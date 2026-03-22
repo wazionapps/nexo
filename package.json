@@ -1,0 +1,32 @@
+{
+  "name": "create-nexo",
+  "version": "0.1.0",
+  "description": "NEXO — Cognitive co-operator for Claude Code. Atkinson-Shiffrin memory, semantic RAG, trust scoring, and metacognitive error prevention.",
+  "bin": {
+    "create-nexo": "./bin/create-nexo.js"
+  },
+  "keywords": [
+    "claude-code",
+    "mcp",
+    "cognitive-architecture",
+    "memory",
+    "ai-assistant",
+    "vector-search",
+    "atkinson-shiffrin"
+  ],
+  "author": "WAzion Apps <hello@wazion.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wazionapps/nexo.git"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "templates/",
+    "scripts/"
+  ]
+}
