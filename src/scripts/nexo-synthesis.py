@@ -3,7 +3,6 @@
 NEXO Synthesis Engine — Daily intelligence brief.
 
 Runs every 2 hours via LaunchAgent. Executes ONCE per day (internal gate).
-Queries nexo.db + claude-mem.db and writes ~/claude/coordination/daily-synthesis.md
 
 Zero external dependencies beyond stdlib + sqlite3.
 """
@@ -23,7 +22,6 @@ CLAUDE_DIR = HOME / "claude"
 COORD_DIR = CLAUDE_DIR / "coordination"
 
 NEXO_DB = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo"))) / "nexo.db"
-CLAUDE_MEM_DB = HOME / ".claude-mem" / "claude-mem.db"
 
 OUTPUT_FILE = COORD_DIR / "daily-synthesis.md"
 SYNTHESIS_LOG = COORD_DIR / "synthesis-log.json"
