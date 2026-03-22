@@ -134,6 +134,13 @@ async function main() {
   const doScan = scanAnswer.trim().toLowerCase().startsWith("y");
   console.log("");
 
+  // Step 2b: Keep Mac awake for nocturnal processes?
+  const caffeinateAnswer = await ask(
+    "  Keep Mac awake so my cognitive processes run on schedule? (y/n) > "
+  );
+  const doCaffeinate = caffeinateAnswer.trim().toLowerCase().startsWith("y");
+  console.log("");
+
   // Step 3: Install Python dependencies
   log("Installing cognitive engine dependencies...");
   const pipInstall = spawnSync(
@@ -466,6 +473,48 @@ Operator name: ${operatorName}
     }
   });
   log(`${agents.length} automated processes configured.`);
+
+  // Caffeinate: keep Mac awake for nocturnal processes
+  if (doCaffeinate) {
+    const caffHookSrc = path.join(__dirname, "..", "src", "hooks", "caffeinate-guard.sh");
+    const caffHookDest = path.join(NEXO_HOME, "hooks", "caffeinate-guard.sh");
+    if (fs.existsSync(caffHookSrc)) {
+      fs.copyFileSync(caffHookSrc, caffHookDest);
+      fs.chmodSync(caffHookDest, "755");
+    }
+
+    const caffPlist = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.nexo.caffeinate</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>${caffHookDest}</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>${path.join(NEXO_HOME, "logs", "caffeinate-stdout.log")}</string>
+    <key>StandardErrorPath</key>
+    <string>${path.join(NEXO_HOME, "logs", "caffeinate-stderr.log")}</string>
+</dict>
+</plist>`;
+
+    const caffPlistPath = path.join(LAUNCH_AGENTS, "com.nexo.caffeinate.plist");
+    fs.writeFileSync(caffPlistPath, caffPlist);
+    try {
+      execSync(
+        `launchctl bootout gui/$(id -u) "${caffPlistPath}" 2>/dev/null; launchctl bootstrap gui/$(id -u) "${caffPlistPath}"`,
+        { stdio: "pipe" }
+      );
+    } catch {}
+    log("Caffeinate enabled — Mac will stay awake for cognitive processes.");
+  }
 
   // Step 8: Generate CLAUDE.md template
   log("Generating operator instructions...");
