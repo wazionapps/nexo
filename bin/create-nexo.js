@@ -75,24 +75,50 @@ async function main() {
     process.exit(1);
   }
 
-  // Find Python
+  // Find or install Homebrew (needed for Python)
+  let hasBrew = run("which brew");
+  if (!hasBrew) {
+    log("Homebrew not found. Installing...");
+    spawnSync("/bin/bash", ["-c", '$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)'], {
+      stdio: "inherit",
+    });
+    hasBrew = run("which brew") || run("eval $(/opt/homebrew/bin/brew shellenv) && which brew");
+  }
+
+  // Find or install Python
   let python = run("which python3");
   if (!python) {
-    log("Python 3 not found. Install it: brew install python3");
-    process.exit(1);
+    if (hasBrew) {
+      log("Python 3 not found. Installing via Homebrew...");
+      spawnSync("brew", ["install", "python3"], { stdio: "inherit" });
+      python = run("which python3");
+    }
+    if (!python) {
+      log("Python 3 not found and couldn't install automatically.");
+      log("Install it manually: brew install python3");
+      process.exit(1);
+    }
   }
   const pyVersion = run(`${python} --version`);
   log(`Found ${pyVersion} at ${python}`);
 
-  // Check if Claude Code is installed
-  const claudeInstalled = run("which claude");
+  // Find or install Claude Code
+  let claudeInstalled = run("which claude");
   if (!claudeInstalled) {
-    log(
-      "Claude Code CLI not found. Install it first: https://claude.ai/claude-code"
-    );
-    process.exit(1);
+    log("Claude Code not found. Installing...");
+    const npmInstall = spawnSync("npm", ["install", "-g", "@anthropic-ai/claude-code"], {
+      stdio: "inherit",
+    });
+    claudeInstalled = run("which claude");
+    if (!claudeInstalled) {
+      log("Could not install Claude Code automatically.");
+      log("Install it manually: npm install -g @anthropic-ai/claude-code");
+      process.exit(1);
+    }
+    log("Claude Code installed successfully.");
+  } else {
+    log("Claude Code detected.");
   }
-  log("Claude Code detected.");
   console.log("");
 
   // Step 1: Name
