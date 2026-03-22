@@ -128,6 +128,21 @@ def run_task(name: str, python: str, script: str, state: dict) -> bool:
 
 def main():
     log("=== NEXO Catch-Up starting (boot/wake) ===")
+
+    # Auto-update check FIRST (before running any other tasks)
+    update_script = SCRIPTS / "nexo-auto-update.py"
+    if update_script.exists():
+        log("Checking for updates...")
+        try:
+            python_for_update = PYTHON_BREW if os.path.exists(PYTHON_BREW) else PYTHON_SYS
+            subprocess.run(
+                [python_for_update, str(update_script)],
+                capture_output=True, text=True, timeout=60,
+                env={**os.environ, "NEXO_HOME": str(HOME)}
+            )
+        except Exception as e:
+            log(f"  Update check failed: {e}")
+
     state = load_state()
 
     # Define tasks in execution order (matching their intended schedule order)
