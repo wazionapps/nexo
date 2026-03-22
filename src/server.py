@@ -1,0 +1,560 @@
+"""NEXO MCP Server — Phase 4: Hot-Reload Plugin System."""
+
+import os
+import signal
+import sys
+
+from fastmcp import FastMCP
+from db import init_db, rebuild_fts_index, get_db, close_db, fts_add_dir, fts_remove_dir, fts_list_dirs
+from tools_sessions import handle_startup, handle_heartbeat, handle_status
+from tools_coordination import (
+    handle_track, handle_untrack, handle_files,
+    handle_send, handle_ask, handle_answer, handle_check_answer,
+)
+from tools_reminders import handle_reminders
+from tools_menu import handle_menu
+from tools_reminders_crud import (
+    handle_reminder_create, handle_reminder_update,
+    handle_reminder_complete, handle_reminder_delete,
+    handle_followup_create, handle_followup_update,
+    handle_followup_complete, handle_followup_delete,
+)
+from tools_learnings import (
+    handle_learning_add, handle_learning_search,
+    handle_learning_update, handle_learning_delete, handle_learning_list,
+)
+from tools_credentials import (
+    handle_credential_get, handle_credential_create,
+    handle_credential_update, handle_credential_delete, handle_credential_list,
+)
+from tools_task_history import (
+    handle_task_log, handle_task_list, handle_task_frequency,
+)
+from plugin_loader import load_all_plugins, load_plugin, remove_plugin, list_plugins
+
+
+# ── Graceful shutdown: close DB on any termination signal ──────────
+def _shutdown_handler(signum, frame):
+    close_db()
+    sys.exit(0)
+
+signal.signal(signal.SIGTERM, _shutdown_handler)
+signal.signal(signal.SIGINT, _shutdown_handler)
+
+# ── Write PID file for stale process detection ─────────────────────
+_pid_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "nexo.pid")
+with open(_pid_file, "w") as f:
+    f.write(str(os.getpid()))
+
+init_db()
+
+mcp = FastMCP(
+    name="nexo",
+    instructions=(
+        "NEXO operational server. Provides session coordination, "
+        "reminders, followups, and menu for user operations.\n\n"
+        "When working with tool results, write down any important information "
+        "you might need later in your response, as the original tool result "
+        "may be cleared later."
+    ),
+)
+
+_plugins_loaded = load_all_plugins(mcp)
+
+
+# ── Session management (3 tools) ──────────────────────────────────
+
+@mcp.tool
+def nexo_startup(task: str = "Startup") -> str:
+    """Register new session, clean stale ones, return active sessions + alerts.
+
+    Call this ONCE at the start of every conversation.
+    Returns the session ID (SID) — store it for use in all other nexo_ tools.
+    """
+    return handle_startup(task)
+
+
+@mcp.tool
+def nexo_heartbeat(sid: str, task: str) -> str:
+    """Update session task, check inbox and pending questions.
+
+    Call this at the START of every user interaction (before doing work).
+    Args:
+        sid: Your session ID from nexo_startup.
+        task: Brief description of current work (5-10 words).
+    """
+    return handle_heartbeat(sid, task)
+
+
+@mcp.tool
+def nexo_status(keyword: str = "") -> str:
+    """List active sessions. Filter by keyword if provided."""
+    return handle_status(keyword if keyword else None)
+
+
+# ── File coordination (3 tools) ───────────────────────────────────
+
+@mcp.tool
+def nexo_track(sid: str, paths: list[str]) -> str:
+    """Track files being edited. Detects conflicts with other sessions.
+
+    MUST call before editing any file outside ~/claude/.
+    Args:
+        sid: Your session ID.
+        paths: List of absolute file paths to track.
+    """
+    return handle_track(sid, paths)
+
+
+@mcp.tool
+def nexo_untrack(sid: str, paths: list[str] | None = None) -> str:
+    """Stop tracking files. If no paths given, releases all.
+
+    Args:
+        sid: Your session ID.
+        paths: File paths to release. Omit to release all.
+    """
+    return handle_untrack(sid, paths)
+
+
+@mcp.tool
+def nexo_files() -> str:
+    """Show all tracked files across all active sessions with conflict detection."""
+    return handle_files()
+
+
+# ── Messaging (4 tools) ───────────────────────────────────────────
+
+@mcp.tool
+def nexo_send(from_sid: str, to_sid: str, text: str) -> str:
+    """Send a fire-and-forget message to another session or broadcast.
+
+    Args:
+        from_sid: Your session ID.
+        to_sid: Target session ID, or 'all' for broadcast.
+        text: Message content.
+    """
+    return handle_send(from_sid, to_sid, text)
+
+
+@mcp.tool
+def nexo_ask(from_sid: str, to_sid: str, question: str) -> str:
+    """Ask a question to another session (they see it on next heartbeat).
+
+    Args:
+        from_sid: Your session ID.
+        to_sid: Target session ID.
+        question: The question text.
+    Returns: Question ID (qid) for checking the answer later.
+    """
+    return handle_ask(from_sid, to_sid, question)
+
+
+@mcp.tool
+def nexo_answer(qid: str, answer: str) -> str:
+    """Answer a pending question from another session.
+
+    Args:
+        qid: The question ID shown in heartbeat output.
+        answer: Your response.
+    """
+    return handle_answer(qid, answer)
+
+
+@mcp.tool
+def nexo_check_answer(qid: str) -> str:
+    """Check if a question has been answered.
+
+    Args:
+        qid: The question ID from nexo_ask.
+    """
+    return handle_check_answer(qid)
+
+
+# ── Operations: Reminders + Menu (2 tools, read-only) ─────────────
+
+@mcp.tool
+def nexo_reminders(filter: str = "due") -> str:
+    """Check reminders and followups.
+
+    Args:
+        filter: 'due' (vencidos/hoy), 'all' (todos activos), 'followups' (solo NEXO followups)
+    """
+    return handle_reminders(filter)
+
+
+@mcp.tool
+def nexo_menu() -> str:
+    """Generate the NEXO operations center menu with alerts and active sessions.
+
+    Shows: date, due alerts, all menu items by category, active sessions.
+    Uses box-drawing characters for formatting.
+    """
+    return handle_menu()
+
+
+# ── Reminders CRUD (4 tools) ──────────────────────────────────────
+
+@mcp.tool
+def nexo_reminder_create(id: str, description: str, date: str = "", category: str = "general") -> str:
+    """Create a new reminder for the user.
+
+    Args:
+        id: Unique ID starting with 'R' (e.g., R90).
+        description: What needs to be done.
+        date: Target date YYYY-MM-DD (optional).
+        category: One of: decisiones, tareas, esperando, ideas, general.
+    """
+    return handle_reminder_create(id, description, date, category)
+
+
+@mcp.tool
+def nexo_reminder_update(id: str, description: str = "", date: str = "", status: str = "", category: str = "") -> str:
+    """Update fields of an existing reminder. Only non-empty fields are changed.
+
+    Args:
+        id: Reminder ID (e.g., R87).
+        description: New description (optional).
+        date: New date YYYY-MM-DD (optional).
+        status: New status (optional).
+        category: New category (optional).
+    """
+    return handle_reminder_update(id, description, date, status, category)
+
+
+@mcp.tool
+def nexo_reminder_complete(id: str) -> str:
+    """Mark a reminder as COMPLETADO with today's date.
+
+    Args:
+        id: Reminder ID (e.g., R87).
+    """
+    return handle_reminder_complete(id)
+
+
+@mcp.tool
+def nexo_reminder_delete(id: str) -> str:
+    """Delete a reminder permanently.
+
+    Args:
+        id: Reminder ID (e.g., R87).
+    """
+    return handle_reminder_delete(id)
+
+
+# ── Followups CRUD (4 tools) ──────────────────────────────────────
+
+@mcp.tool
+def nexo_followup_create(id: str, description: str, date: str = "", verification: str = "", reasoning: str = "", recurrence: str = "") -> str:
+    """Create a new NEXO followup (autonomous task).
+
+    Args:
+        id: Unique ID starting with 'NF' (e.g., NF-MCP2).
+        description: What to verify/do.
+        date: Target date YYYY-MM-DD (optional).
+        verification: How to verify completion (optional).
+        reasoning: WHY this followup exists — what decision/context led to it (optional).
+        recurrence: Auto-regenerate pattern (optional). Formats: 'weekly:monday', 'monthly:1', 'monthly:15', 'quarterly'.
+                    When completed, a new followup is auto-created with the next date. The completed one is archived with date suffix.
+    """
+    return handle_followup_create(id, description, date, verification, reasoning, recurrence)
+
+
+@mcp.tool
+def nexo_followup_update(id: str, description: str = "", date: str = "", verification: str = "", status: str = "") -> str:
+    """Update fields of an existing followup. Only non-empty fields are changed.
+
+    Args:
+        id: Followup ID (e.g., NF45).
+        description: New description (optional).
+        date: New date YYYY-MM-DD (optional).
+        verification: New verification text (optional).
+        status: New status (optional).
+    """
+    return handle_followup_update(id, description, date, verification, status)
+
+
+@mcp.tool
+def nexo_followup_complete(id: str, result: str = "") -> str:
+    """Mark a followup as COMPLETADO. Appends result to verification field.
+
+    Args:
+        id: Followup ID (e.g., NF45).
+        result: What was found/done (optional).
+    """
+    return handle_followup_complete(id, result)
+
+
+@mcp.tool
+def nexo_followup_delete(id: str) -> str:
+    """Delete a followup permanently.
+
+    Args:
+        id: Followup ID (e.g., NF45).
+    """
+    return handle_followup_delete(id)
+
+
+# ── Learnings CRUD (5 tools) ──────────────────────────────────────
+
+@mcp.tool
+def nexo_learning_add(category: str, title: str, content: str, reasoning: str = "") -> str:
+    """Add a new learning (resolved error, pattern, gotcha).
+
+    Args:
+        category: One of: general, code, infrastructure, api, database, security, deployment, testing, performance, ux.
+        title: Short title for the learning.
+        content: Full description with context and solution.
+        reasoning: WHY this matters — what led to discovering this (optional).
+    """
+    return handle_learning_add(category, title, content, reasoning)
+
+
+@mcp.tool
+def nexo_learning_search(query: str, category: str = "") -> str:
+    """Search learnings by keyword. Searches title and content.
+
+    Args:
+        query: Search term.
+        category: Filter by category (optional).
+    """
+    return handle_learning_search(query, category)
+
+
+@mcp.tool
+def nexo_learning_update(id: int, title: str = "", content: str = "", category: str = "") -> str:
+    """Update a learning entry. Only non-empty fields are changed.
+
+    Args:
+        id: Learning ID number.
+        title: New title (optional).
+        content: New content (optional).
+        category: New category (optional).
+    """
+    return handle_learning_update(id, title, content, category)
+
+
+@mcp.tool
+def nexo_learning_delete(id: int) -> str:
+    """Delete a learning entry.
+
+    Args:
+        id: Learning ID number.
+    """
+    return handle_learning_delete(id)
+
+
+@mcp.tool
+def nexo_learning_list(category: str = "") -> str:
+    """List all learnings, grouped by category.
+
+    Args:
+        category: Filter by category (optional). If empty, shows all grouped.
+    """
+    return handle_learning_list(category)
+
+
+# ── Search index ──────────────────────────────────────────────────
+
+@mcp.tool
+def nexo_reindex() -> str:
+    """Force full rebuild of the FTS5 search index. Use after bulk changes or if search seems stale."""
+    conn = get_db()
+    rebuild_fts_index(conn)
+    count = conn.execute("SELECT COUNT(*) FROM unified_search").fetchone()[0]
+    sources = conn.execute("SELECT source, COUNT(*) as cnt FROM unified_search GROUP BY source ORDER BY cnt DESC").fetchall()
+    lines = [f"Index rebuilt: {count} documentos"]
+    for s in sources:
+        lines.append(f"  {s[0]:12s} → {s[1]}")
+    return "\n".join(lines)
+
+
+@mcp.tool
+def nexo_index_add_dir(path: str, dir_type: str = "code",
+                       patterns: str = "*.php,*.js,*.json,*.py,*.ts,*.tsx",
+                       notes: str = "") -> str:
+    """Register a new directory for FTS5 search indexing. Survives restarts.
+
+    Args:
+        path: Absolute path to directory (supports ~).
+        dir_type: 'code' for source files, 'md' for markdown docs.
+        patterns: Comma-separated glob patterns (only for code type).
+        notes: Description of what this directory contains.
+    """
+    result = fts_add_dir(path, dir_type, patterns, notes)
+    if "error" in result:
+        return f"ERROR: {result['error']}"
+    return f"Directorio registrado: {result['path']} ({result['dir_type']}, patterns: {result['patterns']})\nUsa nexo_reindex para indexar ahora."
+
+
+@mcp.tool
+def nexo_index_remove_dir(path: str) -> str:
+    """Remove a directory from FTS5 indexing and clean up its entries.
+
+    Args:
+        path: Path to directory to remove.
+    """
+    result = fts_remove_dir(path)
+    if "error" in result:
+        return f"ERROR: {result['error']}"
+    return f"Directorio eliminado del índice: {result['removed']}"
+
+
+@mcp.tool
+def nexo_index_dirs() -> str:
+    """List all directories being indexed by FTS5 (builtin + dynamic)."""
+    dirs = fts_list_dirs()
+    if not dirs:
+        return "Sin directorios configurados."
+    lines = ["DIRECTORIOS INDEXADOS:"]
+    for d in dirs:
+        source_tag = "⚙️" if d["source"] == "builtin" else "➕"
+        notes = f" — {d['notes']}" if d.get("notes") else ""
+        lines.append(f"  {source_tag} [{d['type']}] {d['path']}")
+        lines.append(f"       patterns: {d['patterns']}{notes}")
+    return "\n".join(lines)
+
+
+# ── Credentials CRUD (5 tools) ────────────────────────────────────
+
+@mcp.tool
+def nexo_credential_get(service: str, key: str = "") -> str:
+    """Get credential value(s) for a service.
+
+    Args:
+        service: Service name (e.g., google-ads, meta-ads, shopify).
+        key: Specific key (optional). If empty, returns all for the service.
+    """
+    return handle_credential_get(service, key)
+
+
+@mcp.tool
+def nexo_credential_create(service: str, key: str, value: str, notes: str = "") -> str:
+    """Store a new credential.
+
+    Args:
+        service: Service name (e.g., google-ads, cloudflare).
+        key: Key name (e.g., api_key, token, ssh).
+        value: The secret value.
+        notes: Description or context (optional).
+    """
+    return handle_credential_create(service, key, value, notes)
+
+
+@mcp.tool
+def nexo_credential_update(service: str, key: str, value: str = "", notes: str = "") -> str:
+    """Update a credential's value and/or notes.
+
+    Args:
+        service: Service name.
+        key: Key name.
+        value: New value (optional).
+        notes: New notes (optional).
+    """
+    return handle_credential_update(service, key, value, notes)
+
+
+@mcp.tool
+def nexo_credential_delete(service: str, key: str = "") -> str:
+    """Delete credential(s). If no key, deletes all for the service.
+
+    Args:
+        service: Service name.
+        key: Specific key (optional). If empty, deletes ALL for service.
+    """
+    return handle_credential_delete(service, key)
+
+
+@mcp.tool
+def nexo_credential_list(service: str = "") -> str:
+    """List credentials (names and notes only, no values).
+
+    Args:
+        service: Filter by service (optional). If empty, shows all.
+    """
+    return handle_credential_list(service)
+
+
+# ── Task History (3 tools) ────────────────────────────────────────
+
+@mcp.tool
+def nexo_task_log(task_num: str, task_name: str, notes: str = "", reasoning: str = "") -> str:
+    """Record that an operational task was executed.
+
+    Args:
+        task_num: Task number from the checklist (e.g., '7', '7b').
+        task_name: Task name (e.g., 'Google Ads').
+        notes: Execution summary (optional).
+        reasoning: WHY this task was executed now — what triggered it (optional).
+    """
+    return handle_task_log(task_num, task_name, notes, reasoning)
+
+
+@mcp.tool
+def nexo_task_list(task_num: str = "", days: int = 30) -> str:
+    """Show execution history for operational tasks.
+
+    Args:
+        task_num: Filter by task number (optional).
+        days: How many days back to show (default 30).
+    """
+    return handle_task_list(task_num, days)
+
+
+@mcp.tool
+def nexo_task_frequency() -> str:
+    """Check which operational tasks are overdue based on their frequency.
+
+    Compares last execution date vs configured frequency.
+    Returns overdue tasks or 'all tasks up to date'.
+    """
+    return handle_task_frequency()
+
+
+# ── Plugin Management (3 tools) ─────────────────────────────────
+
+@mcp.tool
+def nexo_plugin_load(filename: str) -> str:
+    """Load or reload a plugin from the plugins/ directory.
+
+    Args:
+        filename: Plugin filename (e.g., 'entities.py').
+    """
+    try:
+        n = load_plugin(mcp, filename)
+        return f"Plugin {filename}: {n} tools registrados."
+    except Exception as e:
+        return f"Error cargando plugin {filename}: {e}"
+
+
+@mcp.tool
+def nexo_plugin_list() -> str:
+    """List all loaded plugins and their tools."""
+    plugins = list_plugins()
+    if not plugins:
+        return "Sin plugins cargados."
+    lines = ["PLUGINS CARGADOS:"]
+    for p in plugins:
+        names = p["tool_names"] or "(sin tools)"
+        lines.append(f"  {p['filename']} — {p['tools_count']} tools: {names}")
+    return "\n".join(lines)
+
+
+@mcp.tool
+def nexo_plugin_remove(filename: str) -> str:
+    """Remove a plugin: unregister its tools and delete the file.
+
+    Args:
+        filename: Plugin filename (e.g., 'entities.py').
+    """
+    try:
+        removed = remove_plugin(mcp, filename)
+        if removed:
+            return f"Plugin {filename} eliminado. Tools quitados: {', '.join(removed)}"
+        return f"Plugin {filename} eliminado (no tenía tools registrados)."
+    except Exception as e:
+        return f"Error eliminando plugin {filename}: {e}"
+
+
+if __name__ == "__main__":
+    mcp.run(transport="stdio")

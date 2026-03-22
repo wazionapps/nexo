@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# Node
+node_modules/
+package-lock.json
+
+# NEXO runtime (never commit user data)
+*.db
+*.db-wal
+*.db-shm
+session_buffer.jsonl
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Secrets
+.env
+*.key
+*.pem
+*_token.txt
+credentials*.json
