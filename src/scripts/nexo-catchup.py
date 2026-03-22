@@ -131,13 +131,15 @@ def main():
     state = load_state()
 
     # Define tasks in execution order (matching their intended schedule order)
+    # Find Python — prefer homebrew, fallback to system
+    python_path = PYTHON_BREW if os.path.exists(PYTHON_BREW) else PYTHON_SYS
+
     tasks = [
         # (name, hour, minute, python, script, weekday)
-        ("cognitive-decay", 3, 0, PYTHON_BREW, "nexo-cognitive-decay.py", None),
-        ("evolution", 3, 0, PYTHON_SYS, "nexo-evolution-run.py", 6),  # Sunday = 6
-        ("sleep", 4, 0, PYTHON_SYS, "nexo-sleep.py", None),
-        ("self-audit", 7, 0, PYTHON_SYS, "nexo-daily-self-audit.py", None),
-        ("postmortem", 23, 30, PYTHON_BREW, "nexo-postmortem-consolidator.py", None),
+        ("cognitive-decay", 3, 0, python_path, "nexo-cognitive-decay.py", None),
+        ("sleep", 4, 0, python_path, "nexo-sleep.py", None),
+        ("self-audit", 7, 0, python_path, "nexo-daily-self-audit.py", None),
+        ("postmortem", 23, 30, python_path, "nexo-postmortem-consolidator.py", None),
     ]
 
     ran = 0

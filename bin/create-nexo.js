@@ -405,6 +405,12 @@ Operator name: ${operatorName}
       minute: 30,
     },
     {
+      name: "sleep",
+      script: "nexo-sleep.py",
+      hour: 4,
+      minute: 0,
+    },
+    {
       name: "self-audit",
       script: "nexo-daily-self-audit.py",
       hour: 7,

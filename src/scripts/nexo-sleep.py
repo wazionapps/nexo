@@ -22,7 +22,6 @@ Stage C — Learning Consolidation (Python pure, always runs):
 
 Stage B — Intelligent pruning (Claude CLI, conditional):
   Only activates if MEMORY.md >170 lines, nexo.db preferences table has >5 rows,
-  or claude-mem.db has >500 observations >60 days.
   Uses Claude CLI (sonnet) to compress and prune.
 
 Zero external dependencies beyond stdlib + sqlite3. Claude CLI for Stage B only.
@@ -56,8 +55,6 @@ SLEEP_LOG = COORD_DIR / "sleep-log.json"
 
 MEMORY_MD = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo"))) / "brain" / "MEMORY.md"
 NEXO_DB = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo"))) / "nexo.db"
-CLAUDE_MEM_DB = Path.home() / ".claude-mem" / "claude-mem.db"
-CLAUDE_CLI = Path.home() / ".local" / "bin" / "claude"
 
 LAST_RUN_FILE = COORD_DIR / "sleep-last-run"
 LOCK_FILE = COORD_DIR / "sleep.lock"
@@ -527,8 +524,6 @@ def check_stage_b_conditions() -> dict:
         "memory_md_over_limit": False,
         "preferences_auto_sections": 0,
         "preferences_over_limit": False,
-        "claude_mem_old_observations": 0,
-        "claude_mem_over_limit": False,
         "should_trigger": False,
     }
 
@@ -554,27 +549,9 @@ def check_stage_b_conditions() -> dict:
         except Exception as e:
             log(f"Stage B check: WARN reading nexo.db preferences: {e}")
 
-    # Check claude-mem.db observations >60 days
-    if CLAUDE_MEM_DB.exists():
-        try:
-            cutoff_epoch = int((datetime.now() - timedelta(days=60)).timestamp() * 1000)
-            conn = sqlite3.connect(str(CLAUDE_MEM_DB))
-            cursor = conn.cursor()
-            cursor.execute(
-                "SELECT COUNT(*) FROM observations WHERE created_at_epoch < ?",
-                (cutoff_epoch,)
-            )
-            count = cursor.fetchone()[0]
-            conn.close()
-            conditions["claude_mem_old_observations"] = count
-            conditions["claude_mem_over_limit"] = count > 500
-        except Exception as e:
-            log(f"Stage B check: WARN reading claude-mem.db: {e}")
-
     conditions["should_trigger"] = (
         conditions["memory_md_over_limit"]
         or conditions["preferences_over_limit"]
-        or conditions["claude_mem_over_limit"]
     )
 
     return conditions
@@ -597,41 +574,22 @@ Conecta con sqlite3. Elimina preferencias duplicadas (mismo key) manteniendo la 
 Elimina preferencias con updated_at mas antiguo de 30 dias si hay un duplicado mas reciente.
 Reporta cuantos registros eliminaste.""")
 
-    if conditions["claude_mem_over_limit"]:
-        tasks.append(f"""TAREA 3: claude-mem observations ({conditions['claude_mem_old_observations']} registros >60d)
-DB: {CLAUDE_MEM_DB}
-Conecta con sqlite3. Ejecuta:
-  DELETE FROM observations WHERE created_at_epoch < {int((datetime.now() - timedelta(days=60)).timestamp() * 1000)}
-    AND discovery_tokens < 300
-    AND id NOT IN (SELECT id FROM observations WHERE
-        title LIKE '%CRITICO%' OR title LIKE '%MAXIMA%' OR title LIKE '%LLC%'
-        OR title LIKE '%SLU%' OR title LIKE '%EIN%' OR title LIKE '%NIF%'
-        OR title LIKE '%credential%' OR title LIKE '%token%' OR title LIKE '%API%'
-        OR narrative LIKE '%CRITICO%' OR narrative LIKE '%MAXIMA%')
-  LIMIT 200;
-Luego: DELETE FROM observations_fts WHERE rowid NOT IN (SELECT id FROM observations);
-Luego: VACUUM;
-Reporta cuantos registros eliminaste.""")
-
     if not tasks:
         return ""
 
     tasks_str = "\n\n".join(tasks)
 
-    return f"""Eres NEXO Sleep System. Tu trabajo es PODAR la memoria.
-NO eres interactivo. NO esperas input. Ejecuta las siguientes tareas y sal.
+    return f"""You are the NEXO Sleep System. Your job is to PRUNE memory.
+You are NOT interactive. Do NOT wait for input. Execute these tasks and exit.
 
-REGLAS ABSOLUTAS:
-- NUNCA borres informacion sobre la entidad juridica (LLC, SLU, EIN, NIF, Germany Vic Shop).
-- NUNCA borres credenciales, tokens, IDs de cuentas, API endpoints, claves, secrets.
-- NUNCA borres reglas operativas marcadas como "CRITICO" o "MAXIMA PRIORIDAD".
-- NUNCA borres patrones de busqueda en log2 por Cron.
-- NUNCA borres informacion sobre WABAs, numeros de WhatsApp, o contactos.
-- NUNCA borres informacion sobre infraestructura (servidores, repos, deploys).
-- SI puedes fusionar secciones redundantes.
-- SI puedes eliminar informacion tecnica obsoleta (arreglada hace >30 dias y nunca referenciada despues).
-- SI puedes comprimir parrafos largos en bullets concisos.
-- Cada linea que elimines debe tener una razon clara. En caso de duda, NO borres.
+ABSOLUTE RULES:
+- NEVER delete credentials, tokens, account IDs, API endpoints, keys, secrets.
+- NEVER delete operational rules marked as critical or high priority.
+- NEVER delete infrastructure information (servers, repos, deploys).
+- You CAN merge redundant sections.
+- You CAN remove technical info that was fixed >30 days ago and never referenced since.
+- You CAN compress long paragraphs into concise bullets.
+- Every line you remove must have a clear reason. When in doubt, DO NOT delete.
 
 {tasks_str}
 
@@ -644,8 +602,6 @@ def run_stage_b(conditions: dict) -> dict:
     if not prompt:
         return {"skipped": True, "reason": "No tasks to run"}
 
-    if not CLAUDE_CLI.exists():
-        return {"error": f"Claude CLI not found at {CLAUDE_CLI}"}
 
     log("Stage B: Invoking Claude CLI (sonnet)...")
 
@@ -656,7 +612,6 @@ def run_stage_b(conditions: dict) -> dict:
         env.pop("CLAUDE_CODE", None)
 
         result = subprocess.run(
-            [str(CLAUDE_CLI), "-p", prompt, "--model", "sonnet"],
             capture_output=True,
             text=True,
             timeout=300,
@@ -765,8 +720,6 @@ def main():
                 f"(trigger={conditions['memory_md_over_limit']})")
             log(f"  nexo.db preferences: {conditions['preferences_auto_sections']} rows "
                 f"(trigger={conditions['preferences_over_limit']})")
-            log(f"  claude-mem old observations: {conditions['claude_mem_old_observations']} "
-                f"(trigger={conditions['claude_mem_over_limit']})")
 
             if conditions["should_trigger"]:
                 log("Stage B: Conditions met, running intelligent pruning...")
