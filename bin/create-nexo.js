@@ -175,6 +175,17 @@ async function main() {
   ];
   dirs.forEach((d) => fs.mkdirSync(d, { recursive: true }));
 
+  // Write version file for auto-update tracking
+  const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf8"));
+  fs.writeFileSync(
+    path.join(NEXO_HOME, "version.json"),
+    JSON.stringify({
+      version: pkg.version,
+      installed_at: new Date().toISOString(),
+      files_updated: 0,
+    }, null, 2)
+  );
+
   // Copy source files
   const srcDir = path.join(__dirname, "..", "src");
   const scriptsSrcDir = path.join(__dirname, "..", "src", "scripts");
