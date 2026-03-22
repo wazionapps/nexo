@@ -329,10 +329,56 @@ Operator name: ${operatorName}
     },
   };
 
+  // Configure hooks for session capture (Sensory Register)
+  if (!settings.hooks) settings.hooks = {};
+
+  // Copy hook scripts to NEXO_HOME
+  const hooksSrcDir = path.join(__dirname, "..", "src", "hooks");
+  const hooksDestDir = path.join(NEXO_HOME, "hooks");
+  fs.mkdirSync(hooksDestDir, { recursive: true });
+  ["session-start.sh", "capture-session.sh", "session-stop.sh"].forEach((h) => {
+    const src = path.join(hooksSrcDir, h);
+    const dest = path.join(hooksDestDir, h);
+    if (fs.existsSync(src)) {
+      fs.copyFileSync(src, dest);
+      fs.chmodSync(dest, "755");
+    }
+  });
+
+  // SessionStart hook
+  if (!settings.hooks.SessionStart) settings.hooks.SessionStart = [];
+  const startHook = {
+    type: "command",
+    command: `bash ${path.join(hooksDestDir, "session-start.sh")}`,
+  };
+  if (!settings.hooks.SessionStart.some((h) => h.command && h.command.includes("session-start.sh"))) {
+    settings.hooks.SessionStart.push(startHook);
+  }
+
+  // PostToolUse hook (captures tool usage to session_buffer)
+  if (!settings.hooks.PostToolUse) settings.hooks.PostToolUse = [];
+  const captureHook = {
+    type: "command",
+    command: `bash ${path.join(hooksDestDir, "capture-session.sh")}`,
+  };
+  if (!settings.hooks.PostToolUse.some((h) => h.command && h.command.includes("capture-session.sh"))) {
+    settings.hooks.PostToolUse.push(captureHook);
+  }
+
+  // Stop hook (session end)
+  if (!settings.hooks.Stop) settings.hooks.Stop = [];
+  const stopHook = {
+    type: "command",
+    command: `bash ${path.join(hooksDestDir, "session-stop.sh")}`,
+  };
+  if (!settings.hooks.Stop.some((h) => h.command && h.command.includes("session-stop.sh"))) {
+    settings.hooks.Stop.push(stopHook);
+  }
+
   const settingsDir = path.dirname(CLAUDE_SETTINGS);
   fs.mkdirSync(settingsDir, { recursive: true });
   fs.writeFileSync(CLAUDE_SETTINGS, JSON.stringify(settings, null, 2));
-  log("MCP server configured in Claude Code settings.");
+  log("MCP server + hooks configured in Claude Code settings.");
 
   // Step 7: Install LaunchAgents
   log("Setting up automated processes...");
