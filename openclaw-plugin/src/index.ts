@@ -8,15 +8,17 @@
  * Architecture: TypeScript adapter → MCP Bridge (stdio) → Python NEXO server
  */
 
-import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
-import type { OpenClawPluginApi } from "openclaw/plugin-sdk/memory-lancedb";
 import { McpBridge } from "./mcp-bridge.js";
 import { COGNITIVE_TOOLS, ALL_TOOL_NAMES } from "./tools.js";
+
+// OpenClawPluginApi type — inlined to avoid import resolution issues outside monorepo
+type OpenClawPluginApi = any;
 
 let bridge: McpBridge | null = null;
 let sessionId: string | null = null;
 
-export default definePluginEntry({
+// Export plugin definition directly — definePluginEntry is a no-op passthrough
+const plugin = {
   id: "memory-nexo-brain",
   name: "NEXO Brain",
   description:
@@ -24,8 +26,9 @@ export default definePluginEntry({
   kind: "memory" as const,
 
   register(api: OpenClawPluginApi) {
-    const config = api.pluginConfig as Record<string, unknown>;
-    const nexoHome = api.resolvePath(
+    const config = (api.pluginConfig || {}) as Record<string, unknown>;
+    const resolvePath = api.resolvePath ? api.resolvePath.bind(api) : (p: string) => p.replace("~", process.env.HOME || "/root");
+    const nexoHome = resolvePath(
       (config.nexoHome as string) || "~/.nexo"
     );
     const pythonPath = (config.pythonPath as string) || "python3";
@@ -36,6 +39,7 @@ export default definePluginEntry({
     bridge = new McpBridge({ nexoHome, pythonPath });
 
     // Register the system prompt section that tells the agent about NEXO
+    if (typeof api.registerMemoryPromptSection === "function") {
     api.registerMemoryPromptSection(({ availableTools }) => {
       const sections = [
         "## Cognitive Memory (NEXO Brain)",
@@ -61,10 +65,13 @@ export default definePluginEntry({
 
       return sections;
     });
+    } // end registerMemoryPromptSection guard
 
     // Register all cognitive tools
+    const registerTool = typeof api.registerTool === "function" ? api.registerTool.bind(api) : null;
+    if (registerTool) {
     for (const tool of COGNITIVE_TOOLS) {
-      api.registerTool(
+      registerTool(
         {
           name: tool.name,
           label: tool.label,
@@ -95,9 +102,11 @@ export default definePluginEntry({
         { name: tool.name }
       );
     }
+    } // end registerTool guard
 
     // Lifecycle: auto-recall at session start
-    if (autoRecall) {
+    const hasOn = typeof api.on === "function";
+    if (autoRecall && hasOn) {
       api.on("before_agent_start", async (event) => {
         try {
           await bridge!.start();
@@ -147,7 +156,7 @@ export default definePluginEntry({
     }
 
     // Lifecycle: auto-capture at session end
-    if (autoCapture) {
+    if (autoCapture && hasOn) {
       api.on("agent_end", async (event) => {
         try {
           if (bridge && sessionId) {
@@ -164,6 +173,7 @@ export default definePluginEntry({
     }
 
     // CLI commands
+    if (typeof api.registerCli === "function") {
     api.registerCli(
       ({ program }) => {
         program
@@ -205,8 +215,10 @@ export default definePluginEntry({
       },
       { commands: ["nexo-status", "nexo-recall"] }
     );
+    } // end registerCli guard
 
     // Service lifecycle
+    if (typeof api.registerService === "function") {
     api.registerService({
       id: "memory-nexo-brain",
       start: async () => {
@@ -218,5 +230,10 @@ export default definePluginEntry({
         api.logger.info("NEXO Brain cognitive engine stopped");
       },
     });
+    } // end registerService guard
+
+    if (api.logger) api.logger.info("NEXO Brain plugin registered successfully");
   },
-});
+};
+
+export default plugin;
