@@ -65,7 +65,7 @@ def handle_heartbeat(sid: str, task: str, context_hint: str = '') -> str:
     Args:
         sid: Session ID
         task: Current task description
-        context_hint: Optional — last 2-3 sentences from the user or current topic. If provided AND
+        context_hint: Optional — last 2-3 sentences from Francisco or current topic. If provided AND
                       it diverges from startup memories, returns fresh cognitive memories for the new context.
     """
     from db import get_db
@@ -88,7 +88,7 @@ def handle_heartbeat(sid: str, task: str, context_hint: str = '') -> str:
             age = _format_age(q["created_epoch"])
             parts.append(f"  {q['qid']} de {q['from_sid']} ({age}): {q['question']}")
 
-    # Sentiment detection: analyze context_hint for the user's mood
+    # Sentiment detection: analyze context_hint for Francisco's mood
     if context_hint and len(context_hint.strip()) >= 10:
         try:
             import cognitive

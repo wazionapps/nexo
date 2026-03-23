@@ -6,22 +6,18 @@ and provides stats on error prevention effectiveness.
 import json
 import os
 from datetime import datetime, timedelta
+from pathlib import Path
 from db import get_db, find_similar_learnings, extract_keywords
 
-
-SCHEMA_CACHE_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                                  "nexo-mcp", "schema_cache.json")
-# Fallback: same dir as db
-if not os.path.exists(SCHEMA_CACHE_PATH):
-    SCHEMA_CACHE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "schema_cache.json")
+NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+SCHEMA_CACHE_PATH = str(NEXO_HOME / "schema_cache.json")
 
 
 def _load_schema_cache() -> dict:
     """Load cached DB schemas from schema_cache.json."""
     try:
-        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "schema_cache.json")
-        if os.path.exists(path):
-            with open(path) as f:
+        if os.path.exists(SCHEMA_CACHE_PATH):
+            with open(SCHEMA_CACHE_PATH) as f:
                 return json.load(f)
     except Exception:
         pass
@@ -45,17 +41,15 @@ def _extract_table_names(content: str) -> set:
     """Extract SQL table names from source code."""
     import re
     tables = set()
-    # Match FROM/JOIN/INTO/UPDATE/TABLE patterns
     patterns = [
         r'(?:FROM|JOIN|INTO|UPDATE)\s+`?(\w+)`?',
         r'CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?`?(\w+)`?',
         r'DESCRIBE\s+`?(\w+)`?',
-        r'table_info\([\'\"]?(\w+)[\'\"]?\)',
+        r'table_info\([\'"]?(\w+)[\'"]?\)',
     ]
     for pat in patterns:
         for m in re.finditer(pat, content, re.IGNORECASE):
             tables.add(m.group(1))
-    # Filter out SQL keywords that might match
     sql_keywords = {'SELECT', 'WHERE', 'AND', 'OR', 'NOT', 'NULL', 'SET', 'VALUES', 'INTO', 'AS'}
     return {t for t in tables if t.upper() not in sql_keywords}
 
@@ -65,7 +59,7 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
 
     Args:
         files: Comma-separated file paths about to be edited
-        area: System area (frontend, backend, infrastructure, api, etc.)
+        area: System area (infrastructure, api, database, backend, etc.)
         include_schemas: Include DB table schemas if files touch database code (true/false)
     """
     conn = get_db()
@@ -134,7 +128,6 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
 
         cache = _load_schema_cache()
         for table in all_tables:
-            # Try nexo.db first
             schema = _get_nexo_table_schema(table)
             if schema:
                 result["schemas"][table] = schema
@@ -149,9 +142,9 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
             (lid,)
         ).fetchone()["cnt"]
         if rep_count >= 5:
-            result["blocking_rules"].append({
-                "id": lid, "rule": learning["rule"], "repetitions": rep_count
-            })
+            result["blocking_rules"].append(
+                {"id": lid, "rule": learning["rule"], "repetitions": rep_count}
+            )
 
     # 6. Area repetition rate
     if area:
@@ -165,21 +158,19 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
             result["area_repetition_rate"] = round(reps_area / total_area, 2)
 
     # 7. Cognitive metacognition — semantic search for related warnings
-    #    Trust score modulates rigor: <40 = paranoid mode (more results, lower threshold)
     cognitive_warnings = []
     trust_note = ""
     try:
         import cognitive
         trust = cognitive.get_trust_score()
 
-        # Rigor modulation based on trust
         if trust < 40:
-            cog_top_k = 6       # More results
-            cog_min_score = 0.55  # Lower threshold = catch more
+            cog_top_k = 6
+            cog_min_score = 0.55
             trust_note = f" [RIGOR: PARANOID — trust={trust:.0f}]"
         elif trust > 80:
-            cog_top_k = 2       # Fewer results
-            cog_min_score = 0.75  # Higher threshold = only strong matches
+            cog_top_k = 2
+            cog_min_score = 0.75
             trust_note = f" [RIGOR: FLUENT — trust={trust:.0f}]"
         else:
             cog_top_k = 3
@@ -267,14 +258,12 @@ def handle_guard_stats(period_days: int = 7) -> str:
         "SELECT COUNT(*) as cnt FROM error_repetitions WHERE created_at > ?", (cutoff,)
     ).fetchone()["cnt"]
 
-    # Repetition rate
     new_learnings_period = conn.execute(
         "SELECT COUNT(*) as cnt FROM learnings WHERE created_at > ?",
         ((datetime.now() - timedelta(days=period_days)).timestamp(),)
     ).fetchone()["cnt"]
     rep_rate = round(total_reps / new_learnings_period, 2) if new_learnings_period > 0 else 0.0
 
-    # Previous period for trend
     prev_cutoff = (datetime.now() - timedelta(days=period_days * 2)).strftime("%Y-%m-%d %H:%M:%S")
     prev_reps = conn.execute(
         "SELECT COUNT(*) as cnt FROM error_repetitions WHERE created_at > ? AND created_at <= ?",
@@ -286,13 +275,11 @@ def handle_guard_stats(period_days: int = 7) -> str:
     elif total_reps > prev_reps:
         trend = "worsening"
 
-    # Top areas
     area_rows = conn.execute(
         "SELECT area, COUNT(*) as cnt FROM error_repetitions WHERE created_at > ? GROUP BY area ORDER BY cnt DESC LIMIT 5",
         (cutoff,)
     ).fetchall()
 
-    # Most ignored learnings (most repetitions)
     ignored_rows = conn.execute(
         "SELECT original_learning_id, COUNT(*) as cnt FROM error_repetitions "
         "GROUP BY original_learning_id ORDER BY cnt DESC LIMIT 5"
@@ -303,7 +290,6 @@ def handle_guard_stats(period_days: int = 7) -> str:
         if lr:
             most_ignored.append({"id": r["original_learning_id"], "title": lr["title"], "times_repeated": r["cnt"]})
 
-    # Guard checks performed
     checks_count = conn.execute(
         "SELECT COUNT(*) as cnt FROM guard_checks WHERE created_at > ?", (cutoff,)
     ).fetchone()["cnt"]
@@ -339,7 +325,6 @@ def handle_guard_log_repetition(new_learning_id: int, original_learning_id: int,
     """
     conn = get_db()
 
-    # Get the area from the new learning
     row = conn.execute("SELECT category FROM learnings WHERE id = ?", (new_learning_id,)).fetchone()
     if not row:
         return f"ERROR: Learning #{new_learning_id} not found."

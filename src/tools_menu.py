@@ -2,6 +2,7 @@
 
 from datetime import datetime, timedelta
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -9,14 +10,16 @@ from tools_sessions import handle_status
 from tools_reminders import handle_reminders
 from db import get_db
 
+NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+
 
 def _get_date_str() -> str:
-    """Get formatted date in Madrid timezone."""
+    """Get formatted current date and time."""
     try:
         result = subprocess.run(
-            ["date", "+%A %d de %B de %Y, %H:%M"],
+            ["date", "+%A %d %B %Y, %H:%M"],
             capture_output=True, text=True,
-            env={"TZ": "UTC", "PATH": "/usr/bin:/bin", "LANG": "en_US.UTF-8"}
+            env={"PATH": "/usr/bin:/bin"}
         )
         return result.stdout.strip()
     except Exception:
@@ -24,25 +27,21 @@ def _get_date_str() -> str:
 
 
 MENU_ITEMS = [
-    ("Operations", [
-        ("1", "Review reminders and followups"),
-        ("2", "Check server status"),
-        ("3", "Review email inbox"),
-    ]),
     ("Projects", [
-        ("4", "Project status overview"),
-        ("5", "Run periodic scripts"),
-        ("6", "Check analytics"),
+        ("1", "Project Status - Review active projects"),
+        ("2", "Infrastructure - Server health check"),
     ]),
-    ("Marketing", [
-        ("7", "Ad campaigns review"),
-        ("8", "Performance metrics"),
+    ("Advertising", [
+        ("3", "Google Ads - Manage campaigns"),
+        ("4", "Meta Ads - Manage Facebook/Instagram"),
     ]),
-    ("System", [
-        ("9", "NEXO self-audit"),
-        ("10", "Cognitive memory stats"),
-        ("11", "Guard system stats"),
-        ("12", "Backup now"),
+    ("Analytics & Monitoring", [
+        ("5", "Google Analytics - Review web analytics"),
+        ("6", "Email Review - Review inboxes"),
+    ]),
+    ("Maintenance", [
+        ("7", "Backup - Check backup status"),
+        ("8", "Memory Review - Review pending learnings/decisions"),
     ]),
 ]
 
@@ -50,7 +49,7 @@ MENU_ITEMS = [
 def _get_dashboard_alerts() -> list[dict]:
     """Run proactive dashboard and return alerts."""
     try:
-        script = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo"))) / "scripts" / "nexo-proactive-dashboard.py"
+        script = NEXO_HOME / "scripts" / "nexo-proactive-dashboard.py"
         if not script.exists():
             return []
         result = subprocess.run(
@@ -105,23 +104,23 @@ def handle_menu() -> str:
     has_alerts = dashboard_alerts or memory_reviews["total"] > 0 or (due and "Sin recordatorios" not in due)
 
     if has_alerts:
-        lines.append("║" + "  ALERTAS PROACTIVAS".ljust(W) + "║")
+        lines.append("║" + "  PROACTIVE ALERTS".ljust(W) + "║")
         lines.append("╠" + "═" * W + "╣")
 
         if dashboard_alerts:
-            for alert in dashboard_alerts[:10]:  # Top 10
+            for alert in dashboard_alerts[:10]:
                 sev = alert.get("severity", "low")
                 icon = {"high": "!!!", "medium": " ! ", "low": " . "}.get(sev, " . ")
                 text = alert.get("title", "")[:W - 8]
                 lines.append("║" + f"  {icon} {text}".ljust(W) + "║")
             if len(dashboard_alerts) > 10:
                 more = len(dashboard_alerts) - 10
-                lines.append("║" + f"  ... y {more} alertas mas".ljust(W) + "║")
+                lines.append("║" + f"  ... and {more} more alerts".ljust(W) + "║")
 
         if memory_reviews["total"] > 0:
             text = (
-                f"MEMORIA: {memory_reviews['total']} revisiones pendientes "
-                f"({memory_reviews['decisions']} decisiones, {memory_reviews['learnings']} learnings)"
+                f"MEMORY: {memory_reviews['total']} reviews pending "
+                f"({memory_reviews['decisions']} decisions, {memory_reviews['learnings']} learnings)"
             )[:W - 4]
             lines.append("║" + f"  !  {text}".ljust(W) + "║")
 
@@ -142,26 +141,23 @@ def handle_menu() -> str:
             lines.append("║" + entry.ljust(W) + "║")
         lines.append("╠" + "═" * W + "╣")
 
-    # Backlog: ideas, proyectos futuros, tareas sin fecha o lejanas
+    # Backlog: ideas, future projects, undated tasks
     try:
         conn = get_db()
         cutoff = (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d")
-        # Reminders sin fecha (backlog/ideas)
         no_date = conn.execute(
             "SELECT id, description, category FROM reminders WHERE status LIKE 'PENDIENTE%' AND (date IS NULL OR date='') ORDER BY category, id"
         ).fetchall()
-        # Reminders con fecha > 7 días (futuro)
         future = conn.execute(
             "SELECT id, description, date, category FROM reminders WHERE status LIKE 'PENDIENTE%' AND date > ? ORDER BY date",
             (cutoff,)
         ).fetchall()
-        # Followups sin fecha
         nf_no_date = conn.execute(
             "SELECT id, description FROM followups WHERE status NOT LIKE 'COMPLETADO%' AND (date IS NULL OR date='') ORDER BY id"
         ).fetchall()
 
         if no_date or future or nf_no_date:
-            lines.append("║" + "  BACKLOG / IDEAS / FUTURO".ljust(W) + "║")
+            lines.append("║" + "  BACKLOG / IDEAS / FUTURE".ljust(W) + "║")
             lines.append("║" + "─" * W + "║")
 
             if no_date:
@@ -176,26 +172,26 @@ def handle_menu() -> str:
                         lines.append("║" + f"    {r['id']}: {short}".ljust(W) + "║")
 
             if future:
-                lines.append("║" + f"  [Programado]".ljust(W) + "║")
+                lines.append("║" + f"  [Scheduled]".ljust(W) + "║")
                 for r in future:
                     short = r["description"][:W - 18]
                     lines.append("║" + f"    {r['id']} ({r['date']}): {short}".ljust(W) + "║")
 
             if nf_no_date:
-                lines.append("║" + f"  [Followups pendientes]".ljust(W) + "║")
+                lines.append("║" + f"  [Pending followups]".ljust(W) + "║")
                 for r in nf_no_date:
                     short = r["description"][:W - 12]
                     lines.append("║" + f"    {r['id']}: {short}".ljust(W) + "║")
 
             lines.append("╠" + "═" * W + "╣")
     except Exception as e:
-        lines.append("║" + f"  ⚠ Error backlog: {e}".ljust(W) + "║")
+        lines.append("║" + f"  ! Backlog error: {e}".ljust(W) + "║")
         lines.append("╠" + "═" * W + "╣")
 
     # Active sessions
     sessions = handle_status()
     if "Sin sesiones" not in sessions:
-        lines.append("║" + "  SESIONES ACTIVAS".ljust(W) + "║")
+        lines.append("║" + "  ACTIVE SESSIONS".ljust(W) + "║")
         lines.append("║" + "─" * W + "║")
         for s_line in sessions.split("\n"):
             if s_line.strip() and "SESIONES ACTIVAS" not in s_line:
