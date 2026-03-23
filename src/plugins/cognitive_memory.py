@@ -19,6 +19,8 @@ def handle_cognitive_retrieve(
     source_type: str = "",
     domain: str = "",
     include_archived: bool = False,
+    use_hyde: bool = False,
+    spreading_depth: int = 0,
 ) -> str:
     """RAG query over cognitive memory (STM + LTM). Triggers rehearsal on retrieved memories.
 
@@ -30,6 +32,8 @@ def handle_cognitive_retrieve(
         source_type: Filter by source type e.g. "change", "learning", "diary" (default: all)
         domain: Filter by domain e.g. "wazion", "shopify" (default: all)
         include_archived: If True, also search archived memories (default False)
+        use_hyde: If True, use HyDE query expansion — embeds 3-5 query variants and searches with centroid. Better recall for conceptual queries. (default False)
+        spreading_depth: If >0, boost co-activated neighbors (memories frequently retrieved together). 1=direct neighbors only. (default 0)
     """
     if not query or not query.strip():
         return "ERROR: query is required."
@@ -43,6 +47,8 @@ def handle_cognitive_retrieve(
         rehearse=True,
         source_type_filter=source_type,
         include_archived=include_archived,
+        use_hyde=use_hyde,
+        spreading_depth=spreading_depth,
     )
 
     # Apply domain filter post-search (cognitive.search doesn't filter by domain natively)
@@ -50,7 +56,12 @@ def handle_cognitive_retrieve(
         results = [r for r in results if r.get("domain", "") == domain]
 
     formatted = cognitive.format_results(results)
-    header = f"COGNITIVE RETRIEVE — query: '{query}' | {len(results)} results (stores={stores}, min_score={min_score})\n\n"
+    mode_parts = [f"stores={stores}", f"min_score={min_score}"]
+    if use_hyde:
+        mode_parts.append("hyde=ON")
+    if spreading_depth > 0:
+        mode_parts.append(f"spreading={spreading_depth}")
+    header = f"COGNITIVE RETRIEVE — query: '{query}' | {len(results)} results ({', '.join(mode_parts)})\n\n"
     return header + formatted
 
 
@@ -447,6 +458,87 @@ def handle_cognitive_quarantine_process() -> str:
     return "\n".join(lines)
 
 
+# ============================================================================
+# Prospective Memory trigger handlers (Feature 3)
+# ============================================================================
+
+def handle_cognitive_trigger_create(pattern: str, action: str, context: str = "") -> str:
+    """Create a prospective memory trigger — fires when text matches pattern.
+
+    Args:
+        pattern: Keywords to match (case-insensitive, comma-separated for OR matching)
+        action: What to do / remind about when the trigger fires
+        context: Optional context about why this trigger was created
+    """
+    trigger_id = cognitive.create_trigger(pattern, action, context)
+    return f"Trigger #{trigger_id} created — armed. Pattern: '{pattern}' | Action: '{action}'"
+
+
+def handle_cognitive_trigger_list(status: str = "armed") -> str:
+    """List prospective memory triggers.
+
+    Args:
+        status: Filter — 'armed' (active, waiting), 'fired' (already triggered), 'all'
+    """
+    triggers = cognitive.list_triggers(status)
+    if not triggers:
+        return f"No {status} triggers found."
+
+    lines = [f"PROSPECTIVE TRIGGERS ({status}) — {len(triggers)} total", ""]
+    for t in triggers:
+        status_icon = "+" if t["status"] == "armed" else "x"
+        lines.append(f"  [{status_icon}] #{t['id']} pattern='{t['trigger_pattern']}'")
+        lines.append(f"      action: {t['action']}")
+        if t.get("context"):
+            lines.append(f"      context: {t['context']}")
+        lines.append(f"      created: {t['created_at'][:16]}")
+        if t.get("fired_at"):
+            lines.append(f"      fired: {t['fired_at'][:16]}")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def handle_cognitive_trigger_check(text: str, use_semantic: bool = False) -> str:
+    """Check text against all armed triggers and fire matching ones.
+
+    Args:
+        text: Text to check against triggers (e.g. user message, heartbeat context)
+        use_semantic: Also use embedding similarity (slower but catches conceptual matches)
+    """
+    fired = cognitive.check_triggers(text, use_semantic=use_semantic)
+    if not fired:
+        return "No triggers fired."
+
+    lines = [f"TRIGGERS FIRED: {len(fired)}", ""]
+    for t in fired:
+        lines.append(f"  #{t['id']} [{t['match_type']}] pattern='{t['pattern']}'")
+        lines.append(f"    ACTION: {t['action']}")
+        if t.get("context"):
+            lines.append(f"    context: {t['context']}")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def handle_cognitive_trigger_delete(trigger_id: int) -> str:
+    """Delete a prospective memory trigger.
+
+    Args:
+        trigger_id: ID of the trigger to delete
+    """
+    return cognitive.delete_trigger(trigger_id)
+
+
+def handle_cognitive_trigger_rearm(trigger_id: int) -> str:
+    """Re-arm a fired trigger so it can fire again.
+
+    Args:
+        trigger_id: ID of the trigger to re-arm
+    """
+    return cognitive.rearm_trigger(trigger_id)
+
+
 TOOLS = [
     (handle_cognitive_retrieve, "nexo_cognitive_retrieve", "RAG query over cognitive memory (STM+LTM). Triggers rehearsal on retrieved results."),
     (handle_cognitive_stats, "nexo_cognitive_stats", "Cognitive memory system metrics: STM/LTM counts, strengths, retrieval stats, quarantine counts"),
@@ -464,4 +556,9 @@ TOOLS = [
     (handle_cognitive_quarantine_promote, "nexo_cognitive_quarantine_promote", "Manually promote a quarantine item to STM."),
     (handle_cognitive_quarantine_reject, "nexo_cognitive_quarantine_reject", "Manually reject a quarantine item."),
     (handle_cognitive_quarantine_process, "nexo_cognitive_quarantine_process", "Run quarantine promotion cycle — evaluate pending items against policy."),
+    (handle_cognitive_trigger_create, "nexo_cognitive_trigger_create", "Create a prospective memory trigger — 'when X is mentioned, remind about Y'."),
+    (handle_cognitive_trigger_list, "nexo_cognitive_trigger_list", "List prospective triggers by status (armed/fired/all)."),
+    (handle_cognitive_trigger_check, "nexo_cognitive_trigger_check", "Check text against armed triggers. Returns fired triggers with actions."),
+    (handle_cognitive_trigger_delete, "nexo_cognitive_trigger_delete", "Delete a prospective trigger by ID."),
+    (handle_cognitive_trigger_rearm, "nexo_cognitive_trigger_rearm", "Re-arm a fired trigger so it can fire again."),
 ]

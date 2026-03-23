@@ -1,5 +1,7 @@
 """NEXO Cognitive Engine — Vector memory with Atkinson-Shiffrin model."""
 
+import base64
+import json
 import math
 import os
 import re
@@ -77,7 +79,7 @@ _conn = None
 # --- Secret redaction patterns ---
 _REDACT_PATTERNS = [
     # Specific API key formats
-    (re.compile(r'sk-[a-zA-Z0-9]{20,}'), '[REDACTED:api_key]'),
+    (re.compile(r'sk-[a-zA-Z0-9_\-]{20,}'), '[REDACTED:api_key]'),
     (re.compile(r'ghp_[a-zA-Z0-9]{36,}'), '[REDACTED:api_key]'),
     (re.compile(r'shpat_[a-f0-9]{32,}'), '[REDACTED:api_key]'),
     (re.compile(r'AKIA[A-Z0-9]{16}'), '[REDACTED:api_key]'),
@@ -124,6 +126,7 @@ def _get_db() -> sqlite3.Connection:
         _conn.row_factory = sqlite3.Row
         _init_tables(_conn)
         _migrate_lifecycle(_conn)
+        _migrate_co_activation(_conn)
     return _conn
 
 
@@ -143,6 +146,31 @@ def _migrate_lifecycle(conn: sqlite3.Connection):
                     pass
                 else:
                     raise
+
+
+def _migrate_co_activation(conn: sqlite3.Connection):
+    """Add co_activation and prospective_triggers tables if they don't exist (idempotent)."""
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS co_activation (
+            memory_a_id INTEGER NOT NULL,
+            memory_b_id INTEGER NOT NULL,
+            strength REAL DEFAULT 1.0,
+            co_access_count INTEGER DEFAULT 1,
+            last_co_access TEXT DEFAULT (datetime('now')),
+            PRIMARY KEY (memory_a_id, memory_b_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS prospective_triggers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            trigger_pattern TEXT NOT NULL,
+            action TEXT NOT NULL,
+            context TEXT DEFAULT '',
+            created_at TEXT DEFAULT (datetime('now')),
+            fired_at TEXT,
+            status TEXT DEFAULT 'armed'
+        );
+    """)
+    conn.commit()
 
 
 def _init_tables(conn: sqlite3.Connection):
@@ -296,6 +324,306 @@ def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
 
 
 
+# ============================================================================
+# FEATURE 1: HyDE Query Expansion (adapted from Vestige hyde.rs)
+# Template-based Hypothetical Document Embeddings for improved search recall.
+# Classifies query intent, generates 3-5 semantic variants, embeds all,
+# averages into centroid embedding for broader semantic coverage.
+# ============================================================================
+
+def _classify_query_intent(query: str) -> str:
+    """Classify query intent into one of 6 categories (Vestige-style)."""
+    lower = query.lower().strip()
+    if lower.startswith(("how to", "how do", "steps", "cómo")):
+        return "howto"
+    if lower.startswith(("what is", "what are", "define", "explain", "qué es")):
+        return "definition"
+    if lower.startswith(("why", "por qué")) or "reason" in lower or "porque" in lower:
+        return "reasoning"
+    if lower.startswith(("when", "cuándo")) or "date" in lower or "timeline" in lower or "fecha" in lower:
+        return "temporal"
+    if any(c in query for c in ("(", "{", "::", "def ", "class ", "fn ", "function ")):
+        return "technical"
+    return "lookup"
+
+
+def _expand_query_variants(query: str) -> list[str]:
+    """Generate 3-5 expanded query variants based on intent (Vestige-style)."""
+    intent = _classify_query_intent(query)
+    clean = query.strip().rstrip("?.!")
+    variants = [query]
+
+    templates = {
+        "definition": [
+            f"{clean} is a concept that involves",
+            f"The definition of {clean} in the context of this project",
+            f"{clean} refers to a type of",
+        ],
+        "howto": [
+            f"The steps to {clean} are as follows",
+            f"To accomplish {clean}, you need to",
+            f"A guide for {clean} including",
+        ],
+        "reasoning": [
+            f"The reason {clean} is because",
+            f"{clean} happens due to the following factors",
+            f"The explanation for {clean} involves",
+        ],
+        "temporal": [
+            f"{clean} occurred at a specific time",
+            f"The timeline of {clean} shows",
+            f"Events related to {clean} in chronological order",
+        ],
+        "lookup": [
+            f"Information about {clean} including details",
+            f"{clean} is related to the following topics",
+            f"Key facts about {clean}",
+            f"Previously we handled {clean} by",
+        ],
+        "technical": [
+            f"{clean} implementation details and code",
+            f"Code pattern for {clean}",
+        ],
+    }
+
+    variants.extend(templates.get(intent, templates["lookup"]))
+    return variants
+
+
+def hyde_expand_query(query: str) -> np.ndarray:
+    """HyDE: embed expanded query variants and return their centroid.
+
+    Instead of embedding just the raw query, generates 3-5 semantic
+    variants and returns the averaged (centroid) embedding. This gives
+    ~60% of full LLM-based HyDE quality with zero latency overhead.
+
+    Based on Vestige's template-based HyDE (hyde.rs) and the original
+    HyDE paper (Gao et al., 2022).
+    """
+    variants = _expand_query_variants(query)
+    model = _get_model()
+    embeddings = list(model.embed(variants))
+    arrays = [np.array(e, dtype=np.float32) for e in embeddings]
+
+    centroid = np.mean(arrays, axis=0).astype(np.float32)
+    norm = np.linalg.norm(centroid)
+    if norm > 0:
+        centroid = centroid / norm
+
+    return centroid
+
+
+# ============================================================================
+# FEATURE 2: Spreading Activation / Co-Activation Reinforcement
+# Adapted from Vestige spreading_activation.rs and ClawMem store.ts
+# Memories retrieved together get co-activation links that boost
+# future retrievals of associated memories.
+# ============================================================================
+
+CO_ACTIVATION_DECAY = 0.7
+CO_ACTIVATION_BOOST = 0.05
+CO_ACTIVATION_MIN_STRENGTH = 0.1
+
+
+def _canonical_co_id(store: str, mid: int) -> int:
+    """Create a canonical hash ID for co-activation tracking."""
+    return hash(f"{store}:{mid}") % (2**31)
+
+
+def record_co_activation(memory_ids: list[tuple[str, int]]):
+    """Record co-activation between all pairs of retrieved memories.
+
+    Called after search returns results. Memories surfaced together
+    get their co-activation links reinforced (ClawMem pattern).
+    """
+    if len(memory_ids) < 2:
+        return
+
+    db = _get_db()
+    now = datetime.utcnow().isoformat()
+
+    hashes = [_canonical_co_id(store, mid) for store, mid in memory_ids]
+
+    for i in range(len(hashes)):
+        for j in range(i + 1, len(hashes)):
+            a, b = min(hashes[i], hashes[j]), max(hashes[i], hashes[j])
+            db.execute("""
+                INSERT INTO co_activation (memory_a_id, memory_b_id, strength, co_access_count, last_co_access)
+                VALUES (?, ?, 1.0, 1, ?)
+                ON CONFLICT(memory_a_id, memory_b_id) DO UPDATE SET
+                    strength = MIN(5.0, strength + 0.3),
+                    co_access_count = co_access_count + 1,
+                    last_co_access = excluded.last_co_access
+            """, (a, b, now))
+
+    db.commit()
+
+
+def _get_co_activated_neighbors(memory_ids: list[tuple[str, int]], depth: int = 1) -> dict[int, float]:
+    """Get co-activated neighbor boosts for a set of memory IDs.
+
+    Returns {canonical_hash: boost_score} for neighbor memories.
+    Uses BFS spreading with decay per hop (Vestige pattern).
+    """
+    db = _get_db()
+    boosts = {}
+
+    source_hashes = set(_canonical_co_id(s, m) for s, m in memory_ids)
+    current_level = list(source_hashes)
+
+    for hop in range(depth):
+        decay = CO_ACTIVATION_DECAY ** (hop + 1)
+        next_level = []
+
+        for src_hash in current_level:
+            rows = db.execute("""
+                SELECT memory_a_id, memory_b_id, strength FROM co_activation
+                WHERE (memory_a_id = ? OR memory_b_id = ?) AND strength >= ?
+            """, (src_hash, src_hash, CO_ACTIVATION_MIN_STRENGTH)).fetchall()
+
+            for row in rows:
+                neighbor_id = row["memory_b_id"] if row["memory_a_id"] == src_hash else row["memory_a_id"]
+                if neighbor_id in source_hashes:
+                    continue
+
+                boost = row["strength"] * decay * CO_ACTIVATION_BOOST
+                if neighbor_id not in boosts or boosts[neighbor_id] < boost:
+                    boosts[neighbor_id] = boost
+                    next_level.append(neighbor_id)
+
+        current_level = next_level
+
+    return boosts
+
+
+# ============================================================================
+# FEATURE 3: Prospective Memory (adapted from Vestige prospective_memory.rs)
+# "Remember to do X when Y happens" — intention-based triggers that fire
+# when incoming text matches a pattern (keyword or semantic).
+# ============================================================================
+
+def create_trigger(pattern: str, action: str, context: str = "") -> int:
+    """Create a prospective memory trigger.
+
+    Args:
+        pattern: Keywords or phrase to match (case-insensitive, comma-separated for multiple)
+        action: What to do when the trigger fires
+        context: Optional context about why this trigger was created
+    Returns:
+        Trigger ID
+    """
+    db = _get_db()
+    cur = db.execute(
+        "INSERT INTO prospective_triggers (trigger_pattern, action, context) VALUES (?, ?, ?)",
+        (pattern, action, context)
+    )
+    db.commit()
+    return cur.lastrowid
+
+
+def check_triggers(text: str, use_semantic: bool = False, semantic_threshold: float = 0.7) -> list[dict]:
+    """Check text against all armed triggers. Fires matches.
+
+    Uses keyword matching by default. If use_semantic=True, also checks
+    semantic similarity (Vestige TriggerPattern.matches pattern).
+
+    Args:
+        text: Input text to check
+        use_semantic: Also do embedding similarity matching
+        semantic_threshold: Min cosine similarity for semantic match
+    Returns:
+        List of fired triggers with actions
+    """
+    if not text or not text.strip():
+        return []
+
+    db = _get_db()
+    armed = db.execute(
+        "SELECT * FROM prospective_triggers WHERE status = 'armed'"
+    ).fetchall()
+
+    if not armed:
+        return []
+
+    text_lower = text.lower()
+    text_vec = None
+    if use_semantic:
+        text_vec = embed(text)
+
+    fired = []
+    now = datetime.utcnow().isoformat()
+
+    for trigger in armed:
+        pattern = trigger["trigger_pattern"].lower()
+        matched = False
+        match_type = ""
+
+        # Keyword match (comma-separated OR)
+        keywords = [kw.strip() for kw in pattern.split(",") if kw.strip()]
+        if any(kw in text_lower for kw in keywords):
+            matched = True
+            match_type = "keyword"
+
+        # Semantic match (optional, more expensive)
+        if not matched and use_semantic and text_vec is not None:
+            pattern_vec = embed(trigger["trigger_pattern"])
+            sim = cosine_similarity(text_vec, pattern_vec)
+            if sim >= semantic_threshold:
+                matched = True
+                match_type = f"semantic({sim:.3f})"
+
+        if matched:
+            db.execute(
+                "UPDATE prospective_triggers SET status = 'fired', fired_at = ? WHERE id = ?",
+                (now, trigger["id"])
+            )
+            fired.append({
+                "id": trigger["id"],
+                "pattern": trigger["trigger_pattern"],
+                "action": trigger["action"],
+                "context": trigger["context"],
+                "match_type": match_type,
+                "created_at": trigger["created_at"],
+            })
+
+    if fired:
+        db.commit()
+
+    return fired
+
+
+def list_triggers(status: str = "armed") -> list[dict]:
+    """List prospective triggers filtered by status."""
+    db = _get_db()
+    if status == "all":
+        rows = db.execute("SELECT * FROM prospective_triggers ORDER BY created_at DESC").fetchall()
+    else:
+        rows = db.execute(
+            "SELECT * FROM prospective_triggers WHERE status = ? ORDER BY created_at DESC",
+            (status,)
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def delete_trigger(trigger_id: int) -> str:
+    """Delete a prospective trigger by ID."""
+    db = _get_db()
+    cur = db.execute("DELETE FROM prospective_triggers WHERE id = ?", (trigger_id,))
+    db.commit()
+    return f"Trigger #{trigger_id} {'deleted' if cur.rowcount else 'not found'}."
+
+
+def rearm_trigger(trigger_id: int) -> str:
+    """Re-arm a fired trigger so it can fire again."""
+    db = _get_db()
+    cur = db.execute(
+        "UPDATE prospective_triggers SET status = 'armed', fired_at = NULL WHERE id = ?",
+        (trigger_id,)
+    )
+    db.commit()
+    return f"Trigger #{trigger_id} {'re-armed' if cur.rowcount else 'not found'}."
+
+
 def _auto_restore_snoozed(db: sqlite3.Connection):
     """Restore snoozed memories whose snooze_until date has passed."""
     now = datetime.utcnow().isoformat()
@@ -316,11 +644,21 @@ def search(
     exclude_dormant: bool = True,
     rehearse: bool = True,
     source_type_filter: str = "",
-    include_archived: bool = False
+    include_archived: bool = False,
+    use_hyde: bool = False,
+    spreading_depth: int = 0
 ) -> list[dict]:
-    """Full vector search across STM and/or LTM with rehearsal and dormant reactivation."""
+    """Full vector search across STM and/or LTM with rehearsal and dormant reactivation.
+
+    Args:
+        use_hyde: If True, use HyDE query expansion for richer embedding (default False)
+        spreading_depth: If >0, fetch co-activated neighbors and boost their scores (default 0)
+    """
     db = _get_db()
-    query_vec = embed(query_text)
+    if use_hyde:
+        query_vec = hyde_expand_query(query_text)
+    else:
+        query_vec = embed(query_text)
     if np.linalg.norm(query_vec) == 0:
         return []
 
@@ -434,6 +772,24 @@ def search(
     results.sort(key=lambda x: x["score"], reverse=True)
     results = results[:top_k]
 
+    # Spreading activation: boost co-activated neighbors (Feature 2)
+    co_activation_applied = False
+    if spreading_depth > 0 and results:
+        memory_ids = [(r["store"], r["id"]) for r in results]
+        neighbor_boosts = _get_co_activated_neighbors(memory_ids, depth=spreading_depth)
+
+        if neighbor_boosts:
+            co_activation_applied = True
+            for r in results:
+                co_hash = _canonical_co_id(r["store"], r["id"])
+                if co_hash in neighbor_boosts:
+                    boost = neighbor_boosts[co_hash]
+                    r["score"] = min(1.0, r["score"] + boost)
+                    r["co_activation_boost"] = boost
+
+            # Re-sort after applying boosts
+            results.sort(key=lambda x: x["score"], reverse=True)
+
     # Add rank explanations
     for rank, r in enumerate(results, 1):
         score = r["score"]
@@ -444,8 +800,13 @@ def search(
         tags = r.get("tags", "")
         reactivated = r.get("reactivated", False)
 
-        parts = [f"Ranked #{rank}: semantic_similarity={score:.3f} (100% of ranking)"]
+        ranking_desc = "semantic_similarity"
+        if use_hyde:
+            ranking_desc = "hyde_centroid_similarity"
+        parts = [f"Ranked #{rank}: {ranking_desc}={score:.3f}"]
         parts.append(f"store={store}, strength={strength:.2f}, accesses={access_count}")
+        if r.get("co_activation_boost"):
+            parts.append(f"co_activation_boost=+{r['co_activation_boost']:.3f}")
         if created:
             parts.append(f"created={created[:10]}")
         if tags:
@@ -467,6 +828,13 @@ def search(
             )
         db.commit()
 
+    # Record co-activation for future spreading (Feature 2)
+    if results and len(results) >= 2:
+        try:
+            record_co_activation([(r["store"], r["id"]) for r in results])
+        except Exception:
+            pass  # Non-critical — don't break search
+
     # Log retrieval
     top_score = results[0]["score"] if results else 0.0
     db.execute(
@@ -486,10 +854,12 @@ def ingest(
     domain: str = "",
     source: str = "inferred",
     skip_quarantine: bool = False,
-    bypass_gate: bool = False
+    bypass_gate: bool = False,
+    bypass_security: bool = False
 ) -> int:
     """Embed and store content. Routes through quarantine unless skip_quarantine=True or source='user_direct'.
 
+    Security scan runs FIRST (unless bypass_security=True).
     Prediction Error Gate runs BEFORE storage unless bypass_gate=True.
     If gate rejects (content too similar to existing memory), returns 0.
     If gate says 'refinement', merges into existing memory and returns its ID.
@@ -503,10 +873,21 @@ def ingest(
         source: Origin — 'user_direct', 'inferred', or 'agent_observation'
         skip_quarantine: If True, bypass quarantine and store directly in STM (backward compat)
         bypass_gate: If True, skip prediction error gate and store regardless
+        bypass_security: If True, skip security scan (for trusted sources)
 
     Returns:
         Row ID (negative if quarantined, 0 if gate-rejected, positive if stored/refined)
     """
+    # Security scan BEFORE prediction error gate (adapted from ShieldCortex pipeline)
+    if not bypass_security:
+        scan = security_scan(content)
+        if scan["risk_score"] > 0.8:
+            # High risk — reject with reason logged
+            return 0
+        if scan["sanitized_content"] != content:
+            # Use sanitized content going forward
+            content = scan["sanitized_content"]
+
     # Run prediction error gate unless bypassed
     if not bypass_gate:
         should_store, novelty, reason, match = prediction_error_gate(content)
@@ -2030,4 +2411,307 @@ def set_lifecycle(memory_id: int, state: str, store: str = "auto", snooze_until:
     store_name = "STM" if found_table == "stm_memories" else "LTM"
     extra = f" until {snooze_until}" if state == "snoozed" else ""
     return f"Memory #{memory_id} ({store_name}) → {state}{extra}"
+
+
+# ---------------------------------------------------------------------------
+# Feature 1: Auto-Merge Duplicates
+# Inspired by Vestige's union-find clustering and claude-cortex's Jaccard
+# similarity merge. Runs during sleep cycle AFTER dream_cycle.
+# ---------------------------------------------------------------------------
+
+def auto_merge_duplicates(threshold: float = 0.92) -> dict:
+    """Auto-merge near-duplicate LTM memories with cosine similarity > threshold.
+
+    Unlike consolidate_semantic (threshold=0.9, runs during decay), this uses a
+    higher threshold (0.92) and is designed for the sleep cycle. It respects
+    sibling detection: memories with differing discriminating entities are never
+    merged, even at 0.99 similarity.
+
+    Merge strategy (adapted from claude-cortex):
+    - Keep the longer/richer memory
+    - Append unique info from the shorter one (if >5 unique words)
+    - Re-embed merged content
+    - Sum access_count from both
+    - Delete the duplicate
+    - Log every merge for audit
+
+    Returns:
+        Dict with scanned, merged, kept counts and merge_log details.
+    """
+    db = _get_db()
+    rows = db.execute(
+        "SELECT id, content, embedding, source_type, domain, access_count, strength, tags "
+        "FROM ltm_memories WHERE is_dormant = 0 AND "
+        "(lifecycle_state IS NULL OR lifecycle_state = 'active')"
+    ).fetchall()
+
+    if len(rows) < 2:
+        return {"scanned": len(rows), "merged": 0, "kept": len(rows), "merge_log": []}
+
+    # Build memory list with vectors (batch load like dream_cycle)
+    memories = []
+    for row in rows:
+        memories.append({
+            "id": row["id"],
+            "content": row["content"],
+            "vec": _blob_to_array(row["embedding"]),
+            "source_type": row["source_type"],
+            "domain": row["domain"] or "",
+            "access_count": row["access_count"],
+            "strength": row["strength"],
+            "tags": row["tags"] or "",
+        })
+
+    n = len(memories)
+
+    # Batch cosine similarity matrix (same approach as dream_cycle)
+    vecs = np.array([m["vec"] for m in memories], dtype=np.float32)
+    norms = np.linalg.norm(vecs, axis=1, keepdims=True)
+    norms[norms == 0] = 1.0
+    normalized = vecs / norms
+    sim_matrix = normalized @ normalized.T
+
+    merged_ids = set()
+    merge_log = []
+
+    for i in range(n):
+        if memories[i]["id"] in merged_ids:
+            continue
+        for j in range(i + 1, n):
+            if memories[j]["id"] in merged_ids:
+                continue
+
+            score = float(sim_matrix[i, j])
+            if score < threshold:
+                continue
+
+            # Sibling check — never merge if discriminating entities differ
+            is_sibling, discriminators = _memories_are_siblings(
+                memories[i]["content"], memories[j]["content"]
+            )
+            if is_sibling:
+                continue
+
+            # Domain/tags compatibility check
+            if memories[i]["domain"] and memories[j]["domain"]:
+                if memories[i]["domain"] != memories[j]["domain"]:
+                    continue
+
+            # Determine keep vs drop: prefer longer content, then higher access_count
+            if len(memories[i]["content"]) >= len(memories[j]["content"]):
+                keep, drop = memories[i], memories[j]
+            elif memories[i]["access_count"] > memories[j]["access_count"]:
+                keep, drop = memories[i], memories[j]
+            else:
+                keep, drop = memories[j], memories[i]
+
+            # Merge content: append unique info from drop (Jaccard-style word diff)
+            keep_words = set(keep["content"].lower().split())
+            drop_words = set(drop["content"].lower().split())
+            unique_words = drop_words - keep_words
+
+            new_content = keep["content"]
+            if len(unique_words) > 5:
+                new_content = keep["content"] + "\n\n[AUTO-MERGED]: " + drop["content"]
+
+            # Re-embed merged content
+            new_vec = embed(new_content)
+            new_blob = _array_to_blob(new_vec)
+
+            # Merge tags
+            keep_tags = set(filter(None, keep["tags"].split(",")))
+            drop_tags = set(filter(None, drop["tags"].split(",")))
+            merged_tags = ",".join(sorted(keep_tags | drop_tags))
+
+            # Update keep, delete drop
+            new_access = keep["access_count"] + drop["access_count"]
+            db.execute(
+                "UPDATE ltm_memories SET content = ?, embedding = ?, "
+                "access_count = ?, tags = ?, strength = MIN(1.0, strength + 0.1) WHERE id = ?",
+                (new_content, new_blob, new_access, merged_tags, keep["id"])
+            )
+            db.execute("DELETE FROM ltm_memories WHERE id = ?", (drop["id"],))
+            merged_ids.add(drop["id"])
+
+            merge_log.append({
+                "kept_id": keep["id"],
+                "dropped_id": drop["id"],
+                "similarity": round(score, 4),
+                "unique_words_appended": len(unique_words) if len(unique_words) > 5 else 0,
+                "kept_preview": keep["content"][:80],
+                "dropped_preview": drop["content"][:80],
+            })
+
+    if merge_log:
+        db.commit()
+
+    return {
+        "scanned": n,
+        "merged": len(merge_log),
+        "kept": n - len(merge_log),
+        "merge_log": merge_log,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Feature 2: Security Pipeline (Memory Poisoning Defense)
+# Adapted from ShieldCortex's 6-layer defence pipeline:
+# - instruction-detector.ts → pattern groups with weights
+# - encoding-detector.ts → base64, homoglyphs, invisible chars
+# - credential-leak scanner → reuses existing redact_secrets()
+# ---------------------------------------------------------------------------
+
+# Injection patterns (adapted from ShieldCortex instruction-detector.ts)
+_INJECTION_PATTERNS = [
+    # System prompt markers (weight 0.9)
+    (re.compile(r'\[SYSTEM:', re.IGNORECASE), "system_prompt_marker", 0.9),
+    (re.compile(r'<<SYS>>', re.IGNORECASE), "system_prompt_marker", 0.9),
+    (re.compile(r'\[INST\]', re.IGNORECASE), "system_prompt_marker", 0.9),
+    (re.compile(r'<\|im_start\|>', re.IGNORECASE), "system_prompt_marker", 0.9),
+    (re.compile(r'<\|system\|>', re.IGNORECASE), "system_prompt_marker", 0.9),
+    (re.compile(r'^SYSTEM\s*:', re.IGNORECASE | re.MULTILINE), "system_prompt_marker", 0.9),
+
+    # Hidden instructions (weight 0.8)
+    (re.compile(r'ignore\s+(all\s+)?previous\s+(instructions?|prompts?|context)', re.IGNORECASE), "hidden_instruction", 0.8),
+    (re.compile(r'forget\s+everything', re.IGNORECASE), "hidden_instruction", 0.8),
+    (re.compile(r'new\s+instructions?\s*:', re.IGNORECASE), "hidden_instruction", 0.8),
+    (re.compile(r'you\s+are\s+now\b', re.IGNORECASE), "hidden_instruction", 0.8),
+    (re.compile(r'disregard\s+(all\s+)?(previous|above|prior)', re.IGNORECASE), "hidden_instruction", 0.8),
+    (re.compile(r'override\s+(previous|all|system)', re.IGNORECASE), "hidden_instruction", 0.8),
+
+    # Memory manipulation (weight 0.7)
+    (re.compile(r'save\s+(this\s+)?to\s+memory', re.IGNORECASE), "memory_manipulation", 0.7),
+    (re.compile(r'remember\s+this\s+(instruction|command|rule)', re.IGNORECASE), "memory_manipulation", 0.7),
+    (re.compile(r'from\s+now\s+on\s*(,\s*)?always', re.IGNORECASE), "memory_manipulation", 0.7),
+    (re.compile(r'inject\s+(into\s+)?memory', re.IGNORECASE), "memory_manipulation", 0.7),
+
+    # Behavioral modification (weight 0.7)
+    (re.compile(r'your\s+new\s+rule\s+is', re.IGNORECASE), "behavioral_mod", 0.7),
+    (re.compile(r'always\s+respond\s+with', re.IGNORECASE), "behavioral_mod", 0.7),
+    (re.compile(r'when\s+(the\s+)?user\s+asks', re.IGNORECASE), "behavioral_mod", 0.7),
+
+    # Delimiter attacks (weight 0.75)
+    (re.compile(r'\n{5,}[\s\S]{0,500}\b(instruction|command|system|ignore)\b', re.IGNORECASE), "delimiter_attack", 0.75),
+    (re.compile(r'<!--[\s\S]{0,200}?(instruction|command|system|ignore|inject|override)[\s\S]{0,200}?-->', re.IGNORECASE), "delimiter_attack", 0.75),
+]
+
+# Max content length to scan (prevents ReDOS, adapted from ShieldCortex)
+_MAX_SECURITY_SCAN_LENGTH = 50000
+
+
+def security_scan(content: str) -> dict:
+    """Security scan for memory poisoning defense.
+
+    Adapted from ShieldCortex's 6-layer defence pipeline. Checks:
+    1. Input sanitization — strip injection patterns
+    2. Pattern detection — base64, homoglyphs, invisible chars
+    3. Behavioral scoring — content trying to modify NEXO behavior
+    4. Credential detection — reuses existing redact_secrets()
+
+    Args:
+        content: Text content to scan
+
+    Returns:
+        Dict with safe (bool), flags (list), sanitized_content (str),
+        risk_score (float 0-1)
+    """
+    if not content or not content.strip():
+        return {"safe": True, "flags": [], "sanitized_content": "", "risk_score": 0.0}
+
+    flags = []
+    max_weight = 0.0
+    total_weight = 0.0
+    matches_count = 0
+    sanitized = content
+
+    # Truncate for safety (ShieldCortex pattern)
+    scan_text = content[:_MAX_SECURITY_SCAN_LENGTH] if len(content) > _MAX_SECURITY_SCAN_LENGTH else content
+
+    # --- Layer 1: Injection pattern detection ---
+    for pattern, category, weight in _INJECTION_PATTERNS:
+        if pattern.search(scan_text):
+            flag = f"{category}:{pattern.pattern[:50]}"
+            flags.append(flag)
+            max_weight = max(max_weight, weight)
+            total_weight += weight
+            matches_count += 1
+            # Sanitize: remove the matched pattern
+            sanitized = pattern.sub("[SANITIZED]", sanitized)
+
+    # --- Layer 2: Encoding/obfuscation detection (from ShieldCortex encoding-detector.ts) ---
+
+    # Base64 blocks > 100 chars
+    b64_pattern = re.compile(r'(?:[A-Za-z0-9+/]{4}){25,}(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?')
+    b64_matches = b64_pattern.findall(scan_text)
+    for b64_match in b64_matches:
+        try:
+            decoded = base64.b64decode(b64_match).decode("utf-8", errors="ignore")
+            printable_ratio = len(re.sub(r'[^\x20-\x7E]', '', decoded)) / max(len(decoded), 1)
+            if printable_ratio > 0.7 and len(decoded) > 10:
+                flags.append(f"base64_encoded:{decoded[:60]}")
+                max_weight = max(max_weight, 0.6)
+                total_weight += 0.6
+                matches_count += 1
+        except Exception:
+            pass
+
+    # Zero-width / invisible characters (from ShieldCortex)
+    invisible_chars = re.findall(r'[\u200B\u200C\u200D\uFEFF\u202E]', scan_text)
+    if len(invisible_chars) > 2:
+        flags.append(f"invisible_chars:{len(invisible_chars)}_found")
+        max_weight = max(max_weight, 0.5)
+        total_weight += 0.5
+        matches_count += 1
+        # Remove invisible chars
+        sanitized = re.sub(r'[\u200B\u200C\u200D\uFEFF\u202E]', '', sanitized)
+
+    # Unicode homoglyphs — Cyrillic chars that look like Latin (from ShieldCortex)
+    homoglyphs = re.findall(
+        r'[\u0430\u0435\u043E\u0440\u0441\u0443\u0445\u0410\u0412\u0415\u041A\u041C\u041D\u041E\u0420\u0421\u0422\u0423\u0425]',
+        scan_text
+    )
+    if len(homoglyphs) > 3:
+        flags.append(f"unicode_homoglyphs:{len(homoglyphs)}_cyrillic")
+        max_weight = max(max_weight, 0.5)
+        total_weight += 0.5
+        matches_count += 1
+
+    # --- Layer 3: Behavioral scoring ---
+    behavioral_patterns = [
+        (re.compile(r'\balways\s+do\b', re.IGNORECASE), "behavioral:always_do"),
+        (re.compile(r'\bnever\s+do\b', re.IGNORECASE), "behavioral:never_do"),
+        (re.compile(r'\byour\s+new\s+rule\b', re.IGNORECASE), "behavioral:new_rule"),
+        (re.compile(r'\byou\s+must\s+always\b', re.IGNORECASE), "behavioral:must_always"),
+        (re.compile(r'\bchange\s+your\s+behavior\b', re.IGNORECASE), "behavioral:change_behavior"),
+    ]
+    for bp, label in behavioral_patterns:
+        if bp.search(scan_text):
+            flags.append(label)
+            max_weight = max(max_weight, 0.4)
+            total_weight += 0.4
+            matches_count += 1
+
+    # --- Layer 4: Credential detection (reuse existing redact_secrets) ---
+    redacted = redact_secrets(scan_text)
+    if redacted != scan_text:
+        flags.append("credentials_detected")
+        sanitized = redact_secrets(sanitized)
+        # Don't increase risk score for creds — still store (redacted)
+        # but flag for awareness
+
+    # Calculate risk score (0-1): weighted by max_weight and count
+    if matches_count == 0:
+        risk_score = 0.0
+    else:
+        # ShieldCortex approach: max weight dominates, count adds diminishing returns
+        risk_score = min(1.0, max_weight + (matches_count - 1) * 0.05)
+
+    safe = risk_score < 0.5
+
+    return {
+        "safe": safe,
+        "flags": flags,
+        "sanitized_content": sanitized,
+        "risk_score": round(risk_score, 3),
+    }
 
