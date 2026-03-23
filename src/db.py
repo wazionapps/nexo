@@ -20,7 +20,7 @@ DB_PATH = os.environ.get(
 )
 
 # TTLs in seconds
-SESSION_STALE_SECONDS = 3600   # 1 hour
+SESSION_STALE_SECONDS = 900    # 15 min (documented TTL)
 MESSAGE_TTL_SECONDS = 3600     # 1 hour
 QUESTION_TTL_SECONDS = 600     # 10 min
 

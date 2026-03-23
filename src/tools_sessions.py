@@ -149,6 +149,12 @@ def handle_heartbeat(sid: str, task: str, context_hint: str = '') -> str:
     return "\n".join(parts)
 
 
+def handle_stop(sid: str) -> str:
+    """Cleanly close a session, removing it from active sessions immediately."""
+    complete_session(sid)
+    return f"Sesión {sid} cerrada."
+
+
 def handle_status(keyword: str | None = None) -> str:
     """List active sessions, optionally filtered by keyword."""
     clean_stale_sessions()

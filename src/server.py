@@ -87,6 +87,16 @@ def nexo_heartbeat(sid: str, task: str) -> str:
 
 
 @mcp.tool
+def nexo_stop(sid: str) -> str:
+    """Cleanly close a session. Removes it from active sessions immediately.
+
+    Call this when ending a conversation to avoid ghost sessions.
+    Args:
+        sid: Session ID to close."""
+    from tools_sessions import handle_stop
+    return handle_stop(sid)
+
+@mcp.tool
 def nexo_status(keyword: str = "") -> str:
     """List active sessions. Filter by keyword if provided."""
     return handle_status(keyword if keyword else None)
