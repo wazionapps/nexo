@@ -10,6 +10,7 @@ import pathlib
 from pathlib import Path
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+NEXO_HOME.mkdir(parents=True, exist_ok=True)
 
 DB_PATH = os.environ.get(
     "NEXO_TEST_DB",
