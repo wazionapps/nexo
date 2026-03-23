@@ -39,3 +39,4 @@ credentials*.json
 # macOS Finder duplicates
 * 2*
 * 2.*
+.githooks/
