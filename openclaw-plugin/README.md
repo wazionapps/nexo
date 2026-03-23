@@ -48,8 +48,10 @@ In `~/.openclaw/openclaw.json`:
 
 | Tool | Description |
 |------|------------|
-| `memory_recall` | Semantic search across all memories |
+| `memory_recall` | Semantic search across all memories (STM + LTM) |
 | `memory_store` | Store error patterns and lessons learned |
+| `memory_forget` | Archive or delete outdated memories (GDPR-compliant) |
+| `memory_pin` | Pin a memory so it never decays |
 | `memory_guard` | Check past errors before editing code |
 | `memory_trust` | Update trust score based on user feedback |
 | `memory_dissonance` | Detect conflicts with established knowledge |
@@ -62,8 +64,10 @@ In `~/.openclaw/openclaw.json`:
 ## CLI Commands
 
 ```bash
-openclaw nexo-status    # Show cognitive memory statistics
-openclaw nexo-recall "deployment issues"  # Semantic search
+openclaw nexo status     # Show cognitive memory statistics
+openclaw nexo recall "deployment issues"  # Semantic search
+openclaw nexo guard --area shopify        # Check past errors
+openclaw nexo trust                       # Show trust score
 ```
 
 ## Architecture
@@ -84,7 +88,7 @@ fastembed vectors (BAAI/bge-small-en-v1.5, CPU)
 
 - macOS (Linux planned)
 - Python 3 with fastembed
-- OpenClaw >= 2026.3.22
+- OpenClaw >= 2026.3.0
 - Run `npx nexo-brain` first to install the cognitive engine
 
 ## License

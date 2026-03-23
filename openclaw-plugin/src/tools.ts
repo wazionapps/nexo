@@ -2,11 +2,12 @@
  * Tool definitions for the NEXO Brain OpenClaw memory plugin.
  *
  * Exposes cognitive memory tools as native OpenClaw tools via TypeBox schemas.
+ * Each tool maps to a NEXO MCP tool via the MCP bridge.
  */
 
 import { Type, type TObject } from "@sinclair/typebox";
 
-interface ToolDef {
+export interface ToolDef {
   name: string;
   nexoName: string;
   label: string;
@@ -15,22 +16,30 @@ interface ToolDef {
 }
 
 export const COGNITIVE_TOOLS: ToolDef[] = [
+  // ========================================================================
+  // Core memory operations
+  // ========================================================================
   {
     name: "memory_recall",
     nexoName: "nexo_cognitive_retrieve",
     label: "Recall Memory",
     description:
-      "Semantic search across all memories (STM + LTM). Finds memories by meaning, not keywords. Use this to check context before acting.",
+      "Semantic search across all memories (STM + LTM). Finds memories by meaning, not keywords. Use before answering about prior work, decisions, or preferences.",
     parameters: Type.Object({
       query: Type.String({ description: "What to search for (semantic)" }),
       top_k: Type.Optional(
-        Type.Integer({ default: 10, description: "Max results" })
+        Type.Integer({ default: 10, description: "Max results" }),
       ),
       min_score: Type.Optional(
-        Type.Number({ default: 0.5, description: "Minimum relevance (0-1)" })
+        Type.Number({
+          default: 0.5,
+          description: "Minimum relevance (0-1)",
+        }),
       ),
       domain: Type.Optional(
-        Type.String({ description: "Filter by domain (e.g. project name)" })
+        Type.String({
+          description: "Filter by domain (e.g. project name)",
+        }),
       ),
     }),
   },
@@ -47,25 +56,63 @@ export const COGNITIVE_TOOLS: ToolDef[] = [
       error: Type.String({ description: "What went wrong" }),
       solution: Type.String({ description: "How it was fixed" }),
       reasoning: Type.Optional(
-        Type.String({ description: "Why this solution works" })
+        Type.String({ description: "Why this solution works" }),
       ),
     }),
   },
+  {
+    name: "memory_forget",
+    nexoName: "nexo_learning_delete",
+    label: "Forget Memory",
+    description:
+      "Archive or delete a specific memory/learning by ID. Use when a memory is outdated, incorrect, or no longer relevant. GDPR-compliant deletion.",
+    parameters: Type.Object({
+      id: Type.Integer({ description: "Learning/memory ID to delete" }),
+    }),
+  },
+  {
+    name: "memory_pin",
+    nexoName: "nexo_learning_update",
+    label: "Pin Memory",
+    description:
+      "Pin a memory so it never decays. Use for critical rules, permanent preferences, or foundational knowledge that must persist indefinitely.",
+    parameters: Type.Object({
+      id: Type.Integer({ description: "Learning/memory ID to pin" }),
+      pinned: Type.Optional(
+        Type.Boolean({
+          default: true,
+          description: "True to pin, false to unpin",
+        }),
+      ),
+    }),
+  },
+
+  // ========================================================================
+  // Guard system
+  // ========================================================================
   {
     name: "memory_guard",
     nexoName: "nexo_guard_check",
     label: "Guard Check",
     description:
-      "Check past errors and learnings before editing code. Returns relevant warnings, known issues, and DB schemas for the files/area you're about to modify.",
+      "Check past errors and learnings before editing code. Returns relevant warnings, known issues, and DB schemas for the files/area you're about to modify. MUST be called before every code change.",
     parameters: Type.Object({
       files: Type.Optional(
-        Type.String({ description: "Comma-separated file paths to check" })
+        Type.String({
+          description: "Comma-separated file paths to check",
+        }),
       ),
       area: Type.Optional(
-        Type.String({ description: "System area (e.g. wazion, shopify)" })
+        Type.String({
+          description: "System area (e.g. wazion, shopify)",
+        }),
       ),
     }),
   },
+
+  // ========================================================================
+  // Trust and alignment
+  // ========================================================================
   {
     name: "memory_trust",
     nexoName: "nexo_cognitive_trust",
@@ -78,19 +125,24 @@ export const COGNITIVE_TOOLS: ToolDef[] = [
           "Event type: explicit_thanks, delegation, correction, repeated_error, sibling_detected, proactive_action, override, forgot_followup",
       }),
       context: Type.Optional(
-        Type.String({ description: "Brief context for the event" })
+        Type.String({ description: "Brief context for the event" }),
       ),
     }),
   },
+
+  // ========================================================================
+  // Cognitive analysis
+  // ========================================================================
   {
     name: "memory_dissonance",
     nexoName: "nexo_cognitive_dissonance",
     label: "Check Cognitive Dissonance",
     description:
-      "Detect conflicts between a new instruction and established memories. Use when the user gives an instruction that seems to contradict past behavior.",
+      'Detect conflicts between a new instruction and established memories. Use when the user gives an instruction that seems to contradict past behavior. Surfaces the conflict: "My memory says X but you\'re asking Y."',
     parameters: Type.Object({
       instruction: Type.String({
-        description: "The new instruction to check against existing memories",
+        description:
+          "The new instruction to check against existing memories",
       }),
     }),
   },
@@ -99,11 +151,17 @@ export const COGNITIVE_TOOLS: ToolDef[] = [
     nexoName: "nexo_cognitive_sentiment",
     label: "Analyze Sentiment",
     description:
-      "Analyze the user's current tone and emotional state from recent messages. Adapts agent behavior: frustrated → ultra-concise, flow → suggest backlog items.",
+      "Analyze the user's current tone and emotional state from recent messages. Adapts agent behavior: frustrated = ultra-concise, flow = suggest backlog items.",
     parameters: Type.Object({
-      text: Type.String({ description: "Recent user messages to analyze" }),
+      text: Type.String({
+        description: "Recent user messages to analyze",
+      }),
     }),
   },
+
+  // ========================================================================
+  // Session continuity
+  // ========================================================================
   {
     name: "memory_diary_write",
     nexoName: "nexo_session_diary_write",
@@ -113,19 +171,21 @@ export const COGNITIVE_TOOLS: ToolDef[] = [
     parameters: Type.Object({
       summary: Type.String({ description: "What happened this session" }),
       decisions: Type.Optional(
-        Type.String({ description: "Key decisions and reasoning" })
+        Type.String({ description: "Key decisions and reasoning" }),
       ),
       pending: Type.Optional(
-        Type.String({ description: "What's left to do" })
+        Type.String({ description: "What's left to do" }),
       ),
       mental_state: Type.Optional(
         Type.String({
           description:
             "Internal state in first person — thread of thought, observations, momentum",
-        })
+        }),
       ),
       domain: Type.Optional(
-        Type.String({ description: "Project/domain for multi-session context" })
+        Type.String({
+          description: "Project/domain for multi-session context",
+        }),
       ),
     }),
   },
@@ -137,19 +197,26 @@ export const COGNITIVE_TOOLS: ToolDef[] = [
       "Read recent session diaries for context continuity. Use at session start to resume where the last session left off.",
     parameters: Type.Object({
       last_n: Type.Optional(
-        Type.Integer({ default: 3, description: "Number of diaries to read" })
+        Type.Integer({
+          default: 3,
+          description: "Number of diaries to read",
+        }),
       ),
       last_day: Type.Optional(
         Type.Boolean({
           default: false,
           description: "Read all diaries from last active day",
-        })
+        }),
       ),
       domain: Type.Optional(
-        Type.String({ description: "Filter by domain" })
+        Type.String({ description: "Filter by domain" }),
       ),
     }),
   },
+
+  // ========================================================================
+  // Session management
+  // ========================================================================
   {
     name: "memory_startup",
     nexoName: "nexo_startup",
@@ -158,7 +225,10 @@ export const COGNITIVE_TOOLS: ToolDef[] = [
       "Register a new session. Call once at the start of every conversation. Returns session ID and active sessions.",
     parameters: Type.Object({
       task: Type.Optional(
-        Type.String({ default: "Startup", description: "Initial task" })
+        Type.String({
+          default: "Startup",
+          description: "Initial task",
+        }),
       ),
     }),
   },
@@ -170,7 +240,9 @@ export const COGNITIVE_TOOLS: ToolDef[] = [
       "Update session task and check for messages from other sessions. Call at the start of every user interaction.",
     parameters: Type.Object({
       sid: Type.String({ description: "Session ID from startup" }),
-      task: Type.String({ description: "Current task (5-10 words)" }),
+      task: Type.String({
+        description: "Current task (5-10 words)",
+      }),
     }),
   },
 ];
