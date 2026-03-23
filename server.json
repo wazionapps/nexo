@@ -1,0 +1,15 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.wazionapps/nexo",
+  "description": "Cognitive memory for AI agents: Atkinson-Shiffrin, semantic RAG, trust scoring, metacognitive guard.",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "nexo-brain",
+      "version": "0.1.2",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}
