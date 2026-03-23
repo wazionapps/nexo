@@ -9,12 +9,12 @@ and writes permanent rules to memory files so they survive forever.
 Three layers:
 1. Session → self_critique field in session_diary (captured at session end)
 2. Daily → this script consolidates all critiques from today
-3. Permanent → writes to feedback_*.md files + MEMORY.md index
+3. Permanent → writes to feedback_*.md files
 
 Only creates permanent memory for patterns that:
 - Appear 2+ times in the same day, OR
 - Appear in 3+ different days (checked against history), OR
-- the user explicitly corrected NEXO (francisco_signals contains correction keywords)
+- User explicitly corrected NEXO (user_signals contains correction keywords)
 """
 
 import json
@@ -26,25 +26,23 @@ from collections import Counter
 from datetime import datetime, date, timedelta
 from pathlib import Path
 
-# Add nexo-mcp to path for cognitive engine
-sys.path.insert(0, str(Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))))
+NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+sys.path.insert(0, str(NEXO_HOME / "src"))
 
-HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
-NEXO_DB = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo"))) / "nexo.db"
-SESSION_BUFFER = HOME / "claude" / "brain" / "session_buffer.jsonl"
-MEMORY_DIR = HOME / "brain"
-MEMORY_INDEX = MEMORY_DIR / "MEMORY.md"
-CONSOLIDATION_LOG = HOME / "claude" / "logs" / "postmortem-consolidation.log"
-HISTORY_FILE = HOME / "claude" / "coordination" / "postmortem-history.json"
+HOME = Path.home()
+NEXO_DB = NEXO_HOME / "nexo.db"
+SESSION_BUFFER = NEXO_HOME / "brain" / "session_buffer.jsonl"
+MEMORY_DIR = NEXO_HOME / "memory"
+CONSOLIDATION_LOG = NEXO_HOME / "logs" / "postmortem-consolidation.log"
+HISTORY_FILE = NEXO_HOME / "coordination" / "postmortem-history.json"
 
 TODAY = date.today()
 TODAY_STR = TODAY.isoformat()
 
 CORRECTION_KEYWORDS = [
-    "corrig", "frustrad", "no lo entiend", "exig", "repet",
-    "no debería", "por qué no", "otra vez", "ya te dije",
-    "cansando", "siempre espera", "no te adelant", "reactivo",
-    "no haces", "error", "mal", "fallo", "irritad"
+    "corrected", "wrong again", "already told", "repeating", "should not",
+    "why not", "again", "tired", "always waiting", "not proactive", "reactive",
+    "not doing", "error", "wrong", "failure", "frustrat"
 ]
 
 
@@ -64,7 +62,7 @@ def get_today_diaries() -> list[dict]:
     conn = sqlite3.connect(str(NEXO_DB))
     conn.row_factory = sqlite3.Row
     rows = conn.execute(
-        "SELECT id, session_id, summary, self_critique, francisco_signals, mental_state, domain, created_at "
+        "SELECT id, session_id, summary, self_critique, user_signals, mental_state, domain, created_at "
         "FROM session_diary WHERE date(created_at) = ? ORDER BY created_at",
         (TODAY_STR,)
     ).fetchall()
@@ -80,7 +78,7 @@ def get_historical_critiques(days: int = 30) -> list[dict]:
     conn = sqlite3.connect(str(NEXO_DB))
     conn.row_factory = sqlite3.Row
     rows = conn.execute(
-        "SELECT self_critique, francisco_signals, created_at "
+        "SELECT self_critique, user_signals, created_at "
         "FROM session_diary WHERE date(created_at) >= ? AND self_critique != '' "
         "ORDER BY created_at",
         (since,)
@@ -90,7 +88,7 @@ def get_historical_critiques(days: int = 30) -> list[dict]:
 
 
 def has_correction_signals(signals: str) -> bool:
-    """Check if francisco_signals indicate corrections."""
+    """Check if user_signals indicate corrections."""
     if not signals:
         return False
     lower = signals.lower()
@@ -101,13 +99,13 @@ def extract_actionable_rules(critiques: list[str]) -> list[str]:
     """Extract concrete, actionable rules from self-critique text."""
     rules = []
     for critique in critiques:
-        if not critique or critique.strip().lower().startswith("sin autocrítica"):
+        if not critique or critique.strip().lower().startswith("no self-critique"):
             continue
         # Each non-empty critique is a potential rule
         # Clean up and normalize
         for line in critique.split("\n"):
             line = line.strip().lstrip("- ").strip()
-            if len(line) > 20 and not line.lower().startswith("sin "):
+            if len(line) > 20:
                 rules.append(line)
     return rules
 
@@ -157,22 +155,23 @@ def write_permanent_rule(rule_title: str, rule_content: str, source_critiques: l
         log(f"  File already exists: {filename}, skipping")
         return None
 
+    MEMORY_DIR.mkdir(parents=True, exist_ok=True)
     content = f"""---
 name: {rule_title}
-description: Regla de comportamiento extraída de autocrítica post-mortem — patrón recurrente detectado
+description: Behavioral rule extracted from post-mortem self-critique — recurring pattern detected
 type: feedback
 ---
 
 {rule_content}
 
-**Why:** Patrón detectado en múltiples sesiones donde NEXO falló en este aspecto. the user no debería tener que corregir lo mismo dos veces.
+**Why:** Pattern detected across multiple sessions where NEXO failed in this aspect. The user should not have to correct the same issue twice.
 
-**How to apply:** Verificar esta regla al inicio de cada sesión y antes de presentar trabajo como completado.
+**How to apply:** Verify this rule at the start of each session and before presenting work as complete.
 
-**Evidencia (autocríticas originales):**
+**Evidence (original self-critiques):**
 """
     for i, critique in enumerate(source_critiques[:3], 1):
-        content += f"- Sesión {i}: {critique[:200]}\n"
+        content += f"- Session {i}: {critique[:200]}\n"
 
     filepath.write_text(content)
     log(f"  Written permanent rule: {filename}")
@@ -231,12 +230,12 @@ def process_sensory_register():
         tasks = event.get("tasks", [])
         decisions = event.get("decisions", [])
         errors = event.get("errors_resolved", [])
-        francisco = event.get("francisco_patterns", [])
+        user_patterns = event.get("user_patterns", [])
         critique = event.get("self_critique", "")
         source = event.get("source", "")
 
         # Skip empty hook-fallback events
-        if source == "hook-fallback" and not decisions and not errors and not francisco:
+        if source == "hook-fallback" and not decisions and not errors and not user_patterns:
             # Still embed if there are meaningful tasks (not just tool lists)
             task_str = " ".join(tasks) if tasks else ""
             if len(task_str) < 50 or "," in task_str:  # tool lists have commas
@@ -250,8 +249,8 @@ def process_sensory_register():
             parts.append(f"Decisions: {'; '.join(str(d) for d in decisions[:3])}")
         if errors:
             parts.append(f"Errors resolved: {'; '.join(str(e) for e in errors[:3])}")
-        if francisco:
-            parts.append(f"the user patterns: {'; '.join(str(p) for p in francisco[:3])}")
+        if user_patterns:
+            parts.append(f"User patterns: {'; '.join(str(p) for p in user_patterns[:3])}")
         if critique and "hook-fallback" not in critique:
             parts.append(f"Self-critique: {critique[:200]}")
 
@@ -271,16 +270,12 @@ def process_sensory_register():
                     "matches": patterns[:3],
                 })
 
-            # Ingest into STM as sensory
+            # Ingest into STM as sensory — detect domain from content keywords
             domain = ""
-            if any(w in content.lower() for w in ["frontend", "extension", "ui"]):
-                domain = "frontend"
-            elif any(w in content.lower() for w in ["ecommerce", "shop", "store"]):
-                domain = "ecommerce"
-            elif any(w in content.lower() for w in ["nexo", "cognitive", "guard"]):
+            content_lower = content.lower()
+            # Domain detection is generic — users can extend this
+            if any(w in content_lower for w in ["nexo", "cognitive", "guard"]):
                 domain = "nexo"
-            elif any(w in content.lower() for w in ["client", "customer"]):
-                domain = "client"
 
             cognitive.ingest_sensory(
                 content=content,
@@ -315,7 +310,7 @@ def archive_sensory_buffer():
         return
 
     cutoff = (datetime.now() - timedelta(hours=48)).isoformat()
-    archive_dir = HOME / "claude" / "brain" / "session_archive"
+    archive_dir = NEXO_HOME / "brain" / "session_archive"
     archive_dir.mkdir(parents=True, exist_ok=True)
 
     keep_lines = []
@@ -363,7 +358,7 @@ def archive_sensory_buffer():
 def analyze_force_events():
     """Analyze --force dissonance resolutions from today.
 
-    When the user uses --force, NEXO obeyed without discussion. The nocturnal
+    When user uses --force, NEXO obeyed without discussion. The nocturnal
     process must now ask: was the old memory wrong, or was the user taking
     conscious technical debt?
 
@@ -417,7 +412,7 @@ def analyze_force_events():
             log(f"  PARADIGM SHIFT CANDIDATE: LTM #{mem_id} force-overridden {total_overrides}x total")
             log(f"    Content: {mem['content'][:120]}")
             log(f"    Action: Decaying strength from {mem['strength']:.2f} to 0.3")
-            # Auto-decay — if it's been overridden 3+ times, the user clearly disagrees
+            # Auto-decay — if it's been overridden 3+ times, user clearly disagrees
             db.execute(
                 "UPDATE ltm_memories SET strength = 0.3, tags = CASE WHEN tags LIKE '%paradigm_candidate%' THEN tags ELSE tags || ',paradigm_candidate' END WHERE id = ?",
                 (mem_id,)
@@ -447,9 +442,9 @@ def main():
 
     for d in diaries:
         critique = d.get("self_critique") or ""
-        signals = d.get("francisco_signals") or ""
+        signals = d.get("user_signals") or ""
 
-        if critique and not critique.strip().lower().startswith("sin autocrítica"):
+        if critique and not critique.strip().lower().startswith("no self-critique"):
             today_critiques.append(critique)
 
         if has_correction_signals(signals):
@@ -492,8 +487,8 @@ def main():
                     overlap = len(words_i & words_j) / min(len(words_i), len(words_j))
                     if overlap > 0.5 and not rule_already_permanent(rule, history):
                         new_permanent.append({
-                            "title": f"Patrón repetido: {rule[:60]}",
-                            "content": f"Detectado 2+ veces en el mismo día:\n- {rule}\n- {other}",
+                            "title": f"Repeated pattern: {rule[:60]}",
+                            "content": f"Detected 2+ times in the same day:\n- {rule}\n- {other}",
                             "sources": [rule, other],
                         })
 
@@ -517,18 +512,18 @@ def main():
 
         if len(matching_days) >= 2 and not rule_already_permanent(today_rule, history):  # 2 historical + today = 3
             new_permanent.append({
-                "title": f"Patrón recurrente ({len(matching_days)+1} días): {today_rule[:50]}",
-                "content": f"Detectado en {len(matching_days)+1} días diferentes:\n- Hoy: {today_rule}\n- Días previos: {', '.join(sorted(matching_days)[:5])}",
+                "title": f"Recurring pattern ({len(matching_days)+1} days): {today_rule[:50]}",
+                "content": f"Detected on {len(matching_days)+1} different days:\n- Today: {today_rule}\n- Previous days: {', '.join(sorted(matching_days)[:5])}",
                 "sources": [today_rule],
             })
 
-    # Pattern 3: the user corrected AND there's a critique → always promote
+    # Pattern 3: User corrected AND there's a critique → always promote
     for cc in correction_critiques:
         critique = cc.get("critique", "")
         if critique and not rule_already_permanent(critique, history):
             new_permanent.append({
-                "title": f"Corrección the user: {critique[:50]}",
-                "content": f"the user corrigió explícitamente este comportamiento.\nSeñales: {cc['signals'][:200]}\nAutocrítica: {critique[:300]}",
+                "title": f"User correction: {critique[:50]}",
+                "content": f"User explicitly corrected this behavior.\nSignals: {cc['signals'][:200]}\nSelf-critique: {critique[:300]}",
                 "sources": [critique],
             })
 
@@ -542,25 +537,26 @@ def main():
     else:
         log("No patterns qualify for permanent promotion today.")
 
-    # Write daily summary to synthesis
-    summary_file = HOME / "claude" / "coordination" / "postmortem-daily.md"
+    # Write daily summary
+    summary_file = NEXO_HOME / "coordination" / "postmortem-daily.md"
     summary_lines = [
         f"# Post-Mortem Daily — {TODAY_STR}",
-        f"Sesiones: {len(diaries)} | Autocríticas: {len(today_critiques)} | Correcciones the user: {len(correction_critiques)}",
+        f"Sessions: {len(diaries)} | Self-critiques: {len(today_critiques)} | User corrections: {len(correction_critiques)}",
         "",
     ]
     if today_critiques:
-        summary_lines.append("## Autocríticas del día")
+        summary_lines.append("## Today's Self-Critiques")
         for c in today_critiques:
             summary_lines.append(f"- {c[:200]}")
         summary_lines.append("")
     if new_permanent:
-        summary_lines.append("## Promovido a memoria permanente")
+        summary_lines.append("## Promoted to Permanent Memory")
         for r in new_permanent:
             summary_lines.append(f"- {r['title']}")
     else:
-        summary_lines.append("## Nada promovido hoy")
+        summary_lines.append("## Nothing promoted today")
 
+    summary_file.parent.mkdir(parents=True, exist_ok=True)
     summary_file.write_text("\n".join(summary_lines))
     log(f"Written daily summary: {summary_file}")
 
@@ -580,7 +576,7 @@ def main():
 
     # Register successful run for catch-up
     try:
-        state_file = HOME / "claude" / "operations" / ".catchup-state.json"
+        state_file = NEXO_HOME / "operations" / ".catchup-state.json"
         state = json.loads(state_file.read_text()) if state_file.exists() else {}
         state["postmortem"] = datetime.now().isoformat()
         state_file.write_text(json.dumps(state, indent=2))

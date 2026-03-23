@@ -155,7 +155,7 @@ Open Claude Code and start working. Atlas will introduce itself on the first mes
 | Component | What | Where |
 |-----------|------|-------|
 | Cognitive engine | Python: fastembed, numpy, vector search | pip packages |
-| MCP server | 50+ tools for memory, learning, guard | ~/.nexo/ |
+| MCP server | 76 tools for memory, learning, guard | ~/.nexo/ |
 | Plugins | Guard, episodic memory, cognitive memory, entities, preferences | ~/.nexo/plugins/ |
 | Hooks | Session capture, briefing, stop detection | ~/.nexo/hooks/ |
 | LaunchAgents | Decay, sleep, audit, postmortem, catch-up | ~/Library/LaunchAgents/ |
@@ -170,23 +170,26 @@ Open Claude Code and start working. Atlas will introduce itself on the first mes
 
 ## Architecture
 
-### 50+ MCP Tools
+### 76 MCP Tools across 16 Categories
 
-| Category | Tools | Purpose |
-|----------|-------|---------|
-| Cognitive (8) | retrieve, stats, inspect, metrics, dissonance, resolve, sentiment, trust | The brain |
-| Guard (3) | check, stats, log_repetition | Error prevention |
-| Episodic (10) | changes, decisions, session diary, recall | What happened and why |
-| Sessions (3) | startup, heartbeat, status | Session lifecycle |
-| Reminders (4) | create, update, complete, delete | User's tasks |
-| Followups (4) | create, update, complete, delete | System's tasks |
-| Learnings (5) | add, search, update, delete, list | Error patterns |
-| Entities (5) | search, create, update, delete, list | People, services, URLs |
-| Preferences (4) | get, set, list, delete | Observed preferences |
-| Credentials (5) | create, get, update, delete, list | Secure storage |
-| Agents (5) | get, create, update, delete, list | Agent delegation |
-| Backup (3) | now, list, restore | Data safety |
-| Evolution (5) | propose, approve, reject, status, history | Self-improvement |
+| Category | Count | Tools | Purpose |
+|----------|-------|-------|---------|
+| Cognitive | 8 | retrieve, stats, inspect, metrics, dissonance, resolve, sentiment, trust | The brain — memory, RAG, trust, mood |
+| Guard | 3 | check, stats, log_repetition | Metacognitive error prevention |
+| Episodic | 10 | change_log/search/commit, decision_log/outcome/search, review_queue, diary_write/read, recall | What happened and why |
+| Sessions | 3 | startup, heartbeat, status | Session lifecycle + context shift detection |
+| Coordination | 7 | track, untrack, files, send, ask, answer, check_answer | Multi-session file coordination + messaging |
+| Reminders | 5 | list, create, update, complete, delete | User's tasks and deadlines |
+| Followups | 4 | create, update, complete, delete | System's autonomous verification tasks |
+| Learnings | 5 | add, search, update, delete, list | Error patterns and prevention rules |
+| Credentials | 5 | create, get, update, delete, list | Secure local credential storage |
+| Task History | 3 | log, list, frequency | Execution tracking and overdue alerts |
+| Menu | 1 | menu | Operations center with box-drawing UI |
+| Entities | 5 | search, create, update, delete, list | People, services, URLs |
+| Preferences | 4 | get, set, list, delete | Observed user preferences |
+| Agents | 5 | get, create, update, delete, list | Agent delegation registry |
+| Backup | 3 | now, list, restore | SQLite data safety |
+| Evolution | 5 | propose, approve, reject, status, history | Self-improvement proposals |
 
 ### Plugin System
 
