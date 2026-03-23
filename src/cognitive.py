@@ -52,6 +52,10 @@ NEGATIVE_SIGNALS = {
     "cansad", "siempre", "nunca", "por qué no", "no funciona", "roto",
     "no sirve", "horrible", "desastre", "qué coño", "joder", "mierda",
     "hostia", "me cago", "irritad", "harto",
+    "broken", "nothing works", "doesn't work", "not working", "fix it",
+    "wrong", "failed", "failing", "annoying", "frustrated", "damn", "shit",
+    "wtf", "terrible", "useless", "stupid", "hate", "worst", "sucks",
+    "again",
 }
 URGENCY_SIGNALS = {
     "rápido", "ya", "ahora", "urgente", "asap", "inmediatamente", "corre",
@@ -80,12 +84,12 @@ _conn = None
 _REDACT_PATTERNS = [
     # Specific API key formats
     (re.compile(r'sk-[a-zA-Z0-9_\-]{20,}'), '[REDACTED:api_key]'),
-    (re.compile(r'ghp_[a-zA-Z0-9]{36,}'), '[REDACTED:api_key]'),
-    (re.compile(r'shpat_[a-f0-9]{32,}'), '[REDACTED:api_key]'),
+    (re.compile(r'ghp_[a-zA-Z0-9]{20,}'), '[REDACTED:api_key]'),
+    (re.compile(r'shpat_[a-f0-9]{20,}'), '[REDACTED:api_key]'),
     (re.compile(r'AKIA[A-Z0-9]{16}'), '[REDACTED:api_key]'),
     (re.compile(r'xox[bp]-[a-zA-Z0-9\-]{20,}'), '[REDACTED:api_key]'),
     # Bearer tokens
-    (re.compile(r'Bearer\s+[a-zA-Z0-9_\-\.]{20,}'), '[REDACTED:bearer_token]'),
+    (re.compile(r'Bearer\s+[a-zA-Z0-9_\-\.=+/]{20,}'), '[REDACTED:bearer_token]'),
     # Connection strings with credentials
     (re.compile(r'(mysql|postgresql|postgres|mongodb|redis)://[^\s"\']+@[^\s"\']+'), '[REDACTED:connection_string]'),
     # Generic token assignments
@@ -780,12 +784,41 @@ def search(
 
         if neighbor_boosts:
             co_activation_applied = True
+            # Boost existing results that are neighbors
+            existing_hashes = set()
             for r in results:
                 co_hash = _canonical_co_id(r["store"], r["id"])
+                existing_hashes.add(co_hash)
                 if co_hash in neighbor_boosts:
                     boost = neighbor_boosts[co_hash]
                     r["score"] = min(1.0, r["score"] + boost)
                     r["co_activation_boost"] = boost
+
+            # Add neighbor memories not already in results
+            new_neighbor_hashes = set(neighbor_boosts.keys()) - existing_hashes
+            if new_neighbor_hashes:
+                for store_name, table in [("stm", "stm_memories"), ("ltm", "ltm_memories")]:
+                    rows = db.execute(f"SELECT * FROM {table}").fetchall()
+                    for row in rows:
+                        nh = _canonical_co_id(store_name, row["id"])
+                        if nh in new_neighbor_hashes:
+                            boost = neighbor_boosts[nh]
+                            results.append({
+                                "store": store_name,
+                                "id": row["id"],
+                                "content": row["content"],
+                                "source_type": row.get("source_type", ""),
+                                "source_id": row.get("source_id", ""),
+                                "tags": row.get("tags", ""),
+                                "domain": row.get("domain", ""),
+                                "created_at": row.get("created_at", ""),
+                                "strength": row.get("strength", 0.0),
+                                "access_count": row.get("access_count", 0),
+                                "score": min(1.0, boost),
+                                "co_activation_boost": boost,
+                                "lifecycle_state": row.get("lifecycle_state", "active"),
+                            })
+                            new_neighbor_hashes.discard(nh)
 
             # Re-sort after applying boosts
             results.sort(key=lambda x: x["score"], reverse=True)
@@ -881,7 +914,7 @@ def ingest(
     # Security scan BEFORE prediction error gate (adapted from ShieldCortex pipeline)
     if not bypass_security:
         scan = security_scan(content)
-        if scan["risk_score"] > 0.8:
+        if scan["risk_score"] >= 0.8:
             # High risk — reject with reason logged
             return 0
         if scan["sanitized_content"] != content:
