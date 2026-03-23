@@ -239,6 +239,67 @@ NEXO isn't just engineering — it's applied cognitive psychology:
 | Synaptic Pruning | Automated cleanup of weak, unused memories |
 | Associative Memory | Semantic search finds related concepts, not just matching words |
 
+## OpenClaw Integration
+
+NEXO Brain works as a cognitive memory backend for [OpenClaw](https://github.com/openclaw/openclaw). Three integration paths, from instant to deep:
+
+### Path 1: MCP Bridge (Zero Code — Works Now)
+
+Add NEXO Brain to your OpenClaw config at `~/.openclaw/openclaw.json`:
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "nexo-brain": {
+        "command": "python3",
+        "args": ["~/.nexo/src/server.py"],
+        "env": {
+          "NEXO_HOME": "~/.nexo"
+        }
+      }
+    }
+  }
+}
+```
+
+Or via CLI:
+
+```bash
+openclaw mcp set nexo-brain '{"command":"python3","args":["~/.nexo/src/server.py"],"env":{"NEXO_HOME":"~/.nexo"}}'
+openclaw gateway restart
+```
+
+All 76 NEXO tools become available to your OpenClaw agent immediately.
+
+> **First time?** Run `npx nexo-brain` first to install the cognitive engine and dependencies.
+
+### Path 2: ClawHub Skill (Install in Seconds)
+
+```bash
+npx clawhub@latest install nexo-brain
+```
+
+### Path 3: Native Memory Plugin (Replaces Default Memory)
+
+```bash
+npm install @wazionapps/openclaw-memory-nexo-brain
+```
+
+Configure in `~/.openclaw/openclaw.json`:
+
+```json
+{
+  "plugins": {
+    "slots": {
+      "memory": "memory-nexo-brain"
+    }
+  }
+}
+```
+
+This replaces OpenClaw's default memory system with NEXO's full cognitive architecture — Atkinson-Shiffrin memory, semantic RAG, trust scoring, guard system, and all 76 tools.
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines. Issues and PRs welcome.
