@@ -533,7 +533,33 @@ Operator name: ${operatorName}
     log("Caffeinate enabled — Mac will stay awake for cognitive processes.");
   }
 
-  // Step 8: Generate CLAUDE.md template
+  // Step 8: Create shell alias so user can just type the operator's name
+  log("Creating shell alias...");
+  const aliasName = operatorName.toLowerCase();
+  const aliasLine = `alias ${aliasName}='claude --dangerously-skip-permissions "."'`;
+  const aliasComment = `# ${operatorName} — start Claude Code with ${operatorName} speaking first`;
+
+  // Detect shell and add alias
+  const userShell = process.env.SHELL || "/bin/bash";
+  const rcFile = userShell.includes("zsh")
+    ? path.join(require("os").homedir(), ".zshrc")
+    : path.join(require("os").homedir(), ".bash_profile");
+
+  let rcContent = "";
+  if (fs.existsSync(rcFile)) {
+    rcContent = fs.readFileSync(rcFile, "utf8");
+  }
+
+  if (!rcContent.includes(`alias ${aliasName}=`)) {
+    fs.appendFileSync(rcFile, `\n${aliasComment}\n${aliasLine}\n`);
+    log(`Added '${aliasName}' alias to ${path.basename(rcFile)}`);
+    log(`After setup, open a new terminal and type: ${aliasName}`);
+  } else {
+    log(`Alias '${aliasName}' already exists in ${path.basename(rcFile)}`);
+  }
+  console.log("");
+
+  // Step 9: Generate CLAUDE.md template
   log("Generating operator instructions...");
   const templateSrc = path.join(templateDir, "CLAUDE.md.template");
   let claudeMd = "";
@@ -568,16 +594,7 @@ See ~/.nexo/ for configuration.
     "  ╔══════════════════════════════════════════════════════════╗"
   );
   console.log(
-    `  ║  ${operatorName} is ready.${" ".repeat(Math.max(0, 39 - operatorName.length))}║`
-  );
-  console.log(
-    "  ║                                                        ║"
-  );
-  console.log(
-    "  ║  Open Claude Code and start a conversation.            ║"
-  );
-  console.log(
-    `  ║  ${operatorName} will introduce ${operatorName.length > 4 ? "itself" : "itself"} on first message.${" ".repeat(Math.max(0, 27 - operatorName.length))}║`
+    `  ║  ${operatorName} is ready. Type '${aliasName}' to start.${" ".repeat(Math.max(0, 30 - operatorName.length - aliasName.length))}║`
   );
   console.log(
     "  ╚══════════════════════════════════════════════════════════╝"
