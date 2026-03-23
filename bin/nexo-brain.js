@@ -127,7 +127,74 @@ async function main() {
   log(`Got it. I'm ${operatorName}.`);
   console.log("");
 
-  // Step 2: Permission to scan
+  // Step 2: Personality Calibration
+  log("Let's calibrate my personality to work best with you.");
+  log("(These can be changed anytime via nexo_preference_set)");
+  console.log("");
+
+  const autonomyAnswer = await ask(
+    "  How autonomous should I be?\n" +
+    "    1. Ask before most actions (conservative)\n" +
+    "    2. Act on routine tasks, ask on important ones (balanced)\n" +
+    "    3. Act first, inform after — only ask when truly uncertain (full autonomy)\n" +
+    "  > "
+  );
+  const autonomyLevel = ["conservative", "balanced", "full"][parseInt(autonomyAnswer.trim()) - 1] || "balanced";
+
+  const communicationAnswer = await ask(
+    "\n  How should I communicate?\n" +
+    "    1. Concise — just results, no filler (expert user)\n" +
+    "    2. Balanced — brief explanations when useful\n" +
+    "    3. Detailed — explain reasoning and trade-offs\n" +
+    "  > "
+  );
+  const communicationStyle = ["concise", "balanced", "detailed"][parseInt(communicationAnswer.trim()) - 1] || "balanced";
+
+  const honestyAnswer = await ask(
+    "\n  When I disagree with your approach, should I:\n" +
+    "    1. Push back firmly and explain why\n" +
+    "    2. Mention it briefly but follow your lead\n" +
+    "    3. Just do what you ask\n" +
+    "  > "
+  );
+  const honestyLevel = ["firm-pushback", "mention-and-follow", "just-execute"][parseInt(honestyAnswer.trim()) - 1] || "firm-pushback";
+
+  const proactivityAnswer = await ask(
+    "\n  How proactive should I be?\n" +
+    "    1. Only do what's asked\n" +
+    "    2. Suggest improvements when I spot them\n" +
+    "    3. Fix things I notice without asking, and propose optimizations\n" +
+    "  > "
+  );
+  const proactivityLevel = ["reactive", "suggestive", "proactive"][parseInt(proactivityAnswer.trim()) - 1] || "proactive";
+
+  const errorAnswer = await ask(
+    "\n  When I make a mistake, how should I handle it?\n" +
+    "    1. Brief acknowledgment, fix it, move on\n" +
+    "    2. Explain what went wrong and what I learned\n" +
+    "  > "
+  );
+  const errorHandling = ["brief-fix", "explain-and-learn"][parseInt(errorAnswer.trim()) - 1] || "brief-fix";
+
+  console.log("");
+  log(`Calibrated: autonomy=${autonomyLevel}, communication=${communicationStyle}, honesty=${honestyLevel}, proactivity=${proactivityLevel}, errors=${errorHandling}`);
+  console.log("");
+
+  // Save calibration
+  const calibration = {
+    autonomy: autonomyLevel,
+    communication: communicationStyle,
+    honesty: honestyLevel,
+    proactivity: proactivityLevel,
+    error_handling: errorHandling,
+    calibrated_at: new Date().toISOString(),
+  };
+  fs.writeFileSync(
+    path.join(NEXO_HOME, "brain", "calibration.json"),
+    JSON.stringify(calibration, null, 2)
+  );
+
+  // Step 3: Permission to scan
   const scanAnswer = await ask(
     "  Can I explore your workspace to learn about your projects? (y/n) > "
   );
