@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>NEXO Brain — Cognitive Memory for AI Agents</title>
     <meta name="description" content="Open-source cognitive memory system for AI agents. Atkinson-Shiffrin memory model, semantic RAG, trust scoring, and metacognitive error prevention. Built for Claude Code and MCP-compatible clients.">
     <meta name="keywords" content="AI memory, cognitive architecture, MCP, Claude Code, RAG, vector search, AI agents, Atkinson-Shiffrin, memory system, open source">
@@ -29,6 +29,7 @@
     <link rel="icon" type="image/png" href="/assets/logo-1024.png">
     <link rel="apple-touch-icon" href="/assets/logo-1024.png">
 
+
     <!-- Schema.org -->
     <script type="application/ld+json">
     {
@@ -40,12 +41,12 @@
         "operatingSystem": "macOS, Linux",
         "url": "https://nexo-brain.com",
         "downloadUrl": "https://www.npmjs.com/package/nexo-brain",
-        "softwareVersion": "0.1.1",
+        "softwareVersion": "0.2.1",
         "license": "https://opensource.org/licenses/MIT",
         "author": {
             "@type": "Organization",
             "name": "WAzion",
-            "url": "https://wazion.com"
+            "url": "https://www.wazion.com"
         },
         "offers": {
             "@type": "Offer",
@@ -72,7 +73,7 @@
             --glow: 0 0 60px rgba(124, 58, 237, 0.15);
         }
 
-        html { scroll-behavior: smooth; }
+        html { scroll-behavior: smooth; overflow-x: hidden; }
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
@@ -80,6 +81,7 @@
             color: var(--text);
             line-height: 1.6;
             overflow-x: hidden;
+            -webkit-text-size-adjust: 100%;
         }
 
         a { color: var(--purple-light); text-decoration: none; transition: color 0.2s; }
@@ -413,10 +415,14 @@
         /* ===== Responsive ===== */
         @media (max-width: 768px) {
             .nav-links { display: none; }
-            .stats { gap: 32px; }
+            .stats { grid-template-columns: repeat(2, 1fr); gap: 24px; }
+            .features-grid { grid-template-columns: 1fr; }
+            .tools-grid { grid-template-columns: repeat(2, 1fr); }
             .architecture { flex-direction: column; }
             .hero { padding: 120px 0 60px; }
+            .hero h1 { font-size: 2rem; }
             .install-block { font-size: 13px; }
+            .code-body { font-size: 12px; }
         }
 
         /* ===== Animations ===== */
@@ -459,7 +465,7 @@
     <div class="container">
         <div class="hero-badge fade-up">
             <span class="dot"></span>
-            v0.1.1 &mdash; Now available on npm
+            v0.2.1 &mdash; Now available on npm
         </div>
 
         <h1 class="fade-up">
@@ -493,7 +499,7 @@
 <div class="container">
     <div class="stats">
         <div class="stat">
-            <div class="stat-value">76+</div>
+            <div class="stat-value">77+</div>
             <div class="stat-label">MCP Tools</div>
         </div>
         <div class="stat">
@@ -621,7 +627,7 @@
 <section id="tools">
     <div class="container">
         <div class="section-label">Tools</div>
-        <h2 class="section-title">76+ MCP tools, 16 categories</h2>
+        <h2 class="section-title">77+ MCP tools, 16 categories</h2>
         <p class="section-subtitle">
             Every aspect of cognitive operation exposed as MCP tools. Compatible with Claude Code and any MCP client.
         </p>
@@ -678,9 +684,9 @@
                 <p>Inter-session communication</p>
             </div>
             <div class="tool-card">
-                <div class="tool-count">3</div>
+                <div class="tool-count">4</div>
                 <h4>Sessions</h4>
-                <p>Startup, heartbeat, coordination</p>
+                <p>Startup, heartbeat, stop, coordination</p>
             </div>
             <div class="tool-card">
                 <div class="tool-count">3</div>
@@ -745,7 +751,7 @@
     <div class="container">
         <div class="footer-content">
             <div class="footer-left">
-                Built by <a href="https://wazion.com">WAzion</a> &bull; MIT License &bull; &copy; 2026
+                Built by <a href="https://www.wazion.com">WAzion</a> &bull; MIT License &bull; &copy; 2026
             </div>
             <div class="footer-links">
                 <a href="https://github.com/wazionapps/nexo">GitHub</a>

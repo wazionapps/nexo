@@ -1,0 +1,48 @@
+# NEXO Brain
+
+> Open-source cognitive memory system for AI agents
+
+NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It provides 77+ MCP tools across 16 categories including semantic RAG, trust scoring, episodic memory, metacognitive error prevention, and natural memory decay.
+
+## Key Features
+
+- Three-store memory: Sensory Register, Short-Term Memory, Long-Term Memory
+- Semantic vector search with fastembed (BAAI/bge-small-en-v1.5, 384 dimensions)
+- Ebbinghaus forgetting curve for natural memory pruning
+- Discriminative sister memory fusion
+- Cognitive dissonance detection
+- Trust score (0-100) for internal rigor calibration
+- Metacognitive Guard: pre-edit checks with learnings and blocking rules
+- Episodic memory: change logs, decisions, session diaries
+- Plugin system with hot-reload
+- 100% local: SQLite + ONNX Runtime, zero cloud dependencies
+
+## Installation
+
+```
+npx nexo-brain init
+```
+
+## Documentation
+
+- Website: https://nexo-brain.com
+- GitHub: https://github.com/wazionapps/nexo
+- Wiki: https://github.com/wazionapps/nexo/wiki
+- npm: https://www.npmjs.com/package/nexo-brain
+
+## Architecture
+
+Based on the Atkinson-Shiffrin model from cognitive psychology:
+1. Sensory Register captures raw input (30s TTL, attention filter)
+2. Short-Term Memory holds working context (rehearsal resets decay)
+3. Long-Term Memory consolidates via semantic similarity (permanent)
+
+## API
+
+NEXO Brain exposes all functionality as MCP (Model Context Protocol) tools. Compatible with Claude Code and any MCP client.
+
+Tool categories: Cognitive (8), Episodic Memory (8), Learnings (5), Entities (5), Reminders (4), Followups (4), Credentials (5), Preferences (4), Guard (3), Messaging (4), Sessions (4), Plugins (3), Backup (3), and more.
+
+## License
+
+MIT License. Built by WAzion (https://www.wazion.com).
