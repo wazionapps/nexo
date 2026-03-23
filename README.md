@@ -308,7 +308,7 @@ This replaces OpenClaw's default memory system with NEXO's full cognitive archit
 | Glama | MCP Directory | [glama.ai](https://glama.ai/mcp/servers/@wazionapps/nexo) |
 | mcp.so | MCP Directory | [mcp.so](https://mcp.so/server/nexo/wazionapps) |
 | mcpservers.org | MCP Directory | [mcpservers.org](https://mcpservers.org) |
-| OpenClaw | Native Plugin | [openclaw.com](https://openclaw.com) |
+| OpenClaw | Native Plugin | [openclaw.com](https://openclaw.ai) |
 | dev.to | Technical Article | [How I Applied Cognitive Psychology to AI Agents](https://dev.to/wazionapps/how-i-applied-cognitive-psychology-to-give-ai-agents-real-memory-2oce) |
 | nexo-brain.com | Official Website | [nexo-brain.com](https://nexo-brain.com) |
 
