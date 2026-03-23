@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEXO Brain — Cognitive Memory for AI Agents</title>
+    <meta name="description" content="Open-source cognitive memory system for AI agents. Atkinson-Shiffrin memory model, semantic RAG, trust scoring, and metacognitive error prevention. Built for Claude Code and MCP-compatible clients.">
+    <meta name="keywords" content="AI memory, cognitive architecture, MCP, Claude Code, RAG, vector search, AI agents, Atkinson-Shiffrin, memory system, open source">
+    <meta name="author" content="WAzion">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com">
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://nexo-brain.com">
+    <meta property="og:title" content="NEXO Brain — Cognitive Memory for AI Agents">
+    <meta property="og:description" content="Open-source cognitive memory system with Atkinson-Shiffrin architecture, semantic RAG, and metacognitive error prevention.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
+    <meta property="og:image:width" content="1536">
+    <meta property="og:image:height" content="1024">
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO Brain — Cognitive Memory for AI Agents">
+    <meta name="twitter:description" content="Open-source cognitive memory system with Atkinson-Shiffrin architecture, semantic RAG, and metacognitive error prevention.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="/assets/logo-1024.png">
+    <link rel="apple-touch-icon" href="/assets/logo-1024.png">
+
+    <!-- Schema.org -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "NEXO Brain",
+        "description": "Open-source cognitive memory system for AI agents built on the Atkinson-Shiffrin memory model.",
+        "applicationCategory": "DeveloperApplication",
+        "operatingSystem": "macOS, Linux",
+        "url": "https://nexo-brain.com",
+        "downloadUrl": "https://www.npmjs.com/package/nexo-brain",
+        "softwareVersion": "0.1.1",
+        "license": "https://opensource.org/licenses/MIT",
+        "author": {
+            "@type": "Organization",
+            "name": "WAzion",
+            "url": "https://wazion.com"
+        },
+        "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+        }
+    }
+    </script>
+
+    <style>
+        /* ===== Reset & Base ===== */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --purple: #7C3AED;
+            --purple-light: #A78BFA;
+            --pink: #EC4899;
+            --dark: #0A0A0F;
+            --dark-card: #12121A;
+            --dark-border: #1E1E2E;
+            --text: #E2E8F0;
+            --text-muted: #94A3B8;
+            --gradient: linear-gradient(135deg, var(--purple), var(--pink));
+            --glow: 0 0 60px rgba(124, 58, 237, 0.15);
+        }
+
+        html { scroll-behavior: smooth; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--dark);
+            color: var(--text);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        a { color: var(--purple-light); text-decoration: none; transition: color 0.2s; }
+        a:hover { color: var(--pink); }
+
+        .container { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+
+        /* ===== Navigation ===== */
+        nav {
+            position: fixed; top: 0; width: 100%; z-index: 100;
+            background: rgba(10, 10, 15, 0.85);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--dark-border);
+            padding: 16px 0;
+        }
+
+        nav .container {
+            display: flex; align-items: center; justify-content: space-between;
+        }
+
+        .nav-logo {
+            display: flex; align-items: center; gap: 10px;
+            font-size: 18px; font-weight: 700; color: var(--text);
+        }
+
+        .nav-logo img { width: 32px; height: 32px; border-radius: 8px; }
+
+        .nav-links { display: flex; gap: 32px; align-items: center; }
+        .nav-links a { color: var(--text-muted); font-size: 14px; font-weight: 500; }
+        .nav-links a:hover { color: var(--text); }
+
+        .nav-cta {
+            background: var(--gradient); color: #fff !important;
+            padding: 8px 20px; border-radius: 8px; font-weight: 600; font-size: 14px;
+        }
+        .nav-cta:hover { opacity: 0.9; color: #fff !important; }
+
+        /* ===== Hero ===== */
+        .hero {
+            padding: 160px 0 100px;
+            text-align: center;
+            position: relative;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 50%; transform: translateX(-50%);
+            width: 800px; height: 600px;
+            background: radial-gradient(ellipse, rgba(124, 58, 237, 0.08) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .hero-badge {
+            display: inline-flex; align-items: center; gap: 8px;
+            background: var(--dark-card); border: 1px solid var(--dark-border);
+            padding: 6px 16px; border-radius: 100px;
+            font-size: 13px; color: var(--text-muted); margin-bottom: 32px;
+        }
+
+        .hero-badge .dot {
+            width: 6px; height: 6px; border-radius: 50%;
+            background: #22C55E; animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        h1 {
+            font-size: clamp(40px, 6vw, 72px);
+            font-weight: 800;
+            line-height: 1.08;
+            letter-spacing: -0.03em;
+            margin-bottom: 24px;
+        }
+
+        h1 .gradient {
+            background: var(--gradient);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero-subtitle {
+            font-size: 20px; color: var(--text-muted);
+            max-width: 600px; margin: 0 auto 48px; line-height: 1.5;
+        }
+
+        .hero-actions { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+
+        .btn {
+            display: inline-flex; align-items: center; gap: 8px;
+            padding: 14px 28px; border-radius: 12px;
+            font-size: 16px; font-weight: 600; cursor: pointer;
+            border: none; transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: var(--gradient); color: #fff;
+            box-shadow: 0 4px 20px rgba(124, 58, 237, 0.3);
+        }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 30px rgba(124, 58, 237, 0.4); color: #fff; }
+
+        .btn-secondary {
+            background: var(--dark-card); color: var(--text);
+            border: 1px solid var(--dark-border);
+        }
+        .btn-secondary:hover { border-color: var(--purple); transform: translateY(-2px); color: var(--text); }
+
+        /* ===== Install Block ===== */
+        .install-block {
+            margin: 48px auto 0; max-width: 480px;
+            background: var(--dark-card); border: 1px solid var(--dark-border);
+            border-radius: 12px; padding: 16px 24px;
+            display: flex; align-items: center; justify-content: space-between;
+            font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+            font-size: 15px;
+        }
+
+        .install-block code { color: var(--purple-light); }
+        .install-block .prefix { color: var(--text-muted); }
+
+        .copy-btn {
+            background: none; border: none; color: var(--text-muted);
+            cursor: pointer; padding: 4px; transition: color 0.2s;
+        }
+        .copy-btn:hover { color: var(--text); }
+        .copy-btn.copied { color: #22C55E; }
+
+        /* ===== Stats ===== */
+        .stats {
+            display: flex; justify-content: center; gap: 64px;
+            padding: 64px 0; border-bottom: 1px solid var(--dark-border);
+            flex-wrap: wrap;
+        }
+
+        .stat { text-align: center; }
+        .stat-value {
+            font-size: 36px; font-weight: 800;
+            background: var(--gradient);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .stat-label { font-size: 14px; color: var(--text-muted); margin-top: 4px; }
+
+        /* ===== Section ===== */
+        section { padding: 100px 0; }
+        section:nth-child(even) { background: rgba(18, 18, 26, 0.5); }
+
+        .section-label {
+            font-size: 13px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.1em; color: var(--purple-light); margin-bottom: 12px;
+        }
+
+        .section-title {
+            font-size: clamp(28px, 4vw, 42px); font-weight: 800;
+            letter-spacing: -0.02em; margin-bottom: 16px;
+        }
+
+        .section-subtitle {
+            font-size: 18px; color: var(--text-muted);
+            max-width: 640px; margin-bottom: 64px;
+        }
+
+        /* ===== Features Grid ===== */
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 24px;
+        }
+
+        .feature-card {
+            background: var(--dark-card);
+            border: 1px solid var(--dark-border);
+            border-radius: 16px;
+            padding: 32px;
+            transition: all 0.3s;
+        }
+
+        .feature-card:hover {
+            border-color: rgba(124, 58, 237, 0.3);
+            box-shadow: var(--glow);
+            transform: translateY(-4px);
+        }
+
+        .feature-icon {
+            width: 48px; height: 48px; border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 24px; margin-bottom: 20px;
+            background: linear-gradient(135deg, rgba(124, 58, 237, 0.15), rgba(236, 72, 153, 0.15));
+        }
+
+        .feature-card h3 { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+        .feature-card p { font-size: 15px; color: var(--text-muted); line-height: 1.6; }
+
+        /* ===== Architecture ===== */
+        .architecture {
+            display: flex; gap: 48px; align-items: center; flex-wrap: wrap;
+        }
+
+        .arch-visual {
+            flex: 1; min-width: 300px;
+            background: var(--dark-card);
+            border: 1px solid var(--dark-border);
+            border-radius: 16px;
+            padding: 40px;
+        }
+
+        .arch-flow {
+            display: flex; flex-direction: column; gap: 16px; align-items: center;
+        }
+
+        .arch-node {
+            padding: 16px 32px; border-radius: 12px; text-align: center;
+            font-weight: 600; font-size: 15px; width: 100%; max-width: 300px;
+        }
+
+        .arch-sensory { background: rgba(236, 72, 153, 0.12); border: 1px solid rgba(236, 72, 153, 0.3); color: var(--pink); }
+        .arch-stm { background: rgba(124, 58, 237, 0.12); border: 1px solid rgba(124, 58, 237, 0.3); color: var(--purple-light); }
+        .arch-ltm { background: rgba(34, 197, 94, 0.12); border: 1px solid rgba(34, 197, 94, 0.3); color: #22C55E; }
+
+        .arch-arrow { color: var(--text-muted); font-size: 20px; }
+
+        .arch-node small { display: block; font-weight: 400; font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+        .arch-text { flex: 1; min-width: 300px; }
+        .arch-text h3 { font-size: 24px; font-weight: 700; margin-bottom: 16px; }
+        .arch-text p { color: var(--text-muted); margin-bottom: 16px; line-height: 1.7; }
+
+        .arch-list { list-style: none; }
+        .arch-list li {
+            padding: 8px 0; color: var(--text-muted); font-size: 15px;
+            display: flex; align-items: center; gap: 10px;
+        }
+        .arch-list li::before {
+            content: ''; width: 6px; height: 6px; border-radius: 50%;
+            background: var(--purple); flex-shrink: 0;
+        }
+
+        /* ===== Tools Section ===== */
+        .tools-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 16px;
+        }
+
+        .tool-card {
+            background: var(--dark-card);
+            border: 1px solid var(--dark-border);
+            border-radius: 12px;
+            padding: 20px;
+            transition: border-color 0.2s;
+        }
+
+        .tool-card:hover { border-color: rgba(124, 58, 237, 0.3); }
+
+        .tool-count {
+            font-size: 28px; font-weight: 800;
+            background: var(--gradient);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+
+        .tool-card h4 { font-size: 15px; font-weight: 600; margin: 4px 0; }
+        .tool-card p { font-size: 13px; color: var(--text-muted); }
+
+        /* ===== Code Example ===== */
+        .code-block {
+            background: var(--dark-card);
+            border: 1px solid var(--dark-border);
+            border-radius: 16px;
+            overflow: hidden; max-width: 700px; margin: 0 auto;
+        }
+
+        .code-header {
+            display: flex; align-items: center; gap: 8px;
+            padding: 12px 20px;
+            background: rgba(255,255,255,0.02);
+            border-bottom: 1px solid var(--dark-border);
+        }
+
+        .code-dot { width: 12px; height: 12px; border-radius: 50%; }
+        .code-dot:nth-child(1) { background: #EF4444; }
+        .code-dot:nth-child(2) { background: #EAB308; }
+        .code-dot:nth-child(3) { background: #22C55E; }
+
+        .code-title { margin-left: 12px; font-size: 13px; color: var(--text-muted); }
+
+        .code-body {
+            padding: 24px;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 14px; line-height: 1.8;
+            overflow-x: auto;
+        }
+
+        .code-body .comment { color: #6B7280; }
+        .code-body .cmd { color: #22C55E; }
+        .code-body .flag { color: var(--purple-light); }
+        .code-body .str { color: var(--pink); }
+
+        /* ===== CTA Section ===== */
+        .cta-section {
+            text-align: center; padding: 120px 0;
+            position: relative;
+        }
+
+        .cta-section::before {
+            content: '';
+            position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
+            width: 600px; height: 400px;
+            background: radial-gradient(ellipse, rgba(124, 58, 237, 0.06) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        /* ===== Footer ===== */
+        footer {
+            border-top: 1px solid var(--dark-border);
+            padding: 48px 0;
+        }
+
+        .footer-content {
+            display: flex; justify-content: space-between;
+            align-items: center; flex-wrap: wrap; gap: 24px;
+        }
+
+        .footer-left { font-size: 14px; color: var(--text-muted); }
+        .footer-left a { color: var(--text-muted); }
+        .footer-left a:hover { color: var(--purple-light); }
+
+        .footer-links { display: flex; gap: 24px; }
+        .footer-links a { color: var(--text-muted); font-size: 14px; }
+
+        /* ===== Responsive ===== */
+        @media (max-width: 768px) {
+            .nav-links { display: none; }
+            .stats { gap: 32px; }
+            .architecture { flex-direction: column; }
+            .hero { padding: 120px 0 60px; }
+            .install-block { font-size: 13px; }
+        }
+
+        /* ===== Animations ===== */
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .fade-up {
+            opacity: 0;
+            animation: fadeUp 0.6s ease forwards;
+        }
+
+        .fade-up:nth-child(2) { animation-delay: 0.1s; }
+        .fade-up:nth-child(3) { animation-delay: 0.2s; }
+        .fade-up:nth-child(4) { animation-delay: 0.3s; }
+    </style>
+</head>
+<body>
+
+<!-- Nav -->
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-1024.png" alt="NEXO Brain" width="32" height="32">
+            NEXO Brain
+        </a>
+        <div class="nav-links">
+            <a href="#features">Features</a>
+            <a href="#architecture">Architecture</a>
+            <a href="#tools">Tools</a>
+            <a href="https://github.com/wazionapps/nexo/wiki">Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta">GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<!-- Hero -->
+<section class="hero">
+    <div class="container">
+        <div class="hero-badge fade-up">
+            <span class="dot"></span>
+            v0.1.1 &mdash; Now available on npm
+        </div>
+
+        <h1 class="fade-up">
+            Cognitive Memory<br>for <span class="gradient">AI Agents</span>
+        </h1>
+
+        <p class="hero-subtitle fade-up">
+            Give your AI agent a brain that remembers, learns, and protects itself from repeating mistakes. Built on the Atkinson-Shiffrin memory model.
+        </p>
+
+        <div class="hero-actions fade-up">
+            <a href="https://github.com/wazionapps/nexo" class="btn btn-primary">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+                View on GitHub
+            </a>
+            <a href="https://github.com/wazionapps/nexo/wiki" class="btn btn-secondary">
+                Read the Docs
+            </a>
+        </div>
+
+        <div class="install-block fade-up">
+            <code><span class="prefix">$</span> npx nexo-brain init</code>
+            <button class="copy-btn" onclick="copyInstall(this)" title="Copy to clipboard">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            </button>
+        </div>
+    </div>
+</section>
+
+<!-- Stats -->
+<div class="container">
+    <div class="stats">
+        <div class="stat">
+            <div class="stat-value">76+</div>
+            <div class="stat-label">MCP Tools</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value">16</div>
+            <div class="stat-label">Categories</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value">384</div>
+            <div class="stat-label">Vector Dimensions</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value">0</div>
+            <div class="stat-label">Data Sent Externally</div>
+        </div>
+    </div>
+</div>
+
+<!-- Features -->
+<section id="features">
+    <div class="container">
+        <div class="section-label">Features</div>
+        <h2 class="section-title">Everything an AI agent needs to think</h2>
+        <p class="section-subtitle">
+            Not just storage &mdash; a complete cognitive architecture that learns, forgets naturally, detects conflicts, and prevents repeated mistakes.
+        </p>
+
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon">&#x1F9E0;</div>
+                <h3>Atkinson-Shiffrin Memory</h3>
+                <p>Three-store model: Sensory Register captures raw input, STM holds working context with rehearsal, LTM consolidates with semantic vectors. Just like human cognition.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#x1F50D;</div>
+                <h3>Semantic RAG</h3>
+                <p>Vector search with fastembed (BAAI/bge-small-en-v1.5). Query across all memory stores with cosine similarity. Retrieve what matters, not just what matches.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#x1F6E1;</div>
+                <h3>Metacognitive Guard</h3>
+                <p>Pre-edit checks that inject known errors, real schemas, and blocking rules before your agent writes code. Prevents repeating past mistakes.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#x1F4C9;</div>
+                <h3>Ebbinghaus Decay</h3>
+                <p>Memories naturally fade over time following the Ebbinghaus forgetting curve. Rehearsal strengthens important memories. No manual cleanup needed.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#x1F91D;</div>
+                <h3>Trust Score</h3>
+                <p>0-100 alignment index that adjusts based on corrections, successes, and proactive actions. Controls internal rigor: low trust = more paranoid checks.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#x26A1;</div>
+                <h3>Cognitive Dissonance</h3>
+                <p>Detects when new instructions contradict existing strong memories. Surfaces the conflict and asks for resolution instead of silently overwriting.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#x1F4DD;</div>
+                <h3>Episodic Memory</h3>
+                <p>Change logs, decision records with alternatives and reasoning, session diaries with mental state continuity. Full audit trail of what happened and why.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#x1F50C;</div>
+                <h3>Plugin System</h3>
+                <p>Hot-reload plugins at runtime. Add new tool categories without restarting the server. Ship your own extensions as Python files.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#x1F512;</div>
+                <h3>100% Local</h3>
+                <p>All data stored in local SQLite databases. Vectors computed on-device with ONNX Runtime. Nothing ever leaves your machine. Zero cloud dependencies.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Architecture -->
+<section id="architecture">
+    <div class="container">
+        <div class="section-label">Architecture</div>
+        <h2 class="section-title">How memory works</h2>
+        <p class="section-subtitle">
+            Based on the Atkinson-Shiffrin model from cognitive psychology, adapted for AI agents.
+        </p>
+
+        <div class="architecture">
+            <div class="arch-visual">
+                <div class="arch-flow">
+                    <div class="arch-node arch-sensory">
+                        Sensory Register
+                        <small>Raw input &bull; 30s TTL &bull; Attention filter</small>
+                    </div>
+                    <div class="arch-arrow">&darr; rehearsal</div>
+                    <div class="arch-node arch-stm">
+                        Short-Term Memory
+                        <small>Working context &bull; Active rehearsal &bull; Decay curve</small>
+                    </div>
+                    <div class="arch-arrow">&darr; consolidation</div>
+                    <div class="arch-node arch-ltm">
+                        Long-Term Memory
+                        <small>Semantic vectors &bull; Sister fusion &bull; Permanent</small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="arch-text">
+                <h3>Biologically inspired, practically engineered</h3>
+                <p>
+                    Every piece of information flows through three stores, each with its own retention rules and access patterns.
+                </p>
+                <ul class="arch-list">
+                    <li>Sensory Register captures everything, discards noise in 30 seconds</li>
+                    <li>STM holds 7&plusmn;2 active items with exponential decay</li>
+                    <li>Rehearsal (retrieval, updates) resets decay timers</li>
+                    <li>Consolidation promotes STM to LTM via semantic similarity</li>
+                    <li>Sister memories fuse discriminatively: keep what differs, merge what overlaps</li>
+                    <li>Ebbinghaus forgetting curve controls natural memory pruning</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Tools -->
+<section id="tools">
+    <div class="container">
+        <div class="section-label">Tools</div>
+        <h2 class="section-title">76+ MCP tools, 16 categories</h2>
+        <p class="section-subtitle">
+            Every aspect of cognitive operation exposed as MCP tools. Compatible with Claude Code and any MCP client.
+        </p>
+
+        <div class="tools-grid">
+            <div class="tool-card">
+                <div class="tool-count">8</div>
+                <h4>Cognitive</h4>
+                <p>RAG retrieve, trust, dissonance, sentiment, metrics</p>
+            </div>
+            <div class="tool-card">
+                <div class="tool-count">8</div>
+                <h4>Episodic Memory</h4>
+                <p>Change logs, decisions, session diaries, recall</p>
+            </div>
+            <div class="tool-card">
+                <div class="tool-count">5</div>
+                <h4>Learnings</h4>
+                <p>Error patterns, categorized, searchable</p>
+            </div>
+            <div class="tool-card">
+                <div class="tool-count">5</div>
+                <h4>Entities</h4>
+                <p>People, services, URLs, relationships</p>
+            </div>
+            <div class="tool-card">
+                <div class="tool-count">4</div>
+                <h4>Reminders</h4>
+                <p>Time-based alerts with priority levels</p>
+            </div>
+            <div class="tool-card">
+                <div class="tool-count">4</div>
+                <h4>Followups</h4>
+                <p>Deferred verification tasks</p>
+            </div>
+            <div class="tool-card">
+                <div class="tool-count">5</div>
+                <h4>Credentials</h4>
+                <p>Secure local credential storage</p>
+            </div>
+            <div class="tool-card">
+                <div class="tool-count">4</div>
+                <h4>Preferences</h4>
+                <p>Learned behavioral patterns</p>
+            </div>
+            <div class="tool-card">
+                <div class="tool-count">3</div>
+                <h4>Guard</h4>
+                <p>Pre-edit checks, blocking rules</p>
+            </div>
+            <div class="tool-card">
+                <div class="tool-count">4</div>
+                <h4>Messaging</h4>
+                <p>Inter-session communication</p>
+            </div>
+            <div class="tool-card">
+                <div class="tool-count">3</div>
+                <h4>Sessions</h4>
+                <p>Startup, heartbeat, coordination</p>
+            </div>
+            <div class="tool-card">
+                <div class="tool-count">3</div>
+                <h4>Plugins</h4>
+                <p>Hot-reload extensions at runtime</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Quick Start -->
+<section>
+    <div class="container">
+        <div class="section-label">Quick Start</div>
+        <h2 class="section-title">Up and running in 60 seconds</h2>
+        <p class="section-subtitle">
+            One command to install. NEXO Brain sets up the MCP server, SQLite databases, and cognitive engine automatically.
+        </p>
+
+        <div class="code-block">
+            <div class="code-header">
+                <span class="code-dot"></span>
+                <span class="code-dot"></span>
+                <span class="code-dot"></span>
+                <span class="code-title">Terminal</span>
+            </div>
+            <div class="code-body">
+                <span class="comment"># Install NEXO Brain</span><br>
+                <span class="cmd">$</span> <span class="str">npx nexo-brain init</span><br><br>
+                <span class="comment"># That's it. Open Claude Code and your agent has memory.</span><br>
+                <span class="comment"># NEXO Brain auto-configures the MCP server.</span><br><br>
+                <span class="comment"># Verify it's working:</span><br>
+                <span class="cmd">$</span> claude <span class="flag">-p</span> <span class="str">"call nexo_status"</span><br><br>
+                <span class="comment"># Optional: Start with a personality template</span><br>
+                <span class="cmd">$</span> npx nexo-brain init <span class="flag">--template</span> <span class="str">operator</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section">
+    <div class="container">
+        <h2 class="section-title">Give your agent a mind</h2>
+        <p class="section-subtitle" style="margin: 16px auto 48px;">
+            Open source, MIT licensed, and built for builders who want their AI to actually remember.
+        </p>
+        <div class="hero-actions">
+            <a href="https://github.com/wazionapps/nexo" class="btn btn-primary">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+                Star on GitHub
+            </a>
+            <a href="https://www.npmjs.com/package/nexo-brain" class="btn btn-secondary">
+                View on npm
+            </a>
+        </div>
+    </div>
+</section>
+
+<!-- Footer -->
+<footer>
+    <div class="container">
+        <div class="footer-content">
+            <div class="footer-left">
+                Built by <a href="https://wazion.com">WAzion</a> &bull; MIT License &bull; &copy; 2026
+            </div>
+            <div class="footer-links">
+                <a href="https://github.com/wazionapps/nexo">GitHub</a>
+                <a href="https://github.com/wazionapps/nexo/wiki">Docs</a>
+                <a href="https://www.npmjs.com/package/nexo-brain">npm</a>
+                <a href="https://github.com/wazionapps/nexo/releases">Releases</a>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<script>
+function copyInstall(btn) {
+    navigator.clipboard.writeText('npx nexo-brain init');
+    btn.classList.add('copied');
+    btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>';
+    setTimeout(() => {
+        btn.classList.remove('copied');
+        btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+    }, 2000);
+}
+
+// Intersection Observer for scroll animations
+const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+        if (entry.isIntersecting) {
+            entry.target.style.opacity = '1';
+            entry.target.style.transform = 'translateY(0)';
+        }
+    });
+}, { threshold: 0.1 });
+
+document.querySelectorAll('.feature-card, .tool-card').forEach(el => {
+    el.style.opacity = '0';
+    el.style.transform = 'translateY(20px)';
+    el.style.transition = 'all 0.5s ease';
+    observer.observe(el);
+});
+</script>
+
+</body>
+</html>
