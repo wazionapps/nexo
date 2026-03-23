@@ -698,7 +698,7 @@
         </a>
         <div class="nav-links">
             <a href="#features">Features</a>
-            <a href="#cognitive">Cognitive v0.3.3</a>
+            <a href="#cognitive">Cognitive v0.3.4</a>
             <a href="#architecture">Architecture</a>
             <a href="#tools">Tools</a>
             <a href="#psychology">Psychology</a>
@@ -713,7 +713,7 @@
     <div class="container">
         <div class="hero-badge fade-up">
             <span class="dot"></span>
-            <span id="version-badge">v0.3.3</span> &mdash; Now available on npm
+            <span id="version-badge">v0.3.4</span> &mdash; Now available on npm
         </div>
         <div class="fade-up" style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;">
             <img src="https://img.shields.io/npm/v/nexo-brain?color=7C3AED&label=npm" alt="npm version">
@@ -884,13 +884,13 @@
     </div>
 </section>
 
-<!-- Cognitive Features v0.3.3 -->
+<!-- Cognitive Features v0.3.4 -->
 <section id="cognitive">
     <div class="container">
-        <div class="section-label">New in v0.3.3</div>
-        <h2 class="section-title">14 cognitive features, 4 pipelines</h2>
+        <div class="section-label">New in v0.3.4</div>
+        <h2 class="section-title">Formal migration system + 14 cognitive features</h2>
         <p class="section-subtitle">
-            v0.3.3 adds incremental diary drafts and auto-close for orphan sessions on top of 21 cognitive tools, implementing cognitive science concepts that go beyond basic memory storage.
+            v0.3.4 introduces a formal schema migration system with schema_migrations table, enabling safe database schema evolution. Plus incremental diary drafts and auto-close for orphan sessions on top of 21 cognitive tools, implementing cognitive science concepts that go beyond basic memory storage.
         </p>
 
         <div class="cognitive-group">
@@ -961,6 +961,10 @@
                 <div class="cognitive-card">
                     <h4>Hook Auto-capture</h4>
                     <p>Extracts decisions, corrections, and factual statements from conversations automatically. You don't need to say "remember this" &mdash; the system detects what's worth storing.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h4>Formal Schema Migrations <span style="font-size:11px;background:#7C3AED22;color:#7C3AED;padding:2px 6px;border-radius:4px;margin-left:6px;">v0.3.4</span></h4>
+                    <p>Structured migration system with schema_migrations table tracking all database changes. Safe, reversible schema evolution for production systems. Prevents data loss during upgrades.</p>
                 </div>
                 <div class="cognitive-card">
                     <h4>Incremental Diary Drafts + Auto-Close <span style="font-size:11px;background:#7C3AED22;color:#7C3AED;padding:2px 6px;border-radius:4px;margin-left:6px;">v0.3.3</span></h4>
