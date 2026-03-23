@@ -2093,7 +2093,7 @@ def read_session_diary(session_id: str = '', last_n: int = 3, last_day: bool = F
     - session_id: returns entries for that specific session
     - last_day: returns ALL entries from the most recent day (multi-terminal aware)
     - last_n: returns last N entries (default)
-    - domain: filter by project context (project-a, wazion, nexo, project-b, server, other)
+    - domain: filter by project context (e.g. project-a, project-b, nexo, server, other)
     """
     conn = get_db()
     domain_clause = " AND domain = ?" if domain else ""

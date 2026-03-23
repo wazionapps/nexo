@@ -14,7 +14,7 @@ Three layers:
 Only creates permanent memory for patterns that:
 - Appear 2+ times in the same day, OR
 - Appear in 3+ different days (checked against history), OR
-- The user explicitly corrected NEXO (user_signals contains correction keywords)
+- User explicitly corrected NEXO (user_signals contains correction keywords)
 """
 
 import json
@@ -231,12 +231,12 @@ def process_sensory_register():
         tasks = event.get("tasks", [])
         decisions = event.get("decisions", [])
         errors = event.get("errors_resolved", [])
-        user_var = event.get("user_patterns", [])
+        user_patterns = event.get("user_patterns", [])
         critique = event.get("self_critique", "")
         source = event.get("source", "")
 
         # Skip empty hook-fallback events
-        if source == "hook-fallback" and not decisions and not errors and not user_pats:
+        if source == "hook-fallback" and not decisions and not errors and not user_patterns:
             # Still embed if there are meaningful tasks (not just tool lists)
             task_str = " ".join(tasks) if tasks else ""
             if len(task_str) < 50 or "," in task_str:  # tool lists have commas
@@ -250,8 +250,8 @@ def process_sensory_register():
             parts.append(f"Decisions: {'; '.join(str(d) for d in decisions[:3])}")
         if errors:
             parts.append(f"Errors resolved: {'; '.join(str(e) for e in errors[:3])}")
-        if user_pats:
-            parts.append(f"User patterns: {'; '.join(str(p) for p in user_pats[:3])}")
+        if user_patterns:
+            parts.append(f"User patterns: {'; '.join(str(p) for p in user_patterns[:3])}")
         if critique and "hook-fallback" not in critique:
             parts.append(f"Self-critique: {critique[:200]}")
 

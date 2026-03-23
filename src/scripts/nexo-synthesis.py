@@ -350,7 +350,7 @@ def section_autoevaluacion() -> str:
             mental_states.append(truncate(ms, 200))
 
     if user_signals_text := "\n".join(f"  - {s}" for s in all_signals[:3] if s):
-        lines.append(f"**Señales del usuario:**\n{user_signals_text}")
+        lines.append(f"**User signals:**\n{user_signals_text}")
 
     if mental_states:
         lines.append(f"**Estado mental de sesiones:**")

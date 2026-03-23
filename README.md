@@ -322,4 +322,4 @@ MIT — see [LICENSE](LICENSE)
 
 ---
 
-Built by [WAzion](https://www.wazion.com) | Created by WAzion Apps
+Built by [WAzion](https://www.wazion.com)
