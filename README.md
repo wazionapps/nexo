@@ -119,7 +119,7 @@ If your Mac was asleep during any scheduled process, NEXO catches up in order wh
 ## Quick Start
 
 ```bash
-npx create-nexo
+npx nexo-brain
 ```
 
 The installer handles everything:
