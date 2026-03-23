@@ -1,7 +1,8 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.wazionapps/nexo",
-  "description": "Cognitive memory for AI agents: Atkinson-Shiffrin, semantic RAG, trust scoring, metacognitive guard.",
+  "version": "0.1.2",
+  "description": "Cognitive memory for AI agents with Atkinson-Shiffrin model, semantic RAG, and trust scoring.",
   "packages": [
     {
       "registryType": "npm",
