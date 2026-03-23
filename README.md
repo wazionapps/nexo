@@ -1,19 +1,120 @@
-# NEXO — Cognitive Co-Operator for Claude Code
+# NEXO — Your Claude Code Gets a Brain
 
-NEXO transforms Claude Code from a reactive assistant into a **proactive cognitive partner** that remembers, learns, forgets, and adapts.
+**NEXO transforms Claude Code from a stateless assistant into a cognitive partner that remembers, learns, forgets, adapts, and builds a relationship with you over time.**
 
-Built on the **Atkinson-Shiffrin memory model** from cognitive psychology, NEXO gives your Claude Code sessions persistent memory with semantic search, Ebbinghaus forgetting curves, metacognitive error prevention, and a trust-based relationship that evolves over time.
+Every time you close a Claude Code session, everything is lost. Your assistant doesn't remember yesterday's decisions, repeats the same mistakes, and starts from zero. NEXO fixes this by giving Claude Code a brain — modeled after how human memory actually works.
 
-## What makes NEXO different
+## The Problem
 
-| Feature | Without NEXO | With NEXO |
-|---------|-------------|-----------|
-| Memory | Gone after session | Persistent across sessions with decay and reinforcement |
-| Learning | Repeats mistakes | Logs errors, prevents repetition via guard system |
-| Context | Starts cold every time | Resumes from mental state of last session |
-| Search | Keyword matching | Semantic similarity (vector embeddings) |
-| Errors | Reactive | Metacognitive prevention — checks before acting |
-| Relationship | Stateless | Trust score that modulates behavior |
+Claude Code is powerful but amnesic:
+- **No memory** — closes a session, forgets everything
+- **Repeats mistakes** — makes the same error you corrected yesterday
+- **No context** — can't connect today's work with last week's decisions
+- **Reactive** — waits for instructions instead of anticipating needs
+- **No learning** — doesn't improve from experience
+
+## The Solution: A Cognitive Architecture
+
+NEXO implements the **Atkinson-Shiffrin memory model** from cognitive psychology (1968) — the same model that explains how human memory works:
+
+```
+What you say and do
+    │
+    ├─→ Sensory Register (raw capture, 48h)
+    │       │
+    │       └─→ Attention filter: "Is this worth remembering?"
+    │               │
+    │               ↓
+    ├─→ Short-Term Memory (7-day half-life)
+    │       │
+    │       ├─→ Used often? → Consolidate to Long-Term Memory
+    │       └─→ Not accessed? → Gradually forgotten
+    │
+    └─→ Long-Term Memory (60-day half-life)
+            │
+            ├─→ Active: instantly searchable by meaning
+            ├─→ Dormant: faded but recoverable ("oh right, I remember now!")
+            └─→ Near-duplicates auto-merged to prevent clutter
+```
+
+This isn't a metaphor. NEXO literally implements Ebbinghaus forgetting curves, rehearsal-based reinforcement, and memory consolidation during automated "sleep" processes.
+
+## What Makes NEXO Different
+
+| Without NEXO | With NEXO |
+|-------------|-----------|
+| Memory gone after each session | Persistent across sessions with natural decay and reinforcement |
+| Repeats the same mistakes | Checks "have I made this mistake before?" before every action |
+| Keyword search only | Finds memories by **meaning**, not just words |
+| Starts cold every time | Resumes from the mental state of the last session |
+| Same behavior regardless of context | Adapts tone and approach based on your mood |
+| No relationship | Trust score that evolves — makes fewer redundant checks as alignment grows |
+
+## How the Brain Works
+
+### Memory That Forgets (And That's a Feature)
+
+NEXO uses **Ebbinghaus forgetting curves** — memories naturally fade over time unless reinforced by use. This isn't a bug, it's how useful memory works:
+
+- A lesson learned yesterday is strong. If you never encounter it again, it fades — because it probably wasn't important.
+- A lesson accessed 5 times in 2 weeks gets promoted to long-term memory — because repeated use proves it matters.
+- A dormant memory can be reactivated if something similar comes up — the "oh wait, I remember this" moment.
+
+### Semantic Search (Finding by Meaning)
+
+NEXO doesn't search by keywords. It searches by **meaning** using vector embeddings (fastembed, 384 dimensions).
+
+Example: If you search for "deploy problems", NEXO will find a memory about "SSH connection timeout on production server" — even though they share zero words. This is how human associative memory works.
+
+### Metacognition (Thinking About Thinking)
+
+Before every code change, NEXO asks itself: **"Have I made a mistake like this before?"**
+
+It searches its memory for related errors, warnings, and lessons learned. If it finds something relevant, it surfaces the warning BEFORE acting — not after you've already broken production.
+
+### Cognitive Dissonance
+
+When you give an instruction that contradicts NEXO's established knowledge, it doesn't silently obey or silently resist. It **verbalizes the conflict**:
+
+> "My memory says you prefer Tailwind over plain CSS, but you're asking me to write inline styles. Is this a permanent change or a one-time exception?"
+
+You decide: **paradigm shift** (permanent change), **exception** (one-time), or **override** (old memory was wrong).
+
+### Sibling Memories
+
+Some memories look identical but apply to different contexts. "How to deploy" for Project A is different from Project B. NEXO detects discriminating entities (different OS, platform, language) and links them as **siblings** instead of merging them:
+
+> "Applying the Linux deploy procedure. Note: there's a sibling for macOS that uses a different port."
+
+### Trust Score (0-100)
+
+NEXO tracks alignment with you through a trust score:
+
+- **You say thanks** → score goes up → NEXO reduces redundant verification checks
+- **NEXO makes a mistake you already taught it** → score drops → NEXO becomes more careful, checks more thoroughly
+- **The score doesn't control permissions** — you're always in control. It's a mirror that helps NEXO calibrate its own rigor.
+
+### Sentiment Detection
+
+NEXO reads your tone (keywords, message length, urgency signals) and adapts:
+
+- **Frustrated?** → Ultra-concise mode. Zero explanations. Just solve the problem.
+- **In flow?** → Good moment to suggest that backlog item from last Tuesday.
+- **Urgent?** → Immediate action, no preamble.
+
+### Sleep Cycle
+
+Like a human brain, NEXO has automated processes that run while you're not using it:
+
+| Time | Process | Human Analogy |
+|------|---------|---------------|
+| 03:00 | Decay + memory consolidation + merge duplicates | Deep sleep consolidation |
+| 04:00 | Clean expired data, prune redundant memories | Synaptic pruning |
+| 07:00 | Self-audit, health checks, metrics | Waking up + orientation |
+| 23:30 | Process day's events, extract patterns | Pre-sleep reflection |
+| Boot | Catch-up: run anything missed while computer was off | — |
+
+If your Mac was asleep during any scheduled process, NEXO catches up in order when it wakes.
 
 ## Quick Start
 
@@ -21,84 +122,75 @@ Built on the **Atkinson-Shiffrin memory model** from cognitive psychology, NEXO 
 npx create-nexo
 ```
 
-That's it. The installer will:
-1. Ask what you want to call your co-operator
-2. Ask permission to scan your workspace
-3. Install dependencies (Python, fastembed, numpy)
-4. Configure Claude Code's MCP settings
-5. Set up automated memory processes
+The installer handles everything:
 
-Then open Claude Code and start working. Your co-operator will introduce itself.
+```
+  How should I call myself? (default: NEXO) > Atlas
 
-## Requirements
+  Can I explore your workspace to learn about your projects? (y/n) > y
+
+  Keep Mac awake so my cognitive processes run on schedule? (y/n) > y
+
+  Installing cognitive engine dependencies...
+  Setting up NEXO home...
+  Scanning workspace...
+    - 3 git repositories
+    - Node.js project detected
+  Configuring Claude Code MCP server...
+  Setting up automated processes...
+    5 automated processes configured.
+  Caffeinate enabled.
+  Generating operator instructions...
+
+  ╔══════════════════════════════════════════════════════════╗
+  ║  Atlas is ready.                                       ║
+  ║  Open Claude Code and start a conversation.            ║
+  ╚══════════════════════════════════════════════════════════╝
+```
+
+Open Claude Code and start working. Atlas will introduce itself on the first message.
+
+### What Gets Installed
+
+| Component | What | Where |
+|-----------|------|-------|
+| Cognitive engine | Python: fastembed, numpy, vector search | pip packages |
+| MCP server | 50+ tools for memory, learning, guard | ~/.nexo/ |
+| Plugins | Guard, episodic memory, cognitive memory, entities, preferences | ~/.nexo/plugins/ |
+| Hooks | Session capture, briefing, stop detection | ~/.nexo/hooks/ |
+| LaunchAgents | Decay, sleep, audit, postmortem, catch-up | ~/Library/LaunchAgents/ |
+| Auto-update | Checks for new versions at boot | Built into catch-up |
+| Claude Code config | MCP server + hooks registered | ~/.claude/settings.json |
+
+### Requirements
 
 - **macOS** (Linux support planned)
-- **Claude Code** CLI installed
-- **Python 3.10+** (`brew install python3`)
 - **Node.js 18+** (for the installer)
+- Python 3, Homebrew, and Claude Code are installed automatically if missing.
 
 ## Architecture
 
-### Memory Model (Atkinson-Shiffrin)
-
-```
-Sensory Register (48h buffer)
-    │
-    ├─→ Attention filter (nocturnal, 23:30)
-    │       │
-    │       ↓
-    ├─→ Short-Term Memory (STM)
-    │       │ 7-day half-life
-    │       ├─→ Rehearsal (access = strengthen)
-    │       ├─→ 3+ accesses → promote to LTM
-    │       └─→ No access → decay → forget
-    │
-    └─→ Long-Term Memory (LTM)
-            │ 60-day half-life
-            ├─→ Active: searchable by semantic similarity
-            ├─→ Dormant: not searchable, but reactivatable
-            └─→ Consolidation: merge near-duplicates
-```
-
-### Cognitive Features
-
-- **Semantic RAG** — Vector search using fastembed (BAAI/bge-small-en-v1.5, 384 dims)
-- **Ebbinghaus Decay** — Memories fade without reinforcement, just like human memory
-- **Metacognitive Guard** — Checks "have I made this mistake before?" before every code change
-- **Cognitive Dissonance** — Detects when new instructions conflict with established knowledge
-- **Discriminative Fusion** — Similar memories for different contexts (e.g., Linux vs Mac) stay separate as "siblings"
-- **Trust Score** — 0-100 alignment index that modulates verification rigor
-- **Sentiment Detection** — Adapts tone based on user's mood (concise when frustrated, proactive when positive)
-
-### Automated Processes
-
-| Time | Process | What it does |
-|------|---------|-------------|
-| 03:00 | Cognitive Decay | Apply Ebbinghaus curves, promote STM→LTM, merge duplicates, check correction fatigue |
-| 07:00 | Self-Audit | Health checks, metrics, phase trigger monitoring |
-| 23:30 | Post-Mortem | Consolidate session critiques, process sensory register, analyze force events |
-| Boot | Catch-Up | Run any missed processes in order |
-
-### MCP Tools (50+)
+### 50+ MCP Tools
 
 | Category | Tools | Purpose |
 |----------|-------|---------|
-| Sessions | 3 | Register, heartbeat, status |
-| Cognitive | 8 | RAG, stats, metrics, dissonance, sentiment, trust |
-| Guard | 3 | Error prevention, repetition tracking |
-| Episodic | 10 | Changes, decisions, session diary, recall |
-| Reminders | 4 | Create, update, complete, delete |
-| Followups | 4 | Create, update, complete, delete |
-| Learnings | 5 | Add, search, update, delete, list |
-| Entities | 5 | People, services, URLs |
-| Preferences | 4 | Observed user preferences |
-| Agents | 5 | Agent registry for delegation |
-| Backup | 3 | Backup/restore SQLite data |
-| Evolution | 5 | Self-improvement proposals |
+| Cognitive (8) | retrieve, stats, inspect, metrics, dissonance, resolve, sentiment, trust | The brain |
+| Guard (3) | check, stats, log_repetition | Error prevention |
+| Episodic (10) | changes, decisions, session diary, recall | What happened and why |
+| Sessions (3) | startup, heartbeat, status | Session lifecycle |
+| Reminders (4) | create, update, complete, delete | User's tasks |
+| Followups (4) | create, update, complete, delete | System's tasks |
+| Learnings (5) | add, search, update, delete, list | Error patterns |
+| Entities (5) | search, create, update, delete, list | People, services, URLs |
+| Preferences (4) | get, set, list, delete | Observed preferences |
+| Credentials (5) | create, get, update, delete, list | Secure storage |
+| Agents (5) | get, create, update, delete, list | Agent delegation |
+| Backup (3) | now, list, restore | Data safety |
+| Evolution (5) | propose, approve, reject, status, history | Self-improvement |
 
-## Plugin System
+### Plugin System
 
-NEXO supports hot-loadable plugins. Place a `.py` file in `~/.nexo/plugins/` with a `TOOLS` list and it will be automatically loaded.
+NEXO supports hot-loadable plugins. Drop a `.py` file in `~/.nexo/plugins/`:
 
 ```python
 # my_plugin.py
@@ -107,26 +199,42 @@ def handle_my_tool(query: str) -> str:
     return f"Result for {query}"
 
 TOOLS = [
-    (handle_my_tool, "nexo_my_tool", "Description for Claude Code"),
+    (handle_my_tool, "nexo_my_tool", "Short description"),
 ]
 ```
 
-## How It Learns
+Reload without restarting: `nexo_plugin_load("my_plugin.py")`
 
-1. **By error** — When something fails, logs the root cause and prevention
-2. **By correction** — When the user corrects NEXO, it becomes a behavioral rule
-3. **By observation** — Preferences captured from behavior, not just explicit instruction
-4. **By consolidation** — Nightly process detects recurring patterns and promotes to permanent memory
+### Data Privacy
+
+- **Everything stays local.** All data in `~/.nexo/`, never uploaded anywhere.
+- **No telemetry.** No analytics. No phone-home.
+- **No cloud dependencies.** Vector search runs on CPU (fastembed), not an API.
+- **Auto-update is opt-in.** Checks GitHub releases, never sends data.
+
+## The Psychology Behind NEXO
+
+NEXO isn't just engineering — it's applied cognitive psychology:
+
+| Psychological Concept | How NEXO Implements It |
+|----------------------|----------------------|
+| Atkinson-Shiffrin (1968) | Three memory stores: sensory register → STM → LTM |
+| Ebbinghaus Forgetting Curve (1885) | Exponential decay: `strength = strength × e^(-λ × time)` |
+| Rehearsal Effect | Accessing a memory resets its strength to 1.0 |
+| Memory Consolidation | Nightly process promotes frequently-used STM to LTM |
+| Metacognition | Guard system checks past errors before acting |
+| Cognitive Dissonance | Detects and verbalizes conflicts between old and new knowledge |
+| Theory of Mind | Models user behavior, preferences, and mood |
+| Synaptic Pruning | Automated cleanup of weak, unused memories |
+| Associative Memory | Semantic search finds related concepts, not just matching words |
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-Issues and PRs are managed by NEXO itself (via automated review).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines. Issues and PRs welcome.
 
 ## License
 
-MIT - see [LICENSE](LICENSE)
+MIT — see [LICENSE](LICENSE)
 
 ---
 

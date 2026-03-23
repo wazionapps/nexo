@@ -4,8 +4,8 @@ from db import (create_learning, update_learning, delete_learning, search_learni
                 list_learnings, find_similar_learnings, get_db, now_epoch)
 
 VALID_CATEGORIES = {
-    "general", "code", "infrastructure", "api",
-    "database", "security", "deployment", "testing", "performance", "ux"
+    "nexo-ops", "infrastructure", "security", "brain-engine",
+    "api", "database", "frontend", "backend", "devops", "general"
 }
 
 
@@ -24,7 +24,7 @@ def handle_learning_add(category: str, title: str, content: str, reasoning: str 
     """
     if category not in VALID_CATEGORIES:
         valid = ", ".join(sorted(VALID_CATEGORIES))
-        return f"ERROR: Categoría '{category}' inválida. Válidas: {valid}"
+        return f"ERROR: Category '{category}' invalid. Valid: {valid}"
     result = create_learning(
         category, title, content, reasoning=reasoning
     )
@@ -69,15 +69,15 @@ def handle_learning_add(category: str, title: str, content: str, reasoning: str 
     if applies_to:
         meta.append(f"applies_to={applies_to}")
     meta_str = f" ({', '.join(meta)})" if meta else ""
-    return f"Learning #{result['id']} añadido en {category}: {title}{meta_str}{repetition_msg}"
+    return f"Learning #{result['id']} added in {category}: {title}{meta_str}{repetition_msg}"
 
 
 def handle_learning_search(query: str, category: str = '') -> str:
     """Search learnings by query string, optionally filtered by category."""
     results = search_learnings(query, category if category else None)
     if not results:
-        return f"Sin resultados para '{query}'."
-    lines = [f"RESULTADOS ({len(results)}):"]
+        return f"No results for '{query}'."
+    lines = [f"RESULTS ({len(results)}):"]
     for r in results:
         snippet = r["content"][:100] + "..." if len(r["content"]) > 100 else r["content"]
         status = r.get("status", "active")
@@ -86,9 +86,9 @@ def handle_learning_search(query: str, category: str = '') -> str:
         lines.append(f"  #{r['id']} [{r['category']}] [{status}] {r['title']}{review_note}")
         lines.append(f"    {snippet}")
         if r.get("prevention"):
-            lines.append(f"    Prevención: {r['prevention'][:100]}")
+            lines.append(f"    Prevention: {r['prevention'][:100]}")
 
-    # v1.2: Passive rehearsal — strengthen matching cognitive memories
+    # Passive rehearsal — strengthen matching cognitive memories
     try:
         import cognitive
         for r in results[:5]:
@@ -111,7 +111,7 @@ def handle_learning_update(id: int, title: str = '', content: str = '', category
     if category:
         if category not in VALID_CATEGORIES:
             valid = ", ".join(sorted(VALID_CATEGORIES))
-            return f"ERROR: Categoría '{category}' inválida. Válidas: {valid}"
+            return f"ERROR: Category '{category}' invalid. Valid: {valid}"
         kwargs["category"] = category
     if reasoning:
         kwargs["reasoning"] = reasoning
@@ -124,7 +124,7 @@ def handle_learning_update(id: int, title: str = '', content: str = '', category
     if review_days > 0:
         kwargs["review_days"] = review_days
     if not kwargs:
-        return "ERROR: Nada que actualizar. Proporciona campos nuevos."
+        return "ERROR: Nothing to update. Provide new fields."
     basic_kwargs = {k: v for k, v in kwargs.items() if k in {"title", "content", "category", "reasoning"}}
     result = update_learning(id, **basic_kwargs)
     if "error" in result:
@@ -145,23 +145,23 @@ def handle_learning_update(id: int, title: str = '', content: str = '', category
         conn = get_db()
         conn.execute(f"UPDATE learnings SET {set_clause} WHERE id = ?", values)
         conn.commit()
-    return f"Learning #{id} actualizado."
+    return f"Learning #{id} updated."
 
 
 def handle_learning_delete(id: int) -> str:
     """Delete a learning entry by ID."""
     deleted = delete_learning(id)
     if not deleted:
-        return f"ERROR: Learning #{id} no encontrado."
-    return f"Learning #{id} eliminado."
+        return f"ERROR: Learning #{id} not found."
+    return f"Learning #{id} deleted."
 
 
 def handle_learning_list(category: str = '') -> str:
     """List all learnings, grouped by category if no filter given."""
     results = list_learnings(category if category else None)
     if not results:
-        label = category if category else "TODOS"
-        return f"LEARNINGS {label} (0): Sin entradas."
+        label = category if category else "ALL"
+        return f"LEARNINGS {label} (0): No entries."
 
     if category:
         label = category.upper()
@@ -169,7 +169,7 @@ def handle_learning_list(category: str = '') -> str:
         for r in results:
             lines.append(f"  #{r['id']} [{r.get('status','active')}] {r['title']}")
     else:
-        lines = [f"LEARNINGS TODOS ({len(results)}):"]
+        lines = [f"LEARNINGS ALL ({len(results)}):"]
         current_cat = None
         for r in results:
             if r["category"] != current_cat:
