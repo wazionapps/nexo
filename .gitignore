@@ -34,3 +34,8 @@ Thumbs.db
 *.pem
 *_token.txt
 credentials*.json
+.mcpregistry_*
+
+# macOS Finder duplicates
+* 2*
+* 2.*
