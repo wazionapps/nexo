@@ -1,13 +1,5 @@
 """Cognitive Memory plugin — RAG retrieval over NEXO's Atkinson-Shiffrin memory stores."""
 
-import sys
-import os
-
-# Ensure site-packages is in path for numpy/fastembed
-_site = "/opt/homebrew/lib/python{}.{}/site-packages".format(sys.version_info.major, sys.version_info.minor)
-if os.path.isdir(_site) and _site not in sys.path:
-    sys.path.insert(0, _site)
-
 import cognitive
 
 
@@ -27,7 +19,7 @@ def handle_cognitive_retrieve(
         min_score: Minimum cosine similarity score (default 0.5)
         stores: Which store to search — "both", "stm", or "ltm" (default "both")
         source_type: Filter by source type e.g. "change", "learning", "diary" (default: all)
-        domain: Filter by domain e.g. "frontend", "backend" (default: all)
+        domain: Filter by domain e.g. "infrastructure", "general" (default: all)
     """
     if not query or not query.strip():
         return "ERROR: query is required."
@@ -128,7 +120,7 @@ def handle_cognitive_inspect(memory_id: int, store: str = "ltm") -> str:
 
 
 def handle_cognitive_metrics(days: int = 7) -> str:
-    """Cognitive memory performance metrics (spec section 9).
+    """Cognitive memory performance metrics.
 
     Returns retrieval relevance %, repeat error rate, score distribution,
     and whether multilingual model switch is recommended.
@@ -163,7 +155,7 @@ def handle_cognitive_metrics(days: int = 7) -> str:
 
     if metrics["needs_multilingual"]:
         lines.append("")
-        lines.append("⚠ RECOMMENDATION: Switch to multilingual model (intfloat/multilingual-e5-small)")
+        lines.append("RECOMMENDATION: Switch to multilingual model (intfloat/multilingual-e5-small)")
         lines.append(f"  Reason: relevance {metrics['retrieval_relevance_pct']}% < 70% with {metrics['total_retrievals']}+ retrievals")
 
     if repeats["duplicates"]:
@@ -177,13 +169,13 @@ def handle_cognitive_metrics(days: int = 7) -> str:
 
 
 def handle_cognitive_sentiment(text: str) -> str:
-    """Detect the user's sentiment from his text. Returns mood, intensity, and guidance.
+    """Detect user sentiment from their text. Returns mood, intensity, and guidance.
 
     Call this with the user's recent message to adapt NEXO's tone and behavior.
     Also logs the sentiment for historical tracking.
 
     Args:
-        text: the user's recent message or instruction
+        text: User's recent message or instruction
     """
     result = cognitive.log_sentiment(text)
     trust = cognitive.get_trust_score()
@@ -249,27 +241,27 @@ def handle_cognitive_trust(event: str = '', context: str = '', delta: float = No
 def handle_cognitive_dissonance(instruction: str, force: bool = False) -> str:
     """Detect cognitive dissonance: find established memories that conflict with a new instruction.
 
-    Use BEFORE applying a new preference or rule from the user that might contradict
-    existing knowledge. If conflicts found, verbalize them and ask the user to resolve.
+    Use BEFORE applying a new preference or rule that might contradict existing knowledge.
+    If conflicts found, verbalize them and ask to resolve.
 
     Args:
         instruction: The new instruction or preference to check against LTM
         force: If True, skip discussion — execute instruction, auto-resolve all conflicts as
-               'exception', and flag for review in the nocturnal process (23:30).
+               'exception', and flag for review.
     """
     conflicts = cognitive.detect_dissonance(instruction)
     if not conflicts:
         return f"No dissonance detected. Instruction '{instruction[:80]}' is consistent with existing LTM."
 
     if force:
-        # Auto-resolve all as exceptions, log for nocturnal review
+        # Auto-resolve all as exceptions
         for c in conflicts:
             cognitive.resolve_dissonance(
                 c["memory_id"], "exception",
-                f"[FORCE] {instruction[:200]} — auto-exception, pending nocturnal review"
+                f"[FORCE] {instruction[:200]} — auto-exception, pending review"
             )
         return (f"FORCE: {len(conflicts)} conflicts auto-resolved as exceptions. "
-                f"Instruction executed. Flagged for review at 23:30.")
+                f"Instruction executed. Flagged for review.")
 
     lines = [
         f"COGNITIVE DISSONANCE DETECTED — {len(conflicts)} conflicting memories:",
@@ -283,7 +275,7 @@ def handle_cognitive_dissonance(instruction: str, force: bool = False) -> str:
         lines.append("")
 
     lines.append("RESOLVE with nexo_cognitive_resolve, or use force=True to skip:")
-    lines.append("  - 'paradigm_shift': the user changed his mind permanently.")
+    lines.append("  - 'paradigm_shift': Permanent preference change.")
     lines.append("  - 'exception': One-time override. Old memory stays.")
     lines.append("  - 'override': Old memory was wrong.")
 
@@ -291,7 +283,7 @@ def handle_cognitive_dissonance(instruction: str, force: bool = False) -> str:
 
 
 def handle_cognitive_resolve(memory_id: int, resolution: str, context: str = '') -> str:
-    """Resolve a cognitive dissonance by applying the user's decision.
+    """Resolve a cognitive dissonance.
 
     Args:
         memory_id: The LTM memory ID from the dissonance detection
@@ -305,9 +297,9 @@ TOOLS = [
     (handle_cognitive_retrieve, "nexo_cognitive_retrieve", "RAG query over cognitive memory (STM+LTM). Triggers rehearsal on retrieved results."),
     (handle_cognitive_stats, "nexo_cognitive_stats", "Cognitive memory system metrics: STM/LTM counts, strengths, retrieval stats"),
     (handle_cognitive_inspect, "nexo_cognitive_inspect", "Inspect a specific memory by ID (debug). Does NOT trigger rehearsal."),
-    (handle_cognitive_metrics, "nexo_cognitive_metrics", "Performance metrics: retrieval relevance %, repeat error rate, multilingual recommendation (spec section 9)"),
+    (handle_cognitive_metrics, "nexo_cognitive_metrics", "Performance metrics: retrieval relevance %, repeat error rate, multilingual recommendation"),
     (handle_cognitive_dissonance, "nexo_cognitive_dissonance", "Detect conflicts between a new instruction and established LTM memories. force=True to skip discussion."),
     (handle_cognitive_resolve, "nexo_cognitive_resolve", "Resolve a cognitive dissonance: paradigm_shift, exception, or override."),
-    (handle_cognitive_sentiment, "nexo_cognitive_sentiment", "Detect the user's sentiment and get tone guidance. Also logs for tracking."),
+    (handle_cognitive_sentiment, "nexo_cognitive_sentiment", "Detect user sentiment and get tone guidance. Also logs for tracking."),
     (handle_cognitive_trust, "nexo_cognitive_trust", "View or adjust trust score (0-100). Without args: view. With event: adjust."),
 ]

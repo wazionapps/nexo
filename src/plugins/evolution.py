@@ -1,19 +1,23 @@
 """Evolution plugin — NEXO self-improvement tools for interactive sessions."""
 
+import os
+from pathlib import Path
 from db import get_latest_metrics, get_evolution_history, update_evolution_log_status, get_db
+
+NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 
 
 def handle_evolution_status() -> str:
     """Show current NEXO dimension scores and recent trend."""
     metrics = get_latest_metrics()
     if not metrics:
-        return "Sin métricas de evolución registradas."
+        return "No evolution metrics recorded."
 
     BARS = {
-        "episodic_memory": "Memoria Episódica",
-        "autonomy": "Autonomía",
-        "proactivity": "Proactividad",
-        "self_improvement": "Auto-mejora",
+        "episodic_memory": "Episodic Memory",
+        "autonomy": "Autonomy",
+        "proactivity": "Proactivity",
+        "self_improvement": "Self-improvement",
         "agi": "AGI",
     }
 
@@ -37,7 +41,7 @@ def handle_evolution_history(limit: int = 10) -> str:
     """
     history = get_evolution_history(limit)
     if not history:
-        return "Sin historial de evolución."
+        return "No evolution history."
 
     lines = [f"EVOLUTION HISTORY ({len(history)} entries):"]
     for h in history:
@@ -57,8 +61,7 @@ def handle_evolution_propose() -> str:
     This sets a flag that the Cortex wrapper reads on the next cycle.
     """
     import json
-    from pathlib import Path
-    obj_file = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo"))) / "cortex" / "evolution-objective.json"
+    obj_file = NEXO_HOME / "cortex" / "evolution-objective.json"
     if not obj_file.exists():
         return "ERROR: evolution-objective.json not found"
     try:
@@ -77,10 +80,10 @@ def handle_evolution_approve(log_id: int, notes: str = '') -> str:
 
     Args:
         log_id: Evolution log entry ID to approve
-        notes: Optional notes from the user
+        notes: Optional notes
     """
     update_evolution_log_status(log_id, "accepted",
-                                test_result=f"Approved by the user. {notes}".strip())
+                                test_result=f"Approved. {notes}".strip())
     return f"Proposal #{log_id} APPROVED. Will be applied in next Evolution cycle."
 
 
@@ -92,7 +95,7 @@ def handle_evolution_reject(log_id: int, reason: str = '') -> str:
         reason: Why this proposal was rejected
     """
     update_evolution_log_status(log_id, "rejected",
-                                test_result=f"Rejected: {reason}" if reason else "Rejected by the user")
+                                test_result=f"Rejected: {reason}" if reason else "Rejected by user")
     return f"Proposal #{log_id} REJECTED. Reason: {reason or 'no reason given'}"
 
 
@@ -104,7 +107,7 @@ TOOLS = [
     (handle_evolution_propose, "nexo_evolution_propose",
      "Manually trigger an evolution analysis outside weekly schedule"),
     (handle_evolution_approve, "nexo_evolution_approve",
-     "Approve a pending Evolution proposal (the user only)"),
+     "Approve a pending Evolution proposal"),
     (handle_evolution_reject, "nexo_evolution_reject",
      "Reject a pending Evolution proposal with reason"),
 ]
