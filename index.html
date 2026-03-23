@@ -35,8 +35,9 @@
     </script>
 
     <!-- Favicon -->
-    <link rel="icon" type="image/png" href="/assets/logo-1024.png">
-    <link rel="apple-touch-icon" href="/assets/logo-1024.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
 
 
     <!-- Schema.org -->
@@ -474,7 +475,13 @@
     <div class="container">
         <div class="hero-badge fade-up">
             <span class="dot"></span>
-            v0.2.1 &mdash; Now available on npm
+            <span id="version-badge">v0.2.1</span> &mdash; Now available on npm
+        </div>
+        <div class="fade-up" style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;">
+            <img src="https://img.shields.io/npm/v/nexo-brain?color=7C3AED&label=npm" alt="npm version">
+            <img src="https://img.shields.io/github/stars/wazionapps/nexo?style=flat&color=EC4899&label=stars" alt="GitHub stars">
+            <img src="https://img.shields.io/npm/dm/nexo-brain?color=7C3AED&label=downloads" alt="npm downloads">
+            <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License">
         </div>
 
         <h1 class="fade-up">
@@ -799,6 +806,28 @@ document.querySelectorAll('.feature-card, .tool-card').forEach(el => {
     el.style.transition = 'all 0.5s ease';
     observer.observe(el);
 });
+
+// Fetch live version from npm
+fetch('https://registry.npmjs.org/nexo-brain/latest')
+  .then(r => r.json())
+  .then(d => {
+    const v = d.version;
+    if (v) {
+      const badge = document.getElementById('version-badge');
+      if (badge) badge.textContent = 'v' + v;
+    }
+  }).catch(() => {});
+</script>
+
+<!-- Cookie Consent (minimal, GDPR) -->
+<div id="cookie-consent" style="display:none;position:fixed;bottom:0;left:0;right:0;background:rgba(10,10,15,0.95);border-top:1px solid #1E1E2E;padding:12px 24px;z-index:200;font-size:13px;color:#94A3B8;text-align:center;">
+    This site uses analytics cookies to improve the experience. <a href="https://www.wazion.com/en/privacy-policy" style="color:#A78BFA;">Privacy Policy</a>
+    <button onclick="document.getElementById('cookie-consent').style.display='none';localStorage.setItem('cc','1')" style="margin-left:16px;background:#7C3AED;color:#fff;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Accept</button>
+    <button onclick="document.getElementById('cookie-consent').style.display='none';localStorage.setItem('cc','0');window['ga-disable-G-1LNEMCJMS7']=true" style="margin-left:8px;background:transparent;color:#94A3B8;border:1px solid #333;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Decline</button>
+</div>
+<script>
+if(!localStorage.getItem('cc')){document.getElementById('cookie-consent').style.display='block';}
+else if(localStorage.getItem('cc')==='0'){window['ga-disable-G-1LNEMCJMS7']=true;}
 </script>
 
 </body>
