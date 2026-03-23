@@ -14,10 +14,11 @@ import hashlib
 from datetime import datetime, timedelta
 from pathlib import Path
 
-LOG_DIR = Path.home() / "claude" / "logs"
+NEXO_HOME_PATH = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+LOG_DIR = NEXO_HOME_PATH / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE = LOG_DIR / "self-audit.log"
-NEXO_DB = Path.home() / "claude" / "nexo-mcp" / "nexo.db"
+NEXO_DB = NEXO_HOME_PATH / "nexo.db"
 # Configure this to point to your main project repo for uncommitted-changes check
 PROJECT_REPO_DIR = Path(os.environ.get("NEXO_PROJECT_REPO", str(Path.home() / "projects" / "main")))
 HASH_REGISTRY = Path.home() / "claude" / "scripts" / ".watchdog-hashes"
@@ -245,7 +246,7 @@ def check_watchdog_registry():
 # ── Check 13: Snapshot drift on protected recovery files ────────────────
 def check_snapshot_sync():
     pairs = [
-        (Path.home() / "claude" / "nexo-mcp" / "db.py", SNAPSHOT_GOLDEN / "nexo-mcp" / "db.py"),
+        (NEXO_HOME_PATH / "db.py", SNAPSHOT_GOLDEN / "nexo-mcp" / "db.py"),
         (Path.home() / "claude" / "cortex" / "cortex-wrapper.py", SNAPSHOT_GOLDEN / "cortex" / "cortex-wrapper.py"),
         (Path.home() / "claude" / "cortex" / "evolution_cycle.py", SNAPSHOT_GOLDEN / "cortex" / "evolution_cycle.py"),
     ]
@@ -341,7 +342,7 @@ def check_watchdog_smoke():
 # ── Check 18: Cognitive memory health ────────────────────────────────
 def check_cognitive_health():
     """Check cognitive.db health and run weekly GC on Sundays."""
-    cognitive_db = Path.home() / "claude" / "nexo-mcp" / "cognitive.db"
+    cognitive_db = NEXO_HOME_PATH / "cognitive.db"
     if not cognitive_db.exists():
         finding("WARN", "cognitive", "cognitive.db not found")
         return
@@ -362,7 +363,7 @@ def check_cognitive_health():
 
     # Metrics report (spec section 9)
     try:
-        sys.path.insert(0, str(Path.home() / "claude" / "nexo-mcp"))
+        sys.path.insert(0, str(NEXO_HOME_PATH))
         import cognitive as cog
 
         metrics = cog.get_metrics(days=7)
@@ -403,7 +404,7 @@ def check_cognitive_health():
 
     # Phase triggers monitoring (spec section 10)
     try:
-        sys.path.insert(0, str(Path.home() / "claude" / "nexo-mcp"))
+        sys.path.insert(0, str(NEXO_HOME_PATH))
         import cognitive as cog
 
         db_cog = cog._get_db()
@@ -459,7 +460,7 @@ def check_cognitive_health():
     if datetime.now().weekday() == 6:
         log("  Running weekly cognitive GC (Sunday)...")
         try:
-            sys.path.insert(0, str(Path.home() / "claude" / "nexo-mcp"))
+            sys.path.insert(0, str(NEXO_HOME_PATH))
             import cognitive as cog
 
             # 1. Delete STM with strength < 0.1 and > 30 days

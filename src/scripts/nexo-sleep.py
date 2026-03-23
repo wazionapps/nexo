@@ -54,8 +54,9 @@ HEARTBEAT_LOG = COORD_DIR / "heartbeat-log.json"
 REFLECTION_LOG = COORD_DIR / "reflection-log.json"
 SLEEP_LOG = COORD_DIR / "sleep-log.json"
 
+NEXO_HOME = os.environ.get("NEXO_HOME", str(Path.home() / ".nexo"))
 MEMORY_MD = Path.home() / ".claude" / "projects" / f"-Users-{os.environ.get('USER', 'user')}" / "memory" / "MEMORY.md"
-NEXO_DB = Path.home() / "claude" / "nexo-mcp" / "nexo.db"
+NEXO_DB = Path(NEXO_HOME) / "nexo.db"
 CLAUDE_MEM_DB = Path.home() / ".claude-mem" / "claude-mem.db"
 CLAUDE_CLI = Path.home() / ".local" / "bin" / "claude"
 

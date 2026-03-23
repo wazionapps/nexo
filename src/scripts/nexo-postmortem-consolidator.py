@@ -26,12 +26,15 @@ from collections import Counter
 from datetime import datetime, date, timedelta
 from pathlib import Path
 
-# Add nexo-mcp to path for cognitive engine
+# Add NEXO_HOME to path for cognitive engine
+NEXO_HOME = os.environ.get("NEXO_HOME", str(Path.home() / ".nexo"))
+sys.path.insert(0, NEXO_HOME)
+# Fallback for development installs
 sys.path.insert(0, str(Path.home() / "claude" / "nexo-mcp"))
 
 HOME = Path.home()
-NEXO_DB = HOME / "claude" / "nexo-mcp" / "nexo.db"
-SESSION_BUFFER = HOME / "claude" / "brain" / "session_buffer.jsonl"
+NEXO_DB = Path(NEXO_HOME) / "nexo.db"
+SESSION_BUFFER = Path(NEXO_HOME) / "brain" / "session_buffer.jsonl"
 MEMORY_DIR = HOME / ".claude" / "projects" / f"-Users-{os.environ.get('USER', 'user')}" / "memory"
 MEMORY_INDEX = MEMORY_DIR / "MEMORY.md"
 CONSOLIDATION_LOG = HOME / "claude" / "logs" / "postmortem-consolidation.log"

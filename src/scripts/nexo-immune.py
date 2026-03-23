@@ -60,6 +60,7 @@ CLAUDE_DIR = HOME / "claude"
 COORD_DIR = CLAUDE_DIR / "coordination"
 BRAIN_DIR = CLAUDE_DIR / "brain"
 SCRIPTS_DIR = CLAUDE_DIR / "scripts"
+NEXO_HOME = os.environ.get("NEXO_HOME", str(Path.home() / ".nexo"))
 
 IMMUNE_STATUS = COORD_DIR / "immune-status.json"
 IMMUNE_LOG = COORD_DIR / "immune-log.json"
@@ -368,8 +369,8 @@ def check_databases():
     results = []
 
     dbs = [
-        ("nexo.db", Path.home() / "claude" / "nexo-mcp" / "nexo.db"),
-        ("cognitive.db", Path.home() / "claude" / "nexo-mcp" / "cognitive.db"),
+        ("nexo.db", Path(NEXO_HOME) / "nexo.db"),
+        ("cognitive.db", Path(NEXO_HOME) / "cognitive.db"),
         ("claude-mem.db", CLAUDE_MEM_DB),
     ]
 

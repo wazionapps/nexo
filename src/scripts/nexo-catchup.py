@@ -25,6 +25,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 HOME = Path.home()
+NEXO_HOME = os.environ.get("NEXO_HOME", str(Path.home() / ".nexo"))
 LOG_DIR = HOME / "claude" / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE = LOG_DIR / "catchup.log"
@@ -139,7 +140,7 @@ def main():
             subprocess.run(
                 [PYTHON_BREW if os.path.exists(PYTHON_BREW) else PYTHON_SYS, str(update_script)],
                 capture_output=True, text=True, timeout=60,
-                env={**os.environ, "HOME": str(HOME), "NEXO_HOME": str(HOME / "claude" / "nexo-mcp")}
+                env={**os.environ, "HOME": str(HOME), "NEXO_HOME": NEXO_HOME}
             )
         except Exception as e:
             log(f"  Update check failed: {e}")

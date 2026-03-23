@@ -21,8 +21,9 @@ from pathlib import Path
 HOME = Path.home()
 CLAUDE_DIR = HOME / "claude"
 COORD_DIR = CLAUDE_DIR / "coordination"
+NEXO_HOME = os.environ.get("NEXO_HOME", str(Path.home() / ".nexo"))
 
-NEXO_DB = HOME / "claude" / "nexo-mcp" / "nexo.db"
+NEXO_DB = Path(NEXO_HOME) / "nexo.db"
 CLAUDE_MEM_DB = HOME / ".claude-mem" / "claude-mem.db"
 
 OUTPUT_FILE = COORD_DIR / "daily-synthesis.md"

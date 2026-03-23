@@ -2,14 +2,18 @@
 """NEXO Cognitive Decay — Daily Ebbinghaus sweep + STM→LTM promotion."""
 
 import json
+import os
 import sys
 from pathlib import Path
 from datetime import datetime
 
+NEXO_HOME = os.environ.get("NEXO_HOME", str(Path.home() / ".nexo"))
+sys.path.insert(0, NEXO_HOME)
+# Fallback for development installs
 sys.path.insert(0, str(Path.home() / "claude" / "nexo-mcp"))
 import cognitive
 
-STATE_FILE = Path.home() / "claude" / "operations" / ".catchup-state.json"
+STATE_FILE = Path(NEXO_HOME) / ".catchup-state.json"
 
 
 def update_catchup_state():

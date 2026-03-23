@@ -7,6 +7,7 @@ import secrets
 import string
 import datetime
 import pathlib
+import threading
 
 DB_PATH = os.environ.get(
     "NEXO_TEST_DB",
@@ -21,31 +22,35 @@ SESSION_STALE_SECONDS = 900    # 15 min (documented TTL)
 MESSAGE_TTL_SECONDS = 3600     # 1 hour
 QUESTION_TTL_SECONDS = 600     # 10 min
 
-# Shared connection per process — avoids file descriptor leak with multiple MCP sessions
+# Single shared connection per process with write serialization.
+# SQLite allows only one writer at a time. Using a shared connection with
+# check_same_thread=False and a write lock ensures:
+# - No FTS5 corruption from concurrent write connections
+# - Reads can happen freely (WAL allows concurrent readers)
+# - Writes are serialized via _write_lock to prevent 'database is locked' errors
 _shared_conn: sqlite3.Connection | None = None
+_write_lock = threading.RLock()  # RLock allows re-entrant locking (function A calls B, both serialize)
 
 
 def get_db() -> sqlite3.Connection:
-    """Get shared database connection with WAL mode. One connection per process.
+    """Get shared database connection with WAL mode.
 
-    Uses WAL2-style pragmas for safe multi-process concurrent access:
-    - WAL mode allows readers to not block writers
-    - busy_timeout prevents instant SQLITE_BUSY failures
-    - wal_autocheckpoint keeps WAL file from growing unbounded
-    - Autocommit via isolation_level=None prevents implicit transactions
-      that hold locks across multiple operations
+    Returns a _SerializedConnection wrapper that serializes all execute
+    calls via _write_lock, preventing race conditions and FTS5 corruption
+    under concurrent thread access.
     """
     global _shared_conn
     if _shared_conn is None:
-        _shared_conn = sqlite3.connect(
+        raw = sqlite3.connect(
             DB_PATH, timeout=30, check_same_thread=False,
             isolation_level=None,  # autocommit — no implicit BEGIN holding locks
         )
-        _shared_conn.execute("PRAGMA journal_mode=WAL")
-        _shared_conn.execute("PRAGMA busy_timeout=30000")
-        _shared_conn.execute("PRAGMA foreign_keys=ON")
-        _shared_conn.execute("PRAGMA wal_autocheckpoint=100")
-        _shared_conn.row_factory = sqlite3.Row
+        raw.execute("PRAGMA journal_mode=WAL")
+        raw.execute("PRAGMA busy_timeout=30000")
+        raw.execute("PRAGMA foreign_keys=ON")
+        raw.execute("PRAGMA wal_autocheckpoint=100")
+        raw.row_factory = sqlite3.Row
+        _shared_conn = _SerializedConnection(raw)
     return _shared_conn
 
 
@@ -58,6 +63,58 @@ def close_db():
         except Exception:
             pass
         _shared_conn = None
+
+
+def _get_raw_conn() -> sqlite3.Connection:
+    """Get the raw unwrapped connection (for PRAGMA queries that need direct access)."""
+    conn = get_db()
+    if isinstance(conn, _SerializedConnection):
+        return conn._conn
+    return conn
+
+
+class _SerializedConnection:
+    """Wrapper around sqlite3.Connection that serializes all execute calls.
+
+    SQLite with a single shared connection and check_same_thread=False needs
+    serialization to prevent:
+    - Stale lastrowid when concurrent INSERTs happen
+    - FTS5 index corruption from concurrent writes
+    - 'NoneType' errors from interleaved INSERT+SELECT sequences
+
+    All execute/executemany/executescript calls go through _write_lock.
+    Property access (row_factory etc.) passes through directly.
+    """
+    def __init__(self, conn: sqlite3.Connection):
+        self._conn = conn
+
+    def execute(self, *args, **kwargs):
+        with _write_lock:
+            return self._conn.execute(*args, **kwargs)
+
+    def executemany(self, *args, **kwargs):
+        with _write_lock:
+            return self._conn.executemany(*args, **kwargs)
+
+    def executescript(self, *args, **kwargs):
+        with _write_lock:
+            return self._conn.executescript(*args, **kwargs)
+
+    def commit(self):
+        with _write_lock:
+            return self._conn.commit()
+
+    def close(self):
+        return self._conn.close()
+
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
+    def __setattr__(self, name, value):
+        if name == '_conn':
+            super().__setattr__(name, value)
+        else:
+            setattr(self._conn, name, value)
 
 
 def init_db():
