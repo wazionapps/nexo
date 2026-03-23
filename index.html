@@ -356,6 +356,114 @@
         .tool-card h4 { font-size: 15px; font-weight: 600; margin: 4px 0; }
         .tool-card p { font-size: 13px; color: var(--text-muted); }
 
+        /* ===== Integration Cards ===== */
+        .integrations-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+        }
+
+        .integration-card {
+            background: var(--dark-card);
+            border: 1px solid var(--dark-border);
+            border-radius: 16px;
+            padding: 32px;
+            transition: all 0.3s;
+            text-align: center;
+        }
+
+        .integration-card:hover {
+            border-color: rgba(124, 58, 237, 0.3);
+            box-shadow: var(--glow);
+            transform: translateY(-4px);
+        }
+
+        .integration-card .icon {
+            font-size: 36px; margin-bottom: 16px;
+        }
+
+        .integration-card h3 { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+        .integration-card p { font-size: 15px; color: var(--text-muted); line-height: 1.6; }
+        .integration-card .tag {
+            display: inline-block; margin-top: 12px;
+            font-size: 12px; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 0.05em; padding: 4px 12px; border-radius: 100px;
+            background: rgba(124, 58, 237, 0.12); color: var(--purple-light);
+        }
+
+        /* ===== Autonomous Processes ===== */
+        .processes-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 16px;
+        }
+
+        .process-card {
+            background: var(--dark-card);
+            border: 1px solid var(--dark-border);
+            border-radius: 12px;
+            padding: 24px;
+            transition: all 0.3s;
+        }
+
+        .process-card:hover {
+            border-color: rgba(124, 58, 237, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .process-card .process-icon { font-size: 20px; margin-bottom: 8px; }
+        .process-card h4 { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+        .process-card p { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
+
+        /* ===== Hooks ===== */
+        .hooks-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 16px;
+        }
+
+        .hook-card {
+            background: var(--dark-card);
+            border: 1px solid var(--dark-border);
+            border-radius: 12px;
+            padding: 24px;
+            transition: border-color 0.2s;
+        }
+
+        .hook-card:hover { border-color: rgba(236, 72, 153, 0.3); }
+
+        .hook-card code {
+            display: inline-block;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 13px; color: var(--pink);
+            background: rgba(236, 72, 153, 0.1);
+            padding: 2px 8px; border-radius: 4px;
+            margin-bottom: 8px;
+        }
+
+        .hook-card p { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
+
+        /* ===== Listed On ===== */
+        .listed-grid {
+            display: flex; flex-wrap: wrap; gap: 16px; justify-content: center;
+        }
+
+        .listed-badge {
+            display: inline-flex; align-items: center; gap: 8px;
+            background: var(--dark-card); border: 1px solid var(--dark-border);
+            border-radius: 10px; padding: 12px 20px;
+            font-size: 14px; font-weight: 600; color: var(--text);
+            transition: all 0.2s;
+        }
+
+        .listed-badge:hover {
+            border-color: var(--purple);
+            transform: translateY(-2px);
+            color: var(--text);
+        }
+
+        .listed-badge .badge-icon { font-size: 18px; }
+
         /* ===== Code Example ===== */
         .code-block {
             background: var(--dark-card);
@@ -428,6 +536,9 @@
             .stats { grid-template-columns: repeat(2, 1fr); gap: 24px; }
             .features-grid { grid-template-columns: 1fr; }
             .tools-grid { grid-template-columns: repeat(2, 1fr); }
+            .integrations-grid { grid-template-columns: 1fr; }
+            .processes-grid { grid-template-columns: repeat(2, 1fr); }
+            .hooks-grid { grid-template-columns: repeat(2, 1fr); }
             .architecture { flex-direction: column; }
             .hero { padding: 120px 0 60px; }
             .hero h1 { font-size: 2rem; }
@@ -453,6 +564,9 @@
 </head>
 <body>
 
+<!-- Skip to content -->
+<a href="#features" class="sr-only" style="position:absolute;left:-9999px;">Skip to content</a>
+
 <!-- Nav -->
 <nav>
     <div class="container">
@@ -464,6 +578,7 @@
             <a href="#features">Features</a>
             <a href="#architecture">Architecture</a>
             <a href="#tools">Tools</a>
+            <a href="#integrations">Integrations</a>
             <a href="https://github.com/wazionapps/nexo/wiki">Docs</a>
             <a href="https://github.com/wazionapps/nexo" class="nav-cta">GitHub</a>
         </div>
@@ -519,7 +634,7 @@
             <div class="stat-label">MCP Tools</div>
         </div>
         <div class="stat">
-            <div class="stat-value">16</div>
+            <div class="stat-value">15</div>
             <div class="stat-label">Categories</div>
         </div>
         <div class="stat">
@@ -527,11 +642,47 @@
             <div class="stat-label">Vector Dimensions</div>
         </div>
         <div class="stat">
+            <div class="stat-value">8</div>
+            <div class="stat-label">Autonomous Processes</div>
+        </div>
+        <div class="stat">
             <div class="stat-value">0</div>
             <div class="stat-label">Data Sent Externally</div>
         </div>
     </div>
 </div>
+
+<!-- Integrations -->
+<section id="integrations">
+    <div class="container">
+        <div class="section-label">Integrations</div>
+        <h2 class="section-title">Works where you work</h2>
+        <p class="section-subtitle">
+            Three ways to connect NEXO Brain to your AI workflow. Same cognitive engine, different entry points.
+        </p>
+
+        <div class="integrations-grid">
+            <div class="integration-card">
+                <div class="icon">&#x1F50C;</div>
+                <h3>MCP Server</h3>
+                <p>Native Model Context Protocol server. Works with Claude Code, Claude Desktop, and any MCP-compatible client out of the box.</p>
+                <span class="tag">Universal</span>
+            </div>
+            <div class="integration-card">
+                <div class="icon">&#x1F9E9;</div>
+                <h3>OpenClaw Native Plugin</h3>
+                <p>First-class memory plugin for the OpenClaw agent framework. Deep integration with the agent lifecycle and tool registry.</p>
+                <span class="tag">OpenClaw</span>
+            </div>
+            <div class="integration-card">
+                <div class="icon">&#x1F6D2;</div>
+                <h3>ClawHub Skill</h3>
+                <p>One-click install from the ClawHub marketplace. Browse, install, and start using cognitive memory in seconds.</p>
+                <span class="tag">One-Click</span>
+            </div>
+        </div>
+    </div>
+</section>
 
 <!-- Features -->
 <section id="features">
@@ -588,6 +739,21 @@
                 <h3>100% Local</h3>
                 <p>All data stored in local SQLite databases. Vectors computed on-device with ONNX Runtime. Nothing ever leaves your machine. Zero cloud dependencies.</p>
             </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#x1F3AD;</div>
+                <h3>Personality Calibration</h3>
+                <p>5-question onboarding that creates a unique agent personality. Your agent adopts a consistent voice, tone, and behavioral style from day one.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#x1F4DC;</div>
+                <h3>Operational Codex</h3>
+                <p>23 non-negotiable principles every NEXO agent follows. From memory hygiene to error prevention, the codex defines what it means to be a reliable co-operator. <a href="https://github.com/wazionapps/nexo/wiki">See the wiki</a>.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#x1F433;</div>
+                <h3>Docker Support</h3>
+                <p>Run NEXO Brain in a container with two commands. Mount your data directory, and the cognitive engine runs isolated and portable across any environment.</p>
+            </div>
         </div>
     </div>
 </section>
@@ -643,7 +809,7 @@
 <section id="tools">
     <div class="container">
         <div class="section-label">Tools</div>
-        <h2 class="section-title">77+ MCP tools, 16 categories</h2>
+        <h2 class="section-title">77+ MCP tools, 15 categories</h2>
         <p class="section-subtitle">
             Every aspect of cognitive operation exposed as MCP tools. Compatible with Claude Code and any MCP client.
         </p>
@@ -651,38 +817,33 @@
         <div class="tools-grid">
             <div class="tool-card">
                 <div class="tool-count">8</div>
-                <h4>Cognitive</h4>
+                <h4>Cognitive Memory</h4>
                 <p>RAG retrieve, trust, dissonance, sentiment, metrics</p>
             </div>
             <div class="tool-card">
-                <div class="tool-count">8</div>
+                <div class="tool-count">10</div>
                 <h4>Episodic Memory</h4>
                 <p>Change logs, decisions, session diaries, recall</p>
             </div>
             <div class="tool-card">
+                <div class="tool-count">3</div>
+                <h4>Guard</h4>
+                <p>Pre-edit checks, blocking rules, stats</p>
+            </div>
+            <div class="tool-card">
+                <div class="tool-count">5</div>
+                <h4>Evolution</h4>
+                <p>Propose, approve, reject, history, status</p>
+            </div>
+            <div class="tool-card">
                 <div class="tool-count">5</div>
                 <h4>Learnings</h4>
-                <p>Error patterns, categorized, searchable</p>
+                <p>Error patterns, searchable by category</p>
             </div>
             <div class="tool-card">
                 <div class="tool-count">5</div>
                 <h4>Entities</h4>
-                <p>People, services, URLs, relationships</p>
-            </div>
-            <div class="tool-card">
-                <div class="tool-count">4</div>
-                <h4>Reminders</h4>
-                <p>Time-based alerts with priority levels</p>
-            </div>
-            <div class="tool-card">
-                <div class="tool-count">4</div>
-                <h4>Followups</h4>
-                <p>Deferred verification tasks</p>
-            </div>
-            <div class="tool-card">
-                <div class="tool-count">5</div>
-                <h4>Credentials</h4>
-                <p>Secure local credential storage</p>
+                <p>People, services, URLs</p>
             </div>
             <div class="tool-card">
                 <div class="tool-count">4</div>
@@ -690,14 +851,19 @@
                 <p>Learned behavioral patterns</p>
             </div>
             <div class="tool-card">
-                <div class="tool-count">3</div>
-                <h4>Guard</h4>
-                <p>Pre-edit checks, blocking rules</p>
+                <div class="tool-count">5</div>
+                <h4>Agents</h4>
+                <p>Agent registry management</p>
             </div>
             <div class="tool-card">
-                <div class="tool-count">4</div>
-                <h4>Messaging</h4>
-                <p>Inter-session communication</p>
+                <div class="tool-count">9</div>
+                <h4>Reminders / Followups</h4>
+                <p>Time-based alerts + deferred tasks</p>
+            </div>
+            <div class="tool-card">
+                <div class="tool-count">5</div>
+                <h4>Credentials</h4>
+                <p>Secure local storage</p>
             </div>
             <div class="tool-card">
                 <div class="tool-count">4</div>
@@ -705,9 +871,108 @@
                 <p>Startup, heartbeat, stop, coordination</p>
             </div>
             <div class="tool-card">
+                <div class="tool-count">7</div>
+                <h4>Coordination</h4>
+                <p>File tracking, messaging, inter-session</p>
+            </div>
+            <div class="tool-card">
                 <div class="tool-count">3</div>
-                <h4>Plugins</h4>
-                <p>Hot-reload extensions at runtime</p>
+                <h4>Task History</h4>
+                <p>Execution logs, frequency analysis</p>
+            </div>
+            <div class="tool-card">
+                <div class="tool-count">3</div>
+                <h4>Backup</h4>
+                <p>SQLite backup + restore</p>
+            </div>
+            <div class="tool-card">
+                <div class="tool-count">1</div>
+                <h4>Menu</h4>
+                <p>Operations center generator</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Autonomous Processes -->
+<section id="autonomous">
+    <div class="container">
+        <div class="section-label">Autonomous</div>
+        <h2 class="section-title">8 background processes, zero intervention</h2>
+        <p class="section-subtitle">
+            NEXO Brain runs a suite of background scripts that maintain memory health, generate intelligence briefs, and self-repair &mdash; all without user input.
+        </p>
+
+        <div class="processes-grid">
+            <div class="process-card">
+                <div class="process-icon">&#x1F4C9;</div>
+                <h4>Cognitive Decay</h4>
+                <p>Daily Ebbinghaus memory sweep. Weakens unrehearsed memories and promotes surviving STM items to LTM.</p>
+            </div>
+            <div class="process-card">
+                <div class="process-icon">&#x1F319;</div>
+                <h4>Sleep System</h4>
+                <p>Nightly memory cleanup and pruning. Consolidates the day's learning and removes noise while the system is idle.</p>
+            </div>
+            <div class="process-card">
+                <div class="process-icon">&#x1F4CB;</div>
+                <h4>Daily Synthesis</h4>
+                <p>Morning intelligence brief. Summarizes yesterday's errors, patterns, pending items, and context for the day ahead.</p>
+            </div>
+            <div class="process-card">
+                <div class="process-icon">&#x1F50D;</div>
+                <h4>Self-Audit</h4>
+                <p>Daily behavioral self-evaluation. Checks for repeated errors, ignored learnings, and drift from the operational codex.</p>
+            </div>
+            <div class="process-card">
+                <div class="process-icon">&#x1F9EA;</div>
+                <h4>Post-Mortem Consolidator</h4>
+                <p>Extracts learning patterns from session histories. Turns individual incidents into reusable prevention rules.</p>
+            </div>
+            <div class="process-card">
+                <div class="process-icon">&#x1F6E1;</div>
+                <h4>Immune System</h4>
+                <p>Health monitor and auto-repair. Detects database corruption, stale locks, and process failures, then fixes them.</p>
+            </div>
+            <div class="process-card">
+                <div class="process-icon">&#x1F504;</div>
+                <h4>Catch-Up</h4>
+                <p>Recovers missed tasks on Mac boot. If the machine was asleep during scheduled processes, catch-up runs them all.</p>
+            </div>
+            <div class="process-card">
+                <div class="process-icon">&#x2B06;</div>
+                <h4>Auto-Update</h4>
+                <p>Checks for new versions and applies updates. Keeps the cognitive engine current without manual intervention.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Hooks -->
+<section id="hooks">
+    <div class="container">
+        <div class="section-label">Hooks</div>
+        <h2 class="section-title">4 Claude Code hooks for seamless integration</h2>
+        <p class="section-subtitle">
+            Lifecycle hooks that automatically capture context at session boundaries and keep background processes alive.
+        </p>
+
+        <div class="hooks-grid">
+            <div class="hook-card">
+                <code>session-start</code>
+                <p>Generates a briefing with pending tasks, recent session context, and morning intelligence. Your agent starts every session informed.</p>
+            </div>
+            <div class="hook-card">
+                <code>session-stop</code>
+                <p>Captures session state, writes the session diary, and logs mental state for continuity. No context lost between sessions.</p>
+            </div>
+            <div class="hook-card">
+                <code>capture-session</code>
+                <p>Sensory Register layer (Atkinson-Shiffrin Layer 1). Captures raw session input for attention filtering and memory promotion.</p>
+            </div>
+            <div class="hook-card">
+                <code>caffeinate-guard</code>
+                <p>Keeps the Mac awake during nocturnal processes. Ensures cognitive decay, sleep system, and synthesis run to completion.</p>
             </div>
         </div>
     </div>
@@ -719,7 +984,7 @@
         <div class="section-label">Quick Start</div>
         <h2 class="section-title">Up and running in 60 seconds</h2>
         <p class="section-subtitle">
-            One command to install. NEXO Brain sets up the MCP server, SQLite databases, and cognitive engine automatically.
+            One command to install. NEXO Brain sets up the MCP server, SQLite databases, and cognitive engine automatically. A 5-question personality calibration creates your agent's unique voice.
         </p>
 
         <div class="code-block">
@@ -736,9 +1001,44 @@
                 <span class="comment"># NEXO Brain auto-configures the MCP server.</span><br><br>
                 <span class="comment"># Verify it's working:</span><br>
                 <span class="cmd">$</span> claude <span class="flag">-p</span> <span class="str">"call nexo_status"</span><br><br>
+                <span class="comment"># Or run with Docker:</span><br>
+                <span class="cmd">$</span> docker build <span class="flag">-t</span> <span class="str">nexo-brain</span> .<br>
+                <span class="cmd">$</span> docker run <span class="flag">-v</span> <span class="str">~/.nexo:/app</span> nexo-brain<br><br>
                 <span class="comment"># Optional: Start with a personality template</span><br>
                 <span class="cmd">$</span> npx nexo-brain init <span class="flag">--template</span> <span class="str">operator</span>
             </div>
+        </div>
+    </div>
+</section>
+
+<!-- Listed On -->
+<section>
+    <div class="container" style="text-align:center;">
+        <div class="section-label">Listed On</div>
+        <h2 class="section-title">Find NEXO Brain everywhere</h2>
+        <p class="section-subtitle" style="margin-left:auto;margin-right:auto;">
+            Available on major MCP directories and package registries.
+        </p>
+
+        <div class="listed-grid">
+            <a href="https://www.npmjs.com/package/nexo-brain" class="listed-badge">
+                <span class="badge-icon">&#x1F4E6;</span> npm
+            </a>
+            <a href="https://glama.ai/mcp/servers/@wazionapps/nexo" class="listed-badge">
+                <span class="badge-icon">&#x2728;</span> Glama
+            </a>
+            <a href="https://mcp.so/server/nexo/wazionapps" class="listed-badge">
+                <span class="badge-icon">&#x1F310;</span> mcp.so
+            </a>
+            <a href="https://mcpservers.org" class="listed-badge">
+                <span class="badge-icon">&#x1F5C2;</span> mcpservers.org
+            </a>
+            <a href="https://openclaw.com" class="listed-badge">
+                <span class="badge-icon">&#x1F9E9;</span> OpenClaw
+            </a>
+            <a href="https://dev.to/wazionapps/how-i-applied-cognitive-psychology-to-give-ai-agents-real-memory-2oce" class="listed-badge">
+                <span class="badge-icon">&#x1F4DD;</span> dev.to Article
+            </a>
         </div>
     </div>
 </section>
@@ -801,7 +1101,7 @@ const observer = new IntersectionObserver((entries) => {
     });
 }, { threshold: 0.1 });
 
-document.querySelectorAll('.feature-card, .tool-card').forEach(el => {
+document.querySelectorAll('.feature-card, .tool-card, .integration-card, .process-card, .hook-card, .listed-badge').forEach(el => {
     el.style.opacity = '0';
     el.style.transform = 'translateY(20px)';
     el.style.transition = 'all 0.5s ease';
