@@ -241,6 +241,18 @@ def init_db():
             user_signals TEXT,
             summary TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS session_diary_draft (
+            sid TEXT PRIMARY KEY,
+            summary_draft TEXT DEFAULT '',
+            tasks_seen TEXT DEFAULT '[]',
+            change_ids TEXT DEFAULT '[]',
+            decision_ids TEXT DEFAULT '[]',
+            last_context_hint TEXT DEFAULT '',
+            heartbeat_count INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now'))
+        );
+
         CREATE TABLE IF NOT EXISTS evolution_metrics (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             dimension TEXT NOT NULL,
@@ -286,6 +298,8 @@ def init_db():
     _migrate_add_column(conn, "session_diary", "mental_state", "TEXT")
     _migrate_add_column(conn, "session_diary", "domain", "TEXT")
     _migrate_add_column(conn, "session_diary", "user_signals", "TEXT")
+    _migrate_add_column(conn, "session_diary", "self_critique", "TEXT")
+    _migrate_add_column(conn, "session_diary", "source", "TEXT DEFAULT 'claude'")
     _migrate_add_index(conn, "idx_change_log_created", "change_log", "created_at")
     _migrate_add_index(conn, "idx_change_log_files", "change_log", "files")
     _migrate_add_index(conn, "idx_learnings_status", "learnings", "status")
@@ -2059,14 +2073,14 @@ def write_session_diary(session_id: str, decisions: str, summary: str,
                         discarded: str = '', pending: str = '',
                         context_next: str = '', mental_state: str = '',
                         domain: str = '', user_signals: str = '',
-                        self_critique: str = '') -> dict:
+                        self_critique: str = '', source: str = 'claude') -> dict:
     """Write a session diary entry with mental state and self-critique for continuity."""
     conn = get_db()
     cleanup_old_diaries()
     cursor = conn.execute(
-        "INSERT INTO session_diary (session_id, decisions, discarded, pending, context_next, mental_state, summary, domain, user_signals, self_critique) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (session_id, decisions, discarded, pending, context_next, mental_state, summary, domain, user_signals, self_critique)
+        "INSERT INTO session_diary (session_id, decisions, discarded, pending, context_next, mental_state, summary, domain, user_signals, self_critique, source) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (session_id, decisions, discarded, pending, context_next, mental_state, summary, domain, user_signals, self_critique, source)
     )
     conn.commit()
     did = cursor.lastrowid
@@ -2086,6 +2100,64 @@ def check_session_has_diary(session_id: str) -> bool:
     return row is not None
 
 
+# ── Session Diary Drafts ─────────────────────────────────────────
+
+
+def upsert_diary_draft(sid: str, tasks_seen: str, change_ids: str,
+                       decision_ids: str, last_context_hint: str,
+                       heartbeat_count: int, summary_draft: str = '') -> dict:
+    """UPSERT diary draft for a session. Called by heartbeat to accumulate context."""
+    conn = get_db()
+    conn.execute(
+        """INSERT INTO session_diary_draft
+           (sid, summary_draft, tasks_seen, change_ids, decision_ids,
+            last_context_hint, heartbeat_count, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+           ON CONFLICT(sid) DO UPDATE SET
+             summary_draft = excluded.summary_draft,
+             tasks_seen = excluded.tasks_seen,
+             change_ids = excluded.change_ids,
+             decision_ids = excluded.decision_ids,
+             last_context_hint = excluded.last_context_hint,
+             heartbeat_count = excluded.heartbeat_count,
+             updated_at = datetime('now')""",
+        (sid, summary_draft, tasks_seen, change_ids, decision_ids,
+         last_context_hint, heartbeat_count)
+    )
+    conn.commit()
+    return {"sid": sid, "heartbeat_count": heartbeat_count}
+
+
+def get_diary_draft(sid: str) -> dict | None:
+    """Get diary draft for a session, or None."""
+    conn = get_db()
+    row = conn.execute(
+        "SELECT * FROM session_diary_draft WHERE sid = ?", (sid,)
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def delete_diary_draft(sid: str):
+    """Delete diary draft after real diary is written."""
+    conn = get_db()
+    conn.execute("DELETE FROM session_diary_draft WHERE sid = ?", (sid,))
+    conn.commit()
+
+
+def get_orphan_sessions(ttl_seconds: int = 900) -> list[dict]:
+    """Get sessions that exceeded TTL and have no diary."""
+    conn = get_db()
+    cutoff = now_epoch() - ttl_seconds
+    rows = conn.execute(
+        """SELECT s.sid, s.task, s.started_epoch, s.last_update_epoch
+           FROM sessions s
+           LEFT JOIN session_diary sd ON sd.session_id = s.sid
+           WHERE s.last_update_epoch <= ? AND sd.id IS NULL""",
+        (cutoff,)
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
 def read_session_diary(session_id: str = '', last_n: int = 3, last_day: bool = False,
                        domain: str = '') -> list[dict]:
     """Read session diary entries.
@@ -2093,7 +2165,7 @@ def read_session_diary(session_id: str = '', last_n: int = 3, last_day: bool = F
     - session_id: returns entries for that specific session
     - last_day: returns ALL entries from the most recent day (multi-terminal aware)
     - last_n: returns last N entries (default)
-    - domain: filter by project context (e.g. project-a, project-b, nexo, server, other)
+    - domain: filter by project context (project-a, project-b, nexo, other)
     """
     conn = get_db()
     domain_clause = " AND domain = ?" if domain else ""

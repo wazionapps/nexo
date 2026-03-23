@@ -27,19 +27,19 @@ def handle_decision_log(domain: str, decision: str, alternatives: str = '',
     """Log a non-trivial decision with reasoning context.
 
     Args:
-        domain: Area (ads, shopify, server, infrastructure, nexo, general, other)
+        domain: Area (nexo, other)
         decision: What was decided
         alternatives: JSON array or text of options considered and why discarded
         based_on: Data, metrics, or observations that informed this decision
         confidence: high, medium, or low
-        context_ref: Related followup/reminder ID
+        context_ref: Related followup/reminder ID (e.g., NF-ADS1, R71)
         session_id: Current session ID (auto-filled if empty)
     """
-    valid_domains = {'ads', 'shopify', 'server', 'infrastructure', 'nexo', 'general', 'other'}
+    valid_domains = {'nexo', 'other'}
     if domain not in valid_domains:
-        return f"ERROR: domain must be one of: {', '.join(sorted(valid_domains))}"
+        return f"ERROR: domain debe ser uno de: {', '.join(sorted(valid_domains))}"
     if confidence not in ('high', 'medium', 'low'):
-        return f"ERROR: confidence must be high, medium, or low"
+        return f"ERROR: confidence debe ser high, medium, o low"
 
     sid = session_id or 'unknown'
     result = log_decision(sid, domain, decision, alternatives, based_on, confidence, context_ref)
@@ -59,7 +59,7 @@ def handle_decision_log(domain: str, decision: str, alternatives: str = '',
     result = dict(conn.execute("SELECT * FROM decisions WHERE id = ?", (result["id"],)).fetchone())
     due = result.get("review_due_at", "")
     due_str = f" review_due={due}" if due else ""
-    return f"Decision #{result['id']} logged [{domain}] ({confidence}): {decision[:80]}{due_str}"
+    return f"Decision #{result['id']} registrada [{domain}] ({confidence}): {decision[:80]}{due_str}"
 
 
 def handle_decision_outcome(id: int, outcome: str) -> str:
@@ -78,7 +78,7 @@ def handle_decision_outcome(id: int, outcome: str) -> str:
         (id,)
     )
     conn.commit()
-    return f"Decision #{id} outcome recorded: {outcome[:100]}"
+    return f"Decision #{id} outcome registrado: {outcome[:100]}"
 
 
 def handle_decision_search(query: str = '', domain: str = '', days: int = 30) -> str:
@@ -86,18 +86,18 @@ def handle_decision_search(query: str = '', domain: str = '', days: int = 30) ->
 
     Args:
         query: Text to search in decision, alternatives, based_on, outcome
-        domain: Filter by area (ads, shopify, server, infrastructure, nexo, general, other)
+        domain: Filter by area (nexo, other)
         days: Look back N days (default 30)
     """
-    valid_domains = {'ads', 'shopify', 'server', 'infrastructure', 'nexo', 'general', 'other'}
+    valid_domains = {'nexo', 'other'}
     if domain and domain not in valid_domains:
-        return f"ERROR: domain must be one of: {', '.join(sorted(valid_domains))}"
+        return f"ERROR: domain debe ser uno de: {', '.join(sorted(valid_domains))}"
     results = search_decisions(query, domain, days)
     if not results:
-        scope = f"'{query}'" if query else domain or 'all'
-        return f"No decisions found for {scope} in {days} days."
+        scope = f"'{query}'" if query else domain or 'todas'
+        return f"Sin decisiones encontradas para {scope} en {days} días."
 
-    lines = [f"DECISIONS ({len(results)}):"]
+    lines = [f"DECISIONES ({len(results)}):"]
     for d in results:
         conf = d.get('confidence', '?')
         outcome_str = f" → {d['outcome'][:50]}" if d.get('outcome') else ""
@@ -107,9 +107,9 @@ def handle_decision_search(query: str = '', domain: str = '', days: int = 30) ->
         lines.append(f"  #{d['id']} ({d['created_at']}) [{d['domain']}] {conf} [{status}]{ref}{review_due}")
         lines.append(f"    {d['decision'][:120]}")
         if d.get('based_on'):
-            lines.append(f"    Based on: {d['based_on'][:100]}")
+            lines.append(f"    Basado en: {d['based_on'][:100]}")
         if d.get('alternatives'):
-            lines.append(f"    Alternatives: {d['alternatives'][:100]}")
+            lines.append(f"    Alternativas: {d['alternatives'][:100]}")
         if outcome_str:
             lines.append(f"    Outcome:{outcome_str}")
     return "\n".join(lines)
@@ -161,7 +161,7 @@ def handle_session_diary_write(decisions: str, summary: str,
                                 domain: str = '',
                                 session_id: str = '',
                                 self_critique: str = '') -> str:
-    """Write session diary entry at end of session. Call before closing every session.
+    """Write session diary entry at end of session. OBLIGATORIO antes de cerrar.
 
     Args:
         decisions: What was decided and why (JSON array or structured text)
@@ -169,13 +169,16 @@ def handle_session_diary_write(decisions: str, summary: str,
         discarded: Options/approaches considered but rejected, and why
         pending: Items left unresolved, with doubt level
         context_next: What the next session should know to continue effectively
-        mental_state: Internal state to transfer — thread of thought, tone, observations not yet shared, momentum.
-        user_signals: Observable signals from the user during session — response speed, tone, corrections given.
-        domain: Project context: infrastructure, nexo, server, general, other
+        mental_state: Internal state to transfer — thread of thought, tone, observations not yet shared, momentum. Written in first person as NEXO.
+        user_signals: Observable signals from the user during session — response speed (fast='s' vs detailed explanations), tone (direct, frustrated, exploratory, excited), corrections given, topics he initiated vs topics NEXO initiated. Factual observations only, not interpretations.
+        domain: Project context: project-a, project-b, nexo, other
         session_id: Current session ID
-        self_critique: Honest post-mortem: what should have been done proactively? Repeated errors? Concrete rule to prevent repetition.
+        self_critique: OBLIGATORIO. Post-mortem honesto: ¿Qué debí hacer proactivamente? ¿the user tuvo que pedirme algo que yo debería haber detectado? ¿Repetí errores conocidos? ¿Qué regla concreta evitaría la repetición? Si sesión limpia: 'Sin autocrítica — sesión limpia.'
     """
     sid = session_id or 'unknown'
+    # Clean up draft — manual diary supersedes it
+    from db import delete_diary_draft
+    delete_diary_draft(sid)
     result = write_session_diary(sid, decisions, summary, discarded, pending, context_next, mental_state, domain=domain, user_signals=user_signals, self_critique=self_critique)
     if "error" in result:
         return f"ERROR: {result['error']}"
@@ -185,7 +188,7 @@ def handle_session_diary_write(decisions: str, summary: str,
     if mental_state and mental_state.strip():
         _cognitive_ingest_safe(mental_state, "mental_state", f"diary#{result.get('id','')}", f"Session {sid} state", domain)
     domain_str = f" [{domain}]" if domain else ""
-    msg = f"Session diary #{result['id']}{domain_str} saved: {summary[:80]}"
+    msg = f"Diario sesión #{result['id']}{domain_str} guardado: {summary[:80]}"
 
     # Trust score & sentiment summary for session diary
     try:
@@ -206,14 +209,14 @@ def handle_session_diary_write(decisions: str, summary: str,
         "SELECT COUNT(*) FROM change_log WHERE (commit_ref IS NULL OR commit_ref = '')"
     ).fetchone()[0]
     if orphan_changes > 0:
-        warnings.append(f"{orphan_changes} changes without commit_ref")
+        warnings.append(f"{orphan_changes} changes sin commit_ref")
     orphan_decisions = conn.execute(
         "SELECT COUNT(*) FROM decisions WHERE (outcome IS NULL OR outcome = '') AND created_at < datetime('now', '-7 days')"
     ).fetchone()[0]
     if orphan_decisions > 0:
-        warnings.append(f"{orphan_decisions} decisions >7d without outcome")
+        warnings.append(f"{orphan_decisions} decisions >7d sin outcome")
     if warnings:
-        msg += "\n! EPISODIC GAPS: " + " | ".join(warnings) + " — resolve before closing session."
+        msg += "\n⚠ EPISODIC GAPS: " + " | ".join(warnings) + " — resolver antes de cerrar sesión."
 
     return msg
 
@@ -226,29 +229,29 @@ def handle_session_diary_read(session_id: str = '', last_n: int = 3, last_day: b
         session_id: Specific session ID to read (optional)
         last_n: Number of recent entries to return (default 3)
         last_day: If true, returns ALL entries from the most recent day (multi-terminal aware). Use this at startup.
-        domain: Filter by project context: infrastructure, nexo, server, general, other
+        domain: Filter by project context: project-a, project-b, nexo, other
     """
     results = read_session_diary(session_id, last_n, last_day, domain)
     if not results:
-        return "No session diary entries found."
+        return "Sin entradas en el diario de sesiones."
 
-    lines = [f"SESSION DIARY ({len(results)}):"]
+    lines = [f"DIARIO DE SESIONES ({len(results)}):"]
     for d in results:
         domain_label = f" [{d['domain']}]" if d.get('domain') else ""
-        lines.append(f"\n  --- Session {d['session_id']}{domain_label} ({d['created_at']}) ---")
-        lines.append(f"  Summary: {d['summary']}")
+        lines.append(f"\n  --- Sesión {d['session_id']}{domain_label} ({d['created_at']}) ---")
+        lines.append(f"  Resumen: {d['summary']}")
         if d.get('decisions'):
-            lines.append(f"  Decisions: {d['decisions'][:200]}")
+            lines.append(f"  Decisiones: {d['decisions'][:200]}")
         if d.get('discarded'):
-            lines.append(f"  Discarded: {d['discarded'][:150]}")
+            lines.append(f"  Descartado: {d['discarded'][:150]}")
         if d.get('pending'):
-            lines.append(f"  Pending: {d['pending'][:150]}")
+            lines.append(f"  Pendiente: {d['pending'][:150]}")
         if d.get('context_next'):
-            lines.append(f"  For next session: {d['context_next'][:200]}")
+            lines.append(f"  Para siguiente sesión: {d['context_next'][:200]}")
         if d.get('mental_state'):
-            lines.append(f"  Mental state: {d['mental_state'][:300]}")
+            lines.append(f"  Estado mental: {d['mental_state'][:300]}")
         if d.get('user_signals'):
-            lines.append(f"  User signals: {d['user_signals'][:300]}")
+            lines.append(f"  Señales the user: {d['user_signals'][:300]}")
     return "\n".join(lines)
 
 
@@ -256,13 +259,13 @@ def handle_change_log(files: str, what_changed: str, why: str,
                       triggered_by: str = '', affects: str = '',
                       risks: str = '', verify: str = '',
                       commit_ref: str = '', session_id: str = '') -> str:
-    """Log a code/config change with full context. Call after every edit to production code.
+    """Log a code/config change with full context. OBLIGATORIO after every edit to production code.
 
     Args:
         files: File path(s) modified (comma-separated if multiple)
         what_changed: What was modified — functions, lines, behavior change
         why: WHY this change was needed — the root cause, not just "fix bug"
-        triggered_by: What triggered this — bug report, metric, user's request, followup ID
+        triggered_by: What triggered this — bug report, metric, the user's request, followup ID
         affects: What systems/users/flows this change impacts
         risks: What could go wrong — regressions, edge cases, dependencies
         verify: How to verify this works — what to check, followup ID if created
@@ -270,7 +273,7 @@ def handle_change_log(files: str, what_changed: str, why: str,
         session_id: Current session ID
     """
     if not files or not what_changed or not why:
-        return "ERROR: files, what_changed, and why are required"
+        return "ERROR: files, what_changed, y why son obligatorios"
     sid = session_id or 'unknown'
     result = log_change(sid, files, what_changed, why, triggered_by, affects, risks, verify, commit_ref)
     if "error" in result:
@@ -280,9 +283,9 @@ def handle_change_log(files: str, what_changed: str, why: str,
         "change", f"C{result.get('id','')}", (what_changed or '')[:80], ""
     )
     change_id = result['id']
-    msg = f"Change #{change_id} logged: {files[:60]} — {what_changed[:60]}"
+    msg = f"Change #{change_id} registrado: {files[:60]} — {what_changed[:60]}"
     if not commit_ref:
-        msg += f"\n! NO COMMIT. Use nexo_change_commit({change_id}, 'hash') after push, or 'server-direct' if edited directly on server."
+        msg += f"\n⚠ SIN COMMIT. Usa nexo_change_commit({change_id}, 'hash') después del push, o 'server-direct' si fue edición directa en servidor."
     return msg
 
 
@@ -296,22 +299,22 @@ def handle_change_search(query: str = '', files: str = '', days: int = 30) -> st
     """
     results = search_changes(query, files, days)
     if not results:
-        scope = f"'{query}'" if query else files or 'all'
-        return f"No changes found for {scope} in {days} days."
+        scope = f"'{query}'" if query else files or 'todos'
+        return f"Sin cambios encontrados para {scope} en {days} días."
 
-    lines = [f"CHANGES ({len(results)}):"]
+    lines = [f"CAMBIOS ({len(results)}):"]
     for c in results:
         commit = f" [{c['commit_ref'][:8]}]" if c.get('commit_ref') else ""
         lines.append(f"  #{c['id']} ({c['created_at']}){commit}")
-        lines.append(f"    Files: {c['files'][:100]}")
-        lines.append(f"    What: {c['what_changed'][:120]}")
-        lines.append(f"    Why: {c['why'][:120]}")
+        lines.append(f"    Archivos: {c['files'][:100]}")
+        lines.append(f"    Qué: {c['what_changed'][:120]}")
+        lines.append(f"    Por qué: {c['why'][:120]}")
         if c.get('triggered_by'):
             lines.append(f"    Trigger: {c['triggered_by'][:80]}")
         if c.get('affects'):
-            lines.append(f"    Affects: {c['affects'][:80]}")
+            lines.append(f"    Afecta: {c['affects'][:80]}")
         if c.get('risks'):
-            lines.append(f"    Risks: {c['risks'][:80]}")
+            lines.append(f"    Riesgos: {c['risks'][:80]}")
     return "\n".join(lines)
 
 
@@ -325,7 +328,7 @@ def handle_change_commit(id: int, commit_ref: str) -> str:
     result = update_change_commit(id, commit_ref)
     if "error" in result:
         return f"ERROR: {result['error']}"
-    return f"Change #{id} linked to commit {commit_ref[:8]}"
+    return f"Change #{id} vinculado a commit {commit_ref[:8]}"
 
 
 def handle_recall(query: str, days: int = 30) -> str:
@@ -337,9 +340,9 @@ def handle_recall(query: str, days: int = 30) -> str:
     """
     results = recall(query, days)
     if not results:
-        return f"No results for '{query}' in the last {days} days."
+        return f"Sin resultados para '{query}' en los últimos {days} días."
 
-    # Passive rehearsal — strengthen matching cognitive memories
+    # v1.2: Passive rehearsal — strengthen matching cognitive memories
     try:
         import cognitive
         for r in results[:5]:
@@ -350,18 +353,18 @@ def handle_recall(query: str, days: int = 30) -> str:
         pass
 
     SOURCE_LABELS = {
-        'change_log': '[CHANGE]',
-        'change':     '[CHANGE]',
-        'decision':   '[DECISION]',
+        'change_log': '[CAMBIO]',
+        'change':     '[CAMBIO]',
+        'decision':   '[DECISIÓN]',
         'learning':   '[LEARNING]',
         'followup':   '[FOLLOWUP]',
-        'diary':      '[DIARY]',
-        'entity':     '[ENTITY]',
-        'file':       '[FILE]',
-        'code':       '[CODE]',
+        'diary':      '[DIARIO]',
+        'entity':     '[ENTIDAD]',
+        'file':       '[ARCHIVO]',
+        'code':       '[CÓDIGO]',
     }
 
-    lines = [f"RECALL '{query}' — {len(results)} result(s):"]
+    lines = [f"RECALL '{query}' — {len(results)} resultado(s):"]
     for r in results:
         source = r.get('source', '?')
         label = SOURCE_LABELS.get(source, f"[{source.upper()}]")
@@ -374,6 +377,8 @@ def handle_recall(query: str, days: int = 30) -> str:
         lines.append(f"    {title}")
         if snippet:
             lines.append(f"    {snippet}")
+    if len(results) < 5:
+        lines.append(f"\n  💡 Solo {len(results)} resultados en NEXO. Para historial más profundo, busca también en claude-mem: mcp__plugin_claude-mem_mcp-search__search")
     return "\n".join(lines)
 
 
@@ -387,5 +392,5 @@ TOOLS = [
     (handle_memory_review_queue, "nexo_memory_review_queue", "Show decisions and learnings that are due for review"),
     (handle_session_diary_write, "nexo_session_diary_write", "Write end-of-session diary with decisions, discards, and context for next session"),
     (handle_session_diary_read, "nexo_session_diary_read", "Read recent session diaries for context continuity"),
-    (handle_recall, "nexo_recall", "Search across ALL NEXO memory — changes, decisions, learnings, followups, diary, entities, .md files, code files."),
+    (handle_recall, "nexo_recall", "Search across ALL NEXO memory — changes, decisions, learnings, followups, diary, entities, .md files, code files. For deep historical context (older sessions, past work), also search claude-mem (mcp__plugin_claude-mem_mcp-search__search)."),
 ]

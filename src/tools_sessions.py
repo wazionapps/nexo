@@ -65,7 +65,7 @@ def handle_heartbeat(sid: str, task: str, context_hint: str = '') -> str:
     Args:
         sid: Session ID
         task: Current task description
-        context_hint: Optional — last 2-3 sentences from user or current topic. If provided AND
+        context_hint: Optional — last 2-3 sentences from the user or current topic. If provided AND
                       it diverges from startup memories, returns fresh cognitive memories for the new context.
     """
     from db import get_db
@@ -88,7 +88,7 @@ def handle_heartbeat(sid: str, task: str, context_hint: str = '') -> str:
             age = _format_age(q["created_epoch"])
             parts.append(f"  {q['qid']} de {q['from_sid']} ({age}): {q['question']}")
 
-    # Sentiment detection: analyze context_hint for user's mood
+    # Sentiment detection: analyze context_hint for the user's mood
     if context_hint and len(context_hint.strip()) >= 10:
         try:
             import cognitive
@@ -136,6 +136,53 @@ def handle_heartbeat(sid: str, task: str, context_hint: str = '') -> str:
                     parts.append(cognitive.format_results(results))
         except Exception:
             pass  # Mid-session RAG is best-effort
+
+    # Incremental diary draft — accumulate every heartbeat, full UPSERT every 5
+    try:
+        import json as _json
+        from db import get_diary_draft, upsert_diary_draft
+
+        draft = get_diary_draft(sid)
+        hb_count = (draft["heartbeat_count"] + 1) if draft else 1
+
+        existing_tasks = _json.loads(draft["tasks_seen"]) if draft else []
+        if task and task not in existing_tasks:
+            existing_tasks.append(task)
+
+        _conn = get_db()
+        if hb_count % 5 == 0 or hb_count == 1:
+            change_rows = _conn.execute(
+                "SELECT id FROM change_log WHERE session_id = ? ORDER BY id", (sid,)
+            ).fetchall()
+            change_ids = [r["id"] for r in change_rows]
+
+            decision_rows = _conn.execute(
+                "SELECT id FROM decisions WHERE session_id = ? ORDER BY id", (sid,)
+            ).fetchall()
+            decision_ids = [r["id"] for r in decision_rows]
+
+            summary = f"Session tasks: {', '.join(existing_tasks[-10:])}"
+            upsert_diary_draft(
+                sid=sid,
+                tasks_seen=_json.dumps(existing_tasks),
+                change_ids=_json.dumps(change_ids),
+                decision_ids=_json.dumps(decision_ids),
+                last_context_hint=context_hint[:300] if context_hint else '',
+                heartbeat_count=hb_count,
+                summary_draft=summary,
+            )
+        else:
+            upsert_diary_draft(
+                sid=sid,
+                tasks_seen=_json.dumps(existing_tasks),
+                change_ids=draft["change_ids"] if draft else '[]',
+                decision_ids=draft["decision_ids"] if draft else '[]',
+                last_context_hint=context_hint[:300] if context_hint else (draft["last_context_hint"] if draft else ''),
+                heartbeat_count=hb_count,
+                summary_draft=draft["summary_draft"] if draft else f"Session task: {task}",
+            )
+    except Exception:
+        pass  # Draft accumulation is best-effort, never block heartbeat
 
     # Diary reminder: after 30 min active with no diary entry
     conn = get_db()
