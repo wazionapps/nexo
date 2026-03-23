@@ -1,0 +1,70 @@
+{
+  "id": "memory-nexo-brain",
+  "kind": "memory",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "nexoHome": {
+        "type": "string",
+        "default": "~/.nexo",
+        "description": "Path to NEXO data directory"
+      },
+      "pythonPath": {
+        "type": "string",
+        "default": "python3",
+        "description": "Path to Python 3 interpreter"
+      },
+      "autoRecall": {
+        "type": "boolean",
+        "default": true,
+        "description": "Automatically retrieve relevant memories at session start"
+      },
+      "autoCapture": {
+        "type": "boolean",
+        "default": true,
+        "description": "Automatically capture session diary at session end"
+      },
+      "trustScoring": {
+        "type": "boolean",
+        "default": true,
+        "description": "Enable trust score tracking (calibrates verification rigor)"
+      },
+      "guardEnabled": {
+        "type": "boolean",
+        "default": true,
+        "description": "Enable metacognitive guard (checks past errors before code changes)"
+      }
+    }
+  },
+  "uiHints": {
+    "nexoHome": {
+      "label": "NEXO Home Directory",
+      "sensitive": false,
+      "placeholder": "~/.nexo",
+      "help": "Where NEXO stores its SQLite databases and plugins"
+    },
+    "pythonPath": {
+      "label": "Python Path",
+      "sensitive": false,
+      "placeholder": "python3",
+      "help": "Python 3 interpreter used to run the cognitive engine"
+    },
+    "autoRecall": {
+      "label": "Auto-Recall",
+      "help": "Retrieve relevant memories automatically when a session starts"
+    },
+    "autoCapture": {
+      "label": "Auto-Capture",
+      "help": "Write session diary automatically when a session ends"
+    },
+    "trustScoring": {
+      "label": "Trust Scoring",
+      "help": "Track alignment via trust score — higher score = fewer redundant checks"
+    },
+    "guardEnabled": {
+      "label": "Guard System",
+      "help": "Check past errors and learnings before every code change"
+    }
+  }
+}

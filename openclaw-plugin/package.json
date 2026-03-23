@@ -1,0 +1,53 @@
+{
+  "name": "@wazionapps/openclaw-memory-nexo-brain",
+  "version": "1.0.0",
+  "description": "OpenClaw native memory plugin powered by NEXO Brain — Atkinson-Shiffrin cognitive memory, semantic RAG, trust scoring, and metacognitive guard.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@sinclair/typebox": "^0.34.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "typescript": "^5.7.0"
+  },
+  "peerDependencies": {
+    "openclaw": ">=2026.3.22"
+  },
+  "openclaw": {
+    "extensions": [
+      "./dist/index.js"
+    ],
+    "install": {
+      "npmSpec": "@wazionapps/openclaw-memory-nexo-brain",
+      "defaultChoice": "npm",
+      "minHostVersion": ">=2026.3.22"
+    },
+    "release": {
+      "publishToNpm": true
+    }
+  },
+  "keywords": [
+    "openclaw",
+    "openclaw-plugin",
+    "memory",
+    "cognitive",
+    "nexo",
+    "mcp",
+    "ai-memory",
+    "vector-search"
+  ],
+  "author": "WAzion <hello@wazion.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wazionapps/nexo.git",
+    "directory": "openclaw-plugin"
+  },
+  "homepage": "https://github.com/wazionapps/nexo#openclaw-integration"
+}
