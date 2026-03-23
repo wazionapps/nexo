@@ -166,6 +166,7 @@ Open Claude Code and start working. Atlas will introduce itself on the first mes
 
 - **macOS** (Linux support planned)
 - **Node.js 18+** (for the installer)
+- **Claude Opus (latest version) strongly recommended.** NEXO provides 76 MCP tools across 16 categories. This cognitive load requires a top-tier model with large context window. Smaller models (Haiku, Sonnet) may struggle with tool selection and produce inconsistent results. Opus handles all 76 tools without hesitation.
 - Python 3, Homebrew, and Claude Code are installed automatically if missing.
 
 ## Architecture
