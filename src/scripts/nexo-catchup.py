@@ -8,6 +8,7 @@ runs them in the correct order.
 
 Scheduled tasks (ordered by intended run time):
   03:00 — cognitive-decay (Ebbinghaus decay + STM→LTM promotion)
+  03:00 — evolution (weekly, Sundays only)
   04:00 — sleep (session cleanup)
   07:00 — self-audit (health checks + weekly cognitive GC on Sundays)
   23:30 — postmortem (consolidation + sensory register)
@@ -23,14 +24,15 @@ import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
-NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
-LOG_DIR = NEXO_HOME / "logs"
+HOME = Path.home()
+LOG_DIR = HOME / "claude" / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE = LOG_DIR / "catchup.log"
-STATE_FILE = NEXO_HOME / "operations" / ".catchup-state.json"
-SCRIPTS = NEXO_HOME / "src" / "scripts"
+STATE_FILE = HOME / "claude" / "operations" / ".catchup-state.json"
 
-PYTHON = sys.executable
+PYTHON_BREW = "/opt/homebrew/bin/python3"
+PYTHON_SYS = "/Library/Frameworks/Python.framework/Versions/3.12/bin/python3"
+SCRIPTS = HOME / "claude" / "scripts"
 
 
 def log(msg: str):
@@ -93,7 +95,7 @@ def should_run(task_name: str, hour: int, minute: int, state: dict, weekday: int
     return last_run < last_scheduled
 
 
-def run_task(name: str, script: str, state: dict) -> bool:
+def run_task(name: str, python: str, script: str, state: dict) -> bool:
     """Execute a task and update state."""
     script_path = str(SCRIPTS / script)
     if not Path(script_path).exists():
@@ -103,9 +105,9 @@ def run_task(name: str, script: str, state: dict) -> bool:
     log(f"  RUNNING {name}: {script}")
     try:
         result = subprocess.run(
-            [PYTHON, script_path],
+            [python, script_path],
             capture_output=True, text=True, timeout=300,
-            env={**os.environ, "HOME": str(Path.home()), "NEXO_HOME": str(NEXO_HOME), "NEXO_CATCHUP": "1"}
+            env={**os.environ, "HOME": str(HOME), "NEXO_CATCHUP": "1"}
         )
         if result.returncode == 0:
             log(f"  OK {name} (exit 0)")
@@ -129,20 +131,35 @@ def main():
     state = load_state()
 
     # Define tasks in execution order (matching their intended schedule order)
+    # Auto-update check FIRST
+    update_script = SCRIPTS / "nexo-auto-update.py"
+    if update_script.exists():
+        log("Checking for NEXO updates...")
+        try:
+            subprocess.run(
+                [PYTHON_BREW if os.path.exists(PYTHON_BREW) else PYTHON_SYS, str(update_script)],
+                capture_output=True, text=True, timeout=60,
+                env={**os.environ, "HOME": str(HOME), "NEXO_HOME": str(HOME / "claude" / "nexo-mcp")}
+            )
+        except Exception as e:
+            log(f"  Update check failed: {e}")
+
     tasks = [
-        # (name, hour, minute, script, weekday)
-        ("cognitive-decay", 3, 0, "nexo-cognitive-decay.py", None),
-        ("sleep", 4, 0, "nexo-sleep.py", None),
-        ("self-audit", 7, 0, "nexo-daily-self-audit.py", None),
-        ("postmortem", 23, 30, "nexo-postmortem-consolidator.py", None),
+        # (name, hour, minute, python, script, weekday)
+        ("cognitive-decay", 3, 0, PYTHON_BREW, "nexo-cognitive-decay.py", None),
+        ("evolution", 3, 0, PYTHON_SYS, "nexo-evolution-run.py", 6),  # Sunday = 6
+        ("sleep", 4, 0, PYTHON_SYS, "nexo-sleep.py", None),
+        ("self-audit", 7, 0, PYTHON_SYS, "nexo-daily-self-audit.py", None),
+        ("github-monitor", 8, 0, PYTHON_BREW, "nexo-github-monitor.py", None),
+        ("postmortem", 23, 30, PYTHON_BREW, "nexo-postmortem-consolidator.py", None),
     ]
 
     ran = 0
     skipped = 0
-    for name, hour, minute, script, weekday in tasks:
+    for name, hour, minute, python, script, weekday in tasks:
         if should_run(name, hour, minute, state, weekday):
             log(f"  {name} — missed scheduled run, catching up...")
-            if run_task(name, script, state):
+            if run_task(name, python, script, state):
                 ran += 1
         else:
             skipped += 1

@@ -7,20 +7,16 @@ import secrets
 import string
 import datetime
 import pathlib
-from pathlib import Path
-
-NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
-NEXO_HOME.mkdir(parents=True, exist_ok=True)
 
 DB_PATH = os.environ.get(
     "NEXO_TEST_DB",
     os.environ.get(
         "NEXO_DB",
-        str(NEXO_HOME / "nexo.db"),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "nexo.db"),
     ),
 )
 
-# TTLs in seconds
+# TTLs in seconds (match session-coord.sh behavior)
 SESSION_STALE_SECONDS = 900    # 15 min (documented TTL)
 MESSAGE_TTL_SECONDS = 3600     # 1 hour
 QUESTION_TTL_SECONDS = 600     # 10 min
@@ -369,23 +365,25 @@ def init_db():
 
 # ── FTS5 Unified Search ──────────────────────────────────────────
 
-# Directories to index for unified search (uses NEXO_HOME)
+# Directories to index for unified search
 _FTS_MD_DIRS = [
-    str(NEXO_HOME / "docs"),
-    str(NEXO_HOME / "projects"),
-    str(NEXO_HOME / "memory"),
-    str(NEXO_HOME / "operations"),
-    str(NEXO_HOME / "learnings"),
-    str(NEXO_HOME / "brain"),
-    str(NEXO_HOME / "agents"),
-    str(NEXO_HOME / "skills"),
+    os.path.expanduser("~/claude/docs"),
+    os.path.expanduser("~/claude/projects"),
+    os.path.expanduser("~/claude/memory"),
+    os.path.expanduser("~/claude/operations"),
+    os.path.expanduser("~/claude/learnings"),
+    os.path.expanduser("~/claude/brain"),
+    os.path.expanduser("~/claude/agents"),
+    os.path.expanduser("~/claude/skills"),
 ]
-# Code repos: populated via nexo_index_add_dir tool or NEXO_HOME/repos
-_FTS_CODE_DIRS = []
+# Code repos: index source files (skip vendor, node_modules, etc.)
+_FTS_CODE_DIRS = [
+    (os.path.expanduser("~/Documents/_PhpstormProjects"), ["*.php", "*.js", "*.json", "*.py", "*.ts", "*.tsx"]),
+]
 _FTS_CODE_SKIP = {
     "vendor", "node_modules", ".git", "cache", "tmp", "logs", "uploads",
     "assets/img", "assets/fonts", ".next", "dist", "build", ".prisma",
-    "public/build", ".turbo", "__pycache__",
+    "PROYECTOS ANTIGUOS", "public/build", ".turbo", "__pycache__",
     "coverage", ".nyc_output", "storage/framework", "bootstrap/cache",
 }
 _FTS_MAX_FILE_SIZE = 50_000  # skip .md files >50KB
@@ -1194,7 +1192,13 @@ def update_followup(id: str, **kwargs) -> dict:
 
 
 def _calc_next_recurrence_date(recurrence: str, current_date: str = None) -> str:
-    """Calculate the next date for a recurring followup."""
+    """Calculate the next date for a recurring followup.
+
+    Formats:
+        weekly:monday, weekly:thursday, weekly:friday, weekly:sunday
+        monthly:1, monthly:10, monthly:15
+        quarterly
+    """
     today = datetime.date.today()
     base = datetime.date.fromisoformat(current_date) if current_date else today
 
@@ -1205,11 +1209,12 @@ def _calc_next_recurrence_date(recurrence: str, current_date: str = None) -> str
         target_day = day_map.get(day_name, 0)
         days_ahead = (target_day - today.weekday()) % 7
         if days_ahead == 0:
-            days_ahead = 7
+            days_ahead = 7  # next week, not today
         return (today + datetime.timedelta(days=days_ahead)).isoformat()
 
     elif recurrence.startswith('monthly:'):
         target_day = int(recurrence.split(':')[1])
+        # Next month from today
         if today.month == 12:
             next_date = datetime.date(today.year + 1, 1, min(target_day, 28))
         else:
@@ -1219,6 +1224,7 @@ def _calc_next_recurrence_date(recurrence: str, current_date: str = None) -> str
         return next_date.isoformat()
 
     elif recurrence == 'quarterly':
+        # 3 months from current date
         month = base.month + 3
         year = base.year
         if month > 12:
@@ -1252,6 +1258,7 @@ def complete_followup(id: str, result: str = '') -> dict:
     if recurrence:
         next_date = _calc_next_recurrence_date(recurrence, row["date"])
         if next_date:
+            # Rename completed one to include date suffix, then create fresh one
             archived_id = f"{id}-{today}"
             conn.execute("UPDATE followups SET id = ? WHERE id = ?", (archived_id, id))
             conn.commit()
@@ -1829,6 +1836,7 @@ def delete_agent(id: str) -> bool:
 def cleanup_old_changes(retention_days: int = 90) -> int:
     """Delete change_log entries older than retention_days. Returns count deleted."""
     conn = get_db()
+    # Get IDs before deleting so we can clean FTS
     ids = [str(r[0]) for r in conn.execute(
         "SELECT id FROM change_log WHERE created_at < datetime('now', ?)",
         (f"-{retention_days} days",)
@@ -2085,7 +2093,7 @@ def read_session_diary(session_id: str = '', last_n: int = 3, last_day: bool = F
     - session_id: returns entries for that specific session
     - last_day: returns ALL entries from the most recent day (multi-terminal aware)
     - last_n: returns last N entries (default)
-    - domain: filter by project context (e.g., infrastructure, nexo, server, other)
+    - domain: filter by project context (project-a, wazion, nexo, project-b, server, other)
     """
     conn = get_db()
     domain_clause = " AND domain = ?" if domain else ""
@@ -2097,6 +2105,7 @@ def read_session_diary(session_id: str = '', last_n: int = 3, last_day: bool = F
             (session_id,) + domain_params
         ).fetchall()
     elif last_day:
+        # Get all entries from the most recent calendar day
         if domain:
             latest = conn.execute(
                 "SELECT date(created_at) as day FROM session_diary WHERE domain = ? ORDER BY created_at DESC LIMIT 1",
@@ -2121,7 +2130,13 @@ def read_session_diary(session_id: str = '', last_n: int = 3, last_day: bool = F
 
 
 def _multi_word_like(query: str, columns: list[str]) -> tuple[str, list]:
-    """Build AND-ed LIKE conditions: every word must appear in at least one of the columns."""
+    """Build AND-ed LIKE conditions: every word must appear in at least one of the columns.
+
+    Returns (sql_fragment, params) ready for WHERE clause.
+    Example: query="cron learn", columns=["title","content"]
+    → "(title LIKE ? OR content LIKE ?) AND (title LIKE ? OR content LIKE ?)"
+    with params ["%cron%","%cron%","%learn%","%learn%"]
+    """
     words = query.strip().split()
     if not words:
         return "1=1", []
@@ -2136,8 +2151,13 @@ def _multi_word_like(query: str, columns: list[str]) -> tuple[str, list]:
 
 
 def recall(query: str, days: int = 30) -> list[dict]:
-    """Cross-search ALL memory using FTS5: learnings, decisions, changes, diary, followups, entities, .md files."""
-    results = fts_search(query, limit=40)
+    """Cross-search ALL memory using FTS5: learnings, decisions, changes, diary, followups, entities, .md files.
+
+    Returns up to 20 results ranked by relevance (FTS5 bm25).
+    Falls back to LIKE-based search if FTS fails.
+    """
+    # Try FTS5 first (fast, ranked), then filter by days
+    results = fts_search(query, limit=40)  # fetch extra to allow filtering
     if results:
         cutoff_epoch = now_epoch() - (days * 86400)
         filtered = []
@@ -2146,9 +2166,12 @@ def recall(query: str, days: int = 30) -> list[dict]:
             if not ua:
                 filtered.append(r)
                 continue
+            # Normalize to epoch for comparison
             try:
                 if ua[0].isdigit() and ('.' in ua or len(ua) > 12):
+                    # Could be epoch float or ISO date
                     if '-' in ua[:5]:
+                        # ISO datetime like "2026-03-13 16:17:40"
                         dt = datetime.datetime.fromisoformat(ua.replace(' ', 'T'))
                         ts = dt.timestamp()
                     else:
@@ -2158,10 +2181,11 @@ def recall(query: str, days: int = 30) -> list[dict]:
                 if ts >= cutoff_epoch:
                     filtered.append(r)
             except (ValueError, TypeError):
-                filtered.append(r)
+                filtered.append(r)  # keep if can't parse
         if filtered:
             return filtered[:20]
 
+    # Fallback to old LIKE-based search
     days = max(1, int(days))
     conn = get_db()
     cutoff_dt = datetime.datetime.now() - datetime.timedelta(days=days)

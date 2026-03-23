@@ -21,8 +21,8 @@ Stage C — Learning Consolidation (Python pure, always runs):
   C4: Contradiction detection (NUNCA pairs in same category)
 
 Stage B — Intelligent pruning (Claude CLI, conditional):
-  Only activates if nexo.db preferences table has >5 rows,
-  or other configurable thresholds are exceeded.
+  Only activates if MEMORY.md >170 lines, nexo.db preferences table has >5 rows,
+  or claude-mem.db has >500 observations >60 days.
   Uses Claude CLI (sonnet) to compress and prune.
 
 Zero external dependencies beyond stdlib + sqlite3. Claude CLI for Stage B only.
@@ -39,13 +39,12 @@ import sys
 from datetime import datetime, date, timedelta
 from pathlib import Path
 
-NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
-
 # ─── Paths ────────────────────────────────────────────────────────────────────
-BRAIN_DIR = NEXO_HOME / "brain"
-COORD_DIR = NEXO_HOME / "coordination"
-MEMORY_DIR = NEXO_HOME / "memory"
-DAEMON_LOGS_DIR = NEXO_HOME / "daemon" / "logs"
+CLAUDE_DIR = Path.home() / "claude"
+BRAIN_DIR = CLAUDE_DIR / "brain"
+COORD_DIR = CLAUDE_DIR / "coordination"
+MEMORY_DIR = CLAUDE_DIR / "memory"
+DAEMON_LOGS_DIR = CLAUDE_DIR / "daemon" / "logs"
 
 DAILY_SUMMARIES_DIR = BRAIN_DIR / "daily_summaries"
 SESSION_ARCHIVE_DIR = BRAIN_DIR / "session_archive"
@@ -55,7 +54,10 @@ HEARTBEAT_LOG = COORD_DIR / "heartbeat-log.json"
 REFLECTION_LOG = COORD_DIR / "reflection-log.json"
 SLEEP_LOG = COORD_DIR / "sleep-log.json"
 
-NEXO_DB = NEXO_HOME / "nexo.db"
+MEMORY_MD = Path.home() / ".claude" / "projects" / f"-Users-{os.environ.get('USER', 'user')}" / "memory" / "MEMORY.md"
+NEXO_DB = Path.home() / "claude" / "nexo-mcp" / "nexo.db"
+CLAUDE_MEM_DB = Path.home() / ".claude-mem" / "claude-mem.db"
+CLAUDE_CLI = Path.home() / ".local" / "bin" / "claude"
 
 LAST_RUN_FILE = COORD_DIR / "sleep-last-run"
 LOCK_FILE = COORD_DIR / "sleep.lock"
@@ -290,7 +292,7 @@ def stage_a_cleanup() -> dict:
 
     # A8: Delete cortex/logs/*.log >7 days, truncate launchd logs >5MB
     cutoff_7 = TODAY - timedelta(days=7)
-    cortex_logs = NEXO_HOME / "cortex" / "logs"
+    cortex_logs = Path.home() / "claude" / "cortex" / "logs"
     if cortex_logs.exists():
         for f in cortex_logs.glob("*.log"):
             if f.name.startswith("launchd-"):
@@ -474,12 +476,14 @@ def stage_c_learning_consolidation() -> dict:
     stats["potential_duplicates"] = duplicates
 
     # C4: Contradiction detection — NUNCA pairs in same category
-    nunca_entries = [p for p in parsed if "nunca" in p["title"].lower() or "never" in p["title"].lower()]
+    nunca_entries = [p for p in parsed if "nunca" in p["title"].lower()]
     contradictions = []
     for nunca in nunca_entries:
         if len(contradictions) >= 5:
             break
-        nunca_words_no_nunca = nunca["words"] - {"nunca", "never"}
+        # Look for same-category entries that don't contain NUNCA
+        # and whose remaining words overlap significantly (same subject, opposite stance)
+        nunca_words_no_nunca = nunca["words"] - {"nunca"}
         for other in parsed:
             if len(contradictions) >= 5:
                 break
@@ -487,8 +491,9 @@ def stage_c_learning_consolidation() -> dict:
                 continue
             if other["category"] != nunca["category"]:
                 continue
-            if "nunca" in other["title"].lower() or "never" in other["title"].lower():
+            if "nunca" in other["title"].lower():
                 continue
+            # Check if they share meaningful subject words
             overlap = _word_overlap(nunca_words_no_nunca, other["words"])
             if overlap >= 0.50:
                 contradictions.append({
@@ -518,10 +523,23 @@ def check_stage_b_conditions() -> dict:
     Returns dict with condition results and whether to trigger.
     """
     conditions = {
-        "preferences_count": 0,
+        "memory_md_lines": 0,
+        "memory_md_over_limit": False,
+        "preferences_auto_sections": 0,
         "preferences_over_limit": False,
+        "claude_mem_old_observations": 0,
+        "claude_mem_over_limit": False,
         "should_trigger": False,
     }
+
+    # Check MEMORY.md line count
+    if MEMORY_MD.exists():
+        try:
+            lines = MEMORY_MD.read_text().splitlines()
+            conditions["memory_md_lines"] = len(lines)
+            conditions["memory_md_over_limit"] = len(lines) > 170
+        except Exception as e:
+            log(f"Stage B check: WARN reading MEMORY.md: {e}")
 
     # Check preferences count in SQLite
     if NEXO_DB.exists():
@@ -531,13 +549,16 @@ def check_stage_b_conditions() -> dict:
             cursor.execute("SELECT COUNT(*) FROM preferences")
             count = cursor.fetchone()[0]
             conn.close()
-            conditions["preferences_count"] = count
+            conditions["preferences_auto_sections"] = count
             conditions["preferences_over_limit"] = count > 5
         except Exception as e:
             log(f"Stage B check: WARN reading nexo.db preferences: {e}")
 
+    # Check claude-mem.db observations >60 days
+    if CLAUDE_MEM_DB.exists():
         try:
             cutoff_epoch = int((datetime.now() - timedelta(days=60)).timestamp() * 1000)
+            conn = sqlite3.connect(str(CLAUDE_MEM_DB))
             cursor = conn.cursor()
             cursor.execute(
                 "SELECT COUNT(*) FROM observations WHERE created_at_epoch < ?",
@@ -545,10 +566,15 @@ def check_stage_b_conditions() -> dict:
             )
             count = cursor.fetchone()[0]
             conn.close()
+            conditions["claude_mem_old_observations"] = count
+            conditions["claude_mem_over_limit"] = count > 500
         except Exception as e:
+            log(f"Stage B check: WARN reading claude-mem.db: {e}")
 
     conditions["should_trigger"] = (
-        conditions["preferences_over_limit"]
+        conditions["memory_md_over_limit"]
+        or conditions["preferences_over_limit"]
+        or conditions["claude_mem_over_limit"]
     )
 
     return conditions
@@ -558,36 +584,54 @@ def build_stage_b_prompt(conditions: dict) -> str:
     """Build the prompt for Claude CLI based on which conditions triggered."""
     tasks = []
 
-    if conditions["preferences_over_limit"]:
-        tasks.append(f"""TASK: preferences in SQLite ({conditions['preferences_count']} records)
-DB: {NEXO_DB}, table: preferences (columns: key, value, category, updated_at)
-Connect with sqlite3. Delete duplicate preferences (same key) keeping the most recent.
-Delete preferences with updated_at older than 30 days if there is a newer duplicate.
-Report how many records were deleted.""")
+    if conditions["memory_md_over_limit"]:
+        tasks.append(f"""TAREA 1: MEMORY.md ({conditions['memory_md_lines']} lineas, limite 200)
+Archivo: {MEMORY_MD}
+Lee con Read tool, comprime incidentes resueltos >21 dias, fusiona duplicados, mantener <180 lineas.
+PRESERVA toda la estructura de secciones existente. No elimines secciones enteras.""")
 
-Connect with sqlite3. Delete old low-value observations (discovery_tokens < 300 and >60 days old).
-Preserve anything marked CRITICAL, any credentials, tokens, API keys, or infrastructure details.
-Report how many records were deleted.""")
+    if conditions["preferences_over_limit"]:
+        tasks.append(f"""TAREA 2: preferences en SQLite ({conditions['preferences_auto_sections']} registros)
+DB: {NEXO_DB}, tabla: preferences (columnas: key, value, category, updated_at)
+Conecta con sqlite3. Elimina preferencias duplicadas (mismo key) manteniendo la mas reciente.
+Elimina preferencias con updated_at mas antiguo de 30 dias si hay un duplicado mas reciente.
+Reporta cuantos registros eliminaste.""")
+
+    if conditions["claude_mem_over_limit"]:
+        tasks.append(f"""TAREA 3: claude-mem observations ({conditions['claude_mem_old_observations']} registros >60d)
+DB: {CLAUDE_MEM_DB}
+Conecta con sqlite3. Ejecuta:
+  DELETE FROM observations WHERE created_at_epoch < {int((datetime.now() - timedelta(days=60)).timestamp() * 1000)}
+    AND discovery_tokens < 300
+    AND id NOT IN (SELECT id FROM observations WHERE
+        title LIKE '%CRITICO%' OR title LIKE '%MAXIMA%'
+        OR title LIKE '%credential%' OR title LIKE '%token%' OR title LIKE '%API%'
+        OR narrative LIKE '%CRITICO%' OR narrative LIKE '%MAXIMA%')
+  LIMIT 200;
+Luego: DELETE FROM observations_fts WHERE rowid NOT IN (SELECT id FROM observations);
+Luego: VACUUM;
+Reporta cuantos registros eliminaste.""")
 
     if not tasks:
         return ""
 
     tasks_str = "\n\n".join(tasks)
 
-    return f"""You are NEXO Sleep System. Your job is to PRUNE memory.
-NOT interactive. Do NOT wait for input. Execute the following tasks and exit.
+    return f"""Eres NEXO Sleep System. Tu trabajo es PODAR la memoria.
+NO eres interactivo. NO esperas input. Ejecuta las siguientes tareas y sal.
 
-ABSOLUTE RULES:
-- NEVER delete credentials, tokens, account IDs, API endpoints, keys, secrets.
-- NEVER delete operational rules marked as "CRITICAL".
-- YES to merging redundant sections.
-- YES to deleting obsolete technical info (fixed >30 days ago and never referenced after).
-- YES to compressing long paragraphs into concise bullets.
-- Every line you delete must have a clear reason. When in doubt, do NOT delete.
+REGLAS ABSOLUTAS:
+- NUNCA borres credenciales, tokens, IDs de cuentas, API endpoints, claves, secrets.
+- NUNCA borres reglas operativas marcadas como "CRITICO" o "MAXIMA PRIORIDAD".
+- NUNCA borres informacion sobre infraestructura (servidores, repos, deploys).
+- SI puedes fusionar secciones redundantes.
+- SI puedes eliminar informacion tecnica obsoleta (arreglada hace >30 dias y nunca referenciada despues).
+- SI puedes comprimir parrafos largos en bullets concisos.
+- Cada linea que elimines debe tener una razon clara. En caso de duda, NO borres.
 
 {tasks_str}
 
-When done, print a JSON summary of actions taken."""
+Al terminar, imprime un resumen JSON con las acciones realizadas."""
 
 
 def run_stage_b(conditions: dict) -> dict:
@@ -596,6 +640,8 @@ def run_stage_b(conditions: dict) -> dict:
     if not prompt:
         return {"skipped": True, "reason": "No tasks to run"}
 
+    if not CLAUDE_CLI.exists():
+        return {"error": f"Claude CLI not found at {CLAUDE_CLI}"}
 
     log("Stage B: Invoking Claude CLI (sonnet)...")
 
@@ -606,9 +652,10 @@ def run_stage_b(conditions: dict) -> dict:
         env.pop("CLAUDE_CODE", None)
 
         result = subprocess.run(
+            [str(CLAUDE_CLI), "-p", prompt, "--model", "sonnet"],
             capture_output=True,
             text=True,
-            timeout=300,
+            timeout=600,
             env=env
         )
 
@@ -633,7 +680,7 @@ def run_stage_b(conditions: dict) -> dict:
         }
 
     except subprocess.TimeoutExpired:
-        log("Stage B: Claude CLI timed out (300s)")
+        log("Stage B: Claude CLI timed out (600s)")
         return {"error": "timeout"}
     except Exception as e:
         log(f"Stage B: Exception: {e}")
@@ -710,8 +757,12 @@ def main():
             conditions = check_stage_b_conditions()
             run_log["stage_b_conditions"] = conditions
 
-            log(f"  nexo.db preferences: {conditions['preferences_count']} rows "
+            log(f"  MEMORY.md: {conditions['memory_md_lines']} lines "
+                f"(trigger={conditions['memory_md_over_limit']})")
+            log(f"  nexo.db preferences: {conditions['preferences_auto_sections']} rows "
                 f"(trigger={conditions['preferences_over_limit']})")
+            log(f"  claude-mem old observations: {conditions['claude_mem_old_observations']} "
+                f"(trigger={conditions['claude_mem_over_limit']})")
 
             if conditions["should_trigger"]:
                 log("Stage B: Conditions met, running intelligent pruning...")
@@ -731,7 +782,7 @@ def main():
         # Register successful run for catch-up
         try:
             import json as _json
-            _state_file = NEXO_HOME / "operations" / ".catchup-state.json"
+            _state_file = Path.home() / "claude" / "operations" / ".catchup-state.json"
             _state = _json.loads(_state_file.read_text()) if _state_file.exists() else {}
             _state["sleep"] = datetime.now().isoformat()
             _state_file.write_text(_json.dumps(_state, indent=2))

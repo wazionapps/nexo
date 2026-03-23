@@ -8,8 +8,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
-NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
-COGNITIVE_DB = str(NEXO_HOME / "cognitive.db")
+COGNITIVE_DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cognitive.db")
 EMBEDDING_DIM = 384
 LAMBDA_STM = 0.1      # half-life ~7 days
 LAMBDA_LTM = 0.012    # half-life ~60 days
@@ -20,13 +19,13 @@ DISCRIMINATING_ENTITIES = {
     # OS / Environment
     "linux", "mac", "macos", "windows", "darwin", "ubuntu", "debian", "alpine",
     # Platforms
-    "shopify", "whatsapp", "chrome", "firefox",
+    "shopify", "wazion", "project-b", "project-a", "whatsapp", "chrome", "firefox",
     # Languages / Runtimes
     "python", "php", "javascript", "typescript", "node", "deno", "ruby",
     # Versions
     "v1", "v2", "v3", "v4", "v5", "5.6", "7.4", "8.0", "8.1", "8.2",
     # Infrastructure
-    "cloudrun", "gcloud", "vps", "local", "production", "staging",
+    "hosting-provider", "cloudrun", "gcloud", "vps", "local", "production", "staging",
     # DB
     "mysql", "sqlite", "postgresql", "postgres", "redis",
 }
@@ -36,17 +35,15 @@ POSITIVE_SIGNALS = {
     "gracias", "genial", "perfecto", "bien", "excelente", "bueno", "me gusta",
     "correcto", "sí", "dale", "hazlo", "adelante", "ok", "vale", "great",
     "nice", "good", "exactly", "buen trabajo", "bien hecho", "fenomenal",
-    "thanks", "perfect", "awesome", "excellent", "well done",
 }
 NEGATIVE_SIGNALS = {
     "no", "mal", "otra vez", "ya te dije", "frustr", "error", "fallo",
     "cansad", "siempre", "nunca", "por qué no", "no funciona", "roto",
-    "no sirve", "horrible", "desastre", "wrong", "broken", "again",
-    "not working", "frustrated", "always", "never",
+    "no sirve", "horrible", "desastre", "qué coño", "joder", "mierda",
+    "hostia", "me cago", "irritad", "harto",
 }
 URGENCY_SIGNALS = {
     "rápido", "ya", "ahora", "urgente", "asap", "inmediatamente", "corre",
-    "urgent", "now", "immediately", "hurry",
 }
 
 # Trust score events and their point values
@@ -73,7 +70,6 @@ def _get_db() -> sqlite3.Connection:
     """Get or create SQLite connection with WAL mode."""
     global _conn
     if _conn is None:
-        NEXO_HOME.mkdir(parents=True, exist_ok=True)
         _conn = sqlite3.connect(COGNITIVE_DB, check_same_thread=False)
         _conn.execute("PRAGMA journal_mode=WAL")
         _conn.execute("PRAGMA synchronous=NORMAL")
@@ -146,7 +142,7 @@ def _init_tables(conn: sqlite3.Connection):
             created_at TEXT DEFAULT (datetime('now'))
         );
 
-        -- Sentiment readings: user's detected mood per interaction
+        -- Sentiment readings: User's detected mood per interaction
         CREATE TABLE IF NOT EXISTS sentiment_log (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             sentiment TEXT NOT NULL,       -- 'positive', 'negative', 'neutral', 'urgent'
@@ -155,13 +151,13 @@ def _init_tables(conn: sqlite3.Connection):
             created_at TEXT DEFAULT (datetime('now'))
         );
 
-        -- Correction tracking: when user overrides a memory's guidance
+        -- Correction tracking: when User overrides a memory's guidance
         CREATE TABLE IF NOT EXISTS memory_corrections (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             memory_id INTEGER NOT NULL,
             store TEXT NOT NULL,           -- 'stm' or 'ltm'
             correction_type TEXT NOT NULL, -- 'override', 'exception', 'paradigm_shift'
-            context TEXT DEFAULT '',       -- what the user said
+            context TEXT DEFAULT '',       -- what user said
             created_at TEXT DEFAULT (datetime('now'))
         );
     """)
@@ -898,7 +894,7 @@ def detect_dissonance(new_instruction: str, min_score: float = 0.65) -> list[dic
     rather than silently obeying or silently resisting.
 
     Args:
-        new_instruction: The new instruction or preference from the user
+        new_instruction: The new instruction or preference from user
         min_score: Minimum cosine similarity to consider as potential conflict
 
     Returns:
@@ -933,12 +929,12 @@ def detect_dissonance(new_instruction: str, min_score: float = 0.65) -> list[dic
 
 
 def resolve_dissonance(memory_id: int, resolution: str, context: str = "") -> str:
-    """Resolve a cognitive dissonance by applying the user's decision.
+    """Resolve a cognitive dissonance by applying user's decision.
 
     Args:
         memory_id: The LTM memory that conflicts with the new instruction
         resolution: One of:
-            - 'paradigm_shift': User changed their mind permanently. Decay old memory,
+            - 'paradigm_shift': User changed his mind permanently. Decay old memory,
               new instruction becomes the standard.
             - 'exception': This is a one-time override. Keep old memory as standard.
             - 'override': Old memory was wrong. Mark as corrupted and decay to dormant.
@@ -1037,7 +1033,7 @@ def check_correction_fatigue() -> list[dict]:
 
 
 def detect_sentiment(text: str) -> dict:
-    """Analyze user text for sentiment signals.
+    """Analyze user's text for sentiment signals.
 
     Returns detected sentiment, intensity, and action guidance for NEXO.
     Not a model — keyword + heuristic based. Fast and deterministic.
@@ -1076,17 +1072,17 @@ def detect_sentiment(text: str) -> dict:
         sentiment = "negative"
         intensity = min(1.0, 0.3 + neg_score * 0.15)
         if intensity > 0.7:
-            guidance = "MODE: Ultra-concise. No explanations. Resolve and show result."
+            guidance = "MODE: Ultra-conciso. Cero explicaciones. Resolver y mostrar resultado."
         else:
-            guidance = "MODE: Concise. Less context, more direct action."
+            guidance = "MODE: Conciso. Menos contexto, más acción directa."
     elif pos_score > neg_score and pos_score >= 1:
         sentiment = "positive"
         intensity = min(1.0, 0.3 + pos_score * 0.15)
-        guidance = "MODE: Normal. Good moment to propose backlog ideas or improvements."
+        guidance = "MODE: Normal. Buen momento para proponer ideas de backlog o mejoras."
     elif urgency_hits:
         sentiment = "urgent"
         intensity = 0.8
-        guidance = "MODE: Immediate action. No preamble."
+        guidance = "MODE: Acción inmediata. Sin preámbulos."
     else:
         sentiment = "neutral"
         intensity = 0.5
@@ -1101,7 +1097,7 @@ def detect_sentiment(text: str) -> dict:
 
 
 def log_sentiment(text: str) -> dict:
-    """Detect and log user sentiment. Returns the detection result."""
+    """Detect and log user's sentiment. Returns the detection result."""
     result = detect_sentiment(text)
     if result["sentiment"] != "neutral":
         db = _get_db()

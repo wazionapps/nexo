@@ -5,13 +5,11 @@ import json
 import sys
 from pathlib import Path
 from datetime import datetime
-import os
 
-NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
-sys.path.insert(0, str(NEXO_HOME / "src"))
+sys.path.insert(0, str(Path.home() / "claude" / "nexo-mcp"))
 import cognitive
 
-STATE_FILE = NEXO_HOME / "operations" / ".catchup-state.json"
+STATE_FILE = Path.home() / "claude" / "operations" / ".catchup-state.json"
 
 
 def update_catchup_state():
