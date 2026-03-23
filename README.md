@@ -300,6 +300,18 @@ Configure in `~/.openclaw/openclaw.json`:
 
 This replaces OpenClaw's default memory system with NEXO's full cognitive architecture — Atkinson-Shiffrin memory, semantic RAG, trust scoring, guard system, and all 76 tools.
 
+## Listed On
+
+| Directory | Link |
+|-----------|------|
+| Glama | [glama.ai/mcp/servers/@wazionapps/nexo](https://glama.ai/mcp/servers/@wazionapps/nexo) |
+| MCP Registry | [Anthropic Official Registry](https://github.com/anthropics/mcp-registry) |
+| npm | [nexo-brain](https://www.npmjs.com/package/nexo-brain) |
+| mcpservers.org | [mcpservers.org](https://mcpservers.org) |
+| mcp.so | [mcp.so/server/nexo](https://mcp.so/server/nexo/wazionapps) |
+| dev.to | [Technical article](https://dev.to/wazion) |
+| nexo-brain.com | [Official website](https://nexo-brain.com) |
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines. Issues and PRs welcome.
@@ -310,4 +322,4 @@ MIT — see [LICENSE](LICENSE)
 
 ---
 
-Built by [WAzion](https://wazion.com) | Created by WAzion Apps
+Built by [WAzion](https://www.wazion.com) | Created by WAzion Apps
