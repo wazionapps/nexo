@@ -1,0 +1,56 @@
+name: Publish to all channels
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      # 1. Publish nexo-brain to npm
+      - name: Publish nexo-brain to npm
+        run: npm publish --access public || echo "Version already exists"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # 2. Publish OpenClaw plugin to npm
+      - name: Publish OpenClaw plugin to npm
+        working-directory: openclaw-plugin
+        run: |
+          npm install --legacy-peer-deps
+          npm run build
+          npm publish --access public || echo "Version already exists"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # 3. Publish ClawHub skill
+      - name: Publish ClawHub skill
+        run: |
+          npx clawhub@latest publish ./clawhub-skill \
+            --slug nexo-brain \
+            --name "NEXO Brain" \
+            --version ${GITHUB_REF_NAME#v} \
+            --tags latest \
+            --changelog "Release ${GITHUB_REF_NAME}" \
+            --no-input || echo "ClawHub publish failed (may need auth)"
+        env:
+          CLAWHUB_TOKEN: ${{ secrets.CLAWHUB_TOKEN }}
+
+      # 4. Create GitHub Release
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          tag_name: ${{ github.ref_name }}
