@@ -143,12 +143,19 @@ The installer handles everything:
   Generating operator instructions...
 
   ╔══════════════════════════════════════════════════════════╗
-  ║  Atlas is ready.                                       ║
-  ║  Open Claude Code and start a conversation.            ║
+  ║  Atlas is ready. Type 'atlas' to start.                ║
   ╚══════════════════════════════════════════════════════════╝
 ```
 
-Open Claude Code and start working. Atlas will introduce itself on the first message.
+### Starting a Session
+
+The installer creates a shell alias with your chosen name. Just type it:
+
+```bash
+atlas
+```
+
+That's it. No need to run `claude` manually. Atlas will greet you immediately — adapted to the time of day, resuming from where you left off if there's a previous session. No cold starts, no waiting for your input.
 
 ### What Gets Installed
 
