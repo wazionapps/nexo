@@ -1,60 +1,64 @@
-# NEXO — Your Claude Code Gets a Brain
+# NEXO Brain — Your AI Gets a Brain
 
-**NEXO transforms Claude Code from a stateless assistant into a cognitive partner that remembers, learns, forgets, adapts, and builds a relationship with you over time.**
+**NEXO Brain transforms any MCP-compatible AI agent from a stateless assistant into a cognitive partner that remembers, learns, forgets, adapts, and builds a relationship with you over time.**
 
-Every time you close a Claude Code session, everything is lost. Your assistant doesn't remember yesterday's decisions, repeats the same mistakes, and starts from zero. NEXO fixes this by giving Claude Code a brain — modeled after how human memory actually works.
+Every time you close a session, everything is lost. Your agent doesn't remember yesterday's decisions, repeats the same mistakes, and starts from zero. NEXO Brain fixes this with a cognitive architecture modeled after how human memory actually works.
 
 ## The Problem
 
-Claude Code is powerful but amnesic:
+AI coding agents are powerful but amnesic:
 - **No memory** — closes a session, forgets everything
 - **Repeats mistakes** — makes the same error you corrected yesterday
 - **No context** — can't connect today's work with last week's decisions
 - **Reactive** — waits for instructions instead of anticipating needs
 - **No learning** — doesn't improve from experience
+- **No safety** — stores anything it's told, including poisoned or redundant data
 
 ## The Solution: A Cognitive Architecture
 
-NEXO implements the **Atkinson-Shiffrin memory model** from cognitive psychology (1968) — the same model that explains how human memory works:
+NEXO Brain implements the **Atkinson-Shiffrin memory model** from cognitive psychology (1968) — the same model that explains how human memory works:
 
 ```
 What you say and do
-    │
-    ├─→ Sensory Register (raw capture, 48h)
-    │       │
-    │       └─→ Attention filter: "Is this worth remembering?"
-    │               │
-    │               ↓
-    ├─→ Short-Term Memory (7-day half-life)
-    │       │
-    │       ├─→ Used often? → Consolidate to Long-Term Memory
-    │       └─→ Not accessed? → Gradually forgotten
-    │
-    └─→ Long-Term Memory (60-day half-life)
-            │
-            ├─→ Active: instantly searchable by meaning
-            ├─→ Dormant: faded but recoverable ("oh right, I remember now!")
-            └─→ Near-duplicates auto-merged to prevent clutter
+    |
+    +---> Sensory Register (raw capture, 48h)
+    |       |
+    |       +---> Attention filter: "Is this worth remembering?"
+    |               |
+    |               v
+    +---> Short-Term Memory (7-day half-life)
+    |       |
+    |       +---> Used often? --> Consolidate to Long-Term Memory
+    |       +---> Not accessed? --> Gradually forgotten
+    |
+    +---> Long-Term Memory (60-day half-life)
+            |
+            +---> Active: instantly searchable by meaning
+            +---> Dormant: faded but recoverable ("oh right, I remember now!")
+            +---> Near-duplicates auto-merged to prevent clutter
 ```
 
-This isn't a metaphor. NEXO literally implements Ebbinghaus forgetting curves, rehearsal-based reinforcement, and memory consolidation during automated "sleep" processes.
+This isn't a metaphor. NEXO Brain literally implements Ebbinghaus forgetting curves, rehearsal-based reinforcement, and memory consolidation during automated "sleep" processes.
 
-## What Makes NEXO Different
+## What Makes NEXO Brain Different
 
-| Without NEXO | With NEXO |
-|-------------|-----------|
+| Without NEXO Brain | With NEXO Brain |
+|---------------------|-----------------|
 | Memory gone after each session | Persistent across sessions with natural decay and reinforcement |
 | Repeats the same mistakes | Checks "have I made this mistake before?" before every action |
 | Keyword search only | Finds memories by **meaning**, not just words |
 | Starts cold every time | Resumes from the mental state of the last session |
 | Same behavior regardless of context | Adapts tone and approach based on your mood |
 | No relationship | Trust score that evolves — makes fewer redundant checks as alignment grows |
+| Stores everything blindly | Prediction error gating rejects redundant information at write time |
+| Vulnerable to memory poisoning | 4-layer security pipeline scans every memory before storage |
+| No proactive behavior | Context-triggered reminders fire when topics match, not just by date |
 
 ## How the Brain Works
 
 ### Memory That Forgets (And That's a Feature)
 
-NEXO uses **Ebbinghaus forgetting curves** — memories naturally fade over time unless reinforced by use. This isn't a bug, it's how useful memory works:
+NEXO Brain uses **Ebbinghaus forgetting curves** — memories naturally fade over time unless reinforced by use. This isn't a bug, it's how useful memory works:
 
 - A lesson learned yesterday is strong. If you never encounter it again, it fades — because it probably wasn't important.
 - A lesson accessed 5 times in 2 weeks gets promoted to long-term memory — because repeated use proves it matters.
@@ -62,19 +66,19 @@ NEXO uses **Ebbinghaus forgetting curves** — memories naturally fade over time
 
 ### Semantic Search (Finding by Meaning)
 
-NEXO doesn't search by keywords. It searches by **meaning** using vector embeddings (fastembed, 384 dimensions).
+NEXO Brain doesn't search by keywords. It searches by **meaning** using vector embeddings (fastembed, 384 dimensions).
 
-Example: If you search for "deploy problems", NEXO will find a memory about "SSH connection timeout on production server" — even though they share zero words. This is how human associative memory works.
+Example: If you search for "deploy problems", NEXO Brain will find a memory about "SSH connection timeout on production server" — even though they share zero words. This is how human associative memory works.
 
 ### Metacognition (Thinking About Thinking)
 
-Before every code change, NEXO asks itself: **"Have I made a mistake like this before?"**
+Before every code change, NEXO Brain asks itself: **"Have I made a mistake like this before?"**
 
 It searches its memory for related errors, warnings, and lessons learned. If it finds something relevant, it surfaces the warning BEFORE acting — not after you've already broken production.
 
 ### Cognitive Dissonance
 
-When you give an instruction that contradicts NEXO's established knowledge, it doesn't silently obey or silently resist. It **verbalizes the conflict**:
+When you give an instruction that contradicts established knowledge, NEXO Brain doesn't silently obey or silently resist. It **verbalizes the conflict**:
 
 > "My memory says you prefer Tailwind over plain CSS, but you're asking me to write inline styles. Is this a permanent change or a one-time exception?"
 
@@ -82,41 +86,79 @@ You decide: **paradigm shift** (permanent change), **exception** (one-time), or 
 
 ### Sibling Memories
 
-Some memories look identical but apply to different contexts. "How to deploy" for Project A is different from Project B. NEXO detects discriminating entities (different OS, platform, language) and links them as **siblings** instead of merging them:
+Some memories look identical but apply to different contexts. "How to deploy" for Project A is different from Project B. NEXO Brain detects discriminating entities (different OS, platform, language) and links them as **siblings** instead of merging them:
 
 > "Applying the Linux deploy procedure. Note: there's a sibling for macOS that uses a different port."
 
 ### Trust Score (0-100)
 
-NEXO tracks alignment with you through a trust score:
+NEXO Brain tracks alignment with you through a trust score:
 
-- **You say thanks** → score goes up → NEXO reduces redundant verification checks
-- **NEXO makes a mistake you already taught it** → score drops → NEXO becomes more careful, checks more thoroughly
-- **The score doesn't control permissions** — you're always in control. It's a mirror that helps NEXO calibrate its own rigor.
+- **You say thanks** --> score goes up --> reduces redundant verification checks
+- **Makes a mistake you already taught it** --> score drops --> becomes more careful, checks more thoroughly
+- **The score doesn't control permissions** — you're always in control. It's a mirror that helps calibrate rigor.
 
 ### Sentiment Detection
 
-NEXO reads your tone (keywords, message length, urgency signals) and adapts:
+NEXO Brain reads your tone (keywords, message length, urgency signals) and adapts:
 
-- **Frustrated?** → Ultra-concise mode. Zero explanations. Just solve the problem.
-- **In flow?** → Good moment to suggest that backlog item from last Tuesday.
-- **Urgent?** → Immediate action, no preamble.
+- **Frustrated?** --> Ultra-concise mode. Zero explanations. Just solve the problem.
+- **In flow?** --> Good moment to suggest that backlog item from last Tuesday.
+- **Urgent?** --> Immediate action, no preamble.
 
 ### Sleep Cycle
 
-Like a human brain, NEXO has automated processes that run while you're not using it:
+Like a human brain, NEXO Brain has automated processes that run while you're not using it:
 
 | Time | Process | Human Analogy |
 |------|---------|---------------|
-| 03:00 | Decay + memory consolidation + merge duplicates | Deep sleep consolidation |
+| 03:00 | Decay + memory consolidation + merge duplicates + dreaming | Deep sleep consolidation |
 | 04:00 | Clean expired data, prune redundant memories | Synaptic pruning |
 | 07:00 | Self-audit, health checks, metrics | Waking up + orientation |
 | 23:30 | Process day's events, extract patterns | Pre-sleep reflection |
-| Boot | Catch-up: run anything missed while computer was off | — |
+| Boot | Catch-up: run anything missed while computer was off | -- |
 
-If your Mac was asleep during any scheduled process, NEXO catches up in order when it wakes.
+If your Mac was asleep during any scheduled process, NEXO Brain catches up in order when it wakes.
+
+## Cognitive Features (v0.3.1)
+
+NEXO Brain v0.3.1 adds 21 cognitive tools on top of the 76 base tools, bringing the total to **97+ MCP tools**. These features implement cognitive science concepts that go beyond basic memory:
+
+### Input Pipeline
+
+| Feature | What It Does |
+|---------|-------------|
+| **Prediction Error Gating** | Only novel information is stored. Redundant content that matches existing memories is rejected at write time, keeping your memory clean without manual curation. |
+| **Security Pipeline** | 4-layer defense against memory poisoning: injection detection, encoding analysis, behavioral anomaly scoring, and credential scanning. Every memory passes through all four layers before storage. |
+| **Quarantine Queue** | New facts enter quarantine status and must pass a promotion policy before becoming trusted knowledge. Prevents unverified information from influencing decisions. |
+| **Secret Redaction** | Auto-detects and redacts API keys, tokens, passwords, and other sensitive data before storage. Secrets never reach the vector database. |
+
+### Memory Management
+
+| Feature | What It Does |
+|---------|-------------|
+| **Pin / Snooze / Archive** | Granular lifecycle states for memories. Pin = never decays (critical knowledge). Snooze = temporarily hidden (revisit later). Archive = cold storage (searchable but inactive). |
+| **Auto-Merge Duplicates** | Batch cosine deduplication during the 03:00 sleep cycle. Respects sibling discrimination — similar memories about different contexts are kept separate. |
+| **Memory Dreaming** | Discovers hidden connections between recent memories during the 03:00 sleep cycle. Surfaces non-obvious patterns like "these three bugs all relate to the same root cause." |
+
+### Retrieval
+
+| Feature | What It Does |
+|---------|-------------|
+| **HyDE Query Expansion** | Generates hypothetical answer embeddings for richer semantic search. Instead of searching for "deploy error", it imagines what a helpful memory about deploy errors would look like, then searches for that. |
+| **Spreading Activation** | Graph-based co-activation network. Memories retrieved together reinforce each other's connections, building an associative web that improves over time. |
+| **Recall Explanations** | Transparent score breakdown for every retrieval result. Shows exactly why a memory was returned: semantic similarity, recency, access frequency, and co-activation bonuses. |
+
+### Proactive
+
+| Feature | What It Does |
+|---------|-------------|
+| **Prospective Memory** | Context-triggered reminders that fire when conversation topics match, not just by date. "Remind me about X when we discuss Y" works naturally. |
+| **Hook Auto-capture** | Extracts decisions, corrections, and factual statements from conversations automatically. You don't need to explicitly say "remember this" — the system detects what's worth storing. |
 
 ## Quick Start
+
+### Claude Code (Primary)
 
 ```bash
 npx nexo-brain
@@ -136,15 +178,15 @@ The installer handles everything:
   Scanning workspace...
     - 3 git repositories
     - Node.js project detected
-  Configuring Claude Code MCP server...
+  Configuring MCP server...
   Setting up automated processes...
     5 automated processes configured.
   Caffeinate enabled.
   Generating operator instructions...
 
-  ╔══════════════════════════════════════════════════════════╗
-  ║  Atlas is ready. Type 'atlas' to start.                ║
-  ╚══════════════════════════════════════════════════════════╝
+  +----------------------------------------------------------+
+  |  Atlas is ready. Type 'atlas' to start.                  |
+  +----------------------------------------------------------+
 ```
 
 ### Starting a Session
@@ -162,7 +204,7 @@ That's it. No need to run `claude` manually. Atlas will greet you immediately �
 | Component | What | Where |
 |-----------|------|-------|
 | Cognitive engine | Python: fastembed, numpy, vector search | pip packages |
-| MCP server | 77 tools for memory, learning, guard | ~/.nexo/ |
+| MCP server | 97+ tools for memory, cognition, learning, guard | ~/.nexo/ |
 | Plugins | Guard, episodic memory, cognitive memory, entities, preferences | ~/.nexo/plugins/ |
 | Hooks | Session capture, briefing, stop detection | ~/.nexo/hooks/ |
 | LaunchAgents | Decay, sleep, audit, postmortem, catch-up | ~/Library/LaunchAgents/ |
@@ -173,16 +215,18 @@ That's it. No need to run `claude` manually. Atlas will greet you immediately �
 
 - **macOS** (Linux support planned)
 - **Node.js 18+** (for the installer)
-- **Claude Opus (latest version) strongly recommended.** NEXO provides 77 MCP tools across 16 categories. This cognitive load requires a top-tier model with large context window. Smaller models (Haiku, Sonnet) may struggle with tool selection and produce inconsistent results. Opus handles all 77 tools without hesitation.
+- **Claude Opus (latest version) strongly recommended.** NEXO Brain provides 97+ MCP tools across 17 categories. This cognitive load requires a top-tier model with large context window. Smaller models (Haiku, Sonnet) may struggle with tool selection and produce inconsistent results. Opus handles all 97+ tools without hesitation.
 - Python 3, Homebrew, and Claude Code are installed automatically if missing.
 
 ## Architecture
 
-### 77 MCP Tools across 16 Categories
+### 97+ MCP Tools across 17 Categories
 
 | Category | Count | Tools | Purpose |
 |----------|-------|-------|---------|
 | Cognitive | 8 | retrieve, stats, inspect, metrics, dissonance, resolve, sentiment, trust | The brain — memory, RAG, trust, mood |
+| Cognitive Input | 5 | prediction_gate, security_scan, quarantine, promote, redact | Input pipeline — gating, security, quarantine |
+| Cognitive Advanced | 8 | hyde_search, spread_activate, explain_recall, dream, prospect, hook_capture, pin, archive | Advanced retrieval, proactive, lifecycle |
 | Guard | 3 | check, stats, log_repetition | Metacognitive error prevention |
 | Episodic | 10 | change_log/search/commit, decision_log/outcome/search, review_queue, diary_write/read, recall | What happened and why |
 | Sessions | 4 | startup, heartbeat, stop, status | Session lifecycle + context shift detection |
@@ -201,7 +245,7 @@ That's it. No need to run `claude` manually. Atlas will greet you immediately �
 
 ### Plugin System
 
-NEXO supports hot-loadable plugins. Drop a `.py` file in `~/.nexo/plugins/`:
+NEXO Brain supports hot-loadable plugins. Drop a `.py` file in `~/.nexo/plugins/`:
 
 ```python
 # my_plugin.py
@@ -222,28 +266,46 @@ Reload without restarting: `nexo_plugin_load("my_plugin.py")`
 - **No telemetry.** No analytics. No phone-home.
 - **No cloud dependencies.** Vector search runs on CPU (fastembed), not an API.
 - **Auto-update is opt-in.** Checks GitHub releases, never sends data.
+- **Secret redaction.** API keys and tokens are stripped before they ever reach memory storage.
 
-## The Psychology Behind NEXO
+## The Psychology Behind NEXO Brain
 
-NEXO isn't just engineering — it's applied cognitive psychology:
+NEXO Brain isn't just engineering — it's applied cognitive psychology:
 
-| Psychological Concept | How NEXO Implements It |
+| Psychological Concept | How NEXO Brain Implements It |
 |----------------------|----------------------|
-| Atkinson-Shiffrin (1968) | Three memory stores: sensory register → STM → LTM |
-| Ebbinghaus Forgetting Curve (1885) | Exponential decay: `strength = strength × e^(-λ × time)` |
+| Atkinson-Shiffrin (1968) | Three memory stores: sensory register --> STM --> LTM |
+| Ebbinghaus Forgetting Curve (1885) | Exponential decay: `strength = strength * e^(-lambda * time)` |
 | Rehearsal Effect | Accessing a memory resets its strength to 1.0 |
 | Memory Consolidation | Nightly process promotes frequently-used STM to LTM |
+| Prediction Error | Only surprising (novel) information gets stored — redundant input is gated |
+| Spreading Activation (Collins & Loftus, 1975) | Retrieving a memory co-activates related memories through an associative graph |
+| HyDE (Gao et al., 2022) | Hypothetical document embeddings improve semantic recall |
+| Prospective Memory (Einstein & McDaniel, 1990) | Context-triggered intentions fire when cue conditions match |
 | Metacognition | Guard system checks past errors before acting |
-| Cognitive Dissonance | Detects and verbalizes conflicts between old and new knowledge |
+| Cognitive Dissonance (Festinger, 1957) | Detects and verbalizes conflicts between old and new knowledge |
 | Theory of Mind | Models user behavior, preferences, and mood |
 | Synaptic Pruning | Automated cleanup of weak, unused memories |
 | Associative Memory | Semantic search finds related concepts, not just matching words |
+| Memory Reconsolidation | Dreaming process discovers hidden connections during sleep |
 
-## OpenClaw Integration
+## Integrations
 
-NEXO Brain works as a cognitive memory backend for [OpenClaw](https://github.com/openclaw/openclaw). Three integration paths, from instant to deep:
+### Claude Code (Primary)
 
-### Path 1: MCP Bridge (Zero Code — Works Now)
+NEXO Brain is designed as an MCP server. Claude Code is the primary supported client:
+
+```bash
+npx nexo-brain
+```
+
+All 97+ tools are available immediately after installation. The installer configures Claude Code's `~/.claude/settings.json` automatically.
+
+### OpenClaw
+
+NEXO Brain also works as a cognitive memory backend for [OpenClaw](https://github.com/openclaw/openclaw):
+
+#### MCP Bridge (Zero Code)
 
 Add NEXO Brain to your OpenClaw config at `~/.openclaw/openclaw.json`:
 
@@ -270,23 +332,17 @@ openclaw mcp set nexo-brain '{"command":"python3","args":["~/.nexo/src/server.py
 openclaw gateway restart
 ```
 
-All 77 NEXO tools become available to your OpenClaw agent immediately.
-
-> **First time?** Run `npx nexo-brain` first to install the cognitive engine and dependencies.
-
-### Path 2: ClawHub Skill (Install in Seconds)
+#### ClawHub Skill
 
 ```bash
 npx clawhub@latest install nexo-brain
 ```
 
-### Path 3: Native Memory Plugin (Replaces Default Memory)
+#### Native Memory Plugin
 
 ```bash
 npm install @wazionapps/openclaw-memory-nexo-brain
 ```
-
-Configure in `~/.openclaw/openclaw.json`:
 
 ```json
 {
@@ -298,7 +354,11 @@ Configure in `~/.openclaw/openclaw.json`:
 }
 ```
 
-This replaces OpenClaw's default memory system with NEXO's full cognitive architecture — Atkinson-Shiffrin memory, semantic RAG, trust scoring, guard system, and all 77 tools.
+This replaces OpenClaw's default memory system with NEXO Brain's full cognitive architecture.
+
+### Any MCP Client
+
+NEXO Brain works with any application that supports the MCP protocol. Configure it as an MCP server pointing to `~/.nexo/src/server.py`.
 
 ## Listed On
 
@@ -312,13 +372,25 @@ This replaces OpenClaw's default memory system with NEXO's full cognitive archit
 | dev.to | Technical Article | [How I Applied Cognitive Psychology to AI Agents](https://dev.to/wazionapps/how-i-applied-cognitive-psychology-to-give-ai-agents-real-memory-2oce) |
 | nexo-brain.com | Official Website | [nexo-brain.com](https://nexo-brain.com) |
 
+## Inspired By
+
+NEXO Brain builds on ideas from several open-source projects. We're grateful for the research and implementations that inspired specific features:
+
+| Project | Inspired Features |
+|---------|------------------|
+| [Vestige](https://github.com/pchaganti/gx-vestige) | HyDE query expansion, spreading activation, prediction error gating, memory dreaming, prospective memory |
+| [ShieldCortex](https://github.com/PShieldCortex/ShieldCortex) | Security pipeline (4-layer memory poisoning defense) |
+| [Bicameral](https://github.com/nicobailey/Bicameral) | Quarantine queue (trust promotion policy for new facts) |
+| [claude-mem](https://github.com/nicobailey/claude-mem) | Hook auto-capture (extracting decisions and facts from conversations) |
+| [ClawMem](https://github.com/nicobailey/ClawMem) | Co-activation reinforcement (memories retrieved together strengthen connections) |
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines. Issues and PRs welcome.
 
 ## License
 
-MIT — see [LICENSE](LICENSE)
+MIT -- see [LICENSE](LICENSE)
 
 ---
 
