@@ -162,7 +162,7 @@ That's it. No need to run `claude` manually. Atlas will greet you immediately â€
 | Component | What | Where |
 |-----------|------|-------|
 | Cognitive engine | Python: fastembed, numpy, vector search | pip packages |
-| MCP server | 76 tools for memory, learning, guard | ~/.nexo/ |
+| MCP server | 77 tools for memory, learning, guard | ~/.nexo/ |
 | Plugins | Guard, episodic memory, cognitive memory, entities, preferences | ~/.nexo/plugins/ |
 | Hooks | Session capture, briefing, stop detection | ~/.nexo/hooks/ |
 | LaunchAgents | Decay, sleep, audit, postmortem, catch-up | ~/Library/LaunchAgents/ |
@@ -173,19 +173,19 @@ That's it. No need to run `claude` manually. Atlas will greet you immediately â€
 
 - **macOS** (Linux support planned)
 - **Node.js 18+** (for the installer)
-- **Claude Opus (latest version) strongly recommended.** NEXO provides 76 MCP tools across 16 categories. This cognitive load requires a top-tier model with large context window. Smaller models (Haiku, Sonnet) may struggle with tool selection and produce inconsistent results. Opus handles all 76 tools without hesitation.
+- **Claude Opus (latest version) strongly recommended.** NEXO provides 77 MCP tools across 16 categories. This cognitive load requires a top-tier model with large context window. Smaller models (Haiku, Sonnet) may struggle with tool selection and produce inconsistent results. Opus handles all 77 tools without hesitation.
 - Python 3, Homebrew, and Claude Code are installed automatically if missing.
 
 ## Architecture
 
-### 76 MCP Tools across 16 Categories
+### 77 MCP Tools across 16 Categories
 
 | Category | Count | Tools | Purpose |
 |----------|-------|-------|---------|
 | Cognitive | 8 | retrieve, stats, inspect, metrics, dissonance, resolve, sentiment, trust | The brain â€” memory, RAG, trust, mood |
 | Guard | 3 | check, stats, log_repetition | Metacognitive error prevention |
 | Episodic | 10 | change_log/search/commit, decision_log/outcome/search, review_queue, diary_write/read, recall | What happened and why |
-| Sessions | 3 | startup, heartbeat, status | Session lifecycle + context shift detection |
+| Sessions | 4 | startup, heartbeat, stop, status | Session lifecycle + context shift detection |
 | Coordination | 7 | track, untrack, files, send, ask, answer, check_answer | Multi-session file coordination + messaging |
 | Reminders | 5 | list, create, update, complete, delete | User's tasks and deadlines |
 | Followups | 4 | create, update, complete, delete | System's autonomous verification tasks |
@@ -270,7 +270,7 @@ openclaw mcp set nexo-brain '{"command":"python3","args":["~/.nexo/src/server.py
 openclaw gateway restart
 ```
 
-All 76 NEXO tools become available to your OpenClaw agent immediately.
+All 77 NEXO tools become available to your OpenClaw agent immediately.
 
 > **First time?** Run `npx nexo-brain` first to install the cognitive engine and dependencies.
 
@@ -298,7 +298,7 @@ Configure in `~/.openclaw/openclaw.json`:
 }
 ```
 
-This replaces OpenClaw's default memory system with NEXO's full cognitive architecture â€” Atkinson-Shiffrin memory, semantic RAG, trust scoring, guard system, and all 76 tools.
+This replaces OpenClaw's default memory system with NEXO's full cognitive architecture â€” Atkinson-Shiffrin memory, semantic RAG, trust scoring, guard system, and all 77 tools.
 
 ## Listed On
 
