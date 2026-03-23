@@ -8,3 +8,16 @@ __pycache__/
 .git/
 tests/
 .DS_Store
+# macOS Finder duplicates
+* 2*
+* 2.*
+# Secrets
+.mcpregistry_*
+.env
+# OpenClaw plugin (published separately)
+openclaw-plugin/
+# ClawHub skill (published separately)
+clawhub-skill/
+# Dev articles
+devto-article.md
+reddit-post-*.md
