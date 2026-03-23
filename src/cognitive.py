@@ -2,6 +2,7 @@
 
 import math
 import os
+import re
 import sqlite3
 import numpy as np
 from datetime import datetime, timedelta
@@ -12,6 +13,14 @@ COGNITIVE_DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cogniti
 EMBEDDING_DIM = 384
 LAMBDA_STM = 0.1      # half-life ~7 days
 LAMBDA_LTM = 0.012    # half-life ~60 days
+
+# Prediction Error Gate thresholds
+PE_GATE_REJECT = 0.85     # similarity > this → reject (not novel enough)
+PE_GATE_REFINE = 0.70     # similarity between REFINE and REJECT → refinement (update existing)
+# similarity < REFINE → novel (store as new)
+
+# Session-level gate stats (reset each process lifetime)
+_gate_stats = {"accepted_novel": 0, "accepted_refinement": 0, "rejected": 0}
 
 # Discriminating entities — if these differ between two high-similarity memories,
 # they are siblings (similar-but-incompatible), NOT duplicates to merge.
@@ -50,12 +59,12 @@ URGENCY_SIGNALS = {
 TRUST_EVENTS = {
     # Positive
     "explicit_thanks": +3,
-    "delegation": +2,        # User delegates new task without micromanaging
-    "paradigm_shift": +2,    # User teaches, NEXO learns
+    "delegation": +2,        # the user delegates new task without micromanaging
+    "paradigm_shift": +2,    # the user teaches, NEXO learns
     "sibling_detected": +3,  # NEXO avoided context error on its own
     "proactive_action": +2,  # NEXO did something useful without being asked
     # Negative
-    "correction": -3,        # User corrects NEXO
+    "correction": -3,        # the user corrects NEXO
     "repeated_error": -7,    # Error on something NEXO already had a learning for
     "override": -5,          # NEXO's memory was wrong
     "correction_fatigue": -10, # Same memory corrected 3+ times
@@ -64,6 +73,45 @@ TRUST_EVENTS = {
 
 _model = None
 _conn = None
+
+# --- Secret redaction patterns ---
+_REDACT_PATTERNS = [
+    # Specific API key formats
+    (re.compile(r'sk-[a-zA-Z0-9]{20,}'), '[REDACTED:api_key]'),
+    (re.compile(r'ghp_[a-zA-Z0-9]{36,}'), '[REDACTED:api_key]'),
+    (re.compile(r'shpat_[a-f0-9]{32,}'), '[REDACTED:api_key]'),
+    (re.compile(r'AKIA[A-Z0-9]{16}'), '[REDACTED:api_key]'),
+    (re.compile(r'xox[bp]-[a-zA-Z0-9\-]{20,}'), '[REDACTED:api_key]'),
+    # Bearer tokens
+    (re.compile(r'Bearer\s+[a-zA-Z0-9_\-\.]{20,}'), '[REDACTED:bearer_token]'),
+    # Connection strings with credentials
+    (re.compile(r'(mysql|postgresql|postgres|mongodb|redis)://[^\s"\']+@[^\s"\']+'), '[REDACTED:connection_string]'),
+    # Generic token assignments
+    (re.compile(r'(token\s*[=:]\s*["\']?)([a-zA-Z0-9_\-]{20,})', re.IGNORECASE),
+     lambda m: m.group(1) + '[REDACTED:token]'),
+    # Password assignments
+    (re.compile(r'(password\s*[=:]\s*["\']?)([^\s"\']{8,})', re.IGNORECASE),
+     lambda m: m.group(1) + '[REDACTED:password]'),
+    # SSH with private IPs (server credentials context)
+    (re.compile(r'ssh\s+\S+@\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}'), '[REDACTED:ssh_credential]'),
+]
+
+
+def redact_secrets(text: str) -> str:
+    """Scan text for secrets and replace with [REDACTED:<type>] placeholders.
+
+    Fast regex-only detection. Not overly aggressive — won't redact normal
+    hex strings, UUIDs, or short tokens that aren't secrets.
+    """
+    if not text:
+        return text
+    result = text
+    for pattern, replacement in _REDACT_PATTERNS:
+        if callable(replacement):
+            result = pattern.sub(replacement, result)
+        else:
+            result = pattern.sub(replacement, result)
+    return result
 
 
 def _get_db() -> sqlite3.Connection:
@@ -75,7 +123,26 @@ def _get_db() -> sqlite3.Connection:
         _conn.execute("PRAGMA synchronous=NORMAL")
         _conn.row_factory = sqlite3.Row
         _init_tables(_conn)
+        _migrate_lifecycle(_conn)
     return _conn
+
+
+def _migrate_lifecycle(conn: sqlite3.Connection):
+    """Add lifecycle_state, snooze_until, and redaction_applied columns if they don't exist (idempotent)."""
+    for table in ("stm_memories", "ltm_memories"):
+        for col, col_type in [
+            ("lifecycle_state", "TEXT DEFAULT 'active'"),
+            ("snooze_until", "TEXT"),
+            ("redaction_applied", "INTEGER DEFAULT 0"),
+        ]:
+            try:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}")
+                conn.commit()
+            except sqlite3.OperationalError as e:
+                if "duplicate column" in str(e).lower():
+                    pass
+                else:
+                    raise
 
 
 def _init_tables(conn: sqlite3.Connection):
@@ -132,6 +199,16 @@ def _init_tables(conn: sqlite3.Connection):
             UNIQUE(memory_a_id, memory_b_id)
         );
 
+        -- Dreamed pairs: track which memory pairs have been processed by dream_cycle
+        CREATE TABLE IF NOT EXISTS dreamed_pairs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            memory_a_id INTEGER NOT NULL,
+            memory_b_id INTEGER NOT NULL,
+            insight_id INTEGER,              -- LTM ID of the generated insight
+            created_at TEXT DEFAULT (datetime('now')),
+            UNIQUE(memory_a_id, memory_b_id)
+        );
+
         -- Trust score: NEXO's alignment index (0-100, starts at 50)
         CREATE TABLE IF NOT EXISTS trust_score (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -142,7 +219,7 @@ def _init_tables(conn: sqlite3.Connection):
             created_at TEXT DEFAULT (datetime('now'))
         );
 
-        -- Sentiment readings: User's detected mood per interaction
+        -- Sentiment readings: the user's detected mood per interaction
         CREATE TABLE IF NOT EXISTS sentiment_log (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             sentiment TEXT NOT NULL,       -- 'positive', 'negative', 'neutral', 'urgent'
@@ -151,13 +228,30 @@ def _init_tables(conn: sqlite3.Connection):
             created_at TEXT DEFAULT (datetime('now'))
         );
 
-        -- Correction tracking: when User overrides a memory's guidance
+        -- Quarantine: new memories held for validation before promotion to STM
+        CREATE TABLE IF NOT EXISTS quarantine (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            content TEXT NOT NULL,
+            embedding BLOB NOT NULL,
+            source TEXT DEFAULT 'inferred',
+            source_type TEXT NOT NULL,
+            source_id TEXT DEFAULT '',
+            source_title TEXT DEFAULT '',
+            domain TEXT DEFAULT '',
+            confidence REAL DEFAULT 0.5,
+            promotion_checks INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT (datetime('now')),
+            promoted_at TEXT,
+            status TEXT DEFAULT 'pending'
+        );
+
+        -- Correction tracking: when the user overrides a memory's guidance
         CREATE TABLE IF NOT EXISTS memory_corrections (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             memory_id INTEGER NOT NULL,
             store TEXT NOT NULL,           -- 'stm' or 'ltm'
             correction_type TEXT NOT NULL, -- 'override', 'exception', 'paradigm_shift'
-            context TEXT DEFAULT '',       -- what user said
+            context TEXT DEFAULT '',       -- what the user said
             created_at TEXT DEFAULT (datetime('now'))
         );
     """)
@@ -201,6 +295,19 @@ def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.dot(a, b) / (norm_a * norm_b))
 
 
+
+def _auto_restore_snoozed(db: sqlite3.Connection):
+    """Restore snoozed memories whose snooze_until date has passed."""
+    now = datetime.utcnow().isoformat()
+    for table in ("stm_memories", "ltm_memories"):
+        db.execute(
+            f"UPDATE {table} SET lifecycle_state = 'active', snooze_until = NULL "
+            f"WHERE lifecycle_state = 'snoozed' AND snooze_until IS NOT NULL AND snooze_until <= ?",
+            (now,)
+        )
+    db.commit()
+
+
 def search(
     query_text: str,
     top_k: int = 10,
@@ -208,7 +315,8 @@ def search(
     stores: str = "both",
     exclude_dormant: bool = True,
     rehearse: bool = True,
-    source_type_filter: str = ""
+    source_type_filter: str = "",
+    include_archived: bool = False
 ) -> list[dict]:
     """Full vector search across STM and/or LTM with rehearsal and dormant reactivation."""
     db = _get_db()
@@ -216,21 +324,33 @@ def search(
     if np.linalg.norm(query_vec) == 0:
         return []
 
+    # Auto-restore snoozed memories whose snooze_until has passed
+    _auto_restore_snoozed(db)
+
     results = []
     reactivated_ids = set()
 
+    # Lifecycle filter: exclude snoozed always; exclude archived unless requested
+    _lc = " AND (lifecycle_state IS NULL OR lifecycle_state = 'active' OR lifecycle_state = 'pinned'"
+    if include_archived:
+        _lc += " OR lifecycle_state = 'archived'"
+    _lc += ")"
+
     # Search STM
     if stores in ("both", "stm"):
-        where = "WHERE promoted_to_ltm = 0"
+        where = "WHERE promoted_to_ltm = 0" + _lc
+        params = []
         if source_type_filter:
-            where += f" AND source_type = ?"
-            rows = db.execute(f"SELECT * FROM stm_memories {where}", (source_type_filter,)).fetchall()
-        else:
-            rows = db.execute(f"SELECT * FROM stm_memories {where}").fetchall()
+            where += " AND source_type = ?"
+            params.append(source_type_filter)
+        rows = db.execute(f"SELECT * FROM stm_memories {where}", params).fetchall()
 
         for row in rows:
             vec = _blob_to_array(row["embedding"])
             score = cosine_similarity(query_vec, vec)
+            lifecycle = row["lifecycle_state"] or "active"
+            if lifecycle == "pinned":
+                score = min(1.0, score + 0.2)
             if score >= min_score:
                 results.append({
                     "store": "stm",
@@ -244,20 +364,24 @@ def search(
                     "strength": row["strength"],
                     "access_count": row["access_count"],
                     "score": score,
+                    "lifecycle_state": lifecycle,
                 })
 
     # Search LTM (active)
     if stores in ("both", "ltm"):
-        where = "WHERE is_dormant = 0"
+        where = "WHERE is_dormant = 0" + _lc
+        params = []
         if source_type_filter:
             where += " AND source_type = ?"
-            rows = db.execute(f"SELECT * FROM ltm_memories {where}", (source_type_filter,)).fetchall()
-        else:
-            rows = db.execute(f"SELECT * FROM ltm_memories {where}").fetchall()
+            params.append(source_type_filter)
+        rows = db.execute(f"SELECT * FROM ltm_memories {where}", params).fetchall()
 
         for row in rows:
             vec = _blob_to_array(row["embedding"])
             score = cosine_similarity(query_vec, vec)
+            lifecycle = row["lifecycle_state"] or "active"
+            if lifecycle == "pinned":
+                score = min(1.0, score + 0.2)
             if score >= min_score:
                 results.append({
                     "store": "ltm",
@@ -272,6 +396,7 @@ def search(
                     "access_count": row["access_count"],
                     "score": score,
                     "tags": row["tags"],
+                    "lifecycle_state": lifecycle,
                 })
 
     # Check dormant LTM for reactivation
@@ -309,6 +434,26 @@ def search(
     results.sort(key=lambda x: x["score"], reverse=True)
     results = results[:top_k]
 
+    # Add rank explanations
+    for rank, r in enumerate(results, 1):
+        score = r["score"]
+        store = r["store"].upper()
+        strength = r.get("strength", 0.0)
+        access_count = r.get("access_count", 0)
+        created = r.get("created_at", "")
+        tags = r.get("tags", "")
+        reactivated = r.get("reactivated", False)
+
+        parts = [f"Ranked #{rank}: semantic_similarity={score:.3f} (100% of ranking)"]
+        parts.append(f"store={store}, strength={strength:.2f}, accesses={access_count}")
+        if created:
+            parts.append(f"created={created[:10]}")
+        if tags:
+            parts.append(f"tags={tags}")
+        if reactivated:
+            parts.append("REACTIVATED (was dormant, score>0.8 triggered revival)")
+        r["explanation"] = " | ".join(parts)
+
     # Rehearsal: update strength and access_count for returned results
     if rehearse and results:
         now = datetime.utcnow().isoformat()
@@ -338,19 +483,79 @@ def ingest(
     source_type: str,
     source_id: str = "",
     source_title: str = "",
-    domain: str = ""
+    domain: str = "",
+    source: str = "inferred",
+    skip_quarantine: bool = False,
+    bypass_gate: bool = False
 ) -> int:
-    """Embed and store content in STM. Returns row ID."""
+    """Embed and store content. Routes through quarantine unless skip_quarantine=True or source='user_direct'.
+
+    Prediction Error Gate runs BEFORE storage unless bypass_gate=True.
+    If gate rejects (content too similar to existing memory), returns 0.
+    If gate says 'refinement', merges into existing memory and returns its ID.
+
+    Args:
+        content: Text content to store
+        source_type: Type of source (e.g. 'learning', 'change', 'diary')
+        source_id: Optional source identifier
+        source_title: Optional title
+        domain: Optional domain tag
+        source: Origin — 'user_direct', 'inferred', or 'agent_observation'
+        skip_quarantine: If True, bypass quarantine and store directly in STM (backward compat)
+        bypass_gate: If True, skip prediction error gate and store regardless
+
+    Returns:
+        Row ID (negative if quarantined, 0 if gate-rejected, positive if stored/refined)
+    """
+    # Run prediction error gate unless bypassed
+    if not bypass_gate:
+        should_store, novelty, reason, match = prediction_error_gate(content)
+        if not should_store:
+            return 0  # Gate rejected — content is redundant
+        if reason == "refinement" and match:
+            return _refine_memory(match, content)
+
     db = _get_db()
-    vec = embed(content)
+    clean_content = redact_secrets(content)
+    was_redacted = 1 if clean_content != content else 0
+    vec = embed(clean_content)
     blob = _array_to_blob(vec)
+
+    # user_direct = fast-track: quarantine then immediate promote
+    if source == "user_direct" and not skip_quarantine:
+        cur = db.execute(
+            """INSERT INTO quarantine (content, embedding, source, source_type, source_id, source_title, domain, confidence, status, promoted_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, 1.0, 'promoted', datetime('now'))""",
+            (clean_content, blob, source, source_type, source_id, source_title, domain)
+        )
+        db.commit()
+        # Now actually store in STM
+        cur2 = db.execute(
+            """INSERT INTO stm_memories (content, embedding, source_type, source_id, source_title, domain, redaction_applied)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (clean_content, blob, source_type, source_id, source_title, domain, was_redacted)
+        )
+        db.commit()
+        return cur2.lastrowid
+
+    # skip_quarantine = direct STM (backward compatibility)
+    if skip_quarantine:
+        cur = db.execute(
+            """INSERT INTO stm_memories (content, embedding, source_type, source_id, source_title, domain, redaction_applied)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (clean_content, blob, source_type, source_id, source_title, domain, was_redacted)
+        )
+        db.commit()
+        return cur.lastrowid
+
+    # Route to quarantine
     cur = db.execute(
-        """INSERT INTO stm_memories (content, embedding, source_type, source_id, source_title, domain)
-           VALUES (?, ?, ?, ?, ?, ?)""",
-        (content, blob, source_type, source_id, source_title, domain)
+        """INSERT INTO quarantine (content, embedding, source, source_type, source_id, source_title, domain)
+           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        (clean_content, blob, source, source_type, source_id, source_title, domain)
     )
     db.commit()
-    return cur.lastrowid
+    return -cur.lastrowid  # Negative = quarantined
 
 
 def ingest_to_ltm(
@@ -359,16 +564,31 @@ def ingest_to_ltm(
     source_id: str = "",
     source_title: str = "",
     domain: str = "",
-    tags: str = ""
+    tags: str = "",
+    bypass_gate: bool = False
 ) -> int:
-    """Embed and store content directly in LTM. Returns row ID."""
+    """Embed and store content directly in LTM. Returns row ID.
+
+    Prediction Error Gate runs BEFORE storage unless bypass_gate=True.
+    If gate rejects, returns 0. If refinement, merges and returns existing ID.
+    """
+    # Run prediction error gate unless bypassed
+    if not bypass_gate:
+        should_store, novelty, reason, match = prediction_error_gate(content)
+        if not should_store:
+            return 0  # Gate rejected
+        if reason == "refinement" and match:
+            return _refine_memory(match, content)
+
     db = _get_db()
-    vec = embed(content)
+    clean_content = redact_secrets(content)
+    was_redacted = 1 if clean_content != content else 0
+    vec = embed(clean_content)
     blob = _array_to_blob(vec)
     cur = db.execute(
-        """INSERT INTO ltm_memories (content, embedding, source_type, source_id, source_title, domain, tags)
-           VALUES (?, ?, ?, ?, ?, ?, ?)""",
-        (content, blob, source_type, source_id, source_title, domain, tags)
+        """INSERT INTO ltm_memories (content, embedding, source_type, source_id, source_title, domain, tags, redaction_applied)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+        (clean_content, blob, source_type, source_id, source_title, domain, tags, was_redacted)
     )
     db.commit()
     return cur.lastrowid
@@ -379,16 +599,16 @@ def apply_decay():
     db = _get_db()
     now = datetime.utcnow()
 
-    # STM decay
-    rows = db.execute("SELECT id, last_accessed, strength FROM stm_memories WHERE promoted_to_ltm = 0").fetchall()
+    # STM decay (skip pinned)
+    rows = db.execute("SELECT id, last_accessed, strength FROM stm_memories WHERE promoted_to_ltm = 0 AND (lifecycle_state IS NULL OR lifecycle_state != 'pinned')").fetchall()
     for row in rows:
         last = datetime.fromisoformat(row["last_accessed"])
         hours = (now - last).total_seconds() / 3600.0
         new_strength = row["strength"] * math.exp(-LAMBDA_STM * hours)
         db.execute("UPDATE stm_memories SET strength = ? WHERE id = ?", (new_strength, row["id"]))
 
-    # LTM decay
-    rows = db.execute("SELECT id, last_accessed, strength FROM ltm_memories WHERE is_dormant = 0").fetchall()
+    # LTM decay (skip pinned)
+    rows = db.execute("SELECT id, last_accessed, strength FROM ltm_memories WHERE is_dormant = 0 AND (lifecycle_state IS NULL OR lifecycle_state != 'pinned')").fetchall()
     for row in rows:
         last = datetime.fromisoformat(row["last_accessed"])
         hours = (now - last).total_seconds() / 3600.0
@@ -410,11 +630,12 @@ def promote_stm_to_ltm():
 
     promoted = 0
     for row in rows:
+        redacted = row["redaction_applied"] if "redaction_applied" in row.keys() else 0
         db.execute(
-            """INSERT INTO ltm_memories (content, embedding, source_type, source_id, source_title, domain, original_stm_id)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            """INSERT INTO ltm_memories (content, embedding, source_type, source_id, source_title, domain, original_stm_id, redaction_applied)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
             (row["content"], row["embedding"], row["source_type"], row["source_id"],
-             row["source_title"], row["domain"], row["id"])
+             row["source_title"], row["domain"], row["id"], redacted)
         )
         db.execute("UPDATE stm_memories SET promoted_to_ltm = 1 WHERE id = ?", (row["id"],))
         promoted += 1
@@ -452,16 +673,173 @@ def ingest_sensory(
 ) -> int:
     """Embed and store a sensory register event in STM with source_type='sensory'."""
     db = _get_db()
-    vec = embed(content)
+    clean_content = redact_secrets(content)
+    was_redacted = 1 if clean_content != content else 0
+    vec = embed(clean_content)
     blob = _array_to_blob(vec)
     ts = created_at or datetime.utcnow().isoformat()
     cur = db.execute(
-        """INSERT INTO stm_memories (content, embedding, source_type, source_id, domain, created_at)
-           VALUES (?, ?, 'sensory', ?, ?, ?)""",
-        (content, blob, source_id, domain, ts)
+        """INSERT INTO stm_memories (content, embedding, source_type, source_id, domain, created_at, redaction_applied)
+           VALUES (?, ?, 'sensory', ?, ?, ?, ?)""",
+        (clean_content, blob, source_id, domain, ts, was_redacted)
     )
     db.commit()
     return cur.lastrowid
+
+
+# ---------------------------------------------------------------------------
+# Prediction Error Gate — hippocampal novelty filter
+# ---------------------------------------------------------------------------
+
+def prediction_error_gate(
+    content: str,
+    threshold: float = PE_GATE_REJECT,
+    refine_threshold: float = PE_GATE_REFINE,
+) -> tuple[bool, float, str, Optional[dict]]:
+    """Prediction Error Gate — hippocampal novelty filter for memory ingestion.
+
+    Compares incoming content against ALL existing memories (STM + LTM).
+    Decides whether the content is novel enough to store, a refinement of
+    something existing, or redundant.
+
+    Based on the neuroscience principle that prediction errors (mismatches
+    between expected and actual input) gate what gets encoded into memory.
+    High prediction error = novel = store. Low prediction error = redundant = reject.
+
+    Args:
+        content: The text content to evaluate
+        threshold: Similarity above this -> reject as redundant (default 0.85)
+        refine_threshold: Similarity between this and threshold -> refinement (default 0.70)
+
+    Returns:
+        Tuple of (should_store, novelty_score, reason, best_match_info)
+        - should_store: True if content should be stored
+        - novelty_score: 1.0 = completely novel, 0.0 = exact duplicate
+        - reason: 'novel', 'refinement', 'rejected', or 'novel_sibling'
+        - best_match_info: dict with best matching memory details, or None
+    """
+    global _gate_stats
+
+    if not content or not content.strip():
+        return (False, 0.0, "rejected", None)
+
+    content_vec = embed(content[:500])
+    if np.linalg.norm(content_vec) == 0:
+        return (False, 0.0, "rejected", None)
+
+    db = _get_db()
+    best_score = 0.0
+    best_match = None
+
+    # Scan both STM and LTM for the closest match
+    for table, store_name in [("stm_memories", "stm"), ("ltm_memories", "ltm")]:
+        extra_where = ""
+        if table == "stm_memories":
+            extra_where = " AND promoted_to_ltm = 0"
+        elif table == "ltm_memories":
+            extra_where = " AND is_dormant = 0"
+
+        rows = db.execute(
+            f"SELECT id, content, embedding, source_type, domain FROM {table} WHERE 1=1{extra_where}"
+        ).fetchall()
+
+        for row in rows:
+            vec = _blob_to_array(row["embedding"])
+            score = cosine_similarity(content_vec, vec)
+            if score > best_score:
+                best_score = score
+                best_match = {
+                    "store": store_name,
+                    "id": row["id"],
+                    "content": row["content"],
+                    "source_type": row["source_type"],
+                    "domain": row["domain"],
+                    "similarity": round(score, 4),
+                }
+
+    novelty_score = round(1.0 - best_score, 4)
+
+    if best_score > threshold:
+        # Check for siblings before rejecting -- if discriminating entities differ,
+        # this is NOT a duplicate, it's a sibling (same fix for different platforms)
+        if best_match:
+            is_sibling, discriminators = _memories_are_siblings(content, best_match["content"])
+            if is_sibling:
+                _gate_stats["accepted_novel"] += 1
+                best_match["discriminators"] = discriminators
+                return (True, novelty_score, "novel_sibling", best_match)
+
+        _gate_stats["rejected"] += 1
+        return (False, novelty_score, "rejected", best_match)
+
+    elif best_score >= refine_threshold:
+        # Refinement zone -- similar but has enough new info to warrant update
+        _gate_stats["accepted_refinement"] += 1
+        return (True, novelty_score, "refinement", best_match)
+
+    else:
+        # Novel content -- no close match found
+        _gate_stats["accepted_novel"] += 1
+        return (True, novelty_score, "novel", best_match)
+
+
+def _refine_memory(match_info: dict, new_content: str) -> int:
+    """Merge new content into an existing memory (refinement, not replacement).
+
+    Appends genuinely new information to the existing memory and re-embeds.
+
+    Args:
+        match_info: Dict from prediction_error_gate with store, id, content
+        new_content: The new content that refines the existing memory
+
+    Returns:
+        The ID of the updated memory
+    """
+    db = _get_db()
+    table = "stm_memories" if match_info["store"] == "stm" else "ltm_memories"
+    memory_id = match_info["id"]
+
+    # Check word-level diff to avoid appending near-identical text
+    existing_words = set(match_info["content"].lower().split())
+    new_words = set(new_content.lower().split())
+    unique_new = new_words - existing_words
+
+    if len(unique_new) < 3:
+        # Almost no new words -- just strengthen the existing memory
+        now = datetime.utcnow().isoformat()
+        db.execute(
+            f"UPDATE {table} SET strength = MIN(1.0, strength + 0.1), "
+            f"access_count = access_count + 1, last_accessed = ? WHERE id = ?",
+            (now, memory_id)
+        )
+        db.commit()
+        return memory_id
+
+    # Append new content as refinement
+    merged_content = match_info["content"] + "\n\n[REFINED]: " + new_content
+    new_vec = embed(merged_content)
+    new_blob = _array_to_blob(new_vec)
+    now = datetime.utcnow().isoformat()
+
+    db.execute(
+        f"UPDATE {table} SET content = ?, embedding = ?, strength = MIN(1.0, strength + 0.15), "
+        f"access_count = access_count + 1, last_accessed = ? WHERE id = ?",
+        (merged_content, new_blob, now, memory_id)
+    )
+    db.commit()
+    return memory_id
+
+
+def get_gate_stats() -> dict:
+    """Return prediction error gate statistics for the current session."""
+    total = sum(_gate_stats.values())
+    return {
+        "accepted_novel": _gate_stats["accepted_novel"],
+        "accepted_refinement": _gate_stats["accepted_refinement"],
+        "rejected": _gate_stats["rejected"],
+        "total_evaluated": total,
+        "rejection_rate_pct": round(_gate_stats["rejected"] / total * 100, 1) if total > 0 else 0.0,
+    }
 
 
 def detect_patterns(content_vec: np.ndarray, threshold: float = 0.65) -> list[dict]:
@@ -508,6 +886,234 @@ def gc_ltm_dormant(min_age_days: int = 30) -> int:
     return cur.rowcount or 0
 
 
+def _check_quarantine_contradiction(content_vec: np.ndarray) -> list[dict]:
+    """Check if a quarantined memory contradicts existing LTM (cosine > 0.8 with opposite sentiment)."""
+    db = _get_db()
+    rows = db.execute(
+        "SELECT id, content, embedding, strength FROM ltm_memories WHERE is_dormant = 0 AND strength > 0.5"
+    ).fetchall()
+
+    contradictions = []
+    for row in rows:
+        vec = _blob_to_array(row["embedding"])
+        score = cosine_similarity(content_vec, vec)
+        if score >= 0.8:
+            contradictions.append({
+                "ltm_id": row["id"],
+                "content": row["content"][:200],
+                "similarity": round(score, 3),
+                "strength": row["strength"],
+            })
+    return contradictions
+
+
+def _check_quarantine_second_occurrence(content_vec: np.ndarray, exclude_id: int) -> bool:
+    """Check if a similar memory already exists in quarantine (promoted or pending) — confirms the pattern."""
+    db = _get_db()
+    rows = db.execute(
+        "SELECT id, embedding FROM quarantine WHERE id != ? AND status IN ('pending', 'promoted')",
+        (exclude_id,)
+    ).fetchall()
+    for row in rows:
+        vec = _blob_to_array(row["embedding"])
+        score = cosine_similarity(content_vec, vec)
+        if score >= 0.75:
+            return True
+
+    # Also check STM for existing similar memories
+    stm_rows = db.execute(
+        "SELECT embedding FROM stm_memories WHERE promoted_to_ltm = 0"
+    ).fetchall()
+    for row in stm_rows:
+        vec = _blob_to_array(row["embedding"])
+        score = cosine_similarity(content_vec, vec)
+        if score >= 0.75:
+            return True
+
+    return False
+
+
+def process_quarantine() -> dict:
+    """Process the quarantine queue — promote, reject, or expire items based on policy.
+
+    Promotion policy:
+    - source='user_direct' → already promoted at ingest time
+    - source='inferred' + confirmed by second occurrence → promote
+    - source='agent_observation' + no LTM contradiction + >24h old → promote
+    - Contradicts existing LTM → status='rejected', flag for dissonance check
+    - >7 days without promotion → status='expired'
+
+    Returns:
+        Dict with counts: promoted, rejected, expired, still_pending
+    """
+    db = _get_db()
+    now = datetime.utcnow()
+    expire_cutoff = (now - timedelta(days=7)).isoformat()
+    age_24h = (now - timedelta(hours=24)).isoformat()
+
+    pending = db.execute(
+        "SELECT * FROM quarantine WHERE status = 'pending'"
+    ).fetchall()
+
+    promoted = 0
+    rejected = 0
+    expired = 0
+    still_pending = 0
+
+    for row in pending:
+        q_id = row["id"]
+        content = row["content"]
+        source = row["source"]
+        created_at = row["created_at"]
+        content_vec = _blob_to_array(row["embedding"])
+
+        # Check expiration first
+        if created_at < expire_cutoff:
+            db.execute("UPDATE quarantine SET status = 'expired' WHERE id = ?", (q_id,))
+            expired += 1
+            continue
+
+        # Check for contradiction with LTM
+        contradictions = _check_quarantine_contradiction(content_vec)
+        if contradictions:
+            db.execute("UPDATE quarantine SET status = 'rejected', promotion_checks = promotion_checks + 1 WHERE id = ?", (q_id,))
+            rejected += 1
+            continue
+
+        should_promote = False
+
+        if source == "inferred":
+            # Promote if confirmed by second occurrence
+            if _check_quarantine_second_occurrence(content_vec, q_id):
+                should_promote = True
+
+        elif source == "agent_observation":
+            # Promote after 24h if no contradiction (already checked above)
+            if created_at <= age_24h:
+                should_promote = True
+
+        if should_promote:
+            # Promote to STM
+            cur = db.execute(
+                """INSERT INTO stm_memories (content, embedding, source_type, source_id, source_title, domain, redaction_applied)
+                   VALUES (?, ?, ?, ?, ?, ?, 0)""",
+                (content, row["embedding"], row["source_type"], row["source_id"],
+                 row["source_title"], row["domain"])
+            )
+            db.execute(
+                "UPDATE quarantine SET status = 'promoted', promoted_at = datetime('now'), confidence = 1.0 WHERE id = ?",
+                (q_id,)
+            )
+            promoted += 1
+        else:
+            db.execute("UPDATE quarantine SET promotion_checks = promotion_checks + 1 WHERE id = ?", (q_id,))
+            still_pending += 1
+
+    db.commit()
+
+    return {
+        "promoted": promoted,
+        "rejected": rejected,
+        "expired": expired,
+        "still_pending": still_pending,
+        "total_processed": promoted + rejected + expired + still_pending,
+    }
+
+
+def quarantine_list(status: str = "pending", limit: int = 20) -> list[dict]:
+    """List quarantine items by status.
+
+    Args:
+        status: Filter by status — 'pending', 'promoted', 'rejected', 'expired', or 'all'
+        limit: Max results
+    """
+    db = _get_db()
+    if status == "all":
+        rows = db.execute(
+            "SELECT * FROM quarantine ORDER BY created_at DESC LIMIT ?", (limit,)
+        ).fetchall()
+    else:
+        rows = db.execute(
+            "SELECT * FROM quarantine WHERE status = ? ORDER BY created_at DESC LIMIT ?",
+            (status, limit)
+        ).fetchall()
+
+    results = []
+    for row in rows:
+        results.append({
+            "id": row["id"],
+            "content": row["content"][:200],
+            "source": row["source"],
+            "source_type": row["source_type"],
+            "domain": row["domain"],
+            "confidence": row["confidence"],
+            "promotion_checks": row["promotion_checks"],
+            "status": row["status"],
+            "created_at": row["created_at"],
+            "promoted_at": row["promoted_at"],
+        })
+    return results
+
+
+def quarantine_promote(quarantine_id: int) -> str:
+    """Manually promote a quarantine item to STM.
+
+    Args:
+        quarantine_id: ID of the quarantine entry to promote
+    """
+    db = _get_db()
+    row = db.execute("SELECT * FROM quarantine WHERE id = ?", (quarantine_id,)).fetchone()
+    if row is None:
+        return f"ERROR: Quarantine item #{quarantine_id} not found."
+    if row["status"] == "promoted":
+        return f"Quarantine item #{quarantine_id} is already promoted."
+
+    # Insert into STM
+    db.execute(
+        """INSERT INTO stm_memories (content, embedding, source_type, source_id, source_title, domain, redaction_applied)
+           VALUES (?, ?, ?, ?, ?, ?, 0)""",
+        (row["content"], row["embedding"], row["source_type"], row["source_id"],
+         row["source_title"], row["domain"])
+    )
+    db.execute(
+        "UPDATE quarantine SET status = 'promoted', promoted_at = datetime('now'), confidence = 1.0 WHERE id = ?",
+        (quarantine_id,)
+    )
+    db.commit()
+    return f"Quarantine item #{quarantine_id} promoted to STM."
+
+
+def quarantine_reject(quarantine_id: int, reason: str = "") -> str:
+    """Manually reject a quarantine item.
+
+    Args:
+        quarantine_id: ID of the quarantine entry to reject
+        reason: Optional rejection reason
+    """
+    db = _get_db()
+    row = db.execute("SELECT * FROM quarantine WHERE id = ?", (quarantine_id,)).fetchone()
+    if row is None:
+        return f"ERROR: Quarantine item #{quarantine_id} not found."
+    if row["status"] in ("promoted", "rejected"):
+        return f"Quarantine item #{quarantine_id} is already {row['status']}."
+
+    db.execute("UPDATE quarantine SET status = 'rejected' WHERE id = ?", (quarantine_id,))
+    db.commit()
+    return f"Quarantine item #{quarantine_id} rejected.{' Reason: ' + reason if reason else ''}"
+
+
+def quarantine_stats() -> dict:
+    """Return quarantine queue statistics."""
+    db = _get_db()
+    counts = {}
+    for status in ("pending", "promoted", "rejected", "expired"):
+        counts[status] = db.execute(
+            "SELECT COUNT(*) FROM quarantine WHERE status = ?", (status,)
+        ).fetchone()[0]
+    counts["total"] = sum(counts.values())
+    return counts
+
+
 def format_results(results: list[dict]) -> str:
     """Format search results with enriched context."""
     if not results:
@@ -537,7 +1143,9 @@ def format_results(results: list[dict]) -> str:
 
         store_tag = r["store"].upper()
         reactivated = " [REACTIVATED]" if r.get("reactivated") else ""
-        lines.append(f"{header} [{store_tag}]{reactivated}\n  {preview}")
+        explanation = r.get("explanation", "")
+        explain_line = f"\n  ⚙ {explanation}" if explanation else ""
+        lines.append(f"{header} [{store_tag}]{reactivated}\n  {preview}{explain_line}")
 
         # Sibling mention: if this LTM memory has siblings, note them
         if r["store"] == "ltm":
@@ -894,7 +1502,7 @@ def detect_dissonance(new_instruction: str, min_score: float = 0.65) -> list[dic
     rather than silently obeying or silently resisting.
 
     Args:
-        new_instruction: The new instruction or preference from user
+        new_instruction: The new instruction or preference from the user
         min_score: Minimum cosine similarity to consider as potential conflict
 
     Returns:
@@ -929,12 +1537,12 @@ def detect_dissonance(new_instruction: str, min_score: float = 0.65) -> list[dic
 
 
 def resolve_dissonance(memory_id: int, resolution: str, context: str = "") -> str:
-    """Resolve a cognitive dissonance by applying user's decision.
+    """Resolve a cognitive dissonance by applying the user's decision.
 
     Args:
         memory_id: The LTM memory that conflicts with the new instruction
         resolution: One of:
-            - 'paradigm_shift': User changed his mind permanently. Decay old memory,
+            - 'paradigm_shift': the user changed his mind permanently. Decay old memory,
               new instruction becomes the standard.
             - 'exception': This is a one-time override. Keep old memory as standard.
             - 'override': Old memory was wrong. Mark as corrupted and decay to dormant.
@@ -1033,7 +1641,7 @@ def check_correction_fatigue() -> list[dict]:
 
 
 def detect_sentiment(text: str) -> dict:
-    """Analyze user's text for sentiment signals.
+    """Analyze the user's text for sentiment signals.
 
     Returns detected sentiment, intensity, and action guidance for NEXO.
     Not a model — keyword + heuristic based. Fast and deterministic.
@@ -1097,7 +1705,7 @@ def detect_sentiment(text: str) -> dict:
 
 
 def log_sentiment(text: str) -> dict:
-    """Detect and log user's sentiment. Returns the detection result."""
+    """Detect and log the user's sentiment. Returns the detection result."""
     result = detect_sentiment(text)
     if result["sentiment"] != "neutral":
         db = _get_db()
@@ -1186,6 +1794,155 @@ def get_trust_history(days: int = 7) -> dict:
     }
 
 
+def dream_cycle(max_insights: int = 50) -> dict:
+    """Memory Dreaming — discover hidden connections between recent memories.
+
+    Retrieves memories accessed in the last 24h (STM + LTM), finds pairs with
+    moderate similarity (0.4-0.7 — related but not duplicates), and creates
+    'dream_insight' LTM memories linking them. Skips pairs already dreamed about.
+
+    Uses pure vector math — no LLM calls.
+
+    Returns:
+        Dict with 'insights_created' count and 'insights' list of details.
+    """
+    db = _get_db()
+    cutoff_24h = (datetime.utcnow() - timedelta(hours=24)).isoformat()
+
+    # 1. Gather all memories accessed in the last 24 hours
+    recent_memories = []
+
+    stm_rows = db.execute(
+        """SELECT id, content, embedding, source_type, source_title, domain, 'stm' as store
+           FROM stm_memories
+           WHERE last_accessed >= ? AND promoted_to_ltm = 0""",
+        (cutoff_24h,)
+    ).fetchall()
+
+    ltm_rows = db.execute(
+        """SELECT id, content, embedding, source_type, source_title, domain, 'ltm' as store
+           FROM ltm_memories
+           WHERE last_accessed >= ? AND is_dormant = 0""",
+        (cutoff_24h,)
+    ).fetchall()
+
+    for row in stm_rows + ltm_rows:
+        recent_memories.append({
+            "id": row["id"],
+            "content": row["content"],
+            "vec": _blob_to_array(row["embedding"]),
+            "source_type": row["source_type"],
+            "source_title": row["source_title"] or "",
+            "domain": row["domain"] or "",
+            "store": row["store"],
+        })
+
+    if len(recent_memories) < 2:
+        return {"insights_created": 0, "insights": [], "memories_scanned": len(recent_memories)}
+
+    # 2. Get already-dreamed pairs to skip
+    dreamed = set()
+    for row in db.execute("SELECT memory_a_id, memory_b_id FROM dreamed_pairs").fetchall():
+        dreamed.add((row["memory_a_id"], row["memory_b_id"]))
+        dreamed.add((row["memory_b_id"], row["memory_a_id"]))
+
+    # 3. Batch compute all pairwise cosine similarities
+    #    Build matrix for fast numpy dot product
+    n = len(recent_memories)
+    vecs = np.array([m["vec"] for m in recent_memories], dtype=np.float32)
+    norms = np.linalg.norm(vecs, axis=1, keepdims=True)
+    norms[norms == 0] = 1.0  # avoid division by zero
+    normalized = vecs / norms
+    sim_matrix = normalized @ normalized.T  # (n x n) cosine similarity matrix
+
+    # 4. Find pairs in the sweet spot (0.4-0.7) — related but not duplicates
+    candidate_pairs = []
+    for i in range(n):
+        for j in range(i + 1, n):
+            score = float(sim_matrix[i, j])
+            if 0.4 <= score <= 0.7:
+                # Use composite key for dreamed check (store:id to disambiguate stm vs ltm)
+                pair_key = (
+                    f"{recent_memories[i]['store']}:{recent_memories[i]['id']}",
+                    f"{recent_memories[j]['store']}:{recent_memories[j]['id']}",
+                )
+                # For DB tracking we use LTM IDs when both are LTM, else skip dreamed check
+                a_id, b_id = recent_memories[i]["id"], recent_memories[j]["id"]
+                if (a_id, b_id) in dreamed or (b_id, a_id) in dreamed:
+                    continue
+                candidate_pairs.append((i, j, score))
+
+    # Sort by similarity descending (strongest connections first)
+    candidate_pairs.sort(key=lambda x: x[2], reverse=True)
+
+    # 5. Generate insights (capped at max_insights)
+    insights = []
+    for i, j, score in candidate_pairs[:max_insights]:
+        mem_a = recent_memories[i]
+        mem_b = recent_memories[j]
+
+        # Build titles — use source_title if available, else first 60 chars of content
+        title_a = mem_a["source_title"] or mem_a["content"][:60].replace("\n", " ").strip()
+        title_b = mem_b["source_title"] or mem_b["content"][:60].replace("\n", " ").strip()
+
+        # Build domain context
+        domains = set(filter(None, [mem_a["domain"], mem_b["domain"]]))
+        domain_str = ", ".join(domains) if domains else "general"
+
+        # Create insight content
+        insight_content = (
+            f"[Dream Insight] Connection found between:\n"
+            f"  A: {title_a}\n"
+            f"  B: {title_b}\n"
+            f"Similarity: {score:.3f} | Domains: {domain_str}\n"
+            f"These memories appeared together in the same 24h window and share moderate semantic overlap, "
+            f"suggesting a potential relationship worth investigating."
+        )
+
+        # Create embedding as average of the two source vectors (midpoint in vector space)
+        insight_vec = (mem_a["vec"] + mem_b["vec"]) / 2.0
+        insight_vec = insight_vec / (np.linalg.norm(insight_vec) or 1.0)  # re-normalize
+        blob = _array_to_blob(insight_vec)
+
+        # Store as LTM with dream_insight tag
+        cur = db.execute(
+            """INSERT INTO ltm_memories (content, embedding, source_type, source_id, source_title, domain, tags, strength)
+               VALUES (?, ?, 'dream_insight', ?, ?, ?, 'dream_insight', 0.5)""",
+            (insight_content, blob,
+             f"{mem_a['store']}:{mem_a['id']},{mem_b['store']}:{mem_b['id']}",
+             f"Dream: {title_a[:30]} <-> {title_b[:30]}",
+             domain_str)
+        )
+        insight_id = cur.lastrowid
+
+        # Track the dreamed pair
+        a_id, b_id = mem_a["id"], mem_b["id"]
+        try:
+            db.execute(
+                "INSERT OR IGNORE INTO dreamed_pairs (memory_a_id, memory_b_id, insight_id) VALUES (?, ?, ?)",
+                (min(a_id, b_id), max(a_id, b_id), insight_id)
+            )
+        except Exception:
+            pass
+
+        insights.append({
+            "insight_id": insight_id,
+            "title_a": title_a[:80],
+            "title_b": title_b[:80],
+            "similarity": round(score, 4),
+            "domain": domain_str,
+        })
+
+    db.commit()
+
+    return {
+        "insights_created": len(insights),
+        "insights": insights,
+        "memories_scanned": len(recent_memories),
+        "candidates_found": len(candidate_pairs),
+    }
+
+
 def get_stats() -> dict:
     """Return statistics about the cognitive memory system."""
     db = _get_db()
@@ -1207,6 +1964,9 @@ def get_stats() -> dict:
         "SELECT domain, COUNT(*) as cnt FROM ltm_memories WHERE is_dormant = 0 AND domain != '' GROUP BY domain ORDER BY cnt DESC LIMIT 5"
     ).fetchall()
 
+    # Quarantine stats
+    q_stats = quarantine_stats()
+
     return {
         "stm_active": stm_active,
         "ltm_active": ltm_active,
@@ -1217,4 +1977,57 @@ def get_stats() -> dict:
         "avg_retrieval_score": round(avg_retrieval_score, 3),
         "top_domains_stm": [(r["domain"], r["cnt"]) for r in top_domains_stm],
         "top_domains_ltm": [(r["domain"], r["cnt"]) for r in top_domains_ltm],
+        "quarantine": q_stats,
+        "prediction_error_gate": get_gate_stats(),
     }
+
+def set_lifecycle(memory_id: int, state: str, store: str = "auto", snooze_until: str = "") -> str:
+    """Set the lifecycle state of a memory.
+
+    Args:
+        memory_id: Memory ID
+        state: 'active', 'pinned', 'snoozed', 'archived'
+        store: 'stm', 'ltm', or 'auto' (tries both)
+        snooze_until: Required for 'snoozed' state — ISO date string (YYYY-MM-DD or full datetime)
+    """
+    if state not in ("active", "pinned", "snoozed", "archived"):
+        return f"Invalid state: {state}. Must be active, pinned, snoozed, or archived."
+
+    if state == "snoozed" and not snooze_until:
+        return "snooze_until is required when setting state to 'snoozed'."
+
+    db = _get_db()
+
+    tables = []
+    if store == "auto":
+        tables = ["stm_memories", "ltm_memories"]
+    elif store == "stm":
+        tables = ["stm_memories"]
+    elif store == "ltm":
+        tables = ["ltm_memories"]
+    else:
+        return f"Invalid store: {store}. Must be stm, ltm, or auto."
+
+    found = False
+    found_table = None
+    for table in tables:
+        row = db.execute(f"SELECT id FROM {table} WHERE id = ?", (memory_id,)).fetchone()
+        if row:
+            found = True
+            found_table = table
+            break
+
+    if not found:
+        return f"Memory #{memory_id} not found in {store}."
+
+    snooze_val = snooze_until if state == "snoozed" else None
+    db.execute(
+        f"UPDATE {found_table} SET lifecycle_state = ?, snooze_until = ? WHERE id = ?",
+        (state, snooze_val, memory_id)
+    )
+    db.commit()
+
+    store_name = "STM" if found_table == "stm_memories" else "LTM"
+    extra = f" until {snooze_until}" if state == "snoozed" else ""
+    return f"Memory #{memory_id} ({store_name}) → {state}{extra}"
+

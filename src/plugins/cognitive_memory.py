@@ -1,5 +1,13 @@
 """Cognitive Memory plugin — RAG retrieval over NEXO's Atkinson-Shiffrin memory stores."""
 
+import sys
+import os
+
+# Ensure site-packages is in path for numpy/fastembed
+_site = "/opt/homebrew/lib/python{}.{}/site-packages".format(sys.version_info.major, sys.version_info.minor)
+if os.path.isdir(_site) and _site not in sys.path:
+    sys.path.insert(0, _site)
+
 import cognitive
 
 
@@ -10,6 +18,7 @@ def handle_cognitive_retrieve(
     stores: str = "both",
     source_type: str = "",
     domain: str = "",
+    include_archived: bool = False,
 ) -> str:
     """RAG query over cognitive memory (STM + LTM). Triggers rehearsal on retrieved memories.
 
@@ -19,7 +28,8 @@ def handle_cognitive_retrieve(
         min_score: Minimum cosine similarity score (default 0.5)
         stores: Which store to search — "both", "stm", or "ltm" (default "both")
         source_type: Filter by source type e.g. "change", "learning", "diary" (default: all)
-        domain: Filter by domain e.g. "infrastructure", "general" (default: all)
+        domain: Filter by domain e.g. "wazion", "shopify" (default: all)
+        include_archived: If True, also search archived memories (default False)
     """
     if not query or not query.strip():
         return "ERROR: query is required."
@@ -32,6 +42,7 @@ def handle_cognitive_retrieve(
         exclude_dormant=True,
         rehearse=True,
         source_type_filter=source_type,
+        include_archived=include_archived,
     )
 
     # Apply domain filter post-search (cognitive.search doesn't filter by domain natively)
@@ -67,6 +78,21 @@ def handle_cognitive_stats() -> str:
         lines.append("  Top LTM domains:")
         for domain, cnt in stats["top_domains_ltm"]:
             lines.append(f"    {domain}: {cnt}")
+
+    if "quarantine" in stats:
+        q = stats["quarantine"]
+        lines.append(f"  Quarantine pending:  {q.get('pending', 0)}")
+        lines.append(f"  Quarantine promoted: {q.get('promoted', 0)}")
+        lines.append(f"  Quarantine rejected: {q.get('rejected', 0)}")
+        lines.append(f"  Quarantine expired:  {q.get('expired', 0)}")
+
+    if "prediction_error_gate" in stats:
+        g = stats["prediction_error_gate"]
+        lines.append("  PE Gate (session):")
+        lines.append(f"    Accepted (novel):     {g['accepted_novel']}")
+        lines.append(f"    Accepted (refine):    {g['accepted_refinement']}")
+        lines.append(f"    Rejected (redundant): {g['rejected']}")
+        lines.append(f"    Rejection rate:       {g['rejection_rate_pct']}%")
 
     return "\n".join(lines)
 
@@ -104,6 +130,12 @@ def handle_cognitive_inspect(memory_id: int, store: str = "ltm") -> str:
         f"  last_accessed: {row['last_accessed']}",
     ]
 
+    # Lifecycle state
+    lifecycle = row["lifecycle_state"] or "active"
+    lines.append(f"  lifecycle:     {lifecycle}")
+    if row["snooze_until"]:
+        lines.append(f"  snooze_until:  {row['snooze_until']}")
+
     if store == "ltm":
         dormant_label = "YES" if row["is_dormant"] else "no"
         lines.append(f"  dormant:       {dormant_label}")
@@ -120,7 +152,7 @@ def handle_cognitive_inspect(memory_id: int, store: str = "ltm") -> str:
 
 
 def handle_cognitive_metrics(days: int = 7) -> str:
-    """Cognitive memory performance metrics.
+    """Cognitive memory performance metrics (spec section 9).
 
     Returns retrieval relevance %, repeat error rate, score distribution,
     and whether multilingual model switch is recommended.
@@ -155,7 +187,7 @@ def handle_cognitive_metrics(days: int = 7) -> str:
 
     if metrics["needs_multilingual"]:
         lines.append("")
-        lines.append("RECOMMENDATION: Switch to multilingual model (intfloat/multilingual-e5-small)")
+        lines.append("⚠ RECOMMENDATION: Switch to multilingual model (intfloat/multilingual-e5-small)")
         lines.append(f"  Reason: relevance {metrics['retrieval_relevance_pct']}% < 70% with {metrics['total_retrievals']}+ retrievals")
 
     if repeats["duplicates"]:
@@ -165,17 +197,27 @@ def handle_cognitive_metrics(days: int = 7) -> str:
             lines.append(f"  [{d['score']}] STM#{d['new_stm_id']}: {d['new_content'][:60]}...")
             lines.append(f"         ≈ LTM#{d['ltm_id']}: {d['ltm_content'][:60]}...")
 
+    # Prediction Error Gate stats
+    gate = cognitive.get_gate_stats()
+    if gate["total_evaluated"] > 0:
+        lines.append("")
+        lines.append("Prediction Error Gate (session):")
+        lines.append(f"  Novel accepted:      {gate['accepted_novel']}")
+        lines.append(f"  Refinements:         {gate['accepted_refinement']}")
+        lines.append(f"  Rejected redundant:  {gate['rejected']}")
+        lines.append(f"  Rejection rate:      {gate['rejection_rate_pct']}%")
+
     return "\n".join(lines)
 
 
 def handle_cognitive_sentiment(text: str) -> str:
-    """Detect user sentiment from their text. Returns mood, intensity, and guidance.
+    """Detect the user's sentiment from his text. Returns mood, intensity, and guidance.
 
     Call this with the user's recent message to adapt NEXO's tone and behavior.
     Also logs the sentiment for historical tracking.
 
     Args:
-        text: User's recent message or instruction
+        text: the user's recent message or instruction
     """
     result = cognitive.log_sentiment(text)
     trust = cognitive.get_trust_score()
@@ -241,27 +283,27 @@ def handle_cognitive_trust(event: str = '', context: str = '', delta: float = No
 def handle_cognitive_dissonance(instruction: str, force: bool = False) -> str:
     """Detect cognitive dissonance: find established memories that conflict with a new instruction.
 
-    Use BEFORE applying a new preference or rule that might contradict existing knowledge.
-    If conflicts found, verbalize them and ask to resolve.
+    Use BEFORE applying a new preference or rule from the user that might contradict
+    existing knowledge. If conflicts found, verbalize them and ask the user to resolve.
 
     Args:
         instruction: The new instruction or preference to check against LTM
         force: If True, skip discussion — execute instruction, auto-resolve all conflicts as
-               'exception', and flag for review.
+               'exception', and flag for review in the nocturnal process (23:30).
     """
     conflicts = cognitive.detect_dissonance(instruction)
     if not conflicts:
         return f"No dissonance detected. Instruction '{instruction[:80]}' is consistent with existing LTM."
 
     if force:
-        # Auto-resolve all as exceptions
+        # Auto-resolve all as exceptions, log for nocturnal review
         for c in conflicts:
             cognitive.resolve_dissonance(
                 c["memory_id"], "exception",
-                f"[FORCE] {instruction[:200]} — auto-exception, pending review"
+                f"[FORCE] {instruction[:200]} — auto-exception, pending nocturnal review"
             )
         return (f"FORCE: {len(conflicts)} conflicts auto-resolved as exceptions. "
-                f"Instruction executed. Flagged for review.")
+                f"Instruction executed. Flagged for review at 23:30.")
 
     lines = [
         f"COGNITIVE DISSONANCE DETECTED — {len(conflicts)} conflicting memories:",
@@ -275,7 +317,7 @@ def handle_cognitive_dissonance(instruction: str, force: bool = False) -> str:
         lines.append("")
 
     lines.append("RESOLVE with nexo_cognitive_resolve, or use force=True to skip:")
-    lines.append("  - 'paradigm_shift': Permanent preference change.")
+    lines.append("  - 'paradigm_shift': the user changed his mind permanently.")
     lines.append("  - 'exception': One-time override. Old memory stays.")
     lines.append("  - 'override': Old memory was wrong.")
 
@@ -283,7 +325,7 @@ def handle_cognitive_dissonance(instruction: str, force: bool = False) -> str:
 
 
 def handle_cognitive_resolve(memory_id: int, resolution: str, context: str = '') -> str:
-    """Resolve a cognitive dissonance.
+    """Resolve a cognitive dissonance by applying the user's decision.
 
     Args:
         memory_id: The LTM memory ID from the dissonance detection
@@ -293,13 +335,133 @@ def handle_cognitive_resolve(memory_id: int, resolution: str, context: str = '')
     return cognitive.resolve_dissonance(memory_id, resolution, context)
 
 
+def handle_cognitive_pin(memory_id: int, store: str = "auto") -> str:
+    """Pin a memory so it NEVER decays and gets boosted in search results (+0.2 similarity).
+
+    Args:
+        memory_id: Integer ID of the memory to pin
+        store: Which store — "stm", "ltm", or "auto" (tries both, default "auto")
+    """
+    return cognitive.set_lifecycle(memory_id, "pinned", store)
+
+
+def handle_cognitive_snooze(memory_id: int, until_date: str, store: str = "auto") -> str:
+    """Snooze a memory — hidden from searches until the given date, then auto-restores to active.
+
+    Args:
+        memory_id: Integer ID of the memory to snooze
+        until_date: Date to restore the memory (YYYY-MM-DD format)
+        store: Which store — "stm", "ltm", or "auto" (tries both, default "auto")
+    """
+    return cognitive.set_lifecycle(memory_id, "snoozed", store, snooze_until=until_date)
+
+
+def handle_cognitive_archive(memory_id: int, store: str = "auto") -> str:
+    """Archive a memory — stored but excluded from normal searches. Can be restored later.
+
+    Args:
+        memory_id: Integer ID of the memory to archive
+        store: Which store — "stm", "ltm", or "auto" (tries both, default "auto")
+    """
+    return cognitive.set_lifecycle(memory_id, "archived", store)
+
+
+def handle_cognitive_restore(memory_id: int, store: str = "auto") -> str:
+    """Restore a memory to active state (from pinned, snoozed, or archived).
+
+    Args:
+        memory_id: Integer ID of the memory to restore
+        store: Which store — "stm", "ltm", or "auto" (tries both, default "auto")
+    """
+    return cognitive.set_lifecycle(memory_id, "active", store)
+
+
+def handle_cognitive_quarantine_list(status: str = "pending", limit: int = 20) -> str:
+    """List quarantine queue items. Shows memories awaiting promotion to STM.
+
+    Args:
+        status: Filter — 'pending', 'promoted', 'rejected', 'expired', or 'all' (default 'pending')
+        limit: Max items to return (default 20)
+    """
+    items = cognitive.quarantine_list(status=status, limit=limit)
+    stats = cognitive.quarantine_stats()
+
+    lines = [
+        f"QUARANTINE QUEUE — {stats['pending']} pending | {stats['promoted']} promoted | {stats['rejected']} rejected | {stats['expired']} expired",
+        f"Showing: {status} (limit {limit})",
+        "",
+    ]
+
+    if not items:
+        lines.append("No items found.")
+    else:
+        for item in items:
+            lines.append(f"  #{item['id']} [{item['status']}] source={item['source']} type={item['source_type']} domain={item['domain'] or '-'}")
+            lines.append(f"    confidence={item['confidence']:.1f} checks={item['promotion_checks']} created={item['created_at'][:16]}")
+            if item['promoted_at']:
+                lines.append(f"    promoted_at={item['promoted_at'][:16]}")
+            lines.append(f"    {item['content']}")
+            lines.append("")
+
+    return "\n".join(lines)
+
+
+def handle_cognitive_quarantine_promote(quarantine_id: int) -> str:
+    """Manually promote a quarantine item to STM, bypassing the automatic promotion policy.
+
+    Args:
+        quarantine_id: ID of the quarantine entry to promote
+    """
+    return cognitive.quarantine_promote(quarantine_id)
+
+
+def handle_cognitive_quarantine_reject(quarantine_id: int, reason: str = "") -> str:
+    """Manually reject a quarantine item.
+
+    Args:
+        quarantine_id: ID of the quarantine entry to reject
+        reason: Optional reason for rejection
+    """
+    return cognitive.quarantine_reject(quarantine_id, reason)
+
+
+def handle_cognitive_quarantine_process() -> str:
+    """Run the quarantine promotion cycle. Evaluates all pending items against the promotion policy.
+
+    Promotion rules:
+    - source='user_direct' → already promoted at ingest
+    - source='inferred' + second occurrence found → promote
+    - source='agent_observation' + >24h old + no LTM contradiction → promote
+    - Contradicts LTM (cosine >0.8) → reject
+    - >7 days old → expire
+    """
+    result = cognitive.process_quarantine()
+    lines = [
+        "QUARANTINE PROCESSING COMPLETE",
+        f"  Promoted:      {result['promoted']}",
+        f"  Rejected:      {result['rejected']}",
+        f"  Expired:       {result['expired']}",
+        f"  Still pending: {result['still_pending']}",
+        f"  Total:         {result['total_processed']}",
+    ]
+    return "\n".join(lines)
+
+
 TOOLS = [
     (handle_cognitive_retrieve, "nexo_cognitive_retrieve", "RAG query over cognitive memory (STM+LTM). Triggers rehearsal on retrieved results."),
-    (handle_cognitive_stats, "nexo_cognitive_stats", "Cognitive memory system metrics: STM/LTM counts, strengths, retrieval stats"),
+    (handle_cognitive_stats, "nexo_cognitive_stats", "Cognitive memory system metrics: STM/LTM counts, strengths, retrieval stats, quarantine counts"),
     (handle_cognitive_inspect, "nexo_cognitive_inspect", "Inspect a specific memory by ID (debug). Does NOT trigger rehearsal."),
-    (handle_cognitive_metrics, "nexo_cognitive_metrics", "Performance metrics: retrieval relevance %, repeat error rate, multilingual recommendation"),
+    (handle_cognitive_metrics, "nexo_cognitive_metrics", "Performance metrics: retrieval relevance %, repeat error rate, multilingual recommendation (spec section 9)"),
     (handle_cognitive_dissonance, "nexo_cognitive_dissonance", "Detect conflicts between a new instruction and established LTM memories. force=True to skip discussion."),
     (handle_cognitive_resolve, "nexo_cognitive_resolve", "Resolve a cognitive dissonance: paradigm_shift, exception, or override."),
-    (handle_cognitive_sentiment, "nexo_cognitive_sentiment", "Detect user sentiment and get tone guidance. Also logs for tracking."),
+    (handle_cognitive_sentiment, "nexo_cognitive_sentiment", "Detect the user's sentiment and get tone guidance. Also logs for tracking."),
     (handle_cognitive_trust, "nexo_cognitive_trust", "View or adjust trust score (0-100). Without args: view. With event: adjust."),
+    (handle_cognitive_pin, "nexo_cognitive_pin", "Pin a memory — never decays, boosted +0.2 in search results."),
+    (handle_cognitive_snooze, "nexo_cognitive_snooze", "Snooze a memory — hidden from searches until a date, then auto-restores."),
+    (handle_cognitive_archive, "nexo_cognitive_archive", "Archive a memory — excluded from searches, can be restored."),
+    (handle_cognitive_restore, "nexo_cognitive_restore", "Restore a memory to active state (from pinned/snoozed/archived)."),
+    (handle_cognitive_quarantine_list, "nexo_cognitive_quarantine_list", "List quarantine queue items awaiting promotion to STM."),
+    (handle_cognitive_quarantine_promote, "nexo_cognitive_quarantine_promote", "Manually promote a quarantine item to STM."),
+    (handle_cognitive_quarantine_reject, "nexo_cognitive_quarantine_reject", "Manually reject a quarantine item."),
+    (handle_cognitive_quarantine_process, "nexo_cognitive_quarantine_process", "Run quarantine promotion cycle — evaluate pending items against policy."),
 ]
