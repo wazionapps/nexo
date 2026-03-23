@@ -1,13 +1,13 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.wazionapps/nexo",
-  "version": "0.2.1",
-  "description": "Cognitive memory for AI agents with Atkinson-Shiffrin model, semantic RAG, and trust scoring.",
+  "version": "0.3.2",
+  "description": "Cognitive memory for AI agents. Atkinson-Shiffrin model, Ebbinghaus decay, semantic RAG, prediction error gating, memory dreaming, quarantine queue, security pipeline, trust scoring. 97+ MCP tools, 100% local.",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "nexo-brain",
-      "version": "0.2.1",
+      "version": "0.3.2",
       "transport": {
         "type": "stdio"
       }
