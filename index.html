@@ -331,6 +331,22 @@
             background: var(--purple); flex-shrink: 0;
         }
 
+        /* ===== Architecture Infographic ===== */
+        .arch-infographic {
+            margin-top: 64px; text-align: center;
+        }
+
+        .arch-infographic img {
+            max-width: 100%;
+            border-radius: 16px;
+            border: 1px solid var(--dark-border);
+            box-shadow: var(--glow);
+        }
+
+        .arch-infographic p {
+            font-size: 14px; color: var(--text-muted); margin-top: 12px;
+        }
+
         /* ===== Tools Section ===== */
         .tools-grid {
             display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -443,6 +459,108 @@
 
         .hook-card p { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
 
+        /* ===== Cognitive Features (new in v0.3.1) ===== */
+        .cognitive-group { margin-bottom: 48px; }
+        .cognitive-group:last-child { margin-bottom: 0; }
+
+        .cognitive-group-label {
+            font-size: 14px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.08em; color: var(--pink); margin-bottom: 20px;
+            padding-bottom: 8px; border-bottom: 1px solid var(--dark-border);
+        }
+
+        .cognitive-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 16px;
+        }
+
+        .cognitive-card {
+            background: var(--dark-card);
+            border: 1px solid var(--dark-border);
+            border-radius: 12px;
+            padding: 24px;
+            transition: all 0.3s;
+        }
+
+        .cognitive-card:hover {
+            border-color: rgba(236, 72, 153, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .cognitive-card h4 {
+            font-size: 15px; font-weight: 700; margin-bottom: 6px;
+            color: var(--text);
+        }
+
+        .cognitive-card p { font-size: 13px; color: var(--text-muted); line-height: 1.6; }
+
+        /* ===== Psychology Table ===== */
+        .psychology-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 32px;
+        }
+
+        .psychology-table th,
+        .psychology-table td {
+            padding: 14px 16px;
+            text-align: left;
+            border-bottom: 1px solid var(--dark-border);
+            font-size: 14px;
+        }
+
+        .psychology-table th {
+            color: var(--purple-light);
+            font-weight: 700;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .psychology-table td:first-child {
+            font-weight: 600;
+            color: var(--text);
+            white-space: nowrap;
+        }
+
+        .psychology-table td:last-child {
+            color: var(--text-muted);
+        }
+
+        .psychology-table tr:hover {
+            background: rgba(124, 58, 237, 0.04);
+        }
+
+        /* ===== Inspired By ===== */
+        .inspired-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 16px;
+        }
+
+        .inspired-card {
+            background: var(--dark-card);
+            border: 1px solid var(--dark-border);
+            border-radius: 12px;
+            padding: 24px;
+            transition: all 0.3s;
+        }
+
+        .inspired-card:hover {
+            border-color: rgba(124, 58, 237, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .inspired-card h4 {
+            font-size: 16px; font-weight: 700; margin-bottom: 8px;
+        }
+
+        .inspired-card h4 a { color: var(--text); }
+        .inspired-card h4 a:hover { color: var(--purple-light); }
+
+        .inspired-card p { font-size: 13px; color: var(--text-muted); line-height: 1.6; }
+
         /* ===== Listed On ===== */
         .listed-grid {
             display: flex; flex-wrap: wrap; gap: 16px; justify-content: center;
@@ -539,11 +657,15 @@
             .integrations-grid { grid-template-columns: 1fr; }
             .processes-grid { grid-template-columns: repeat(2, 1fr); }
             .hooks-grid { grid-template-columns: repeat(2, 1fr); }
+            .cognitive-grid { grid-template-columns: 1fr; }
+            .inspired-grid { grid-template-columns: 1fr; }
             .architecture { flex-direction: column; }
             .hero { padding: 120px 0 60px; }
             .hero h1 { font-size: 2rem; }
             .install-block { font-size: 13px; }
             .code-body { font-size: 12px; }
+            .psychology-table { font-size: 13px; }
+            .psychology-table td:first-child { white-space: normal; }
         }
 
         /* ===== Animations ===== */
@@ -576,9 +698,10 @@
         </a>
         <div class="nav-links">
             <a href="#features">Features</a>
+            <a href="#cognitive">Cognitive v0.3.1</a>
             <a href="#architecture">Architecture</a>
             <a href="#tools">Tools</a>
-            <a href="#integrations">Integrations</a>
+            <a href="#psychology">Psychology</a>
             <a href="https://github.com/wazionapps/nexo/wiki">Docs</a>
             <a href="https://github.com/wazionapps/nexo" class="nav-cta">GitHub</a>
         </div>
@@ -590,7 +713,7 @@
     <div class="container">
         <div class="hero-badge fade-up">
             <span class="dot"></span>
-            <span id="version-badge">v0.2.1</span> &mdash; Now available on npm
+            <span id="version-badge">v0.3.1</span> &mdash; Now available on npm
         </div>
         <div class="fade-up" style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;">
             <img src="https://img.shields.io/npm/v/nexo-brain?color=7C3AED&label=npm" alt="npm version">
@@ -604,7 +727,7 @@
         </h1>
 
         <p class="hero-subtitle fade-up">
-            Give your AI agent a brain that remembers, learns, and protects itself from repeating mistakes. Built on the Atkinson-Shiffrin memory model.
+            Give your AI agent a brain that remembers, learns, and protects itself from repeating mistakes. Built on the Atkinson-Shiffrin memory model with 97+ MCP tools.
         </p>
 
         <div class="hero-actions fade-up">
@@ -630,11 +753,11 @@
 <div class="container">
     <div class="stats">
         <div class="stat">
-            <div class="stat-value">77+</div>
+            <div class="stat-value">97+</div>
             <div class="stat-label">MCP Tools</div>
         </div>
         <div class="stat">
-            <div class="stat-value">15</div>
+            <div class="stat-value">17</div>
             <div class="stat-label">Categories</div>
         </div>
         <div class="stat">
@@ -758,6 +881,89 @@
     </div>
 </section>
 
+<!-- Cognitive Features v0.3.1 -->
+<section id="cognitive">
+    <div class="container">
+        <div class="section-label">New in v0.3.1</div>
+        <h2 class="section-title">13 cognitive features, 4 pipelines</h2>
+        <p class="section-subtitle">
+            v0.3.1 adds 21 cognitive tools on top of 76 base tools, implementing cognitive science concepts that go beyond basic memory storage.
+        </p>
+
+        <div class="cognitive-group">
+            <div class="cognitive-group-label">Input Pipeline</div>
+            <div class="cognitive-grid">
+                <div class="cognitive-card">
+                    <h4>Prediction Error Gating</h4>
+                    <p>Only novel information is stored. Redundant content that matches existing memories is rejected at write time, keeping memory clean without manual curation.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h4>Security Pipeline</h4>
+                    <p>4-layer defense against memory poisoning: injection detection, encoding analysis, behavioral anomaly scoring, and credential scanning.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h4>Quarantine Queue</h4>
+                    <p>New facts enter quarantine status and must pass a promotion policy before becoming trusted knowledge. Prevents unverified information from influencing decisions.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h4>Secret Redaction</h4>
+                    <p>Auto-detects and redacts API keys, tokens, passwords, and other sensitive data before storage. Secrets never reach the vector database.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="cognitive-group">
+            <div class="cognitive-group-label">Memory Management</div>
+            <div class="cognitive-grid">
+                <div class="cognitive-card">
+                    <h4>Pin / Snooze / Archive</h4>
+                    <p>Granular lifecycle states. Pin = never decays (critical knowledge). Snooze = temporarily hidden. Archive = cold storage (searchable but inactive).</p>
+                </div>
+                <div class="cognitive-card">
+                    <h4>Auto-Merge Duplicates</h4>
+                    <p>Batch cosine deduplication during the 03:00 sleep cycle. Respects sibling discrimination &mdash; similar memories about different contexts are kept separate.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h4>Memory Dreaming</h4>
+                    <p>Discovers hidden connections between recent memories during sleep. Surfaces non-obvious patterns like "these three bugs all relate to the same root cause."</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="cognitive-group">
+            <div class="cognitive-group-label">Retrieval</div>
+            <div class="cognitive-grid">
+                <div class="cognitive-card">
+                    <h4>HyDE Query Expansion</h4>
+                    <p>Generates hypothetical answer embeddings for richer semantic search. Instead of searching for your query, it imagines what a helpful memory would look like, then searches for that.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h4>Spreading Activation</h4>
+                    <p>Graph-based co-activation network. Memories retrieved together reinforce each other's connections, building an associative web that improves over time.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h4>Recall Explanations</h4>
+                    <p>Transparent score breakdown for every retrieval result. Shows exactly why a memory was returned: semantic similarity, recency, access frequency, and co-activation bonuses.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="cognitive-group">
+            <div class="cognitive-group-label">Proactive</div>
+            <div class="cognitive-grid">
+                <div class="cognitive-card">
+                    <h4>Prospective Memory</h4>
+                    <p>Context-triggered reminders that fire when conversation topics match, not just by date. "Remind me about X when we discuss Y" works naturally.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h4>Hook Auto-capture</h4>
+                    <p>Extracts decisions, corrections, and factual statements from conversations automatically. You don't need to say "remember this" &mdash; the system detects what's worth storing.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
 <!-- Architecture -->
 <section id="architecture">
     <div class="container">
@@ -772,17 +978,17 @@
                 <div class="arch-flow">
                     <div class="arch-node arch-sensory">
                         Sensory Register
-                        <small>Raw input &bull; 30s TTL &bull; Attention filter</small>
+                        <small>Raw input &bull; 48h TTL &bull; Attention filter</small>
                     </div>
                     <div class="arch-arrow">&darr; rehearsal</div>
                     <div class="arch-node arch-stm">
                         Short-Term Memory
-                        <small>Working context &bull; Active rehearsal &bull; Decay curve</small>
+                        <small>Working context &bull; Active rehearsal &bull; 7-day half-life</small>
                     </div>
                     <div class="arch-arrow">&darr; consolidation</div>
                     <div class="arch-node arch-ltm">
                         Long-Term Memory
-                        <small>Semantic vectors &bull; Sister fusion &bull; Permanent</small>
+                        <small>Semantic vectors &bull; Sister fusion &bull; 60-day half-life</small>
                     </div>
                 </div>
             </div>
@@ -793,14 +999,20 @@
                     Every piece of information flows through three stores, each with its own retention rules and access patterns.
                 </p>
                 <ul class="arch-list">
-                    <li>Sensory Register captures everything, discards noise in 30 seconds</li>
+                    <li>Sensory Register captures everything, discards noise in 48 hours</li>
                     <li>STM holds 7&plusmn;2 active items with exponential decay</li>
                     <li>Rehearsal (retrieval, updates) resets decay timers</li>
                     <li>Consolidation promotes STM to LTM via semantic similarity</li>
                     <li>Sister memories fuse discriminatively: keep what differs, merge what overlaps</li>
                     <li>Ebbinghaus forgetting curve controls natural memory pruning</li>
+                    <li>Prediction error gating rejects redundant input at write time</li>
                 </ul>
             </div>
+        </div>
+
+        <div class="arch-infographic">
+            <img src="/assets/nexo-brain-architecture.png" alt="NEXO Brain Architecture Diagram — showing memory flow from sensory register through STM to LTM with cognitive pipelines" loading="lazy">
+            <p>Full architecture: sensory register, STM, LTM, input pipeline, retrieval, and proactive systems</p>
         </div>
     </div>
 </section>
@@ -809,7 +1021,7 @@
 <section id="tools">
     <div class="container">
         <div class="section-label">Tools</div>
-        <h2 class="section-title">77+ MCP tools, 15 categories</h2>
+        <h2 class="section-title">97+ MCP tools, 17 categories</h2>
         <p class="section-subtitle">
             Every aspect of cognitive operation exposed as MCP tools. Compatible with Claude Code and any MCP client.
         </p>
@@ -819,6 +1031,16 @@
                 <div class="tool-count">8</div>
                 <h4>Cognitive Memory</h4>
                 <p>RAG retrieve, trust, dissonance, sentiment, metrics</p>
+            </div>
+            <div class="tool-card">
+                <div class="tool-count">5</div>
+                <h4>Cognitive Input</h4>
+                <p>Prediction gate, security scan, quarantine, redact</p>
+            </div>
+            <div class="tool-card">
+                <div class="tool-count">8</div>
+                <h4>Cognitive Advanced</h4>
+                <p>HyDE, spreading activation, dreaming, prospective</p>
             </div>
             <div class="tool-card">
                 <div class="tool-count">10</div>
@@ -890,6 +1112,86 @@
                 <h4>Menu</h4>
                 <p>Operations center generator</p>
             </div>
+        </div>
+    </div>
+</section>
+
+<!-- Psychology -->
+<section id="psychology">
+    <div class="container">
+        <div class="section-label">Science</div>
+        <h2 class="section-title">The psychology behind NEXO Brain</h2>
+        <p class="section-subtitle">
+            Not just engineering &mdash; applied cognitive psychology. Every feature maps to a real research concept.
+        </p>
+
+        <div style="overflow-x:auto;">
+            <table class="psychology-table">
+                <thead>
+                    <tr>
+                        <th>Psychological Concept</th>
+                        <th>How NEXO Brain Implements It</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Atkinson-Shiffrin (1968)</td>
+                        <td>Three memory stores: sensory register, STM, and LTM with distinct retention rules</td>
+                    </tr>
+                    <tr>
+                        <td>Ebbinghaus Forgetting Curve (1885)</td>
+                        <td>Exponential decay: strength = strength * e^(-lambda * time)</td>
+                    </tr>
+                    <tr>
+                        <td>Rehearsal Effect</td>
+                        <td>Accessing a memory resets its strength to 1.0</td>
+                    </tr>
+                    <tr>
+                        <td>Memory Consolidation</td>
+                        <td>Nightly process promotes frequently-used STM to LTM</td>
+                    </tr>
+                    <tr>
+                        <td>Prediction Error</td>
+                        <td>Only surprising (novel) information gets stored &mdash; redundant input is gated</td>
+                    </tr>
+                    <tr>
+                        <td>Spreading Activation (Collins & Loftus, 1975)</td>
+                        <td>Retrieving a memory co-activates related memories through an associative graph</td>
+                    </tr>
+                    <tr>
+                        <td>HyDE (Gao et al., 2022)</td>
+                        <td>Hypothetical document embeddings improve semantic recall</td>
+                    </tr>
+                    <tr>
+                        <td>Prospective Memory (Einstein & McDaniel, 1990)</td>
+                        <td>Context-triggered intentions fire when cue conditions match</td>
+                    </tr>
+                    <tr>
+                        <td>Metacognition</td>
+                        <td>Guard system checks past errors before acting</td>
+                    </tr>
+                    <tr>
+                        <td>Cognitive Dissonance (Festinger, 1957)</td>
+                        <td>Detects and verbalizes conflicts between old and new knowledge</td>
+                    </tr>
+                    <tr>
+                        <td>Theory of Mind</td>
+                        <td>Models user behavior, preferences, and mood</td>
+                    </tr>
+                    <tr>
+                        <td>Synaptic Pruning</td>
+                        <td>Automated cleanup of weak, unused memories</td>
+                    </tr>
+                    <tr>
+                        <td>Associative Memory</td>
+                        <td>Semantic search finds related concepts, not just matching words</td>
+                    </tr>
+                    <tr>
+                        <td>Memory Reconsolidation</td>
+                        <td>Dreaming process discovers hidden connections during sleep</td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
     </div>
 </section>
@@ -1011,6 +1313,40 @@
     </div>
 </section>
 
+<!-- Inspired By -->
+<section id="inspired-by">
+    <div class="container">
+        <div class="section-label">Inspired By</div>
+        <h2 class="section-title">Standing on the shoulders of builders</h2>
+        <p class="section-subtitle">
+            NEXO Brain builds on ideas from several open-source projects. We're grateful for the research and implementations that inspired specific features.
+        </p>
+
+        <div class="inspired-grid">
+            <div class="inspired-card">
+                <h4><a href="https://github.com/pchaganti/gx-vestige">Vestige</a></h4>
+                <p>HyDE query expansion, spreading activation, prediction error gating, memory dreaming, prospective memory</p>
+            </div>
+            <div class="inspired-card">
+                <h4><a href="https://github.com/PShieldCortex/ShieldCortex">ShieldCortex</a></h4>
+                <p>Security pipeline (4-layer memory poisoning defense)</p>
+            </div>
+            <div class="inspired-card">
+                <h4><a href="https://github.com/nicobailey/Bicameral">Bicameral</a></h4>
+                <p>Quarantine queue (trust promotion policy for new facts)</p>
+            </div>
+            <div class="inspired-card">
+                <h4><a href="https://github.com/nicobailey/claude-mem">claude-mem</a></h4>
+                <p>Hook auto-capture (extracting decisions and facts from conversations)</p>
+            </div>
+            <div class="inspired-card">
+                <h4><a href="https://github.com/nicobailey/ClawMem">ClawMem</a></h4>
+                <p>Co-activation reinforcement (memories retrieved together strengthen connections)</p>
+            </div>
+        </div>
+    </div>
+</section>
+
 <!-- Listed On -->
 <section>
     <div class="container" style="text-align:center;">
@@ -1101,7 +1437,7 @@ const observer = new IntersectionObserver((entries) => {
     });
 }, { threshold: 0.1 });
 
-document.querySelectorAll('.feature-card, .tool-card, .integration-card, .process-card, .hook-card, .listed-badge').forEach(el => {
+document.querySelectorAll('.feature-card, .tool-card, .integration-card, .process-card, .hook-card, .listed-badge, .cognitive-card, .inspired-card').forEach(el => {
     el.style.opacity = '0';
     el.style.transform = 'translateY(20px)';
     el.style.transition = 'all 0.5s ease';
