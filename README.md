@@ -302,15 +302,15 @@ This replaces OpenClaw's default memory system with NEXO's full cognitive archit
 
 ## Listed On
 
-| Directory | Link |
-|-----------|------|
-| Glama | [glama.ai/mcp/servers/@wazionapps/nexo](https://glama.ai/mcp/servers/@wazionapps/nexo) |
-| MCP Registry | [Anthropic Official Registry](https://github.com/anthropics/mcp-registry) |
-| npm | [nexo-brain](https://www.npmjs.com/package/nexo-brain) |
-| mcpservers.org | [mcpservers.org](https://mcpservers.org) |
-| mcp.so | [mcp.so/server/nexo](https://mcp.so/server/nexo/wazionapps) |
-| dev.to | [Technical article](https://dev.to/wazion) |
-| nexo-brain.com | [Official website](https://nexo-brain.com) |
+| Directory | Type | Link |
+|-----------|------|------|
+| npm | Package | [nexo-brain](https://www.npmjs.com/package/nexo-brain) |
+| Glama | MCP Directory | [glama.ai](https://glama.ai/mcp/servers/@wazionapps/nexo) |
+| mcp.so | MCP Directory | [mcp.so](https://mcp.so/server/nexo/wazionapps) |
+| mcpservers.org | MCP Directory | [mcpservers.org](https://mcpservers.org) |
+| OpenClaw | Native Plugin | [openclaw.com](https://openclaw.com) |
+| dev.to | Technical Article | [How I Applied Cognitive Psychology to AI Agents](https://dev.to/wazionapps/how-i-applied-cognitive-psychology-to-give-ai-agents-real-memory-2oce) |
+| nexo-brain.com | Official Website | [nexo-brain.com](https://nexo-brain.com) |
 
 ## Contributing
 
