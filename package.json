@@ -1,9 +1,9 @@
 {
   "name": "nexo-brain",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "NEXO — Cognitive co-operator for Claude Code. Atkinson-Shiffrin memory, semantic RAG, trust scoring, and metacognitive error prevention.",
   "bin": {
-    "nexo-brain": "./bin/create-nexo.js"
+    "nexo-brain": "./bin/nexo-brain.js"
   },
   "keywords": [
     "claude-code",
