@@ -102,6 +102,19 @@ def handle_heartbeat(sid: str, task: str, context_hint: str = '') -> str:
         except Exception:
             pass
 
+    # Auto-detect trust events from context_hint
+    if context_hint and len(context_hint.strip()) >= 10:
+        try:
+            import cognitive
+            auto_events = cognitive.auto_detect_trust_events(context_hint)
+            for ae in auto_events:
+                result = cognitive.adjust_trust(ae["event"], ae["reason"], ae["delta"])
+                if result.get("delta", 0) != 0:
+                    parts.append("")
+                    parts.append(f"TRUST AUTO: {result['old_score']:.0f} → {result['new_score']:.0f} ({result['delta']:+.0f}) [{ae['event']}] {ae['reason']}")
+        except Exception:
+            pass  # Auto-trust is best-effort
+
     # Mid-session RAG: if context_hint provided, check for context shift
     if context_hint and len(context_hint.strip()) >= 15:
         try:

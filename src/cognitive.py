@@ -30,13 +30,13 @@ DISCRIMINATING_ENTITIES = {
     # OS / Environment
     "linux", "mac", "macos", "windows", "darwin", "ubuntu", "debian", "alpine",
     # Platforms
-    "shopify", "whatsapp", "chrome", "firefox",
+    "nexo", "other", "whatsapp", "chrome", "firefox",
     # Languages / Runtimes
     "python", "php", "javascript", "typescript", "node", "deno", "ruby",
     # Versions
     "v1", "v2", "v3", "v4", "v5", "5.6", "7.4", "8.0", "8.1", "8.2",
     # Infrastructure
-    "cloudrun", "gcloud", "vps", "local", "production", "staging",
+    "vps", "local", "production", "staging",
     # DB
     "mysql", "sqlite", "postgresql", "postgres", "redis",
 }
@@ -61,8 +61,8 @@ URGENCY_SIGNALS = {
     "rápido", "ya", "ahora", "urgente", "asap", "inmediatamente", "corre",
 }
 
-# Trust score events and their point values
-TRUST_EVENTS = {
+# Trust score events — default deltas (overridable via trust_event_config table)
+_DEFAULT_TRUST_EVENTS = {
     # Positive
     "explicit_thanks": +3,
     "delegation": +2,        # the user delegates new task without micromanaging
@@ -76,6 +76,113 @@ TRUST_EVENTS = {
     "correction_fatigue": -10, # Same memory corrected 3+ times
     "forgot_followup": -4,   # Forgot to mark followup or execute it
 }
+
+# Lazy-loaded from DB (trust_event_config table overrides defaults)
+_trust_events_cache = None
+_trust_events_cache_ts = 0
+
+
+def get_trust_events() -> dict:
+    """Get trust events with deltas. DB overrides take priority over defaults."""
+    global _trust_events_cache, _trust_events_cache_ts
+    import time
+    now = time.time()
+    # Cache for 60s to avoid constant DB reads
+    if _trust_events_cache is not None and (now - _trust_events_cache_ts) < 60:
+        return _trust_events_cache
+
+    events = dict(_DEFAULT_TRUST_EVENTS)
+    try:
+        db = _get_db()
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS trust_event_config (
+                event TEXT PRIMARY KEY,
+                delta REAL NOT NULL,
+                description TEXT DEFAULT '',
+                updated_at TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        rows = db.execute("SELECT event, delta FROM trust_event_config").fetchall()
+        for r in rows:
+            events[r[0]] = r[1]
+    except Exception:
+        pass
+    _trust_events_cache = events
+    _trust_events_cache_ts = now
+    return events
+
+# For backward compat — code that reads TRUST_EVENTS directly
+TRUST_EVENTS = _DEFAULT_TRUST_EVENTS
+
+# Auto-detection patterns for trust events from user text
+# Each pattern: (event_name, keywords/phrases that trigger it, min_matches)
+TRUST_AUTO_PATTERNS = {
+    "explicit_thanks": {
+        "patterns": [
+            "gracias", "buen trabajo", "bien hecho", "perfecto", "genial",
+            "excelente", "fenomenal", "great job", "nice work", "thank",
+            "thanks", "awesome", "amazing", "love it", "me encanta",
+        ],
+        "min_matches": 1,
+    },
+    "correction": {
+        "patterns": [
+            "ya te dije", "ya te lo dije", "otra vez", "te he dicho",
+            "no es así", "eso no", "mal", "incorrecto", "equivocado",
+            "no no no", "that's wrong", "te aviso", "te avisé",
+            "2ª vez", "segunda vez", "te lo repito",
+        ],
+        "min_matches": 1,
+    },
+    "repeated_error": {
+        "patterns": [
+            "otra vez lo mismo", "siempre igual", "ya te lo dije antes",
+            "cuántas veces", "no aprendes", "same mistake", "again the same",
+            "ya van", "es la 2", "es la 3", "ya te avisé",
+        ],
+        "min_matches": 1,
+    },
+    "delegation": {
+        "patterns": [
+            "encárgate", "hazlo tú", "dale tú", "te lo dejo",
+            "manéjalo", "resuélvelo", "handle it", "take care of",
+            "you decide", "tú decides", "lo que veas", "como veas",
+        ],
+        "min_matches": 1,
+    },
+}
+
+
+def auto_detect_trust_events(text: str) -> list[dict]:
+    """Detect trust events from user text. Returns list of {event, delta, reason}.
+
+    Called automatically by heartbeat. Only fires once per event per heartbeat
+    to avoid double-counting.
+    """
+    if not text or len(text.strip()) < 5:
+        return []
+
+    text_lower = text.lower()
+    events = get_trust_events()
+    detected = []
+
+    for event_name, config in TRUST_AUTO_PATTERNS.items():
+        matches = [p for p in config["patterns"] if p in text_lower]
+        if len(matches) >= config["min_matches"]:
+            delta = events.get(event_name, _DEFAULT_TRUST_EVENTS.get(event_name, 0))
+            detected.append({
+                "event": event_name,
+                "delta": delta,
+                "reason": f"auto-detected: {', '.join(matches[:3])}",
+            })
+
+    # Priority: if repeated_error detected, remove correction (it's a superset)
+    event_names = {d["event"] for d in detected}
+    if "repeated_error" in event_names and "correction" in event_names:
+        detected = [d for d in detected if d["event"] != "correction"]
+    # If explicit_thanks and delegation both detected, keep both (they're independent)
+
+    return detected
 
 _model = None
 _conn = None
@@ -1956,7 +2063,7 @@ def resolve_dissonance(memory_id: int, resolution: str, context: str = "") -> st
     Args:
         memory_id: The LTM memory that conflicts with the new instruction
         resolution: One of:
-            - 'paradigm_shift': the user changed his mind permanently. Decay old memory,
+            - 'paradigm_shift': the user changed their mind permanently. Decay old memory,
               new instruction becomes the standard.
             - 'exception': This is a one-time override. Keep old memory as standard.
             - 'override': Old memory was wrong. Mark as corrupted and decay to dormant.
@@ -2159,7 +2266,8 @@ def adjust_trust(event: str, context: str = "", custom_delta: float = None) -> d
     db = _get_db()
     old_score = get_trust_score()
 
-    delta = custom_delta if custom_delta is not None else TRUST_EVENTS.get(event, 0)
+    events = get_trust_events()
+    delta = custom_delta if custom_delta is not None else events.get(event, 0)
     if delta == 0 and custom_delta is None:
         return {"old_score": old_score, "delta": 0, "new_score": old_score, "event": event, "error": "unknown event"}
 

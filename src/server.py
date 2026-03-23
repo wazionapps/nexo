@@ -52,7 +52,7 @@ mcp = FastMCP(
     name="nexo",
     instructions=(
         "NEXO operational server. Provides session coordination, "
-        "reminders, followups, and menu for user operations.\n\n"
+        "reminders, followups, and menu for the user's operations.\n\n"
         "When working with tool results, write down any important information "
         "you might need later in your response, as the original tool result "
         "may be cleared later."
@@ -75,15 +75,16 @@ def nexo_startup(task: str = "Startup") -> str:
 
 
 @mcp.tool
-def nexo_heartbeat(sid: str, task: str) -> str:
-    """Update session task, check inbox and pending questions.
+def nexo_heartbeat(sid: str, task: str, context_hint: str = '') -> str:
+    """Update session task, check inbox and pending questions. Auto-detects trust events.
 
     Call this at the START of every user interaction (before doing work).
     Args:
         sid: Your session ID from nexo_startup.
         task: Brief description of current work (5-10 words).
+        context_hint: Last 2-3 sentences from the user or current topic. Used for sentiment detection, trust auto-scoring, and mid-session RAG. ALWAYS provide this for best results.
     """
-    return handle_heartbeat(sid, task)
+    return handle_heartbeat(sid, task, context_hint)
 
 
 @mcp.tool
@@ -312,7 +313,7 @@ def nexo_learning_add(category: str, title: str, content: str, reasoning: str = 
     """Add a new learning (resolved error, pattern, gotcha).
 
     Args:
-        category: One of: general, code, infrastructure, api, database, security, deployment, testing, performance, ux.
+        category: One of: nexo-ops, infrastructure, security, brain-engine, other.
         title: Short title for the learning.
         content: Full description with context and solution.
         reasoning: WHY this matters — what led to discovering this (optional).
