@@ -241,17 +241,6 @@ def init_db():
             user_signals TEXT,
             summary TEXT NOT NULL
         );
-        CREATE TABLE IF NOT EXISTS session_diary_draft (
-            sid TEXT PRIMARY KEY,
-            summary_draft TEXT DEFAULT '',
-            tasks_seen TEXT DEFAULT '[]',
-            change_ids TEXT DEFAULT '[]',
-            decision_ids TEXT DEFAULT '[]',
-            last_context_hint TEXT DEFAULT '',
-            heartbeat_count INTEGER DEFAULT 0,
-            created_at TEXT DEFAULT (datetime('now')),
-            updated_at TEXT DEFAULT (datetime('now'))
-        );
 
         CREATE TABLE IF NOT EXISTS evolution_metrics (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -279,55 +268,8 @@ def init_db():
     """)
     # foreign_keys=ON is set in get_db() per-connection
 
-    # ── Schema migrations (idempotent) ────────────────────────────
-    _migrate_add_column(conn, "learnings", "reasoning", "TEXT")
-    _migrate_add_column(conn, "learnings", "prevention", "TEXT DEFAULT ''")
-    _migrate_add_column(conn, "learnings", "applies_to", "TEXT DEFAULT ''")
-    _migrate_add_column(conn, "learnings", "status", "TEXT DEFAULT 'active'")
-    _migrate_add_column(conn, "learnings", "review_due_at", "REAL")
-    _migrate_add_column(conn, "learnings", "last_reviewed_at", "REAL")
-    _migrate_add_column(conn, "followups", "reasoning", "TEXT")
-    _migrate_add_column(conn, "task_history", "reasoning", "TEXT")
-    _migrate_add_column(conn, "decisions", "status", "TEXT DEFAULT 'pending_review'")
-    _migrate_add_column(conn, "decisions", "review_due_at", "TEXT")
-    _migrate_add_column(conn, "decisions", "last_reviewed_at", "TEXT")
-    _migrate_add_index(conn, "idx_decisions_domain", "decisions", "domain")
-    _migrate_add_index(conn, "idx_decisions_created", "decisions", "created_at")
-    _migrate_add_index(conn, "idx_decisions_review_due", "decisions", "review_due_at")
-    _migrate_add_index(conn, "idx_session_diary_sid", "session_diary", "session_id")
-    _migrate_add_column(conn, "session_diary", "mental_state", "TEXT")
-    _migrate_add_column(conn, "session_diary", "domain", "TEXT")
-    _migrate_add_column(conn, "session_diary", "user_signals", "TEXT")
-    _migrate_add_column(conn, "session_diary", "self_critique", "TEXT")
-    _migrate_add_column(conn, "session_diary", "source", "TEXT DEFAULT 'claude'")
-    _migrate_add_index(conn, "idx_change_log_created", "change_log", "created_at")
-    _migrate_add_index(conn, "idx_change_log_files", "change_log", "files")
-    _migrate_add_index(conn, "idx_learnings_status", "learnings", "status")
-    _migrate_add_index(conn, "idx_learnings_review_due", "learnings", "review_due_at")
-
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS error_repetitions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            new_learning_id INTEGER NOT NULL,
-            original_learning_id INTEGER NOT NULL,
-            similarity REAL NOT NULL,
-            area TEXT NOT NULL,
-            created_at TEXT DEFAULT (datetime('now'))
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS guard_checks (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            session_id TEXT,
-            files TEXT,
-            area TEXT,
-            learnings_returned INTEGER DEFAULT 0,
-            blocking_rules_returned INTEGER DEFAULT 0,
-            created_at TEXT DEFAULT (datetime('now'))
-        )
-    """)
-    _migrate_add_index(conn, "idx_error_repetitions_area", "error_repetitions", "area")
-    _migrate_add_index(conn, "idx_guard_checks_session", "guard_checks", "session_id")
+    # ── Run formal migrations ────────────────────────────────────
+    run_migrations(conn)
 
     # ── FTS5 unified search index ────────────────────────────────
     conn.execute("""
@@ -777,6 +719,149 @@ def _migrate_add_index(conn, index_name: str, table: str, column: str):
     """Create index if it doesn't exist (idempotent)."""
     conn.execute(f"CREATE INDEX IF NOT EXISTS {index_name} ON {table}({column})")
     conn.commit()
+
+
+# ── Formal Migration System ─────────────────────────────────────
+#
+# Each migration is (version, name, callable). Migrations run once
+# and are tracked in schema_migrations. The version number MUST be
+# strictly increasing. Add new migrations at the end of the list.
+#
+# For users upgrading via npm/git, init_db() calls run_migrations()
+# automatically — no manual steps needed.
+
+def _m1_learnings_columns(conn):
+    _migrate_add_column(conn, "learnings", "reasoning", "TEXT")
+    _migrate_add_column(conn, "learnings", "prevention", "TEXT DEFAULT ''")
+    _migrate_add_column(conn, "learnings", "applies_to", "TEXT DEFAULT ''")
+    _migrate_add_column(conn, "learnings", "status", "TEXT DEFAULT 'active'")
+    _migrate_add_column(conn, "learnings", "review_due_at", "REAL")
+    _migrate_add_column(conn, "learnings", "last_reviewed_at", "REAL")
+
+def _m2_followups_reasoning(conn):
+    _migrate_add_column(conn, "followups", "reasoning", "TEXT")
+    _migrate_add_column(conn, "task_history", "reasoning", "TEXT")
+
+def _m3_decisions_review(conn):
+    _migrate_add_column(conn, "decisions", "status", "TEXT DEFAULT 'pending_review'")
+    _migrate_add_column(conn, "decisions", "review_due_at", "TEXT")
+    _migrate_add_column(conn, "decisions", "last_reviewed_at", "TEXT")
+    _migrate_add_index(conn, "idx_decisions_domain", "decisions", "domain")
+    _migrate_add_index(conn, "idx_decisions_created", "decisions", "created_at")
+    _migrate_add_index(conn, "idx_decisions_review_due", "decisions", "review_due_at")
+
+def _m4_session_diary_columns(conn):
+    _migrate_add_index(conn, "idx_session_diary_sid", "session_diary", "session_id")
+    _migrate_add_column(conn, "session_diary", "mental_state", "TEXT")
+    _migrate_add_column(conn, "session_diary", "domain", "TEXT")
+    _migrate_add_column(conn, "session_diary", "user_signals", "TEXT")
+    _migrate_add_column(conn, "session_diary", "self_critique", "TEXT")
+
+def _m5_change_log_indexes(conn):
+    _migrate_add_index(conn, "idx_change_log_created", "change_log", "created_at")
+    _migrate_add_index(conn, "idx_change_log_files", "change_log", "files")
+    _migrate_add_index(conn, "idx_learnings_status", "learnings", "status")
+    _migrate_add_index(conn, "idx_learnings_review_due", "learnings", "review_due_at")
+
+def _m6_error_guard_tables(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS error_repetitions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            new_learning_id INTEGER NOT NULL,
+            original_learning_id INTEGER NOT NULL,
+            similarity REAL NOT NULL,
+            area TEXT NOT NULL,
+            created_at TEXT DEFAULT (datetime('now'))
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS guard_checks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT,
+            files TEXT,
+            area TEXT,
+            learnings_returned INTEGER DEFAULT 0,
+            blocking_rules_returned INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT (datetime('now'))
+        )
+    """)
+    _migrate_add_index(conn, "idx_error_repetitions_area", "error_repetitions", "area")
+    _migrate_add_index(conn, "idx_guard_checks_session", "guard_checks", "session_id")
+
+def _m7_diary_source_and_draft(conn):
+    _migrate_add_column(conn, "session_diary", "source", "TEXT DEFAULT 'claude'")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS session_diary_draft (
+            sid TEXT PRIMARY KEY,
+            summary_draft TEXT DEFAULT '',
+            tasks_seen TEXT DEFAULT '[]',
+            change_ids TEXT DEFAULT '[]',
+            decision_ids TEXT DEFAULT '[]',
+            last_context_hint TEXT DEFAULT '',
+            heartbeat_count INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now'))
+        )
+    """)
+
+
+# Migration registry — APPEND ONLY, never reorder or delete
+MIGRATIONS = [
+    (1, "learnings_columns", _m1_learnings_columns),
+    (2, "followups_reasoning", _m2_followups_reasoning),
+    (3, "decisions_review", _m3_decisions_review),
+    (4, "session_diary_columns", _m4_session_diary_columns),
+    (5, "change_log_indexes", _m5_change_log_indexes),
+    (6, "error_guard_tables", _m6_error_guard_tables),
+    (7, "diary_source_and_draft", _m7_diary_source_and_draft),
+]
+
+
+def run_migrations(conn=None):
+    """Run pending migrations. Tracks applied versions in schema_migrations.
+
+    Safe to call multiple times — skips already-applied migrations.
+    Called automatically by init_db() on every server start.
+    """
+    if conn is None:
+        conn = get_db()
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS schema_migrations (
+            version INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            applied_at TEXT DEFAULT (datetime('now'))
+        )
+    """)
+    conn.commit()
+
+    applied = {r[0] for r in conn.execute("SELECT version FROM schema_migrations").fetchall()}
+
+    for version, name, fn in MIGRATIONS:
+        if version not in applied:
+            try:
+                fn(conn)
+                conn.execute(
+                    "INSERT INTO schema_migrations (version, name) VALUES (?, ?)",
+                    (version, name)
+                )
+                conn.commit()
+            except Exception as e:
+                # Log but don't crash — partial migration is better than no server
+                import sys
+                print(f"[MIGRATION] v{version} ({name}) failed: {e}", file=sys.stderr)
+
+    return len(MIGRATIONS) - len(applied)
+
+
+def get_schema_version() -> int:
+    """Return the highest applied migration version, or 0 if none."""
+    conn = get_db()
+    try:
+        row = conn.execute("SELECT MAX(version) FROM schema_migrations").fetchone()
+        return row[0] or 0
+    except Exception:
+        return 0
 
 
 def _gen_id(prefix: str, length: int = 8) -> str:
@@ -2165,7 +2250,7 @@ def read_session_diary(session_id: str = '', last_n: int = 3, last_day: bool = F
     - session_id: returns entries for that specific session
     - last_day: returns ALL entries from the most recent day (multi-terminal aware)
     - last_n: returns last N entries (default)
-    - domain: filter by project context (project-a, project-b, nexo, other)
+    - domain: filter by project context (nexo, other)
     """
     conn = get_db()
     domain_clause = " AND domain = ?" if domain else ""
