@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Optional
 
 COGNITIVE_DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cognitive.db")
-EMBEDDING_DIM = 384
+EMBEDDING_DIM = 768
 LAMBDA_STM = 0.1      # half-life ~7 days
 LAMBDA_LTM = 0.012    # half-life ~60 days
 
@@ -394,6 +394,50 @@ def _init_tables(conn: sqlite3.Connection):
             created_at TEXT DEFAULT (datetime('now'))
         );
     """)
+
+    # FTS5 tables for hybrid search (BM25 + vector)
+    conn.executescript("""
+        CREATE VIRTUAL TABLE IF NOT EXISTS stm_fts USING fts5(
+            content, source_type, source_id, domain,
+            content_rowid='id',
+            prefix='2,3'
+        );
+        CREATE VIRTUAL TABLE IF NOT EXISTS ltm_fts USING fts5(
+            content, source_type, source_id, domain,
+            content_rowid='id',
+            prefix='2,3'
+        );
+    """)
+
+    # Sync triggers — keep FTS5 in sync with memory tables
+    for store in ("stm", "ltm"):
+        conn.executescript(f"""
+            CREATE TRIGGER IF NOT EXISTS {store}_fts_insert AFTER INSERT ON {store}_memories BEGIN
+                INSERT OR REPLACE INTO {store}_fts(rowid, content, source_type, source_id, domain)
+                VALUES (new.id, new.content, new.source_type, new.source_id, new.domain);
+            END;
+            CREATE TRIGGER IF NOT EXISTS {store}_fts_delete AFTER DELETE ON {store}_memories BEGIN
+                DELETE FROM {store}_fts WHERE rowid = old.id;
+            END;
+            CREATE TRIGGER IF NOT EXISTS {store}_fts_update AFTER UPDATE OF content ON {store}_memories BEGIN
+                UPDATE {store}_fts SET content = new.content WHERE rowid = new.id;
+            END;
+        """)
+
+    # Backfill FTS5 for existing memories not yet indexed
+    for store in ("stm", "ltm"):
+        conn.execute(f"""
+            INSERT OR IGNORE INTO {store}_fts(rowid, content, source_type, source_id, domain)
+            SELECT id, content, source_type, source_id, domain FROM {store}_memories
+        """)
+
+    # Temporal indexing columns
+    for table in ("stm_memories", "ltm_memories"):
+        try:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN temporal_date TEXT DEFAULT ''")
+        except Exception:
+            pass  # Column already exists
+
     conn.commit()
 
 
@@ -402,12 +446,12 @@ def _get_model():
     global _model
     if _model is None:
         from fastembed import TextEmbedding
-        _model = TextEmbedding("BAAI/bge-small-en-v1.5")
+        _model = TextEmbedding("BAAI/bge-base-en-v1.5")
     return _model
 
 
 def embed(text: str) -> np.ndarray:
-    """Embed text into a 384-dim float32 vector. Returns zeros for empty text."""
+    """Embed text into a 768-dim float32 vector. Returns zeros for empty text."""
     if not text or not text.strip():
         return np.zeros(EMBEDDING_DIM, dtype=np.float32)
     model = _get_model()
@@ -433,6 +477,162 @@ def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
         return 0.0
     return float(np.dot(a, b) / (norm_a * norm_b))
 
+
+# ── Temporal Date Extraction ───────────────────────────────────────────
+
+_MONTH_MAP = {
+    "january": "01", "february": "02", "march": "03", "april": "04",
+    "may": "05", "june": "06", "july": "07", "august": "08",
+    "september": "09", "october": "10", "november": "11", "december": "12",
+    "jan": "01", "feb": "02", "mar": "03", "apr": "04",
+    "jun": "06", "jul": "07", "aug": "08", "sep": "09",
+    "oct": "10", "nov": "11", "dec": "12",
+    "enero": "01", "febrero": "02", "marzo": "03", "abril": "04",
+    "mayo": "05", "junio": "06", "julio": "07", "agosto": "08",
+    "septiembre": "09", "octubre": "10", "noviembre": "11", "diciembre": "12",
+}
+
+def extract_temporal_date(text: str) -> str:
+    """Extract the most prominent date from text. Returns ISO format YYYY-MM-DD or ''."""
+    if not text:
+        return ""
+
+    text_lower = text.lower()
+
+    # Pattern 1: "DD Month YYYY" or "Month DD, YYYY" or "D Month, YYYY"
+    for month_name, month_num in _MONTH_MAP.items():
+        # "8 May, 2023" or "8 May 2023"
+        match = re.search(rf'(\d{{1,2}})\s+{month_name}[,]?\s+(\d{{4}})', text_lower)
+        if match:
+            day, year = match.group(1).zfill(2), match.group(2)
+            return f"{year}-{month_num}-{day}"
+        # "May 8, 2023" or "May 8 2023"
+        match = re.search(rf'{month_name}\s+(\d{{1,2}})[,]?\s+(\d{{4}})', text_lower)
+        if match:
+            day, year = match.group(1).zfill(2), match.group(2)
+            return f"{year}-{month_num}-{day}"
+
+    # Pattern 2: ISO format YYYY-MM-DD
+    match = re.search(r'(\d{4})-(\d{2})-(\d{2})', text)
+    if match:
+        return match.group(0)
+
+    # Pattern 3: DD/MM/YYYY or MM/DD/YYYY (assume DD/MM/YYYY)
+    match = re.search(r'(\d{1,2})/(\d{1,2})/(\d{4})', text)
+    if match:
+        d, m, y = match.group(1).zfill(2), match.group(2).zfill(2), match.group(3)
+        return f"{y}-{m}-{d}"
+
+    return ""
+
+
+# ── Hybrid Search: BM25 via FTS5 ──────────────────────────────────────
+
+def bm25_search(query_text: str, stores: str = "both", top_k: int = 20,
+                source_type_filter: str = "") -> list[dict]:
+    """BM25 keyword search using SQLite FTS5. Returns ranked results by relevance."""
+    db = _get_db()
+    results = []
+
+    # Sanitize query for FTS5 (escape special chars, use OR for multi-word)
+    words = [w.strip() for w in query_text.split() if w.strip() and len(w.strip()) > 1]
+    if not words:
+        return []
+    fts_query = " OR ".join(f'"{w}"' for w in words)
+
+    for store in ("stm", "ltm"):
+        if stores == "stm" and store == "ltm":
+            continue
+        if stores == "ltm" and store == "stm":
+            continue
+
+        table = f"{store}_memories"
+        fts_table = f"{store}_fts"
+
+        try:
+            sql = f"""
+                SELECT m.id, m.content, m.source_type, m.source_id, m.source_title,
+                       m.domain, m.created_at, m.strength, m.access_count
+                FROM {fts_table}
+                JOIN {table} m ON m.id = {fts_table}.rowid
+                WHERE {fts_table} MATCH ?
+            """
+            params = [fts_query]
+
+            if source_type_filter:
+                sql += " AND m.source_type = ?"
+                params.append(source_type_filter)
+
+            if store == "stm":
+                sql += " AND m.promoted_to_ltm = 0"
+            else:
+                sql += " AND m.is_dormant = 0"
+
+            sql += f" ORDER BY {fts_table}.rank LIMIT ?"
+            params.append(top_k)
+
+            rows = db.execute(sql, params).fetchall()
+
+            for rank_pos, row in enumerate(rows):
+                results.append({
+                    "store": store,
+                    "id": row["id"],
+                    "content": row["content"],
+                    "source_type": row["source_type"],
+                    "source_id": row["source_id"],
+                    "source_title": row["source_title"],
+                    "domain": row["domain"],
+                    "created_at": row["created_at"],
+                    "strength": row["strength"],
+                    "access_count": row["access_count"],
+                    "bm25_rank": rank_pos + 1,
+                    "lifecycle_state": "active",
+                })
+        except Exception:
+            # FTS5 table might not exist yet or query syntax error
+            pass
+
+    return results
+
+
+def _rrf_fuse(vector_results: list[dict], bm25_results: list[dict],
+              k: int = 60, alpha: float = 0.5) -> list[dict]:
+    """Reciprocal Rank Fusion: combine vector and BM25 results.
+
+    RRF score = alpha * 1/(k + vector_rank) + (1-alpha) * 1/(k + bm25_rank)
+    Higher alpha = more weight on vector search.
+    """
+    # Build score maps by (store, id)
+    scores = {}
+    metadata = {}
+
+    for rank, r in enumerate(vector_results):
+        key = (r["store"], r["id"])
+        scores[key] = alpha * (1.0 / (k + rank + 1))
+        metadata[key] = r
+
+    for rank, r in enumerate(bm25_results):
+        key = (r["store"], r["id"])
+        bm25_score = (1 - alpha) * (1.0 / (k + rank + 1))
+        if key in scores:
+            scores[key] += bm25_score
+        else:
+            scores[key] = bm25_score
+            metadata[key] = r
+
+    # Sort by fused score descending
+    sorted_keys = sorted(scores.keys(), key=lambda x: scores[x], reverse=True)
+
+    fused = []
+    for key in sorted_keys:
+        result = metadata[key].copy()
+        result["rrf_score"] = scores[key]
+        # Preserve original vector score if available
+        if "score" not in result:
+            result["score"] = scores[key]
+        fused.append(result)
+
+    return fused
 
 
 # ============================================================================
@@ -757,12 +957,16 @@ def search(
     source_type_filter: str = "",
     include_archived: bool = False,
     use_hyde: bool = False,
+    hybrid: bool = True,
+    hybrid_alpha: float = 0.6,
     spreading_depth: int = 0
 ) -> list[dict]:
     """Full vector search across STM and/or LTM with rehearsal and dormant reactivation.
 
     Args:
         use_hyde: If True, use HyDE query expansion for richer embedding (default False)
+        hybrid: If True, fuse vector results with BM25 keyword search via RRF (default True)
+        hybrid_alpha: Weight for vector results in RRF fusion (0.0-1.0, default 0.6)
         spreading_depth: If >0, fetch co-activated neighbors and boost their scores (default 0)
     """
     db = _get_db()
@@ -879,8 +1083,17 @@ def search(
         if reactivated_ids:
             db.commit()
 
+    # Hybrid search: fuse vector results with BM25 keyword results
+    if hybrid and query_text:
+        bm25_results = bm25_search(query_text, stores=stores, top_k=top_k * 2,
+                                    source_type_filter=source_type_filter)
+        if bm25_results:
+            results = _rrf_fuse(results, bm25_results, alpha=hybrid_alpha)
+            # Re-apply min_score filter on fused results (use original vector score or rrf_score)
+            results = [r for r in results if r.get("score", 0) >= min_score or r.get("rrf_score", 0) > 0]
+
     # Sort by score descending and take top_k
-    results.sort(key=lambda x: x["score"], reverse=True)
+    results.sort(key=lambda x: x.get("rrf_score", x.get("score", 0)), reverse=True)
     results = results[:top_k]
 
     # Spreading activation: boost co-activated neighbors (Feature 2)
@@ -1041,6 +1254,7 @@ def ingest(
     was_redacted = 1 if clean_content != content else 0
     vec = embed(clean_content)
     blob = _array_to_blob(vec)
+    temporal = extract_temporal_date(content)
 
     # user_direct = fast-track: quarantine then immediate promote
     if source == "user_direct" and not skip_quarantine:
@@ -1052,9 +1266,9 @@ def ingest(
         db.commit()
         # Now actually store in STM
         cur2 = db.execute(
-            """INSERT INTO stm_memories (content, embedding, source_type, source_id, source_title, domain, redaction_applied)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            (clean_content, blob, source_type, source_id, source_title, domain, was_redacted)
+            """INSERT INTO stm_memories (content, embedding, source_type, source_id, source_title, domain, redaction_applied, temporal_date)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (clean_content, blob, source_type, source_id, source_title, domain, was_redacted, temporal)
         )
         db.commit()
         return cur2.lastrowid
@@ -1062,9 +1276,9 @@ def ingest(
     # skip_quarantine = direct STM (backward compatibility)
     if skip_quarantine:
         cur = db.execute(
-            """INSERT INTO stm_memories (content, embedding, source_type, source_id, source_title, domain, redaction_applied)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            (clean_content, blob, source_type, source_id, source_title, domain, was_redacted)
+            """INSERT INTO stm_memories (content, embedding, source_type, source_id, source_title, domain, redaction_applied, temporal_date)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (clean_content, blob, source_type, source_id, source_title, domain, was_redacted, temporal)
         )
         db.commit()
         return cur.lastrowid
