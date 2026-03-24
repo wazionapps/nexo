@@ -1,12 +1,12 @@
 # NEXO Brain — Your AI Gets a Brain
 
-[![npm v0.5.0](https://img.shields.io/npm/v/nexo-brain?label=npm&color=purple)](https://www.npmjs.com/package/nexo-brain)
+[![npm v0.6.0](https://img.shields.io/npm/v/nexo-brain?label=npm&color=purple)](https://www.npmjs.com/package/nexo-brain)
 [![F1 0.588 on LoCoMo](https://img.shields.io/badge/LoCoMo_F1-0.588-brightgreen)](https://github.com/wazionapps/nexo/blob/main/benchmarks/locomo/results/)
 [![+55% vs GPT-4](https://img.shields.io/badge/vs_GPT--4-%2B55%25-blue)](https://github.com/snap-research/locomo/issues/33)
 [![GitHub stars](https://img.shields.io/github/stars/wazionapps/nexo?style=social)](https://github.com/wazionapps/nexo/stargazers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-> **v0.5.0** — Highest published score on [LoCoMo benchmark](https://github.com/snap-research/locomo) (ACL 2024). F1 **0.588** — outperforms GPT-4 (0.379) by 55%. Runs on CPU. No GPU required. [Full results](benchmarks/locomo/results/)
+> **v0.6.0** — Now ships with **full orchestration**: 5 automated hooks, mandatory post-mortem with self-critique, pre-compaction context preservation, reflection engine, and auto-migration. Plus: F1 **0.588** on [LoCoMo](https://github.com/snap-research/locomo) (ACL 2024) — outperforms GPT-4 by 55%. Runs on CPU. [Full results](benchmarks/locomo/results/)
 
 **NEXO Brain transforms any MCP-compatible AI agent from a stateless assistant into a cognitive partner that remembers, learns, forgets, adapts, and builds a relationship with you over time.**
 
@@ -130,9 +130,9 @@ Like a human brain, NEXO Brain has automated processes that run while you're not
 
 If your Mac was asleep during any scheduled process, NEXO Brain catches up in order when it wakes.
 
-## Cognitive Features (v0.3.1)
+## Cognitive Features
 
-NEXO Brain v0.3.1 adds 21 cognitive tools on top of the 76 base tools, bringing the total to **97+ MCP tools**. These features implement cognitive science concepts that go beyond basic memory:
+NEXO Brain provides 21 cognitive tools on top of the 76 base tools, totaling **97+ MCP tools**. These features implement cognitive science concepts that go beyond basic memory:
 
 ### Input Pipeline
 
@@ -198,6 +198,65 @@ NEXO Brain was evaluated on [LoCoMo](https://github.com/snap-research/locomo) (A
 
 Full results in [`benchmarks/locomo/results/`](benchmarks/locomo/results/).
 
+## Full Orchestration System (v0.6.0)
+
+Memory alone doesn't make a co-operator. What makes the difference is the **behavioral loop** — the automated discipline that ensures every session starts informed, runs with guardrails, and ends with self-reflection.
+
+### 5 Automated Hooks
+
+These fire automatically at key moments in every Claude Code session:
+
+| Hook | When | What It Does |
+|------|------|-------------|
+| **SessionStart** | Session opens | Generates a briefing from SQLite: overdue reminders, today's tasks, pending followups, active sessions |
+| **Stop** | Session ends | Mandatory post-mortem: self-critique (5 questions), session buffer entry, followup creation, proactive seeds for next session |
+| **PostToolUse** | After each tool call | Captures meaningful mutations to the Sensory Register |
+| **PreCompact** | Before context compression | Saves checkpoint, reminds operator to write diary — prevents losing the thread |
+| **Caffeinate** | Always (optional) | Keeps Mac awake for nocturnal cognitive processes |
+
+### The Session Lifecycle
+
+```
+Session starts
+    ↓
+SessionStart hook generates briefing
+    ↓
+Operator reads diary, reminders, followups
+    ↓
+Heartbeat on every interaction (sentiment, context shifts)
+    ↓
+Guard check before every code edit
+    ↓
+PreCompact hook saves context if conversation is compressed
+    ↓
+Stop hook triggers mandatory post-mortem:
+  - Self-critique: 5 questions about what could be better
+  - Session buffer: structured entry for the reflection engine
+  - Followups: anything promised gets scheduled
+  - Proactive seeds: what can the next session do without being asked?
+    ↓
+Reflection engine processes buffer (after 3+ sessions)
+    ↓
+Nocturnal processes: decay, consolidation, self-audit, dreaming
+```
+
+### Reflection Engine
+
+After 3+ sessions accumulate, the stop hook triggers `nexo-reflection.py`:
+- Extracts recurring tasks, error patterns, mood trends
+- Updates `user_model.json` with observed behavior
+- No LLM required — runs as pure Python
+
+### Auto-Migration
+
+Existing users upgrading from v0.5.0:
+```bash
+npx nexo-brain  # detects v0.5.0, migrates automatically
+```
+- Updates hooks, core files, plugins, scripts
+- **Never touches your data** (memories, learnings, preferences)
+- Saves updated CLAUDE.md as reference (doesn't overwrite customizations)
+
 ## Quick Start
 
 ### Claude Code (Primary)
@@ -248,10 +307,12 @@ That's it. No need to run `claude` manually. Atlas will greet you immediately �
 | Cognitive engine | Python: fastembed, numpy, vector search | pip packages |
 | MCP server | 97+ tools for memory, cognition, learning, guard | ~/.nexo/ |
 | Plugins | Guard, episodic memory, cognitive memory, entities, preferences | ~/.nexo/plugins/ |
-| Hooks | Session capture, briefing, stop detection | ~/.nexo/hooks/ |
+| Hooks (5) | SessionStart briefing, Stop post-mortem, PostToolUse capture, PreCompact checkpoint, Caffeinate | ~/.nexo/hooks/ |
+| Reflection engine | Processes session buffer, extracts patterns, updates user model | ~/.nexo/scripts/ |
+| CLAUDE.md | Complete operator instructions (Codex, hooks, guard, trust, memory) | ~/.claude/CLAUDE.md |
 | LaunchAgents | Decay, sleep, audit, postmortem, catch-up | ~/Library/LaunchAgents/ |
 | Auto-update | Checks for new versions at boot | Built into catch-up |
-| Claude Code config | MCP server + hooks registered | ~/.claude/settings.json |
+| Claude Code config | MCP server + 5 hooks registered | ~/.claude/settings.json |
 
 ### Requirements
 
