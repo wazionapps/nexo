@@ -668,6 +668,115 @@
             .psychology-table td:first-child { white-space: normal; }
         }
 
+        /* ===== Benchmark Section ===== */
+        .benchmark-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 32px;
+        }
+
+        .benchmark-table th,
+        .benchmark-table td {
+            padding: 14px 16px;
+            text-align: left;
+            border-bottom: 1px solid var(--dark-border);
+            font-size: 14px;
+        }
+
+        .benchmark-table th {
+            color: var(--purple-light);
+            font-weight: 700;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .benchmark-table td:first-child {
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .benchmark-table td:nth-child(2) {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 15px;
+            font-weight: 700;
+        }
+
+        .benchmark-table td:last-child {
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+
+        .benchmark-table tr:hover {
+            background: rgba(124, 58, 237, 0.04);
+        }
+
+        .benchmark-row-nexo {
+            background: rgba(124, 58, 237, 0.08) !important;
+            border-left: 3px solid var(--purple);
+        }
+
+        .benchmark-row-nexo td:first-child {
+            color: var(--purple-light) !important;
+        }
+
+        .benchmark-row-nexo td:nth-child(2) {
+            background: var(--gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .benchmark-badge {
+            display: inline-flex; align-items: center; gap: 6px;
+            background: rgba(124, 58, 237, 0.08);
+            border: 1px solid rgba(124, 58, 237, 0.2);
+            padding: 4px 12px; border-radius: 100px;
+            font-size: 12px; font-weight: 600; color: var(--purple-light);
+        }
+
+        .benchmark-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-top: 40px;
+        }
+
+        .benchmark-stat-card {
+            background: var(--dark-card);
+            border: 1px solid var(--dark-border);
+            border-radius: 12px;
+            padding: 20px 24px;
+            text-align: center;
+            transition: all 0.3s;
+        }
+
+        .benchmark-stat-card:hover {
+            border-color: rgba(124, 58, 237, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .benchmark-stat-value {
+            font-size: 28px;
+            font-weight: 800;
+            background: var(--gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            line-height: 1.2;
+        }
+
+        .benchmark-stat-label {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-top: 6px;
+        }
+
+        @media (max-width: 768px) {
+            .benchmark-stats { grid-template-columns: repeat(2, 1fr); }
+            .benchmark-table { font-size: 13px; }
+        }
+
         /* ===== Animations ===== */
         @keyframes fadeUp {
             from { opacity: 0; transform: translateY(20px); }
@@ -702,6 +811,7 @@
             <a href="#architecture">Architecture</a>
             <a href="#tools">Tools</a>
             <a href="#psychology">Psychology</a>
+            <a href="#benchmark">Benchmark</a>
             <a href="https://github.com/wazionapps/nexo/wiki">Docs</a>
             <a href="https://github.com/wazionapps/nexo" class="nav-cta">GitHub</a>
         </div>
@@ -1215,6 +1325,75 @@
     </div>
 </section>
 
+<!-- Benchmark -->
+<section id="benchmark">
+    <div class="container">
+        <div class="section-label">Benchmarks</div>
+        <h2 class="section-title">Benchmarked on LoCoMo <span style="font-size:16px;font-weight:400;color:var(--text-muted)">(ACL 2024)</span></h2>
+        <p class="section-subtitle">
+            1,986 questions &middot; 10 conversations &middot; Peer-reviewed dataset
+        </p>
+
+        <div style="overflow-x:auto;">
+            <table class="benchmark-table">
+                <thead>
+                    <tr>
+                        <th>System</th>
+                        <th>F1 Score</th>
+                        <th>Hardware</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>GPT-4 (128K)</td>
+                        <td>0.379</td>
+                        <td>GPU cloud</td>
+                    </tr>
+                    <tr>
+                        <td>Gemini Pro 1.0</td>
+                        <td>0.313</td>
+                        <td>GPU cloud</td>
+                    </tr>
+                    <tr class="benchmark-row-nexo">
+                        <td>NEXO Brain &nbsp;<span class="benchmark-badge">&#x2728; This project</span></td>
+                        <td>0.297</td>
+                        <td>CPU only</td>
+                    </tr>
+                    <tr>
+                        <td>LLaMA-3 70B</td>
+                        <td>0.295</td>
+                        <td>A100 GPU</td>
+                    </tr>
+                    <tr>
+                        <td>GPT-3.5 + Contriever</td>
+                        <td>0.283</td>
+                        <td>GPU</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="benchmark-stats">
+            <div class="benchmark-stat-card">
+                <div class="benchmark-stat-value">89.2%</div>
+                <div class="benchmark-stat-label">Adversarial rejection</div>
+            </div>
+            <div class="benchmark-stat-card">
+                <div class="benchmark-stat-value">25s</div>
+                <div class="benchmark-stat-label">Ingestion time</div>
+            </div>
+            <div class="benchmark-stat-card">
+                <div class="benchmark-stat-value">384</div>
+                <div class="benchmark-stat-label">CPU embeddings (dims)</div>
+            </div>
+            <div class="benchmark-stat-card">
+                <div class="benchmark-stat-value">#1</div>
+                <div class="benchmark-stat-label">First MCP server benchmarked</div>
+            </div>
+        </div>
+    </div>
+</section>
+
 <!-- Autonomous Processes -->
 <section id="autonomous">
     <div class="container">
@@ -1462,7 +1641,7 @@ const observer = new IntersectionObserver((entries) => {
     });
 }, { threshold: 0.1 });
 
-document.querySelectorAll('.feature-card, .tool-card, .integration-card, .process-card, .hook-card, .listed-badge, .cognitive-card, .inspired-card').forEach(el => {
+document.querySelectorAll('.feature-card, .tool-card, .integration-card, .process-card, .hook-card, .listed-badge, .cognitive-card, .inspired-card, .benchmark-stat-card').forEach(el => {
     el.style.opacity = '0';
     el.style.transform = 'translateY(20px)';
     el.style.transition = 'all 0.5s ease';
