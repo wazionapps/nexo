@@ -807,7 +807,8 @@
         </a>
         <div class="nav-links">
             <a href="#features">Features</a>
-            <a href="#cognitive">Cognitive v0.5.0</a>
+            <a href="#orchestration">Orchestration v0.6.0</a>
+            <a href="#cognitive">Cognitive</a>
             <a href="#architecture">Architecture</a>
             <a href="#tools">Tools</a>
             <a href="#psychology">Psychology</a>
@@ -823,7 +824,7 @@
     <div class="container">
         <div class="hero-badge fade-up">
             <span class="dot"></span>
-            <span id="version-badge">v0.5.0</span> &mdash; Now available on npm
+            <span id="version-badge">v0.6.0</span> &mdash; Full orchestration system
         </div>
         <div class="fade-up" style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;">
             <img src="https://img.shields.io/npm/v/nexo-brain?color=7C3AED&label=npm" alt="npm version">
@@ -1039,13 +1040,68 @@
     </div>
 </section>
 
+<!-- Orchestration System v0.6.0 -->
+<section id="orchestration" style="padding:80px 0;background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
+    <div class="container">
+        <div class="section-label">New in v0.6.0</div>
+        <h2 class="section-title">Full Orchestration System</h2>
+        <p class="section-subtitle">
+            Memory alone doesn't make a co-operator. v0.6.0 ships the complete behavioral loop: 5 automated hooks, mandatory post-mortem with self-critique, pre-compaction context preservation, reflection engine, and auto-migration. Every session starts informed, runs with guardrails, and ends with self-reflection.
+        </p>
+
+        <div class="cognitive-group">
+            <div class="cognitive-group-label">5 Automated Hooks</div>
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h4>SessionStart Briefing</h4>
+                    <p>Generates a full briefing from SQLite: overdue reminders, today's tasks, pending followups, active sessions. Cached for 1 hour.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h4>Stop Post-Mortem</h4>
+                    <p>Mandatory self-critique with 5 questions, session buffer, followup creation, proactive seeds for next session, and reflection trigger.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h4>PreCompact Checkpoint</h4>
+                    <p>Saves context before conversation compression. Prevents losing the thread — compaction without a diary means starting from zero.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h4>PostToolUse Capture</h4>
+                    <p>Captures meaningful tool usage to the Sensory Register. Feeds the Atkinson-Shiffrin memory pipeline silently.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h4>Reflection Engine</h4>
+                    <p>After 3+ sessions, processes the buffer: extracts recurring tasks, error patterns, mood trends. Updates user model. No LLM needed.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="cognitive-group" style="margin-top:40px;">
+            <div class="cognitive-group-label">Operational Codex</div>
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h4>23 Non-Negotiable Principles</h4>
+                    <p>Hardwired behavioral foundation: never promise without scheduling, verify before claiming done, audit before delivering, proactive not reactive.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h4>Personality Calibration</h4>
+                    <p>5 configurable axes: autonomy, communication style, honesty level, proactivity, error handling. Set during install, adjustable anytime.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h4>Auto-Migration</h4>
+                    <p>Seamless upgrade from previous versions. Updates hooks, core files, plugins, scripts — never touches your data or customized CLAUDE.md.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
 <!-- Cognitive Features v0.5.0 -->
 <section id="cognitive">
     <div class="container">
-        <div class="section-label">New in v0.5.0</div>
+        <div class="section-label">Since v0.5.0</div>
         <h2 class="section-title">Thread-safe SQLite + 21 cognitive features</h2>
         <p class="section-subtitle">
-            v0.5.0 introduces thread-safe SQLite with WAL mode and connection pooling, passing 100% of concurrent stress tests. Built on formal schema migrations and trust auto-detection, on top of 21 cognitive tools implementing cognitive science concepts that go beyond basic memory storage.
+            Thread-safe SQLite with WAL mode and connection pooling, passing 100% of concurrent stress tests. Built on formal schema migrations and trust auto-detection, on top of 21 cognitive tools implementing cognitive science concepts that go beyond basic memory storage.
         </p>
 
         <div class="cognitive-group">
