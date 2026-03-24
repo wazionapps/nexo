@@ -1021,6 +1021,24 @@ def _auto_restore_snoozed(db: sqlite3.Connection):
     db.commit()
 
 
+def _rehearse_results(results: list[dict], skip_ids: set = None):
+    """Update strength and access_count for retrieved results (rehearsal)."""
+    if not results:
+        return
+    db = _get_db()
+    now = datetime.utcnow().isoformat()
+    skip = skip_ids or set()
+    for r in results:
+        if (r["store"], r["id"]) in skip:
+            continue
+        table = "stm_memories" if r["store"] == "stm" else "ltm_memories"
+        db.execute(
+            f"UPDATE {table} SET strength = 1.0, access_count = access_count + 1, last_accessed = ? WHERE id = ?",
+            (now, r["id"])
+        )
+    db.commit()
+
+
 def search(
     query_text: str,
     top_k: int = 10,
@@ -1033,16 +1051,45 @@ def search(
     use_hyde: bool = False,
     hybrid: bool = True,
     hybrid_alpha: float = 0.6,
-    spreading_depth: int = 0
+    spreading_depth: int = 0,
+    decompose: bool = True,
 ) -> list[dict]:
     """Full vector search across STM and/or LTM with rehearsal and dormant reactivation.
 
     Args:
         use_hyde: If True, use HyDE query expansion for richer embedding (default False)
-        hybrid: If True, fuse vector results with BM25 keyword search via RRF (default True)
-        hybrid_alpha: Weight for vector results in RRF fusion (0.0-1.0, default 0.6)
         spreading_depth: If >0, fetch co-activated neighbors and boost their scores (default 0)
+        hybrid: If True, boost results with BM25 keyword matches (default True)
+        hybrid_alpha: Weight for vector vs BM25. Higher = more vector. (default 0.6)
+        decompose: If True, decompose complex queries into sub-queries for better multi-hop (default True)
     """
+    # Multi-query decomposition: for complex questions, search sub-parts and merge
+    if decompose and query_text:
+        _connectors = [" after ", " before ", " because ", " and then ", " when ", " while "]
+        for conn in _connectors:
+            if conn in query_text.lower():
+                parts = query_text.lower().split(conn, 1)
+                if len(parts) == 2 and len(parts[0]) > 10 and len(parts[1]) > 10:
+                    # Search each sub-query separately, merge results by max score
+                    all_results = {}
+                    for sub_q in [query_text, parts[0].strip("? "), parts[1].strip("? ")]:
+                        sub_results = search(
+                            sub_q, top_k=top_k, min_score=min_score, stores=stores,
+                            exclude_dormant=exclude_dormant, rehearse=False,
+                            source_type_filter=source_type_filter,
+                            include_archived=include_archived, use_hyde=use_hyde,
+                            hybrid=hybrid, hybrid_alpha=hybrid_alpha,
+                            spreading_depth=spreading_depth, decompose=False,  # No recursion
+                        )
+                        for r in sub_results:
+                            key = (r["store"], r["id"])
+                            if key not in all_results or r["score"] > all_results[key]["score"]:
+                                all_results[key] = r
+                    merged = sorted(all_results.values(), key=lambda x: x["score"], reverse=True)[:top_k]
+                    if rehearse:
+                        _rehearse_results(merged)
+                    return merged
+
     db = _get_db()
     if use_hyde:
         query_vec = hyde_expand_query(query_text)
@@ -1370,6 +1417,102 @@ def ingest(
     )
     db.commit()
     return -cur.lastrowid  # Negative = quarantined
+
+
+def ingest_session(
+    turns: list[dict],
+    session_title: str = "",
+    domain: str = "",
+    chunk_size: int = 3,
+) -> dict:
+    """Ingest a conversation session with intelligent chunking and summary.
+
+    Stores: (1) individual turns, (2) overlapping chunks for multi-hop context,
+    (3) an extractive session summary.
+
+    Args:
+        turns: List of dicts with keys: content (required), source_id (optional), speaker (optional)
+        session_title: Title for the session (e.g., "Session 5")
+        domain: Domain tag
+        chunk_size: Number of turns per chunk (default 3, with overlap of 1)
+
+    Returns:
+        Dict with counts: {"turns": N, "chunks": N, "summary": 1}
+    """
+    turn_ids = []
+    turn_contents = []
+    ingested_turns = 0
+
+    # 1. Ingest individual turns
+    for turn in turns:
+        content = turn.get("content", "")
+        source_id = turn.get("source_id", "")
+        if not content:
+            continue
+
+        ingest(
+            content=content,
+            source_type="dialog",
+            source_id=source_id,
+            source_title=session_title,
+            domain=domain,
+            bypass_gate=True,
+            skip_quarantine=True,
+            bypass_security=True,
+        )
+        turn_ids.append(source_id)
+        turn_contents.append(content)
+        ingested_turns += 1
+
+    # 2. Overlapping chunks for multi-hop context
+    ingested_chunks = 0
+    for i in range(0, len(turn_contents) - chunk_size + 1):
+        chunk_content = "\n".join(turn_contents[i:i + chunk_size])
+        chunk_ids = ",".join(turn_ids[i:i + chunk_size])
+        ingest(
+            content=chunk_content,
+            source_type="dialog_chunk",
+            source_id=chunk_ids,
+            source_title=f"{session_title} chunk",
+            domain=domain,
+            bypass_gate=True,
+            skip_quarantine=True,
+            bypass_security=True,
+        )
+        ingested_chunks += 1
+
+    # 3. Session summary (extractive)
+    if turn_contents:
+        speakers = set()
+        topics = []
+        for t in turn_contents:
+            if ": " in t:
+                parts = t.split(": ", 1)
+                # Try to extract speaker from "[date] Speaker: text" pattern
+                speaker_part = parts[0].split("] ")[-1] if "] " in parts[0] else parts[0]
+                speakers.add(speaker_part.strip())
+                topics.append(parts[1][:100])
+            else:
+                topics.append(t[:100])
+
+        summary = f"{session_title} summary ({', '.join(speakers)}): "
+        summary += " | ".join(topics[:5])
+        if len(topics) > 5:
+            summary += f" | ... ({len(topics)} total turns)"
+
+        all_ids = ",".join(turn_ids)
+        ingest(
+            content=summary,
+            source_type="session_summary",
+            source_id=all_ids,
+            source_title=f"{session_title} summary",
+            domain=domain,
+            bypass_gate=True,
+            skip_quarantine=True,
+            bypass_security=True,
+        )
+
+    return {"turns": ingested_turns, "chunks": ingested_chunks, "summary": 1 if turn_contents else 0}
 
 
 def ingest_to_ltm(

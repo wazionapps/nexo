@@ -1,35 +1,35 @@
 {
   "mode": "rag",
   "model": "claude-sonnet-4-20250514",
-  "timestamp": "2026-03-24T13:04:44.394237",
+  "timestamp": "2026-03-24T17:21:33.632794",
   "cat_4_open_domain": {
     "count": 841,
-    "f1": 0.144,
-    "recall": 0.5535
+    "f1": 0.6366,
+    "recall": 0.8553
   },
   "cat_1_multi_hop": {
     "count": 282,
-    "f1": 0.134,
-    "recall": 0.2876
+    "f1": 0.3329,
+    "recall": 0.4112
   },
   "cat_2_temporal": {
     "count": 321,
-    "f1": 0.112,
-    "recall": 0.5885
+    "f1": 0.3258,
+    "recall": 0.7503
   },
   "cat_3_first_answer": {
     "count": 96,
-    "f1": 0.0638,
-    "recall": 0.2534
+    "f1": 0.177,
+    "recall": 0.3838
   },
   "cat_5_adversarial": {
     "count": 446,
-    "f1": 0.8744,
-    "recall": 0.3386
+    "f1": 0.9327,
+    "recall": 0.8352
   },
   "overall": {
     "total_qa": 1986,
-    "f1": 0.2975,
-    "recall": 0.459
+    "f1": 0.5875,
+    "recall": 0.7487
   }
 }
