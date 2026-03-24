@@ -72,7 +72,7 @@ NEXO Brain uses **Ebbinghaus forgetting curves** — memories naturally fade ove
 
 ### Semantic Search (Finding by Meaning)
 
-NEXO Brain doesn't search by keywords. It searches by **meaning** using vector embeddings (fastembed, 384 dimensions).
+NEXO Brain doesn't search by keywords. It searches by **meaning** using vector embeddings (fastembed, 768 dimensions).
 
 Example: If you search for "deploy problems", NEXO Brain will find a memory about "SSH connection timeout on production server" — even though they share zero words. This is how human associative memory works.
 
@@ -168,17 +168,20 @@ NEXO Brain was evaluated on [LoCoMo](https://github.com/snap-research/locomo) (A
 
 | System | F1 | Adversarial | Hardware |
 |---|---|---|---|
+| **NEXO Brain v0.5.0** | **0.588** | **93.3%** | **CPU only** |
 | GPT-4 (128K full context) | 0.379 | — | GPU cloud |
 | Gemini Pro 1.0 | 0.313 | — | GPU cloud |
-| **NEXO Brain** | **0.297** | **89.2%** | **CPU only** |
 | LLaMA-3 70B | 0.295 | — | A100 GPU |
 | GPT-3.5 + Contriever RAG | 0.283 | — | GPU |
 
+**+55% vs GPT-4. Running entirely on CPU.**
+
 **Key findings:**
-- Matches 70B-parameter models running entirely on CPU with 384-dim embeddings
-- 89.2% adversarial rejection rate — reliably says "I don't know" when information isn't available
-- 25s ingestion for 10 full conversations (no GPU, no batching)
-- 58.9% temporal recall on "when did X happen?" questions
+- Outperforms GPT-4 (128K full context) by 55% on F1 score
+- 93.3% adversarial rejection rate — reliably says "I don't know" when information isn't available
+- 74.9% recall across 1,986 questions
+- Open-domain F1: 0.637 | Multi-hop F1: 0.333 | Temporal F1: 0.326
+- Runs on CPU with 768-dim embeddings (BAAI/bge-base-en-v1.5) — no GPU required
 - First MCP memory server benchmarked on a peer-reviewed dataset
 
 Full results in [`benchmarks/locomo/results/`](benchmarks/locomo/results/).
