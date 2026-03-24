@@ -837,7 +837,7 @@
         </h1>
 
         <p class="hero-subtitle fade-up">
-            Give your AI agent a brain that remembers, learns, and protects itself from repeating mistakes. Built on the Atkinson-Shiffrin memory model with 97+ MCP tools.
+            Give your AI agent a brain that remembers, learns, and protects itself from repeating mistakes. F1 0.588 on LoCoMo &mdash; +55% vs GPT-4. Built on the Atkinson-Shiffrin memory model with 97+ MCP tools.
         </p>
 
         <div class="hero-actions fade-up">
@@ -874,7 +874,7 @@
             <div class="stat-label">Categories</div>
         </div>
         <div class="stat">
-            <div class="stat-value">384</div>
+            <div class="stat-value">768</div>
             <div class="stat-label">Vector Dimensions</div>
         </div>
         <div class="stat">
@@ -989,6 +989,26 @@
                 <div class="feature-icon">&#x1F433;</div>
                 <h3>Docker Support</h3>
                 <p>Run NEXO Brain in a container with two commands. Mount your data directory, and the cognitive engine runs isolated and portable across any environment.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#x1F50E;</div>
+                <h3>Multi-Query Decomposition</h3>
+                <p>Complex questions are automatically split into sub-queries. Each component is retrieved independently, then fused for a higher-quality answer. Improves recall on multi-faceted prompts.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#x2702;&#xFE0F;</div>
+                <h3>Intelligent Chunking</h3>
+                <p>Adaptive chunking strategy that respects sentence and paragraph boundaries. Produces semantically coherent chunks instead of arbitrary token splits, reducing retrieval noise.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#x1F3AF;</div>
+                <h3>Cross-Encoder Reranking</h3>
+                <p>After initial vector retrieval, a cross-encoder model rescores candidates for precision. The top-k results are reordered by true semantic relevance before being returned to the agent.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#x1F4C3;</div>
+                <h3>Session Summaries</h3>
+                <p>Automatic end-of-session summarization that distills key decisions, errors, and follow-ups into a compact diary entry. The next session starts with full context, not a cold slate.</p>
             </div>
         </div>
     </div>
@@ -1355,8 +1375,8 @@
                         <td>GPU cloud</td>
                     </tr>
                     <tr class="benchmark-row-nexo">
-                        <td>NEXO Brain &nbsp;<span class="benchmark-badge">&#x2728; This project</span></td>
-                        <td>0.297</td>
+                        <td>NEXO Brain v0.5.0 &nbsp;<span class="benchmark-badge">&#x2728; This project</span></td>
+                        <td>0.588</td>
                         <td>CPU only</td>
                     </tr>
                     <tr>
@@ -1375,7 +1395,7 @@
 
         <div class="benchmark-stats">
             <div class="benchmark-stat-card">
-                <div class="benchmark-stat-value">89.2%</div>
+                <div class="benchmark-stat-value">93.3%</div>
                 <div class="benchmark-stat-label">Adversarial rejection</div>
             </div>
             <div class="benchmark-stat-card">
@@ -1383,7 +1403,7 @@
                 <div class="benchmark-stat-label">Ingestion time</div>
             </div>
             <div class="benchmark-stat-card">
-                <div class="benchmark-stat-value">384</div>
+                <div class="benchmark-stat-value">768</div>
                 <div class="benchmark-stat-label">CPU embeddings (dims)</div>
             </div>
             <div class="benchmark-stat-card">
