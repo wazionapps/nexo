@@ -1,5 +1,9 @@
 # NEXO Brain — Your AI Gets a Brain
 
+[![GitHub stars](https://img.shields.io/github/stars/wazionapps/nexo?style=social)](https://github.com/wazionapps/nexo/stargazers)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![GitHub Sponsors](https://img.shields.io/badge/Sponsor-%E2%9D%A4-pink)](https://github.com/sponsors/wazionapps)
+
 **NEXO Brain transforms any MCP-compatible AI agent from a stateless assistant into a cognitive partner that remembers, learns, forgets, adapts, and builds a relationship with you over time.**
 
 [Watch the overview on YouTube](https://www.youtube.com/watch?v=-uvhicUhGTY)
@@ -386,9 +390,16 @@ NEXO Brain builds on ideas from several open-source projects. We're grateful for
 | [claude-mem](https://github.com/nicobailey/claude-mem) | Hook auto-capture (extracting decisions and facts from conversations) |
 | [ClawMem](https://github.com/nicobailey/ClawMem) | Co-activation reinforcement (memories retrieved together strengthen connections) |
 
-## Contributing
+## Support the Project
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines. Issues and PRs welcome.
+If NEXO Brain is useful to you, consider:
+
+- **Star this repo** — it helps others discover the project and motivates continued development
+- **[Sponsor on GitHub](https://github.com/sponsors/wazionapps)** — support ongoing development directly
+- **Share your experience** — tell others how you're using cognitive memory in your AI workflows
+- **Contribute** — see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines. Issues and PRs welcome
+
+[![Star History Chart](https://api.star-history.com/svg?repos=wazionapps/nexo&type=Date)](https://star-history.com/#wazionapps/nexo&Date)
 
 ## License
 
