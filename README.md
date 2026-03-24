@@ -144,6 +144,9 @@ NEXO Brain v0.3.1 adds 21 cognitive tools on top of the 76 base tools, bringing 
 | Feature | What It Does |
 |---------|-------------|
 | **Pin / Snooze / Archive** | Granular lifecycle states for memories. Pin = never decays (critical knowledge). Snooze = temporarily hidden (revisit later). Archive = cold storage (searchable but inactive). |
+| **Intelligent Chunking** | Adaptive chunking that respects sentence and paragraph boundaries. Produces semantically coherent chunks instead of arbitrary token splits, reducing retrieval noise. |
+| **Adaptive Decay** | Decay rate adapts per memory based on access patterns: frequently-accessed memories decay slower, rarely-accessed ones fade faster. Prevents permanent clutter while keeping active knowledge sharp. |
+| **Auto-Migration** | Formal schema migration system (schema_migrations table) tracks all database changes. Safe, reversible schema evolution for production systems — upgrades never lose data. |
 | **Auto-Merge Duplicates** | Batch cosine deduplication during the 03:00 sleep cycle. Respects sibling discrimination — similar memories about different contexts are kept separate. |
 | **Memory Dreaming** | Discovers hidden connections between recent memories during the 03:00 sleep cycle. Surfaces non-obvious patterns like "these three bugs all relate to the same root cause." |
 
@@ -152,6 +155,10 @@ NEXO Brain v0.3.1 adds 21 cognitive tools on top of the 76 base tools, bringing 
 | Feature | What It Does |
 |---------|-------------|
 | **HyDE Query Expansion** | Generates hypothetical answer embeddings for richer semantic search. Instead of searching for "deploy error", it imagines what a helpful memory about deploy errors would look like, then searches for that. |
+| **Hybrid Search (FTS5+BM25+RRF)** | Combines dense vector search with BM25 keyword search via Reciprocal Rank Fusion. Outperforms pure semantic search on precise terminology and code identifiers. |
+| **Cross-Encoder Reranking** | After initial vector retrieval, a cross-encoder model rescores candidates for precision. The top-k results are reordered by true semantic relevance before being returned to the agent. |
+| **Multi-Query Decomposition** | Complex questions are automatically split into sub-queries. Each component is retrieved independently, then fused for a higher-quality answer — improves recall on multi-faceted prompts. |
+| **Temporal Indexing** | Memories are indexed by time in addition to semantics. Time-sensitive queries ("what did we decide last Tuesday?") use temporal proximity scoring alongside semantic similarity. |
 | **Spreading Activation** | Graph-based co-activation network. Memories retrieved together reinforce each other's connections, building an associative web that improves over time. |
 | **Recall Explanations** | Transparent score breakdown for every retrieval result. Shows exactly why a memory was returned: semantic similarity, recency, access frequency, and co-activation bonuses. |
 
@@ -161,6 +168,7 @@ NEXO Brain v0.3.1 adds 21 cognitive tools on top of the 76 base tools, bringing 
 |---------|-------------|
 | **Prospective Memory** | Context-triggered reminders that fire when conversation topics match, not just by date. "Remind me about X when we discuss Y" works naturally. |
 | **Hook Auto-capture** | Extracts decisions, corrections, and factual statements from conversations automatically. You don't need to explicitly say "remember this" — the system detects what's worth storing. |
+| **Session Summaries** | Automatic end-of-session summarization that distills key decisions, errors, and follow-ups into a compact diary entry. The next session starts with full context — not a cold slate. |
 
 ## Benchmark: LoCoMo (ACL 2024)
 
