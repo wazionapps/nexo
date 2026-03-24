@@ -20,7 +20,7 @@ We are committed to making participation in NEXO Brain a harassment-free experie
 
 ## Enforcement
 
-Instances of abusive behavior may be reported to **conduct@wazion.com**. All complaints will be reviewed and investigated. Maintainers who do not follow the Code of Conduct may be removed from the project.
+Instances of abusive behavior may be reported to **conduct@nexo-brain.com**. All complaints will be reviewed and investigated. Maintainers who do not follow the Code of Conduct may be removed from the project.
 
 ## Attribution
 

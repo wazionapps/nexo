@@ -12,7 +12,7 @@
 If you discover a security vulnerability in NEXO Brain, please report it responsibly:
 
 1. **Do NOT open a public issue**
-2. Email **security@wazion.com** with:
+2. Email **security@nexo-brain.com** with:
    - Description of the vulnerability
    - Steps to reproduce
    - Potential impact
