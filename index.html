@@ -280,9 +280,11 @@
         .feature-icon {
             width: 48px; height: 48px; border-radius: 12px;
             display: flex; align-items: center; justify-content: center;
-            font-size: 24px; margin-bottom: 20px;
+            margin-bottom: 20px;
             background: linear-gradient(135deg, rgba(124, 58, 237, 0.15), rgba(236, 72, 153, 0.15));
+            color: var(--purple-light);
         }
+        .feature-icon svg { width: 28px; height: 28px; }
 
         .feature-card h3 { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
         .feature-card p { font-size: 15px; color: var(--text-muted); line-height: 1.6; }
@@ -395,8 +397,10 @@
         }
 
         .integration-card .icon {
-            font-size: 36px; margin-bottom: 16px;
+            display: flex; align-items: center; justify-content: center;
+            margin-bottom: 16px; color: var(--purple-light);
         }
+        .integration-card .icon svg { width: 28px; height: 28px; }
 
         .integration-card h3 { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
         .integration-card p { font-size: 15px; color: var(--text-muted); line-height: 1.6; }
@@ -427,7 +431,8 @@
             transform: translateY(-2px);
         }
 
-        .process-card .process-icon { font-size: 20px; margin-bottom: 8px; }
+        .process-card .process-icon { display: flex; align-items: center; justify-content: center; margin-bottom: 8px; color: var(--purple-light); }
+        .process-card .process-icon svg { width: 28px; height: 28px; }
         .process-card h4 { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
         .process-card p { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
 
@@ -580,7 +585,8 @@
             color: var(--text);
         }
 
-        .listed-badge .badge-icon { font-size: 18px; }
+        .listed-badge .badge-icon { display: inline-flex; align-items: center; }
+        .listed-badge .badge-icon svg { width: 16px; height: 16px; margin-right: 4px; }
 
         /* ===== Code Example ===== */
         .code-block {
@@ -900,19 +906,19 @@
 
         <div class="integrations-grid">
             <div class="integration-card">
-                <div class="icon">&#x1F50C;</div>
+                <div class="icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></div>
                 <h3>MCP Server</h3>
                 <p>Native Model Context Protocol server. Works with Claude Code, Claude Desktop, and any MCP-compatible client out of the box.</p>
                 <span class="tag">Universal</span>
             </div>
             <div class="integration-card">
-                <div class="icon">&#x1F9E9;</div>
+                <div class="icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></div>
                 <h3>OpenClaw Memory System</h3>
                 <p>Replaces OpenClaw's default memory with full cognitive architecture. Deep integration with the agent lifecycle and tool registry.</p>
                 <span class="tag">OpenClaw</span>
             </div>
             <div class="integration-card">
-                <div class="icon">&#x1F6D2;</div>
+                <div class="icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg></div>
                 <h3>ClawHub Skill</h3>
                 <p>One-click install from the ClawHub marketplace. Browse, install, and start using cognitive memory in seconds.</p>
                 <span class="tag">One-Click</span>
@@ -932,107 +938,107 @@
 
         <div class="features-grid">
             <div class="feature-card">
-                <div class="feature-icon">&#x1F9E0;</div>
+                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96-.46 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96-.46 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2z"/></svg></div>
                 <h3>Atkinson-Shiffrin Memory</h3>
                 <p>Three-store model: Sensory Register captures raw input, STM holds working context with rehearsal, LTM consolidates with semantic vectors. Just like human cognition.</p>
             </div>
             <div class="feature-card">
-                <div class="feature-icon">&#x1F50D;</div>
+                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
                 <h3>Semantic RAG</h3>
                 <p>Vector search with fastembed (BAAI/bge-base-en-v1.5). Query across all memory stores with cosine similarity. Retrieve what matters, not just what matches.</p>
             </div>
             <div class="feature-card">
-                <div class="feature-icon">&#x1F6E1;</div>
+                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
                 <h3>Metacognitive Guard</h3>
                 <p>Pre-edit checks that inject known errors, real schemas, and blocking rules before your agent writes code. Prevents repeating past mistakes.</p>
             </div>
             <div class="feature-card">
-                <div class="feature-icon">&#x1F4C9;</div>
+                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></svg></div>
                 <h3>Ebbinghaus Decay</h3>
                 <p>Memories naturally fade over time following the Ebbinghaus forgetting curve. Rehearsal strengthens important memories. No manual cleanup needed.</p>
             </div>
             <div class="feature-card">
-                <div class="feature-icon">&#x1F91D;</div>
+                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>
                 <h3>Trust Score</h3>
                 <p>0-100 alignment index that adjusts based on corrections, successes, and proactive actions. Controls internal rigor: low trust = more paranoid checks.</p>
             </div>
             <div class="feature-card">
-                <div class="feature-icon">&#x26A1;</div>
+                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
                 <h3>Cognitive Dissonance</h3>
                 <p>Detects when new instructions contradict existing strong memories. Surfaces the conflict and asks for resolution instead of silently overwriting.</p>
             </div>
             <div class="feature-card">
-                <div class="feature-icon">&#x1F4DD;</div>
+                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></div>
                 <h3>Episodic Memory</h3>
                 <p>Change logs, decision records with alternatives and reasoning, session diaries with mental state continuity. Full audit trail of what happened and why.</p>
             </div>
             <div class="feature-card">
-                <div class="feature-icon">&#x1F50C;</div>
+                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></div>
                 <h3>Plugin System</h3>
                 <p>Hot-reload plugins at runtime. Add new tool categories without restarting the server. Ship your own extensions as Python files.</p>
             </div>
             <div class="feature-card">
-                <div class="feature-icon">&#x1F512;</div>
+                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
                 <h3>100% Local</h3>
                 <p>All data stored in local SQLite databases. Vectors computed on-device with ONNX Runtime. Nothing ever leaves your machine. Zero cloud dependencies.</p>
             </div>
             <div class="feature-card">
-                <div class="feature-icon">&#x1F3AD;</div>
+                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/><circle cx="12" cy="8" r="4"/></svg></div>
                 <h3>Personality Calibration</h3>
                 <p>5-question onboarding that creates a unique agent personality. Your agent adopts a consistent voice, tone, and behavioral style from day one.</p>
             </div>
             <div class="feature-card">
-                <div class="feature-icon">&#x1F4DC;</div>
+                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
                 <h3>Operational Codex</h3>
                 <p>23 non-negotiable principles every NEXO agent follows. From memory hygiene to error prevention, the codex defines what it means to be a reliable co-operator. <a href="https://github.com/wazionapps/nexo/wiki">See the wiki</a>.</p>
             </div>
             <div class="feature-card">
-                <div class="feature-icon">&#x1F433;</div>
+                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg></div>
                 <h3>Docker Support</h3>
                 <p>Run NEXO Brain in a container with two commands. Mount your data directory, and the cognitive engine runs isolated and portable across any environment.</p>
             </div>
             <div class="feature-card">
-                <div class="feature-icon">&#x1F50E;</div>
+                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
                 <h3>Multi-Query Decomposition</h3>
                 <p>Complex questions are automatically split into sub-queries. Each component is retrieved independently, then fused for a higher-quality answer. Improves recall on multi-faceted prompts.</p>
             </div>
             <div class="feature-card">
-                <div class="feature-icon">&#x2702;&#xFE0F;</div>
+                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg></div>
                 <h3>Intelligent Chunking</h3>
                 <p>Adaptive chunking strategy that respects sentence and paragraph boundaries. Produces semantically coherent chunks instead of arbitrary token splits, reducing retrieval noise.</p>
             </div>
             <div class="feature-card">
-                <div class="feature-icon">&#x1F3AF;</div>
+                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></div>
                 <h3>Cross-Encoder Reranking</h3>
                 <p>After initial vector retrieval, a cross-encoder model rescores candidates for precision. The top-k results are reordered by true semantic relevance before being returned to the agent.</p>
             </div>
             <div class="feature-card">
-                <div class="feature-icon">&#x1F4C3;</div>
+                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg></div>
                 <h3>Session Summaries</h3>
                 <p>Automatic end-of-session summarization that distills key decisions, errors, and follow-ups into a compact diary entry. The next session starts with full context, not a cold slate.</p>
             </div>
             <div class="feature-card">
-                <div class="feature-icon">&#x1F50D;</div>
+                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
                 <h3>Hybrid Search</h3>
                 <p>Combined vector + BM25 keyword search via SQLite FTS5. Best of both worlds: semantic understanding for concept-level retrieval plus exact keyword matching for precise lookups.</p>
             </div>
             <div class="feature-card">
-                <div class="feature-icon">&#x1F4D0;</div>
+                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></svg></div>
                 <h3>768-dim Embeddings</h3>
                 <p>Upgraded from 384 to 768 dimensions (BAAI/bge-base-en-v1.5). Doubled semantic precision for richer memory representations — still CPU-only, no GPU required.</p>
             </div>
             <div class="feature-card">
-                <div class="feature-icon">&#x23F3;</div>
+                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
                 <h3>Adaptive Decay</h3>
                 <p>Redundancy-aware Ebbinghaus forgetting curve. Unique memories decay 4x slower than duplicates — no information loss in sparse stores, automatic cleanup in dense ones.</p>
             </div>
             <div class="feature-card">
-                <div class="feature-icon">&#x1F4C5;</div>
+                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
                 <h3>Temporal Indexing</h3>
                 <p>Automatic date extraction and temporal query boosting. "When" questions get smarter filtering — memories are ranked not just by relevance but by recency when context demands it.</p>
             </div>
             <div class="feature-card">
-                <div class="feature-icon">&#x1F504;</div>
+                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg></div>
                 <h3>Auto-Migration</h3>
                 <p>Transparent 384→768 embedding upgrade on first startup. All existing memories are re-embedded automatically with zero user action required — no data loss, no manual steps.</p>
             </div>
@@ -1506,42 +1512,42 @@
 
         <div class="processes-grid">
             <div class="process-card">
-                <div class="process-icon">&#x1F4C9;</div>
+                <div class="process-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></svg></div>
                 <h4>Cognitive Decay</h4>
                 <p>Daily Ebbinghaus memory sweep. Weakens unrehearsed memories and promotes surviving STM items to LTM.</p>
             </div>
             <div class="process-card">
-                <div class="process-icon">&#x1F319;</div>
+                <div class="process-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></div>
                 <h4>Sleep System</h4>
                 <p>Nightly memory cleanup and pruning. Consolidates the day's learning and removes noise while the system is idle.</p>
             </div>
             <div class="process-card">
-                <div class="process-icon">&#x1F4CB;</div>
+                <div class="process-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg></div>
                 <h4>Daily Synthesis</h4>
                 <p>Morning intelligence brief. Summarizes yesterday's errors, patterns, pending items, and context for the day ahead.</p>
             </div>
             <div class="process-card">
-                <div class="process-icon">&#x1F50D;</div>
+                <div class="process-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
                 <h4>Self-Audit</h4>
                 <p>Daily behavioral self-evaluation. Checks for repeated errors, ignored learnings, and drift from the operational codex.</p>
             </div>
             <div class="process-card">
-                <div class="process-icon">&#x1F9EA;</div>
+                <div class="process-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v11m0 0H3m6 0a3 3 0 0 0 6 0m0 0h6m-6 0v5"/></svg></div>
                 <h4>Post-Mortem Consolidator</h4>
                 <p>Extracts learning patterns from session histories. Turns individual incidents into reusable prevention rules.</p>
             </div>
             <div class="process-card">
-                <div class="process-icon">&#x1F6E1;</div>
+                <div class="process-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
                 <h4>Immune System</h4>
                 <p>Health monitor and auto-repair. Detects database corruption, stale locks, and process failures, then fixes them.</p>
             </div>
             <div class="process-card">
-                <div class="process-icon">&#x1F504;</div>
+                <div class="process-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg></div>
                 <h4>Catch-Up</h4>
                 <p>Recovers missed tasks on Mac boot. If the machine was asleep during scheduled processes, catch-up runs them all.</p>
             </div>
             <div class="process-card">
-                <div class="process-icon">&#x2B06;</div>
+                <div class="process-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></div>
                 <h4>Auto-Update</h4>
                 <p>Checks for new versions and applies updates. Keeps the cognitive engine current without manual intervention.</p>
             </div>
@@ -1657,22 +1663,22 @@
 
         <div class="listed-grid">
             <a href="https://www.npmjs.com/package/nexo-brain" class="listed-badge">
-                <span class="badge-icon">&#x1F4E6;</span> npm
+                <span class="badge-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg></span> npm
             </a>
             <a href="https://glama.ai/mcp/servers/@wazionapps/nexo" class="listed-badge">
-                <span class="badge-icon">&#x2728;</span> Glama
+                <span class="badge-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span> Glama
             </a>
             <a href="https://mcpmarket.com/server/nexo" class="listed-badge">
-                <span class="badge-icon">&#x1F6D2;</span> MCPMarket
+                <span class="badge-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg></span> MCPMarket
             </a>
             <a href="https://github.com/wazionapps/nexo" class="listed-badge">
-                <span class="badge-icon">&#x1F4BB;</span> GitHub
+                <span class="badge-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg></span> GitHub
             </a>
             <a href="https://dev.to/wazionapps/how-i-applied-cognitive-psychology-to-give-ai-agents-real-memory-2oce" class="listed-badge">
-                <span class="badge-icon">&#x1F4DD;</span> dev.to Article
+                <span class="badge-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></span> dev.to Article
             </a>
             <a href="https://www.youtube.com/watch?v=-uvhicUhGTY" class="listed-badge">
-                <span class="badge-icon">&#x1F3AC;</span> YouTube
+                <span class="badge-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg></span> YouTube
             </a>
         </div>
     </div>
