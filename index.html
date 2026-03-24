@@ -1010,6 +1010,31 @@
                 <h3>Session Summaries</h3>
                 <p>Automatic end-of-session summarization that distills key decisions, errors, and follow-ups into a compact diary entry. The next session starts with full context, not a cold slate.</p>
             </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#x1F50D;</div>
+                <h3>Hybrid Search</h3>
+                <p>Combined vector + BM25 keyword search via SQLite FTS5. Best of both worlds: semantic understanding for concept-level retrieval plus exact keyword matching for precise lookups.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#x1F4D0;</div>
+                <h3>768-dim Embeddings</h3>
+                <p>Upgraded from 384 to 768 dimensions (BAAI/bge-base-en-v1.5). Doubled semantic precision for richer memory representations — still CPU-only, no GPU required.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#x23F3;</div>
+                <h3>Adaptive Decay</h3>
+                <p>Redundancy-aware Ebbinghaus forgetting curve. Unique memories decay 4x slower than duplicates — no information loss in sparse stores, automatic cleanup in dense ones.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#x1F4C5;</div>
+                <h3>Temporal Indexing</h3>
+                <p>Automatic date extraction and temporal query boosting. "When" questions get smarter filtering — memories are ranked not just by relevance but by recency when context demands it.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#x1F504;</div>
+                <h3>Auto-Migration</h3>
+                <p>Transparent 384→768 embedding upgrade on first startup. All existing memories are re-embedded automatically with zero user action required — no data loss, no manual steps.</p>
+            </div>
         </div>
     </div>
 </section>
