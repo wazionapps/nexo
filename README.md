@@ -162,6 +162,27 @@ NEXO Brain v0.3.1 adds 21 cognitive tools on top of the 76 base tools, bringing 
 | **Prospective Memory** | Context-triggered reminders that fire when conversation topics match, not just by date. "Remind me about X when we discuss Y" works naturally. |
 | **Hook Auto-capture** | Extracts decisions, corrections, and factual statements from conversations automatically. You don't need to explicitly say "remember this" — the system detects what's worth storing. |
 
+## Benchmark: LoCoMo (ACL 2024)
+
+NEXO Brain was evaluated on [LoCoMo](https://github.com/snap-research/locomo) (ACL 2024), a long-term conversation memory benchmark with 1,986 questions across 10 multi-session conversations.
+
+| System | F1 | Adversarial | Hardware |
+|---|---|---|---|
+| GPT-4 (128K full context) | 0.379 | — | GPU cloud |
+| Gemini Pro 1.0 | 0.313 | — | GPU cloud |
+| **NEXO Brain** | **0.297** | **89.2%** | **CPU only** |
+| LLaMA-3 70B | 0.295 | — | A100 GPU |
+| GPT-3.5 + Contriever RAG | 0.283 | — | GPU |
+
+**Key findings:**
+- Matches 70B-parameter models running entirely on CPU with 384-dim embeddings
+- 89.2% adversarial rejection rate — reliably says "I don't know" when information isn't available
+- 25s ingestion for 10 full conversations (no GPU, no batching)
+- 58.9% temporal recall on "when did X happen?" questions
+- First MCP memory server benchmarked on a peer-reviewed dataset
+
+Full results in [`benchmarks/locomo/results/`](benchmarks/locomo/results/).
+
 ## Quick Start
 
 ### Claude Code (Primary)

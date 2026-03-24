@@ -1,0 +1,35 @@
+{
+  "mode": "cognitive",
+  "model": "claude-sonnet-4-20250514",
+  "timestamp": "2026-03-24T14:27:28.874206",
+  "cat_4_open_domain": {
+    "count": 841,
+    "f1": 0.1358,
+    "recall": 0.518
+  },
+  "cat_1_multi_hop": {
+    "count": 282,
+    "f1": 0.1312,
+    "recall": 0.2666
+  },
+  "cat_2_temporal": {
+    "count": 321,
+    "f1": 0.1112,
+    "recall": 0.5636
+  },
+  "cat_3_first_answer": {
+    "count": 96,
+    "f1": 0.0641,
+    "recall": 0.209
+  },
+  "cat_5_adversarial": {
+    "count": 446,
+    "f1": 0.8722,
+    "recall": 0.3217
+  },
+  "overall": {
+    "total_qa": 1986,
+    "f1": 0.2931,
+    "recall": 0.4311
+  }
+}
