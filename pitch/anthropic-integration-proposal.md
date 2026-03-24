@@ -69,7 +69,7 @@ The key insight: a well-designed memory system with selective retrieval beats br
 ## Traction
 
 - **949 npm downloads** on the first day of public release (March 23, 2026)
-- **107 MCP tools** across 17 categories
+- **97+ MCP tools** across 17 categories
 - Listed on npm, Glama, MCPMarket, awesome-mcp-servers
 - Active GitHub community with discussions and issues
 
