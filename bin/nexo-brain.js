@@ -75,6 +75,120 @@ async function main() {
     process.exit(1);
   }
 
+  // Auto-migration: detect existing installation
+  const versionFile = path.join(NEXO_HOME, "version.json");
+  if (fs.existsSync(versionFile)) {
+    try {
+      const installed = JSON.parse(fs.readFileSync(versionFile, "utf8"));
+      const currentPkg = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf8"));
+      const installedVersion = installed.version || "0.0.0";
+      const currentVersion = currentPkg.version;
+
+      if (installedVersion !== currentVersion) {
+        log(`Existing installation detected: v${installedVersion} → v${currentVersion}`);
+        log("Running auto-migration...");
+
+        // Update hooks
+        const hooksSrc = path.join(__dirname, "..", "src", "hooks");
+        const hooksDest = path.join(NEXO_HOME, "hooks");
+        fs.mkdirSync(hooksDest, { recursive: true });
+        ["session-start.sh", "capture-session.sh", "session-stop.sh", "pre-compact.sh", "caffeinate-guard.sh"].forEach((h) => {
+          const src = path.join(hooksSrc, h);
+          const dest = path.join(hooksDest, h);
+          if (fs.existsSync(src)) {
+            fs.copyFileSync(src, dest);
+            fs.chmodSync(dest, "755");
+          }
+        });
+        log("  Hooks updated.");
+
+        // Update core Python files
+        const srcDir = path.join(__dirname, "..", "src");
+        ["server.py", "db.py", "plugin_loader.py", "cognitive.py",
+         "tools_sessions.py", "tools_coordination.py", "tools_reminders.py",
+         "tools_reminders_crud.py", "tools_learnings.py", "tools_credentials.py",
+         "tools_task_history.py", "tools_menu.py"].forEach((f) => {
+          const src = path.join(srcDir, f);
+          if (fs.existsSync(src)) {
+            fs.copyFileSync(src, path.join(NEXO_HOME, f));
+          }
+        });
+        log("  Core files updated.");
+
+        // Update plugins
+        const pluginsSrc = path.join(srcDir, "plugins");
+        const pluginsDest = path.join(NEXO_HOME, "plugins");
+        fs.mkdirSync(pluginsDest, { recursive: true });
+        if (fs.existsSync(pluginsSrc)) {
+          fs.readdirSync(pluginsSrc).filter(f => f.endsWith(".py")).forEach((f) => {
+            fs.copyFileSync(path.join(pluginsSrc, f), path.join(pluginsDest, f));
+          });
+        }
+        log("  Plugins updated.");
+
+        // Update scripts
+        const scriptsSrc = path.join(srcDir, "scripts");
+        const scriptsDest = path.join(NEXO_HOME, "scripts");
+        fs.mkdirSync(scriptsDest, { recursive: true });
+        if (fs.existsSync(scriptsSrc)) {
+          fs.readdirSync(scriptsSrc).filter(f => f.endsWith(".py") || f.endsWith(".sh")).forEach((f) => {
+            fs.copyFileSync(path.join(scriptsSrc, f), path.join(scriptsDest, f));
+          });
+        }
+        log("  Scripts updated.");
+
+        // Add PreCompact hook to settings.json if missing
+        let settings = {};
+        if (fs.existsSync(CLAUDE_SETTINGS)) {
+          try { settings = JSON.parse(fs.readFileSync(CLAUDE_SETTINGS, "utf8")); } catch {}
+        }
+        if (settings.hooks && !settings.hooks.PreCompact) {
+          settings.hooks.PreCompact = [];
+        }
+        if (settings.hooks && settings.hooks.PreCompact) {
+          const hookPath = path.join(hooksDest, "pre-compact.sh");
+          if (!settings.hooks.PreCompact.some((h) => h.command && h.command.includes("pre-compact.sh"))) {
+            settings.hooks.PreCompact.push({
+              type: "command",
+              command: `bash ${hookPath}`,
+            });
+            fs.writeFileSync(CLAUDE_SETTINGS, JSON.stringify(settings, null, 2));
+            log("  PreCompact hook added to Claude Code settings.");
+          }
+        }
+
+        // Update version file
+        fs.writeFileSync(versionFile, JSON.stringify({
+          version: currentVersion,
+          installed_at: installed.installed_at,
+          updated_at: new Date().toISOString(),
+          migrated_from: installedVersion,
+        }, null, 2));
+
+        // Save updated CLAUDE.md template as reference (don't overwrite user's)
+        const templateSrc = path.join(__dirname, "..", "templates", "CLAUDE.md.template");
+        if (fs.existsSync(templateSrc)) {
+          const operatorName = installed.operator_name || "NEXO";
+          let claudeMd = fs.readFileSync(templateSrc, "utf8")
+            .replace(/\{\{NAME\}\}/g, operatorName)
+            .replace(/\{\{NEXO_HOME\}\}/g, NEXO_HOME);
+          fs.writeFileSync(path.join(NEXO_HOME, "CLAUDE.md.updated"), claudeMd);
+          log(`  Updated CLAUDE.md template saved to ~/.nexo/CLAUDE.md.updated`);
+          log(`  Review and merge changes into your ~/.claude/CLAUDE.md if desired.`);
+        }
+
+        console.log("");
+        log(`Migration complete: v${installedVersion} → v${currentVersion}`);
+        log("Your data (memories, learnings, preferences) is untouched.");
+        console.log("");
+        rl.close();
+        return;
+      }
+    } catch (e) {
+      // Version file corrupt — proceed with fresh install
+    }
+  }
+
   // Find or install Homebrew (needed for Python)
   let hasBrew = run("which brew");
   if (!hasBrew) {
@@ -249,6 +363,7 @@ async function main() {
     JSON.stringify({
       version: pkg.version,
       installed_at: new Date().toISOString(),
+      operator_name: operatorName,
       files_updated: 0,
     }, null, 2)
   );
@@ -421,7 +536,7 @@ Operator name: ${operatorName}
   const hooksSrcDir = path.join(__dirname, "..", "src", "hooks");
   const hooksDestDir = path.join(NEXO_HOME, "hooks");
   fs.mkdirSync(hooksDestDir, { recursive: true });
-  ["session-start.sh", "capture-session.sh", "session-stop.sh"].forEach((h) => {
+  ["session-start.sh", "capture-session.sh", "session-stop.sh", "pre-compact.sh"].forEach((h) => {
     const src = path.join(hooksSrcDir, h);
     const dest = path.join(hooksDestDir, h);
     if (fs.existsSync(src)) {
@@ -458,6 +573,16 @@ Operator name: ${operatorName}
   };
   if (!settings.hooks.Stop.some((h) => h.command && h.command.includes("session-stop.sh"))) {
     settings.hooks.Stop.push(stopHook);
+  }
+
+  // PreCompact hook (saves context before conversation compression)
+  if (!settings.hooks.PreCompact) settings.hooks.PreCompact = [];
+  const preCompactHook = {
+    type: "command",
+    command: `bash ${path.join(hooksDestDir, "pre-compact.sh")}`,
+  };
+  if (!settings.hooks.PreCompact.some((h) => h.command && h.command.includes("pre-compact.sh"))) {
+    settings.hooks.PreCompact.push(preCompactHook);
   }
 
   const settingsDir = path.dirname(CLAUDE_SETTINGS);
