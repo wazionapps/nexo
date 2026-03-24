@@ -407,4 +407,4 @@ MIT -- see [LICENSE](LICENSE)
 
 ---
 
-Built by [WAzion](https://www.wazion.com)
+Created by **Francisco Cerdà Puigserver** · Built by [WAzion](https://www.wazion.com)
