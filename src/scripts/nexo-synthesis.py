@@ -110,7 +110,7 @@ def section_learnings() -> str:
         (TODAY_STR,),
     )
     if not rows:
-        return "Sin errores nuevos registrados."
+        return "No new errors recorded."
 
     lines = []
     for r in rows:
@@ -130,7 +130,7 @@ def section_decisions() -> str:
         (TODAY_STR,),
     )
     if not rows:
-        return "Sin decisiones registradas."
+        return "No decisions recorded."
 
     lines = []
     for r in rows:
@@ -140,13 +140,13 @@ def section_decisions() -> str:
         why = truncate(r.get("based_on") or "", 120)
         outcome = r.get("outcome") or ""
 
-        line = f"- **[{domain}]** Elegido: {chosen}"
+        line = f"- **[{domain}]** Chosen: {chosen}"
         if discarded:
-            line += f"\n  Descartado: {discarded}"
+            line += f"\n  Discarded: {discarded}"
         if why:
-            line += f"\n  Por: {why}"
+            line += f"\n  Why: {why}"
         if outcome:
-            line += f"\n  Resultado: {truncate(outcome, 100)}"
+            line += f"\n  Result: {truncate(outcome, 100)}"
         lines.append(line)
     return "\n".join(lines)
 
@@ -159,7 +159,7 @@ def section_changes() -> str:
         (TODAY_STR,),
     )
     if not rows:
-        return "Sin cambios de código registrados."
+        return "No code changes recorded."
 
     # Group by "system" (first part of first file path)
     by_system = defaultdict(list)
@@ -173,13 +173,13 @@ def section_changes() -> str:
 
     lines = []
     for system, entries in by_system.items():
-        lines.append(f"**{system}** ({len(entries)} cambio{'s' if len(entries) > 1 else ''}):")
+        lines.append(f"**{system}** ({len(entries)} change{'s' if len(entries) > 1 else ''}):")
         for r in entries[:3]:  # cap per system
             what = truncate(r.get("what_changed") or "", 160)
             risks = truncate(r.get("risks") or "", 100)
             lines.append(f"  - {what}")
             if risks:
-                lines.append(f"    ⚠ Riesgos: {risks}")
+                lines.append(f"    ⚠ Risks: {risks}")
     return "\n".join(lines)
 
 
@@ -202,7 +202,7 @@ def section_patterns() -> str:
     total_changes = len(change_rows)
 
     if total_learn < 3 and total_changes < 3:
-        return "Datos insuficientes para análisis de patrones (< 7 días)."
+        return "Insufficient data for pattern analysis (< 7 days)."
 
     lines = []
 
@@ -210,9 +210,9 @@ def section_patterns() -> str:
     if learn_rows:
         cat_counter = Counter(r.get("category") or "general" for r in learn_rows)
         top_cats = cat_counter.most_common(3)
-        lines.append(f"**Áreas con más errores** (últimos 7d, {total_learn} learnings):")
+        lines.append(f"**Areas with most errors** (last 7d, {total_learn} learnings):")
         for cat, count in top_cats:
-            lines.append(f"  - {cat}: {count} {'error' if count == 1 else 'errores'}")
+            lines.append(f"  - {cat}: {count} {'error' if count == 1 else 'errors'}")
 
     # Systems most touched in change_log
     if change_rows:
@@ -225,9 +225,9 @@ def section_patterns() -> str:
                 if parts:
                     sys_counter[parts[0]] += 1
         top_sys = sys_counter.most_common(3)
-        lines.append(f"**Sistemas más tocados** (últimos 7d, {total_changes} cambios):")
+        lines.append(f"**Most touched systems** (last 7d, {total_changes} changes):")
         for sys_name, count in top_sys:
-            lines.append(f"  - {sys_name}: {count} {'modificación' if count == 1 else 'modificaciones'}")
+            lines.append(f"  - {sys_name}: {count} {'modification' if count == 1 else 'modifications'}")
 
     # Recurring error patterns — categories with learnings on 3+ different days
     if learn_rows:
@@ -243,11 +243,11 @@ def section_patterns() -> str:
             cat_days = Counter(r.get("category") or "general" for r in daily_cats)
             recurring = [(c, d) for c, d in cat_days.items() if d >= 3]
             if recurring:
-                lines.append("**Categorías con errores recurrentes** (3+ días distintos):")
+                lines.append("**Categories with recurring errors** (3+ different days):")
                 for cat, days in sorted(recurring, key=lambda x: -x[1]):
-                    lines.append(f"  - {cat}: errores en {days} días — punto débil")
+                    lines.append(f"  - {cat}: errors on {days} days — weak point")
 
-    return "\n".join(lines) if lines else "Sin patrones significativos detectados."
+    return "\n".join(lines) if lines else "No significant patterns detected."
 
 
 def section_manana() -> str:
@@ -262,15 +262,15 @@ def section_manana() -> str:
         (TOMORROW,),
     )
     if rem_rows:
-        lines.append("### Recordatorios vencidos/mañana")
+        lines.append("### Overdue/tomorrow reminders")
         for r in rem_rows:
             d = r.get("date") or ""
             cat = r.get("category") or ""
             desc = truncate(r.get("description") or "", 150)
-            overdue = " ⚠ VENCIDO" if d and d < TODAY_STR else ""
+            overdue = " ⚠ OVERDUE" if d and d < TODAY_STR else ""
             lines.append(f"- [{d}]{overdue} {desc}" + (f" ({cat})" if cat else ""))
     else:
-        lines.append("### Recordatorios\nNinguno vencido ni para mañana.")
+        lines.append("### Reminders\nNone overdue or due tomorrow.")
 
     # Followups due <= tomorrow, PENDIENTE
     fol_rows = safe_query(
@@ -281,14 +281,14 @@ def section_manana() -> str:
         (TOMORROW,),
     )
     if fol_rows:
-        lines.append("### Followups vencidos/mañana")
+        lines.append("### Overdue/tomorrow followups")
         for r in fol_rows:
             d = r.get("date") or ""
             desc = truncate(r.get("description") or "", 150)
-            overdue = " ⚠ VENCIDO" if d and d < TODAY_STR else ""
+            overdue = " ⚠ OVERDUE" if d and d < TODAY_STR else ""
             lines.append(f"- [{d}]{overdue} {desc}")
     else:
-        lines.append("### Followups\nNinguno vencido ni para mañana.")
+        lines.append("### Followups\nNone overdue or due tomorrow.")
 
     # Last 3 session diary entries — pending + next_session_context
     diary_rows = safe_query(
@@ -297,7 +297,7 @@ def section_manana() -> str:
         "ORDER BY created_at DESC LIMIT 3",
     )
     if diary_rows:
-        lines.append("### Contexto activo (últimas sesiones)")
+        lines.append("### Active context (recent sessions)")
         for r in diary_rows:
             domain = r.get("domain") or "general"
             pending = truncate(r.get("pending") or "", 200)
@@ -306,11 +306,11 @@ def section_manana() -> str:
             if pending or nxt:
                 lines.append(f"**[{domain}]** ({ts[:16]}):")
                 if pending:
-                    lines.append(f"  Pendiente: {pending}")
+                    lines.append(f"  Pending: {pending}")
                 if nxt:
-                    lines.append(f"  Para la próxima: {nxt}")
+                    lines.append(f"  For next session: {nxt}")
 
-    return "\n".join(lines) if lines else "Sin elementos para mañana."
+    return "\n".join(lines) if lines else "No items for tomorrow."
 
 
 def section_autoevaluacion() -> str:
@@ -321,7 +321,7 @@ def section_autoevaluacion() -> str:
         (TODAY_STR,),
     )
     if not diary_rows:
-        return "Sin diarios de sesión registrados hoy."
+        return "No session diaries recorded today."
 
     lines = []
 
@@ -329,14 +329,14 @@ def section_autoevaluacion() -> str:
     all_critiques = []
     for r in diary_rows:
         sc = r.get("self_critique") or ""
-        if sc.strip() and not sc.strip().lower().startswith("sin autocrítica"):
+        if sc.strip() and not sc.strip().lower().startswith("no self-critique"):
             all_critiques.append(truncate(sc, 300))
 
     if all_critiques:
-        lines.append(f"**AUTOCRÍTICAS ({len(all_critiques)} sesiones con fallos detectados):**")
+        lines.append(f"**SELF-CRITIQUES ({len(all_critiques)} sessions with detected failures):**")
         for c in all_critiques[:5]:
             lines.append(f"  - {c}")
-        lines.append("**ACCIÓN:** Estas autocríticas deben informar el comportamiento de mañana. Si un patrón se repite 3+ días, el consolidador nocturno lo promoverá a memoria permanente.")
+        lines.append("**ACTION:** These self-critiques should inform tomorrow's behavior. If a pattern repeats 3+ days, the nightly consolidator will promote it to permanent memory.")
         lines.append("")
 
     # user_signals patterns
@@ -354,25 +354,25 @@ def section_autoevaluacion() -> str:
         lines.append(f"**User signals:**\n{user_signals_text}")
 
     if mental_states:
-        lines.append(f"**Estado mental de sesiones:**")
+        lines.append(f"**Session mental states:**")
         for ms in mental_states[:2]:
             lines.append(f"  - {ms}")
 
     # Derive what to do differently based on signal analysis
     if all_signals:
         # Detect repeated corrections
-        correction_words = ["corrig", "frustrad", "no lo entiend", "exig", "repet",
-                           "no debería", "por qué no", "otra vez", "cansando",
-                           "siempre espera", "reactivo", "no te adelant"]
+        correction_words = ["corrig", "frustrat", "don't understand", "demand", "repeat",
+                           "shouldn't", "why not", "again", "tiring",
+                           "always wait", "reactive", "not proactive"]
         correction_count = sum(
             1 for s in all_signals
             if any(w in s.lower() for w in correction_words)
         )
         if correction_count >= 2:
-            lines.append(f"**ALERTA:** El usuario corrigió {correction_count} veces hoy — revisar qué se está repitiendo.")
-        lines.append("**Para mañana:** Revisar señales anteriores antes de actuar.")
+            lines.append(f"**ALERT:** User corrected {correction_count} times today — review what is repeating.")
+        lines.append("**For tomorrow:** Review previous signals before acting.")
     elif not diary_rows:
-        lines.append("**Para mañana:** Recordar escribir diario al cerrar sesión.")
+        lines.append("**For tomorrow:** Remember to write diary before closing session.")
 
     # Check for postmortem daily summary
     postmortem_file = COORD_DIR / "postmortem-daily.md"
@@ -380,12 +380,12 @@ def section_autoevaluacion() -> str:
         pm_content = postmortem_file.read_text().strip()
         if "Promovido a memoria permanente" in pm_content:
             lines.append("")
-            lines.append("**REGLAS NUEVAS PERMANENTES (generadas anoche por el consolidador):**")
+            lines.append("**NEW PERMANENT RULES (generated last night by the consolidator):**")
             for line in pm_content.split("\n"):
                 if line.startswith("- ") and "Promovido" not in line:
                     lines.append(f"  {line}")
 
-    return "\n".join(lines) if lines else "Sin datos de auto-evaluación."
+    return "\n".join(lines) if lines else "No self-evaluation data."
 
 
 def section_user_observer() -> str:
@@ -405,7 +405,7 @@ def section_user_observer() -> str:
             desc = truncate(r.get("description") or "", 80)
             lines.append(f"  - {r.get('id')}: {desc}")
         if len(no_date) > 3:
-            lines.append(f"  - ... y {len(no_date) - 3} más")
+            lines.append(f"  - ... and {len(no_date) - 3} more")
 
     # 2. Followups waiting on user or external responses
     waiting = safe_query(
@@ -418,9 +418,9 @@ def section_user_observer() -> str:
         "ORDER BY date",
     )
     if waiting:
-        lines.append(f"**Esperando respuesta/decisión del usuario o terceros:** {len(waiting)}")
+        lines.append(f"**Waiting for user or third-party response/decision:** {len(waiting)}")
         for r in waiting[:5]:
-            d = r.get("date") or "sin fecha"
+            d = r.get("date") or "no date"
             desc = truncate(r.get("description") or "", 100)
             lines.append(f"  - {r.get('id')} ({d}): {desc}")
 
@@ -434,13 +434,13 @@ def section_user_observer() -> str:
         (TODAY_STR,),
     )
     if stale:
-        lines.append(f"**Recordatorios vencidos no atendidos:**")
+        lines.append(f"**Overdue reminders not attended:**")
         for r in stale:
             desc = truncate(r.get("description") or "", 80)
-            lines.append(f"  - {r.get('id')} (venció {r.get('date')}): {desc}")
+            lines.append(f"  - {r.get('id')} (overdue since {r.get('date')}): {desc}")
 
     if not lines:
-        return "Sin observaciones sobre patrones del usuario."
+        return "No observations on user patterns."
 
     return "\n".join(lines)
 
@@ -488,25 +488,25 @@ def main():
         md = f"""# NEXO Daily Synthesis — {TODAY_STR}
 Generated at {ts}
 
-## Errores y Lecciones (hoy)
+## Errors and Lessons (today)
 {s_learnings}
 
-## Decisiones Tomadas
+## Decisions Made
 {s_decisions}
 
-## Sistemas Tocados
+## Systems Touched
 {s_changes}
 
-## Patrones Detectados
+## Patterns Detected
 {s_patterns}
 
-## Usuario — Observaciones
+## User — Observations
 {s_user_obs}
 
-## Mañana
+## Tomorrow
 {s_manana}
 
-## Auto-Evaluación
+## Self-Evaluation
 {s_autoeval}
 """
 

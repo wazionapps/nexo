@@ -44,10 +44,10 @@ TODAY = date.today()
 TODAY_STR = TODAY.isoformat()
 
 CORRECTION_KEYWORDS = [
-    "corrig", "frustrad", "no lo entiend", "exig", "repet",
-    "no debería", "por qué no", "otra vez", "ya te dije",
-    "cansando", "siempre espera", "no te adelant", "reactivo",
-    "no haces", "error", "mal", "fallo", "irritad"
+    "corrig", "frustrat", "don't understand", "demand", "repeat",
+    "shouldn't", "why not", "again", "already told you",
+    "tiring", "always wait", "not proactive", "reactive",
+    "don't do", "error", "wrong", "failure", "irritat"
 ]
 
 
@@ -104,13 +104,13 @@ def extract_actionable_rules(critiques: list[str]) -> list[str]:
     """Extract concrete, actionable rules from self-critique text."""
     rules = []
     for critique in critiques:
-        if not critique or critique.strip().lower().startswith("sin autocrítica"):
+        if not critique or critique.strip().lower().startswith("no self-critique"):
             continue
         # Each non-empty critique is a potential rule
         # Clean up and normalize
         for line in critique.split("\n"):
             line = line.strip().lstrip("- ").strip()
-            if len(line) > 20 and not line.lower().startswith("sin "):
+            if len(line) > 20 and not line.lower().startswith("no "):
                 rules.append(line)
     return rules
 
@@ -162,20 +162,20 @@ def write_permanent_rule(rule_title: str, rule_content: str, source_critiques: l
 
     content = f"""---
 name: {rule_title}
-description: Regla de comportamiento extraída de autocrítica post-mortem — patrón recurrente detectado
+description: Behavioral rule extracted from post-mortem self-critique — recurring pattern detected
 type: feedback
 ---
 
 {rule_content}
 
-**Why:** Patrón detectado en múltiples sesiones donde NEXO falló en este aspecto. The user should not tener que corregir lo mismo dos veces.
+**Why:** Pattern detected across multiple sessions where NEXO failed in this regard. The user should not have to correct the same thing twice.
 
-**How to apply:** Verificar esta regla al inicio de cada sesión y antes de presentar trabajo como completado.
+**How to apply:** Verify this rule at the start of each session and before presenting work as complete.
 
-**Evidencia (autocríticas originales):**
+**Evidence (original self-critiques):**
 """
     for i, critique in enumerate(source_critiques[:3], 1):
-        content += f"- Sesión {i}: {critique[:200]}\n"
+        content += f"- Session {i}: {critique[:200]}\n"
 
     filepath.write_text(content)
     log(f"  Written permanent rule: {filename}")
@@ -450,7 +450,7 @@ def main():
         critique = d.get("self_critique") or ""
         signals = d.get("user_signals") or ""
 
-        if critique and not critique.strip().lower().startswith("sin autocrítica"):
+        if critique and not critique.strip().lower().startswith("no self-critique"):
             today_critiques.append(critique)
 
         if has_correction_signals(signals):
@@ -493,8 +493,8 @@ def main():
                     overlap = len(words_i & words_j) / min(len(words_i), len(words_j))
                     if overlap > 0.5 and not rule_already_permanent(rule, history):
                         new_permanent.append({
-                            "title": f"Patrón repetido: {rule[:60]}",
-                            "content": f"Detectado 2+ veces en el mismo día:\n- {rule}\n- {other}",
+                            "title": f"Repeated pattern: {rule[:60]}",
+                            "content": f"Detected 2+ times on the same day:\n- {rule}\n- {other}",
                             "sources": [rule, other],
                         })
 
@@ -518,8 +518,8 @@ def main():
 
         if len(matching_days) >= 2 and not rule_already_permanent(today_rule, history):  # 2 historical + today = 3
             new_permanent.append({
-                "title": f"Patrón recurrente ({len(matching_days)+1} días): {today_rule[:50]}",
-                "content": f"Detectado en {len(matching_days)+1} días diferentes:\n- Hoy: {today_rule}\n- Días previos: {', '.join(sorted(matching_days)[:5])}",
+                "title": f"Recurring pattern ({len(matching_days)+1} days): {today_rule[:50]}",
+                "content": f"Detected across {len(matching_days)+1} different days:\n- Today: {today_rule}\n- Previous days: {', '.join(sorted(matching_days)[:5])}",
                 "sources": [today_rule],
             })
 
@@ -529,7 +529,7 @@ def main():
         if critique and not rule_already_permanent(critique, history):
             new_permanent.append({
                 "title": f"User correction: {critique[:50]}",
-                "content": f"The user corrected explícitamente este comportamiento.\nSeñales: {cc['signals'][:200]}\nAutocrítica: {critique[:300]}",
+                "content": f"The user explicitly corrected this behavior.\nSignals: {cc['signals'][:200]}\nSelf-critique: {critique[:300]}",
                 "sources": [critique],
             })
 
@@ -547,20 +547,20 @@ def main():
     summary_file = HOME / "claude" / "coordination" / "postmortem-daily.md"
     summary_lines = [
         f"# Post-Mortem Daily — {TODAY_STR}",
-        f"Sesiones: {len(diaries)} | Autocríticas: {len(today_critiques)} | User corrections: {len(correction_critiques)}",
+        f"Sessions: {len(diaries)} | Self-critiques: {len(today_critiques)} | User corrections: {len(correction_critiques)}",
         "",
     ]
     if today_critiques:
-        summary_lines.append("## Autocríticas del día")
+        summary_lines.append("## Today's self-critiques")
         for c in today_critiques:
             summary_lines.append(f"- {c[:200]}")
         summary_lines.append("")
     if new_permanent:
-        summary_lines.append("## Promovido a memoria permanente")
+        summary_lines.append("## Promoted to permanent memory")
         for r in new_permanent:
             summary_lines.append(f"- {r['title']}")
     else:
-        summary_lines.append("## Nada promovido hoy")
+        summary_lines.append("## Nothing promoted today")
 
     summary_file.write_text("\n".join(summary_lines))
     log(f"Written daily summary: {summary_file}")

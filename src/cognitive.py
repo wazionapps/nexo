@@ -185,6 +185,7 @@ def auto_detect_trust_events(text: str) -> list[dict]:
     return detected
 
 _model = None
+_reranker = None
 _conn = None
 
 # --- Secret redaction patterns ---
@@ -238,6 +239,7 @@ def _get_db() -> sqlite3.Connection:
         _init_tables(_conn)
         _migrate_lifecycle(_conn)
         _migrate_co_activation(_conn)
+        _auto_migrate_embeddings(_conn)
     return _conn
 
 
@@ -282,6 +284,41 @@ def _migrate_co_activation(conn: sqlite3.Connection):
         );
     """)
     conn.commit()
+
+
+def _auto_migrate_embeddings(conn: sqlite3.Connection):
+    """Auto-detect old 384-dim embeddings and re-embed to 768-dim. Transparent to user."""
+    try:
+        row = conn.execute("SELECT embedding FROM stm_memories LIMIT 1").fetchone()
+        if not row:
+            return  # Empty DB, nothing to migrate
+
+        vec = np.frombuffer(row["embedding"], dtype=np.float32)
+        if len(vec) == EMBEDDING_DIM:
+            return  # Already correct dimension
+
+        if len(vec) != 384:
+            return  # Unknown dimension, don't touch
+
+        # Need migration: 384 → 768
+        model = _get_model()
+
+        for table in ("stm_memories", "ltm_memories"):
+            rows = conn.execute(f"SELECT id, content FROM {table}").fetchall()
+            if not rows:
+                continue
+
+            contents = [r["content"] for r in rows]
+            ids = [r["id"] for r in rows]
+
+            embeddings = list(model.embed(contents))
+            for mem_id, emb in zip(ids, embeddings):
+                blob = np.array(emb, dtype=np.float32).tobytes()
+                conn.execute(f"UPDATE {table} SET embedding = ? WHERE id = ?", (blob, mem_id))
+
+        conn.commit()
+    except Exception:
+        pass  # Don't break startup if migration fails
 
 
 def _init_tables(conn: sqlite3.Connection):
@@ -448,6 +485,43 @@ def _get_model():
         from fastembed import TextEmbedding
         _model = TextEmbedding("BAAI/bge-base-en-v1.5")
     return _model
+
+
+def _get_reranker():
+    """Lazy-load cross-encoder reranking model."""
+    global _reranker
+    if _reranker is None:
+        try:
+            from fastembed.rerank.cross_encoder import TextCrossEncoder
+            _reranker = TextCrossEncoder("Xenova/ms-marco-MiniLM-L-6-v2")
+        except Exception:
+            _reranker = False  # Mark as unavailable
+    return _reranker if _reranker is not False else None
+
+
+def rerank_results(query: str, results: list[dict], top_k: int = 5) -> list[dict]:
+    """Rerank search results using cross-encoder for precise top-k.
+
+    Takes top-20 vector results and reranks with a cross-encoder model.
+    Falls back to original ranking if reranker is unavailable.
+    """
+    reranker = _get_reranker()
+    if not reranker or len(results) <= 1:
+        return results[:top_k]
+
+    # Extract texts for reranking
+    docs = [r["content"] for r in results]
+
+    try:
+        scores = list(reranker.rerank(query, docs))
+        # Attach rerank scores and sort
+        for r, score in zip(results, scores):
+            r["rerank_score"] = score
+        results.sort(key=lambda x: x.get("rerank_score", -999), reverse=True)
+    except Exception:
+        pass  # Fall back to original order
+
+    return results[:top_k]
 
 
 def embed(text: str) -> np.ndarray:
@@ -1092,9 +1166,14 @@ def search(
             # Re-apply min_score filter on fused results (use original vector score or rrf_score)
             results = [r for r in results if r.get("score", 0) >= min_score or r.get("rrf_score", 0) > 0]
 
-    # Sort by score descending and take top_k
-    results.sort(key=lambda x: x.get("rrf_score", x.get("score", 0)), reverse=True)
-    results = results[:top_k]
+    # Sort by score descending, take top-20 for reranking
+    results.sort(key=lambda x: x.get("score", 0), reverse=True)
+
+    # Cross-encoder reranking: precise top-k from top-20 candidates
+    if len(results) > top_k:
+        results = rerank_results(query_text, results[:top_k * 4], top_k=top_k)
+    else:
+        results = results[:top_k]
 
     # Spreading activation: boost co-activated neighbors (Feature 2)
     co_activation_applied = False
@@ -1329,17 +1408,45 @@ def ingest_to_ltm(
     return cur.lastrowid
 
 
-def apply_decay():
-    """Apply Ebbinghaus decay to all memories. Mark LTM as dormant if strength < 0.1."""
+def apply_decay(adaptive: bool = True):
+    """Apply Ebbinghaus decay to all memories. Mark LTM as dormant if strength < 0.1.
+
+    Args:
+        adaptive: If True, protect unique memories (no similar neighbors) from aggressive decay.
+                  Unique memories decay at 25% of normal rate. This prevents information loss
+                  in sparse memory stores where there's no redundancy to compensate.
+    """
     db = _get_db()
     now = datetime.utcnow()
+
+    # Build redundancy map if adaptive mode — check which memories have similar siblings
+    _protected_stm = set()
+    _protected_ltm = set()
+    if adaptive:
+        # A memory is "protected" if it has no siblings in memory_siblings table
+        # (meaning no other memory covers similar content)
+        sibling_ids = set()
+        for row in db.execute("SELECT memory_a_id, memory_b_id FROM memory_siblings").fetchall():
+            sibling_ids.add(row["memory_a_id"])
+            sibling_ids.add(row["memory_b_id"])
+
+        # STM memories NOT in sibling_ids are unique → protect
+        for row in db.execute("SELECT id FROM stm_memories WHERE promoted_to_ltm = 0").fetchall():
+            if row["id"] not in sibling_ids:
+                _protected_stm.add(row["id"])
+
+        # LTM memories NOT in sibling_ids are unique → protect
+        for row in db.execute("SELECT id FROM ltm_memories WHERE is_dormant = 0").fetchall():
+            if row["id"] not in sibling_ids:
+                _protected_ltm.add(row["id"])
 
     # STM decay (skip pinned)
     rows = db.execute("SELECT id, last_accessed, strength FROM stm_memories WHERE promoted_to_ltm = 0 AND (lifecycle_state IS NULL OR lifecycle_state != 'pinned')").fetchall()
     for row in rows:
         last = datetime.fromisoformat(row["last_accessed"])
         hours = (now - last).total_seconds() / 3600.0
-        new_strength = row["strength"] * math.exp(-LAMBDA_STM * hours)
+        decay_rate = LAMBDA_STM * 0.25 if (adaptive and row["id"] in _protected_stm) else LAMBDA_STM
+        new_strength = row["strength"] * math.exp(-decay_rate * hours)
         db.execute("UPDATE stm_memories SET strength = ? WHERE id = ?", (new_strength, row["id"]))
 
     # LTM decay (skip pinned)
@@ -1347,7 +1454,8 @@ def apply_decay():
     for row in rows:
         last = datetime.fromisoformat(row["last_accessed"])
         hours = (now - last).total_seconds() / 3600.0
-        new_strength = row["strength"] * math.exp(-LAMBDA_LTM * hours)
+        decay_rate = LAMBDA_LTM * 0.25 if (adaptive and row["id"] in _protected_ltm) else LAMBDA_LTM
+        new_strength = row["strength"] * math.exp(-decay_rate * hours)
         if new_strength < 0.1:
             db.execute("UPDATE ltm_memories SET strength = ?, is_dormant = 1 WHERE id = ?", (new_strength, row["id"]))
         else:
