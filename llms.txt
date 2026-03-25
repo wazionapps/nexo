@@ -1,11 +1,14 @@
 # NEXO Brain
 
-> Cognitive co-operator for Claude Code. Atkinson-Shiffrin memory model with 105+ MCP tools.
+> Cognitive co-operator for Claude Code. Atkinson-Shiffrin memory model with 109+ MCP tools, knowledge graph, and web dashboard.
 
-NEXO Brain is an MCP server that gives AI coding agents persistent, psychologically-grounded memory. It implements the Atkinson-Shiffrin memory model (Sensory Register, Short-Term Memory, Long-Term Memory) with vector embeddings, semantic RAG retrieval, and automatic memory lifecycle management.
+NEXO Brain is an MCP server that gives AI coding agents persistent, psychologically-grounded memory. It implements the Atkinson-Shiffrin memory model (Sensory Register, Short-Term Memory, Long-Term Memory) with vector embeddings, semantic RAG retrieval, automatic memory lifecycle management, and a bi-temporal knowledge graph.
 
-## Key Features (v0.7.0)
+## Key Features (v0.8.0)
 
+- **Knowledge Graph**: Bi-temporal entity-relationship graph (988 nodes, 896 edges) with BFS traversal, temporal queries, D3 visualization, and event-sourced smart dedup
+- **Web Dashboard**: 6 pages (Overview, Graph, Memory, Somatic, Adaptive, Sessions) at localhost:6174, built with FastAPI + D3.js
+- **Cross-Platform**: Full Linux and Windows support with opportunistic maintenance
 - **Cognitive Memory**: STM/LTM stores with Ebbinghaus decay, semantic consolidation, sibling detection, prediction error gating
 - **Adaptive Personality**: 3 modes (FLOW/NORMAL/TENSION) driven by 6 weighted signals. Weights learn from real feedback via Ridge regression (shadow mode, momentum, auto-rollback)
 - **Somatic Markers**: Pain memory per file/area. Files that cause repeated errors accumulate risk scores. Guard warns on HIGH RISK (>0.5) and CRITICAL (>0.8)
@@ -14,6 +17,7 @@ NEXO Brain is an MCP server that gives AI coding agents persistent, psychologica
 - **Session Coordination**: Multi-terminal support with heartbeat, file tracking, inter-session messaging
 - **Episodic Memory**: Change log, decisions with outcomes, session diaries with mental state continuity
 - **Full Orchestration**: 5 automated hooks, post-mortem with self-critique, pre-compaction context preservation, reflection engine
+- **Storage Router**: Multi-tenant ready abstraction layer
 
 ## Installation
 

@@ -1,12 +1,12 @@
 # NEXO Brain â€” Your AI Gets a Brain
 
-[![npm v0.7.0](https://img.shields.io/npm/v/nexo-brain?label=npm&color=purple)](https://www.npmjs.com/package/nexo-brain)
+[![npm v0.8.0](https://img.shields.io/npm/v/nexo-brain?label=npm&color=purple)](https://www.npmjs.com/package/nexo-brain)
 [![F1 0.588 on LoCoMo](https://img.shields.io/badge/LoCoMo_F1-0.588-brightgreen)](https://github.com/wazionapps/nexo/blob/main/benchmarks/locomo/results/)
 [![+55% vs GPT-4](https://img.shields.io/badge/vs_GPT--4-%2B55%25-blue)](https://github.com/snap-research/locomo/issues/33)
 [![GitHub stars](https://img.shields.io/github/stars/wazionapps/nexo?style=social)](https://github.com/wazionapps/nexo/stargazers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-> **v0.7.0** â€” Adaptive signal weights that learn from real feedback (Ridge regression, shadow mode, momentum), somatic markers (pain memory per file/area), Adaptive Personality v2 (6 signals, emergency bypass), and 4 new MCP tools.
+> **v0.8.0** â€” Knowledge Graph (988 bi-temporal nodes, D3 visualization), Web Dashboard (6 pages at localhost:6174), Cross-Platform support (Linux + Windows), Smart dedup with event-sourced edges, and 4 new KG tools.
 
 **NEXO Brain transforms any MCP-compatible AI agent from a stateless assistant into a cognitive partner that remembers, learns, forgets, adapts, and builds a relationship with you over time.**
 
@@ -132,7 +132,7 @@ If your Mac was asleep during any scheduled process, NEXO Brain catches up in or
 
 ## Cognitive Features
 
-NEXO Brain provides 25 cognitive tools on top of the 76 base tools, totaling **105+ MCP tools**. These features implement cognitive science concepts that go beyond basic memory:
+NEXO Brain provides 25 cognitive tools on top of the 76 base tools, totaling **109+ MCP tools**. These features implement cognitive science concepts that go beyond basic memory:
 
 ### Input Pipeline
 
@@ -257,6 +257,22 @@ npx nexo-brain  # detects v0.5.0, migrates automatically
 - **Never touches your data** (memories, learnings, preferences)
 - Saves updated CLAUDE.md as reference (doesn't overwrite customizations)
 
+## Knowledge Graph & Dashboard (v0.8.0)
+
+### Knowledge Graph
+A bi-temporal entity-relationship graph with 988 nodes and 896 edges. Entities and relationships carry both valid-time (when the fact was true) and system-time (when it was recorded), enabling temporal queries like "what did we know about X last Tuesday?". BFS traversal discovers multi-hop connections between concepts. Event-sourced edges with smart dedup (ADD/UPDATE/NOOP) prevent redundant writes while preserving full history.
+
+4 new MCP tools: `nexo_kg_query` (SPARQL-like queries), `nexo_kg_path` (shortest path between entities), `nexo_kg_neighbors` (direct connections), `nexo_kg_stats` (graph metrics).
+
+### Web Dashboard
+A visual interface at `localhost:6174` with 6 pages: Overview (system health at a glance), Graph (interactive D3.js visualization of the knowledge graph), Memory (browse and search all memory stores), Somatic (pain map per file/area), Adaptive (personality signals and weights), and Sessions (active and historical sessions). Built with FastAPI backend and D3.js frontend.
+
+### Cross-Platform Support
+v0.8.0 adds full Linux and Windows support. The installer detects the platform and configures the appropriate process manager (LaunchAgents on macOS, systemd on Linux, Task Scheduler on Windows). Opportunistic maintenance runs cognitive processes when resources are available.
+
+### Storage Router
+A new abstraction layer routes storage operations through a unified interface, making the system multi-tenant ready. Each operator's data is isolated while sharing the same cognitive engine.
+
 ## Learned Weights & Somatic Markers (v0.7.0)
 
 ### Adaptive Learned Weights
@@ -327,14 +343,14 @@ That's it. No need to run `claude` manually. Atlas will greet you immediately â€
 
 ### Requirements
 
-- **macOS** (Linux support planned)
+- **macOS, Linux, or Windows**
 - **Node.js 18+** (for the installer)
-- **Claude Opus (latest version) strongly recommended.** NEXO Brain provides 105+ MCP tools across 17 categories. This cognitive load requires a top-tier model with large context window. Smaller models (Haiku, Sonnet) may struggle with tool selection and produce inconsistent results. Opus handles all 105+ tools without hesitation.
+- **Claude Opus (latest version) strongly recommended.** NEXO Brain provides 109+ MCP tools across 17 categories. This cognitive load requires a top-tier model with large context window. Smaller models (Haiku, Sonnet) may struggle with tool selection and produce inconsistent results. Opus handles all 105+ tools without hesitation.
 - Python 3, Homebrew, and Claude Code are installed automatically if missing.
 
 ## Architecture
 
-### 105+ MCP Tools across 18 Categories
+### 109+ MCP Tools across 19 Categories
 
 | Category | Count | Tools | Purpose |
 |----------|-------|-------|---------|
@@ -357,6 +373,7 @@ That's it. No need to run `claude` manually. Atlas will greet you immediately â€
 | Backup | 3 | now, list, restore | SQLite data safety |
 | Evolution | 5 | propose, approve, reject, status, history | Self-improvement proposals |
 | Adaptive & Somatic (4) | nexo_adaptive_weights, nexo_adaptive_override, nexo_somatic_check, nexo_somatic_stats |
+| Knowledge Graph | 4 | kg_query, kg_path, kg_neighbors, kg_stats | Bi-temporal entity-relationship graph |
 
 ### Plugin System
 
