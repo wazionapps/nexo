@@ -332,7 +332,7 @@ That's it. No need to run `claude` manually. Atlas will greet you immediately â€
 | Component | What | Where |
 |-----------|------|-------|
 | Cognitive engine | Python: fastembed, numpy, vector search | pip packages |
-| MCP server | 105+ tools for memory, cognition, learning, guard | ~/.nexo/ |
+| MCP server | 109+ tools for memory, cognition, learning, guard | ~/.nexo/ |
 | Plugins | Guard, episodic memory, cognitive memory, entities, preferences | ~/.nexo/plugins/ |
 | Hooks (5) | SessionStart briefing, Stop post-mortem, PostToolUse capture, PreCompact checkpoint, Caffeinate | ~/.nexo/hooks/ |
 | Reflection engine | Processes session buffer, extracts patterns, updates user model | ~/.nexo/scripts/ |
@@ -345,7 +345,7 @@ That's it. No need to run `claude` manually. Atlas will greet you immediately â€
 
 - **macOS, Linux, or Windows**
 - **Node.js 18+** (for the installer)
-- **Claude Opus (latest version) strongly recommended.** NEXO Brain provides 109+ MCP tools across 17 categories. This cognitive load requires a top-tier model with large context window. Smaller models (Haiku, Sonnet) may struggle with tool selection and produce inconsistent results. Opus handles all 105+ tools without hesitation.
+- **Claude Opus (latest version) strongly recommended.** NEXO Brain provides 109+ MCP tools across 19 categories. This cognitive load requires a top-tier model with large context window. Smaller models (Haiku, Sonnet) may struggle with tool selection and produce inconsistent results. Opus handles all 109+ tools without hesitation.
 - Python 3, Homebrew, and Claude Code are installed automatically if missing.
 
 ## Architecture
@@ -372,7 +372,7 @@ That's it. No need to run `claude` manually. Atlas will greet you immediately â€
 | Agents | 5 | get, create, update, delete, list | Agent delegation registry |
 | Backup | 3 | now, list, restore | SQLite data safety |
 | Evolution | 5 | propose, approve, reject, status, history | Self-improvement proposals |
-| Adaptive & Somatic (4) | nexo_adaptive_weights, nexo_adaptive_override, nexo_somatic_check, nexo_somatic_stats |
+| Adaptive & Somatic | 4 | adaptive_weights, adaptive_override, somatic_check, somatic_stats | Learned signal weights + pain memory per file |
 | Knowledge Graph | 4 | kg_query, kg_path, kg_neighbors, kg_stats | Bi-temporal entity-relationship graph |
 
 ### Plugin System
@@ -431,7 +431,7 @@ NEXO Brain is designed as an MCP server. Claude Code is the primary supported cl
 npx nexo-brain
 ```
 
-All 105+ tools are available immediately after installation. The installer configures Claude Code's `~/.claude/settings.json` automatically.
+All 109+ tools are available immediately after installation. The installer configures Claude Code's `~/.claude/settings.json` automatically.
 
 ### OpenClaw
 
