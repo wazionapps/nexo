@@ -21,7 +21,7 @@ def handle_task_log(task_num: str, task_name: str, notes: str = '', reasoning: s
     result = log_task(task_num, task_name, notes, reasoning)
     if "error" in result:
         return f"ERROR: {result['error']}"
-    return f"Tarea {task_num} ({task_name}) registrada."
+    return f"Task {task_num} ({task_name}) logged."
 
 
 def handle_task_list(task_num: str = '', days: int = 30) -> str:

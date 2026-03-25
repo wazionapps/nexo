@@ -546,7 +546,7 @@ def nexo_plugin_list() -> str:
         return "No plugins loaded."
     lines = ["PLUGINS CARGADOS:"]
     for p in plugins:
-        names = p["tool_names"] or "(sin tools)"
+        names = p["tool_names"] or "(no tools)"
         lines.append(f"  {p['filename']} — {p['tools_count']} tools: {names}")
     return "\n".join(lines)
 

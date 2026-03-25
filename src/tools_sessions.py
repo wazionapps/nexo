@@ -47,7 +47,7 @@ def handle_startup(task: str = "Startup") -> str:
             age = _format_age(s["last_update_epoch"])
             lines.append(f"  {s['sid']} ({age}) — {s['task']}")
     else:
-        lines.append("Sin otras sesiones activas.")
+        lines.append("No other active sessions.")
 
     if inbox:
         lines.append("")
@@ -272,7 +272,7 @@ def handle_status(keyword: str | None = None) -> str:
         sessions = get_active_sessions()
 
     if not sessions:
-        return "Sin sesiones activas."
+        return "No active sessions."
 
     lines = ["SESIONES ACTIVAS:"]
     for s in sessions:
