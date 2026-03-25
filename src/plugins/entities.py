@@ -5,7 +5,7 @@ def handle_entity_search(query: str, type: str = "") -> str:
     """Search entities by name or value. Optional type filter."""
     results = search_entities(query, type)
     if not results:
-        return "Sin resultados."
+        return "No results."
     lines = []
     for e in results:
         notes = f" — {e['notes']}" if e.get("notes") else ""
@@ -37,14 +37,14 @@ def handle_entity_update(id: int, name: str = "", type: str = "", value: str = "
 def handle_entity_delete(id: int) -> str:
     """Delete an entity."""
     if not delete_entity(id):
-        return f"ERROR: Entidad [{id}] no encontrada."
+        return f"ERROR: Entity [{id}] not found."
     return f"Entidad [{id}] eliminada."
 
 def handle_entity_list(type: str = "") -> str:
     """List all entities, optionally filtered by type."""
     results = list_entities(type)
     if not results:
-        return "Sin entidades."
+        return "No entities found."
     grouped = {}
     for e in results:
         t = e["type"]

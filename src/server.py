@@ -395,7 +395,7 @@ def nexo_index_add_dir(path: str, dir_type: str = "code",
     result = fts_add_dir(path, dir_type, patterns, notes)
     if "error" in result:
         return f"ERROR: {result['error']}"
-    return f"Directorio registrado: {result['path']} ({result['dir_type']}, patterns: {result['patterns']})\nUsa nexo_reindex para indexar ahora."
+    return f"Directory registered: {result['path']} ({result['dir_type']}, patterns: {result['patterns']})\nUse nexo_reindex to index now."
 
 
 @mcp.tool
@@ -408,7 +408,7 @@ def nexo_index_remove_dir(path: str) -> str:
     result = fts_remove_dir(path)
     if "error" in result:
         return f"ERROR: {result['error']}"
-    return f"Directorio eliminado del índice: {result['removed']}"
+    return f"Directory removed from index: {result['removed']}"
 
 
 @mcp.tool
@@ -416,7 +416,7 @@ def nexo_index_dirs() -> str:
     """List all directories being indexed by FTS5 (builtin + dynamic)."""
     dirs = fts_list_dirs()
     if not dirs:
-        return "Sin directorios configurados."
+        return "No directories configured."
     lines = ["DIRECTORIOS INDEXADOS:"]
     for d in dirs:
         source_tag = "⚙️" if d["source"] == "builtin" else "➕"
@@ -533,7 +533,7 @@ def nexo_plugin_load(filename: str) -> str:
     """
     try:
         n = load_plugin(mcp, filename)
-        return f"Plugin {filename}: {n} tools registrados."
+        return f"Plugin {filename}: {n} tools registered."
     except Exception as e:
         return f"Error cargando plugin {filename}: {e}"
 
@@ -543,7 +543,7 @@ def nexo_plugin_list() -> str:
     """List all loaded plugins and their tools."""
     plugins = list_plugins()
     if not plugins:
-        return "Sin plugins cargados."
+        return "No plugins loaded."
     lines = ["PLUGINS CARGADOS:"]
     for p in plugins:
         names = p["tool_names"] or "(sin tools)"
@@ -561,8 +561,8 @@ def nexo_plugin_remove(filename: str) -> str:
     try:
         removed = remove_plugin(mcp, filename)
         if removed:
-            return f"Plugin {filename} eliminado. Tools quitados: {', '.join(removed)}"
-        return f"Plugin {filename} eliminado (no tenía tools registrados)."
+            return f"Plugin {filename} removed. Tools unregistered: {', '.join(removed)}"
+        return f"Plugin {filename} removed (had no registered tools)."
     except Exception as e:
         return f"Error eliminando plugin {filename}: {e}"
 

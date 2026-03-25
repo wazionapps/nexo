@@ -33,10 +33,10 @@ def handle_backup_now() -> str:
 def handle_backup_list() -> str:
     """List available backups with dates and sizes."""
     if not os.path.isdir(BACKUP_DIR):
-        return "Sin backups."
+        return "No backups found."
     files = sorted(glob.glob(os.path.join(BACKUP_DIR, "nexo-*.db")), reverse=True)
     if not files:
-        return "Sin backups."
+        return "No backups found."
     lines = [f"BACKUPS ({len(files)}):"]
     total_size = 0
     for f in files:

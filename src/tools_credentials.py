@@ -23,7 +23,7 @@ def handle_credential_create(service: str, key: str, value: str, notes: str = ''
     result = create_credential(service, key, value, notes)
     if "error" in result:
         return f"ERROR: {result['error']}"
-    return f"Credencial {service}/{key} creada."
+    return f"Credential {service}/{key} created."
 
 
 def handle_credential_update(service: str, key: str, value: str = '', notes: str = '') -> str:
@@ -36,7 +36,7 @@ def handle_credential_update(service: str, key: str, value: str = '', notes: str
     )
     if "error" in result:
         return f"ERROR: {result['error']}"
-    return f"Credencial {service}/{key} actualizada."
+    return f"Credential {service}/{key} updated."
 
 
 def handle_credential_delete(service: str, key: str = '') -> str:
@@ -46,8 +46,8 @@ def handle_credential_delete(service: str, key: str = '') -> str:
         target = f"{service}/{key}" if key else service
         return f"ERROR: No se encontraron credenciales para '{target}'."
     if key:
-        return f"Credencial {service}/{key} eliminada."
-    return f"Todas las credenciales de {service} eliminadas."
+        return f"Credential {service}/{key} deleted."
+    return f"All credentials for {service} deleted."
 
 
 def handle_credential_list(service: str = '') -> str:
@@ -55,8 +55,8 @@ def handle_credential_list(service: str = '') -> str:
     results = list_credentials(service if service else None)
     label = service if service else "TODAS"
     if not results:
-        return f"CREDENCIALES {label.upper()}: Sin entradas."
-    lines = [f"CREDENCIALES {label.upper()} ({len(results)}):"]
+        return f"CREDENTIALS {label.upper()}: No entries."
+    lines = [f"CREDENTIALS {label.upper()} ({len(results)}):"]
     for r in results:
         notes = r.get("notes") or ""
         suffix = f" — {notes}" if notes else ""

@@ -101,7 +101,7 @@ def handle_menu() -> str:
     dashboard_alerts = _get_dashboard_alerts()
     memory_reviews = _get_memory_review_summary()
     due = handle_reminders("due")
-    has_alerts = dashboard_alerts or memory_reviews["total"] > 0 or (due and "Sin recordatorios" not in due)
+    has_alerts = dashboard_alerts or memory_reviews["total"] > 0 or (due and "No reminders" not in due)
 
     if has_alerts:
         lines.append("║" + "  PROACTIVE ALERTS".ljust(W) + "║")
@@ -124,7 +124,7 @@ def handle_menu() -> str:
             )[:W - 4]
             lines.append("║" + f"  !  {text}".ljust(W) + "║")
 
-        if due and "Sin recordatorios" not in due:
+        if due and "No reminders" not in due:
             for reminder_line in due.split("\n"):
                 if reminder_line.strip():
                     truncated = reminder_line[:W - 2]
@@ -190,7 +190,7 @@ def handle_menu() -> str:
 
     # Active sessions
     sessions = handle_status()
-    if "Sin sesiones" not in sessions:
+    if "No sessions" not in sessions:
         lines.append("║" + "  ACTIVE SESSIONS".ljust(W) + "║")
         lines.append("║" + "─" * W + "║")
         for s_line in sessions.split("\n"):

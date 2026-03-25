@@ -2737,7 +2737,7 @@ def detect_sentiment(text: str) -> dict:
     elif urgency_hits:
         sentiment = "urgent"
         intensity = 0.8
-        guidance = "MODE: Acción inmediata. Sin preámbulos."
+        guidance = "MODE: Immediate action. No preamble."
     else:
         sentiment = "neutral"
         intensity = 0.5
