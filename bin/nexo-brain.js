@@ -384,24 +384,39 @@ async function main() {
     console.log("");
   }
 
-  // Step 3: Install Python dependencies
+  // Step 3: Install Python dependencies (use venv to avoid PEP 668 on modern Linux)
   log("Installing cognitive engine dependencies...");
-  const pipInstall = spawnSync(
-    python,
-    [
-      "-m",
-      "pip",
-      "install",
-      "--quiet",
-      "fastembed",
-      "numpy",
-      "mcp[cli]",
-    ],
-    { stdio: "inherit" }
-  );
+  fs.mkdirSync(NEXO_HOME, { recursive: true });
+  const venvPath = path.join(NEXO_HOME, ".venv");
+  const venvPython = platform === "win32"
+    ? path.join(venvPath, "Scripts", "python.exe")
+    : path.join(venvPath, "bin", "python3");
+
+  // Create venv if it doesn't exist
+  if (!fs.existsSync(venvPython)) {
+    log("  Creating Python virtual environment...");
+    const venvResult = spawnSync(python, ["-m", "venv", venvPath], { stdio: "inherit" });
+    if (venvResult.status !== 0) {
+      log("Failed to create venv. Trying pip install directly...");
+    }
+  }
+
+  // Use venv python if available, otherwise fall back to system python with --break-system-packages
+  const pipPython = fs.existsSync(venvPython) ? venvPython : python;
+  const pipArgs = ["-m", "pip", "install", "--quiet", "fastembed", "numpy", "mcp[cli]"];
+  if (!fs.existsSync(venvPython)) {
+    pipArgs.push("--break-system-packages");  // Fallback for systems without venv
+  }
+
+  const pipInstall = spawnSync(pipPython, pipArgs, { stdio: "inherit" });
   if (pipInstall.status !== 0) {
-    log("Failed to install Python dependencies. Check pip.");
+    log("Failed to install Python dependencies.");
+    log("Try manually: python3 -m venv ~/.nexo/.venv && ~/.nexo/.venv/bin/pip install fastembed numpy 'mcp[cli]'");
     process.exit(1);
+  }
+  // Update python reference to use venv python for the rest of setup
+  if (fs.existsSync(venvPython)) {
+    python = venvPython;
   }
   log("Dependencies installed.");
 
