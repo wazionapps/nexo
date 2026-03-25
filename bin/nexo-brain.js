@@ -353,6 +353,9 @@ async function main() {
     error_handling: errorHandling,
     calibrated_at: new Date().toISOString(),
   };
+  // Ensure NEXO_HOME and brain dir exist before writing calibration
+  fs.mkdirSync(NEXO_HOME, { recursive: true });
+  fs.mkdirSync(path.join(NEXO_HOME, "brain"), { recursive: true });
   fs.writeFileSync(
     path.join(NEXO_HOME, "brain", "calibration.json"),
     JSON.stringify(calibration, null, 2)
@@ -447,6 +450,12 @@ async function main() {
     "tools_credentials.py",
     "tools_task_history.py",
     "tools_menu.py",
+    "knowledge_graph.py",
+    "kg_populate.py",
+    "maintenance.py",
+    "storage_router.py",
+    "migrate_embeddings.py",
+    "auto_close_sessions.py",
   ];
   coreFiles.forEach((f) => {
     const src = path.join(srcDir, f);
@@ -466,6 +475,8 @@ async function main() {
     "agents.py",
     "backup.py",
     "evolution.py",
+    "adaptive_mode.py",
+    "knowledge_graph_tools.py",
   ];
   pluginFiles.forEach((f) => {
     const src = path.join(pluginsSrcDir, f);
@@ -484,6 +495,26 @@ async function main() {
       fs.copyFileSync(src, path.join(NEXO_HOME, "scripts", f));
     }
   });
+
+  // Dashboard
+  const dashSrcDir = path.join(srcDir, "dashboard");
+  const dashDestDir = path.join(NEXO_HOME, "dashboard");
+  if (fs.existsSync(dashSrcDir)) {
+    const copyDirRecursive = (src, dest) => {
+      fs.mkdirSync(dest, { recursive: true });
+      fs.readdirSync(src).forEach(item => {
+        const srcPath = path.join(src, item);
+        const destPath = path.join(dest, item);
+        if (fs.statSync(srcPath).isDirectory()) {
+          copyDirRecursive(srcPath, destPath);
+        } else {
+          fs.copyFileSync(srcPath, destPath);
+        }
+      });
+    };
+    copyDirRecursive(dashSrcDir, dashDestDir);
+    log("  Dashboard installed.");
+  }
 
   // Generate personality
   const personality = `# ${operatorName} — Personality
