@@ -53,6 +53,9 @@ function log(msg) {
 }
 
 async function main() {
+  // Non-interactive mode: --defaults or --yes skips all prompts
+  const useDefaults = process.argv.includes("--defaults") || process.argv.includes("--yes") || process.argv.includes("-y");
+
   console.log("");
   console.log(
     "  ╔══════════════════════════════════════════════════════════╗"
@@ -67,6 +70,10 @@ async function main() {
     "  ╚══════════════════════════════════════════════════════════╝"
   );
   console.log("");
+  if (useDefaults) {
+    log("Running with defaults (non-interactive mode).");
+    console.log("");
+  }
 
   // Check prerequisites
   const platform = process.platform;
@@ -275,12 +282,15 @@ async function main() {
   console.log("");
 
   // Step 1: Name
-  const name = await ask("  How should I call myself? (default: NEXO) > ");
+  const name = useDefaults ? "" : await ask("  How should I call myself? (default: NEXO) > ");
   const operatorName = name.trim() || "NEXO";
   log(`Got it. I'm ${operatorName}.`);
   console.log("");
 
   // Step 2: Personality Calibration
+  let autonomyLevel = "full", communicationStyle = "concise", honestyLevel = "firm-pushback", proactivityLevel = "proactive", errorHandling = "brief-fix";
+
+  if (!useDefaults) {
   log("Let's calibrate my personality to work best with you.");
   log("(These can be changed anytime via nexo_preference_set)");
   console.log("");
@@ -292,7 +302,7 @@ async function main() {
     "    3. Act first, inform after — only ask when truly uncertain (full autonomy)\n" +
     "  > "
   );
-  const autonomyLevel = ["conservative", "balanced", "full"][parseInt(autonomyAnswer.trim()) - 1] || "balanced";
+  autonomyLevel = ["conservative", "balanced", "full"][parseInt(autonomyAnswer.trim()) - 1] || "balanced";
 
   const communicationAnswer = await ask(
     "\n  How should I communicate?\n" +
@@ -301,7 +311,7 @@ async function main() {
     "    3. Detailed — explain reasoning and trade-offs\n" +
     "  > "
   );
-  const communicationStyle = ["concise", "balanced", "detailed"][parseInt(communicationAnswer.trim()) - 1] || "balanced";
+  communicationStyle = ["concise", "balanced", "detailed"][parseInt(communicationAnswer.trim()) - 1] || "balanced";
 
   const honestyAnswer = await ask(
     "\n  When I disagree with your approach, should I:\n" +
@@ -310,7 +320,7 @@ async function main() {
     "    3. Just do what you ask\n" +
     "  > "
   );
-  const honestyLevel = ["firm-pushback", "mention-and-follow", "just-execute"][parseInt(honestyAnswer.trim()) - 1] || "firm-pushback";
+  honestyLevel = ["firm-pushback", "mention-and-follow", "just-execute"][parseInt(honestyAnswer.trim()) - 1] || "firm-pushback";
 
   const proactivityAnswer = await ask(
     "\n  How proactive should I be?\n" +
@@ -319,7 +329,7 @@ async function main() {
     "    3. Fix things I notice without asking, and propose optimizations\n" +
     "  > "
   );
-  const proactivityLevel = ["reactive", "suggestive", "proactive"][parseInt(proactivityAnswer.trim()) - 1] || "proactive";
+  proactivityLevel = ["reactive", "suggestive", "proactive"][parseInt(proactivityAnswer.trim()) - 1] || "proactive";
 
   const errorAnswer = await ask(
     "\n  When I make a mistake, how should I handle it?\n" +
@@ -327,7 +337,8 @@ async function main() {
     "    2. Explain what went wrong and what I learned\n" +
     "  > "
   );
-  const errorHandling = ["brief-fix", "explain-and-learn"][parseInt(errorAnswer.trim()) - 1] || "brief-fix";
+  errorHandling = ["brief-fix", "explain-and-learn"][parseInt(errorAnswer.trim()) - 1] || "brief-fix";
+  } // end if (!useDefaults)
 
   console.log("");
   log(`Calibrated: autonomy=${autonomyLevel}, communication=${communicationStyle}, honesty=${honestyLevel}, proactivity=${proactivityLevel}, errors=${errorHandling}`);
@@ -348,18 +359,27 @@ async function main() {
   );
 
   // Step 3: Permission to scan
-  const scanAnswer = await ask(
-    "  Can I explore your workspace to learn about your projects? (y/n) > "
-  );
-  const doScan = scanAnswer.trim().toLowerCase().startsWith("y");
-  console.log("");
+  let doScan = false;
+  let doCaffeinate = false;
+  if (!useDefaults) {
+    const scanAnswer = await ask(
+      "  Can I explore your workspace to learn about your projects? (y/n) > "
+    );
+    doScan = scanAnswer.trim().toLowerCase().startsWith("y");
+    console.log("");
 
-  // Step 2b: Keep Mac awake for nocturnal processes?
-  const caffeinateAnswer = await ask(
-    "  Keep Mac awake so my cognitive processes run on schedule? (y/n) > "
-  );
-  const doCaffeinate = caffeinateAnswer.trim().toLowerCase().startsWith("y");
-  console.log("");
+    // Keep Mac awake for nocturnal processes?
+    if (platform === "darwin") {
+      const caffeinateAnswer = await ask(
+        "  Keep Mac awake so my cognitive processes run on schedule? (y/n) > "
+      );
+      doCaffeinate = caffeinateAnswer.trim().toLowerCase().startsWith("y");
+      console.log("");
+    }
+  } else {
+    log("Skipping workspace scan (non-interactive).");
+    console.log("");
+  }
 
   // Step 3: Install Python dependencies
   log("Installing cognitive engine dependencies...");
