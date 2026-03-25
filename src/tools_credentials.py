@@ -8,7 +8,7 @@ def handle_credential_get(service: str, key: str = '') -> str:
     results = get_credential(service, key if key else None)
     if not results:
         target = f"{service}/{key}" if key else service
-        return f"ERROR: No se encontraron credenciales para '{target}'."
+        return f"ERROR: No credentials found for '{target}'."
     lines = []
     for r in results:
         lines.append(f"CREDENCIAL {r['service']}/{r['key']}:")
@@ -44,7 +44,7 @@ def handle_credential_delete(service: str, key: str = '') -> str:
     deleted = delete_credential(service, key if key else None)
     if not deleted:
         target = f"{service}/{key}" if key else service
-        return f"ERROR: No se encontraron credenciales para '{target}'."
+        return f"ERROR: No credentials found for '{target}'."
     if key:
         return f"Credential {service}/{key} deleted."
     return f"All credentials for {service} deleted."

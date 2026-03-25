@@ -214,7 +214,7 @@ def nexo_reminder_create(id: str, description: str, date: str = "", category: st
         id: Unique ID starting with 'R' (e.g., R90).
         description: What needs to be done.
         date: Target date YYYY-MM-DD (optional).
-        category: One of: decisiones, tareas, esperando, ideas, general.
+        category: One of: decisions, tasks, waiting, ideas, general.
     """
     return handle_reminder_create(id, description, date, category)
 

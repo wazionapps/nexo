@@ -437,7 +437,7 @@ _SYNONYMS = {
     "plantilla": ["template"],
     "template": ["plantilla"],
     "webhook": ["gancho"],
-    "cron": ["tarea programada", "scheduled"],
+    "cron": ["scheduled task", "scheduled"],
     "extension": ["extensión", "plugin", "addon"],
     "plugin": ["extension", "extensión"],
 }

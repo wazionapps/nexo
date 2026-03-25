@@ -24,7 +24,7 @@ def handle_agent_update(id: str, name: str = "", specialization: str = "", model
     for k, v in [("name", name), ("specialization", specialization), ("model", model),
                   ("tools", tools), ("context_files", context_files), ("rules", rules)]:
         if v: kwargs[k] = v
-    if not kwargs: return "Nada que actualizar."
+    if not kwargs: return "Nothing to update."
     update_agent(id, **kwargs)
     return f"Agent '{id}' updated."
 
