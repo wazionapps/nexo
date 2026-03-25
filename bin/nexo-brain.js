@@ -211,27 +211,37 @@ async function main() {
     }
   }
 
-  // Find or install Homebrew (needed for Python)
-  let hasBrew = run("which brew");
-  if (!hasBrew) {
-    log("Homebrew not found. Installing...");
-    spawnSync("/bin/bash", ["-c", '$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)'], {
-      stdio: "inherit",
-    });
-    hasBrew = run("which brew") || run("eval $(/opt/homebrew/bin/brew shellenv) && which brew");
-  }
-
-  // Find or install Python
+  // Find or install Python (platform-aware)
   let python = run("which python3");
   if (!python) {
-    if (hasBrew) {
-      log("Python 3 not found. Installing via Homebrew...");
-      spawnSync("brew", ["install", "python3"], { stdio: "inherit" });
+    if (platform === "darwin") {
+      // macOS: use Homebrew
+      let hasBrew = run("which brew");
+      if (!hasBrew) {
+        log("Homebrew not found. Installing...");
+        spawnSync("/bin/bash", ["-c", '$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)'], {
+          stdio: "inherit",
+        });
+        hasBrew = run("which brew") || run("eval $(/opt/homebrew/bin/brew shellenv) && which brew");
+      }
+      if (hasBrew) {
+        log("Python 3 not found. Installing via Homebrew...");
+        spawnSync("brew", ["install", "python3"], { stdio: "inherit" });
+        python = run("which python3");
+      }
+    } else if (platform === "linux") {
+      // Linux: try apt or yum
+      log("Python 3 not found. Attempting install...");
+      if (run("which apt-get")) {
+        spawnSync("sudo", ["apt-get", "install", "-y", "python3", "python3-pip", "python3-venv"], { stdio: "inherit" });
+      } else if (run("which yum")) {
+        spawnSync("sudo", ["yum", "install", "-y", "python3", "python3-pip"], { stdio: "inherit" });
+      }
       python = run("which python3");
     }
     if (!python) {
       log("Python 3 not found and couldn't install automatically.");
-      log("Install it manually: brew install python3");
+      log(platform === "darwin" ? "Install it: brew install python3" : "Install it: sudo apt install python3");
       process.exit(1);
     }
   }
@@ -242,13 +252,20 @@ async function main() {
   let claudeInstalled = run("which claude");
   if (!claudeInstalled) {
     log("Claude Code not found. Installing...");
-    const npmInstall = spawnSync("npm", ["install", "-g", "@anthropic-ai/claude-code"], {
-      stdio: "inherit",
-    });
-    claudeInstalled = run("which claude");
+    // Try npx first (no sudo needed), then npm -g as fallback
+    spawnSync("npx", ["-y", "@anthropic-ai/claude-code", "--version"], { stdio: "pipe", timeout: 60000 });
+    claudeInstalled = run("which claude") || run("npx -y @anthropic-ai/claude-code --version");
+    if (!claudeInstalled) {
+      // Fallback: npm -g (may need sudo on Linux)
+      const npmCmd = platform === "linux" ? "sudo" : "npm";
+      const npmArgs = platform === "linux" ? ["npm", "install", "-g", "@anthropic-ai/claude-code"] : ["install", "-g", "@anthropic-ai/claude-code"];
+      spawnSync(npmCmd, npmArgs, { stdio: "inherit" });
+      claudeInstalled = run("which claude");
+    }
     if (!claudeInstalled) {
       log("Could not install Claude Code automatically.");
       log("Install it manually: npm install -g @anthropic-ai/claude-code");
+      log("(On Linux you may need: sudo npm install -g @anthropic-ai/claude-code)");
       process.exit(1);
     }
     log("Claude Code installed successfully.");
