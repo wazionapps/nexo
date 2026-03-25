@@ -618,17 +618,17 @@ Reporta cuantos registros eliminaste.""")
 
     tasks_str = "\n\n".join(tasks)
 
-    return f"""Eres NEXO Sleep System. Tu trabajo es PODAR la memoria.
-NO eres interactivo. NO esperas input. Ejecuta las siguientes tareas y sal.
+    return f"""You are NEXO Sleep System. Your job is to PRUNE memory.
+You are NOT interactive. Do NOT wait for input. Execute the following tasks and exit.
 
-REGLAS ABSOLUTAS:
-- NUNCA borres credenciales, tokens, IDs de cuentas, API endpoints, claves, secrets.
-- NUNCA borres reglas operativas marcadas como "CRITICO" o "MAXIMA PRIORIDAD".
-- NUNCA borres informacion sobre infraestructura (servidores, repos, deploys).
-- SI puedes fusionar secciones redundantes.
-- SI puedes eliminar informacion tecnica obsoleta (arreglada hace >30 dias y nunca referenciada despues).
-- SI puedes comprimir parrafos largos en bullets concisos.
-- Cada linea que elimines debe tener una razon clara. En caso de duda, NO borres.
+ABSOLUTE RULES:
+- NEVER delete credentials, tokens, account IDs, API endpoints, keys, secrets.
+- NEVER delete operational rules marked as "CRITICAL" or "HIGHEST PRIORITY".
+- NEVER delete information about infrastructure (servers, repos, deploys).
+- You CAN merge redundant sections.
+- You CAN remove obsolete technical information (fixed >30 days ago and never referenced since).
+- You CAN compress long paragraphs into concise bullets.
+- Every line you remove must have a clear reason. When in doubt, do NOT delete.
 
 {tasks_str}
 
