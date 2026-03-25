@@ -79,7 +79,20 @@ fi
 
 if [ "$SKIP_FALLBACK" = false ]; then
     mkdir -p "$(dirname "$BUFFER")"
-    echo "{\"ts\":\"$TIMESTAMP\",\"tasks\":[\"session ended\"],\"decisions\":[],\"user_patterns\":[],\"files_modified\":[],\"errors_resolved\":[],\"self_critique\":\"hook-fallback, no self-critique captured\",\"mood\":\"unknown\",\"source\":\"hook-fallback\"}" >> "$BUFFER" 2>/dev/null
+    # Read current adaptive mode for the buffer entry
+    ADAPTIVE_MODE="unknown"
+    ADAPTIVE_FILE="$NEXO_HOME/brain/adaptive_state.json"
+    if [ -f "$ADAPTIVE_FILE" ]; then
+        ADAPTIVE_MODE=$(python3 -c "
+import json
+try:
+    d = json.load(open('$ADAPTIVE_FILE'))
+    print(d.get('current_mode', 'unknown').lower())
+except:
+    print('unknown')
+" 2>/dev/null || echo "unknown")
+    fi
+    echo "{\"ts\":\"$TIMESTAMP\",\"tasks\":[\"session ended\"],\"decisions\":[],\"user_patterns\":[],\"files_modified\":[],\"errors_resolved\":[],\"self_critique\":\"hook-fallback, no self-critique captured\",\"mood\":\"unknown\",\"session_end_mode\":\"$ADAPTIVE_MODE\",\"source\":\"hook-fallback\"}" >> "$BUFFER" 2>/dev/null
 fi
 
 # 3. Intra-day reflection trigger

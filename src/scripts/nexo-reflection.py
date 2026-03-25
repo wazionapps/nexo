@@ -230,6 +230,19 @@ def main():
     with open(BUFFER_PATH, "w") as f:
         f.write("")
 
+    # Adaptive personality: decay inter-session tension
+    try:
+        import sys
+        sys.path.insert(0, os.path.join(NEXO_HOME))
+        from plugins.adaptive_mode import decay_tension
+        decay_result = decay_tension()
+        if decay_result:
+            reflection["adaptive_decay"] = decay_result
+            print(f"Adaptive decay: tension {decay_result['old_tension']} → {decay_result['new_tension']} "
+                  f"({decay_result['hours_elapsed']}h elapsed)")
+    except Exception as e:
+        print(f"Adaptive decay skipped: {e}")
+
     print(f"Reflection complete: {analysis['entry_count']} entries processed, "
           f"{analysis['claude_entries']} from Claude, "
           f"{len(analysis['errors'])} errors, "

@@ -115,6 +115,52 @@ def handle_heartbeat(sid: str, task: str, context_hint: str = '') -> str:
         except Exception:
             pass  # Auto-trust is best-effort
 
+    # Adaptive personality mode: compute from multiple signals
+    if context_hint and len(context_hint.strip()) >= 5:
+        try:
+            from plugins.adaptive_mode import compute_mode
+            # Gather signals
+            _vibe = "neutral"
+            _vibe_intensity = 0.5
+            _corrections = 0
+            try:
+                import cognitive
+                _sent = cognitive.detect_sentiment(context_hint)
+                _vibe = _sent.get("sentiment", "neutral")
+                _vibe_intensity = _sent.get("intensity", 0.5)
+            except Exception:
+                pass
+            # Count recent trust corrections in this session
+            try:
+                _conn = get_db()
+                _corr_count = _conn.execute(
+                    "SELECT COUNT(*) FROM trust_score WHERE context LIKE '%correction%' "
+                    "AND timestamp > datetime('now', '-15 minutes')"
+                ).fetchone()[0]
+                _corrections = _corr_count
+            except Exception:
+                pass
+
+            adaptive = compute_mode(
+                vibe=_vibe,
+                vibe_intensity=_vibe_intensity,
+                recent_corrections=_corrections,
+                user_msg_length=len(context_hint),
+                context_hint=context_hint,
+            )
+            if adaptive.get("changed"):
+                parts.append("")
+                parts.append(f"ADAPTIVE MODE CHANGED: {adaptive['previous_mode']} → {adaptive['mode']} (score: {adaptive['score']})")
+                parts.append(f"  {adaptive['description']}")
+                if adaptive["overrides"]["communication"]:
+                    parts.append(f"  Override: communication={adaptive['overrides']['communication']}, proactivity={adaptive['overrides']['proactivity']}")
+            elif adaptive.get("mode") != "NORMAL":
+                parts.append("")
+                parts.append(f"ADAPTIVE MODE: {adaptive['mode']} (score: {adaptive['score']})")
+                parts.append(f"  MODE: {adaptive['description']}")
+        except Exception:
+            pass  # Adaptive mode is best-effort
+
     # Mid-session RAG: if context_hint provided, check for context shift
     if context_hint and len(context_hint.strip()) >= 15:
         try:
