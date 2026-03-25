@@ -46,7 +46,7 @@ Restart the gateway: `openclaw gateway restart`
 
 ## What You Get
 
-76 MCP tools across 16 categories:
+105+ MCP tools across 18 categories:
 
 - **Cognitive Memory** — RAG-powered semantic search, trust scoring, sentiment detection, cognitive dissonance resolution
 - **Guard System** — Checks "have I made this mistake before?" before every code change

@@ -1,12 +1,12 @@
 # NEXO Brain — Your AI Gets a Brain
 
-[![npm v0.6.0](https://img.shields.io/npm/v/nexo-brain?label=npm&color=purple)](https://www.npmjs.com/package/nexo-brain)
+[![npm v0.7.0](https://img.shields.io/npm/v/nexo-brain?label=npm&color=purple)](https://www.npmjs.com/package/nexo-brain)
 [![F1 0.588 on LoCoMo](https://img.shields.io/badge/LoCoMo_F1-0.588-brightgreen)](https://github.com/wazionapps/nexo/blob/main/benchmarks/locomo/results/)
 [![+55% vs GPT-4](https://img.shields.io/badge/vs_GPT--4-%2B55%25-blue)](https://github.com/snap-research/locomo/issues/33)
 [![GitHub stars](https://img.shields.io/github/stars/wazionapps/nexo?style=social)](https://github.com/wazionapps/nexo/stargazers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-> **v0.6.0** — Now ships with **full orchestration**: 5 automated hooks, mandatory post-mortem with self-critique, pre-compaction context preservation, reflection engine, and auto-migration. Plus: F1 **0.588** on [LoCoMo](https://github.com/snap-research/locomo) (ACL 2024) — outperforms GPT-4 by 55%. Runs on CPU. [Full results](benchmarks/locomo/results/)
+> **v0.7.0** — Adaptive signal weights that learn from real feedback (Ridge regression, shadow mode, momentum), somatic markers (pain memory per file/area), Adaptive Personality v2 (6 signals, emergency bypass), and 4 new MCP tools.
 
 **NEXO Brain transforms any MCP-compatible AI agent from a stateless assistant into a cognitive partner that remembers, learns, forgets, adapts, and builds a relationship with you over time.**
 
@@ -132,7 +132,7 @@ If your Mac was asleep during any scheduled process, NEXO Brain catches up in or
 
 ## Cognitive Features
 
-NEXO Brain provides 21 cognitive tools on top of the 76 base tools, totaling **97+ MCP tools**. These features implement cognitive science concepts that go beyond basic memory:
+NEXO Brain provides 25 cognitive tools on top of the 76 base tools, totaling **105+ MCP tools**. These features implement cognitive science concepts that go beyond basic memory:
 
 ### Input Pipeline
 
@@ -198,7 +198,7 @@ NEXO Brain was evaluated on [LoCoMo](https://github.com/snap-research/locomo) (A
 
 Full results in [`benchmarks/locomo/results/`](benchmarks/locomo/results/).
 
-## Full Orchestration System (v0.6.0)
+## Full Orchestration System (v0.7.0)
 
 Memory alone doesn't make a co-operator. What makes the difference is the **behavioral loop** — the automated discipline that ensures every session starts informed, runs with guardrails, and ends with self-reflection.
 
@@ -257,6 +257,17 @@ npx nexo-brain  # detects v0.5.0, migrates automatically
 - **Never touches your data** (memories, learnings, preferences)
 - Saves updated CLAUDE.md as reference (doesn't overwrite customizations)
 
+## Learned Weights & Somatic Markers (v0.7.0)
+
+### Adaptive Learned Weights
+Signal weights learn from real user feedback via Ridge regression. A 2-week shadow mode observes before activating. Weight momentum (85/15 blend) prevents personality whiplash. Automatic rollback if correction rate doubles.
+
+### Somatic Markers (Pain Memory)
+Files and areas that cause repeated errors accumulate a risk score (0.0–1.0). The guard system warns on HIGH RISK (>0.5) and CRITICAL RISK (>0.8), lowering thresholds for more paranoid checking. Clean guard checks reduce risk multiplicatively (×0.7). Nightly decay (×0.95) ensures old pain fades.
+
+### Adaptive Personality v2
+6 weighted signals: vibe, corrections, brevity, topic, tool errors, git diff. Emergency keywords bypass hysteresis. Severity-weighted decay. Manual override via `nexo_adaptive_override`.
+
 ## Quick Start
 
 ### Claude Code (Primary)
@@ -305,7 +316,7 @@ That's it. No need to run `claude` manually. Atlas will greet you immediately �
 | Component | What | Where |
 |-----------|------|-------|
 | Cognitive engine | Python: fastembed, numpy, vector search | pip packages |
-| MCP server | 97+ tools for memory, cognition, learning, guard | ~/.nexo/ |
+| MCP server | 105+ tools for memory, cognition, learning, guard | ~/.nexo/ |
 | Plugins | Guard, episodic memory, cognitive memory, entities, preferences | ~/.nexo/plugins/ |
 | Hooks (5) | SessionStart briefing, Stop post-mortem, PostToolUse capture, PreCompact checkpoint, Caffeinate | ~/.nexo/hooks/ |
 | Reflection engine | Processes session buffer, extracts patterns, updates user model | ~/.nexo/scripts/ |
@@ -318,12 +329,12 @@ That's it. No need to run `claude` manually. Atlas will greet you immediately �
 
 - **macOS** (Linux support planned)
 - **Node.js 18+** (for the installer)
-- **Claude Opus (latest version) strongly recommended.** NEXO Brain provides 97+ MCP tools across 17 categories. This cognitive load requires a top-tier model with large context window. Smaller models (Haiku, Sonnet) may struggle with tool selection and produce inconsistent results. Opus handles all 97+ tools without hesitation.
+- **Claude Opus (latest version) strongly recommended.** NEXO Brain provides 105+ MCP tools across 17 categories. This cognitive load requires a top-tier model with large context window. Smaller models (Haiku, Sonnet) may struggle with tool selection and produce inconsistent results. Opus handles all 105+ tools without hesitation.
 - Python 3, Homebrew, and Claude Code are installed automatically if missing.
 
 ## Architecture
 
-### 97+ MCP Tools across 17 Categories
+### 105+ MCP Tools across 18 Categories
 
 | Category | Count | Tools | Purpose |
 |----------|-------|-------|---------|
@@ -345,6 +356,7 @@ That's it. No need to run `claude` manually. Atlas will greet you immediately �
 | Agents | 5 | get, create, update, delete, list | Agent delegation registry |
 | Backup | 3 | now, list, restore | SQLite data safety |
 | Evolution | 5 | propose, approve, reject, status, history | Self-improvement proposals |
+| Adaptive & Somatic (4) | nexo_adaptive_weights, nexo_adaptive_override, nexo_somatic_check, nexo_somatic_stats |
 
 ### Plugin System
 
@@ -402,7 +414,7 @@ NEXO Brain is designed as an MCP server. Claude Code is the primary supported cl
 npx nexo-brain
 ```
 
-All 97+ tools are available immediately after installation. The installer configures Claude Code's `~/.claude/settings.json` automatically.
+All 105+ tools are available immediately after installation. The installer configures Claude Code's `~/.claude/settings.json` automatically.
 
 ### OpenClaw
 
