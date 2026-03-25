@@ -28,6 +28,7 @@ import time
 import math
 import subprocess
 from datetime import datetime, timedelta
+from db import get_db
 
 NEXO_HOME = os.environ.get("NEXO_HOME", os.path.expanduser("~/.nexo"))
 ADAPTIVE_STATE_FILE = os.path.join(NEXO_HOME, "brain", "adaptive_state.json")
@@ -84,6 +85,22 @@ GIT_SAFE_OPS = [
     "git stash", "git checkout -b", "git checkout --", "git switch",
     "git rebase", "git merge", "git pull", "git fetch",
 ]
+
+
+def _log_to_db(mode, score, signals, context_hint=""):
+    """Log adaptive computation to nexo.db for weight learning."""
+    try:
+        conn = get_db()
+        conn.execute(
+            "INSERT INTO adaptive_log (mode, tension_score, sig_vibe, sig_corrections, "
+            "sig_brevity, sig_topic, sig_tool_errors, sig_git_diff, context_hint) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (mode, score, signals["vibe"], signals["corrections"], signals["brevity"],
+             signals["topic"], signals["tool_errors"], signals["git_diff"], context_hint[:500])
+        )
+        conn.commit()
+    except Exception:
+        pass  # DB logging is best-effort, never break mode computation
 
 
 def _load_state():
@@ -311,13 +328,18 @@ def compute_mode(
     git_diff_signal = _get_git_diff_signal(state)
 
     # --- Weighted composite score ---
+    # Use learned weights if available, otherwise static
+    active_weights = state.get("learned_weights", None)
+    if not active_weights or len(active_weights) != 6:
+        active_weights = WEIGHTS
+
     composite = (
-        WEIGHTS["vibe"] * vibe_signal
-        + WEIGHTS["corrections"] * correction_signal
-        + WEIGHTS["brevity"] * brevity_signal
-        + WEIGHTS["topic"] * topic_signal
-        + WEIGHTS["tool_errors"] * tool_error_signal
-        + WEIGHTS["git_diff"] * git_diff_signal
+        active_weights["vibe"] * vibe_signal
+        + active_weights["corrections"] * correction_signal
+        + active_weights["brevity"] * brevity_signal
+        + active_weights["topic"] * topic_signal
+        + active_weights["tool_errors"] * tool_error_signal
+        + active_weights["git_diff"] * git_diff_signal
     )
 
     # Momentum (30% of previous score for stability)
@@ -367,6 +389,13 @@ def compute_mode(
     })
     state["mode_history"] = state["mode_history"][-50:]
 
+    # Log to DB for learned weights
+    _log_to_db(new_mode, smoothed, {
+        "vibe": vibe_signal, "corrections": correction_signal,
+        "brevity": brevity_signal, "topic": topic_signal,
+        "tool_errors": tool_error_signal, "git_diff": git_diff_signal,
+    }, context_hint)
+
     _save_state(state)
 
     mode_def = MODES[new_mode]
@@ -389,6 +418,7 @@ def compute_mode(
             "proactivity": mode_def["proactivity_override"],
         },
         "description": mode_def["description"],
+        "weights_source": "learned" if state.get("learned_weights") and len(state.get("learned_weights", {})) == 6 else "static",
     }
 
 
@@ -452,6 +482,166 @@ def decay_tension(gamma: float = 0.15):
         "hours_elapsed": round(hours_elapsed, 1),
         "mode": state["current_mode"],
     }
+
+
+def learn_weights(min_samples: int = 30, lookback_days: int = 30) -> dict:
+    """Learn optimal signal weights from feedback-annotated adaptive_log entries.
+
+    Uses Ridge regression with weight momentum (0.85 old + 0.15 new).
+    Starts in shadow mode — logs what weights WOULD be without activating.
+    After 2 weeks of shadow data, transitions to active mode.
+    """
+    try:
+        conn = get_db()
+        cutoff = (datetime.utcnow() - timedelta(days=lookback_days)).strftime("%Y-%m-%dT%H:%M:%S")
+        rows = conn.execute(
+            "SELECT sig_vibe, sig_corrections, sig_brevity, sig_topic, sig_tool_errors, "
+            "sig_git_diff, feedback_delta FROM adaptive_log "
+            "WHERE feedback_event IS NOT NULL AND timestamp >= ?",
+            (cutoff,)
+        ).fetchall()
+
+        if len(rows) < min_samples:
+            return {"status": "insufficient_data", "samples": len(rows), "min_required": min_samples}
+
+        import numpy as np
+        X = np.array([[r[0], r[1], r[2], r[3], r[4], r[5]] for r in rows], dtype=np.float64)
+        y = np.array([r[6] for r in rows], dtype=np.float64)
+
+        # Ridge regression (alpha=1.0 — more stable than OLS with correlated features)
+        try:
+            n_features = X.shape[1]
+            XtX = X.T @ X + np.eye(n_features) * 1.0
+            Xty = X.T @ y
+            w = np.linalg.solve(XtX, Xty)
+        except np.linalg.LinAlgError:
+            return {"status": "regression_failed", "samples": len(rows)}
+
+        w = np.abs(w)
+        w = np.clip(w, 0.05, 0.50)
+        w = w / w.sum()
+
+        signal_names = ["vibe", "corrections", "brevity", "topic", "tool_errors", "git_diff"]
+        raw_learned = {name: round(float(w[i]), 4) for i, name in enumerate(signal_names)}
+
+        # Weight momentum: blend 85% old + 15% new (prevents personality whiplash)
+        state = _load_state()
+        old_weights = state.get("learned_weights", dict(WEIGHTS))
+        learned = {}
+        for name in signal_names:
+            blended = 0.85 * old_weights.get(name, WEIGHTS[name]) + 0.15 * raw_learned[name]
+            learned[name] = round(blended, 4)
+        total = sum(learned.values())
+        learned = {k: round(v / total, 4) for k, v in learned.items()}
+
+        drift = {name: round(learned[name] - WEIGHTS[name], 4) for name in signal_names}
+        max_drift = max(abs(d) for d in drift.values())
+
+        # Shadow mode: first 2 weeks, only LOG without activating
+        first_learned_date = state.get("learned_weights_first_date")
+        if not first_learned_date:
+            first_learned_date = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
+            state["learned_weights_first_date"] = first_learned_date
+
+        first_dt = datetime.strptime(first_learned_date, "%Y-%m-%dT%H:%M:%S")
+        days_since_first = (datetime.utcnow() - first_dt).days
+        is_shadow = days_since_first < 14
+
+        state["shadow_weights"] = learned
+        state["shadow_weights_date"] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
+        state["shadow_weights_samples"] = len(rows)
+
+        if not is_shadow:
+            state["learned_weights"] = learned
+        state["learned_weights_date"] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
+        state["learned_weights_samples"] = len(rows)
+        _save_state(state)
+
+        return {
+            "status": "shadow" if is_shadow else "active",
+            "mode": "shadow" if is_shadow else "active",
+            "days_in_shadow": days_since_first if is_shadow else 0,
+            "samples": len(rows),
+            "weights": learned,
+            "raw_weights": raw_learned,
+            "static_weights": dict(WEIGHTS),
+            "drift": drift,
+            "max_drift": max_drift,
+        }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+def prune_adaptive_log(max_age_days: int = 90):
+    """Remove adaptive_log entries older than max_age_days."""
+    try:
+        conn = get_db()
+        cutoff = (datetime.utcnow() - timedelta(days=max_age_days)).strftime("%Y-%m-%dT%H:%M:%S")
+        cursor = conn.execute("DELETE FROM adaptive_log WHERE timestamp < ?", (cutoff,))
+        conn.commit()
+        return cursor.rowcount
+    except Exception:
+        return 0
+
+
+def check_weight_rollback() -> dict:
+    """Check if learned weights should be rolled back.
+    Compares correction rate in last 7 days vs 7 days before activation.
+    Includes minimum-volume guard (skip if <10 events in either window).
+    """
+    state = _load_state()
+    activation_date = state.get("learned_weights_date")
+    if not activation_date:
+        return {"status": "no_learned_weights"}
+    try:
+        conn = get_db()
+        activation_dt = datetime.strptime(activation_date, "%Y-%m-%dT%H:%M:%S")
+        days_since = (datetime.utcnow() - activation_dt).days
+        if days_since < 7:
+            return {"status": "too_early", "days_since_activation": days_since}
+
+        pre_start = (activation_dt - timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%S")
+        pre_end = activation_date
+        pre_corrections = conn.execute(
+            "SELECT COUNT(*) FROM adaptive_log WHERE feedback_event IN ('correction','repeated_error') "
+            "AND timestamp BETWEEN ? AND ?", (pre_start, pre_end)
+        ).fetchone()[0]
+
+        post_start = (datetime.utcnow() - timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%S")
+        post_corrections = conn.execute(
+            "SELECT COUNT(*) FROM adaptive_log WHERE feedback_event IN ('correction','repeated_error') "
+            "AND timestamp >= ?", (post_start,)
+        ).fetchone()[0]
+
+        # Minimum-volume guard
+        pre_total = conn.execute(
+            "SELECT COUNT(*) FROM adaptive_log WHERE timestamp BETWEEN ? AND ?",
+            (pre_start, pre_end)
+        ).fetchone()[0]
+        post_total = conn.execute(
+            "SELECT COUNT(*) FROM adaptive_log WHERE timestamp >= ?", (post_start,)
+        ).fetchone()[0]
+        if pre_total < 10 or post_total < 10:
+            return {"status": "low_volume", "pre_events": pre_total, "post_events": post_total,
+                    "days_since_activation": days_since}
+
+        pre_rate = pre_corrections / 7
+        post_rate = post_corrections / 7
+
+        if pre_rate > 0 and post_rate >= 2 * pre_rate:
+            state.pop("learned_weights", None)
+            state.pop("learned_weights_date", None)
+            state.pop("learned_weights_samples", None)
+            state["learned_weights_rollback"] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
+            _save_state(state)
+            return {"status": "rolled_back", "pre_rate": round(pre_rate, 2),
+                    "post_rate": round(post_rate, 2),
+                    "reason": f"Recent correction rate {post_rate:.2f}/day vs pre-activation {pre_rate:.2f}/day (>=2x)"}
+
+        return {"status": "ok", "pre_rate": round(pre_rate, 2), "post_rate": round(post_rate, 2),
+                "days_since_activation": days_since}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
 
 
 def reset_session():
@@ -574,6 +764,36 @@ def handle_adaptive_override(mode: str = "") -> str:
     return f"Manual override set: {mode_upper}. {mode_def['description']} Use 'CLEAR' to return to auto-detection."
 
 
+def handle_adaptive_weights() -> str:
+    """View current adaptive weights — static vs learned, training stats, drift from baseline, shadow mode status."""
+    state = _load_state()
+    learned = state.get("learned_weights")
+    shadow = state.get("shadow_weights")
+    result = {
+        "static_weights": dict(WEIGHTS),
+        "using": "learned" if learned and len(learned) == 6 else "static",
+    }
+    if learned and len(learned) == 6:
+        result["learned_weights"] = learned
+        result["learned_date"] = state.get("learned_weights_date", "unknown")
+        result["learned_samples"] = state.get("learned_weights_samples", 0)
+        result["drift"] = {k: round(learned[k] - WEIGHTS[k], 4) for k in WEIGHTS}
+        result["max_drift"] = max(abs(d) for d in result["drift"].values())
+    if shadow and len(shadow) == 6:
+        result["shadow_weights"] = shadow
+        result["shadow_date"] = state.get("shadow_weights_date")
+        result["shadow_samples"] = state.get("shadow_weights_samples", 0)
+        first = state.get("learned_weights_first_date")
+        if first:
+            days = (datetime.utcnow() - datetime.strptime(first, "%Y-%m-%dT%H:%M:%S")).days
+            result["shadow_days"] = days
+            result["shadow_active"] = days < 14
+    rollback = state.get("learned_weights_rollback")
+    if rollback:
+        result["last_rollback"] = rollback
+    return json.dumps(result, indent=2)
+
+
 # Plugin registration
 TOOLS = [
     (handle_adaptive_mode, "nexo_adaptive_mode", "Get or compute adaptive personality mode (FLOW/NORMAL/TENSION) from 6 signals"),
@@ -581,4 +801,5 @@ TOOLS = [
     (handle_adaptive_decay, "nexo_adaptive_decay", "Trigger inter-session tension decay (severity-weighted)"),
     (handle_adaptive_reset, "nexo_adaptive_reset", "Reset adaptive state for new session"),
     (handle_adaptive_override, "nexo_adaptive_override", "Manual override: force FLOW/NORMAL/TENSION or CLEAR to return to auto"),
+    (handle_adaptive_weights, "nexo_adaptive_weights", "View adaptive weights — static vs learned, training stats, shadow mode, drift"),
 ]

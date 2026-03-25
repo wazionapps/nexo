@@ -313,7 +313,7 @@ def nexo_learning_add(category: str, title: str, content: str, reasoning: str = 
     """Add a new learning (resolved error, pattern, gotcha).
 
     Args:
-        category: One of: nexo-ops, infrastructure, security, brain-engine, other.
+        category: One of: nexo-ops, infrastructure, security, brain-engine (or custom categories).
         title: Short title for the learning.
         content: Full description with context and solution.
         reasoning: WHY this matters — what led to discovering this (optional).

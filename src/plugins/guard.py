@@ -6,18 +6,22 @@ and provides stats on error prevention effectiveness.
 import json
 import os
 from datetime import datetime, timedelta
-from pathlib import Path
 from db import get_db, find_similar_learnings, extract_keywords
 
-NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
-SCHEMA_CACHE_PATH = str(NEXO_HOME / "schema_cache.json")
+
+SCHEMA_CACHE_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                  "nexo-mcp", "schema_cache.json")
+# Fallback: same dir as db
+if not os.path.exists(SCHEMA_CACHE_PATH):
+    SCHEMA_CACHE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "schema_cache.json")
 
 
 def _load_schema_cache() -> dict:
     """Load cached DB schemas from schema_cache.json."""
     try:
-        if os.path.exists(SCHEMA_CACHE_PATH):
-            with open(SCHEMA_CACHE_PATH) as f:
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "schema_cache.json")
+        if os.path.exists(path):
+            with open(path) as f:
                 return json.load(f)
     except Exception:
         pass
@@ -41,15 +45,17 @@ def _extract_table_names(content: str) -> set:
     """Extract SQL table names from source code."""
     import re
     tables = set()
+    # Match FROM/JOIN/INTO/UPDATE/TABLE patterns
     patterns = [
         r'(?:FROM|JOIN|INTO|UPDATE)\s+`?(\w+)`?',
         r'CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?`?(\w+)`?',
         r'DESCRIBE\s+`?(\w+)`?',
-        r'table_info\([\'"]?(\w+)[\'"]?\)',
+        r'table_info\([\'\"]?(\w+)[\'\"]?\)',
     ]
     for pat in patterns:
         for m in re.finditer(pat, content, re.IGNORECASE):
             tables.add(m.group(1))
+    # Filter out SQL keywords that might match
     sql_keywords = {'SELECT', 'WHERE', 'AND', 'OR', 'NOT', 'NULL', 'SET', 'VALUES', 'INTO', 'AS'}
     return {t for t in tables if t.upper() not in sql_keywords}
 
@@ -59,7 +65,7 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
 
     Args:
         files: Comma-separated file paths about to be edited
-        area: System area (infrastructure, api, database, backend, etc.)
+        area: System area (wazion, shopify, infrastructure, nexo-ops, etc.)
         include_schemas: Include DB table schemas if files touch database code (true/false)
     """
     conn = get_db()
@@ -128,6 +134,7 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
 
         cache = _load_schema_cache()
         for table in all_tables:
+            # Try nexo.db first
             schema = _get_nexo_table_schema(table)
             if schema:
                 result["schemas"][table] = schema
@@ -142,9 +149,9 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
             (lid,)
         ).fetchone()["cnt"]
         if rep_count >= 5:
-            result["blocking_rules"].append(
-                {"id": lid, "rule": learning["rule"], "repetitions": rep_count}
-            )
+            result["blocking_rules"].append({
+                "id": lid, "rule": learning["rule"], "repetitions": rep_count
+            })
 
     # 6. Area repetition rate
     if area:
@@ -158,23 +165,34 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
             result["area_repetition_rate"] = round(reps_area / total_area, 2)
 
     # 7. Cognitive metacognition — semantic search for related warnings
+    #    Trust score modulates rigor: <40 = paranoid mode (more results, lower threshold)
     cognitive_warnings = []
     trust_note = ""
     try:
         import cognitive
         trust = cognitive.get_trust_score()
 
+        # Rigor modulation based on trust
         if trust < 40:
-            cog_top_k = 6
-            cog_min_score = 0.55
+            cog_top_k = 6       # More results
+            cog_min_score = 0.55  # Lower threshold = catch more
             trust_note = f" [RIGOR: PARANOID — trust={trust:.0f}]"
         elif trust > 80:
-            cog_top_k = 2
-            cog_min_score = 0.75
+            cog_top_k = 2       # Fewer results
+            cog_min_score = 0.75  # Higher threshold = only strong matches
             trust_note = f" [RIGOR: FLUENT — trust={trust:.0f}]"
         else:
             cog_top_k = 3
             cog_min_score = 0.65
+
+        # Somatic risk lowers threshold further
+        try:
+            risk_result = cognitive.somatic_get_risk(file_list, area)
+            if risk_result["max_risk"] > 0.5:
+                cog_min_score = min(cog_min_score, 0.4)
+                cog_top_k = max(cog_top_k, 5)
+        except Exception:
+            pass
 
         query_parts = []
         if file_list:
@@ -193,6 +211,21 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
                 )
     except Exception:
         pass  # Cognitive is optional
+
+    # 8. Somatic markers — risk score per file/area
+    somatic_risk = 0.0
+    somatic_details = {}
+    try:
+        import cognitive
+        risk_result = cognitive.somatic_get_risk(file_list, area)
+        somatic_risk = risk_result["max_risk"]
+        somatic_details = risk_result["scores"]
+        # Validated recovery: if no learnings found, guard check is "clean"
+        if not result["learnings"]:
+            for fp in file_list:
+                cognitive.somatic_guard_decay(fp, "file")
+    except Exception:
+        pass
 
     # Log the guard check
     conn.execute(
@@ -237,6 +270,19 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
         for w in cognitive_warnings:
             lines.append(f"  COGNITIVE MATCH {w}")
 
+    if somatic_risk > 0:
+        if somatic_risk > 0.8:
+            lines.insert(0, "CRITICAL RISK (score {:.2f}) — suggest code review before editing".format(somatic_risk))
+        elif somatic_risk > 0.5:
+            lines.insert(0, "HIGH RISK (score {:.2f}) — extra caution recommended".format(somatic_risk))
+        else:
+            lines.append("\nSomatic risk: {:.2f} (low)".format(somatic_risk))
+        if somatic_details:
+            lines.append("Risk scores:")
+            for target, data in somatic_details.items():
+                lines.append("  {}: {:.2f} ({} incidents, last: {})".format(
+                    target, data["risk"], data["incidents"], data["last"][:10] if data["last"] else "unknown"))
+
     if not lines:
         return "No relevant learnings found for these files/area."
 
@@ -258,12 +304,14 @@ def handle_guard_stats(period_days: int = 7) -> str:
         "SELECT COUNT(*) as cnt FROM error_repetitions WHERE created_at > ?", (cutoff,)
     ).fetchone()["cnt"]
 
+    # Repetition rate
     new_learnings_period = conn.execute(
         "SELECT COUNT(*) as cnt FROM learnings WHERE created_at > ?",
         ((datetime.now() - timedelta(days=period_days)).timestamp(),)
     ).fetchone()["cnt"]
     rep_rate = round(total_reps / new_learnings_period, 2) if new_learnings_period > 0 else 0.0
 
+    # Previous period for trend
     prev_cutoff = (datetime.now() - timedelta(days=period_days * 2)).strftime("%Y-%m-%d %H:%M:%S")
     prev_reps = conn.execute(
         "SELECT COUNT(*) as cnt FROM error_repetitions WHERE created_at > ? AND created_at <= ?",
@@ -275,11 +323,13 @@ def handle_guard_stats(period_days: int = 7) -> str:
     elif total_reps > prev_reps:
         trend = "worsening"
 
+    # Top areas
     area_rows = conn.execute(
         "SELECT area, COUNT(*) as cnt FROM error_repetitions WHERE created_at > ? GROUP BY area ORDER BY cnt DESC LIMIT 5",
         (cutoff,)
     ).fetchall()
 
+    # Most ignored learnings (most repetitions)
     ignored_rows = conn.execute(
         "SELECT original_learning_id, COUNT(*) as cnt FROM error_repetitions "
         "GROUP BY original_learning_id ORDER BY cnt DESC LIMIT 5"
@@ -290,6 +340,7 @@ def handle_guard_stats(period_days: int = 7) -> str:
         if lr:
             most_ignored.append({"id": r["original_learning_id"], "title": lr["title"], "times_repeated": r["cnt"]})
 
+    # Guard checks performed
     checks_count = conn.execute(
         "SELECT COUNT(*) as cnt FROM guard_checks WHERE created_at > ?", (cutoff,)
     ).fetchone()["cnt"]
@@ -325,6 +376,7 @@ def handle_guard_log_repetition(new_learning_id: int, original_learning_id: int,
     """
     conn = get_db()
 
+    # Get the area from the new learning
     row = conn.execute("SELECT category FROM learnings WHERE id = ?", (new_learning_id,)).fetchone()
     if not row:
         return f"ERROR: Learning #{new_learning_id} not found."
@@ -339,8 +391,54 @@ def handle_guard_log_repetition(new_learning_id: int, original_learning_id: int,
     return f"Repetition logged: #{new_learning_id} similar to #{original_learning_id} ({similarity:.0%})"
 
 
+def handle_somatic_check(files: str = "", area: str = "") -> str:
+    """View somatic risk scores for specific files and/or area.
+    Args:
+        files: Comma-separated file paths to check
+        area: System area to check
+    """
+    try:
+        import cognitive
+        file_list = [f.strip() for f in files.split(",") if f.strip()] if files else []
+        result = cognitive.somatic_get_risk(file_list, area)
+        if not result["scores"]:
+            return "No somatic markers found for these targets."
+        lines = ["Max risk: {:.2f}".format(result["max_risk"]), ""]
+        for target, data in result["scores"].items():
+            level = "CRITICAL" if data["risk"] > 0.8 else "HIGH" if data["risk"] > 0.5 else "Low"
+            lines.append("  {} {}: {:.2f} ({} incidents, last: {})".format(
+                level, target, data["risk"], data["incidents"], data["last"][:10] if data["last"] else "unknown"))
+        return "\n".join(lines)
+    except Exception as e:
+        return "Error: {}".format(e)
+
+
+def handle_somatic_stats() -> str:
+    """View top 10 riskiest files/areas and system-wide risk distribution."""
+    try:
+        import cognitive
+        top = cognitive.somatic_top_risks(limit=10)
+        if not top:
+            return "No somatic markers recorded yet."
+        lines = ["TOP RISK TARGETS:", ""]
+        for r in top:
+            level = "CRIT" if r["risk_score"] > 0.8 else "HIGH" if r["risk_score"] > 0.5 else "low"
+            lines.append("  [{}] [{}] {}: {:.2f} ({} incidents)".format(
+                level, r["target_type"], r["target"], r["risk_score"], r["incident_count"]))
+        db = cognitive._get_db()
+        total = db.execute("SELECT COUNT(*) FROM somatic_markers WHERE risk_score > 0").fetchone()[0]
+        high = db.execute("SELECT COUNT(*) FROM somatic_markers WHERE risk_score > 0.5").fetchone()[0]
+        critical = db.execute("SELECT COUNT(*) FROM somatic_markers WHERE risk_score > 0.8").fetchone()[0]
+        lines.extend(["", "Distribution: {} tracked | {} high risk | {} critical".format(total, high, critical)])
+        return "\n".join(lines)
+    except Exception as e:
+        return "Error: {}".format(e)
+
+
 TOOLS = [
     (handle_guard_check, "nexo_guard_check", "Check learnings relevant to files/area BEFORE editing code. Call this before any code change."),
     (handle_guard_stats, "nexo_guard_stats", "Get guard system statistics: repetition rate, trends, top problem areas"),
     (handle_guard_log_repetition, "nexo_guard_log_repetition", "Log a learning repetition (new learning matches existing one)"),
+    (handle_somatic_check, "nexo_somatic_check", "View somatic risk scores for files/areas — pain memory"),
+    (handle_somatic_stats, "nexo_somatic_stats", "Top 10 riskiest targets + risk distribution"),
 ]

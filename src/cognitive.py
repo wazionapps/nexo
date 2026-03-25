@@ -30,13 +30,13 @@ DISCRIMINATING_ENTITIES = {
     # OS / Environment
     "linux", "mac", "macos", "windows", "darwin", "ubuntu", "debian", "alpine",
     # Platforms
-    "nexo", "other", "whatsapp", "chrome", "firefox",
+    "shopify", "wazion", "whatsapp", "chrome", "firefox",
     # Languages / Runtimes
     "python", "php", "javascript", "typescript", "node", "deno", "ruby",
     # Versions
     "v1", "v2", "v3", "v4", "v5", "5.6", "7.4", "8.0", "8.1", "8.2",
     # Infrastructure
-    "vps", "local", "production", "staging",
+    "cloudrun", "gcloud", "vps", "local", "production", "staging",
     # DB
     "mysql", "sqlite", "postgresql", "postgres", "redis",
 }
@@ -468,12 +468,31 @@ def _init_tables(conn: sqlite3.Connection):
             SELECT id, content, source_type, source_id, domain FROM {store}_memories
         """)
 
-    # Temporal indexing columns
+    # Temporal indexing columns (Task C)
     for table in ("stm_memories", "ltm_memories"):
         try:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN temporal_date TEXT DEFAULT ''")
         except Exception:
             pass  # Column already exists
+
+    # Somatic markers — emotional risk memory for files and areas
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS somatic_markers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            target TEXT NOT NULL,
+            target_type TEXT NOT NULL,
+            risk_score REAL DEFAULT 0.0,
+            incident_count INTEGER DEFAULT 0,
+            last_incident TEXT DEFAULT NULL,
+            last_decay TEXT DEFAULT NULL,
+            last_guard_decay_date TEXT DEFAULT NULL,
+            last_validated_at TEXT DEFAULT NULL,
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now')),
+            UNIQUE(target, target_type)
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_somatic_target ON somatic_markers(target)")
 
     conn.commit()
 
@@ -574,28 +593,37 @@ def extract_temporal_date(text: str) -> str:
     text_lower = text.lower()
 
     # Pattern 1: "DD Month YYYY" or "Month DD, YYYY" or "D Month, YYYY"
+    # e.g., "8 May, 2023", "May 8, 2023", "25 May, 2023"
     for month_name, month_num in _MONTH_MAP.items():
         # "8 May, 2023" or "8 May 2023"
         match = re.search(rf'(\d{{1,2}})\s+{month_name}[,]?\s+(\d{{4}})', text_lower)
         if match:
-            day, year = match.group(1).zfill(2), match.group(2)
-            return f"{year}-{month_num}-{day}"
+            day = int(match.group(1))
+            year = match.group(2)
+            return f"{year}-{month_num}-{day:02d}"
+
         # "May 8, 2023" or "May 8 2023"
         match = re.search(rf'{month_name}\s+(\d{{1,2}})[,]?\s+(\d{{4}})', text_lower)
         if match:
-            day, year = match.group(1).zfill(2), match.group(2)
-            return f"{year}-{month_num}-{day}"
+            day = int(match.group(1))
+            year = match.group(2)
+            return f"{year}-{month_num}-{day:02d}"
 
-    # Pattern 2: ISO format YYYY-MM-DD
+    # Pattern 2: ISO format "2023-05-08"
     match = re.search(r'(\d{4})-(\d{2})-(\d{2})', text)
     if match:
         return match.group(0)
 
-    # Pattern 3: DD/MM/YYYY or MM/DD/YYYY (assume DD/MM/YYYY)
+    # Pattern 3: "DD/MM/YYYY" or "MM/DD/YYYY" (ambiguous, try DD/MM first)
     match = re.search(r'(\d{1,2})/(\d{1,2})/(\d{4})', text)
     if match:
-        d, m, y = match.group(1).zfill(2), match.group(2).zfill(2), match.group(3)
-        return f"{y}-{m}-{d}"
+        a, b, year = int(match.group(1)), int(match.group(2)), match.group(3)
+        if a > 12:  # Must be DD/MM
+            return f"{year}-{b:02d}-{a:02d}"
+        elif b > 12:  # Must be MM/DD
+            return f"{year}-{a:02d}-{b:02d}"
+        # Ambiguous — default to DD/MM (European)
+        return f"{year}-{b:02d}-{a:02d}"
 
     return ""
 
@@ -670,43 +698,35 @@ def bm25_search(query_text: str, stores: str = "both", top_k: int = 20,
 
 
 def _rrf_fuse(vector_results: list[dict], bm25_results: list[dict],
-              k: int = 60, alpha: float = 0.5) -> list[dict]:
-    """Reciprocal Rank Fusion: combine vector and BM25 results.
+              k: int = 60, alpha: float = 0.7) -> list[dict]:
+    """Reciprocal Rank Fusion: boost vector results with BM25 keyword matches.
 
-    RRF score = alpha * 1/(k + vector_rank) + (1-alpha) * 1/(k + bm25_rank)
-    Higher alpha = more weight on vector search.
+    BM25 only BOOSTS existing vector results — never adds new ones.
+    This preserves vector search recall while improving precision for keyword-heavy queries.
+
+    RRF score = vector_score + (1-alpha) * 1/(k + bm25_rank) for items found by both.
+    Items only in vector results keep their original score.
     """
-    # Build score maps by (store, id)
-    scores = {}
-    metadata = {}
-
-    for rank, r in enumerate(vector_results):
-        key = (r["store"], r["id"])
-        scores[key] = alpha * (1.0 / (k + rank + 1))
-        metadata[key] = r
-
+    # Build BM25 lookup by (store, id)
+    bm25_lookup = {}
     for rank, r in enumerate(bm25_results):
         key = (r["store"], r["id"])
-        bm25_score = (1 - alpha) * (1.0 / (k + rank + 1))
-        if key in scores:
-            scores[key] += bm25_score
-        else:
-            scores[key] = bm25_score
-            metadata[key] = r
+        bm25_lookup[key] = rank + 1  # 1-based rank
 
-    # Sort by fused score descending
-    sorted_keys = sorted(scores.keys(), key=lambda x: scores[x], reverse=True)
-
+    # Boost vector results that also appear in BM25
     fused = []
-    for key in sorted_keys:
-        result = metadata[key].copy()
-        result["rrf_score"] = scores[key]
-        # Preserve original vector score if available
-        if "score" not in result:
-            result["score"] = scores[key]
+    for r in vector_results:
+        result = r.copy()
+        key = (r["store"], r["id"])
+        if key in bm25_lookup:
+            bm25_rank = bm25_lookup[key]
+            boost = (1 - alpha) * (1.0 / (k + bm25_rank))
+            result["score"] = r["score"] + boost
+            result["bm25_boosted"] = True
         fused.append(result)
 
     return fused
+
 
 
 # ============================================================================
@@ -1091,6 +1111,13 @@ def search(
                     return merged
 
     db = _get_db()
+
+    # Detect temporal queries — boost results with temporal_date
+    _temporal_keywords = {"when", "date", "time", "first", "last", "before", "after",
+                          "cuándo", "cuando", "fecha", "primero", "último", "antes", "después"}
+    query_lower = query_text.lower().split()
+    is_temporal_query = bool(_temporal_keywords & set(query_lower))
+
     if use_hyde:
         query_vec = hyde_expand_query(query_text)
     else:
@@ -1126,6 +1153,11 @@ def search(
             if lifecycle == "pinned":
                 score = min(1.0, score + 0.2)
             if score >= min_score:
+                temporal = ""
+                try:
+                    temporal = row["temporal_date"] or ""
+                except (IndexError, KeyError):
+                    pass
                 results.append({
                     "store": "stm",
                     "id": row["id"],
@@ -1139,6 +1171,7 @@ def search(
                     "access_count": row["access_count"],
                     "score": score,
                     "lifecycle_state": lifecycle,
+                    "temporal_date": temporal,
                 })
 
     # Search LTM (active)
@@ -1204,14 +1237,18 @@ def search(
         if reactivated_ids:
             db.commit()
 
-    # Hybrid search: fuse vector results with BM25 keyword results
+    # Hybrid search: boost vector results with BM25 keyword matches
     if hybrid and query_text:
-        bm25_results = bm25_search(query_text, stores=stores, top_k=top_k * 2,
+        bm25_results = bm25_search(query_text, stores=stores, top_k=top_k * 4,
                                     source_type_filter=source_type_filter)
         if bm25_results:
             results = _rrf_fuse(results, bm25_results, alpha=hybrid_alpha)
-            # Re-apply min_score filter on fused results (use original vector score or rrf_score)
-            results = [r for r in results if r.get("score", 0) >= min_score or r.get("rrf_score", 0) > 0]
+
+    # Temporal boost: for "when" queries, boost results that have temporal_date
+    if is_temporal_query:
+        for r in results:
+            if r.get("temporal_date"):
+                r["score"] = min(1.0, r["score"] + 0.05)
 
     # Sort by score descending, take top-20 for reranking
     results.sort(key=lambda x: x.get("score", 0), reverse=True)
@@ -1296,16 +1333,7 @@ def search(
 
     # Rehearsal: update strength and access_count for returned results
     if rehearse and results:
-        now = datetime.utcnow().isoformat()
-        for r in results:
-            if (r["store"], r["id"]) in reactivated_ids:
-                continue
-            table = "stm_memories" if r["store"] == "stm" else "ltm_memories"
-            db.execute(
-                f"UPDATE {table} SET strength = 1.0, access_count = access_count + 1, last_accessed = ? WHERE id = ?",
-                (now, r["id"])
-            )
-        db.commit()
+        _rehearse_results(results, skip_ids=reactivated_ids)
 
     # Record co-activation for future spreading (Feature 2)
     if results and len(results) >= 2:
@@ -2528,7 +2556,7 @@ def resolve_dissonance(memory_id: int, resolution: str, context: str = "") -> st
     Args:
         memory_id: The LTM memory that conflicts with the new instruction
         resolution: One of:
-            - 'paradigm_shift': the user changed their mind permanently. Decay old memory,
+            - 'paradigm_shift': the user changed his mind permanently. Decay old memory,
               new instruction becomes the standard.
             - 'exception': This is a one-time override. Keep old memory as standard.
             - 'override': Old memory was wrong. Mark as corrupted and decay to dormant.
@@ -2717,6 +2745,25 @@ def get_trust_score() -> float:
     return row[0]
 
 
+def _annotate_adaptive_log(event: str, delta: float):
+    """Retroactively annotate the most recent adaptive_log entry with trust feedback."""
+    try:
+        from db import get_db
+        conn = get_db()
+        conn.execute(
+            "UPDATE adaptive_log SET feedback_event = ?, feedback_delta = ?, "
+            "feedback_ts = datetime('now') "
+            "WHERE id = (SELECT id FROM adaptive_log "
+            "WHERE feedback_event IS NULL "
+            "AND timestamp >= datetime('now', '-5 minutes') "
+            "ORDER BY id DESC LIMIT 1)",
+            (event, int(delta))
+        )
+        conn.commit()
+    except Exception:
+        pass
+
+
 def adjust_trust(event: str, context: str = "", custom_delta: float = None) -> dict:
     """Adjust trust score based on an event.
 
@@ -2743,6 +2790,22 @@ def adjust_trust(event: str, context: str = "", custom_delta: float = None) -> d
         (new_score, event, delta, context[:500])
     )
     db.commit()
+
+    # Annotate adaptive log for learned weights
+    _annotate_adaptive_log(event, delta)
+
+    # Somatic event logging for repeated_error events (append-only in nexo.db)
+    if event == "repeated_error" and context:
+        try:
+            from db import get_db as get_nexo_db
+            area = context.split(":")[0].strip() if ":" in context else "unknown"
+            get_nexo_db().execute(
+                "INSERT INTO somatic_events (target, target_type, event_type, delta, source) VALUES (?, ?, ?, ?, ?)",
+                (area, "area", "repeated_error", 0.20, f"trust:{event}")
+            )
+            get_nexo_db().commit()
+        except Exception:
+            pass
 
     return {
         "old_score": round(old_score, 1),
@@ -3320,4 +3383,126 @@ def security_scan(content: str) -> dict:
         "sanitized_content": sanitized,
         "risk_score": round(risk_score, 3),
     }
+
+
+# ─── Somatic Markers ────────────────────────────────────────────────
+
+def somatic_accumulate(target: str, target_type: str, delta: float):
+    """Increase risk_score for a target (file or area). Capped at 1.0."""
+    db = _get_db()
+    now = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
+    existing = db.execute(
+        "SELECT id, risk_score, incident_count FROM somatic_markers WHERE target = ? AND target_type = ?",
+        (target, target_type)
+    ).fetchone()
+    if existing:
+        new_score = min(1.0, existing["risk_score"] + delta)
+        db.execute(
+            "UPDATE somatic_markers SET risk_score = ?, incident_count = incident_count + 1, "
+            "last_incident = ?, updated_at = ? WHERE id = ?",
+            (new_score, now, now, existing["id"])
+        )
+    else:
+        db.execute(
+            "INSERT INTO somatic_markers (target, target_type, risk_score, incident_count, last_incident, updated_at) "
+            "VALUES (?, ?, ?, 1, ?, ?)",
+            (target, target_type, min(1.0, delta), now, now)
+        )
+    db.commit()
+
+
+def somatic_guard_decay(target: str, target_type: str):
+    """Validated recovery: multiplicative x0.7 on successful guard check. Max once/day/target."""
+    db = _get_db()
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    now = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
+    row = db.execute(
+        "SELECT id, risk_score, last_guard_decay_date FROM somatic_markers WHERE target = ? AND target_type = ?",
+        (target, target_type)
+    ).fetchone()
+    if not row or row["risk_score"] <= 0:
+        return
+    if row["last_guard_decay_date"] == today:
+        return
+    new_score = max(0.0, row["risk_score"] * 0.7)
+    if new_score < 0.01:
+        new_score = 0.0
+    db.execute(
+        "UPDATE somatic_markers SET risk_score = ?, last_guard_decay_date = ?, "
+        "last_validated_at = ?, updated_at = datetime('now') WHERE id = ?",
+        (new_score, today, now, row["id"])
+    )
+    db.commit()
+
+
+def somatic_nightly_decay(gamma: float = 0.95):
+    """Apply nightly decay to all somatic markers. Called from cognitive-decay cron."""
+    db = _get_db()
+    rows = db.execute("SELECT id, risk_score FROM somatic_markers WHERE risk_score > 0").fetchall()
+    updated = 0
+    for row in rows:
+        new_score = row["risk_score"] * gamma
+        if new_score < 0.01:
+            new_score = 0.0
+        db.execute(
+            "UPDATE somatic_markers SET risk_score = ?, last_decay = datetime('now'), updated_at = datetime('now') WHERE id = ?",
+            (new_score, row["id"])
+        )
+        updated += 1
+    db.commit()
+    return updated
+
+
+def somatic_project_events():
+    """Project unprojected somatic_events from nexo.db into cognitive.db somatic_markers.
+    Called during nightly cron. Idempotent — each event processed exactly once.
+    """
+    try:
+        from db import get_db
+        conn = get_db()
+        rows = conn.execute(
+            "SELECT id, target, target_type, delta FROM somatic_events WHERE projected = 0 ORDER BY id"
+        ).fetchall()
+        for row in rows:
+            somatic_accumulate(row["target"], row["target_type"], row["delta"])
+            conn.execute("UPDATE somatic_events SET projected = 1 WHERE id = ?", (row["id"],))
+        conn.commit()
+        return len(rows)
+    except Exception:
+        return 0
+
+
+def somatic_get_risk(targets: list, area: str = "") -> dict:
+    """Get risk scores for targets (files) and optional area."""
+    db = _get_db()
+    scores = {}
+    for t in targets:
+        row = db.execute(
+            "SELECT risk_score, incident_count, last_incident FROM somatic_markers WHERE target = ? AND target_type = 'file'",
+            (t,)
+        ).fetchone()
+        if row and row["risk_score"] > 0:
+            scores[t] = {"risk": round(row["risk_score"], 3), "incidents": row["incident_count"],
+                         "last": row["last_incident"] or "unknown"}
+    if area:
+        row = db.execute(
+            "SELECT risk_score, incident_count, last_incident FROM somatic_markers WHERE target = ? AND target_type = 'area'",
+            (area,)
+        ).fetchone()
+        if row and row["risk_score"] > 0:
+            scores[f"area:{area}"] = {"risk": round(row["risk_score"], 3), "incidents": row["incident_count"],
+                                       "last": row["last_incident"] or "unknown"}
+    all_risks = [s["risk"] for s in scores.values()]
+    return {"max_risk": max(all_risks) if all_risks else 0.0, "scores": scores}
+
+
+def somatic_top_risks(limit: int = 10) -> list:
+    """Get top N riskiest targets across all types."""
+    db = _get_db()
+    rows = db.execute(
+        "SELECT target, target_type, risk_score, incident_count, last_incident "
+        "FROM somatic_markers WHERE risk_score > 0 ORDER BY risk_score DESC LIMIT ?",
+        (limit,)
+    ).fetchall()
+    return [dict(r) for r in rows]
 

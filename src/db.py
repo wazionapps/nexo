@@ -862,6 +862,42 @@ def _m7_diary_source_and_draft(conn):
     """)
 
 
+def _m8_adaptive_log_and_somatic(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS adaptive_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT DEFAULT (datetime('now')),
+            mode TEXT NOT NULL,
+            tension_score REAL NOT NULL,
+            sig_vibe REAL DEFAULT 0,
+            sig_corrections REAL DEFAULT 0,
+            sig_brevity REAL DEFAULT 0,
+            sig_topic REAL DEFAULT 0,
+            sig_tool_errors REAL DEFAULT 0,
+            sig_git_diff REAL DEFAULT 0,
+            context_hint TEXT DEFAULT '',
+            feedback_event TEXT DEFAULT NULL,
+            feedback_delta INTEGER DEFAULT NULL,
+            feedback_ts TEXT DEFAULT NULL
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_adaptive_log_ts ON adaptive_log(timestamp)")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS somatic_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT DEFAULT (datetime('now')),
+            target TEXT NOT NULL,
+            target_type TEXT NOT NULL,
+            event_type TEXT NOT NULL,
+            delta REAL NOT NULL,
+            source TEXT DEFAULT '',
+            projected INTEGER DEFAULT 0
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_somatic_events_target ON somatic_events(target)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_somatic_events_projected ON somatic_events(projected)")
+
+
 # Migration registry — APPEND ONLY, never reorder or delete
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
@@ -871,6 +907,7 @@ MIGRATIONS = [
     (5, "change_log_indexes", _m5_change_log_indexes),
     (6, "error_guard_tables", _m6_error_guard_tables),
     (7, "diary_source_and_draft", _m7_diary_source_and_draft),
+    (8, "adaptive_log_and_somatic", _m8_adaptive_log_and_somatic),
 ]
 
 
