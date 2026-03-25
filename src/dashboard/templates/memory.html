@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>NEXO Brain — Memory Search</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; background: #0a0a0f; color: #e0e0e0; }
+        nav { background: #111118; padding: 1rem 2rem; display: flex; gap: 2rem; align-items: center; border-bottom: 1px solid #2a2a3a; }
+        nav a { color: #8b8bff; text-decoration: none; font-size: 0.9rem; } nav a:hover { color: #fff; }
+        nav .brand { font-weight: 700; font-size: 1.2rem; color: #7c3aed; }
+        .controls { padding: 1rem 2rem; display: flex; gap: 1rem; align-items: center; }
+        input, select, button { background: #1a1a2a; color: #ddd; border: 1px solid #333; border-radius: 6px; padding: 0.5rem 1rem; font-size: 0.9rem; }
+        button { cursor: pointer; background: #7c3aed; border-color: #7c3aed; color: #fff; } button:hover { background: #6d28d9; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 1rem 2rem; }
+        .memory-card { background: #15151f; border: 1px solid #2a2a3a; border-radius: 8px; padding: 1rem; margin-bottom: 0.75rem; }
+        .memory-card .meta { color: #888; font-size: 0.8rem; margin-bottom: 0.5rem; }
+        .memory-card .content { font-size: 0.9rem; line-height: 1.5; }
+        .score { color: #7c3aed; font-weight: 600; }
+        #count { color: #888; margin-left: 1rem; }
+    </style>
+</head>
+<body>
+    <nav>
+        <span class="brand">NEXO Brain</span>
+        <a href="/">Overview</a>
+        <a href="/graph">Knowledge Graph</a>
+        <a href="/memory">Memory</a>
+        <a href="/somatic">Somatic</a>
+        <a href="/adaptive">Adaptive</a>
+        <a href="/sessions">Sessions</a>
+    </nav>
+    <div class="controls">
+        <input type="text" id="query" placeholder="Search memories..." style="width:400px" onkeydown="if(event.key==='Enter')search()">
+        <select id="store"><option value="both">Both</option><option value="stm">STM</option><option value="ltm">LTM</option></select>
+        <button onclick="search()">Search</button>
+        <span id="count"></span>
+    </div>
+    <div class="container" id="results"></div>
+    <script>
+        async function search() {
+            const q = document.getElementById('query').value;
+            if (!q) return;
+            const store = document.getElementById('store').value;
+            const data = await fetch(`/api/memories?q=${encodeURIComponent(q)}&store=${store}&limit=30`).then(r => r.json());
+            document.getElementById('count').textContent = `${data.count} results`;
+            document.getElementById('results').innerHTML = (data.results || []).map(m => `
+                <div class="memory-card">
+                    <div class="meta">
+                        <span class="score">${(m.score || m.similarity || 0).toFixed(3)}</span>
+                        &middot; ${m.store || 'unknown'} &middot; ID: ${m.id}
+                        ${m.source_type ? '&middot; ' + m.source_type : ''}
+                        ${m.created_at ? '&middot; ' + m.created_at : ''}
+                    </div>
+                    <div class="content">${(m.content || '').replace(/</g, '&lt;')}</div>
+                </div>
+            `).join('');
+        }
+    </script>
+</body>
+</html>

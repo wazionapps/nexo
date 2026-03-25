@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEXO Brain Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: #0a0a0f; color: #e0e0e0; }
+        nav { background: #111118; padding: 1rem 2rem; display: flex; gap: 2rem; align-items: center; border-bottom: 1px solid #2a2a3a; }
+        nav a { color: #8b8bff; text-decoration: none; font-size: 0.9rem; } nav a:hover { color: #fff; }
+        nav .brand { font-weight: 700; font-size: 1.2rem; color: #7c3aed; }
+        .container { max-width: 1400px; margin: 2rem auto; padding: 0 2rem; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; }
+        .card { background: #15151f; border: 1px solid #2a2a3a; border-radius: 12px; padding: 1.5rem; }
+        .card h2 { font-size: 1rem; color: #888; margin-bottom: 1rem; text-transform: uppercase; letter-spacing: 0.05em; }
+        .big-number { font-size: 3rem; font-weight: 700; color: #7c3aed; }
+        .stat-row { display: flex; justify-content: space-between; padding: 0.4rem 0; border-bottom: 1px solid #1a1a2a; }
+        .stat-label { color: #888; } .stat-value { color: #ddd; font-weight: 500; }
+        #loading { text-align: center; padding: 3rem; color: #666; }
+    </style>
+</head>
+<body>
+    <nav>
+        <span class="brand">NEXO Brain</span>
+        <a href="/">Overview</a>
+        <a href="/graph">Knowledge Graph</a>
+        <a href="/memory">Memory</a>
+        <a href="/somatic">Somatic</a>
+        <a href="/adaptive">Adaptive</a>
+        <a href="/sessions">Sessions</a>
+    </nav>
+    <div class="container">
+        <div id="loading">Loading brain state...</div>
+        <div id="content" style="display:none">
+            <div class="grid">
+                <div class="card">
+                    <h2>Trust Score</h2>
+                    <div class="big-number" id="trust-score">--</div>
+                </div>
+                <div class="card">
+                    <h2>Cognitive Memory</h2>
+                    <div id="cog-stats"></div>
+                </div>
+                <div class="card">
+                    <h2>Knowledge Graph</h2>
+                    <div id="kg-stats"></div>
+                </div>
+                <div class="card">
+                    <h2>Prediction Gate</h2>
+                    <div id="gate-stats"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        fetch('/api/stats').then(r => r.json()).then(data => {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('content').style.display = 'block';
+            document.getElementById('trust-score').textContent = data.trust_score?.toFixed(1) ?? '--';
+            const cog = data.cognitive || {};
+            document.getElementById('cog-stats').innerHTML = Object.entries(cog)
+                .filter(([k]) => typeof cog[k] !== 'object')
+                .map(([k,v]) => `<div class="stat-row"><span class="stat-label">${k}</span><span class="stat-value">${v}</span></div>`).join('');
+            const kg = data.knowledge_graph || {};
+            document.getElementById('kg-stats').innerHTML = [
+                ['Nodes', kg.nodes], ['Active Edges', kg.edges_active], ['Historical', kg.edges_historical]
+            ].map(([k,v]) => `<div class="stat-row"><span class="stat-label">${k}</span><span class="stat-value">${v}</span></div>`).join('');
+            const gate = data.prediction_gate || {};
+            document.getElementById('gate-stats').innerHTML = Object.entries(gate)
+                .map(([k,v]) => `<div class="stat-row"><span class="stat-label">${k}</span><span class="stat-value">${v}</span></div>`).join('');
+        }).catch(e => { document.getElementById('loading').textContent = 'Error: ' + e.message; });
+    </script>
+</body>
+</html>

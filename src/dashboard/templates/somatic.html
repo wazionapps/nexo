@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>NEXO Brain — Somatic Markers</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; background: #0a0a0f; color: #e0e0e0; }
+        nav { background: #111118; padding: 1rem 2rem; display: flex; gap: 2rem; align-items: center; border-bottom: 1px solid #2a2a3a; }
+        nav a { color: #8b8bff; text-decoration: none; font-size: 0.9rem; } nav a:hover { color: #fff; }
+        nav .brand { font-weight: 700; font-size: 1.2rem; color: #7c3aed; }
+        .container { max-width: 1000px; margin: 2rem auto; padding: 0 2rem; }
+        .risk-bar { display: flex; align-items: center; margin-bottom: 0.75rem; }
+        .risk-label { width: 250px; font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .risk-track { flex: 1; height: 24px; background: #1a1a2a; border-radius: 4px; overflow: hidden; }
+        .risk-fill { height: 100%; border-radius: 4px; transition: width 0.5s; display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; font-size: 0.75rem; font-weight: 600; }
+        .risk-type { width: 100px; color: #888; font-size: 0.8rem; text-align: right; margin-right: 1rem; }
+        h1 { font-size: 1.3rem; margin-bottom: 1.5rem; color: #7c3aed; }
+    </style>
+</head>
+<body>
+    <nav>
+        <span class="brand">NEXO Brain</span>
+        <a href="/">Overview</a>
+        <a href="/graph">Knowledge Graph</a>
+        <a href="/memory">Memory</a>
+        <a href="/somatic">Somatic</a>
+        <a href="/adaptive">Adaptive</a>
+        <a href="/sessions">Sessions</a>
+    </nav>
+    <div class="container">
+        <h1>Somatic Risk Markers</h1>
+        <div id="risks">Loading...</div>
+    </div>
+    <script>
+        function riskColor(score) {
+            if (score > 5) return '#ef4444';
+            if (score > 2) return '#f59e0b';
+            return '#10b981';
+        }
+        fetch('/api/somatic').then(r => r.json()).then(data => {
+            const risks = data.risks || [];
+            if (!risks.length) { document.getElementById('risks').textContent = 'No somatic markers found.'; return; }
+            const max = Math.max(...risks.map(r => Math.abs(r.cumulative_score || r.score || 0)), 1);
+            document.getElementById('risks').innerHTML = risks.map(r => {
+                const score = Math.abs(r.cumulative_score || r.score || 0);
+                const pct = Math.min(score / max * 100, 100);
+                return `<div class="risk-bar">
+                    <span class="risk-type">${r.target_type || ''}</span>
+                    <span class="risk-label">${r.target || r.name || ''}</span>
+                    <div class="risk-track"><div class="risk-fill" style="width:${pct}%;background:${riskColor(score)}">${score.toFixed(1)}</div></div>
+                </div>`;
+            }).join('');
+        });
+    </script>
+</body>
+</html>

@@ -30,7 +30,7 @@ DISCRIMINATING_ENTITIES = {
     # OS / Environment
     "linux", "mac", "macos", "windows", "darwin", "ubuntu", "debian", "alpine",
     # Platforms
-    "shopify", "wazion", "whatsapp", "chrome", "firefox",
+    "shopify", "whatsapp", "chrome", "firefox",
     # Languages / Runtimes
     "python", "php", "javascript", "typescript", "node", "deno", "ruby",
     # Versions
@@ -65,12 +65,12 @@ URGENCY_SIGNALS = {
 _DEFAULT_TRUST_EVENTS = {
     # Positive
     "explicit_thanks": +3,
-    "delegation": +2,        # the user delegates new task without micromanaging
-    "paradigm_shift": +2,    # the user teaches, NEXO learns
+    "delegation": +2,        # User delegates new task without micromanaging
+    "paradigm_shift": +2,    # User teaches, NEXO learns
     "sibling_detected": +3,  # NEXO avoided context error on its own
     "proactive_action": +2,  # NEXO did something useful without being asked
     # Negative
-    "correction": -3,        # the user corrects NEXO
+    "correction": -3,        # User corrects NEXO
     "repeated_error": -7,    # Error on something NEXO already had a learning for
     "override": -5,          # NEXO's memory was wrong
     "correction_fatigue": -10, # Same memory corrected 3+ times
@@ -395,7 +395,7 @@ def _init_tables(conn: sqlite3.Connection):
             created_at TEXT DEFAULT (datetime('now'))
         );
 
-        -- Sentiment readings: the user's detected mood per interaction
+        -- Sentiment readings: User's detected mood per interaction
         CREATE TABLE IF NOT EXISTS sentiment_log (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             sentiment TEXT NOT NULL,       -- 'positive', 'negative', 'neutral', 'urgent'
@@ -421,13 +421,13 @@ def _init_tables(conn: sqlite3.Connection):
             status TEXT DEFAULT 'pending'
         );
 
-        -- Correction tracking: when the user overrides a memory's guidance
+        -- Correction tracking: when User overrides a memory's guidance
         CREATE TABLE IF NOT EXISTS memory_corrections (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             memory_id INTEGER NOT NULL,
             store TEXT NOT NULL,           -- 'stm' or 'ltm'
             correction_type TEXT NOT NULL, -- 'override', 'exception', 'paradigm_shift'
-            context TEXT DEFAULT '',       -- what the user said
+            context TEXT DEFAULT '',       -- what User said
             created_at TEXT DEFAULT (datetime('now'))
         );
     """)
@@ -493,6 +493,39 @@ def _init_tables(conn: sqlite3.Connection):
         )
     """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_somatic_target ON somatic_markers(target)")
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS kg_nodes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            node_type TEXT NOT NULL,
+            node_ref TEXT NOT NULL,
+            label TEXT NOT NULL,
+            properties TEXT DEFAULT '{}',
+            created_at TEXT DEFAULT (datetime('now')),
+            UNIQUE(node_type, node_ref)
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_kg_nodes_type ON kg_nodes(node_type)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_kg_nodes_label ON kg_nodes(label)")
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS kg_edges (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_id INTEGER NOT NULL REFERENCES kg_nodes(id),
+            target_id INTEGER NOT NULL REFERENCES kg_nodes(id),
+            relation TEXT NOT NULL,
+            weight REAL DEFAULT 1.0,
+            confidence REAL DEFAULT 1.0,
+            valid_from TEXT DEFAULT (datetime('now')),
+            valid_until TEXT DEFAULT NULL,
+            source_memory_id TEXT DEFAULT '',
+            properties TEXT DEFAULT '{}',
+            created_at TEXT DEFAULT (datetime('now'))
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_kg_edges_source ON kg_edges(source_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_kg_edges_target ON kg_edges(target_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_kg_edges_relation ON kg_edges(relation)")
 
     conn.commit()
 
@@ -2511,12 +2544,12 @@ def get_siblings(memory_id: int) -> list[dict]:
 def detect_dissonance(new_instruction: str, min_score: float = 0.65) -> list[dict]:
     """Detect cognitive dissonance: find LTM memories that contradict a new instruction.
 
-    When the user gives a new instruction that conflicts with established LTM memories
+    When User gives a new instruction that conflicts with established LTM memories
     (strength > 0.8), this function surfaces the conflict so NEXO can verbalize it
     rather than silently obeying or silently resisting.
 
     Args:
-        new_instruction: The new instruction or preference from the user
+        new_instruction: The new instruction or preference from User
         min_score: Minimum cosine similarity to consider as potential conflict
 
     Returns:
@@ -2551,12 +2584,12 @@ def detect_dissonance(new_instruction: str, min_score: float = 0.65) -> list[dic
 
 
 def resolve_dissonance(memory_id: int, resolution: str, context: str = "") -> str:
-    """Resolve a cognitive dissonance by applying the user's decision.
+    """Resolve a cognitive dissonance by applying User's decision.
 
     Args:
         memory_id: The LTM memory that conflicts with the new instruction
         resolution: One of:
-            - 'paradigm_shift': the user changed his mind permanently. Decay old memory,
+            - 'paradigm_shift': User changed his mind permanently. Decay old memory,
               new instruction becomes the standard.
             - 'exception': This is a one-time override. Keep old memory as standard.
             - 'override': Old memory was wrong. Mark as corrupted and decay to dormant.
@@ -2607,7 +2640,7 @@ def resolve_dissonance(memory_id: int, resolution: str, context: str = "") -> st
 def check_correction_fatigue() -> list[dict]:
     """Find memories corrected 3+ times in the last 7 days — mark as 'under review'.
 
-    These memories are unreliable: the user keeps overriding them, suggesting
+    These memories are unreliable: User keeps overriding them, suggesting
     the memory itself may be wrong or outdated.
 
     Returns:
@@ -2655,7 +2688,7 @@ def check_correction_fatigue() -> list[dict]:
 
 
 def detect_sentiment(text: str) -> dict:
-    """Analyze the user's text for sentiment signals.
+    """Analyze User's text for sentiment signals.
 
     Returns detected sentiment, intensity, and action guidance for NEXO.
     Not a model — keyword + heuristic based. Fast and deterministic.
@@ -2719,7 +2752,7 @@ def detect_sentiment(text: str) -> dict:
 
 
 def log_sentiment(text: str) -> dict:
-    """Detect and log the user's sentiment. Returns the detection result."""
+    """Detect and log User's sentiment. Returns the detection result."""
     result = detect_sentiment(text)
     if result["sentiment"] != "neutral":
         db = _get_db()

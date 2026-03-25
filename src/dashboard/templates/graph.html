@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>NEXO Brain — Knowledge Graph</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; background: #0a0a0f; color: #e0e0e0; }
+        nav { background: #111118; padding: 1rem 2rem; display: flex; gap: 2rem; align-items: center; border-bottom: 1px solid #2a2a3a; }
+        nav a { color: #8b8bff; text-decoration: none; font-size: 0.9rem; } nav a:hover { color: #fff; }
+        nav .brand { font-weight: 700; font-size: 1.2rem; color: #7c3aed; }
+        .controls { padding: 0.75rem 2rem; display: flex; gap: 1rem; align-items: center; background: #0f0f18; border-bottom: 1px solid #1a1a2a; }
+        input, select, button { background: #1a1a2a; color: #ddd; border: 1px solid #333; border-radius: 6px; padding: 0.5rem 1rem; font-size: 0.9rem; }
+        button { cursor: pointer; background: #7c3aed; border-color: #7c3aed; color: #fff; } button:hover { background: #6d28d9; }
+        .legend { display: flex; gap: 1rem; margin-left: auto; font-size: 0.8rem; }
+        .legend-item { display: flex; align-items: center; gap: 4px; }
+        .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+        #main { display: flex; height: calc(100vh - 110px); }
+        #graph-container { flex: 1; }
+        svg { width: 100%; height: 100%; }
+        .link { stroke-opacity: 0.4; }
+        .link-label { fill: #555; font-size: 8px; pointer-events: none; }
+        #sidebar { width: 0; overflow: hidden; background: #111118; border-left: 1px solid #2a2a3a; transition: width 0.3s; padding: 0; }
+        #sidebar.open { width: 320px; padding: 1.5rem; }
+        #sidebar h3 { color: #7c3aed; margin-bottom: 0.5rem; }
+        #sidebar .meta { font-size: 0.8rem; color: #888; margin-bottom: 1rem; }
+        #sidebar .neighbor { padding: 0.4rem 0; border-bottom: 1px solid #1a1a2a; font-size: 0.85rem; }
+        #sidebar .neighbor .rel { color: #666; font-size: 0.75rem; }
+        #sidebar .close-btn { float: right; cursor: pointer; color: #888; font-size: 1.2rem; }
+        #sidebar .close-btn:hover { color: #fff; }
+    </style>
+</head>
+<body>
+    <nav>
+        <span class="brand">NEXO Brain</span>
+        <a href="/">Overview</a>
+        <a href="/graph">Knowledge Graph</a>
+        <a href="/memory">Memory</a>
+        <a href="/somatic">Somatic</a>
+        <a href="/adaptive">Adaptive</a>
+        <a href="/sessions">Sessions</a>
+    </nav>
+    <div class="controls">
+        <label>Center Node ID: <input type="number" id="center" placeholder="node id"></label>
+        <label>Depth: <select id="depth"><option>1</option><option selected>2</option><option>3</option></select></label>
+        <button onclick="loadGraph()">Load Subgraph</button>
+        <span id="info" style="color:#888; margin-left:1rem;"></span>
+        <div class="legend">
+            <div class="legend-item"><div class="legend-dot" style="background:#7c3aed"></div>area</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#10b981"></div>file</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#3b82f6"></div>learning</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div>decision</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#ec4899"></div>entity</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#6b7280"></div>change</div>
+        </div>
+    </div>
+    <div id="main">
+        <div id="graph-container"><svg id="svg"></svg></div>
+        <div id="sidebar">
+            <span class="close-btn" onclick="closeSidebar()">x</span>
+            <h3 id="sb-label"></h3>
+            <div class="meta" id="sb-meta"></div>
+            <div id="sb-neighbors"></div>
+        </div>
+    </div>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script>
+        const typeColors = {
+            area: '#7c3aed', file: '#10b981', learning: '#3b82f6',
+            decision: '#f59e0b', entity: '#ec4899', change: '#6b7280',
+            memory: '#8b5cf6'
+        };
+        function nodeColor(type) { return typeColors[type] || '#6b7280'; }
+        function nodeRadius(d) { return d.depth === 0 ? 14 : d.depth === 1 ? 9 : 6; }
+
+        let currentSim = null;
+
+        async function loadGraph() {
+            const center = document.getElementById('center').value;
+            const depth = document.getElementById('depth').value;
+            const url = center ? `/api/graph?center=${center}&depth=${depth}` : '/api/graph';
+            const data = await fetch(url).then(r => r.json());
+            if (!data.nodes || data.nodes.length === 0) {
+                const hints = (data.hints || []).map(h => `${h.label} (id:${h.id})`).join(', ');
+                document.getElementById('info').textContent = `No subgraph. Top nodes: ${hints}`;
+                // Auto-load first hint
+                if (data.hints && data.hints.length > 0) {
+                    document.getElementById('center').value = data.hints[0].id;
+                    loadGraph();
+                }
+                return;
+            }
+            document.getElementById('info').textContent = `${data.nodes.length} nodes, ${data.edges.length} edges`;
+            renderGraph(data);
+        }
+
+        function renderGraph(data) {
+            const svg = d3.select('#svg');
+            svg.selectAll('*').remove();
+            const width = svg.node().clientWidth, height = svg.node().clientHeight;
+            const g = svg.append('g');
+            svg.call(d3.zoom().scaleExtent([0.1, 8]).on('zoom', e => g.attr('transform', e.transform)));
+
+            if (currentSim) currentSim.stop();
+            currentSim = d3.forceSimulation(data.nodes)
+                .force('link', d3.forceLink(data.edges).id(d => d.id).distance(80))
+                .force('charge', d3.forceManyBody().strength(-300))
+                .force('center', d3.forceCenter(width / 2, height / 2))
+                .force('collision', d3.forceCollide().radius(d => nodeRadius(d) + 20));
+
+            // Edges
+            const link = g.selectAll('.link').data(data.edges).join('line')
+                .attr('class', 'link')
+                .attr('stroke', '#444')
+                .attr('stroke-width', d => Math.max(1, d.weight * 2));
+
+            // Edge labels (only on depth 1 connections, hidden for clutter)
+            const linkLabel = g.selectAll('.link-label').data(data.edges).join('text')
+                .attr('class', 'link-label')
+                .text(d => d.relation);
+
+            // Nodes
+            const node = g.selectAll('.node').data(data.nodes).join('g').attr('class', 'node')
+                .style('cursor', 'pointer')
+                .on('click', (e, d) => showNodeDetail(d))
+                .call(d3.drag()
+                    .on('start', (e, d) => { if (!e.active) currentSim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+                    .on('drag', (e, d) => { d.fx = e.x; d.fy = e.y; })
+                    .on('end', (e, d) => { if (!e.active) currentSim.alphaTarget(0); d.fx = null; d.fy = null; }));
+
+            node.append('circle')
+                .attr('r', d => nodeRadius(d))
+                .attr('fill', d => nodeColor(d.type))
+                .attr('stroke', '#fff')
+                .attr('stroke-width', d => d.depth === 0 ? 2 : 0.5)
+                .attr('stroke-opacity', 0.3);
+
+            // Labels: only for center node (depth 0) and depth 1
+            node.filter(d => d.depth <= 1).append('text')
+                .attr('dx', d => nodeRadius(d) + 4)
+                .attr('dy', 4)
+                .attr('fill', '#ccc')
+                .attr('font-size', d => d.depth === 0 ? '13px' : '10px')
+                .attr('font-weight', d => d.depth === 0 ? '700' : '400')
+                .text(d => d.label.length > 40 ? d.label.slice(0, 37) + '...' : d.label);
+
+            // Tooltip for depth 2+ nodes
+            node.filter(d => d.depth > 1).append('title')
+                .text(d => `[${d.type}] ${d.label}`);
+
+            currentSim.on('tick', () => {
+                link.attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+                    .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+                linkLabel.attr('x', d => (d.source.x + d.target.x) / 2)
+                    .attr('y', d => (d.source.y + d.target.y) / 2);
+                node.attr('transform', d => `translate(${d.x},${d.y})`);
+            });
+        }
+
+        async function showNodeDetail(d) {
+            document.getElementById('sb-label').textContent = d.label;
+            document.getElementById('sb-meta').textContent = `Type: ${d.type} | ID: ${d.id} | Depth: ${d.depth}`;
+            document.getElementById('sidebar').classList.add('open');
+
+            // Fetch neighbors
+            const resp = await fetch(`/api/graph?center=${d.id}&depth=1`);
+            const data = await resp.json();
+            const nbDiv = document.getElementById('sb-neighbors');
+            if (!data.edges || data.edges.length === 0) {
+                nbDiv.innerHTML = '<p style="color:#666">No connections</p>';
+                return;
+            }
+            nbDiv.innerHTML = `<p style="color:#888;margin-bottom:0.5rem">${data.edges.length} connections:</p>` +
+                data.nodes.filter(n => n.id !== d.id).slice(0, 20).map(n =>
+                    `<div class="neighbor"><span style="color:${nodeColor(n.type)}">[${n.type}]</span> ${
+                        n.label.length > 50 ? n.label.slice(0, 47) + '...' : n.label
+                    } <span class="rel">(click to center)</span></div>`
+                ).join('');
+
+            // Click neighbors to re-center
+            nbDiv.querySelectorAll('.neighbor').forEach((el, i) => {
+                const nid = data.nodes.filter(n => n.id !== d.id)[i];
+                if (nid) el.onclick = () => {
+                    document.getElementById('center').value = nid.id;
+                    loadGraph();
+                };
+            });
+        }
+
+        function closeSidebar() {
+            document.getElementById('sidebar').classList.remove('open');
+        }
+
+        // Auto-load on page open
+        loadGraph();
+    </script>
+</body>
+</html>

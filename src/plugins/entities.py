@@ -15,6 +15,12 @@ def handle_entity_search(query: str, type: str = "") -> str:
 def handle_entity_create(name: str, type: str, value: str, notes: str = "") -> str:
     """Create a new entity."""
     eid = create_entity(name, type, value, notes)
+    # KG hook
+    try:
+        from kg_populate import on_entity_create
+        on_entity_create(eid, name, type)
+    except Exception:
+        pass
     return f"Entidad creada: [{eid}] {name} ({type})"
 
 def handle_entity_update(id: int, name: str = "", type: str = "", value: str = "", notes: str = "") -> str:

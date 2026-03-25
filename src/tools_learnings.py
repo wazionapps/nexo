@@ -4,8 +4,8 @@ from db import (create_learning, update_learning, delete_learning, search_learni
                 list_learnings, find_similar_learnings, get_db, now_epoch)
 
 VALID_CATEGORIES = {
-    "nexo-ops", "infrastructure", "security", "brain-engine",
-    "api", "database", "frontend", "backend", "devops", "general"
+    "nexo-ops", "google-ads", "meta-ads", "google-analytics",
+    "shopify", "wazion", "cloud-sql", "infrastructure", "security", "brain-engine"
 }
 
 
@@ -24,7 +24,7 @@ def handle_learning_add(category: str, title: str, content: str, reasoning: str 
     """
     if category not in VALID_CATEGORIES:
         valid = ", ".join(sorted(VALID_CATEGORIES))
-        return f"ERROR: Category '{category}' invalid. Valid: {valid}"
+        return f"ERROR: Categoría '{category}' inválida. Válidas: {valid}"
     result = create_learning(
         category, title, content, reasoning=reasoning
     )
@@ -63,21 +63,52 @@ def handle_learning_add(category: str, title: str, content: str, reasoning: str 
         repetition_msg = f"\n⚠️ REPETITION WARNING: Similar to {len(matches)} existing learning(s): " + \
             ", ".join(f"#{m[0]} ({m[1]:.0%})" for m in matches[:3])
 
+    # Somatic event logging (append-only in nexo.db, projected to cognitive.db nightly)
+    try:
+        if applies_to:
+            for file_path in [f.strip() for f in applies_to.split(",") if f.strip()]:
+                get_db().execute(
+                    "INSERT INTO somatic_events (target, target_type, event_type, delta, source) VALUES (?, ?, ?, ?, ?)",
+                    (file_path, "file", "learning_add", 0.15, f"learning:{new_id}")
+                )
+        # Area + extra file pain ONLY for repeated errors
+        if matches:
+            get_db().execute(
+                "INSERT INTO somatic_events (target, target_type, event_type, delta, source) VALUES (?, ?, ?, ?, ?)",
+                (category, "area", "error_repetition", 0.15, f"learning:{new_id}")
+            )
+            if applies_to:
+                for file_path in [f.strip() for f in applies_to.split(",") if f.strip()]:
+                    get_db().execute(
+                        "INSERT INTO somatic_events (target, target_type, event_type, delta, source) VALUES (?, ?, ?, ?, ?)",
+                        (file_path, "file", "error_repetition", 0.25, f"learning:{new_id}")
+                    )
+        get_db().commit()
+    except Exception:
+        pass  # Somatic event logging is best-effort
+
+    # Knowledge graph incremental population
+    try:
+        from kg_populate import on_learning_add
+        on_learning_add(new_id, category, title, applies_to)
+    except Exception:
+        pass
+
     meta = []
     if prevention:
         meta.append("with prevention")
     if applies_to:
         meta.append(f"applies_to={applies_to}")
     meta_str = f" ({', '.join(meta)})" if meta else ""
-    return f"Learning #{result['id']} added in {category}: {title}{meta_str}{repetition_msg}"
+    return f"Learning #{result['id']} añadido en {category}: {title}{meta_str}{repetition_msg}"
 
 
 def handle_learning_search(query: str, category: str = '') -> str:
     """Search learnings by query string, optionally filtered by category."""
     results = search_learnings(query, category if category else None)
     if not results:
-        return f"No results for '{query}'."
-    lines = [f"RESULTS ({len(results)}):"]
+        return f"Sin resultados para '{query}'."
+    lines = [f"RESULTADOS ({len(results)}):"]
     for r in results:
         snippet = r["content"][:100] + "..." if len(r["content"]) > 100 else r["content"]
         status = r.get("status", "active")
@@ -86,9 +117,9 @@ def handle_learning_search(query: str, category: str = '') -> str:
         lines.append(f"  #{r['id']} [{r['category']}] [{status}] {r['title']}{review_note}")
         lines.append(f"    {snippet}")
         if r.get("prevention"):
-            lines.append(f"    Prevention: {r['prevention'][:100]}")
+            lines.append(f"    Prevención: {r['prevention'][:100]}")
 
-    # Passive rehearsal — strengthen matching cognitive memories
+    # v1.2: Passive rehearsal — strengthen matching cognitive memories
     try:
         import cognitive
         for r in results[:5]:
@@ -111,7 +142,7 @@ def handle_learning_update(id: int, title: str = '', content: str = '', category
     if category:
         if category not in VALID_CATEGORIES:
             valid = ", ".join(sorted(VALID_CATEGORIES))
-            return f"ERROR: Category '{category}' invalid. Valid: {valid}"
+            return f"ERROR: Categoría '{category}' inválida. Válidas: {valid}"
         kwargs["category"] = category
     if reasoning:
         kwargs["reasoning"] = reasoning
@@ -124,7 +155,7 @@ def handle_learning_update(id: int, title: str = '', content: str = '', category
     if review_days > 0:
         kwargs["review_days"] = review_days
     if not kwargs:
-        return "ERROR: Nothing to update. Provide new fields."
+        return "ERROR: Nada que actualizar. Proporciona campos nuevos."
     basic_kwargs = {k: v for k, v in kwargs.items() if k in {"title", "content", "category", "reasoning"}}
     result = update_learning(id, **basic_kwargs)
     if "error" in result:
@@ -145,23 +176,23 @@ def handle_learning_update(id: int, title: str = '', content: str = '', category
         conn = get_db()
         conn.execute(f"UPDATE learnings SET {set_clause} WHERE id = ?", values)
         conn.commit()
-    return f"Learning #{id} updated."
+    return f"Learning #{id} actualizado."
 
 
 def handle_learning_delete(id: int) -> str:
     """Delete a learning entry by ID."""
     deleted = delete_learning(id)
     if not deleted:
-        return f"ERROR: Learning #{id} not found."
-    return f"Learning #{id} deleted."
+        return f"ERROR: Learning #{id} no encontrado."
+    return f"Learning #{id} eliminado."
 
 
 def handle_learning_list(category: str = '') -> str:
     """List all learnings, grouped by category if no filter given."""
     results = list_learnings(category if category else None)
     if not results:
-        label = category if category else "ALL"
-        return f"LEARNINGS {label} (0): No entries."
+        label = category if category else "TODOS"
+        return f"LEARNINGS {label} (0): Sin entradas."
 
     if category:
         label = category.upper()
@@ -169,7 +200,7 @@ def handle_learning_list(category: str = '') -> str:
         for r in results:
             lines.append(f"  #{r['id']} [{r.get('status','active')}] {r['title']}")
     else:
-        lines = [f"LEARNINGS ALL ({len(results)}):"]
+        lines = [f"LEARNINGS TODOS ({len(results)}):"]
         current_cat = None
         for r in results:
             if r["category"] != current_cat:

@@ -898,6 +898,28 @@ def _m8_adaptive_log_and_somatic(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_somatic_events_projected ON somatic_events(projected)")
 
 
+def _m9_maintenance_schedule(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS maintenance_schedule (
+            task_name TEXT PRIMARY KEY,
+            interval_hours REAL NOT NULL,
+            last_run_at TEXT DEFAULT NULL,
+            last_duration_ms INTEGER DEFAULT 0,
+            run_count INTEGER DEFAULT 0
+        )
+    """)
+    tasks = [
+        ('cognitive_decay', 20), ('synthesis', 20), ('self_audit', 144),
+        ('weight_learning', 20), ('somatic_projection', 20), ('somatic_decay', 20),
+        ('graph_maintenance', 48),
+    ]
+    for name, hours in tasks:
+        conn.execute(
+            "INSERT OR IGNORE INTO maintenance_schedule (task_name, interval_hours) VALUES (?, ?)",
+            (name, hours)
+        )
+
+
 # Migration registry — APPEND ONLY, never reorder or delete
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
@@ -908,6 +930,7 @@ MIGRATIONS = [
     (6, "error_guard_tables", _m6_error_guard_tables),
     (7, "diary_source_and_draft", _m7_diary_source_and_draft),
     (8, "adaptive_log_and_somatic", _m8_adaptive_log_and_somatic),
+    (9, "maintenance_schedule", _m9_maintenance_schedule),
 ]
 
 

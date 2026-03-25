@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>NEXO Brain — Adaptive Personality</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; background: #0a0a0f; color: #e0e0e0; }
+        nav { background: #111118; padding: 1rem 2rem; display: flex; gap: 2rem; align-items: center; border-bottom: 1px solid #2a2a3a; }
+        nav a { color: #8b8bff; text-decoration: none; font-size: 0.9rem; } nav a:hover { color: #fff; }
+        nav .brand { font-weight: 700; font-size: 1.2rem; color: #7c3aed; }
+        .container { max-width: 1200px; margin: 2rem auto; padding: 0 2rem; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+        .card { background: #15151f; border: 1px solid #2a2a3a; border-radius: 12px; padding: 1.5rem; }
+        .card h2 { font-size: 1rem; color: #888; margin-bottom: 1rem; text-transform: uppercase; letter-spacing: 0.05em; }
+        .mode-badge { display: inline-block; padding: 0.3rem 1rem; border-radius: 20px; font-weight: 700; font-size: 1.5rem; }
+        .mode-FLOW { background: #10b98133; color: #10b981; }
+        .mode-NORMAL { background: #3b82f633; color: #3b82f6; }
+        .mode-TENSION { background: #ef444433; color: #ef4444; }
+        .weight-bar { display: flex; align-items: center; margin-bottom: 0.5rem; }
+        .weight-name { width: 120px; font-size: 0.85rem; color: #aaa; }
+        .weight-track { flex: 1; height: 16px; background: #1a1a2a; border-radius: 4px; overflow: hidden; }
+        .weight-fill { height: 100%; background: #7c3aed; border-radius: 4px; }
+        .weight-val { width: 50px; text-align: right; font-size: 0.85rem; color: #ddd; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        th, td { padding: 0.4rem 0.6rem; text-align: left; border-bottom: 1px solid #1a1a2a; }
+        th { color: #888; }
+    </style>
+</head>
+<body>
+    <nav>
+        <span class="brand">NEXO Brain</span>
+        <a href="/">Overview</a>
+        <a href="/graph">Knowledge Graph</a>
+        <a href="/memory">Memory</a>
+        <a href="/somatic">Somatic</a>
+        <a href="/adaptive">Adaptive</a>
+        <a href="/sessions">Sessions</a>
+    </nav>
+    <div class="container">
+        <div class="grid">
+            <div class="card">
+                <h2>Current Mode</h2>
+                <div id="mode"></div>
+                <div id="mode-desc" style="margin-top:0.5rem;color:#888;font-size:0.9rem;"></div>
+            </div>
+            <div class="card">
+                <h2>Signal Weights</h2>
+                <div id="weights"></div>
+            </div>
+            <div class="card" style="grid-column:1/-1">
+                <h2>Mode History (last 50)</h2>
+                <table id="history"><thead><tr><th>Time</th><th>Mode</th><th>Score</th><th>Signals</th></tr></thead><tbody></tbody></table>
+            </div>
+        </div>
+    </div>
+    <script>
+        fetch('/api/adaptive').then(r => r.json()).then(data => {
+            const mode = data.state?.mode || 'NORMAL';
+            document.getElementById('mode').innerHTML = `<span class="mode-badge mode-${mode}">${mode}</span>`;
+            document.getElementById('mode-desc').textContent = data.modes?.[mode] || '';
+            const weights = data.weights || {};
+            document.getElementById('weights').innerHTML = Object.entries(weights).map(([k,v]) =>
+                `<div class="weight-bar"><span class="weight-name">${k}</span><div class="weight-track"><div class="weight-fill" style="width:${v*100}%"></div></div><span class="weight-val">${(v*100).toFixed(0)}%</span></div>`
+            ).join('');
+            const tbody = document.querySelector('#history tbody');
+            (data.history || []).forEach(h => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td>${h.timestamp || ''}</td><td><span class="mode-badge mode-${h.mode}" style="font-size:0.8rem;padding:0.1rem 0.5rem;">${h.mode}</span></td><td>${h.score?.toFixed?.(2) ?? h.score ?? ''}</td><td style="color:#888">${h.signals || ''}</td>`;
+                tbody.appendChild(tr);
+            });
+        });
+    </script>
+</body>
+</html>

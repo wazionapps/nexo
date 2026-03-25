@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>NEXO Brain — Sessions</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; background: #0a0a0f; color: #e0e0e0; }
+        nav { background: #111118; padding: 1rem 2rem; display: flex; gap: 2rem; align-items: center; border-bottom: 1px solid #2a2a3a; }
+        nav a { color: #8b8bff; text-decoration: none; font-size: 0.9rem; } nav a:hover { color: #fff; }
+        nav .brand { font-weight: 700; font-size: 1.2rem; color: #7c3aed; }
+        .container { max-width: 1000px; margin: 2rem auto; padding: 0 2rem; }
+        .session { background: #15151f; border: 1px solid #2a2a3a; border-radius: 12px; padding: 1.5rem; margin-bottom: 1rem; }
+        .session-header { display: flex; justify-content: space-between; margin-bottom: 0.75rem; }
+        .session-id { color: #7c3aed; font-weight: 600; }
+        .session-time { color: #888; font-size: 0.85rem; }
+        .session-mental { background: #1a1a2a; border-radius: 8px; padding: 1rem; margin-top: 0.75rem; font-size: 0.9rem; line-height: 1.6; color: #bbb; white-space: pre-wrap; }
+        .session-summary { font-size: 0.9rem; line-height: 1.5; }
+        h3 { font-size: 0.85rem; color: #888; margin-bottom: 0.3rem; text-transform: uppercase; }
+    </style>
+</head>
+<body>
+    <nav>
+        <span class="brand">NEXO Brain</span>
+        <a href="/">Overview</a>
+        <a href="/graph">Knowledge Graph</a>
+        <a href="/memory">Memory</a>
+        <a href="/somatic">Somatic</a>
+        <a href="/adaptive">Adaptive</a>
+        <a href="/sessions">Sessions</a>
+    </nav>
+    <div class="container">
+        <div id="sessions">Loading...</div>
+    </div>
+    <script>
+        fetch('/api/sessions?limit=20').then(r => r.json()).then(data => {
+            const el = document.getElementById('sessions');
+            if (!data.sessions?.length) { el.textContent = 'No session diaries found.'; return; }
+            el.innerHTML = data.sessions.map(s => `
+                <div class="session">
+                    <div class="session-header">
+                        <span class="session-id">${s.session_id || s.id || ''}</span>
+                        <span class="session-time">${s.created_at || ''}</span>
+                    </div>
+                    <div class="session-summary">${(s.summary || '').replace(/</g, '&lt;')}</div>
+                    ${s.mental_state ? `<h3>Mental State</h3><div class="session-mental">${s.mental_state.replace(/</g, '&lt;')}</div>` : ''}
+                </div>
+            `).join('');
+        });
+    </script>
+</body>
+</html>
