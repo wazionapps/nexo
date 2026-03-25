@@ -834,9 +834,11 @@
             outline: none;
         }
         .goog-te-gadget .goog-te-combo:hover { border-color: var(--primary); }
-        /* Hide Google branding bar */
-        .goog-te-banner-frame, .skiptranslate { display: none !important; }
+        /* Hide Google top banner but keep the dropdown */
+        .goog-te-banner-frame { display: none !important; }
         body { top: 0 !important; }
+        .goog-te-gadget > span { display: none !important; }
+        #google_translate_element { display: inline-block; vertical-align: middle; }
     </style>
 </head>
 <body>
