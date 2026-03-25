@@ -74,7 +74,79 @@ def main():
     except Exception as e:
         print(f"[{ts}] Correction fatigue check error: {e}")
 
-    # 6. Stats
+    # 6. Memory Dreaming — discover hidden connections between recent memories
+    try:
+        dream_result = cognitive.dream_cycle(max_insights=50)
+        scanned = dream_result["memories_scanned"]
+        created = dream_result["insights_created"]
+        candidates = dream_result["candidates_found"]
+        print(f"[{ts}] Dream cycle: scanned {scanned} recent memories, {candidates} candidates, {created} insights created.")
+        for insight in dream_result["insights"][:10]:
+            print(f"[{ts}]   [{insight['similarity']}] {insight['title_a'][:40]} <-> {insight['title_b'][:40]}")
+    except Exception as e:
+        print(f"[{ts}] Dream cycle error: {e}")
+
+    # 7. Auto-merge duplicates (runs AFTER dream_cycle, higher threshold than consolidation)
+    try:
+        merge_result = cognitive.auto_merge_duplicates(threshold=0.92)
+        if merge_result["merged"] > 0:
+            print(f"[{ts}] Auto-merge: scanned {merge_result['scanned']}, merged {merge_result['merged']} duplicates, {merge_result['kept']} kept.")
+            for m in merge_result["merge_log"][:10]:
+                print(f"[{ts}]   [{m['similarity']}] kept #{m['kept_id']}, dropped #{m['dropped_id']}")
+        else:
+            print(f"[{ts}] Auto-merge: scanned {merge_result['scanned']}, no duplicates above 0.92 threshold.")
+    except Exception as e:
+        print(f"[{ts}] Auto-merge error: {e}")
+
+    # 8. Adaptive weight learning — Ridge regression from feedback-annotated entries
+    try:
+        plugins_dir = os.path.join(NEXO_HOME, "plugins")
+        sys.path.insert(0, plugins_dir)
+        from adaptive_mode import learn_weights, prune_adaptive_log, check_weight_rollback
+
+        rollback = check_weight_rollback()
+        if rollback["status"] == "rolled_back":
+            print(f"[{ts}] WEIGHT ROLLBACK: {rollback['reason']}")
+        elif rollback["status"] == "ok":
+            print(f"[{ts}] Weight health: pre={rollback['pre_rate']}/day, post={rollback['post_rate']}/day")
+        elif rollback["status"] != "no_learned_weights":
+            print(f"[{ts}] Weight rollback: {rollback['status']}")
+
+        result = learn_weights()
+        if result["status"] in ("shadow", "active"):
+            mode_label = "SHADOW" if result["status"] == "shadow" else "ACTIVE"
+            print(f"[{ts}] Learned weights ({mode_label}) from {result['samples']} samples. Max drift: {result['max_drift']:.4f}")
+            for signal, weight in result["weights"].items():
+                drift = result["drift"][signal]
+                arrow = "+" if drift > 0 else "" if drift < 0 else "="
+                print(f"[{ts}]   {signal}: {weight:.4f} ({arrow}{drift:.4f} from static)")
+        elif result["status"] == "insufficient_data":
+            print(f"[{ts}] Weight learning: {result['samples']}/{result['min_required']} samples (waiting)")
+        else:
+            print(f"[{ts}] Weight learning: {result['status']}")
+
+        pruned = prune_adaptive_log(max_age_days=90)
+        if pruned > 0:
+            print(f"[{ts}] Pruned {pruned} adaptive_log entries >90 days")
+    except Exception as e:
+        print(f"[{ts}] Adaptive weight learning error: {e}")
+
+    # 9. Project somatic events from nexo.db -> cognitive.db
+    try:
+        projected = cognitive.somatic_project_events()
+        if projected > 0:
+            print(f"[{ts}] Somatic projection: {projected} events projected to cognitive.db")
+    except Exception as e:
+        print(f"[{ts}] Somatic projection error: {e}")
+
+    # 10. Somatic marker nightly decay
+    try:
+        decayed = cognitive.somatic_nightly_decay(gamma=0.95)
+        print(f"[{ts}] Somatic decay: {decayed} markers processed (x0.95)")
+    except Exception as e:
+        print(f"[{ts}] Somatic decay error: {e}")
+
+    # 11. Stats
     stats = cognitive.get_stats()
     print(f"[{ts}] STM: {stats['stm_active']} | LTM: {stats['ltm_active']} active, {stats['ltm_dormant']} dormant")
     print(f"[{ts}] Done.")
