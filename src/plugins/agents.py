@@ -5,10 +5,10 @@ def handle_agent_get(id: str) -> str:
     """Get an agent's full profile by ID."""
     a = get_agent(id)
     if not a: return f"Agent '{id}' not found."
-    lines = [f"AGENTE: {a['name']} ({a['id']})", f"  Especialización: {a['specialization']}", f"  Modelo: {a['model']}"]
+    lines = [f"AGENT: {a['name']} ({a['id']})", f"  Specialization: {a['specialization']}", f"  Model: {a['model']}"]
     if a["tools"]: lines.append(f"  Tools: {a['tools']}")
-    if a["context_files"]: lines.append(f"  Contexto: {a['context_files']}")
-    if a["rules"]: lines.append(f"  Reglas: {a['rules']}")
+    if a["context_files"]: lines.append(f"  Context: {a['context_files']}")
+    if a["rules"]: lines.append(f"  Rules: {a['rules']}")
     return "\n".join(lines)
 
 def handle_agent_create(id: str, name: str, specialization: str, model: str = "sonnet",
@@ -31,8 +31,8 @@ def handle_agent_update(id: str, name: str = "", specialization: str = "", model
 def handle_agent_list() -> str:
     """List all registered agents."""
     agents = list_agents()
-    if not agents: return "No agents registered."
-    lines = ["AGENTES REGISTRADOS:"]
+    if not agents: return "No registered agents."
+    lines = ["REGISTERED AGENTS:"]
     for a in agents:
         lines.append(f"  {a['id']} — {a['name']} ({a['model']}) — {a['specialization'][:60]}")
     return "\n".join(lines)

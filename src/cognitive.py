@@ -30,13 +30,13 @@ DISCRIMINATING_ENTITIES = {
     # OS / Environment
     "linux", "mac", "macos", "windows", "darwin", "ubuntu", "debian", "alpine",
     # Platforms
-    "shopify", "whatsapp", "chrome", "firefox",
+    "shopify", "wazion", "canarirural", "recambios", "whatsapp", "chrome", "firefox",
     # Languages / Runtimes
     "python", "php", "javascript", "typescript", "node", "deno", "ruby",
     # Versions
     "v1", "v2", "v3", "v4", "v5", "5.6", "7.4", "8.0", "8.1", "8.2",
     # Infrastructure
-    "cloudrun", "gcloud", "vps", "local", "production", "staging",
+    "mundiserver", "cloudrun", "gcloud", "vps", "local", "production", "staging",
     # DB
     "mysql", "sqlite", "postgresql", "postgres", "redis",
 }
@@ -65,12 +65,12 @@ URGENCY_SIGNALS = {
 _DEFAULT_TRUST_EVENTS = {
     # Positive
     "explicit_thanks": +3,
-    "delegation": +2,        # User delegates new task without micromanaging
-    "paradigm_shift": +2,    # User teaches, NEXO learns
+    "delegation": +2,        # Francisco delegates new task without micromanaging
+    "paradigm_shift": +2,    # Francisco teaches, NEXO learns
     "sibling_detected": +3,  # NEXO avoided context error on its own
     "proactive_action": +2,  # NEXO did something useful without being asked
     # Negative
-    "correction": -3,        # User corrects NEXO
+    "correction": -3,        # Francisco corrects NEXO
     "repeated_error": -7,    # Error on something NEXO already had a learning for
     "override": -5,          # NEXO's memory was wrong
     "correction_fatigue": -10, # Same memory corrected 3+ times
@@ -395,7 +395,7 @@ def _init_tables(conn: sqlite3.Connection):
             created_at TEXT DEFAULT (datetime('now'))
         );
 
-        -- Sentiment readings: User's detected mood per interaction
+        -- Sentiment readings: Francisco's detected mood per interaction
         CREATE TABLE IF NOT EXISTS sentiment_log (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             sentiment TEXT NOT NULL,       -- 'positive', 'negative', 'neutral', 'urgent'
@@ -421,13 +421,13 @@ def _init_tables(conn: sqlite3.Connection):
             status TEXT DEFAULT 'pending'
         );
 
-        -- Correction tracking: when User overrides a memory's guidance
+        -- Correction tracking: when Francisco overrides a memory's guidance
         CREATE TABLE IF NOT EXISTS memory_corrections (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             memory_id INTEGER NOT NULL,
             store TEXT NOT NULL,           -- 'stm' or 'ltm'
             correction_type TEXT NOT NULL, -- 'override', 'exception', 'paradigm_shift'
-            context TEXT DEFAULT '',       -- what User said
+            context TEXT DEFAULT '',       -- what Francisco said
             created_at TEXT DEFAULT (datetime('now'))
         );
     """)
@@ -2544,12 +2544,12 @@ def get_siblings(memory_id: int) -> list[dict]:
 def detect_dissonance(new_instruction: str, min_score: float = 0.65) -> list[dict]:
     """Detect cognitive dissonance: find LTM memories that contradict a new instruction.
 
-    When User gives a new instruction that conflicts with established LTM memories
+    When Francisco gives a new instruction that conflicts with established LTM memories
     (strength > 0.8), this function surfaces the conflict so NEXO can verbalize it
     rather than silently obeying or silently resisting.
 
     Args:
-        new_instruction: The new instruction or preference from User
+        new_instruction: The new instruction or preference from Francisco
         min_score: Minimum cosine similarity to consider as potential conflict
 
     Returns:
@@ -2584,12 +2584,12 @@ def detect_dissonance(new_instruction: str, min_score: float = 0.65) -> list[dic
 
 
 def resolve_dissonance(memory_id: int, resolution: str, context: str = "") -> str:
-    """Resolve a cognitive dissonance by applying User's decision.
+    """Resolve a cognitive dissonance by applying Francisco's decision.
 
     Args:
         memory_id: The LTM memory that conflicts with the new instruction
         resolution: One of:
-            - 'paradigm_shift': User changed his mind permanently. Decay old memory,
+            - 'paradigm_shift': Francisco changed his mind permanently. Decay old memory,
               new instruction becomes the standard.
             - 'exception': This is a one-time override. Keep old memory as standard.
             - 'override': Old memory was wrong. Mark as corrupted and decay to dormant.
@@ -2640,7 +2640,7 @@ def resolve_dissonance(memory_id: int, resolution: str, context: str = "") -> st
 def check_correction_fatigue() -> list[dict]:
     """Find memories corrected 3+ times in the last 7 days — mark as 'under review'.
 
-    These memories are unreliable: User keeps overriding them, suggesting
+    These memories are unreliable: Francisco keeps overriding them, suggesting
     the memory itself may be wrong or outdated.
 
     Returns:
@@ -2688,7 +2688,7 @@ def check_correction_fatigue() -> list[dict]:
 
 
 def detect_sentiment(text: str) -> dict:
-    """Analyze User's text for sentiment signals.
+    """Analyze Francisco's text for sentiment signals.
 
     Returns detected sentiment, intensity, and action guidance for NEXO.
     Not a model — keyword + heuristic based. Fast and deterministic.
@@ -2727,13 +2727,13 @@ def detect_sentiment(text: str) -> dict:
         sentiment = "negative"
         intensity = min(1.0, 0.3 + neg_score * 0.15)
         if intensity > 0.7:
-            guidance = "MODE: Ultra-conciso. Cero explicaciones. Resolver y mostrar resultado."
+            guidance = "MODE: Ultra-concise. Zero explanations. Resolve and show result."
         else:
-            guidance = "MODE: Conciso. Menos contexto, más acción directa."
+            guidance = "MODE: Concise. Less context, more direct action."
     elif pos_score > neg_score and pos_score >= 1:
         sentiment = "positive"
         intensity = min(1.0, 0.3 + pos_score * 0.15)
-        guidance = "MODE: Normal. Buen momento para proponer ideas de backlog o mejoras."
+        guidance = "MODE: Normal. Good moment to propose backlog ideas or improvements."
     elif urgency_hits:
         sentiment = "urgent"
         intensity = 0.8
@@ -2752,7 +2752,7 @@ def detect_sentiment(text: str) -> dict:
 
 
 def log_sentiment(text: str) -> dict:
-    """Detect and log User's sentiment. Returns the detection result."""
+    """Detect and log Francisco's sentiment. Returns the detection result."""
     result = detect_sentiment(text)
     if result["sentiment"] != "neutral":
         db = _get_db()

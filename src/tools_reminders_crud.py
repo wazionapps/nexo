@@ -14,15 +14,15 @@ from db import (
 def handle_reminder_create(id: str, description: str, date: str = '', category: str = 'general') -> str:
     """Create a new reminder. id must start with 'R'."""
     if not id.startswith('R'):
-        return f"ERROR: Reminder ID must start with 'R' (received: '{id}')."
+        return f"ERROR: El ID del recordatorio debe empezar por 'R' (recibido: '{id}')."
 
     result = create_reminder(id=id, description=description, date=date or None, category=category)
     if not result or "error" in result:
-        error_msg = result.get("error", "unknown") if isinstance(result, dict) else "unknown"
+        error_msg = result.get("error", "desconocido") if isinstance(result, dict) else "desconocido"
         return f"ERROR: {error_msg}"
 
-    date_str = date if date else 'no date'
-    return f"Reminder {id} created. Date: {date_str}. Category: {category}."
+    fecha_str = date if date else 'no date'
+    return f"Reminder {id} created. Date: {fecha_str}. Category: {category}."
 
 
 def handle_reminder_update(id: str, description: str = '', date: str = '', status: str = '', category: str = '') -> str:
@@ -85,12 +85,12 @@ def handle_followup_create(id: str, description: str, date: str = '', verificati
 
     result = create_followup(id=id, description=description, date=date or None, verification=verification, reasoning=reasoning, recurrence=recurrence or None)
     if not result or "error" in result:
-        error_msg = result.get("error", "unknown") if isinstance(result, dict) else "unknown"
+        error_msg = result.get("error", "desconocido") if isinstance(result, dict) else "desconocido"
         return f"ERROR: {error_msg}"
 
-    date_str = date if date else 'no date'
+    fecha_str = date if date else 'no date'
     rec_str = f" Recurrence: {recurrence}." if recurrence else ""
-    return f"Followup {id} created. Date: {date_str}.{rec_str}"
+    return f"Followup {id} created. Date: {fecha_str}.{rec_str}"
 
 
 def handle_followup_update(id: str, description: str = '', date: str = '', verification: str = '', status: str = '') -> str:
@@ -136,10 +136,10 @@ def handle_followup_complete(id: str, result: str = '') -> str:
         # The new one was auto-created by complete_followup
         new_row = conn.execute("SELECT date FROM followups WHERE id = ?", (id,)).fetchone()
         if new_row:
-            msg += f" Next auto-created for {new_row['date']}."
+            msg += f" ♻️ Siguiente auto-creado para {new_row['date']}."
     linked_decisions = find_decisions_by_context_ref(id)
     if linked_decisions:
-        outcome_text = result if result else f"Followup {id} completed"
+        outcome_text = result if result else f"Followup {id} completado"
         for dec in linked_decisions:
             update_decision_outcome(dec['id'], outcome_text)
         dec_ids = ', '.join(f"#{d['id']}" for d in linked_decisions)

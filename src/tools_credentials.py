@@ -11,10 +11,10 @@ def handle_credential_get(service: str, key: str = '') -> str:
         return f"ERROR: No credentials found for '{target}'."
     lines = []
     for r in results:
-        lines.append(f"CREDENCIAL {r['service']}/{r['key']}:")
-        lines.append(f"  Valor: {r['value']}")
+        lines.append(f"CREDENTIAL {r['service']}/{r['key']}:")
+        lines.append(f"  Value: {r['value']}")
         notes = r.get("notes") or ""
-        lines.append(f"  Notas: {notes if notes else '—'}")
+        lines.append(f"  Notes: {notes if notes else '—'}")
     return "\n".join(lines)
 
 
@@ -53,7 +53,7 @@ def handle_credential_delete(service: str, key: str = '') -> str:
 def handle_credential_list(service: str = '') -> str:
     """List credential service/key names and notes — values are never shown."""
     results = list_credentials(service if service else None)
-    label = service if service else "TODAS"
+    label = service if service else "ALL"
     if not results:
         return f"CREDENTIALS {label.upper()}: No entries."
     lines = [f"CREDENTIALS {label.upper()} ({len(results)}):"]

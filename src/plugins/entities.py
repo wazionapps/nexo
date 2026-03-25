@@ -21,7 +21,7 @@ def handle_entity_create(name: str, type: str, value: str, notes: str = "") -> s
         on_entity_create(eid, name, type)
     except Exception:
         pass
-    return f"Entidad creada: [{eid}] {name} ({type})"
+    return f"Entity created: [{eid}] {name} ({type})"
 
 def handle_entity_update(id: int, name: str = "", type: str = "", value: str = "", notes: str = "") -> str:
     """Update an entity. Only non-empty fields are changed."""
@@ -30,21 +30,21 @@ def handle_entity_update(id: int, name: str = "", type: str = "", value: str = "
     if type: kwargs["type"] = type
     if value: kwargs["value"] = value
     if notes: kwargs["notes"] = notes
-    if not kwargs: return "Nada que actualizar."
+    if not kwargs: return "Nothing to update."
     update_entity(id, **kwargs)
-    return f"Entidad [{id}] actualizada."
+    return f"Entity [{id}] updated."
 
 def handle_entity_delete(id: int) -> str:
     """Delete an entity."""
     if not delete_entity(id):
         return f"ERROR: Entity [{id}] not found."
-    return f"Entidad [{id}] eliminada."
+    return f"Entity [{id}] deleted."
 
 def handle_entity_list(type: str = "") -> str:
     """List all entities, optionally filtered by type."""
     results = list_entities(type)
     if not results:
-        return "No entities found."
+        return "No entities."
     grouped = {}
     for e in results:
         t = e["type"]

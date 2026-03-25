@@ -4,7 +4,7 @@ from db import set_preference, get_preference, list_preferences, delete_preferen
 def handle_preference_get(key: str) -> str:
     """Get a specific preference by key."""
     p = get_preference(key)
-    if not p: return f"Preferencia '{key}' no encontrada."
+    if not p: return f"Preference '{key}' not found."
     return f"{p['key']} = {p['value']} (cat: {p['category']})"
 
 def handle_preference_set(key: str, value: str, category: str = "general") -> str:
@@ -15,18 +15,18 @@ def handle_preference_set(key: str, value: str, category: str = "general") -> st
         cognitive.ingest_to_ltm(f"{key}: {value}", "preference", key, key, "")
     except Exception:
         pass
-    return f"Preferencia '{key}' = '{value}' ({category})"
+    return f"Preference '{key}' = '{value}' ({category})"
 
 def handle_preference_list(category: str = "") -> str:
     """List all preferences, optionally filtered by category."""
     prefs = list_preferences(category)
-    if not prefs: return "Sin preferencias."
+    if not prefs: return "No preferences."
     grouped = {}
     for p in prefs:
         c = p["category"]
         if c not in grouped: grouped[c] = []
         grouped[c].append(p)
-    lines = ["PREFERENCIAS:"]
+    lines = ["PREFERENCES:"]
     for c, items in grouped.items():
         lines.append(f"\n  [{c.upper()}]")
         for p in items:
@@ -36,8 +36,8 @@ def handle_preference_list(category: str = "") -> str:
 def handle_preference_delete(key: str) -> str:
     """Delete a preference."""
     if not delete_preference(key):
-        return f"ERROR: Preferencia '{key}' no encontrada."
-    return f"Preferencia '{key}' eliminada."
+        return f"ERROR: Preference '{key}' not found."
+    return f"Preference '{key}' deleted."
 
 TOOLS = [
     (handle_preference_get, "nexo_preference_get", "Get a specific preference value"),

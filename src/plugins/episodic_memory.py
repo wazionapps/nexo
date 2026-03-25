@@ -27,7 +27,7 @@ def handle_decision_log(domain: str, decision: str, alternatives: str = '',
     """Log a non-trivial decision with reasoning context.
 
     Args:
-        domain: Area (ads, shopify, server, nexo, other)
+        domain: Area (ads, shopify, server, wazion, nexo, canarirural, other)
         decision: What was decided
         alternatives: JSON array or text of options considered and why discarded
         based_on: Data, metrics, or observations that informed this decision
@@ -35,7 +35,7 @@ def handle_decision_log(domain: str, decision: str, alternatives: str = '',
         context_ref: Related followup/reminder ID (e.g., NF-ADS1, R71)
         session_id: Current session ID (auto-filled if empty)
     """
-    valid_domains = {'ads', 'shopify', 'server', 'nexo', 'other'}
+    valid_domains = {'ads', 'shopify', 'server', 'wazion', 'nexo', 'canarirural', 'other'}
     if domain not in valid_domains:
         return f"ERROR: domain debe ser uno de: {', '.join(sorted(valid_domains))}"
     if confidence not in ('high', 'medium', 'low'):
@@ -65,7 +65,7 @@ def handle_decision_log(domain: str, decision: str, alternatives: str = '',
     result = dict(conn.execute("SELECT * FROM decisions WHERE id = ?", (result["id"],)).fetchone())
     due = result.get("review_due_at", "")
     due_str = f" review_due={due}" if due else ""
-    return f"Decision #{result['id']} registrada [{domain}] ({confidence}): {decision[:80]}{due_str}"
+    return f"Decision #{result['id']} logged [{domain}] ({confidence}): {decision[:80]}{due_str}"
 
 
 def handle_decision_outcome(id: int, outcome: str) -> str:
@@ -84,7 +84,7 @@ def handle_decision_outcome(id: int, outcome: str) -> str:
         (id,)
     )
     conn.commit()
-    return f"Decision #{id} outcome registrado: {outcome[:100]}"
+    return f"Decision #{id} outcome recorded: {outcome[:100]}"
 
 
 def handle_decision_search(query: str = '', domain: str = '', days: int = 30) -> str:
@@ -92,16 +92,16 @@ def handle_decision_search(query: str = '', domain: str = '', days: int = 30) ->
 
     Args:
         query: Text to search in decision, alternatives, based_on, outcome
-        domain: Filter by area (ads, shopify, server, nexo, other)
+        domain: Filter by area (ads, shopify, server, wazion, nexo, canarirural, other)
         days: Look back N days (default 30)
     """
-    valid_domains = {'ads', 'shopify', 'server', 'nexo', 'other'}
+    valid_domains = {'ads', 'shopify', 'server', 'wazion', 'nexo', 'canarirural', 'other'}
     if domain and domain not in valid_domains:
         return f"ERROR: domain debe ser uno de: {', '.join(sorted(valid_domains))}"
     results = search_decisions(query, domain, days)
     if not results:
         scope = f"'{query}'" if query else domain or 'todas'
-        return f"Sin decisiones encontradas para {scope} in {days} days."
+        return f"No decisions found for {scope} in {days} days."
 
     lines = [f"DECISIONES ({len(results)}):"]
     for d in results:
@@ -113,9 +113,9 @@ def handle_decision_search(query: str = '', domain: str = '', days: int = 30) ->
         lines.append(f"  #{d['id']} ({d['created_at']}) [{d['domain']}] {conf} [{status}]{ref}{review_due}")
         lines.append(f"    {d['decision'][:120]}")
         if d.get('based_on'):
-            lines.append(f"    Basado en: {d['based_on'][:100]}")
+            lines.append(f"    Based on: {d['based_on'][:100]}")
         if d.get('alternatives'):
-            lines.append(f"    Alternativas: {d['alternatives'][:100]}")
+            lines.append(f"    Alternatives: {d['alternatives'][:100]}")
         if outcome_str:
             lines.append(f"    Outcome:{outcome_str}")
     return "\n".join(lines)
@@ -163,7 +163,7 @@ def handle_memory_review_queue(days: int = 0) -> str:
 def handle_session_diary_write(decisions: str, summary: str,
                                 discarded: str = '', pending: str = '',
                                 context_next: str = '', mental_state: str = '',
-                                user_signals: str = '',
+                                francisco_signals: str = '',
                                 domain: str = '',
                                 session_id: str = '',
                                 self_critique: str = '') -> str:
@@ -176,16 +176,16 @@ def handle_session_diary_write(decisions: str, summary: str,
         pending: Items left unresolved, with doubt level
         context_next: What the next session should know to continue effectively
         mental_state: Internal state to transfer — thread of thought, tone, observations not yet shared, momentum. Written in first person as NEXO.
-        user_signals: Observable signals from User during session — response speed (fast='s' vs detailed explanations), tone (direct, frustrated, exploratory, excited), corrections given, topics he initiated vs topics NEXO initiated. Factual observations only, not interpretations.
-        domain: Project context: project-a, project-b, nexo, server, other
+        francisco_signals: Observable signals from Francisco during session — response speed (fast='s' vs detailed explanations), tone (direct, frustrated, exploratory, excited), corrections given, topics he initiated vs topics NEXO initiated. Factual observations only, not interpretations.
+        domain: Project context: recambios, wazion, nexo, canarirural, server, other
         session_id: Current session ID
-        self_critique: OBLIGATORIO. Post-mortem honesto: ¿Qué debí hacer proactivamente? ¿User tuvo que pedirme algo que yo debería haber detectado? ¿Repetí errores conocidos? ¿Qué regla concreta evitaría la repetición? Si sesión limpia: 'Sin autocrítica — sesión limpia.'
+        self_critique: MANDATORY. Honest post-mortem: What should I have done proactively? Did Francisco ask for something I should have detected? Did I repeat known errors? What concrete rule would prevent the recurrence? If clean session: 'No self-critique — clean session.'
     """
     sid = session_id or 'unknown'
     # Clean up draft — manual diary supersedes it
     from db import delete_diary_draft
     delete_diary_draft(sid)
-    result = write_session_diary(sid, decisions, summary, discarded, pending, context_next, mental_state, domain=domain, user_signals=user_signals, self_critique=self_critique)
+    result = write_session_diary(sid, decisions, summary, discarded, pending, context_next, mental_state, domain=domain, user_signals=francisco_signals, self_critique=self_critique)
     if "error" in result:
         return f"ERROR: {result['error']}"
     _cognitive_ingest_safe(summary, "diary", f"diary#{result.get('id','')}", f"Session {sid} summary", domain)
@@ -194,7 +194,7 @@ def handle_session_diary_write(decisions: str, summary: str,
     if mental_state and mental_state.strip():
         _cognitive_ingest_safe(mental_state, "mental_state", f"diary#{result.get('id','')}", f"Session {sid} state", domain)
     domain_str = f" [{domain}]" if domain else ""
-    msg = f"Diario sesión #{result['id']}{domain_str} guardado: {summary[:80]}"
+    msg = f"Session diary #{result['id']}{domain_str} saved: {summary[:80]}"
 
     # Trust score & sentiment summary for session diary
     try:
@@ -215,14 +215,14 @@ def handle_session_diary_write(decisions: str, summary: str,
         "SELECT COUNT(*) FROM change_log WHERE (commit_ref IS NULL OR commit_ref = '')"
     ).fetchone()[0]
     if orphan_changes > 0:
-        warnings.append(f"{orphan_changes} changes sin commit_ref")
+        warnings.append(f"{orphan_changes} changes without commit_ref")
     orphan_decisions = conn.execute(
         "SELECT COUNT(*) FROM decisions WHERE (outcome IS NULL OR outcome = '') AND created_at < datetime('now', '-7 days')"
     ).fetchone()[0]
     if orphan_decisions > 0:
-        warnings.append(f"{orphan_decisions} decisions >7d sin outcome")
+        warnings.append(f"{orphan_decisions} decisions >7d without outcome")
     if warnings:
-        msg += "\n⚠ EPISODIC GAPS: " + " | ".join(warnings) + " — resolver antes de cerrar sesión."
+        msg += "\n⚠ EPISODIC GAPS: " + " | ".join(warnings) + " — resolve before closing session."
 
     return msg
 
@@ -235,29 +235,29 @@ def handle_session_diary_read(session_id: str = '', last_n: int = 3, last_day: b
         session_id: Specific session ID to read (optional)
         last_n: Number of recent entries to return (default 3)
         last_day: If true, returns ALL entries from the most recent day (multi-terminal aware). Use this at startup.
-        domain: Filter by project context: project-a, project-b, nexo, server, other
+        domain: Filter by project context: recambios, wazion, nexo, canarirural, server, other
     """
     results = read_session_diary(session_id, last_n, last_day, domain)
     if not results:
-        return "Sin entradas en el diario de sesiones."
+        return "No entries in the session diary."
 
-    lines = [f"DIARIO DE SESIONES ({len(results)}):"]
+    lines = [f"SESSION DIARY ({len(results)}):"]
     for d in results:
         domain_label = f" [{d['domain']}]" if d.get('domain') else ""
-        lines.append(f"\n  --- Sesión {d['session_id']}{domain_label} ({d['created_at']}) ---")
-        lines.append(f"  Resumen: {d['summary']}")
+        lines.append(f"\n  --- Session {d['session_id']}{domain_label} ({d['created_at']}) ---")
+        lines.append(f"  Summary: {d['summary']}")
         if d.get('decisions'):
-            lines.append(f"  Decisiones: {d['decisions'][:200]}")
+            lines.append(f"  Decisions: {d['decisions'][:200]}")
         if d.get('discarded'):
-            lines.append(f"  Descartado: {d['discarded'][:150]}")
+            lines.append(f"  Discarded: {d['discarded'][:150]}")
         if d.get('pending'):
-            lines.append(f"  Pendiente: {d['pending'][:150]}")
+            lines.append(f"  Pending: {d['pending'][:150]}")
         if d.get('context_next'):
-            lines.append(f"  Para siguiente sesión: {d['context_next'][:200]}")
+            lines.append(f"  For next session: {d['context_next'][:200]}")
         if d.get('mental_state'):
-            lines.append(f"  Estado mental: {d['mental_state'][:300]}")
-        if d.get('user_signals'):
-            lines.append(f"  Señales User: {d['user_signals'][:300]}")
+            lines.append(f"  Mental state: {d['mental_state'][:300]}")
+        if d.get('francisco_signals'):
+            lines.append(f"  Francisco signals: {d['francisco_signals'][:300]}")
     return "\n".join(lines)
 
 
@@ -271,7 +271,7 @@ def handle_change_log(files: str, what_changed: str, why: str,
         files: File path(s) modified (comma-separated if multiple)
         what_changed: What was modified — functions, lines, behavior change
         why: WHY this change was needed — the root cause, not just "fix bug"
-        triggered_by: What triggered this — bug report, metric, User's request, followup ID
+        triggered_by: What triggered this — bug report, metric, Francisco's request, followup ID
         affects: What systems/users/flows this change impacts
         risks: What could go wrong — regressions, edge cases, dependencies
         verify: How to verify this works — what to check, followup ID if created
@@ -295,9 +295,9 @@ def handle_change_log(files: str, what_changed: str, why: str,
         on_change_log(change_id, files, "")
     except Exception:
         pass
-    msg = f"Change #{change_id} registrado: {files[:60]} — {what_changed[:60]}"
+    msg = f"Change #{change_id} logged: {files[:60]} — {what_changed[:60]}"
     if not commit_ref:
-        msg += f"\n⚠ SIN COMMIT. Usa nexo_change_commit({change_id}, 'hash') después del push, o 'server-direct' si fue edición directa en servidor."
+        msg += f"\n⚠ NO COMMIT. Use nexo_change_commit({change_id}, 'hash') after push, or 'server-direct' if it was a direct server edit."
     return msg
 
 
@@ -319,8 +319,8 @@ def handle_change_search(query: str = '', files: str = '', days: int = 30) -> st
         commit = f" [{c['commit_ref'][:8]}]" if c.get('commit_ref') else ""
         lines.append(f"  #{c['id']} ({c['created_at']}){commit}")
         lines.append(f"    Archivos: {c['files'][:100]}")
-        lines.append(f"    Qué: {c['what_changed'][:120]}")
-        lines.append(f"    Por qué: {c['why'][:120]}")
+        lines.append(f"    What: {c['what_changed'][:120]}")
+        lines.append(f"    Why: {c['why'][:120]}")
         if c.get('triggered_by'):
             lines.append(f"    Trigger: {c['triggered_by'][:80]}")
         if c.get('affects'):
@@ -352,7 +352,7 @@ def handle_recall(query: str, days: int = 30) -> str:
     """
     results = recall(query, days)
     if not results:
-        return f"Sin resultados para '{query}' en los últimos {days} días."
+        return f"No results for '{query}' in the last {days} days."
 
     # v1.2: Passive rehearsal — strengthen matching cognitive memories
     try:
@@ -367,13 +367,13 @@ def handle_recall(query: str, days: int = 30) -> str:
     SOURCE_LABELS = {
         'change_log': '[CAMBIO]',
         'change':     '[CAMBIO]',
-        'decision':   '[DECISIÓN]',
+        'decision':   '[DECISION]',
         'learning':   '[LEARNING]',
         'followup':   '[FOLLOWUP]',
         'diary':      '[DIARIO]',
         'entity':     '[ENTIDAD]',
         'file':       '[ARCHIVO]',
-        'code':       '[CÓDIGO]',
+        'code':       '[CODE]',
     }
 
     lines = [f"RECALL '{query}' — {len(results)} resultado(s):"]
@@ -390,7 +390,7 @@ def handle_recall(query: str, days: int = 30) -> str:
         if snippet:
             lines.append(f"    {snippet}")
     if len(results) < 5:
-        lines.append(f"\n  💡 Solo {len(results)} resultados en NEXO. Para historial más profundo, busca también en claude-mem: mcp__plugin_claude-mem_mcp-search__search")
+        lines.append(f"\n  💡 Only {len(results)} results in NEXO. For deeper history, also search claude-mem: mcp__plugin_claude-mem_mcp-search__search")
     return "\n".join(lines)
 
 

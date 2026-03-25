@@ -79,16 +79,16 @@ def handle_startup(task: str = "Startup") -> str:
 
     if other_sessions:
         lines.append("")
-        lines.append("SESIONES ACTIVAS:")
+        lines.append("ACTIVE SESSIONS:")
         for s in other_sessions:
             age = _format_age(s["last_update_epoch"])
             lines.append(f"  {s['sid']} ({age}) — {s['task']}")
     else:
-        lines.append("Sin otras sesiones activas.")
+        lines.append("No other active sessions.")
 
     if inbox:
         lines.append("")
-        lines.append("MENSAJES PENDIENTES:")
+        lines.append("PENDING MESSAGES:")
         for m in inbox:
             age = _format_age(m["created_epoch"])
             lines.append(f"  [{m['from_sid']}] ({age}): {m['text']}")
@@ -112,7 +112,7 @@ def handle_heartbeat(sid: str, task: str, context_hint: str = '') -> str:
     inbox = get_inbox(sid)
     if inbox:
         parts.append("")
-        parts.append("MENSAJES:")
+        parts.append("MESSAGES:")
         for m in inbox:
             age = _format_age(m["created_epoch"])
             parts.append(f"  [{m['from_sid']}] ({age}): {m['text']}")
@@ -120,7 +120,7 @@ def handle_heartbeat(sid: str, task: str, context_hint: str = '') -> str:
     questions = get_pending_questions(sid)
     if questions:
         parts.append("")
-        parts.append("PREGUNTAS PENDIENTES (responder con nexo_answer):")
+        parts.append("PENDING QUESTIONS (reply with nexo_answer):")
         for q in questions:
             age = _format_age(q["created_epoch"])
             parts.append(f"  {q['qid']} de {q['from_sid']} ({age}): {q['question']}")
@@ -296,7 +296,7 @@ def handle_stop(sid: str) -> str:
     """Cleanly close a session, removing it from active sessions immediately."""
     _stop_keepalive(sid)
     complete_session(sid)
-    return f"Sesión {sid} cerrada."
+    return f"Session {sid} closed."
 
 
 def handle_status(keyword: str | None = None) -> str:
@@ -310,9 +310,9 @@ def handle_status(keyword: str | None = None) -> str:
         sessions = get_active_sessions()
 
     if not sessions:
-        return "Sin sesiones activas."
+        return "No active sessions."
 
-    lines = ["SESIONES ACTIVAS:"]
+    lines = ["ACTIVE SESSIONS:"]
     for s in sessions:
         age = _format_age(s["last_update_epoch"])
         lines.append(f"  {s['sid']} ({age}) — {s['task']}")

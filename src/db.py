@@ -437,7 +437,7 @@ _SYNONYMS = {
     "plantilla": ["template"],
     "template": ["plantilla"],
     "webhook": ["gancho"],
-    "cron": ["scheduled task", "scheduled"],
+    "cron": ["tarea programada", "scheduled"],
     "extension": ["extensión", "plugin", "addon"],
     "plugin": ["extension", "extensión"],
 }
@@ -1012,24 +1012,31 @@ def register_session(sid: str, task: str) -> dict:
     return {"sid": sid, "task": task}
 
 
-def update_session(sid: str, task: str) -> dict:
-    """Update session task and timestamp. Preserves started_epoch."""
+def update_session(sid: str, task: str | None) -> dict:
+    """Update session timestamp (and task if provided). Preserves started_epoch.
+
+    Args:
+        sid: Session ID.
+        task: New task description, or None to keep current task (keepalive touch).
+    """
     conn = get_db()
     now = now_epoch()
-    row = conn.execute("SELECT started_epoch FROM sessions WHERE sid = ?", (sid,)).fetchone()
+    row = conn.execute("SELECT started_epoch, task FROM sessions WHERE sid = ?", (sid,)).fetchone()
     if row:
+        effective_task = task if task is not None else row["task"]
         conn.execute(
             "UPDATE sessions SET task = ?, last_update_epoch = ?, local_time = ? WHERE sid = ?",
-            (task, now, local_time_str(), sid)
+            (effective_task, now, local_time_str(), sid)
         )
     else:
+        effective_task = task or "Unknown"
         conn.execute(
             "INSERT INTO sessions (sid, task, started_epoch, last_update_epoch, local_time) "
             "VALUES (?, ?, ?, ?, ?)",
-            (sid, task, now, now, local_time_str())
+            (sid, effective_task, now, now, local_time_str())
         )
     conn.commit()
-    return {"sid": sid, "task": task}
+    return {"sid": sid, "task": effective_task}
 
 
 def complete_session(sid: str):

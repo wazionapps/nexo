@@ -2,7 +2,6 @@
 
 from datetime import datetime, timedelta
 import json
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -10,16 +9,14 @@ from tools_sessions import handle_status
 from tools_reminders import handle_reminders
 from db import get_db
 
-NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
-
 
 def _get_date_str() -> str:
-    """Get formatted current date and time."""
+    """Get formatted date in Madrid timezone."""
     try:
         result = subprocess.run(
-            ["date", "+%A %d %B %Y, %H:%M"],
+            ["date", "+%A %d de %B de %Y, %H:%M"],
             capture_output=True, text=True,
-            env={"PATH": "/usr/bin:/bin"}
+            env={"TZ": "Europe/Madrid", "PATH": "/usr/bin:/bin", "LANG": "es_ES.UTF-8"}
         )
         return result.stdout.strip()
     except Exception:
@@ -27,21 +24,39 @@ def _get_date_str() -> str:
 
 
 MENU_ITEMS = [
-    ("Projects", [
-        ("1", "Project Status - Review active projects"),
-        ("2", "Infrastructure - Server health check"),
+    ("Proyectos", [
+        ("1", "WAzion - Revisar estado del proyecto"),
+        ("9", "Claude Agent VPS - Revisar cambios autonomos"),
     ]),
-    ("Advertising", [
-        ("3", "Google Ads - Manage campaigns"),
-        ("4", "Meta Ads - Manage Facebook/Instagram"),
+    ("Publicidad", [
+        ("7", "Google Ads - Administrar campanas (Recambios + WAzion)"),
+        ("7b", "Meta Ads - Administrar campanas Facebook/Instagram"),
+        ("7c", "Ads Tracking - Revision combinada Google+Meta"),
     ]),
-    ("Analytics & Monitoring", [
-        ("5", "Google Analytics - Review web analytics"),
-        ("6", "Email Review - Review inboxes"),
+    ("Shopify", [
+        ("4", "Shopify Theme Sync - Sincronizar tema"),
+        ("5", "Shopify Scripts - Ejecutar scripts periodicos"),
+        ("6", "Cambiar Promocion Shopify"),
     ]),
-    ("Maintenance", [
-        ("7", "Backup - Check backup status"),
-        ("8", "Memory Review - Review pending learnings/decisions"),
+    ("Servidor e Infraestructura", [
+        ("2", "Servidor - Chequeo cl105e.mundiserver.com"),
+        ("3", "WhatsApp Logs - Revisar logs vicshopsysteam"),
+        ("11", "File Tracker - Reporte archivos PHP"),
+        ("12", "Google Cloud - Gasto, consumo y estado GCP"),
+    ]),
+    ("Comunicacion y Monitorizacion", [
+        ("8", "Recovery Optimizer - Analisis IA semanal (LUNES)"),
+        ("10", "Recovery Monitor - Estado emails/WA recovery (24h)"),
+        ("13", "Review Monitor - Estado emails/WA resenas"),
+        ("14", "WhatsApp Analisis Completo - Estadisticas globales"),
+        ("15", "Google Analytics - Revisar analiticas web"),
+        ("16", "Email Review - Revisar bandejas y spam"),
+    ]),
+    ("Informes y SEO", [
+        ("17", "Auditoria Search Console (cada 2 semanas)"),
+        ("18", "Re-envio sitemaps (cada 30 dias)"),
+        ("19", "Verificacion SEO metas"),
+        ("20", "Informe Email Semanal (domingos)"),
     ]),
 ]
 
@@ -49,7 +64,7 @@ MENU_ITEMS = [
 def _get_dashboard_alerts() -> list[dict]:
     """Run proactive dashboard and return alerts."""
     try:
-        script = NEXO_HOME / "scripts" / "nexo-proactive-dashboard.py"
+        script = Path.home() / "claude" / "scripts" / "nexo-proactive-dashboard.py"
         if not script.exists():
             return []
         result = subprocess.run(
@@ -93,7 +108,7 @@ def handle_menu() -> str:
 
     lines = []
     lines.append("╔" + "═" * W + "╗")
-    lines.append("║" + "NEXO — OPERATIONS CENTER".center(W) + "║")
+    lines.append("║" + "NEXO — CENTRO DE OPERACIONES".center(W) + "║")
     lines.append("║" + date_str.center(W) + "║")
     lines.append("╠" + "═" * W + "╣")
 
@@ -101,30 +116,30 @@ def handle_menu() -> str:
     dashboard_alerts = _get_dashboard_alerts()
     memory_reviews = _get_memory_review_summary()
     due = handle_reminders("due")
-    has_alerts = dashboard_alerts or memory_reviews["total"] > 0 or (due and "No reminders" not in due)
+    has_alerts = dashboard_alerts or memory_reviews["total"] > 0 or (due and "No pending reminders" not in due)
 
     if has_alerts:
         lines.append("║" + "  PROACTIVE ALERTS".ljust(W) + "║")
         lines.append("╠" + "═" * W + "╣")
 
         if dashboard_alerts:
-            for alert in dashboard_alerts[:10]:
+            for alert in dashboard_alerts[:10]:  # Top 10
                 sev = alert.get("severity", "low")
                 icon = {"high": "!!!", "medium": " ! ", "low": " . "}.get(sev, " . ")
                 text = alert.get("title", "")[:W - 8]
                 lines.append("║" + f"  {icon} {text}".ljust(W) + "║")
             if len(dashboard_alerts) > 10:
                 more = len(dashboard_alerts) - 10
-                lines.append("║" + f"  ... and {more} more alerts".ljust(W) + "║")
+                lines.append("║" + f"  ... y {more} alertas mas".ljust(W) + "║")
 
         if memory_reviews["total"] > 0:
             text = (
-                f"MEMORY: {memory_reviews['total']} reviews pending "
-                f"({memory_reviews['decisions']} decisions, {memory_reviews['learnings']} learnings)"
+                f"MEMORIA: {memory_reviews['total']} revisiones pendientes "
+                f"({memory_reviews['decisions']} decisiones, {memory_reviews['learnings']} learnings)"
             )[:W - 4]
             lines.append("║" + f"  !  {text}".ljust(W) + "║")
 
-        if due and "No reminders" not in due:
+        if due and "No pending reminders" not in due:
             for reminder_line in due.split("\n"):
                 if reminder_line.strip():
                     truncated = reminder_line[:W - 2]
@@ -141,23 +156,26 @@ def handle_menu() -> str:
             lines.append("║" + entry.ljust(W) + "║")
         lines.append("╠" + "═" * W + "╣")
 
-    # Backlog: ideas, future projects, undated tasks
+    # Backlog: ideas, proyectos futuros, tareas sin fecha o lejanas
     try:
         conn = get_db()
         cutoff = (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d")
+        # Reminders sin fecha (backlog/ideas)
         no_date = conn.execute(
             "SELECT id, description, category FROM reminders WHERE status LIKE 'PENDIENTE%' AND (date IS NULL OR date='') ORDER BY category, id"
         ).fetchall()
+        # Reminders con fecha > 7 días (futuro)
         future = conn.execute(
             "SELECT id, description, date, category FROM reminders WHERE status LIKE 'PENDIENTE%' AND date > ? ORDER BY date",
             (cutoff,)
         ).fetchall()
+        # Followups sin fecha
         nf_no_date = conn.execute(
             "SELECT id, description FROM followups WHERE status NOT LIKE 'COMPLETADO%' AND (date IS NULL OR date='') ORDER BY id"
         ).fetchall()
 
         if no_date or future or nf_no_date:
-            lines.append("║" + "  BACKLOG / IDEAS / FUTURE".ljust(W) + "║")
+            lines.append("║" + "  BACKLOG / IDEAS / FUTURO".ljust(W) + "║")
             lines.append("║" + "─" * W + "║")
 
             if no_date:
@@ -172,29 +190,29 @@ def handle_menu() -> str:
                         lines.append("║" + f"    {r['id']}: {short}".ljust(W) + "║")
 
             if future:
-                lines.append("║" + f"  [Scheduled]".ljust(W) + "║")
+                lines.append("║" + f"  [Programado]".ljust(W) + "║")
                 for r in future:
                     short = r["description"][:W - 18]
                     lines.append("║" + f"    {r['id']} ({r['date']}): {short}".ljust(W) + "║")
 
             if nf_no_date:
-                lines.append("║" + f"  [Pending followups]".ljust(W) + "║")
+                lines.append("║" + f"  [Followups pendientes]".ljust(W) + "║")
                 for r in nf_no_date:
                     short = r["description"][:W - 12]
                     lines.append("║" + f"    {r['id']}: {short}".ljust(W) + "║")
 
             lines.append("╠" + "═" * W + "╣")
     except Exception as e:
-        lines.append("║" + f"  ! Backlog error: {e}".ljust(W) + "║")
+        lines.append("║" + f"  ⚠ Error backlog: {e}".ljust(W) + "║")
         lines.append("╠" + "═" * W + "╣")
 
     # Active sessions
     sessions = handle_status()
-    if "No sessions" not in sessions:
+    if "No active sessions" not in sessions:
         lines.append("║" + "  ACTIVE SESSIONS".ljust(W) + "║")
         lines.append("║" + "─" * W + "║")
         for s_line in sessions.split("\n"):
-            if s_line.strip() and "SESIONES ACTIVAS" not in s_line:
+            if s_line.strip() and "ACTIVE SESSIONS" not in s_line:
                 truncated = s_line[:W - 2]
                 lines.append("║" + f"  {truncated}".ljust(W) + "║")
         lines.append("╠" + "═" * W + "╣")

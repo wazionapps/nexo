@@ -52,7 +52,7 @@ mcp = FastMCP(
     name="nexo",
     instructions=(
         "NEXO operational server. Provides session coordination, "
-        "reminders, followups, and menu for the user's operations.\n\n"
+        "reminders, followups, and menu for Francisco's operations.\n\n"
         "When working with tool results, write down any important information "
         "you might need later in your response, as the original tool result "
         "may be cleared later."
@@ -208,13 +208,13 @@ def nexo_menu() -> str:
 
 @mcp.tool
 def nexo_reminder_create(id: str, description: str, date: str = "", category: str = "general") -> str:
-    """Create a new reminder for the user.
+    """Create a new reminder for Francisco.
 
     Args:
         id: Unique ID starting with 'R' (e.g., R90).
         description: What needs to be done.
         date: Target date YYYY-MM-DD (optional).
-        category: One of: decisions, tasks, waiting, ideas, general.
+        category: One of: decisiones, tareas, esperando, ideas, general.
     """
     return handle_reminder_create(id, description, date, category)
 
@@ -313,7 +313,7 @@ def nexo_learning_add(category: str, title: str, content: str, reasoning: str = 
     """Add a new learning (resolved error, pattern, gotcha).
 
     Args:
-        category: One of: nexo-ops, infrastructure, security, brain-engine (or custom categories).
+        category: One of: nexo-ops, google-ads, meta-ads, google-analytics, shopify, wazion, cloud-sql, infrastructure, security, brain-engine.
         title: Short title for the learning.
         content: Full description with context and solution.
         reasoning: WHY this matters — what led to discovering this (optional).
@@ -417,7 +417,7 @@ def nexo_index_dirs() -> str:
     dirs = fts_list_dirs()
     if not dirs:
         return "No directories configured."
-    lines = ["DIRECTORIOS INDEXADOS:"]
+    lines = ["INDEXED DIRECTORIES:"]
     for d in dirs:
         source_tag = "⚙️" if d["source"] == "builtin" else "➕"
         notes = f" — {d['notes']}" if d.get("notes") else ""
@@ -544,7 +544,7 @@ def nexo_plugin_list() -> str:
     plugins = list_plugins()
     if not plugins:
         return "No plugins loaded."
-    lines = ["PLUGINS CARGADOS:"]
+    lines = ["LOADED PLUGINS:"]
     for p in plugins:
         names = p["tool_names"] or "(no tools)"
         lines.append(f"  {p['filename']} — {p['tools_count']} tools: {names}")

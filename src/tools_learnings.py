@@ -100,7 +100,7 @@ def handle_learning_add(category: str, title: str, content: str, reasoning: str 
     if applies_to:
         meta.append(f"applies_to={applies_to}")
     meta_str = f" ({', '.join(meta)})" if meta else ""
-    return f"Learning #{result['id']} añadido en {category}: {title}{meta_str}{repetition_msg}"
+    return f"Learning #{result['id']} added to {category}: {title}{meta_str}{repetition_msg}"
 
 
 def handle_learning_search(query: str, category: str = '') -> str:
@@ -117,7 +117,7 @@ def handle_learning_search(query: str, category: str = '') -> str:
         lines.append(f"  #{r['id']} [{r['category']}] [{status}] {r['title']}{review_note}")
         lines.append(f"    {snippet}")
         if r.get("prevention"):
-            lines.append(f"    Prevención: {r['prevention'][:100]}")
+            lines.append(f"    Prevention: {r['prevention'][:100]}")
 
     # v1.2: Passive rehearsal — strengthen matching cognitive memories
     try:
@@ -176,7 +176,7 @@ def handle_learning_update(id: int, title: str = '', content: str = '', category
         conn = get_db()
         conn.execute(f"UPDATE learnings SET {set_clause} WHERE id = ?", values)
         conn.commit()
-    return f"Learning #{id} actualizado."
+    return f"Learning #{id} updated."
 
 
 def handle_learning_delete(id: int) -> str:
@@ -184,7 +184,7 @@ def handle_learning_delete(id: int) -> str:
     deleted = delete_learning(id)
     if not deleted:
         return f"ERROR: Learning #{id} not found."
-    return f"Learning #{id} eliminado."
+    return f"Learning #{id} deleted."
 
 
 def handle_learning_list(category: str = '') -> str:
