@@ -51,7 +51,7 @@
         "operatingSystem": "macOS, Linux",
         "url": "https://nexo-brain.com",
         "downloadUrl": "https://www.npmjs.com/package/nexo-brain",
-        "softwareVersion": "0.7.0",
+        "softwareVersion": "0.8.0",
         "license": "https://opensource.org/licenses/MIT",
         "author": {
             "@type": "Organization",
@@ -835,7 +835,7 @@
         </a>
         <div class="nav-links">
             <a href="#features">Features</a>
-            <a href="#orchestration">Orchestration v0.7.0</a>
+            <a href="#v080">v0.8.0</a>
             <a href="#cognitive">Cognitive</a>
             <a href="#architecture">Architecture</a>
             <a href="#tools">Tools</a>
@@ -852,7 +852,7 @@
     <div class="container">
         <div class="hero-badge fade-up">
             <span class="dot"></span>
-            <span id="version-badge">v0.7.0</span> &mdash; Learned weights, somatic markers &amp; adaptive personality v2
+            <span id="version-badge">v0.8.0</span> &mdash; Knowledge Graph, Web Dashboard &amp; Cross-Platform
         </div>
         <div class="fade-up" style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;">
             <img src="https://img.shields.io/npm/v/nexo-brain?color=7C3AED&label=npm" alt="npm version">
@@ -866,7 +866,7 @@
         </h1>
 
         <p class="hero-subtitle fade-up">
-            Give your AI agent a brain that remembers, learns, and protects itself from repeating mistakes. F1 0.588 on LoCoMo &mdash; +55% vs GPT-4. Built on the Atkinson-Shiffrin memory model with 105+ MCP tools.
+            Give your AI agent a brain that remembers, learns, and protects itself from repeating mistakes. F1 0.588 on LoCoMo &mdash; +55% vs GPT-4. Built on the Atkinson-Shiffrin memory model with 109+ MCP tools.
         </p>
 
         <div class="hero-actions fade-up">
@@ -896,12 +896,12 @@
     <div class="stats">
         <div class="stat">
             <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></div>
-            <div class="stat-value">105+</div>
+            <div class="stat-value">109+</div>
             <div class="stat-label">MCP Tools</div>
         </div>
         <div class="stat">
             <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg></div>
-            <div class="stat-value">18</div>
+            <div class="stat-value">19</div>
             <div class="stat-label">Categories</div>
         </div>
         <div class="stat">
@@ -1088,14 +1088,32 @@
     </div>
 </section>
 
-<!-- Orchestration System v0.7.0 -->
-<section id="orchestration" style="padding:80px 0;background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
+<!-- v0.8.0 Features -->
+<section id="v080" style="padding:80px 0;background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
     <div class="container">
-        <div class="section-label">New in v0.7.0</div>
-        <h2 class="section-title">Learned Weights &amp; Adaptive Intelligence</h2>
+        <div class="section-label">New in v0.8.0</div>
+        <h2 class="section-title">Knowledge Graph, Dashboard &amp; Cross-Platform</h2>
         <p class="section-subtitle">
-            v0.7.0 closes the loop between memory and behavior. Signal weights now learn from real feedback via Ridge regression. Guard warns on somatic pain memory. Personality adapts across 6 signals with severity-weighted decay. Every component gets smarter the longer it runs.
+            v0.8.0 gives your AI agent a relationship graph, a visual brain dashboard, and runs everywhere. 988 bi-temporal nodes with D3 visualization, 6 dashboard pages, and full Linux + Windows support.
         </p>
+
+        <div class="cognitive-group">
+            <div class="cognitive-group-label">Major Features</div>
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h4>Knowledge Graph</h4>
+                    <p>Bi-temporal entity-relationship graph with 988 nodes and 896 edges. BFS traversal discovers multi-hop connections. Event-sourced edges with smart dedup (ADD/UPDATE/NOOP). Temporal queries. Interactive D3.js visualization.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h4>Web Dashboard</h4>
+                    <p>Visual interface at localhost:6174 with 6 pages: Overview, Graph, Memory, Somatic, Adaptive, Sessions. FastAPI + D3.js. See your AI brain in real time.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h4>Cross-Platform</h4>
+                    <p>Full Linux and Windows support. Platform-appropriate process managers. Opportunistic maintenance when resources are available.</p>
+                </div>
+            </div>
+        </div>
 
         <div class="cognitive-group">
             <div class="cognitive-group-label">5 Automated Hooks</div>
@@ -1323,7 +1341,7 @@
 <section id="tools">
     <div class="container">
         <div class="section-label">Tools</div>
-        <h2 class="section-title">105+ MCP tools, 18 categories</h2>
+        <h2 class="section-title">109+ MCP tools, 19 categories</h2>
         <p class="section-subtitle">
             Every aspect of cognitive operation exposed as MCP tools. Compatible with Claude Code and any MCP client.
         </p>
@@ -1413,6 +1431,11 @@
                 <div class="tool-count">1</div>
                 <h4>Menu</h4>
                 <p>Operations center generator</p>
+            </div>
+            <div class="tool-card">
+                <div class="tool-count">4</div>
+                <h4>Knowledge Graph</h4>
+                <p>Query, path, neighbors, stats</p>
             </div>
         </div>
     </div>
