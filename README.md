@@ -274,7 +274,9 @@ A bi-temporal entity-relationship graph with 988 nodes and 896 edges. Entities a
 A visual interface at `localhost:6174` with 6 pages: Overview (system health at a glance), Graph (interactive D3.js visualization of the knowledge graph), Memory (browse and search all memory stores), Somatic (pain map per file/area), Adaptive (personality signals and weights), and Sessions (active and historical sessions). Built with FastAPI backend and D3.js frontend.
 
 ### Cross-Platform Support
-v0.8.0 adds full Linux and Windows support. The installer detects the platform and configures the appropriate process manager (LaunchAgents on macOS, systemd on Linux, Task Scheduler on Windows). Opportunistic maintenance runs cognitive processes when resources are available.
+v0.8.0 adds full Linux support and Windows via WSL. The installer detects the platform and configures the appropriate process manager (LaunchAgents on macOS, catch-up on startup for Linux). Opportunistic maintenance runs cognitive processes when resources are available.
+
+> **Windows users:** NEXO Brain requires [WSL (Windows Subsystem for Linux)](https://learn.microsoft.com/en-us/windows/wsl/install). Install WSL first, then run `npx nexo-brain` inside the Ubuntu/WSL terminal.
 
 ### Storage Router
 A new abstraction layer routes storage operations through a unified interface, making the system multi-tenant ready. Each operator's data is isolated while sharing the same cognitive engine.
@@ -349,7 +351,7 @@ That's it. No need to run `claude` manually. Atlas will greet you immediately â€
 
 ### Requirements
 
-- **macOS, Linux, or Windows**
+- **macOS or Linux** (Windows via [WSL](https://learn.microsoft.com/en-us/windows/wsl/install))
 - **Node.js 18+** (for the installer)
 - **Claude Opus (latest version) strongly recommended.** NEXO Brain provides 109+ MCP tools across 19 categories. This cognitive load requires a top-tier model with large context window. Smaller models (Haiku, Sonnet) may struggle with tool selection and produce inconsistent results. Opus handles all 109+ tools without hesitation.
 - Python 3, Homebrew, and Claude Code are installed automatically if missing.

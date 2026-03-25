@@ -77,8 +77,14 @@ async function main() {
 
   // Check prerequisites
   const platform = process.platform;
-  if (platform !== "darwin" && platform !== "linux" && platform !== "win32") {
-    log(`Unsupported platform: ${platform}. NEXO supports macOS, Linux, and Windows.`);
+  if (platform === "win32") {
+    log("Windows detected. NEXO Brain requires WSL (Windows Subsystem for Linux).");
+    log("Install WSL: https://learn.microsoft.com/en-us/windows/wsl/install");
+    log("Then run this command inside WSL (Ubuntu terminal), not PowerShell/CMD.");
+    process.exit(1);
+  }
+  if (platform !== "darwin" && platform !== "linux") {
+    log(`Unsupported platform: ${platform}. NEXO supports macOS and Linux (Windows via WSL).`);
     process.exit(1);
   }
 
