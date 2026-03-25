@@ -70,8 +70,8 @@ async function main() {
 
   // Check prerequisites
   const platform = process.platform;
-  if (platform !== "darwin") {
-    log("NEXO currently supports macOS only. Linux support coming soon.");
+  if (platform !== "darwin" && platform !== "linux" && platform !== "win32") {
+    log(`Unsupported platform: ${platform}. NEXO supports macOS, Linux, and Windows.`);
     process.exit(1);
   }
 
@@ -105,6 +105,7 @@ async function main() {
         // Update core Python files
         const srcDir = path.join(__dirname, "..", "src");
         ["server.py", "db.py", "plugin_loader.py", "cognitive.py",
+         "knowledge_graph.py", "kg_populate.py", "maintenance.py", "storage_router.py",
          "tools_sessions.py", "tools_coordination.py", "tools_reminders.py",
          "tools_reminders_crud.py", "tools_learnings.py", "tools_credentials.py",
          "tools_task_history.py", "tools_menu.py"].forEach((f) => {
@@ -125,6 +126,27 @@ async function main() {
           });
         }
         log("  Plugins updated.");
+
+        // Update dashboard
+        const dashSrc = path.join(srcDir, "dashboard");
+        const dashDest = path.join(NEXO_HOME, "dashboard");
+        if (fs.existsSync(dashSrc)) {
+          fs.mkdirSync(dashDest, { recursive: true });
+          const copyDir = (src, dest) => {
+            fs.readdirSync(src).forEach(item => {
+              const srcPath = path.join(src, item);
+              const destPath = path.join(dest, item);
+              if (fs.statSync(srcPath).isDirectory()) {
+                fs.mkdirSync(destPath, { recursive: true });
+                copyDir(srcPath, destPath);
+              } else {
+                fs.copyFileSync(srcPath, destPath);
+              }
+            });
+          };
+          copyDir(dashSrc, dashDest);
+          log("  Dashboard updated.");
+        }
 
         // Update scripts
         const scriptsSrc = path.join(srcDir, "scripts");
@@ -590,8 +612,9 @@ Operator name: ${operatorName}
   fs.writeFileSync(CLAUDE_SETTINGS, JSON.stringify(settings, null, 2));
   log("MCP server + hooks configured in Claude Code settings.");
 
-  // Step 7: Install LaunchAgents
+  // Step 7: Install LaunchAgents (macOS only)
   log("Setting up automated processes...");
+  if (platform === "darwin") {
   fs.mkdirSync(LAUNCH_AGENTS, { recursive: true });
 
   const agents = [
@@ -723,6 +746,10 @@ Operator name: ${operatorName}
       );
     } catch {}
     log("Caffeinate enabled — Mac will stay awake for cognitive processes.");
+  }
+  } else {
+    log("Non-macOS platform: background tasks will run via catch-up on startup.");
+    log("  No OS scheduler configured — NEXO runs maintenance when MCP starts.");
   }
 
   // Step 8: Create shell alias so user can just type the operator's name
