@@ -1,12 +1,12 @@
 # NEXO Brain — Your AI Gets a Brain
 
-[![npm v0.8.0](https://img.shields.io/npm/v/nexo-brain?label=npm&color=purple)](https://www.npmjs.com/package/nexo-brain)
+[![npm v0.8.10](https://img.shields.io/npm/v/nexo-brain?label=npm&color=purple)](https://www.npmjs.com/package/nexo-brain)
 [![F1 0.588 on LoCoMo](https://img.shields.io/badge/LoCoMo_F1-0.588-brightgreen)](https://github.com/wazionapps/nexo/blob/main/benchmarks/locomo/results/)
 [![+55% vs GPT-4](https://img.shields.io/badge/vs_GPT--4-%2B55%25-blue)](https://github.com/snap-research/locomo/issues/33)
 [![GitHub stars](https://img.shields.io/github/stars/wazionapps/nexo?style=social)](https://github.com/wazionapps/nexo/stargazers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-> **v0.8.0** — Knowledge Graph (988 bi-temporal nodes, D3 visualization), Web Dashboard (6 pages at localhost:6174), Cross-Platform support (Linux + Windows), Smart dedup with event-sourced edges, and 4 new KG tools.
+> **v0.8.10** — Knowledge Graph (988 bi-temporal nodes, D3 visualization), Web Dashboard (6 pages at localhost:6174), Cross-Platform support (Linux + Windows + WSL), Session keepalive, PEP 668 compliance, full English translation, and 4 new KG tools.
 
 **NEXO Brain transforms any MCP-compatible AI agent from a stateless assistant into a cognitive partner that remembers, learns, forgets, adapts, and builds a relationship with you over time.**
 
@@ -16,7 +16,7 @@
   </a>
 </p>
 
-[Watch the 1-minute overview on YouTube](https://www.youtube.com/watch?v=J0hCWnYU4UY)
+[Watch the 1-minute overview on YouTube](https://www.youtube.com/watch?v=J0hCWnYU4UY) · [Watch the full deep-dive](https://www.youtube.com/watch?v=-uvhicUhGTY)
 
 Every time you close a session, everything is lost. Your agent doesn't remember yesterday's decisions, repeats the same mistakes, and starts from zero. NEXO Brain fixes this with a cognitive architecture modeled after how human memory actually works.
 
@@ -263,7 +263,7 @@ npx nexo-brain  # detects v0.5.0, migrates automatically
 - **Never touches your data** (memories, learnings, preferences)
 - Saves updated CLAUDE.md as reference (doesn't overwrite customizations)
 
-## Knowledge Graph & Dashboard (v0.8.0)
+## Knowledge Graph & Dashboard (v0.8)
 
 ### Knowledge Graph
 A bi-temporal entity-relationship graph with 988 nodes and 896 edges. Entities and relationships carry both valid-time (when the fact was true) and system-time (when it was recorded), enabling temporal queries like "what did we know about X last Tuesday?". BFS traversal discovers multi-hop connections between concepts. Event-sourced edges with smart dedup (ADD/UPDATE/NOOP) prevent redundant writes while preserving full history.
@@ -274,7 +274,7 @@ A bi-temporal entity-relationship graph with 988 nodes and 896 edges. Entities a
 A visual interface at `localhost:6174` with 6 pages: Overview (system health at a glance), Graph (interactive D3.js visualization of the knowledge graph), Memory (browse and search all memory stores), Somatic (pain map per file/area), Adaptive (personality signals and weights), and Sessions (active and historical sessions). Built with FastAPI backend and D3.js frontend.
 
 ### Cross-Platform Support
-v0.8.0 adds full Linux support and Windows via WSL. The installer detects the platform and configures the appropriate process manager (LaunchAgents on macOS, catch-up on startup for Linux). Opportunistic maintenance runs cognitive processes when resources are available.
+Full Linux support and Windows via WSL. The installer detects the platform and configures the appropriate process manager (LaunchAgents on macOS, catch-up on startup for Linux). PEP 668 compliance (venv on Ubuntu 24.04+). Session keepalive prevents phantom sessions during long tasks. Opportunistic maintenance runs cognitive processes when resources are available.
 
 > **Windows users:** NEXO Brain requires [WSL (Windows Subsystem for Linux)](https://learn.microsoft.com/en-us/windows/wsl/install). Install WSL first, then run `npx nexo-brain` inside the Ubuntu/WSL terminal.
 
