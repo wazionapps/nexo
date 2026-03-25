@@ -127,6 +127,15 @@
             background: var(--gradient); color: #fff !important;
             padding: 8px 20px; border-radius: 8px; font-weight: 600; font-size: 14px;
         }
+
+        /* Hamburger menu */
+        .nav-toggle {
+            display: none;
+            background: none; border: none; cursor: pointer; padding: 8px;
+            color: var(--text-muted);
+        }
+        .nav-toggle svg { width: 24px; height: 24px; }
+        .nav-toggle:hover { color: var(--text); }
         .nav-cta:hover { opacity: 0.9; color: #fff !important; }
 
         /* ===== Hero ===== */
@@ -678,7 +687,19 @@
 
         /* ===== Responsive ===== */
         @media (max-width: 768px) {
-            .nav-links { display: none; }
+            .nav-toggle { display: block; }
+            .nav-links {
+                display: none;
+                position: absolute; top: 100%; left: 0; right: 0;
+                background: var(--bg-card); border-bottom: 1px solid var(--border);
+                flex-direction: column; gap: 0; padding: 8px 0;
+                box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+                z-index: 100;
+            }
+            .nav-links.open { display: flex; }
+            .nav-links a { padding: 12px 24px; border-bottom: 1px solid var(--border); }
+            .nav-links a:hover { background: rgba(124,58,237,0.1); }
+            nav .container { position: relative; }
             .stats { grid-template-columns: repeat(2, 1fr); gap: 24px; }
             .features-grid { grid-template-columns: 1fr; }
             .tools-grid { grid-template-columns: repeat(2, 1fr); }
@@ -853,6 +874,9 @@
             <img src="/assets/logo-64.png" alt="NEXO Brain" width="32" height="32">
             NEXO Brain
         </a>
+        <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
         <div class="nav-links">
             <a href="#features">Features</a>
             <a href="#v080">v0.8.0</a>
