@@ -56,7 +56,7 @@ def handle_backup_restore(filename: str) -> str:
     """
     src = os.path.join(BACKUP_DIR, filename)
     if not os.path.isfile(src):
-        return f"Backup no encontrado: {filename}"
+        return f"Backup not found: {filename}"
 
     # Create safety backup first
     safety = os.path.join(BACKUP_DIR, f"nexo-pre-restore-{time.strftime('%Y%m%d%H%M%S')}.db")

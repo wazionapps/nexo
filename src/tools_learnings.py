@@ -24,7 +24,7 @@ def handle_learning_add(category: str, title: str, content: str, reasoning: str 
     """
     if category not in VALID_CATEGORIES:
         valid = ", ".join(sorted(VALID_CATEGORIES))
-        return f"ERROR: Categoría '{category}' inválida. Válidas: {valid}"
+        return f"ERROR: Category '{category}' invalid. Valid: {valid}"
     result = create_learning(
         category, title, content, reasoning=reasoning
     )
@@ -142,7 +142,7 @@ def handle_learning_update(id: int, title: str = '', content: str = '', category
     if category:
         if category not in VALID_CATEGORIES:
             valid = ", ".join(sorted(VALID_CATEGORIES))
-            return f"ERROR: Categoría '{category}' inválida. Válidas: {valid}"
+            return f"ERROR: Category '{category}' invalid. Valid: {valid}"
         kwargs["category"] = category
     if reasoning:
         kwargs["reasoning"] = reasoning
@@ -183,7 +183,7 @@ def handle_learning_delete(id: int) -> str:
     """Delete a learning entry by ID."""
     deleted = delete_learning(id)
     if not deleted:
-        return f"ERROR: Learning #{id} no encontrado."
+        return f"ERROR: Learning #{id} not found."
     return f"Learning #{id} eliminado."
 
 

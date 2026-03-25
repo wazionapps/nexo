@@ -101,7 +101,7 @@ def handle_decision_search(query: str = '', domain: str = '', days: int = 30) ->
     results = search_decisions(query, domain, days)
     if not results:
         scope = f"'{query}'" if query else domain or 'todas'
-        return f"Sin decisiones encontradas para {scope} en {days} días."
+        return f"Sin decisiones encontradas para {scope} in {days} days."
 
     lines = [f"DECISIONES ({len(results)}):"]
     for d in results:
@@ -312,7 +312,7 @@ def handle_change_search(query: str = '', files: str = '', days: int = 30) -> st
     results = search_changes(query, files, days)
     if not results:
         scope = f"'{query}'" if query else files or 'todos'
-        return f"Sin cambios encontrados para {scope} en {days} días."
+        return f"No changes found for {scope} in {days} days."
 
     lines = [f"CAMBIOS ({len(results)}):"]
     for c in results:
