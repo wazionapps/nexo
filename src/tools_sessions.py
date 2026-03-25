@@ -2,12 +2,48 @@
 
 import time
 import secrets
+import threading
 from db import (
     register_session, update_session, complete_session,
     get_active_sessions, clean_stale_sessions, search_sessions,
     get_inbox, get_pending_questions, now_epoch,
     SESSION_STALE_SECONDS, check_session_has_diary,
 )
+
+# ── Session Keepalive ────────────────────────────────────────────────
+# Background thread per session that auto-pings last_update_epoch every
+# KEEPALIVE_INTERVAL seconds.  This prevents clean_stale_sessions from
+# killing sessions that are alive but quiet (e.g. waiting on long Tasks).
+# Threads are daemon=True so they die when the MCP server process exits.
+
+KEEPALIVE_INTERVAL = 600  # 10 min — well inside the 15-min TTL
+
+_keepalive_threads: dict[str, threading.Event] = {}  # sid → stop_event
+
+
+def _keepalive_loop(sid: str, stop_event: threading.Event) -> None:
+    """Periodically touch the session's last_update_epoch until stopped."""
+    while not stop_event.wait(KEEPALIVE_INTERVAL):
+        try:
+            update_session(sid, None)  # None = keep current task, just touch timestamp
+        except Exception:
+            break  # DB gone or session deleted — exit silently
+
+
+def _start_keepalive(sid: str) -> None:
+    """Start a keepalive thread for the given session."""
+    _stop_keepalive(sid)  # clean up any leftover
+    stop_event = threading.Event()
+    _keepalive_threads[sid] = stop_event
+    t = threading.Thread(target=_keepalive_loop, args=(sid, stop_event), daemon=True)
+    t.start()
+
+
+def _stop_keepalive(sid: str) -> None:
+    """Signal the keepalive thread for the given session to stop."""
+    stop_event = _keepalive_threads.pop(sid, None)
+    if stop_event is not None:
+        stop_event.set()
 
 
 def _generate_sid() -> str:
@@ -31,6 +67,7 @@ def handle_startup(task: str = "Startup") -> str:
     sid = _generate_sid()
     cleaned = clean_stale_sessions()
     register_session(sid, task)
+    _start_keepalive(sid)
     active = get_active_sessions()
     other_sessions = [s for s in active if s["sid"] != sid]
     inbox = get_inbox(sid)
@@ -47,7 +84,7 @@ def handle_startup(task: str = "Startup") -> str:
             age = _format_age(s["last_update_epoch"])
             lines.append(f"  {s['sid']} ({age}) — {s['task']}")
     else:
-        lines.append("No other active sessions.")
+        lines.append("Sin otras sesiones activas.")
 
     if inbox:
         lines.append("")
@@ -257,6 +294,7 @@ def handle_heartbeat(sid: str, task: str, context_hint: str = '') -> str:
 
 def handle_stop(sid: str) -> str:
     """Cleanly close a session, removing it from active sessions immediately."""
+    _stop_keepalive(sid)
     complete_session(sid)
     return f"Sesión {sid} cerrada."
 
@@ -272,7 +310,7 @@ def handle_status(keyword: str | None = None) -> str:
         sessions = get_active_sessions()
 
     if not sessions:
-        return "No active sessions."
+        return "Sin sesiones activas."
 
     lines = ["SESIONES ACTIVAS:"]
     for s in sessions:
