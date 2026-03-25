@@ -813,7 +813,7 @@
         </a>
         <div class="nav-links">
             <a href="#features">Features</a>
-            <a href="#orchestration">Orchestration v0.6.0</a>
+            <a href="#orchestration">Orchestration v0.7.0</a>
             <a href="#cognitive">Cognitive</a>
             <a href="#architecture">Architecture</a>
             <a href="#tools">Tools</a>
@@ -830,7 +830,7 @@
     <div class="container">
         <div class="hero-badge fade-up">
             <span class="dot"></span>
-            <span id="version-badge">v0.6.0</span> &mdash; Full orchestration system
+            <span id="version-badge">v0.7.0</span> &mdash; Learned weights, somatic markers &amp; adaptive personality v2
         </div>
         <div class="fade-up" style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;">
             <img src="https://img.shields.io/npm/v/nexo-brain?color=7C3AED&label=npm" alt="npm version">
@@ -844,7 +844,7 @@
         </h1>
 
         <p class="hero-subtitle fade-up">
-            Give your AI agent a brain that remembers, learns, and protects itself from repeating mistakes. F1 0.588 on LoCoMo &mdash; +55% vs GPT-4. Built on the Atkinson-Shiffrin memory model with 97+ MCP tools.
+            Give your AI agent a brain that remembers, learns, and protects itself from repeating mistakes. F1 0.588 on LoCoMo &mdash; +55% vs GPT-4. Built on the Atkinson-Shiffrin memory model with 105+ MCP tools.
         </p>
 
         <div class="hero-actions fade-up">
@@ -873,11 +873,11 @@
 <div class="container">
     <div class="stats">
         <div class="stat">
-            <div class="stat-value">97+</div>
+            <div class="stat-value">105+</div>
             <div class="stat-label">MCP Tools</div>
         </div>
         <div class="stat">
-            <div class="stat-value">17</div>
+            <div class="stat-value">18</div>
             <div class="stat-label">Categories</div>
         </div>
         <div class="stat">
@@ -1042,17 +1042,32 @@
                 <h3>Auto-Migration</h3>
                 <p>Transparent 384→768 embedding upgrade on first startup. All existing memories are re-embedded automatically with zero user action required — no data loss, no manual steps.</p>
             </div>
+            <div class="feature-card">
+                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96-.46 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96-.46 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2z"/></svg></div>
+                <h3>Adaptive Learned Weights</h3>
+                <p>Signal weights learn from real feedback via Ridge regression. 2-week shadow mode validates new weights before promoting. Weight momentum and automatic rollback keep the system stable.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg></div>
+                <h3>Somatic Markers</h3>
+                <p>Pain memory per file and area. Guard warns on HIGH RISK (&gt;0.5) and CRITICAL (&gt;0.8). Validated recovery on clean checks — the system forgets pain when the problem is fixed.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg></div>
+                <h3>6-Signal Personality</h3>
+                <p>Vibe, corrections, brevity, topic, tool errors, and git diff. Emergency bypass for urgent sessions. Severity-weighted decay keeps personality calibrated over time without manual resets.</p>
+            </div>
         </div>
     </div>
 </section>
 
-<!-- Orchestration System v0.6.0 -->
+<!-- Orchestration System v0.7.0 -->
 <section id="orchestration" style="padding:80px 0;background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
     <div class="container">
-        <div class="section-label">New in v0.6.0</div>
-        <h2 class="section-title">Full Orchestration System</h2>
+        <div class="section-label">New in v0.7.0</div>
+        <h2 class="section-title">Learned Weights &amp; Adaptive Intelligence</h2>
         <p class="section-subtitle">
-            Memory alone doesn't make a co-operator. v0.6.0 ships the complete behavioral loop: 5 automated hooks, mandatory post-mortem with self-critique, pre-compaction context preservation, reflection engine, and auto-migration. Every session starts informed, runs with guardrails, and ends with self-reflection.
+            v0.7.0 closes the loop between memory and behavior. Signal weights now learn from real feedback via Ridge regression. Guard warns on somatic pain memory. Personality adapts across 6 signals with severity-weighted decay. Every component gets smarter the longer it runs.
         </p>
 
         <div class="cognitive-group">
@@ -1257,7 +1272,7 @@
 <section id="tools">
     <div class="container">
         <div class="section-label">Tools</div>
-        <h2 class="section-title">97+ MCP tools, 17 categories</h2>
+        <h2 class="section-title">105+ MCP tools, 18 categories</h2>
         <p class="section-subtitle">
             Every aspect of cognitive operation exposed as MCP tools. Compatible with Claude Code and any MCP client.
         </p>
