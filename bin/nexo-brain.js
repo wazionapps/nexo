@@ -61,10 +61,16 @@ async function main() {
     "  ╔══════════════════════════════════════════════════════════╗"
   );
   console.log(
-    "  ║  NEXO — Cognitive Co-Operator for Claude Code          ║"
+    "  ║  🧠 NEXO Brain — Setup                                 ║"
   );
   console.log(
-    "  ║  Atkinson-Shiffrin Memory | RAG | Trust Score           ║"
+    "  ║                                                        ║"
+  );
+  console.log(
+    "  ║  Hello! / ¡Hola! / Bonjour! / Hallo!                  ║"
+  );
+  console.log(
+    "  ║  Ciao! / Olá! / こんにちは! / 你好!                     ║"
   );
   console.log(
     "  ╚══════════════════════════════════════════════════════════╝"
@@ -287,62 +293,237 @@ async function main() {
   }
   console.log("");
 
-  // Step 1: Name
-  const name = useDefaults ? "" : await ask("  How should I call myself? (default: NEXO) > ");
+  // Step 1: Language (P1)
+  // Language-specific strings for the entire onboarding
+  const i18n = {
+    en: {
+      langConfirm: "English it is.",
+      askUserName: "  What's your name? > ",
+      userGreet: (n) => `Nice to meet you, ${n}.`,
+      askAgentName: "  What should I call myself? (default: NEXO) > ",
+      agentConfirm: (n) => `Got it. I'm ${n}.`,
+      calibTitle: "Let's calibrate my personality to work best with you.",
+      calibNote: "(You can change these anytime via nexo_preference_set)",
+      autonomyQ: "  How autonomous should I be?\n    1. Conservative — ask before most actions\n    2. Balanced — act on routine, ask on important\n    3. Full — act first, inform after, only ask when truly uncertain\n  > ",
+      commQ: "  How should I communicate?\n    1. Concise — just results, zero filler\n    2. Balanced — brief explanations when useful\n    3. Detailed — reasoning and trade-offs included\n  > ",
+      honestyQ: "  When I disagree with your approach:\n    1. Tell you straight and explain why\n    2. Mention it briefly but follow your lead\n    3. Just do what you ask\n  > ",
+      proactiveQ: "  How proactive should I be?\n    1. Only do what you ask\n    2. Suggest improvements when I spot them\n    3. Fix things I notice without asking and propose optimizations\n  > ",
+      errorQ: "  When I make a mistake:\n    1. Quick fix and move on\n    2. Explain what went wrong and what I learned\n  > ",
+      scanQ: "  Want me to analyze your environment to get to know you deeply?\n  Everything stays local, nothing leaves your machine.\n\n    1. Yes, analyze everything\n    2. No, I'll tell you over time\n  > ",
+      scanStart: "Getting to know you... this takes 1-2 minutes.",
+      scanDone: "Done.",
+      caffeinateQ: "  Keep Mac awake for my cognitive processes at night?\n  (I consolidate memory, clean duplicates, and discover connections while you sleep)\n    1. Yes\n    2. No\n  > ",
+      caffYes: "Nocturnal processes scheduled.",
+      caffNo: "Ok, I'll run them when I can.",
+      autoInstallQ: "  Can I install tools automatically if I need them? (brew, pip, npm)\n    1. Yes, install whatever you need\n    2. Ask me before installing anything\n  > ",
+      autoInstallYes: "Auto-install enabled.",
+      autoInstallNo: "I'll ask before installing.",
+      installing: "Configuring...",
+      ready: (name, alias) => `${name} is ready. Open a new terminal and type: ${alias}`,
+      readySubtext: "First time we talk, I'll finish getting to know you\nwith a couple of questions I can't figure out on my own.",
+      profileTitle: "PROFILE",
+    },
+    es: {
+      langConfirm: "Español, perfecto.",
+      askUserName: "  ¿Cómo te llamas? > ",
+      userGreet: (n) => `Encantado, ${n}.`,
+      askAgentName: "  ¿Cómo quieres que me llame? (default: NEXO) > ",
+      agentConfirm: (n) => `Perfecto, soy ${n}.`,
+      calibTitle: "Vamos a calibrar mi personalidad para trabajar mejor contigo.",
+      calibNote: "(Puedes cambiar esto en cualquier momento con nexo_preference_set)",
+      autonomyQ: "  ¿Cuánta autonomía me das?\n    1. Conservador — pregunto antes de casi todo\n    2. Equilibrado — actúo en lo rutinario, pregunto en lo importante\n    3. Total — actúo primero, informo después, solo pregunto si hay duda real\n  > ",
+      commQ: "\n  ¿Cómo prefieres que me comunique?\n    1. Conciso — solo resultados, cero relleno\n    2. Equilibrado — explicaciones breves cuando aporten\n    3. Detallado — razonamiento y trade-offs incluidos\n  > ",
+      honestyQ: "\n  Cuando no esté de acuerdo con tu enfoque:\n    1. Te lo digo claro y explico por qué\n    2. Lo menciono brevemente pero sigo tu criterio\n    3. Ejecuto lo que pides sin más\n  > ",
+      proactiveQ: "\n  ¿Qué tan proactivo quieres que sea?\n    1. Solo hago lo que me pidas\n    2. Sugiero mejoras cuando las detecto\n    3. Arreglo lo que veo sin preguntar y propongo optimizaciones\n  > ",
+      errorQ: "\n  Cuando me equivoque:\n    1. Corrijo rápido y sigo\n    2. Explico qué falló y qué aprendí\n  > ",
+      scanQ: "  ¿Quieres que analice tu entorno para conocerte a fondo?\n  Todo queda en local, nada sale de tu máquina.\n\n    1. Sí, analiza todo\n    2. No, ya te iré contando\n  > ",
+      scanStart: "Conociéndote... esto toma 1-2 minutos.",
+      scanDone: "Listo.",
+      caffeinateQ: "  ¿Mantengo el Mac despierto para mis procesos cognitivos nocturnos?\n  (Consolido memoria, limpio duplicados y descubro conexiones mientras duermes)\n    1. Sí\n    2. No\n  > ",
+      caffYes: "Procesos nocturnos programados.",
+      caffNo: "Ok, los ejecutaré cuando pueda.",
+      autoInstallQ: "  ¿Puedo instalar herramientas automáticamente si las necesito? (brew, pip, npm)\n    1. Sí, instala lo que necesites\n    2. Pregúntame antes de instalar algo\n  > ",
+      autoInstallYes: "Auto-instalación activada.",
+      autoInstallNo: "Te preguntaré antes.",
+      installing: "Configurando...",
+      ready: (name, alias) => `${name} está listo. Abre una terminal nueva y escribe: ${alias}`,
+      readySubtext: "La primera vez que hablemos, terminaré de conocerte\ncon un par de preguntas que no puedo resolver solo.",
+      profileTitle: "PERFIL",
+    },
+    fr: {
+      langConfirm: "Français, parfait.",
+      askUserName: "  Comment tu t'appelles ? > ",
+      userGreet: (n) => `Enchanté, ${n}.`,
+      askAgentName: "  Comment veux-tu m'appeler ? (défaut: NEXO) > ",
+      agentConfirm: (n) => `C'est noté. Je suis ${n}.`,
+      calibTitle: "Calibrons ma personnalité pour mieux travailler ensemble.",
+      calibNote: "(Tu peux changer ça à tout moment avec nexo_preference_set)",
+      autonomyQ: "  Quel niveau d'autonomie me donnes-tu ?\n    1. Conservateur — je demande avant presque tout\n    2. Équilibré — j'agis en routine, je demande pour l'important\n    3. Total — j'agis d'abord, j'informe après\n  > ",
+      commQ: "\n  Comment préfères-tu que je communique ?\n    1. Concis — résultats seulement\n    2. Équilibré — brèves explications quand c'est utile\n    3. Détaillé — raisonnement et compromis inclus\n  > ",
+      honestyQ: "\n  Quand je ne suis pas d'accord :\n    1. Je te le dis clairement\n    2. Je le mentionne brièvement\n    3. J'exécute sans commenter\n  > ",
+      proactiveQ: "\n  Quel niveau de proactivité ?\n    1. Seulement ce qui est demandé\n    2. Je suggère des améliorations\n    3. Je corrige ce que je vois et propose des optimisations\n  > ",
+      errorQ: "\n  Quand je me trompe :\n    1. Correction rapide\n    2. J'explique ce qui s'est passé\n  > ",
+      scanQ: "  Veux-tu que j'analyse ton environnement pour te connaître en profondeur ?\n  Tout reste local.\n\n    1. Oui, analyse tout\n    2. Non, je te raconterai\n  > ",
+      scanStart: "Je fais connaissance... ça prend 1-2 minutes.",
+      scanDone: "Terminé.",
+      caffeinateQ: "  Garder le Mac éveillé pour mes processus nocturnes ?\n    1. Oui\n    2. Non\n  > ",
+      caffYes: "Processus nocturnes programmés.",
+      caffNo: "Ok, je les exécuterai quand possible.",
+      autoInstallQ: "  Puis-je installer des outils automatiquement ? (brew, pip, npm)\n    1. Oui\n    2. Demande-moi avant\n  > ",
+      autoInstallYes: "Auto-installation activée.",
+      autoInstallNo: "Je demanderai avant.",
+      installing: "Configuration...",
+      ready: (name, alias) => `${name} est prêt. Ouvre un nouveau terminal et tape : ${alias}`,
+      readySubtext: "La première fois qu'on se parle, je finirai de te connaître\navec quelques questions que je ne peux pas résoudre seul.",
+      profileTitle: "PROFIL",
+    },
+    de: {
+      langConfirm: "Deutsch, perfekt.",
+      askUserName: "  Wie heißt du? > ",
+      userGreet: (n) => `Freut mich, ${n}.`,
+      askAgentName: "  Wie soll ich heißen? (Standard: NEXO) > ",
+      agentConfirm: (n) => `Alles klar. Ich bin ${n}.`,
+      calibTitle: "Kalibrieren wir meine Persönlichkeit für die Zusammenarbeit.",
+      calibNote: "(Jederzeit änderbar mit nexo_preference_set)",
+      autonomyQ: "  Wie viel Autonomie gibst du mir?\n    1. Konservativ — frage vor fast allem\n    2. Ausgewogen — handle bei Routine, frage bei Wichtigem\n    3. Voll — handle zuerst, informiere danach\n  > ",
+      commQ: "\n  Wie soll ich kommunizieren?\n    1. Knapp — nur Ergebnisse\n    2. Ausgewogen — kurze Erklärungen wenn nützlich\n    3. Detailliert — Begründungen und Abwägungen\n  > ",
+      honestyQ: "\n  Wenn ich nicht einverstanden bin:\n    1. Sage es klar\n    2. Erwähne es kurz\n    3. Führe einfach aus\n  > ",
+      proactiveQ: "\n  Wie proaktiv soll ich sein?\n    1. Nur was gefragt wird\n    2. Verbesserungen vorschlagen\n    3. Selbst korrigieren und optimieren\n  > ",
+      errorQ: "\n  Wenn ich einen Fehler mache:\n    1. Schnell korrigieren\n    2. Erklären was schiefging\n  > ",
+      scanQ: "  Soll ich deine Umgebung analysieren um dich kennenzulernen?\n  Alles bleibt lokal.\n\n    1. Ja, analysiere alles\n    2. Nein, ich erzähle dir mit der Zeit\n  > ",
+      scanStart: "Lerne dich kennen... dauert 1-2 Minuten.",
+      scanDone: "Fertig.",
+      caffeinateQ: "  Mac wach halten für nächtliche Prozesse?\n    1. Ja\n    2. Nein\n  > ",
+      caffYes: "Nachtprozesse geplant.",
+      caffNo: "Ok, führe sie aus wenn möglich.",
+      autoInstallQ: "  Darf ich Tools automatisch installieren? (brew, pip, npm)\n    1. Ja\n    2. Frag mich vorher\n  > ",
+      autoInstallYes: "Auto-Installation aktiviert.",
+      autoInstallNo: "Frage vorher.",
+      installing: "Konfiguriere...",
+      ready: (name, alias) => `${name} ist bereit. Öffne ein neues Terminal und tippe: ${alias}`,
+      readySubtext: "Beim ersten Gespräch stelle ich noch ein paar Fragen\ndie ich nicht alleine beantworten kann.",
+      profileTitle: "PROFIL",
+    },
+    it: {
+      langConfirm: "Italiano, perfetto.",
+      askUserName: "  Come ti chiami? > ",
+      userGreet: (n) => `Piacere, ${n}.`,
+      askAgentName: "  Come vuoi chiamarmi? (default: NEXO) > ",
+      agentConfirm: (n) => `Perfetto, sono ${n}.`,
+      calibTitle: "Calibriamo la mia personalità per lavorare meglio insieme.",
+      calibNote: "(Puoi cambiare in qualsiasi momento con nexo_preference_set)",
+      autonomyQ: "  Quanta autonomia mi dai?\n    1. Conservatore — chiedo prima di quasi tutto\n    2. Equilibrato — agisco nella routine, chiedo per le cose importanti\n    3. Totale — agisco prima, informo dopo\n  > ",
+      commQ: "\n  Come preferisci che comunichi?\n    1. Conciso — solo risultati\n    2. Equilibrato — brevi spiegazioni quando utili\n    3. Dettagliato — ragionamento e compromessi\n  > ",
+      honestyQ: "\n  Quando non sono d'accordo:\n    1. Te lo dico chiaramente\n    2. Lo accenno brevemente\n    3. Eseguo senza commentare\n  > ",
+      proactiveQ: "\n  Quanto proattivo vuoi che sia?\n    1. Solo quello che chiedi\n    2. Suggerisco miglioramenti\n    3. Correggo quello che vedo e propongo ottimizzazioni\n  > ",
+      errorQ: "\n  Quando sbaglio:\n    1. Correggo veloce e vado avanti\n    2. Spiego cosa è andato storto\n  > ",
+      scanQ: "  Vuoi che analizzi il tuo ambiente per conoscerti a fondo?\n  Tutto resta locale.\n\n    1. Sì, analizza tutto\n    2. No, ti racconterò col tempo\n  > ",
+      scanStart: "Ti conosco... ci vogliono 1-2 minuti.",
+      scanDone: "Fatto.",
+      caffeinateQ: "  Tenere il Mac sveglio per i processi notturni?\n    1. Sì\n    2. No\n  > ",
+      caffYes: "Processi notturni programmati.",
+      caffNo: "Ok, li eseguirò quando possibile.",
+      autoInstallQ: "  Posso installare strumenti automaticamente? (brew, pip, npm)\n    1. Sì\n    2. Chiedimi prima\n  > ",
+      autoInstallYes: "Auto-installazione attivata.",
+      autoInstallNo: "Chiederò prima.",
+      installing: "Configurazione...",
+      ready: (name, alias) => `${name} è pronto. Apri un nuovo terminale e scrivi: ${alias}`,
+      readySubtext: "La prima volta che parliamo, finirò di conoscerti\ncon un paio di domande che non posso risolvere da solo.",
+      profileTitle: "PROFILO",
+    },
+    pt: {
+      langConfirm: "Português, perfeito.",
+      askUserName: "  Como te chamas? > ",
+      userGreet: (n) => `Prazer, ${n}.`,
+      askAgentName: "  Como queres que eu me chame? (padrão: NEXO) > ",
+      agentConfirm: (n) => `Perfeito, sou ${n}.`,
+      calibTitle: "Vamos calibrar a minha personalidade para trabalhar melhor contigo.",
+      calibNote: "(Podes mudar a qualquer momento com nexo_preference_set)",
+      autonomyQ: "  Quanta autonomia me dás?\n    1. Conservador — pergunto antes de quase tudo\n    2. Equilibrado — ajo na rotina, pergunto no importante\n    3. Total — ajo primeiro, informo depois\n  > ",
+      commQ: "\n  Como preferes que eu comunique?\n    1. Conciso — só resultados\n    2. Equilibrado — explicações breves quando úteis\n    3. Detalhado — raciocínio e trade-offs\n  > ",
+      honestyQ: "\n  Quando não concordo:\n    1. Digo claramente\n    2. Menciono brevemente\n    3. Executo sem comentar\n  > ",
+      proactiveQ: "\n  Quão proativo queres que eu seja?\n    1. Só o que pedes\n    2. Sugiro melhorias\n    3. Corrijo o que vejo e proponho otimizações\n  > ",
+      errorQ: "\n  Quando erro:\n    1. Corrijo rápido\n    2. Explico o que correu mal\n  > ",
+      scanQ: "  Queres que analise o teu ambiente para te conhecer a fundo?\n  Tudo fica local.\n\n    1. Sim, analisa tudo\n    2. Não, vou-te contando\n  > ",
+      scanStart: "A conhecer-te... demora 1-2 minutos.",
+      scanDone: "Pronto.",
+      caffeinateQ: "  Manter o Mac acordado para processos noturnos?\n    1. Sim\n    2. Não\n  > ",
+      caffYes: "Processos noturnos agendados.",
+      caffNo: "Ok, executo quando possível.",
+      autoInstallQ: "  Posso instalar ferramentas automaticamente? (brew, pip, npm)\n    1. Sim\n    2. Pergunta antes\n  > ",
+      autoInstallYes: "Auto-instalação ativada.",
+      autoInstallNo: "Perguntarei antes.",
+      installing: "A configurar...",
+      ready: (name, alias) => `${name} está pronto. Abre um novo terminal e escreve: ${alias}`,
+      readySubtext: "Na primeira vez que falarmos, termino de te conhecer\ncom umas perguntas que não consigo resolver sozinho.",
+      profileTitle: "PERFIL",
+    },
+  };
+
+  // Detect language from input or use default
+  let lang = "en";
+  let t = i18n.en;
+  if (!useDefaults) {
+    const langInput = await ask("  What's your preferred language? / ¿En qué idioma prefieres hablar?\n  > ");
+    const langLower = langInput.trim().toLowerCase();
+    // Detect language from common responses
+    if (/^(es|español|spanish|castellano)/.test(langLower)) lang = "es";
+    else if (/^(fr|français|french|francais)/.test(langLower)) lang = "fr";
+    else if (/^(de|deutsch|german|aleman)/.test(langLower)) lang = "de";
+    else if (/^(it|italiano|italian)/.test(langLower)) lang = "it";
+    else if (/^(pt|português|portuguese|portugues)/.test(langLower)) lang = "pt";
+    else if (/^(en|english|inglés|ingles)/.test(langLower)) lang = "en";
+    else {
+      // Try to infer from the response language itself
+      if (/[ñáéíóú]/.test(langLower) || /hola|sí|vale/.test(langLower)) lang = "es";
+      else if (/[àâêîôû]|bonjour|oui/.test(langLower)) lang = "fr";
+      else if (/[äöüß]|ja|hallo/.test(langLower)) lang = "de";
+      else if (/ciao|sì|buon/.test(langLower)) lang = "it";
+      else if (/[ãõ]|olá|sim/.test(langLower)) lang = "pt";
+    }
+    t = i18n[lang] || i18n.en;
+    log(t.langConfirm);
+    console.log("");
+  }
+
+  // Step 2: User's name (P2)
+  let userName = "";
+  if (!useDefaults) {
+    const nameInput = await ask(t.askUserName);
+    userName = nameInput.trim();
+    if (userName) {
+      log(t.userGreet(userName));
+      console.log("");
+    }
+  }
+
+  // Step 3: Agent name (P3)
+  const name = useDefaults ? "" : await ask(t.askAgentName);
   const operatorName = name.trim() || "NEXO";
-  log(`Got it. I'm ${operatorName}.`);
+  log(t.agentConfirm(operatorName));
   console.log("");
 
-  // Step 2: Personality Calibration
+  // Step 4: Personality Calibration (P4-P8)
   let autonomyLevel = "full", communicationStyle = "concise", honestyLevel = "firm-pushback", proactivityLevel = "proactive", errorHandling = "brief-fix";
 
   if (!useDefaults) {
-  log("Let's calibrate my personality to work best with you.");
-  log("(These can be changed anytime via nexo_preference_set)");
+  log(t.calibTitle);
+  log(t.calibNote);
   console.log("");
 
-  const autonomyAnswer = await ask(
-    "  How autonomous should I be?\n" +
-    "    1. Ask before most actions (conservative)\n" +
-    "    2. Act on routine tasks, ask on important ones (balanced)\n" +
-    "    3. Act first, inform after — only ask when truly uncertain (full autonomy)\n" +
-    "  > "
-  );
+  const autonomyAnswer = await ask(t.autonomyQ);
   autonomyLevel = ["conservative", "balanced", "full"][parseInt(autonomyAnswer.trim()) - 1] || "balanced";
 
-  const communicationAnswer = await ask(
-    "\n  How should I communicate?\n" +
-    "    1. Concise — just results, no filler (expert user)\n" +
-    "    2. Balanced — brief explanations when useful\n" +
-    "    3. Detailed — explain reasoning and trade-offs\n" +
-    "  > "
-  );
+  const communicationAnswer = await ask(t.commQ);
   communicationStyle = ["concise", "balanced", "detailed"][parseInt(communicationAnswer.trim()) - 1] || "balanced";
 
-  const honestyAnswer = await ask(
-    "\n  When I disagree with your approach, should I:\n" +
-    "    1. Push back firmly and explain why\n" +
-    "    2. Mention it briefly but follow your lead\n" +
-    "    3. Just do what you ask\n" +
-    "  > "
-  );
+  const honestyAnswer = await ask(t.honestyQ);
   honestyLevel = ["firm-pushback", "mention-and-follow", "just-execute"][parseInt(honestyAnswer.trim()) - 1] || "firm-pushback";
 
-  const proactivityAnswer = await ask(
-    "\n  How proactive should I be?\n" +
-    "    1. Only do what's asked\n" +
-    "    2. Suggest improvements when I spot them\n" +
-    "    3. Fix things I notice without asking, and propose optimizations\n" +
-    "  > "
-  );
+  const proactivityAnswer = await ask(t.proactiveQ);
   proactivityLevel = ["reactive", "suggestive", "proactive"][parseInt(proactivityAnswer.trim()) - 1] || "proactive";
 
-  const errorAnswer = await ask(
-    "\n  When I make a mistake, how should I handle it?\n" +
-    "    1. Brief acknowledgment, fix it, move on\n" +
-    "    2. Explain what went wrong and what I learned\n" +
-    "  > "
-  );
+  const errorAnswer = await ask(t.errorQ);
   errorHandling = ["brief-fix", "explain-and-learn"][parseInt(errorAnswer.trim()) - 1] || "brief-fix";
   } // end if (!useDefaults)
 
@@ -352,11 +533,14 @@ async function main() {
 
   // Save calibration
   const calibration = {
+    language: lang,
+    user_name: userName,
     autonomy: autonomyLevel,
     communication: communicationStyle,
     honesty: honestyLevel,
     proactivity: proactivityLevel,
     error_handling: errorHandling,
+    auto_install: "ask", // default, updated later if user answers P11
     calibrated_at: new Date().toISOString(),
   };
   // Ensure NEXO_HOME and brain dir exist before writing calibration
@@ -367,26 +551,31 @@ async function main() {
     JSON.stringify(calibration, null, 2)
   );
 
-  // Step 3: Permission to scan
+  // Step 5: Deep scan (P9)
   let doScan = false;
   let doCaffeinate = false;
+  let autoInstall = "ask";
   if (!useDefaults) {
-    const scanAnswer = await ask(
-      "  Can I explore your workspace to learn about your projects? (y/n) > "
-    );
-    doScan = scanAnswer.trim().toLowerCase().startsWith("y");
+    const scanAnswer = await ask(t.scanQ);
+    doScan = scanAnswer.trim() === "1" || scanAnswer.trim().toLowerCase().startsWith("y") || scanAnswer.trim().toLowerCase().startsWith("s");
     console.log("");
 
-    // Keep Mac awake for nocturnal processes?
+    // Step 6: Caffeinate (P10) — macOS only
     if (platform === "darwin") {
-      const caffeinateAnswer = await ask(
-        "  Keep Mac awake so my cognitive processes run on schedule? (y/n) > "
-      );
-      doCaffeinate = caffeinateAnswer.trim().toLowerCase().startsWith("y");
+      const caffeinateAnswer = await ask(t.caffeinateQ);
+      doCaffeinate = caffeinateAnswer.trim() === "1" || caffeinateAnswer.trim().toLowerCase().startsWith("y") || caffeinateAnswer.trim().toLowerCase().startsWith("s");
+      log(doCaffeinate ? `✓ ${t.caffYes}` : t.caffNo);
       console.log("");
     }
+
+    // Step 7: Auto-install permission (P11)
+    const autoInstallAnswer = await ask(t.autoInstallQ);
+    autoInstall = (autoInstallAnswer.trim() === "1" || autoInstallAnswer.trim().toLowerCase().startsWith("y") || autoInstallAnswer.trim().toLowerCase().startsWith("s")) ? "auto" : "ask";
+    calibration.auto_install = autoInstall;
+    log(`✓ ${autoInstall === "auto" ? t.autoInstallYes : t.autoInstallNo}`);
+    console.log("");
   } else {
-    log("Skipping workspace scan (non-interactive).");
+    log("Skipping interactive setup (non-interactive mode).");
     console.log("");
   }
 
@@ -447,6 +636,8 @@ async function main() {
       version: pkg.version,
       installed_at: new Date().toISOString(),
       operator_name: operatorName,
+      user_name: userName,
+      language: lang,
       files_updated: 0,
     }, null, 2)
   );
@@ -507,9 +698,9 @@ async function main() {
   });
 
   // Scripts
-  const scriptFiles = fs
-    .readdirSync(scriptsSrcDir || ".")
-    .filter((f) => f.endsWith(".py"));
+  const scriptFiles = fs.existsSync(scriptsSrcDir)
+    ? fs.readdirSync(scriptsSrcDir).filter((f) => f.endsWith(".py"))
+    : [];
   scriptFiles.forEach((f) => {
     const src = path.join(scriptsSrcDir, f);
     if (fs.existsSync(src)) {
@@ -556,11 +747,419 @@ I am ${operatorName}, a cognitive co-operator. Not an assistant — an operation
 `;
   fs.writeFileSync(path.join(NEXO_HOME, "brain", "personality.md"), personality);
 
-  // Generate user profile
-  const profile = `# User Profile
+  // Deep scan (P9) — comprehensive environment analysis
+  const profileData = {
+    scanned_at: new Date().toISOString(),
+    user_name: userName,
+    language: lang,
+    operator_name: operatorName,
+    system: {},
+    code: {},
+    apps: [],
+    git: {},
+    ssh: [],
+    terminal: {},
+    browser: {},
+    email: [],
+    calendar: {},
+    contacts: [],
+    documents: {},
+    messaging: [],
+    interests: [],
+    summary: {},
+  };
 
+  if (doScan) {
+    log(t.scanStart);
+    console.log("");
+    const home = require("os").homedir();
+
+    // --- System info ---
+    process.stdout.write("  \u280B System...\r");
+    profileData.system.platform = platform;
+    profileData.system.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    profileData.system.locale = Intl.DateTimeFormat().resolvedOptions().locale || lang;
+    profileData.system.hostname = require("os").hostname();
+    const darkMode = platform === "darwin" ? run("defaults read -g AppleInterfaceStyle 2>/dev/null") : null;
+    profileData.system.dark_mode = darkMode === "Dark";
+    const kbLayout = platform === "darwin" ? run("defaults read com.apple.HIToolbox AppleCurrentKeyboardLayoutInputSourceID 2>/dev/null") : null;
+    if (kbLayout) profileData.system.keyboard = kbLayout.split(".").pop();
+    log(`\u2713 System: ${profileData.system.timezone}, ${profileData.system.dark_mode ? "dark mode" : "light mode"}${profileData.system.keyboard ? `, keyboard ${profileData.system.keyboard}` : ""}`);
+
+    // --- Code projects ---
+    process.stdout.write("  \u280B Code projects...\r");
+    const repos = [];
+    const langCounts = {};
+    // Search common project locations
+    const projectDirs = ["Documents", "Projects", "projects", "src", "code", "Code", "dev", "Dev", "repos", "workspace", "Workspace", "Desktop"];
+    const dirsToScan = projectDirs
+      .map(d => path.join(home, d))
+      .filter(d => fs.existsSync(d));
+    dirsToScan.push(home); // also scan home root (depth 1)
+
+    for (const dir of dirsToScan) {
+      const maxDepth = dir === home ? 1 : 4;
+      const gitFind = run(`find "${dir}" -maxdepth ${maxDepth} -name ".git" -type d 2>/dev/null`);
+      if (gitFind) {
+        for (const gitDir of gitFind.split("\n").filter(Boolean)) {
+          const repoPath = path.dirname(gitDir);
+          if (repos.some(r => r.path === repoPath)) continue;
+          const repoName = path.basename(repoPath);
+          // Detect languages by file extensions
+          const files = run(`find "${repoPath}" -maxdepth 2 -type f \\( -name "*.py" -o -name "*.js" -o -name "*.ts" -o -name "*.tsx" -o -name "*.jsx" -o -name "*.go" -o -name "*.rs" -o -name "*.java" -o -name "*.php" -o -name "*.rb" -o -name "*.swift" -o -name "*.kt" \\) 2>/dev/null | head -100`);
+          const exts = {};
+          if (files) {
+            files.split("\n").filter(Boolean).forEach(f => {
+              const ext = path.extname(f).slice(1);
+              const langMap = { py: "Python", js: "JavaScript", ts: "TypeScript", tsx: "TypeScript", jsx: "JavaScript", go: "Go", rs: "Rust", java: "Java", php: "PHP", rb: "Ruby", swift: "Swift", kt: "Kotlin" };
+              const l = langMap[ext] || ext;
+              exts[l] = (exts[l] || 0) + 1;
+              langCounts[l] = (langCounts[l] || 0) + 1;
+            });
+          }
+          const mainLang = Object.keys(exts).sort((a, b) => exts[b] - exts[a])[0] || "unknown";
+          // Check last commit date
+          const lastCommit = run(`git -C "${repoPath}" log -1 --format=%ci 2>/dev/null`);
+          const isRecent = lastCommit && (Date.now() - new Date(lastCommit).getTime()) < 30 * 24 * 60 * 60 * 1000; // 30 days
+          repos.push({ name: repoName, path: repoPath, language: mainLang, recent: isRecent, last_commit: lastCommit ? lastCommit.split(" ")[0] : null });
+        }
+      }
+    }
+    profileData.code.repos = repos;
+    profileData.code.total = repos.length;
+    profileData.code.active_last_month = repos.filter(r => r.recent).length;
+    // Calculate language percentages
+    const totalFiles = Object.values(langCounts).reduce((a, b) => a + b, 0);
+    profileData.code.languages = {};
+    if (totalFiles > 0) {
+      Object.keys(langCounts).sort((a, b) => langCounts[b] - langCounts[a]).forEach(l => {
+        profileData.code.languages[l] = Math.round(langCounts[l] / totalFiles * 100);
+      });
+    }
+    const langSummary = Object.entries(profileData.code.languages).slice(0, 3).map(([l, p]) => `${l} ${p}%`).join(", ");
+    log(`\u2713 ${repos.length} repositories (${profileData.code.active_last_month} active last month)${langSummary ? ` — ${langSummary}` : ""}`);
+
+    // --- Installed apps ---
+    process.stdout.write("  \u280B Apps...\r");
+    if (platform === "darwin") {
+      const appsRaw = run("ls /Applications 2>/dev/null");
+      if (appsRaw) {
+        profileData.apps = appsRaw.split("\n")
+          .filter(a => a.endsWith(".app"))
+          .map(a => a.replace(".app", ""));
+      }
+    } else {
+      // Linux: check common commands
+      const linuxApps = ["code", "docker", "figma", "slack", "spotify", "firefox", "chromium", "vim", "nvim", "emacs", "postman", "insomnia", "gimp", "inkscape", "obs", "telegram-desktop"];
+      profileData.apps = linuxApps.filter(a => run(`which ${a} 2>/dev/null`));
+    }
+    log(`\u2713 ${profileData.apps.length} apps detected`);
+
+    // --- Git config ---
+    process.stdout.write("  \u280B Git identity...\r");
+    profileData.git.name = run("git config --global user.name 2>/dev/null") || "";
+    profileData.git.email = run("git config --global user.email 2>/dev/null") || "";
+    const gitAliases = run("git config --global --get-regexp alias 2>/dev/null");
+    profileData.git.aliases = gitAliases ? gitAliases.split("\n").filter(Boolean).length : 0;
+    // Total commits last year across all repos
+    let totalCommits = 0;
+    for (const repo of repos.slice(0, 20)) { // limit to 20 to keep it fast
+      const count = run(`git -C "${repo.path}" rev-list --count --since="1 year ago" HEAD 2>/dev/null`);
+      if (count) totalCommits += parseInt(count) || 0;
+    }
+    profileData.git.commits_last_year = totalCommits;
+    if (profileData.git.name) {
+      log(`\u2713 Git: ${profileData.git.name} <${profileData.git.email}> — ${totalCommits} commits/year${profileData.git.aliases ? `, ${profileData.git.aliases} aliases` : ""}`);
+    }
+
+    // --- SSH connections ---
+    process.stdout.write("  \u280B SSH connections...\r");
+    const sshConfig = path.join(home, ".ssh", "config");
+    if (fs.existsSync(sshConfig)) {
+      try {
+        const sshContent = fs.readFileSync(sshConfig, "utf8");
+        const hosts = sshContent.match(/^Host\s+(\S+)/gm);
+        if (hosts) {
+          profileData.ssh = hosts
+            .map(h => h.replace(/^Host\s+/, ""))
+            .filter(h => h !== "*" && !h.includes("*"));
+        }
+      } catch {}
+    }
+    if (profileData.ssh.length > 0) {
+      log(`\u2713 ${profileData.ssh.length} SSH connections in ~/.ssh/config`);
+    }
+
+    // --- Terminal history ---
+    process.stdout.write("  \u280B Terminal patterns...\r");
+    const histFile = fs.existsSync(path.join(home, ".zsh_history"))
+      ? path.join(home, ".zsh_history")
+      : path.join(home, ".bash_history");
+    if (fs.existsSync(histFile)) {
+      try {
+        const histRaw = fs.readFileSync(histFile, "utf8");
+        const lines = histRaw.split("\n").filter(Boolean);
+        profileData.terminal.total_commands = lines.length;
+        // Extract command patterns (first word of each line)
+        const cmdCounts = {};
+        lines.forEach(line => {
+          // zsh history format: : timestamp:0;command or just command
+          const cmd = line.replace(/^:\s*\d+:\d+;/, "").trim().split(/\s+/)[0];
+          if (cmd && cmd.length > 1 && !cmd.startsWith("#")) {
+            cmdCounts[cmd] = (cmdCounts[cmd] || 0) + 1;
+          }
+        });
+        profileData.terminal.top_commands = Object.entries(cmdCounts)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 20)
+          .map(([cmd, count]) => ({ cmd, count }));
+
+        // Detect work patterns from zsh history timestamps
+        if (histFile.includes("zsh")) {
+          const hourCounts = new Array(24).fill(0);
+          const dayCounts = new Array(7).fill(0);
+          lines.forEach(line => {
+            const match = line.match(/^:\s*(\d+):/);
+            if (match) {
+              const date = new Date(parseInt(match[1]) * 1000);
+              hourCounts[date.getHours()]++;
+              dayCounts[date.getDay()]++;
+            }
+          });
+          // Find peak hours
+          const peakHours = hourCounts
+            .map((c, h) => ({ h, c }))
+            .sort((a, b) => b.c - a.c)
+            .slice(0, 6)
+            .map(x => x.h)
+            .sort((a, b) => a - b);
+          profileData.terminal.peak_hours = peakHours;
+          // Find peak days
+          const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+          const peakDays = dayCounts
+            .map((c, d) => ({ d: dayNames[d], c }))
+            .sort((a, b) => b.c - a.c)
+            .slice(0, 3)
+            .map(x => x.d);
+          profileData.terminal.peak_days = peakDays;
+        }
+      } catch {}
+    }
+    if (profileData.terminal.total_commands) {
+      const peakInfo = profileData.terminal.peak_hours
+        ? ` — peak hours: ${profileData.terminal.peak_hours.map(h => `${h}:00`).join(", ")}`
+        : "";
+      log(`\u2713 ${profileData.terminal.total_commands.toLocaleString()} commands analyzed${peakInfo}`);
+    }
+
+    // --- Browser bookmarks ---
+    process.stdout.write("  \u280B Browser data...\r");
+    // Chrome bookmarks
+    const chromeBookmarks = platform === "darwin"
+      ? path.join(home, "Library", "Application Support", "Google", "Chrome", "Default", "Bookmarks")
+      : path.join(home, ".config", "google-chrome", "Default", "Bookmarks");
+    if (fs.existsSync(chromeBookmarks)) {
+      try {
+        const bm = JSON.parse(fs.readFileSync(chromeBookmarks, "utf8"));
+        const countBookmarks = (node) => {
+          let count = 0;
+          if (node.type === "url") count++;
+          if (node.children) node.children.forEach(c => count += countBookmarks(c));
+          return count;
+        };
+        let total = 0;
+        const categories = [];
+        if (bm.roots) {
+          Object.values(bm.roots).forEach(root => {
+            total += countBookmarks(root);
+            if (root.children) {
+              root.children.forEach(c => {
+                if (c.type === "folder" && c.name) categories.push(c.name);
+              });
+            }
+          });
+        }
+        profileData.browser.bookmarks_count = total;
+        profileData.browser.bookmark_categories = categories.slice(0, 10);
+      } catch {}
+    }
+    // Chrome extensions
+    const chromeExtDir = platform === "darwin"
+      ? path.join(home, "Library", "Application Support", "Google", "Chrome", "Default", "Extensions")
+      : path.join(home, ".config", "google-chrome", "Default", "Extensions");
+    if (fs.existsSync(chromeExtDir)) {
+      try {
+        const extDirs = fs.readdirSync(chromeExtDir).filter(d => d.length === 32);
+        profileData.browser.extensions_count = extDirs.length;
+      } catch {}
+    }
+    if (profileData.browser.bookmarks_count) {
+      log(`\u2713 Browser: ${profileData.browser.bookmarks_count} bookmarks${profileData.browser.extensions_count ? `, ${profileData.browser.extensions_count} extensions` : ""}`);
+    }
+
+    // --- Email accounts ---
+    process.stdout.write("  \u280B Email accounts...\r");
+    if (platform === "darwin") {
+      // macOS Mail.app accounts
+      const mailAccounts = run("defaults read com.apple.mail MailAccounts 2>/dev/null | grep AccountName | head -20");
+      if (mailAccounts) {
+        profileData.email = mailAccounts.split("\n")
+          .map(l => l.replace(/.*=\s*"?/, "").replace(/"?\s*;?\s*$/, "").trim())
+          .filter(Boolean);
+      }
+    }
+    if (profileData.email.length > 0) {
+      log(`\u2713 ${profileData.email.length} email accounts configured`);
+    }
+
+    // --- Calendar (macOS) ---
+    process.stdout.write("  \u280B Calendar...\r");
+    if (platform === "darwin") {
+      const calDir = path.join(home, "Library", "Calendars");
+      if (fs.existsSync(calDir)) {
+        // Count calendar sources
+        const calSources = run(`find "${calDir}" -maxdepth 2 -name "Info.plist" 2>/dev/null | wc -l`);
+        profileData.calendar.sources = parseInt((calSources || "0").trim());
+        // Try to get recent events count
+        const eventsCount = run(`find "${calDir}" -name "*.ics" 2>/dev/null | wc -l`);
+        profileData.calendar.events = parseInt((eventsCount || "0").trim());
+      }
+    }
+    if (profileData.calendar.events) {
+      log(`\u2713 Calendar: ${profileData.calendar.events} events across ${profileData.calendar.sources || "?"} calendars`);
+    }
+
+    // --- Contacts (macOS) ---
+    process.stdout.write("  \u280B Contacts...\r");
+    if (platform === "darwin") {
+      const contactsDir = path.join(home, "Library", "Application Support", "AddressBook", "Sources");
+      if (fs.existsSync(contactsDir)) {
+        const vcfCount = run(`find "${contactsDir}" -name "*.abcdp" 2>/dev/null | wc -l`);
+        profileData.contacts = { count: parseInt((vcfCount || "0").trim()) };
+      }
+    }
+    if (profileData.contacts.count) {
+      log(`\u2713 ${profileData.contacts.count} contacts indexed`);
+    }
+
+    // --- Recent documents ---
+    process.stdout.write("  \u280B Documents...\r");
+    const docDirs = ["Documents", "Desktop", "Downloads"].map(d => path.join(home, d));
+    const docExts = [".pdf", ".docx", ".xlsx", ".csv", ".txt", ".md", ".pptx"];
+    let totalDocs = 0;
+    const docTypes = {};
+    for (const dir of docDirs) {
+      if (fs.existsSync(dir)) {
+        const findCmd = docExts.map(e => `-name "*${e}"`).join(" -o ");
+        const docs = run(`find "${dir}" -maxdepth 2 -type f \\( ${findCmd} \\) -mtime -90 2>/dev/null | head -200`);
+        if (docs) {
+          docs.split("\n").filter(Boolean).forEach(f => {
+            const ext = path.extname(f).slice(1);
+            docTypes[ext] = (docTypes[ext] || 0) + 1;
+            totalDocs++;
+          });
+        }
+      }
+    }
+    profileData.documents.recent_count = totalDocs;
+    profileData.documents.types = docTypes;
+    if (totalDocs > 0) {
+      const typesSummary = Object.entries(docTypes).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([t, c]) => `${c} ${t}`).join(", ");
+      log(`\u2713 ${totalDocs} recent documents (${typesSummary})`);
+    }
+
+    // --- Messaging apps ---
+    process.stdout.write("  \u280B Messaging...\r");
+    const msgApps = { "WhatsApp": "WhatsApp.app", "Telegram": "Telegram.app", "Slack": "Slack.app", "Discord": "Discord.app", "Signal": "Signal.app", "Teams": "Microsoft Teams.app", "Zoom": "zoom.us.app" };
+    if (platform === "darwin") {
+      profileData.messaging = Object.entries(msgApps)
+        .filter(([_, app]) => fs.existsSync(path.join("/Applications", app)))
+        .map(([name]) => name);
+    }
+    if (profileData.messaging.length > 0) {
+      log(`\u2713 Messaging: ${profileData.messaging.join(", ")}`);
+    }
+
+    // --- Build summary ---
+    process.stdout.write("  \u280B Building profile...\r");
+    const topLangs = Object.keys(profileData.code.languages || {}).slice(0, 3);
+    const topApps = profileData.apps
+      .filter(a => !["Utilities", "System Preferences", "App Store", "Calculator", "Preview", "TextEdit", "Font Book", "Chess", "Stickies"].includes(a))
+      .slice(0, 10);
+
+    profileData.summary = {
+      primary_stack: topLangs.join(", ") || "not detected",
+      repos: repos.length,
+      servers: profileData.ssh.length,
+      email_accounts: profileData.email.length,
+      key_tools: topApps.slice(0, 8),
+      work_hours: profileData.terminal.peak_hours || [],
+      peak_days: profileData.terminal.peak_days || [],
+    };
+
+    log(`\u2713 ${t.scanDone}`);
+    console.log("");
+
+    // Display profile summary
+    const pad = (s, len) => s + " ".repeat(Math.max(0, len - s.length));
+    const boxW = 60;
+    const line = (text) => console.log(`  \u2551  ${pad(text, boxW - 5)}\u2551`);
+    console.log(`  \u2554${"═".repeat(boxW - 2)}\u2557`);
+    line(`${t.profileTitle}: ${userName || profileData.git.name || "User"}`);
+    line("");
+    if (topLangs.length) line(`Stack: ${topLangs.join(", ")}`);
+    line(`${repos.length} repos \u00B7 ${profileData.ssh.length} servers \u00B7 ${profileData.email.length} email accounts`);
+    if (topApps.length) line(`Tools: ${topApps.slice(0, 6).join(", ")}`);
+    if (totalCommits) line(`${totalCommits.toLocaleString()} commits/year`);
+    if (profileData.terminal.peak_hours) {
+      const hours = profileData.terminal.peak_hours;
+      // Group consecutive hours into ranges
+      const ranges = [];
+      let start = hours[0], prev = hours[0];
+      for (let i = 1; i <= hours.length; i++) {
+        if (i < hours.length && hours[i] === prev + 1) { prev = hours[i]; continue; }
+        ranges.push(start === prev ? `${start}:00` : `${start}-${prev + 1}h`);
+        if (i < hours.length) { start = hours[i]; prev = hours[i]; }
+      }
+      line(`Hours: ${ranges.join(", ")}${profileData.terminal.peak_days ? ` \u00B7 Peak: ${profileData.terminal.peak_days.join(", ")}` : ""}`);
+    }
+    if (profileData.messaging.length) line(`Messaging: ${profileData.messaging.join(", ")}`);
+    line(`Timezone: ${profileData.system.timezone}`);
+    line("");
+    line(lang === "es" ? "Ya te conozco. Vamos a trabajar." : lang === "fr" ? "Je te connais. Au travail." : lang === "de" ? "Ich kenne dich. Los geht's." : lang === "it" ? "Ti conosco. Al lavoro." : lang === "pt" ? "J\u00E1 te conhe\u00E7o. Ao trabalho." : "I know you now. Let's work.");
+    console.log(`  \u255A${"═".repeat(boxW - 2)}\u255D`);
+    console.log("");
+
+    // Save full profile
+    fs.writeFileSync(
+      path.join(NEXO_HOME, "brain", "profile.json"),
+      JSON.stringify(profileData, null, 2)
+    );
+    log(`Saved to ~/.nexo/brain/profile.json`);
+
+  } else {
+    // No scan — save minimal profile
+    fs.writeFileSync(
+      path.join(NEXO_HOME, "brain", "profile.json"),
+      JSON.stringify(profileData, null, 2)
+    );
+    log(lang === "es" ? "Sin problema. Iré aprendiéndote sobre la marcha." : "No problem. I'll learn about you as we go.");
+  }
+
+  // Generate user profile markdown (from scan or minimal)
+  const profileMd = `# User Profile
+
+Name: ${userName || "Unknown"}
 Created: ${new Date().toISOString().split("T")[0]}
-Operator name: ${operatorName}
+Operator: ${operatorName}
+Language: ${lang}
+
+## Detected (from deep scan)
+${doScan ? `- Stack: ${Object.keys(profileData.code.languages || {}).slice(0, 5).join(", ") || "none"}
+- Repos: ${profileData.code.repos ? profileData.code.repos.length : 0}
+- Servers: ${profileData.ssh ? profileData.ssh.length : 0}
+- Email accounts: ${profileData.email ? profileData.email.length : 0}
+- Work hours: ${profileData.terminal.peak_hours ? profileData.terminal.peak_hours.map(h => h + ":00").join(", ") : "unknown"}` : "(scan skipped — ${operatorName} will learn over time)"}
 
 ## Observed preferences
 (${operatorName} will learn these over time)
@@ -568,54 +1167,7 @@ Operator name: ${operatorName}
 ## Work patterns
 (${operatorName} will observe and record these)
 `;
-  fs.writeFileSync(path.join(NEXO_HOME, "brain", "user-profile.md"), profile);
-
-  // Step 5: Scan workspace
-  if (doScan) {
-    log("Scanning workspace...");
-    const cwd = process.cwd();
-    const findings = [];
-
-    // Git repos
-    const gitDirs = run(
-      `find "${cwd}" -maxdepth 3 -name ".git" -type d 2>/dev/null`
-    );
-    if (gitDirs) {
-      const repos = gitDirs.split("\n").filter(Boolean);
-      findings.push(`${repos.length} git repositories`);
-    }
-
-    // Package managers
-    if (fs.existsSync(path.join(cwd, "package.json")))
-      findings.push("Node.js project detected");
-    if (fs.existsSync(path.join(cwd, "requirements.txt")))
-      findings.push("Python project detected");
-    if (fs.existsSync(path.join(cwd, "Cargo.toml")))
-      findings.push("Rust project detected");
-    if (fs.existsSync(path.join(cwd, "go.mod")))
-      findings.push("Go project detected");
-
-    // Config files
-    if (fs.existsSync(path.join(cwd, ".env")))
-      findings.push(".env file found (will NOT read contents)");
-
-    if (findings.length > 0) {
-      log("Found:");
-      findings.forEach((f) => log(`  - ${f}`));
-    } else {
-      log("No projects detected in current directory.");
-    }
-
-    // Save scan results
-    fs.writeFileSync(
-      path.join(NEXO_HOME, "brain", "workspace-scan.json"),
-      JSON.stringify(
-        { scanned_at: new Date().toISOString(), cwd, findings },
-        null,
-        2
-      )
-    );
-  }
+  fs.writeFileSync(path.join(NEXO_HOME, "brain", "user-profile.md"), profileMd);
 
   console.log("");
 
@@ -898,15 +1450,19 @@ See ~/.nexo/ for configuration.
   }
 
   console.log("");
-  console.log(
-    "  ╔══════════════════════════════════════════════════════════╗"
-  );
-  console.log(
-    `  ║  ${operatorName} is ready. Type '${aliasName}' to start.${" ".repeat(Math.max(0, 30 - operatorName.length - aliasName.length))}║`
-  );
-  console.log(
-    "  ╚══════════════════════════════════════════════════════════╝"
-  );
+  const readyMsg = t.ready(operatorName, aliasName);
+  const readySub = t.readySubtext;
+  const bw = 60;
+  const padR = (s, len) => s + " ".repeat(Math.max(0, len - s.length));
+  console.log(`  \u2554${"═".repeat(bw - 2)}\u2557`);
+  console.log(`  \u2551  ${padR("", bw - 5)}\u2551`);
+  console.log(`  \u2551  ${padR(readyMsg, bw - 5)}\u2551`);
+  console.log(`  \u2551  ${padR("", bw - 5)}\u2551`);
+  readySub.split("\n").forEach(l => {
+    console.log(`  \u2551  ${padR(l, bw - 5)}\u2551`);
+  });
+  console.log(`  \u2551  ${padR("", bw - 5)}\u2551`);
+  console.log(`  \u255A${"═".repeat(bw - 2)}\u255D`);
   console.log("");
 
   rl.close();
