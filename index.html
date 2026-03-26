@@ -881,6 +881,7 @@
         </button>
         <div class="nav-links">
             <a href="#features">Features</a>
+            <a href="#v0100">v0.10.0</a>
             <a href="#v090">v0.9.0</a>
             <a href="#cognitive">Cognitive</a>
             <a href="#architecture">Architecture</a>
@@ -898,7 +899,7 @@
     <div class="container">
         <div class="hero-badge fade-up">
             <span class="dot"></span>
-            <span id="version-badge">v0.9.0</span> &mdash; Diary Archive, Fuzzy Credentials &amp; Subconscious Memory
+            <span id="version-badge">v0.10.0-beta.5</span> &mdash; Smart Startup, Context Packets &amp; Auto-Prime
         </div>
         <div class="fade-up" style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;">
             <img src="https://img.shields.io/npm/v/nexo-brain?color=7C3AED&label=npm" alt="npm version">
@@ -1143,6 +1144,53 @@
 <section style="padding:60px 0;background:rgba(18,18,26,0.3);">
     <div class="container" style="text-align:center;">
         <img src="/assets/nexo-brain-infographic-v4.png" alt="NEXO Brain Architecture Infographic" style="max-width:800px;width:100%;border-radius:16px;box-shadow:0 8px 32px rgba(124,58,237,0.15);" class="fade-up">
+    </div>
+</section>
+
+<!-- v0.10.0-beta Features -->
+<section id="v0100" style="padding:80px 0;background:linear-gradient(135deg,#1a0f2e 0%,#0F0A1A 100%);">
+    <div class="container">
+        <div class="section-label">New in v0.10.0</div>
+        <h2 class="section-title">Smart Startup, Context Packets &amp; Auto-Prime</h2>
+        <p class="section-subtitle">
+            v0.10.0 tackles the "stores but forgets" problem. Three new features ensure the right memories surface at the right time &mdash; at session boot, during conversation, and when delegating to subagents.
+        </p>
+
+        <div class="cognitive-group">
+            <div class="cognitive-group-label">New Tools</div>
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h4>Smart Startup</h4>
+                    <p>Pre-loads relevant memories at session boot by composing a query from pending followups, due reminders, and last session's topics. No more cold starts.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h4>Context Packets</h4>
+                    <p>Bundles all area knowledge (learnings, changes, followups, preferences, cognitive memories) into a single injectable packet for subagent delegation.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h4>Auto-Prime by Topic</h4>
+                    <p>Heartbeat detects project keywords in conversation and automatically surfaces relevant learnings. Context arrives proactively &mdash; no manual query needed.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="cognitive-group">
+            <div class="cognitive-group-label">Pipeline Improvements</div>
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h4>Automated Quarantine</h4>
+                    <p>Quarantine queue now processes automatically during the nightly cycle. Items are promoted, rejected, or expired based on policy &mdash; no manual intervention needed.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h4>Zero-Decay Pinning</h4>
+                    <p>Corrections and critical learnings are auto-pinned at ingest. Pinned memories never decay and get a +0.2 boost in search results. User corrections stick permanently.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h4>Dream Noise Reduction</h4>
+                    <p>Dream insights (cross-memory connections) are excluded from default search, reducing noise by 21%. Capped at 50 active insights; excess is archived automatically.</p>
+                </div>
+            </div>
+        </div>
     </div>
 </section>
 
