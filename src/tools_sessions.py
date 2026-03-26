@@ -79,16 +79,16 @@ def handle_startup(task: str = "Startup") -> str:
 
     if other_sessions:
         lines.append("")
-        lines.append("ACTIVE SESSIONS:")
+        lines.append("SESIONES ACTIVAS:")
         for s in other_sessions:
             age = _format_age(s["last_update_epoch"])
             lines.append(f"  {s['sid']} ({age}) — {s['task']}")
     else:
-        lines.append("No other active sessions.")
+        lines.append("Sin otras sesiones activas.")
 
     if inbox:
         lines.append("")
-        lines.append("PENDING MESSAGES:")
+        lines.append("MENSAJES PENDIENTES:")
         for m in inbox:
             age = _format_age(m["created_epoch"])
             lines.append(f"  [{m['from_sid']}] ({age}): {m['text']}")
@@ -112,7 +112,7 @@ def handle_heartbeat(sid: str, task: str, context_hint: str = '') -> str:
     inbox = get_inbox(sid)
     if inbox:
         parts.append("")
-        parts.append("MESSAGES:")
+        parts.append("MENSAJES:")
         for m in inbox:
             age = _format_age(m["created_epoch"])
             parts.append(f"  [{m['from_sid']}] ({age}): {m['text']}")
@@ -120,7 +120,7 @@ def handle_heartbeat(sid: str, task: str, context_hint: str = '') -> str:
     questions = get_pending_questions(sid)
     if questions:
         parts.append("")
-        parts.append("PENDING QUESTIONS (reply with nexo_answer):")
+        parts.append("PREGUNTAS PENDIENTES (responder con nexo_answer):")
         for q in questions:
             age = _format_age(q["created_epoch"])
             parts.append(f"  {q['qid']} de {q['from_sid']} ({age}): {q['question']}")
@@ -199,6 +199,7 @@ def handle_heartbeat(sid: str, task: str, context_hint: str = '') -> str:
             pass  # Adaptive mode is best-effort
 
     # Mid-session RAG: if context_hint provided, check for context shift
+    # Enhanced: also detect project/area keywords for auto-priming
     if context_hint and len(context_hint.strip()) >= 15:
         try:
             import cognitive
@@ -230,6 +231,42 @@ def handle_heartbeat(sid: str, task: str, context_hint: str = '') -> str:
                     parts.append("")
                     parts.append("COGNITIVE CONTEXT SHIFT — nuevas memorias relevantes:")
                     parts.append(cognitive.format_results(results))
+
+            # Auto-prime: detect project/area keywords and fetch targeted learnings
+            _PROJECT_KEYWORDS = {
+                'shopify': 'shopify', 'theme': 'shopify', 'dawn': 'shopify',
+                'wazion': 'wazion', 'chrome extension': 'wazion', 'vps': 'wazion',
+                'meta': 'meta-ads', 'facebook': 'meta-ads', 'advantage': 'meta-ads',
+                'google ads': 'google-ads', 'pmax': 'google-ads', 'campaign': 'google-ads',
+                'project_a': 'project_a', 'user_contact': 'project_a',
+                'shared-hosting': 'infrastructure', 'servidor': 'infrastructure', 'ssh': 'infrastructure',
+                'analytics': 'google-analytics', 'ga4': 'google-analytics',
+                'nexo brain': 'nexo', 'nexo-brain': 'nexo', 'cognitive': 'nexo',
+                'ecommerce': 'shopify',
+            }
+            hint_lower = context_hint.lower()
+            detected_area = None
+            for keyword, area in _PROJECT_KEYWORDS.items():
+                if keyword in hint_lower:
+                    detected_area = area
+                    break
+
+            if detected_area:
+                # Fetch area-specific learnings from nexo.db
+                try:
+                    from db import get_db as _get_nexo_db
+                    _conn = _get_nexo_db()
+                    area_learnings = _conn.execute(
+                        "SELECT id, title FROM learnings WHERE category = ? ORDER BY id DESC LIMIT 5",
+                        (detected_area,)
+                    ).fetchall()
+                    if area_learnings:
+                        parts.append("")
+                        parts.append(f"AUTO-PRIME [{detected_area.upper()}] — learnings activos:")
+                        for al in area_learnings:
+                            parts.append(f"  L#{al['id']}: {al['title']}")
+                except Exception:
+                    pass
         except Exception:
             pass  # Mid-session RAG is best-effort
 
@@ -292,11 +329,162 @@ def handle_heartbeat(sid: str, task: str, context_hint: str = '') -> str:
     return "\n".join(parts)
 
 
+def handle_context_packet(area: str, files: str = "") -> str:
+    """Build a context packet for a specific area/project — designed for subagent injection.
+
+    Returns: relevant learnings + last 5 changes + active followups + key preferences
+    for the given area. Use this before delegating to a subagent.
+
+    Args:
+        area: Project/area name (e.g., 'wazion', 'shopify', 'meta-ads', 'project_a', 'nexo')
+        files: Optional comma-separated file paths for guard check
+    """
+    from db import get_db
+    parts = []
+
+    # 1. Learnings for this area (from nexo.db)
+    conn = get_db()
+    learnings = conn.execute(
+        "SELECT id, title, content FROM learnings WHERE category LIKE ? OR content LIKE ? ORDER BY id DESC LIMIT 15",
+        (f"%{area}%", f"%{area}%")
+    ).fetchall()
+    if learnings:
+        parts.append("## ERRORES CONOCIDOS — NO REPETIR")
+        for l in learnings:
+            parts.append(f"  L#{l['id']}: {l['title']}")
+            # First 200 chars of content
+            parts.append(f"    {l['content'][:200]}")
+        parts.append("")
+
+    # 2. Last 5 changes in this area
+    changes = conn.execute(
+        "SELECT id, files, what_changed, why FROM change_log WHERE files LIKE ? OR what_changed LIKE ? ORDER BY id DESC LIMIT 5",
+        (f"%{area}%", f"%{area}%")
+    ).fetchall()
+    if changes:
+        parts.append("## CAMBIOS RECIENTES")
+        for c in changes:
+            parts.append(f"  C#{c['id']}: {c['what_changed'][:150]}")
+            if c['why']:
+                parts.append(f"    Why: {c['why'][:100]}")
+        parts.append("")
+
+    # 3. Active followups for this area
+    followups = conn.execute(
+        "SELECT id, description, date, verification FROM followups WHERE status = 'PENDIENTE' AND (description LIKE ? OR verification LIKE ?) ORDER BY date ASC LIMIT 10",
+        (f"%{area}%", f"%{area}%")
+    ).fetchall()
+    if followups:
+        parts.append("## FOLLOWUPS ACTIVOS")
+        for f in followups:
+            parts.append(f"  {f['id']}: {f['description'][:150]} (fecha: {f['date']})")
+        parts.append("")
+
+    # 4. Preferences related to this area
+    try:
+        prefs = conn.execute(
+            "SELECT key, value FROM preferences WHERE key LIKE ? OR value LIKE ? LIMIT 10",
+            (f"%{area}%", f"%{area}%")
+        ).fetchall()
+        if prefs:
+            parts.append("## PREFERENCIAS")
+            for p in prefs:
+                parts.append(f"  {p['key']}: {p['value'][:150]}")
+            parts.append("")
+    except Exception:
+        pass
+
+    # 5. Cognitive memories for this area
+    try:
+        import cognitive
+        results = cognitive.search(
+            query_text=area,
+            top_k=5,
+            min_score=0.55,
+            stores="ltm",
+            rehearse=False,
+        )
+        if results:
+            parts.append("## MEMORIAS COGNITIVAS RELEVANTES")
+            for r in results:
+                parts.append(f"  [{r['source_type']}] {r['source_title'] or r['content'][:80]}")
+            parts.append("")
+    except Exception:
+        pass
+
+    if not parts:
+        return f"No context found for area '{area}'. The subagent will start with no project-specific knowledge."
+
+    header = f"CONTEXT PACKET — {area.upper()}\n{'='*40}\n\n"
+    footer = f"\n{'='*40}\nINSTRUCCIÓN: Si no estás 100% seguro de un dato, PARA y devuelve la pregunta. NO inventes."
+    return header + "\n".join(parts) + footer
+
+
+def handle_smart_startup_query() -> str:
+    """Generate and execute a composite cognitive query from pending followups + diary topics + reminders.
+
+    Called during startup to pre-load the most relevant context for this session.
+    Returns cognitive memories that match the current operational state.
+    """
+    from db import get_db
+    conn = get_db()
+    query_parts = []
+
+    # 1. Pending followups (what NEXO needs to do)
+    followups = conn.execute(
+        "SELECT description FROM followups WHERE status = 'PENDIENTE' ORDER BY date ASC LIMIT 5"
+    ).fetchall()
+    for f in followups:
+        query_parts.append(f['description'][:100])
+
+    # 2. Due reminders (what user needs to know)
+    reminders = conn.execute(
+        "SELECT description FROM reminders WHERE status = 'PENDIENTE' AND date <= date('now', '+1 day') ORDER BY date ASC LIMIT 5"
+    ).fetchall()
+    for r in reminders:
+        query_parts.append(r['description'][:100])
+
+    # 3. Last session diary topics
+    try:
+        last_diary = conn.execute(
+            "SELECT summary FROM session_diaries ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        if last_diary and last_diary['summary']:
+            query_parts.append(last_diary['summary'][:200])
+    except Exception:
+        pass
+
+    if not query_parts:
+        return "No pending context to pre-load."
+
+    composite_query = " | ".join(query_parts[:8])  # Cap at 8 parts
+
+    try:
+        import cognitive
+        results = cognitive.search(
+            query_text=composite_query,
+            top_k=10,
+            min_score=0.5,
+            stores="both",
+            rehearse=True,
+        )
+        if not results:
+            return "Smart startup query: no relevant memories found."
+
+        lines = [f"SMART STARTUP — {len(results)} memories pre-loaded from composite query:"]
+        lines.append(f"Query: {composite_query[:200]}...")
+        lines.append("")
+        lines.append(cognitive.format_results(results))
+        return "\n".join(lines)
+    except Exception as e:
+        return f"Smart startup query error: {e}"
+
+
 def handle_stop(sid: str) -> str:
     """Cleanly close a session, removing it from active sessions immediately."""
     _stop_keepalive(sid)
     complete_session(sid)
-    return f"Session {sid} closed."
+    return f"Sesión {sid} cerrada."
 
 
 def handle_status(keyword: str | None = None) -> str:
@@ -310,9 +498,9 @@ def handle_status(keyword: str | None = None) -> str:
         sessions = get_active_sessions()
 
     if not sessions:
-        return "No active sessions."
+        return "Sin sesiones activas."
 
-    lines = ["ACTIVE SESSIONS:"]
+    lines = ["SESIONES ACTIVAS:"]
     for s in sessions:
         age = _format_age(s["last_update_epoch"])
         lines.append(f"  {s['sid']} ({age}) — {s['task']}")

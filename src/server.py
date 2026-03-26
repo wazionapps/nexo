@@ -6,7 +6,7 @@ import sys
 
 from fastmcp import FastMCP
 from db import init_db, rebuild_fts_index, get_db, close_db, fts_add_dir, fts_remove_dir, fts_list_dirs
-from tools_sessions import handle_startup, handle_heartbeat, handle_status
+from tools_sessions import handle_startup, handle_heartbeat, handle_status, handle_context_packet, handle_smart_startup_query
 from tools_coordination import (
     handle_track, handle_untrack, handle_files,
     handle_send, handle_ask, handle_answer, handle_check_answer,
@@ -52,7 +52,7 @@ mcp = FastMCP(
     name="nexo",
     instructions=(
         "NEXO operational server. Provides session coordination, "
-        "reminders, followups, and menu for Francisco's operations.\n\n"
+        "reminders, followups, and menu for the user's operations.\n\n"
         "When working with tool results, write down any important information "
         "you might need later in your response, as the original tool result "
         "may be cleared later."
@@ -101,6 +101,29 @@ def nexo_stop(sid: str) -> str:
 def nexo_status(keyword: str = "") -> str:
     """List active sessions. Filter by keyword if provided."""
     return handle_status(keyword if keyword else None)
+
+
+@mcp.tool
+def nexo_context_packet(area: str, files: str = "") -> str:
+    """Build a context packet for subagent injection. Returns learnings + changes + followups + preferences + cognitive memories for a specific area.
+
+    MUST call before delegating ANY task to a subagent. Inject the result into the subagent's prompt.
+
+    Args:
+        area: Project/area name (e.g., 'wazion', 'shopify', 'meta-ads', 'project_a', 'nexo', 'infrastructure').
+        files: Optional comma-separated file paths for additional context.
+    """
+    return handle_context_packet(area, files)
+
+
+@mcp.tool
+def nexo_smart_startup() -> str:
+    """Pre-load relevant cognitive memories based on pending followups, due reminders, and last session topics.
+
+    Call during startup (after nexo_startup) to ensure the session starts with the right context loaded.
+    Returns up to 10 memories matching the current operational state.
+    """
+    return handle_smart_startup_query()
 
 
 # ── File coordination (3 tools) ───────────────────────────────────
@@ -208,7 +231,7 @@ def nexo_menu() -> str:
 
 @mcp.tool
 def nexo_reminder_create(id: str, description: str, date: str = "", category: str = "general") -> str:
-    """Create a new reminder for Francisco.
+    """Create a new reminder for user.
 
     Args:
         id: Unique ID starting with 'R' (e.g., R90).
@@ -395,7 +418,7 @@ def nexo_index_add_dir(path: str, dir_type: str = "code",
     result = fts_add_dir(path, dir_type, patterns, notes)
     if "error" in result:
         return f"ERROR: {result['error']}"
-    return f"Directory registered: {result['path']} ({result['dir_type']}, patterns: {result['patterns']})\nUse nexo_reindex to index now."
+    return f"Directorio registrado: {result['path']} ({result['dir_type']}, patterns: {result['patterns']})\nUsa nexo_reindex para indexar ahora."
 
 
 @mcp.tool
@@ -408,7 +431,7 @@ def nexo_index_remove_dir(path: str) -> str:
     result = fts_remove_dir(path)
     if "error" in result:
         return f"ERROR: {result['error']}"
-    return f"Directory removed from index: {result['removed']}"
+    return f"Directorio eliminado del índice: {result['removed']}"
 
 
 @mcp.tool
@@ -416,8 +439,8 @@ def nexo_index_dirs() -> str:
     """List all directories being indexed by FTS5 (builtin + dynamic)."""
     dirs = fts_list_dirs()
     if not dirs:
-        return "No directories configured."
-    lines = ["INDEXED DIRECTORIES:"]
+        return "Sin directorios configurados."
+    lines = ["DIRECTORIOS INDEXADOS:"]
     for d in dirs:
         source_tag = "⚙️" if d["source"] == "builtin" else "➕"
         notes = f" — {d['notes']}" if d.get("notes") else ""
@@ -533,7 +556,7 @@ def nexo_plugin_load(filename: str) -> str:
     """
     try:
         n = load_plugin(mcp, filename)
-        return f"Plugin {filename}: {n} tools registered."
+        return f"Plugin {filename}: {n} tools registrados."
     except Exception as e:
         return f"Error cargando plugin {filename}: {e}"
 
@@ -543,10 +566,10 @@ def nexo_plugin_list() -> str:
     """List all loaded plugins and their tools."""
     plugins = list_plugins()
     if not plugins:
-        return "No plugins loaded."
-    lines = ["LOADED PLUGINS:"]
+        return "Sin plugins cargados."
+    lines = ["PLUGINS CARGADOS:"]
     for p in plugins:
-        names = p["tool_names"] or "(no tools)"
+        names = p["tool_names"] or "(sin tools)"
         lines.append(f"  {p['filename']} — {p['tools_count']} tools: {names}")
     return "\n".join(lines)
 
@@ -561,8 +584,8 @@ def nexo_plugin_remove(filename: str) -> str:
     try:
         removed = remove_plugin(mcp, filename)
         if removed:
-            return f"Plugin {filename} removed. Tools unregistered: {', '.join(removed)}"
-        return f"Plugin {filename} removed (had no registered tools)."
+            return f"Plugin {filename} eliminado. Tools quitados: {', '.join(removed)}"
+        return f"Plugin {filename} eliminado (no tenía tools registrados)."
     except Exception as e:
         return f"Error eliminando plugin {filename}: {e}"
 

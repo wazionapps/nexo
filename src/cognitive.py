@@ -30,13 +30,13 @@ DISCRIMINATING_ENTITIES = {
     # OS / Environment
     "linux", "mac", "macos", "windows", "darwin", "ubuntu", "debian", "alpine",
     # Platforms
-    "shopify", "whatsapp", "chrome", "firefox",
+    "shopify", "wazion", "project_a", "ecommerce", "whatsapp", "chrome", "firefox",
     # Languages / Runtimes
     "python", "php", "javascript", "typescript", "node", "deno", "ruby",
     # Versions
     "v1", "v2", "v3", "v4", "v5", "5.6", "7.4", "8.0", "8.1", "8.2",
     # Infrastructure
-    "cloudrun", "gcloud", "vps", "local", "production", "staging",
+    "shared-hosting", "cloudrun", "gcloud", "vps", "local", "production", "staging",
     # DB
     "mysql", "sqlite", "postgresql", "postgres", "redis",
 }
@@ -66,11 +66,11 @@ _DEFAULT_TRUST_EVENTS = {
     # Positive
     "explicit_thanks": +3,
     "delegation": +2,        # user delegates new task without micromanaging
-    "paradigm_shift": +2,    # user teaches, agent learns
+    "paradigm_shift": +2,    # user teaches, NEXO learns
     "sibling_detected": +3,  # NEXO avoided context error on its own
     "proactive_action": +2,  # NEXO did something useful without being asked
     # Negative
-    "correction": -3,        # user corrects the agent
+    "correction": -3,        # user corrects NEXO
     "repeated_error": -7,    # Error on something NEXO already had a learning for
     "override": -5,          # NEXO's memory was wrong
     "correction_fatigue": -10, # Same memory corrected 3+ times
@@ -395,7 +395,7 @@ def _init_tables(conn: sqlite3.Connection):
             created_at TEXT DEFAULT (datetime('now'))
         );
 
-        -- Sentiment readings: the user's detected mood per interaction
+        -- Sentiment readings: user's detected mood per interaction
         CREATE TABLE IF NOT EXISTS sentiment_log (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             sentiment TEXT NOT NULL,       -- 'positive', 'negative', 'neutral', 'urgent'
@@ -1559,7 +1559,7 @@ def ingest(
     temporal = extract_temporal_date(content)
 
     # Auto-pin: corrections and blocking learnings get pinned (zero decay, +0.2 boost)
-    # This ensures user corrections NEVER fade away
+    # This ensures user's corrections NEVER fade away
     _pin_lifecycle = None
     if auto_pin or (source_type in ('learning', 'feedback') and
                     any(kw in content.upper() for kw in ('BLOCKING', 'CRÍTICO', 'CRITICAL', 'NUNCA', 'NEVER', 'PROHIBIDO'))):
@@ -2689,12 +2689,12 @@ def get_siblings(memory_id: int) -> list[dict]:
 def detect_dissonance(new_instruction: str, min_score: float = 0.65) -> list[dict]:
     """Detect cognitive dissonance: find LTM memories that contradict a new instruction.
 
-    When the user gives a new instruction that conflicts with established LTM memories
+    When user gives a new instruction that conflicts with established LTM memories
     (strength > 0.8), this function surfaces the conflict so NEXO can verbalize it
     rather than silently obeying or silently resisting.
 
     Args:
-        new_instruction: The new instruction or preference from the user
+        new_instruction: The new instruction or preference from user
         min_score: Minimum cosine similarity to consider as potential conflict
 
     Returns:
@@ -2729,12 +2729,12 @@ def detect_dissonance(new_instruction: str, min_score: float = 0.65) -> list[dic
 
 
 def resolve_dissonance(memory_id: int, resolution: str, context: str = "") -> str:
-    """Resolve a cognitive dissonance by applying the user's decision.
+    """Resolve a cognitive dissonance by applying user's decision.
 
     Args:
         memory_id: The LTM memory that conflicts with the new instruction
         resolution: One of:
-            - 'paradigm_shift': user changed their mind permanently. Decay old memory,
+            - 'paradigm_shift': user changed his mind permanently. Decay old memory,
               new instruction becomes the standard.
             - 'exception': This is a one-time override. Keep old memory as standard.
             - 'override': Old memory was wrong. Mark as corrupted and decay to dormant.
@@ -2833,7 +2833,7 @@ def check_correction_fatigue() -> list[dict]:
 
 
 def detect_sentiment(text: str) -> dict:
-    """Analyze the user's text for sentiment signals.
+    """Analyze user's text for sentiment signals.
 
     Returns detected sentiment, intensity, and action guidance for NEXO.
     Not a model — keyword + heuristic based. Fast and deterministic.
@@ -2897,7 +2897,7 @@ def detect_sentiment(text: str) -> dict:
 
 
 def log_sentiment(text: str) -> dict:
-    """Detect and log the user's sentiment. Returns the detection result."""
+    """Detect and log user's sentiment. Returns the detection result."""
     result = detect_sentiment(text)
     if result["sentiment"] != "neutral":
         db = _get_db()
