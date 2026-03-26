@@ -1,12 +1,12 @@
 # NEXO Brain — Your AI Gets a Brain
 
-[![npm v0.10.0-beta.6](https://img.shields.io/npm/v/nexo-brain?label=npm&color=purple)](https://www.npmjs.com/package/nexo-brain)
+[![npm v0.10.0-beta.7](https://img.shields.io/npm/v/nexo-brain?label=npm&color=purple)](https://www.npmjs.com/package/nexo-brain)
 [![F1 0.588 on LoCoMo](https://img.shields.io/badge/LoCoMo_F1-0.588-brightgreen)](https://github.com/wazionapps/nexo/blob/main/benchmarks/locomo/results/)
 [![+55% vs GPT-4](https://img.shields.io/badge/vs_GPT--4-%2B55%25-blue)](https://github.com/snap-research/locomo/issues/33)
 [![GitHub stars](https://img.shields.io/github/stars/wazionapps/nexo?style=social)](https://github.com/wazionapps/nexo/stargazers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-> **v0.10.0-beta.6** — Smart Startup pre-loads relevant memories at boot. Context Packets bundle area knowledge for subagents. Auto-prime detects project topics and surfaces learnings automatically. Plus: quarantine automation, embedding migration fix, smarter STM→LTM promotion, dream noise reduction, and zero-decay pinning for corrections.
+> **v0.10.0-beta.7** — 30 Core System Rules (versioned, with migration). Battle-tested behavioral rules from 6 months production use, validated via multi-AI debate (Claude + GPT-4o). 6 categories: Integrity, Execution, Memory, Delegation, Communication, Proactivity. 25 BLOCKING + 5 ADVISORY. Plus: Smart Startup, Context Packets, Auto-Prime, and zero-decay pinning.
 
 **NEXO Brain transforms any MCP-compatible AI agent from a stateless assistant into a cognitive partner that remembers, learns, forgets, adapts, and builds a relationship with you over time.**
 
