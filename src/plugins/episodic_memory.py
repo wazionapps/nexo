@@ -163,11 +163,11 @@ def handle_memory_review_queue(days: int = 0) -> str:
 def handle_session_diary_write(decisions: str, summary: str,
                                 discarded: str = '', pending: str = '',
                                 context_next: str = '', mental_state: str = '',
-                                francisco_signals: str = '',
+                                user_signals: str = '',
                                 domain: str = '',
                                 session_id: str = '',
                                 self_critique: str = '') -> str:
-    """Write session diary entry at end of session. OBLIGATORIO antes de cerrar.
+    """Write session diary entry at end of session. Mandatory before closing.
 
     Args:
         decisions: What was decided and why (JSON array or structured text)
@@ -176,16 +176,16 @@ def handle_session_diary_write(decisions: str, summary: str,
         pending: Items left unresolved, with doubt level
         context_next: What the next session should know to continue effectively
         mental_state: Internal state to transfer — thread of thought, tone, observations not yet shared, momentum. Written in first person as NEXO.
-        francisco_signals: Observable signals from Francisco during session — response speed (fast='s' vs detailed explanations), tone (direct, frustrated, exploratory, excited), corrections given, topics he initiated vs topics NEXO initiated. Factual observations only, not interpretations.
-        domain: Project context: recambios, wazion, nexo, canarirural, server, other
+        user_signals: Observable signals from the user during session — response speed (fast='s' vs detailed explanations), tone (direct, frustrated, exploratory, excited), corrections given, topics they initiated vs topics NEXO initiated. Factual observations only, not interpretations.
+        domain: Project context (e.g. project name, area)
         session_id: Current session ID
-        self_critique: MANDATORY. Honest post-mortem: What should I have done proactively? Did Francisco ask for something I should have detected? Did I repeat known errors? What concrete rule would prevent the recurrence? If clean session: 'No self-critique — clean session.'
+        self_critique: MANDATORY. Honest post-mortem: What should I have done proactively? Did the user ask for something I should have detected? Did I repeat known errors? What concrete rule would prevent the recurrence? If clean session: 'No self-critique — clean session.'
     """
     sid = session_id or 'unknown'
     # Clean up draft — manual diary supersedes it
     from db import delete_diary_draft
     delete_diary_draft(sid)
-    result = write_session_diary(sid, decisions, summary, discarded, pending, context_next, mental_state, domain=domain, user_signals=francisco_signals, self_critique=self_critique)
+    result = write_session_diary(sid, decisions, summary, discarded, pending, context_next, mental_state, domain=domain, user_signals=user_signals, self_critique=self_critique)
     if "error" in result:
         return f"ERROR: {result['error']}"
     _cognitive_ingest_safe(summary, "diary", f"diary#{result.get('id','')}", f"Session {sid} summary", domain)
@@ -256,8 +256,8 @@ def handle_session_diary_read(session_id: str = '', last_n: int = 3, last_day: b
             lines.append(f"  For next session: {d['context_next'][:200]}")
         if d.get('mental_state'):
             lines.append(f"  Mental state: {d['mental_state'][:300]}")
-        if d.get('francisco_signals'):
-            lines.append(f"  Francisco signals: {d['francisco_signals'][:300]}")
+        if d.get('user_signals'):
+            lines.append(f"  User signals: {d['user_signals'][:300]}")
     return "\n".join(lines)
 
 
@@ -271,7 +271,7 @@ def handle_change_log(files: str, what_changed: str, why: str,
         files: File path(s) modified (comma-separated if multiple)
         what_changed: What was modified — functions, lines, behavior change
         why: WHY this change was needed — the root cause, not just "fix bug"
-        triggered_by: What triggered this — bug report, metric, Francisco's request, followup ID
+        triggered_by: What triggered this — bug report, metric, user request, followup ID
         affects: What systems/users/flows this change impacts
         risks: What could go wrong — regressions, edge cases, dependencies
         verify: How to verify this works — what to check, followup ID if created
@@ -351,8 +351,18 @@ def handle_recall(query: str, days: int = 30) -> str:
         days: Look back N days (default 30)
     """
     results = recall(query, days)
-    if not results:
-        return f"No results for '{query}' in the last {days} days."
+
+    # Fallback to diary archive if few results (subconscious memory)
+    archive_results = []
+    if len(results) < 5:
+        try:
+            from db import diary_archive_search
+            archive_results = diary_archive_search(query=query, limit=5)
+        except Exception:
+            pass
+
+    if not results and not archive_results:
+        return f"No results for '{query}' in the last {days} days or in the archive."
 
     # v1.2: Passive rehearsal — strengthen matching cognitive memories
     try:
@@ -365,18 +375,19 @@ def handle_recall(query: str, days: int = 30) -> str:
         pass
 
     SOURCE_LABELS = {
-        'change_log': '[CAMBIO]',
-        'change':     '[CAMBIO]',
+        'change_log': '[CHANGE]',
+        'change':     '[CHANGE]',
         'decision':   '[DECISION]',
         'learning':   '[LEARNING]',
         'followup':   '[FOLLOWUP]',
-        'diary':      '[DIARIO]',
-        'entity':     '[ENTIDAD]',
-        'file':       '[ARCHIVO]',
+        'diary':      '[DIARY]',
+        'diary_archive': '[ARCHIVE]',
+        'entity':     '[ENTITY]',
+        'file':       '[FILE]',
         'code':       '[CODE]',
     }
 
-    lines = [f"RECALL '{query}' — {len(results)} resultado(s):"]
+    lines = [f"RECALL '{query}' — {len(results)} result(s):"]
     for r in results:
         source = r.get('source', '?')
         label = SOURCE_LABELS.get(source, f"[{source.upper()}]")
@@ -389,8 +400,93 @@ def handle_recall(query: str, days: int = 30) -> str:
         lines.append(f"    {title}")
         if snippet:
             lines.append(f"    {snippet}")
-    if len(results) < 5:
-        lines.append(f"\n  💡 Only {len(results)} results in NEXO. For deeper history, also search claude-mem: mcp__plugin_claude-mem_mcp-search__search")
+
+    if archive_results:
+        lines.append(f"\n--- SUBCONSCIOUS (diary archive) — {len(archive_results)} result(s) ---")
+        for r in archive_results:
+            lines.append(f"\n  [ARCHIVE] #{r['id']} ({r['created_at'][:10]}) [{r.get('domain', '?')}]")
+            lines.append(f"    {r['summary'][:200]}")
+    elif len(results) < 5:
+        lines.append(f"\n  Only {len(results)} results. Diary archive empty (auto-populated after 180 days).")
+    return "\n".join(lines)
+
+
+def handle_diary_archive_search(
+    query: str = "",
+    domain: str = "",
+    year: int = 0,
+    month: int = 0,
+    limit: int = 20
+) -> str:
+    """Search the permanent diary archive (subconscious memory). Use for 'last year', 'months ago', 'in February', etc.
+
+    Args:
+        query: Text to search in diary content
+        domain: Filter by project domain (e.g. 'wazion', 'my-store')
+        year: Filter by year (e.g. 2026)
+        month: Filter by month (1-12), requires year
+        limit: Max results (default 20)
+    """
+    from db import diary_archive_search, diary_archive_stats
+
+    if not query and not domain and not year:
+        stats = diary_archive_stats()
+        if stats["count"] == 0:
+            return "Archive empty — diaries are archived automatically after 180 days."
+        return (
+            f"DIARY ARCHIVE STATS:\n"
+            f"  Total: {stats['count']} archived diaries\n"
+            f"  Range: {stats['oldest']} -> {stats['newest']}\n"
+            f"  Domains: {', '.join(stats['domains']) if stats['domains'] else 'N/A'}\n"
+            f"\nUse query, domain, year/month to search."
+        )
+
+    results = diary_archive_search(query=query, domain=domain, year=year, month=month, limit=limit)
+    if not results:
+        return f"No results in archive for: query='{query}' domain='{domain}' year={year} month={month}"
+
+    lines = [f"DIARY ARCHIVE — {len(results)} result(s):"]
+    for r in results:
+        lines.append(f"\n  [#{r['id']}] {r['created_at'][:10]} [{r.get('domain', '?')}]")
+        lines.append(f"    {r['summary'][:200]}")
+        if r.get('decisions'):
+            lines.append(f"    Decisions: {r['decisions'][:150]}")
+        if r.get('mental_state'):
+            lines.append(f"    State: {r['mental_state'][:100]}")
+    return "\n".join(lines)
+
+
+def handle_diary_archive_read(diary_id: int = 0) -> str:
+    """Read a single archived diary entry in full detail.
+
+    Args:
+        diary_id: The archive diary ID (from search results)
+    """
+    if not diary_id:
+        return "ERROR: diary_id required. Use nexo_diary_archive_search to find IDs."
+
+    from db import diary_archive_read
+    entry = diary_archive_read(diary_id)
+    if not entry:
+        return f"Diary #{diary_id} not found in the archive."
+
+    lines = [f"DIARY ARCHIVE #{entry['id']} — {entry['created_at']}"]
+    lines.append(f"  Session: {entry['session_id']}")
+    lines.append(f"  Domain: {entry.get('domain', 'N/A')}")
+    lines.append(f"  Source: {entry.get('source', 'N/A')}")
+    lines.append(f"\nSUMMARY:\n  {entry['summary']}")
+    if entry.get('decisions'):
+        lines.append(f"\nDECISIONS:\n  {entry['decisions']}")
+    if entry.get('pending'):
+        lines.append(f"\nPENDING:\n  {entry['pending']}")
+    if entry.get('mental_state'):
+        lines.append(f"\nMENTAL STATE:\n  {entry['mental_state']}")
+    if entry.get('self_critique'):
+        lines.append(f"\nSELF-CRITIQUE:\n  {entry['self_critique']}")
+    if entry.get('user_signals'):
+        lines.append(f"\nUSER SIGNALS:\n  {entry['user_signals']}")
+    if entry.get('context_next'):
+        lines.append(f"\nCONTEXT FOR NEXT SESSION:\n  {entry['context_next']}")
     return "\n".join(lines)
 
 
@@ -404,5 +500,7 @@ TOOLS = [
     (handle_memory_review_queue, "nexo_memory_review_queue", "Show decisions and learnings that are due for review"),
     (handle_session_diary_write, "nexo_session_diary_write", "Write end-of-session diary with decisions, discards, and context for next session"),
     (handle_session_diary_read, "nexo_session_diary_read", "Read recent session diaries for context continuity"),
-    (handle_recall, "nexo_recall", "Search across ALL NEXO memory — changes, decisions, learnings, followups, diary, entities, .md files, code files. For deep historical context (older sessions, past work), also search claude-mem (mcp__plugin_claude-mem_mcp-search__search)."),
+    (handle_recall, "nexo_recall", "Search across ALL NEXO memory — changes, decisions, learnings, followups, diary, entities, .md files, code files. For deep historical context (older sessions, past work), also searches the diary archive."),
+    (handle_diary_archive_search, "nexo_diary_archive_search", "Search the permanent diary archive (subconscious memory). Diaries older than 180d are moved here forever. Use for historical lookups: 'last year', 'months ago', 'in February', etc."),
+    (handle_diary_archive_read, "nexo_diary_archive_read", "Read a single archived diary entry in full detail. Get the ID from diary_archive_search."),
 ]

@@ -9,7 +9,11 @@ def handle_credential_get(service: str, key: str = '') -> str:
     if not results:
         target = f"{service}/{key}" if key else service
         return f"ERROR: No credentials found for '{target}'."
+    is_fuzzy = any(r.get("_fuzzy") for r in results)
     lines = []
+    if is_fuzzy:
+        lines.append(f"No exact match for '{service}'. Similar results ({len(results)}):")
+        lines.append("")
     for r in results:
         lines.append(f"CREDENTIAL {r['service']}/{r['key']}:")
         lines.append(f"  Value: {r['value']}")

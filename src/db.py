@@ -898,6 +898,36 @@ def _m8_adaptive_log_and_somatic(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_somatic_events_projected ON somatic_events(projected)")
 
 
+def _m10_diary_archive(conn):
+    """Permanent diary archive — diaries are never truly deleted, just moved here."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS diary_archive (
+            id INTEGER PRIMARY KEY,
+            session_id TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            decisions TEXT NOT NULL,
+            discarded TEXT,
+            pending TEXT,
+            context_next TEXT,
+            summary TEXT NOT NULL,
+            mental_state TEXT,
+            domain TEXT,
+            user_signals TEXT,
+            self_critique TEXT DEFAULT '',
+            source TEXT DEFAULT 'claude',
+            archived_at TEXT DEFAULT (datetime('now'))
+        )
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_diary_archive_created
+        ON diary_archive (created_at)
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_diary_archive_domain
+        ON diary_archive (domain)
+    """)
+
+
 def _m9_maintenance_schedule(conn):
     conn.execute("""
         CREATE TABLE IF NOT EXISTS maintenance_schedule (
@@ -931,6 +961,7 @@ MIGRATIONS = [
     (7, "diary_source_and_draft", _m7_diary_source_and_draft),
     (8, "adaptive_log_and_somatic", _m8_adaptive_log_and_somatic),
     (9, "maintenance_schedule", _m9_maintenance_schedule),
+    (10, "diary_archive", _m10_diary_archive),
 ]
 
 
@@ -1763,7 +1794,12 @@ def delete_credential(service: str, key: str = None) -> bool:
 
 
 def get_credential(service: str, key: str = None) -> list[dict]:
-    """Get credential(s). If key=None, return all for the service."""
+    """Get credential(s). If key=None, return all for the service.
+
+    When exact match fails, performs fuzzy search across service, key,
+    and notes fields. Returns results tagged with _fuzzy=True so
+    the caller can differentiate suggestions from exact hits.
+    """
     conn = get_db()
     if key:
         rows = conn.execute(
@@ -1773,7 +1809,29 @@ def get_credential(service: str, key: str = None) -> list[dict]:
         rows = conn.execute(
             "SELECT * FROM credentials WHERE service = ?", (service,)
         ).fetchall()
-    return [dict(r) for r in rows]
+    if rows:
+        return [dict(r) for r in rows]
+
+    # Fuzzy fallback: search term in service, key and notes (not value — too noisy)
+    # Prioritize: service/key matches first, notes-only matches second
+    term = f"%{service}%"
+    fuzzy_rows = conn.execute(
+        "SELECT *, "
+        "CASE WHEN service LIKE ? THEN 0 "
+        "     WHEN key LIKE ? THEN 1 "
+        "     ELSE 2 END AS _rank "
+        "FROM credentials WHERE "
+        "service LIKE ? OR key LIKE ? OR notes LIKE ? "
+        "ORDER BY _rank ASC, service ASC, key ASC",
+        (term, term, term, term, term),
+    ).fetchall()
+    results = []
+    for r in fuzzy_rows:
+        d = dict(r)
+        d["_fuzzy"] = True
+        d.pop("_rank", None)
+        results.append(d)
+    return results
 
 
 def list_credentials(service: str = None) -> list[dict]:
@@ -2262,15 +2320,37 @@ def search_decisions(query: str = '', domain: str = '', days: int = 30) -> list[
 # ── Session Diary ────────────────────────────────────────────────
 
 def cleanup_old_diaries(retention_days: int = 180) -> int:
-    """Delete session_diary entries older than retention_days. Returns count deleted."""
+    """Archive then delete session_diary entries older than retention_days.
+
+    Diaries are moved to diary_archive (permanent) before being removed from
+    the active session_diary table. Nothing is ever truly lost.
+    """
     conn = get_db()
+    cutoff = f"-{retention_days} days"
+
+    # Archive before deleting — permanent subconscious memory
+    try:
+        conn.execute("""
+            INSERT OR IGNORE INTO diary_archive
+                (id, session_id, created_at, decisions, discarded, pending,
+                 context_next, summary, mental_state, domain, user_signals,
+                 self_critique, source)
+            SELECT id, session_id, created_at, decisions, discarded, pending,
+                   context_next, summary, mental_state, domain, user_signals,
+                   self_critique, source
+            FROM session_diary
+            WHERE created_at < datetime('now', ?)
+        """, (cutoff,))
+    except Exception:
+        pass  # Table may not exist yet (pre-migration)
+
     ids = [str(r[0]) for r in conn.execute(
         "SELECT id FROM session_diary WHERE created_at < datetime('now', ?)",
-        (f"-{retention_days} days",)
+        (cutoff,)
     ).fetchall()]
     cursor = conn.execute(
         "DELETE FROM session_diary WHERE created_at < datetime('now', ?)",
-        (f"-{retention_days} days",)
+        (cutoff,)
     )
     for did in ids:
         conn.execute("DELETE FROM unified_search WHERE source = 'diary' AND source_id = ?", (did,))
@@ -2307,6 +2387,99 @@ def check_session_has_diary(session_id: str) -> bool:
         (session_id,)
     ).fetchone()
     return row is not None
+
+
+# ── Diary Archive (permanent subconscious) ──────────────────────
+
+
+def diary_archive_search(query: str = '', domain: str = '',
+                         year: int = 0, month: int = 0,
+                         limit: int = 20) -> list[dict]:
+    """Search the permanent diary archive. Supports text search, domain filter, and date filter.
+
+    Args:
+        query: Text to search in summary, decisions, mental_state, pending
+        domain: Filter by domain (e.g. 'wazion', 'my-store')
+        year: Filter by year (e.g. 2026)
+        month: Filter by month (1-12), requires year
+        limit: Max results (default 20)
+    """
+    conn = get_db()
+    try:
+        conn.execute("SELECT 1 FROM diary_archive LIMIT 1")
+    except Exception:
+        return []  # Table doesn't exist yet
+
+    conditions = []
+    params = []
+
+    if query:
+        words = query.strip().split()
+        for word in words:
+            conditions.append(
+                "(summary LIKE ? OR decisions LIKE ? OR mental_state LIKE ? "
+                "OR pending LIKE ? OR self_critique LIKE ?)"
+            )
+            w = f"%{word}%"
+            params.extend([w, w, w, w, w])
+
+    if domain:
+        conditions.append("domain = ?")
+        params.append(domain)
+
+    if year:
+        if month:
+            date_start = f"{year:04d}-{month:02d}-01"
+            if month == 12:
+                date_end = f"{year + 1:04d}-01-01"
+            else:
+                date_end = f"{year:04d}-{month + 1:02d}-01"
+            conditions.append("created_at >= ? AND created_at < ?")
+            params.extend([date_start, date_end])
+        else:
+            conditions.append("created_at >= ? AND created_at < ?")
+            params.extend([f"{year:04d}-01-01", f"{year + 1:04d}-01-01"])
+
+    where = " AND ".join(conditions) if conditions else "1=1"
+
+    rows = conn.execute(f"""
+        SELECT id, session_id, created_at, summary, decisions, domain,
+               mental_state, pending, self_critique, source
+        FROM diary_archive
+        WHERE {where}
+        ORDER BY created_at DESC
+        LIMIT ?
+    """, params + [limit]).fetchall()
+    return [dict(r) for r in rows]
+
+
+def diary_archive_read(diary_id: int) -> dict | None:
+    """Read a single archived diary entry by ID — full content."""
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT * FROM diary_archive WHERE id = ?", (diary_id,)
+        ).fetchone()
+        return dict(row) if row else None
+    except Exception:
+        return None
+
+
+def diary_archive_stats() -> dict:
+    """Get archive statistics: count, date range, domains."""
+    conn = get_db()
+    try:
+        count = conn.execute("SELECT COUNT(*) FROM diary_archive").fetchone()[0]
+        if count == 0:
+            return {"count": 0, "oldest": None, "newest": None, "domains": []}
+        oldest = conn.execute("SELECT MIN(created_at) FROM diary_archive").fetchone()[0]
+        newest = conn.execute("SELECT MAX(created_at) FROM diary_archive").fetchone()[0]
+        domains = [r[0] for r in conn.execute(
+            "SELECT DISTINCT domain FROM diary_archive WHERE domain IS NOT NULL AND domain != '' ORDER BY domain"
+        ).fetchall()]
+        return {"count": count, "oldest": oldest, "newest": newest, "domains": domains}
+    except Exception:
+        return {"count": 0, "oldest": None, "newest": None, "domains": []}
 
 
 # ── Session Diary Drafts ─────────────────────────────────────────
