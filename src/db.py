@@ -950,6 +950,59 @@ def _m9_maintenance_schedule(conn):
         )
 
 
+def _m11_core_rules(conn):
+    """Core system rules table — versioned behavioral rules with migration support."""
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS core_rules (
+            id TEXT PRIMARY KEY,
+            category TEXT NOT NULL,
+            rule TEXT NOT NULL,
+            why TEXT NOT NULL,
+            importance INTEGER NOT NULL DEFAULT 4,
+            type TEXT NOT NULL DEFAULT 'advisory' CHECK(type IN ('blocking', 'advisory')),
+            added_in TEXT NOT NULL DEFAULT '1.0.0',
+            removed_in TEXT DEFAULT NULL,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS core_rules_version (
+            id INTEGER PRIMARY KEY CHECK(id = 1),
+            version TEXT NOT NULL DEFAULT '0.0.0',
+            updated_at TEXT DEFAULT (datetime('now'))
+        );
+
+        INSERT OR IGNORE INTO core_rules_version (id, version) VALUES (1, '0.0.0');
+    """)
+    # Seed rules from core-rules.json if available
+    _seed_core_rules(conn)
+
+
+def _seed_core_rules(conn):
+    """Load rules from core-rules.json into the database."""
+    import json
+    rules_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rules", "core-rules.json")
+    if not os.path.exists(rules_file):
+        return
+
+    with open(rules_file) as f:
+        data = json.load(f)
+
+    version = data["_meta"]["version"]
+
+    for cat_key, cat in data["categories"].items():
+        for rule in cat["rules"]:
+            conn.execute(
+                """INSERT OR REPLACE INTO core_rules (id, category, rule, why, importance, type, added_in)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (rule["id"], cat_key, rule["rule"], rule["why"],
+                 rule["importance"], rule["type"], rule.get("added_in", version))
+            )
+
+    conn.execute("UPDATE core_rules_version SET version = ?, updated_at = datetime('now') WHERE id = 1", (version,))
+    conn.commit()
+
+
 # Migration registry — APPEND ONLY, never reorder or delete
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
@@ -962,6 +1015,7 @@ MIGRATIONS = [
     (8, "adaptive_log_and_somatic", _m8_adaptive_log_and_somatic),
     (9, "maintenance_schedule", _m9_maintenance_schedule),
     (10, "diary_archive", _m10_diary_archive),
+    (11, "core_rules", _m11_core_rules),
 ]
 
 
