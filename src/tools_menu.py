@@ -39,8 +39,8 @@ MENU_ITEMS = [
         ("6", "Cambiar Promocion Shopify"),
     ]),
     ("Servidor e Infraestructura", [
-        ("2", "Servidor - Chequeo cl105e.mundiserver.com"),
-        ("3", "WhatsApp Logs - Revisar logs vicshopsysteam"),
+        ("2", "Servidor - Chequeo server health check"),
+        ("3", "WhatsApp Logs - Review WhatsApp logs"),
         ("11", "File Tracker - Reporte archivos PHP"),
         ("12", "Google Cloud - Gasto, consumo y estado GCP"),
     ]),

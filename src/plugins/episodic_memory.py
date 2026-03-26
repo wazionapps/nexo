@@ -27,7 +27,7 @@ def handle_decision_log(domain: str, decision: str, alternatives: str = '',
     """Log a non-trivial decision with reasoning context.
 
     Args:
-        domain: Area (ads, shopify, server, wazion, nexo, canarirural, other)
+        domain: Area (ads, shopify, server, wazion, nexo, project, other)
         decision: What was decided
         alternatives: JSON array or text of options considered and why discarded
         based_on: Data, metrics, or observations that informed this decision
@@ -35,7 +35,7 @@ def handle_decision_log(domain: str, decision: str, alternatives: str = '',
         context_ref: Related followup/reminder ID (e.g., NF-ADS1, R71)
         session_id: Current session ID (auto-filled if empty)
     """
-    valid_domains = {'ads', 'shopify', 'server', 'wazion', 'nexo', 'canarirural', 'other'}
+    valid_domains = {'ads', 'shopify', 'server', 'wazion', 'nexo', 'project', 'other'}
     if domain not in valid_domains:
         return f"ERROR: domain debe ser uno de: {', '.join(sorted(valid_domains))}"
     if confidence not in ('high', 'medium', 'low'):
@@ -92,10 +92,10 @@ def handle_decision_search(query: str = '', domain: str = '', days: int = 30) ->
 
     Args:
         query: Text to search in decision, alternatives, based_on, outcome
-        domain: Filter by area (ads, shopify, server, wazion, nexo, canarirural, other)
+        domain: Filter by area (ads, shopify, server, wazion, nexo, project, other)
         days: Look back N days (default 30)
     """
-    valid_domains = {'ads', 'shopify', 'server', 'wazion', 'nexo', 'canarirural', 'other'}
+    valid_domains = {'ads', 'shopify', 'server', 'wazion', 'nexo', 'project', 'other'}
     if domain and domain not in valid_domains:
         return f"ERROR: domain debe ser uno de: {', '.join(sorted(valid_domains))}"
     results = search_decisions(query, domain, days)
@@ -235,7 +235,7 @@ def handle_session_diary_read(session_id: str = '', last_n: int = 3, last_day: b
         session_id: Specific session ID to read (optional)
         last_n: Number of recent entries to return (default 3)
         last_day: If true, returns ALL entries from the most recent day (multi-terminal aware). Use this at startup.
-        domain: Filter by project context: recambios, wazion, nexo, canarirural, server, other
+        domain: Filter by project context: project-a, project-b, nexo, project-c, server, other
     """
     results = read_session_diary(session_id, last_n, last_day, domain)
     if not results:
