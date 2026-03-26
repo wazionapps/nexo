@@ -1,12 +1,12 @@
 # NEXO Brain — Your AI Gets a Brain
 
-[![npm v0.10.0-beta.4](https://img.shields.io/npm/v/nexo-brain?label=npm&color=purple)](https://www.npmjs.com/package/nexo-brain)
+[![npm v0.10.0-beta.5](https://img.shields.io/npm/v/nexo-brain?label=npm&color=purple)](https://www.npmjs.com/package/nexo-brain)
 [![F1 0.588 on LoCoMo](https://img.shields.io/badge/LoCoMo_F1-0.588-brightgreen)](https://github.com/wazionapps/nexo/blob/main/benchmarks/locomo/results/)
 [![+55% vs GPT-4](https://img.shields.io/badge/vs_GPT--4-%2B55%25-blue)](https://github.com/snap-research/locomo/issues/33)
 [![GitHub stars](https://img.shields.io/github/stars/wazionapps/nexo?style=social)](https://github.com/wazionapps/nexo/stargazers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-> **v0.10.0-beta.4** — Cognitive memory pipeline hardened: quarantine automation, embedding migration fix, smarter STM→LTM promotion, 21% noise reduction from dream insights, zero-decay pinning for corrections, and extended GC windows.
+> **v0.10.0-beta.5** — Smart Startup pre-loads relevant memories at boot. Context Packets bundle area knowledge for subagents. Auto-prime detects project topics and surfaces learnings automatically. Plus: quarantine automation, embedding migration fix, smarter STM→LTM promotion, dream noise reduction, and zero-decay pinning for corrections.
 
 **NEXO Brain transforms any MCP-compatible AI agent from a stateless assistant into a cognitive partner that remembers, learns, forgets, adapts, and builds a relationship with you over time.**
 
@@ -138,7 +138,7 @@ If your Mac was asleep during any scheduled process, NEXO Brain catches up in or
 
 ## Cognitive Features
 
-NEXO Brain provides 25 cognitive tools on top of the 76 base tools, totaling **109+ MCP tools**. These features implement cognitive science concepts that go beyond basic memory:
+NEXO Brain provides 27 cognitive tools on top of the 76 base tools, totaling **111+ MCP tools**. These features implement cognitive science concepts that go beyond basic memory:
 
 ### Input Pipeline
 
@@ -146,7 +146,7 @@ NEXO Brain provides 25 cognitive tools on top of the 76 base tools, totaling **1
 |---------|-------------|
 | **Prediction Error Gating** | Only novel information is stored. Redundant content that matches existing memories is rejected at write time, keeping your memory clean without manual curation. |
 | **Security Pipeline** | 4-layer defense against memory poisoning: injection detection, encoding analysis, behavioral anomaly scoring, and credential scanning. Every memory passes through all four layers before storage. |
-| **Quarantine Queue** | New facts enter quarantine status and must pass a promotion policy before becoming trusted knowledge. Prevents unverified information from influencing decisions. |
+| **Quarantine Queue** | New facts enter quarantine status and must pass a promotion policy before becoming trusted knowledge. Prevents unverified information from influencing decisions. Automated nightly processing promotes, rejects, or expires items. |
 | **Secret Redaction** | Auto-detects and redacts API keys, tokens, passwords, and other sensitive data before storage. Secrets never reach the vector database. |
 
 ### Memory Management
@@ -179,6 +179,9 @@ NEXO Brain provides 25 cognitive tools on top of the 76 base tools, totaling **1
 | **Prospective Memory** | Context-triggered reminders that fire when conversation topics match, not just by date. "Remind me about X when we discuss Y" works naturally. |
 | **Hook Auto-capture** | Extracts decisions, corrections, and factual statements from conversations automatically. You don't need to explicitly say "remember this" — the system detects what's worth storing. |
 | **Session Summaries** | Automatic end-of-session summarization that distills key decisions, errors, and follow-ups into a compact diary entry. The next session starts with full context — not a cold slate. |
+| **Smart Startup** | Pre-loads relevant cognitive memories at session boot by composing a query from pending followups, due reminders, and last session's topics. Every session starts with the right context — not a cold search. |
+| **Context Packets** | Bundles all area knowledge (learnings, recent changes, active followups, preferences, cognitive memories) into a single injectable packet for subagent delegation. Subagents never start blind again. |
+| **Auto-Prime by Topic** | Heartbeat detects project/area keywords in conversation and automatically surfaces the most relevant learnings. No explicit memory query needed — context arrives proactively. |
 
 ## Benchmark: LoCoMo (ACL 2024)
 
