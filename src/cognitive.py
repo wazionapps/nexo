@@ -30,13 +30,13 @@ DISCRIMINATING_ENTITIES = {
     # OS / Environment
     "linux", "mac", "macos", "windows", "darwin", "ubuntu", "debian", "alpine",
     # Platforms
-    "shopify", "wazion", "project-a", "project-b", "whatsapp", "chrome", "firefox",
+    "shopify", "whatsapp", "chrome", "firefox",
     # Languages / Runtimes
     "python", "php", "javascript", "typescript", "node", "deno", "ruby",
     # Versions
     "v1", "v2", "v3", "v4", "v5", "5.6", "7.4", "8.0", "8.1", "8.2",
     # Infrastructure
-    "server", "cloudrun", "gcloud", "vps", "local", "production", "staging",
+    "cloudrun", "gcloud", "vps", "local", "production", "staging",
     # DB
     "mysql", "sqlite", "postgresql", "postgres", "redis",
 }
@@ -65,12 +65,12 @@ URGENCY_SIGNALS = {
 _DEFAULT_TRUST_EVENTS = {
     # Positive
     "explicit_thanks": +3,
-    "delegation": +2,        # Francisco delegates new task without micromanaging
-    "paradigm_shift": +2,    # Francisco teaches, NEXO learns
+    "delegation": +2,        # user delegates new task without micromanaging
+    "paradigm_shift": +2,    # user teaches, agent learns
     "sibling_detected": +3,  # NEXO avoided context error on its own
     "proactive_action": +2,  # NEXO did something useful without being asked
     # Negative
-    "correction": -3,        # Francisco corrects NEXO
+    "correction": -3,        # user corrects the agent
     "repeated_error": -7,    # Error on something NEXO already had a learning for
     "override": -5,          # NEXO's memory was wrong
     "correction_fatigue": -10, # Same memory corrected 3+ times
@@ -303,7 +303,7 @@ def _auto_migrate_embeddings(conn: sqlite3.Connection):
         # Need migration: 384 → 768
         model = _get_model()
 
-        for table in ("stm_memories", "ltm_memories"):
+        for table in ("stm_memories", "ltm_memories", "quarantine"):
             rows = conn.execute(f"SELECT id, content FROM {table}").fetchall()
             if not rows:
                 continue
@@ -395,7 +395,7 @@ def _init_tables(conn: sqlite3.Connection):
             created_at TEXT DEFAULT (datetime('now'))
         );
 
-        -- Sentiment readings: Francisco's detected mood per interaction
+        -- Sentiment readings: the user's detected mood per interaction
         CREATE TABLE IF NOT EXISTS sentiment_log (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             sentiment TEXT NOT NULL,       -- 'positive', 'negative', 'neutral', 'urgent'
@@ -421,13 +421,13 @@ def _init_tables(conn: sqlite3.Connection):
             status TEXT DEFAULT 'pending'
         );
 
-        -- Correction tracking: when Francisco overrides a memory's guidance
+        -- Correction tracking: when user overrides a memory's guidance
         CREATE TABLE IF NOT EXISTS memory_corrections (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             memory_id INTEGER NOT NULL,
             store TEXT NOT NULL,           -- 'stm' or 'ltm'
             correction_type TEXT NOT NULL, -- 'override', 'exception', 'paradigm_shift'
-            context TEXT DEFAULT '',       -- what Francisco said
+            context TEXT DEFAULT '',       -- what user said
             created_at TEXT DEFAULT (datetime('now'))
         );
     """)
@@ -732,33 +732,138 @@ def bm25_search(query_text: str, stores: str = "both", top_k: int = 20,
 
 def _rrf_fuse(vector_results: list[dict], bm25_results: list[dict],
               k: int = 60, alpha: float = 0.7) -> list[dict]:
-    """Reciprocal Rank Fusion: boost vector results with BM25 keyword matches.
+    """Reciprocal Rank Fusion: merge vector and BM25 results.
 
-    BM25 only BOOSTS existing vector results — never adds new ones.
-    This preserves vector search recall while improving precision for keyword-heavy queries.
+    Unlike the old version that only boosted vector-found results, this now
+    ALSO ADDS BM25-only results. This is critical for vocabulary mismatches
+    where semantic search misses but keyword search finds the right memory
+    (e.g., user says 'backend', memory contains 'FastAPI dashboard localhost:6174').
 
-    RRF score = vector_score + (1-alpha) * 1/(k + bm25_rank) for items found by both.
-    Items only in vector results keep their original score.
+    RRF score = alpha * 1/(k + vec_rank) + (1-alpha) * 1/(k + bm25_rank)
+    Items found by only one source get a penalty rank for the missing source.
     """
-    # Build BM25 lookup by (store, id)
+    # Build lookups by (store, id)
+    vec_lookup = {}
+    for rank, r in enumerate(vector_results):
+        key = (r["store"], r["id"])
+        vec_lookup[key] = (rank + 1, r)
+
     bm25_lookup = {}
     for rank, r in enumerate(bm25_results):
         key = (r["store"], r["id"])
-        bm25_lookup[key] = rank + 1  # 1-based rank
+        if key not in bm25_lookup:  # keep best rank
+            bm25_lookup[key] = (rank + 1, r)
 
-    # Boost vector results that also appear in BM25
+    # Merge all unique keys
+    all_keys = set(vec_lookup.keys()) | set(bm25_lookup.keys())
+    miss_rank = max(len(vector_results), len(bm25_results)) + 10  # penalty rank for missing source
+
     fused = []
-    for r in vector_results:
-        result = r.copy()
-        key = (r["store"], r["id"])
-        if key in bm25_lookup:
-            bm25_rank = bm25_lookup[key]
-            boost = (1 - alpha) * (1.0 / (k + bm25_rank))
-            result["score"] = r["score"] + boost
-            result["bm25_boosted"] = True
+    for key in all_keys:
+        vec_rank, vec_result = vec_lookup.get(key, (miss_rank, None))
+        bm25_rank, bm25_result = bm25_lookup.get(key, (miss_rank, None))
+
+        # Use whichever result has the data
+        base = vec_result if vec_result else bm25_result
+        result = base.copy()
+
+        rrf_score = alpha * (1.0 / (k + vec_rank)) + (1 - alpha) * (1.0 / (k + bm25_rank))
+
+        # If we have the original cosine score, blend it in to preserve semantic confidence
+        if vec_result and "score" in vec_result:
+            # Weighted blend: RRF for ranking + cosine for confidence
+            result["score"] = 0.6 * vec_result["score"] + 0.4 * (rrf_score * k * 3)
+        else:
+            # BM25-only result: use RRF score scaled to ~0.5-0.7 range
+            result["score"] = min(0.85, rrf_score * k * 3)
+
+        result["bm25_boosted"] = key in bm25_lookup
+        result["bm25_only"] = key not in vec_lookup
+        result["rrf_score"] = rrf_score
         fused.append(result)
 
+    # Sort by score descending
+    fused.sort(key=lambda x: x["score"], reverse=True)
     return fused
+
+
+# ── Temporal Boosting ────────────────────────────────────────────────
+# Recent memories get a bounded additive boost at query time.
+# Design from multi-AI debate (GPT-5.4 + Gemini 3.1 Pro + Claude Opus 4.6):
+# - Additive, not multiplicative (preserves old strong matches)
+# - Relevance-gated (only boost if already above threshold)
+# - Query-adaptive alpha (operational queries get more boost)
+
+# Operational keywords that suggest the user wants recent/active things
+_OPERATIONAL_CUES = frozenset({
+    "current", "latest", "now", "running", "active", "today", "yesterday",
+    "tonight", "backend", "server", "dashboard", "service", "localhost",
+    "anoche", "ayer", "ahora", "actual", "corriendo", "activo", "hoy",
+    "madrugada", "esta mañana", "last night", "this morning",
+})
+
+# Historical keywords that suggest the user wants old things
+_HISTORICAL_CUES = frozenset({
+    "ago", "month", "months", "year", "years", "previous", "earlier",
+    "cuando", "hace", "meses", "año", "anterior", "antes",
+})
+
+
+def _apply_temporal_boost(results: list[dict], query_text: str) -> list[dict]:
+    """Apply bounded temporal boost to retrieval results.
+
+    Recent memories (hours/days) get a small additive bonus, but only if they
+    already have a reasonable relevance score (gated at 0.45). This prevents
+    recent junk from outranking strong old matches.
+
+    The boost decays with a 3-day half-life:
+        boost = alpha * exp(-ln(2) * age_days / 3)
+
+    Alpha is query-adaptive:
+        - Operational queries ('backend', 'active', 'today'): alpha = 0.06
+        - Default queries: alpha = 0.02
+        - Historical queries ('ago', 'months', 'year'): alpha = 0.0 (disabled)
+    """
+    if not results:
+        return results
+
+    # Determine alpha based on query intent
+    query_tokens = set(query_text.lower().split())
+    if query_tokens & _HISTORICAL_CUES:
+        return results  # No temporal boost for historical queries
+    elif query_tokens & _OPERATIONAL_CUES:
+        alpha = 0.06
+    else:
+        alpha = 0.02
+
+    now = datetime.now()
+    ln2 = math.log(2)
+    half_life_days = 3.0
+
+    for r in results:
+        # Only boost if already reasonably relevant (relevance gate)
+        if r.get("score", 0) < 0.45:
+            continue
+
+        # Calculate age in days
+        created_str = r.get("created_at", "")
+        if not created_str:
+            continue
+        try:
+            created = datetime.fromisoformat(created_str.replace("Z", "+00:00").replace("+00:00", ""))
+            age_days = max(0, (now - created).total_seconds() / 86400)
+        except (ValueError, TypeError):
+            continue
+
+        # Bounded exponential decay boost
+        boost = alpha * math.exp(-ln2 * age_days / half_life_days)
+
+        # Apply boost (capped at 1.0)
+        r["score"] = min(1.0, r["score"] + boost)
+        if boost > 0.001:
+            r["temporal_boost"] = round(boost, 4)
+
+    return results
 
 
 
@@ -1106,12 +1211,16 @@ def search(
     hybrid_alpha: float = 0.6,
     spreading_depth: int = 0,
     decompose: bool = True,
+    exclude_dreams: bool = True,
 ) -> list[dict]:
     """Full vector search across STM and/or LTM with rehearsal and dormant reactivation.
 
     Args:
         use_hyde: If True, use HyDE query expansion for richer embedding (default False)
         spreading_depth: If >0, fetch co-activated neighbors and boost their scores (default 0)
+        exclude_dreams: If True (default), exclude dream_insight memories from results.
+                        Dream insights are 21% of LTM and dilute search precision.
+                        Set to False only when explicitly looking for cross-domain patterns.
         hybrid: If True, boost results with BM25 keyword matches (default True)
         hybrid_alpha: Weight for vector vs BM25. Higher = more vector. (default 0.6)
         decompose: If True, decompose complex queries into sub-queries for better multi-hop (default True)
@@ -1214,6 +1323,8 @@ def search(
         if source_type_filter:
             where += " AND source_type = ?"
             params.append(source_type_filter)
+        if exclude_dreams and not source_type_filter:
+            where += " AND source_type != 'dream_insight'"
         rows = db.execute(f"SELECT * FROM ltm_memories {where}", params).fetchall()
 
         for row in rows:
@@ -1282,6 +1393,9 @@ def search(
         for r in results:
             if r.get("temporal_date"):
                 r["score"] = min(1.0, r["score"] + 0.05)
+
+    # Recency temporal boost: recent memories get additive bonus (query-adaptive)
+    results = _apply_temporal_boost(results, query_text)
 
     # Sort by score descending, take top-20 for reranking
     results.sort(key=lambda x: x.get("score", 0), reverse=True)
@@ -1395,7 +1509,8 @@ def ingest(
     source: str = "inferred",
     skip_quarantine: bool = False,
     bypass_gate: bool = False,
-    bypass_security: bool = False
+    bypass_security: bool = False,
+    auto_pin: bool = False,
 ) -> int:
     """Embed and store content. Routes through quarantine unless skip_quarantine=True or source='user_direct'.
 
@@ -1443,6 +1558,13 @@ def ingest(
     blob = _array_to_blob(vec)
     temporal = extract_temporal_date(content)
 
+    # Auto-pin: corrections and blocking learnings get pinned (zero decay, +0.2 boost)
+    # This ensures user corrections NEVER fade away
+    _pin_lifecycle = None
+    if auto_pin or (source_type in ('learning', 'feedback') and
+                    any(kw in content.upper() for kw in ('BLOCKING', 'CRÍTICO', 'CRITICAL', 'NUNCA', 'NEVER', 'PROHIBIDO'))):
+        _pin_lifecycle = 'pinned'
+
     # user_direct = fast-track: quarantine then immediate promote
     if source == "user_direct" and not skip_quarantine:
         cur = db.execute(
@@ -1453,9 +1575,9 @@ def ingest(
         db.commit()
         # Now actually store in STM
         cur2 = db.execute(
-            """INSERT INTO stm_memories (content, embedding, source_type, source_id, source_title, domain, redaction_applied, temporal_date)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (clean_content, blob, source_type, source_id, source_title, domain, was_redacted, temporal)
+            """INSERT INTO stm_memories (content, embedding, source_type, source_id, source_title, domain, redaction_applied, temporal_date, lifecycle_state)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (clean_content, blob, source_type, source_id, source_title, domain, was_redacted, temporal, _pin_lifecycle)
         )
         db.commit()
         return cur2.lastrowid
@@ -1463,9 +1585,9 @@ def ingest(
     # skip_quarantine = direct STM (backward compatibility)
     if skip_quarantine:
         cur = db.execute(
-            """INSERT INTO stm_memories (content, embedding, source_type, source_id, source_title, domain, redaction_applied, temporal_date)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (clean_content, blob, source_type, source_id, source_title, domain, was_redacted, temporal)
+            """INSERT INTO stm_memories (content, embedding, source_type, source_id, source_title, domain, redaction_applied, temporal_date, lifecycle_state)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (clean_content, blob, source_type, source_id, source_title, domain, was_redacted, temporal, _pin_lifecycle)
         )
         db.commit()
         return cur.lastrowid
@@ -1669,10 +1791,29 @@ def apply_decay(adaptive: bool = True):
 
 
 def promote_stm_to_ltm():
-    """Promote STM memories with access_count >= 3 to LTM. Mark as promoted."""
+    """Promote STM memories to LTM based on multiple criteria.
+
+    Promotion rules (any one is sufficient):
+    1. access_count >= 3 (actively retrieved = important)
+    2. age > 5 days AND strength > 0.4 (survived decay = worth keeping)
+    3. source_type in ('learning', 'decision', 'feedback') (high-value by nature)
+    """
     db = _get_db()
+    now = datetime.utcnow()
+    age_cutoff = (now - timedelta(days=5)).isoformat()
+
+    # Rule 1: frequently accessed
+    # Rule 2: old + strong (survived decay)
+    # Rule 3: high-value source types (always promote if in STM)
     rows = db.execute(
-        "SELECT * FROM stm_memories WHERE access_count >= 3 AND promoted_to_ltm = 0"
+        """SELECT * FROM stm_memories
+           WHERE promoted_to_ltm = 0
+           AND (
+               access_count >= 3
+               OR (created_at < ? AND strength > 0.4)
+               OR source_type IN ('learning', 'decision', 'feedback')
+           )""",
+        (age_cutoff,)
     ).fetchall()
 
     promoted = 0
@@ -1692,21 +1833,25 @@ def promote_stm_to_ltm():
 
 
 def gc_stm():
-    """Garbage collect STM: delete weak old memories and anything > 30 days."""
+    """Garbage collect STM: delete weak old memories and anything > 45 days.
+    Pinned memories are never deleted.
+    """
     db = _get_db()
     now = datetime.utcnow()
     cutoff_7d = (now - timedelta(days=7)).isoformat()
-    cutoff_30d = (now - timedelta(days=30)).isoformat()
+    cutoff_45d = (now - timedelta(days=45)).isoformat()
 
-    # Delete STM with strength < 0.3 and older than 7 days
+    # Delete STM with strength < 0.3 and older than 7 days (skip pinned)
     cur1 = db.execute(
-        "DELETE FROM stm_memories WHERE strength < 0.3 AND created_at < ? AND promoted_to_ltm = 0",
+        "DELETE FROM stm_memories WHERE strength < 0.3 AND created_at < ? AND promoted_to_ltm = 0 "
+        "AND (lifecycle_state IS NULL OR lifecycle_state != 'pinned')",
         (cutoff_7d,)
     )
-    # Delete any STM older than 30 days
+    # Delete any STM older than 45 days (skip pinned)
     cur2 = db.execute(
-        "DELETE FROM stm_memories WHERE created_at < ? AND promoted_to_ltm = 0",
-        (cutoff_30d,)
+        "DELETE FROM stm_memories WHERE created_at < ? AND promoted_to_ltm = 0 "
+        "AND (lifecycle_state IS NULL OR lifecycle_state != 'pinned')",
+        (cutoff_45d,)
     )
     db.commit()
     return (cur1.rowcount or 0) + (cur2.rowcount or 0)
@@ -2544,12 +2689,12 @@ def get_siblings(memory_id: int) -> list[dict]:
 def detect_dissonance(new_instruction: str, min_score: float = 0.65) -> list[dict]:
     """Detect cognitive dissonance: find LTM memories that contradict a new instruction.
 
-    When Francisco gives a new instruction that conflicts with established LTM memories
+    When the user gives a new instruction that conflicts with established LTM memories
     (strength > 0.8), this function surfaces the conflict so NEXO can verbalize it
     rather than silently obeying or silently resisting.
 
     Args:
-        new_instruction: The new instruction or preference from Francisco
+        new_instruction: The new instruction or preference from the user
         min_score: Minimum cosine similarity to consider as potential conflict
 
     Returns:
@@ -2584,12 +2729,12 @@ def detect_dissonance(new_instruction: str, min_score: float = 0.65) -> list[dic
 
 
 def resolve_dissonance(memory_id: int, resolution: str, context: str = "") -> str:
-    """Resolve a cognitive dissonance by applying Francisco's decision.
+    """Resolve a cognitive dissonance by applying the user's decision.
 
     Args:
         memory_id: The LTM memory that conflicts with the new instruction
         resolution: One of:
-            - 'paradigm_shift': Francisco changed his mind permanently. Decay old memory,
+            - 'paradigm_shift': user changed their mind permanently. Decay old memory,
               new instruction becomes the standard.
             - 'exception': This is a one-time override. Keep old memory as standard.
             - 'override': Old memory was wrong. Mark as corrupted and decay to dormant.
@@ -2640,7 +2785,7 @@ def resolve_dissonance(memory_id: int, resolution: str, context: str = "") -> st
 def check_correction_fatigue() -> list[dict]:
     """Find memories corrected 3+ times in the last 7 days — mark as 'under review'.
 
-    These memories are unreliable: Francisco keeps overriding them, suggesting
+    These memories are unreliable: user keeps overriding them, suggesting
     the memory itself may be wrong or outdated.
 
     Returns:
@@ -2688,7 +2833,7 @@ def check_correction_fatigue() -> list[dict]:
 
 
 def detect_sentiment(text: str) -> dict:
-    """Analyze Francisco's text for sentiment signals.
+    """Analyze the user's text for sentiment signals.
 
     Returns detected sentiment, intensity, and action guidance for NEXO.
     Not a model — keyword + heuristic based. Fast and deterministic.
@@ -2727,17 +2872,17 @@ def detect_sentiment(text: str) -> dict:
         sentiment = "negative"
         intensity = min(1.0, 0.3 + neg_score * 0.15)
         if intensity > 0.7:
-            guidance = "MODE: Ultra-concise. Zero explanations. Resolve and show result."
+            guidance = "MODE: Ultra-conciso. Cero explicaciones. Resolver y mostrar resultado."
         else:
-            guidance = "MODE: Concise. Less context, more direct action."
+            guidance = "MODE: Conciso. Menos contexto, más acción directa."
     elif pos_score > neg_score and pos_score >= 1:
         sentiment = "positive"
         intensity = min(1.0, 0.3 + pos_score * 0.15)
-        guidance = "MODE: Normal. Good moment to propose backlog ideas or improvements."
+        guidance = "MODE: Normal. Buen momento para proponer ideas de backlog o mejoras."
     elif urgency_hits:
         sentiment = "urgent"
         intensity = 0.8
-        guidance = "MODE: Immediate action. No preamble."
+        guidance = "MODE: Acción inmediata. Sin preámbulos."
     else:
         sentiment = "neutral"
         intensity = 0.5
@@ -2752,7 +2897,7 @@ def detect_sentiment(text: str) -> dict:
 
 
 def log_sentiment(text: str) -> dict:
-    """Detect and log Francisco's sentiment. Returns the detection result."""
+    """Detect and log the user's sentiment. Returns the detection result."""
     result = detect_sentiment(text)
     if result["sentiment"] != "neutral":
         db = _get_db()
@@ -3018,12 +3163,35 @@ def dream_cycle(max_insights: int = 50) -> dict:
 
     db.commit()
 
-    return {
+    # Dream cap: archive oldest dream_insights if total exceeds MAX_DREAM_INSIGHTS
+    MAX_DREAM_INSIGHTS = 50
+    dream_count = db.execute(
+        "SELECT COUNT(*) FROM ltm_memories WHERE source_type = 'dream_insight' AND is_dormant = 0"
+    ).fetchone()[0]
+    archived_dreams = 0
+    if dream_count > MAX_DREAM_INSIGHTS:
+        excess = dream_count - MAX_DREAM_INSIGHTS
+        oldest = db.execute(
+            "SELECT id FROM ltm_memories WHERE source_type = 'dream_insight' AND is_dormant = 0 "
+            "ORDER BY strength ASC, created_at ASC LIMIT ?", (excess,)
+        ).fetchall()
+        for row in oldest:
+            db.execute(
+                "UPDATE ltm_memories SET lifecycle_state = 'archived' WHERE id = ?", (row["id"],)
+            )
+            archived_dreams += 1
+        db.commit()
+
+    result = {
         "insights_created": len(insights),
         "insights": insights,
         "memories_scanned": len(recent_memories),
         "candidates_found": len(candidate_pairs),
     }
+    if archived_dreams > 0:
+        result["dreams_archived"] = archived_dreams
+        result["dreams_total"] = dream_count
+    return result
 
 
 def get_stats() -> dict:

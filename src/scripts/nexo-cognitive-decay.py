@@ -2,18 +2,14 @@
 """NEXO Cognitive Decay — Daily Ebbinghaus sweep + STM→LTM promotion."""
 
 import json
-import os
 import sys
 from pathlib import Path
 from datetime import datetime
 
-NEXO_HOME = os.environ.get("NEXO_HOME", str(Path.home() / ".nexo"))
-sys.path.insert(0, NEXO_HOME)
-# Fallback for development installs
 sys.path.insert(0, str(Path.home() / "claude" / "nexo-mcp"))
 import cognitive
 
-STATE_FILE = Path(NEXO_HOME) / ".catchup-state.json"
+STATE_FILE = Path.home() / "claude" / "operations" / ".catchup-state.json"
 
 
 def update_catchup_state():
@@ -31,6 +27,16 @@ def main():
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(f"[{ts}] Cognitive decay starting...")
 
+    # 0. Process quarantine FIRST — promote/reject/expire pending items
+    #    BUG FIX 26-Mar-2026: quarantine was NEVER processed automatically.
+    #    78 items were stuck as pending indefinitely.
+    try:
+        q_result = cognitive.process_quarantine()
+        print(f"[{ts}] Quarantine: {q_result['promoted']} promoted, {q_result['rejected']} rejected, "
+              f"{q_result['expired']} expired, {q_result['still_pending']} still pending.")
+    except Exception as e:
+        print(f"[{ts}] Quarantine processing error: {e}")
+
     # 1. Apply decay
     cognitive.apply_decay()
     print(f"[{ts}] Decay applied.")
@@ -39,9 +45,13 @@ def main():
     promoted = cognitive.promote_stm_to_ltm()
     print(f"[{ts}] Promoted {promoted} STM memories to LTM.")
 
-    # 3. Garbage collect expired STM
+    # 3. Garbage collect expired STM + sensory
     gc_count = cognitive.gc_stm()
-    print(f"[{ts}] GC: removed {gc_count} expired STM memories.")
+    try:
+        gc_sensory = cognitive.gc_sensory(max_age_hours=48)
+        print(f"[{ts}] GC: removed {gc_count} expired STM, {gc_sensory} expired sensory.")
+    except Exception as e:
+        print(f"[{ts}] GC: removed {gc_count} expired STM. Sensory GC error: {e}")
 
     # 4. Semantic consolidation — merge near-duplicate LTM (cosine > 0.9)
     #    With discriminative fusion: siblings (different environments) are linked, not merged
@@ -76,7 +86,7 @@ def main():
 
     # 6. Memory Dreaming — discover hidden connections between recent memories
     try:
-        dream_result = cognitive.dream_cycle(max_insights=50)
+        dream_result = cognitive.dream_cycle(max_insights=15)
         scanned = dream_result["memories_scanned"]
         created = dream_result["insights_created"]
         candidates = dream_result["candidates_found"]
@@ -98,10 +108,9 @@ def main():
     except Exception as e:
         print(f"[{ts}] Auto-merge error: {e}")
 
-    # 8. Adaptive weight learning — Ridge regression from feedback-annotated entries
+    # 9. Adaptive weight learning — Ridge regression from feedback-annotated entries
     try:
-        plugins_dir = os.path.join(NEXO_HOME, "plugins")
-        sys.path.insert(0, plugins_dir)
+        sys.path.insert(0, str(Path.home() / "claude" / "nexo-mcp" / "plugins"))
         from adaptive_mode import learn_weights, prune_adaptive_log, check_weight_rollback
 
         rollback = check_weight_rollback()
@@ -131,7 +140,7 @@ def main():
     except Exception as e:
         print(f"[{ts}] Adaptive weight learning error: {e}")
 
-    # 9. Project somatic events from nexo.db -> cognitive.db
+    # 10. Project somatic events from nexo.db -> cognitive.db
     try:
         projected = cognitive.somatic_project_events()
         if projected > 0:
@@ -139,14 +148,14 @@ def main():
     except Exception as e:
         print(f"[{ts}] Somatic projection error: {e}")
 
-    # 10. Somatic marker nightly decay
+    # 11. Somatic marker nightly decay
     try:
         decayed = cognitive.somatic_nightly_decay(gamma=0.95)
         print(f"[{ts}] Somatic decay: {decayed} markers processed (x0.95)")
     except Exception as e:
         print(f"[{ts}] Somatic decay error: {e}")
 
-    # 11. Stats
+    # 8. Stats
     stats = cognitive.get_stats()
     print(f"[{ts}] STM: {stats['stm_active']} | LTM: {stats['ltm_active']} active, {stats['ltm_dormant']} dormant")
     print(f"[{ts}] Done.")
