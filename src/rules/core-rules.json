@@ -6,7 +6,9 @@
     "source": "Consolidated from 6 months production use + multi-AI debate (Claude Opus + GPT-4o)",
     "total_rules": 30,
     "blocking": 25,
-    "advisory": 5
+    "advisory": 5,
+    "immutable": true,
+    "immutable_note": "Core rules are the DNA of NEXO Brain. They CANNOT be deleted or modified by the user. Only the migration system (version updates from the creators) can add, modify, or remove rules. Users can configure behavioral intensity (autonomy, communication, proactivity) but not the rules themselves."
   },
   "categories": {
     "integrity": {
