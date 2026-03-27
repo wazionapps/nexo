@@ -905,7 +905,7 @@
     <div class="container">
         <div class="hero-badge fade-up">
             <span class="dot"></span>
-            <span id="version-badge">v1.0.0</span> &mdash; Cognitive Cortex + 30 Core Rules + Stable Release
+            <span id="version-badge">v1.1.0</span> &mdash; Context Continuity + Auto-Compaction Intelligence
         </div>
         <div class="fade-up" style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;">
             <img src="https://img.shields.io/npm/v/nexo-brain?color=7C3AED&label=npm" alt="npm version">
@@ -1153,8 +1153,26 @@
     </div>
 </section>
 
+<!-- v1.1.0 Context Continuity -->
+<section id="v110" style="padding:80px 0;background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
+    <div class="container">
+        <div class="section-label">New in v1.1.0</div>
+        <h2 class="section-title">Context Continuity</h2>
+        <p class="section-subtitle">
+            Long sessions no longer lose their thread. NEXO preserves session context across Claude Code compaction events using PreCompact checkpoints and PostCompact re-injection. 8-hour sessions feel like one continuous conversation.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>PreCompact Checkpoint</h4><p>Before compaction, NEXO saves a complete snapshot to SQLite: current task, active files, decisions, errors, reasoning thread, and next step.</p></div>
+                <div class="cognitive-card"><h4>Core Memory Block</h4><p>After compaction, a structured block is re-injected into context with everything needed to continue seamlessly. Zero "where were we?" moments.</p></div>
+                <div class="cognitive-card"><h4>Heartbeat Tracking</h4><p>The checkpoint updates automatically every interaction via the heartbeat. No manual action required &mdash; continuity is always maintained.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
 <!-- v1.0.0 Cognitive Cortex -->
-<section id="v100" style="padding:80px 0;background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
+<section id="v100" style="padding:80px 0;background:linear-gradient(135deg,#1a0f2e 0%,#0F0A1A 100%);">
     <div class="container">
         <div class="section-label">New in v1.0.0</div>
         <h2 class="section-title">Cognitive Cortex</h2>
