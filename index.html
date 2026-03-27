@@ -905,7 +905,7 @@
     <div class="container">
         <div class="hero-badge fade-up">
             <span class="dot"></span>
-            <span id="version-badge">v1.1.1</span> &mdash; Context Continuity + Auto-Compaction Intelligence
+            <span id="version-badge">v1.2.0</span> &mdash; Stop Hook Post-Mortem Enforcement
         </div>
         <div class="fade-up" style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;">
             <img src="https://img.shields.io/npm/v/nexo-brain?color=7C3AED&label=npm" alt="npm version">
@@ -1153,8 +1153,24 @@
     </div>
 </section>
 
+<!-- v1.2.0 Stop Hook Post-Mortem -->
+<section id="v120" style="padding:80px 0;background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
+    <div class="container">
+        <div class="section-label">New in v1.2.0</div>
+        <h2 class="section-title">Stop Hook Post-Mortem Enforcement</h2>
+        <p class="section-subtitle">
+            The Stop hook now uses <code>decision:block</code> instead of <code>approve</code> to enforce post-mortem execution. This ensures the session diary is always written before Claude exits &mdash; no more lost context on abrupt stops.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Fix: decision:block</h4><p>Stop hook changed from <code>approve</code> to <code>decision:block</code> so post-mortem writing is enforced architecturally, not just suggested.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
 <!-- v1.1.0 Context Continuity -->
-<section id="v110" style="padding:80px 0;background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
+<section id="v110" style="padding:80px 0;background:linear-gradient(135deg,#1a0f2e 0%,#0F0A1A 100%);">
     <div class="container">
         <div class="section-label">New in v1.1.0</div>
         <h2 class="section-title">Context Continuity</h2>
