@@ -1,24 +1,30 @@
 #!/bin/bash
-# NEXO Stop hook (v6 — BLOCKING post-mortem)
+# NEXO Stop hook (v7 — BLOCKING post-mortem with trivial session detection)
 #
-# v5 bug: used "decision": "approve" + systemMessage. The AI already responded
-# with a goodbye and never processed the post-mortem instructions. The
-# systemMessage appeared but the AI had no turn to act on it.
-#
-# v6 fix: uses "decision": "block" to PREVENT session close until the
-# post-mortem is done. A flag file (.postmortem-complete) signals completion
-# — next close attempt will approve.
+# v5 bug: used "approve" + systemMessage — AI never processed post-mortem.
+# v6 bug: used "block" but deleted flag on approve — caused infinite block loop.
+#         Also had TTL on flag that expired between close attempts.
+# v7 fix: trivial sessions (<5 tool calls) approve immediately.
+#         Non-trivial sessions block until post-mortem is done.
+#         Flag has NO TTL and is NOT deleted on approve.
+#         SessionStart hook cleans up the flag for the next session.
 #
 # Flow:
-#   1. User says goodbye / Ctrl+C
-#   2. Hook checks for recent flag → not found → BLOCK with instructions
-#   3. AI gets another turn → executes post-mortem → creates flag
-#   4. User closes again → hook sees flag → APPROVE
+#   Trivial session (quick question, <5 meaningful tool calls):
+#     → APPROVE immediately, no post-mortem needed
+#
+#   Non-trivial session:
+#     1. User closes → hook checks flag → not found → BLOCK
+#     2. AI executes post-mortem → creates flag
+#     3. User closes again → hook sees flag → APPROVE
+#     4. Next session start → SessionStart hook deletes flag
 set -euo pipefail
 
 NEXO_HOME="${NEXO_HOME:-$HOME/.nexo}"
 NEXO_NAME="${NEXO_NAME:-NEXO}"
 FLAG_FILE="$NEXO_HOME/operations/.postmortem-complete"
+TODAY=$(date +%Y-%m-%d)
+TOOL_LOG="$NEXO_HOME/operations/tool-logs/${TODAY}.jsonl"
 
 # 0. Refresh diary draft with latest changes/decisions (best-effort)
 python3 -c "
@@ -50,25 +56,51 @@ except Exception:
     pass
 " 2>/dev/null || true
 
-# 1. Check if post-mortem was already completed (flag < 120 seconds old)
+# 1. Detect trivial session — count meaningful tool calls from today's log
+# A session with <5 tool calls (excluding Read/Grep/Glob/Bash/ToolSearch) is trivial
+TOOL_COUNT=0
+if [ -f "$TOOL_LOG" ]; then
+    TOOL_COUNT=$(python3 -c "
+import json, sys
+count = 0
+for line in open('$TOOL_LOG'):
+    try:
+        d = json.loads(line)
+        t = d.get('tool_name', '')
+        if t and t not in ('Read', 'Grep', 'Glob', 'Bash', 'ToolSearch'):
+            count += 1
+    except:
+        pass
+print(count)
+" 2>/dev/null || echo "0")
+fi
+
+# Trivial session → approve immediately, write minimal buffer, skip post-mortem
+if [ "$TOOL_COUNT" -lt 5 ]; then
+    BUFFER="$NEXO_HOME/brain/session_buffer.jsonl"
+    TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%S")
+    mkdir -p "$(dirname "$BUFFER")"
+    echo "{\"ts\":\"$TIMESTAMP\",\"tasks\":[\"trivial session\"],\"decisions\":[],\"user_patterns\":[],\"files_modified\":[],\"errors_resolved\":[],\"self_critique\":\"trivial session — no post-mortem needed\",\"mood\":\"neutral\",\"source\":\"hook-trivial\"}" >> "$BUFFER" 2>/dev/null
+
+    cat << 'HOOKEOF'
+{
+  "decision": "approve"
+}
+HOOKEOF
+    exit 0
+fi
+
+# 2. Non-trivial session — check if post-mortem was already completed
+#    Flag has NO TTL — it persists until SessionStart cleans it up next session.
+#    IMPORTANT: do NOT delete flag here — that causes an infinite block loop
+#    if the session doesn't close immediately after approve.
 POSTMORTEM_DONE=false
 if [ -f "$FLAG_FILE" ]; then
-    FLAG_AGE=$(python3 -c "
-import os, time
-try:
-    age = time.time() - os.path.getmtime('$FLAG_FILE')
-    print('recent' if age < 120 else 'stale')
-except:
-    print('stale')
-" 2>/dev/null || echo "stale")
-    if [ "$FLAG_AGE" = "recent" ]; then
-        POSTMORTEM_DONE=true
-    fi
+    POSTMORTEM_DONE=true
 fi
 
 if [ "$POSTMORTEM_DONE" = true ]; then
     # Post-mortem was done — allow session to close
-    rm -f "$FLAG_FILE" 2>/dev/null
     cat << 'HOOKEOF'
 {
   "decision": "approve"
@@ -76,7 +108,6 @@ if [ "$POSTMORTEM_DONE" = true ]; then
 HOOKEOF
 else
     # Post-mortem NOT done — BLOCK session close and inject instructions
-    # Uses "reason" field which Claude Code shows to the AI as context
     cat << HOOKEOF
 {
   "decision": "block",
@@ -85,7 +116,7 @@ else
 HOOKEOF
 fi
 
-# 2. Direct session buffer fallback (runs regardless — safety net)
+# 3. Direct session buffer fallback (runs for non-trivial sessions)
 BUFFER="$NEXO_HOME/brain/session_buffer.jsonl"
 TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%S")
 
@@ -132,8 +163,7 @@ except:
     echo "{\"ts\":\"$TIMESTAMP\",\"tasks\":[\"session ended\"],\"decisions\":[],\"user_patterns\":[],\"files_modified\":[],\"errors_resolved\":[],\"self_critique\":\"hook-fallback, no self-critique captured\",\"mood\":\"unknown\",\"session_end_mode\":\"$ADAPTIVE_MODE\",\"source\":\"hook-fallback\"}" >> "$BUFFER" 2>/dev/null
 fi
 
-# 3. Intra-day reflection trigger
-# Check if buffer has >=3 sessions AND last reflection was >4h ago
+# 4. Intra-day reflection trigger
 REFLECTION_SCRIPT="$NEXO_HOME/scripts/nexo-reflection.py"
 REFLECTION_STATE="$NEXO_HOME/coordination/reflection-log.json"
 TRIGGER_THRESHOLD=3

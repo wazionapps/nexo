@@ -8,7 +8,10 @@ NEXO_HOME="${NEXO_HOME:-$HOME/.nexo}"
 BRIEFING_FILE="$NEXO_HOME/coordination/session-briefing.txt"
 MAX_AGE_SECONDS=3600  # 1 hour cache
 
-mkdir -p "$NEXO_HOME/coordination"
+mkdir -p "$NEXO_HOME/coordination" "$NEXO_HOME/operations"
+
+# Clean up post-mortem flag from previous session
+rm -f "$NEXO_HOME/operations/.postmortem-complete" 2>/dev/null
 
 # If briefing exists and is less than 1 hour old, skip regeneration
 if [ -f "$BRIEFING_FILE" ]; then

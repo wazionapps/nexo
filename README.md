@@ -1,6 +1,6 @@
 # NEXO Brain — Your AI Gets a Brain
 
-[![npm v1.2.0](https://img.shields.io/npm/v/nexo-brain?label=npm&color=purple)](https://www.npmjs.com/package/nexo-brain)
+[![npm v1.2.1](https://img.shields.io/npm/v/nexo-brain?label=npm&color=purple)](https://www.npmjs.com/package/nexo-brain)
 [![F1 0.588 on LoCoMo](https://img.shields.io/badge/LoCoMo_F1-0.588-brightgreen)](https://github.com/wazionapps/nexo/blob/main/benchmarks/locomo/results/)
 [![+55% vs GPT-4](https://img.shields.io/badge/vs_GPT--4-%2B55%25-blue)](https://github.com/snap-research/locomo/issues/33)
 [![GitHub stars](https://img.shields.io/github/stars/wazionapps/nexo?style=social)](https://github.com/wazionapps/nexo/stargazers)
@@ -603,6 +603,12 @@ If NEXO Brain is useful to you, consider:
 [![Star History Chart](https://api.star-history.com/svg?repos=wazionapps/nexo&type=Date)](https://star-history.com/#wazionapps/nexo&Date)
 
 ## Changelog
+
+### v1.2.1 — Stop Hook Hotfix (2026-03-27)
+- **Fix**: v1.2.0 deleted the flag on approve, causing infinite block loops if session didn't close immediately
+- **Fix**: Removed TTL on flag — it persists until SessionStart cleans it up next session
+- **New**: Trivial sessions (<5 meaningful tool calls) skip post-mortem entirely and approve immediately
+- SessionStart hook now cleans up `.postmortem-complete` flag on session start
 
 ### v1.2.0 — Blocking Stop Hook (2026-03-27)
 - **Fix**: Stop hook now uses `"decision": "block"` instead of `"approve"` to enforce post-mortem execution
