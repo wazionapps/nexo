@@ -1,6 +1,6 @@
 # NEXO Brain — Your AI Gets a Brain
 
-[![npm v1.1.1](https://img.shields.io/npm/v/nexo-brain?label=npm&color=purple)](https://www.npmjs.com/package/nexo-brain)
+[![npm v1.2.0](https://img.shields.io/npm/v/nexo-brain?label=npm&color=purple)](https://www.npmjs.com/package/nexo-brain)
 [![F1 0.588 on LoCoMo](https://img.shields.io/badge/LoCoMo_F1-0.588-brightgreen)](https://github.com/wazionapps/nexo/blob/main/benchmarks/locomo/results/)
 [![+55% vs GPT-4](https://img.shields.io/badge/vs_GPT--4-%2B55%25-blue)](https://github.com/snap-research/locomo/issues/33)
 [![GitHub stars](https://img.shields.io/github/stars/wazionapps/nexo?style=social)](https://github.com/wazionapps/nexo/stargazers)
@@ -603,6 +603,13 @@ If NEXO Brain is useful to you, consider:
 [![Star History Chart](https://api.star-history.com/svg?repos=wazionapps/nexo&type=Date)](https://star-history.com/#wazionapps/nexo&Date)
 
 ## Changelog
+
+### v1.2.0 — Blocking Stop Hook (2026-03-27)
+- **Fix**: Stop hook now uses `"decision": "block"` instead of `"approve"` to enforce post-mortem execution
+- Previous behavior: hook injected `systemMessage` but AI had already responded — instructions were never processed
+- New behavior: session close is blocked until AI completes self-critique, session diary, buffer entry, and followups
+- Flag-based mechanism (`.postmortem-complete`) allows second close attempt to succeed
+- Works for all NEXO users, not just specific setups
 
 ### v1.1.1 — Multi-terminal fix (2026-03-27)
 - **Fix**: PostCompact now reads the correct session's checkpoint in multi-terminal setups

@@ -1,12 +1,24 @@
 #!/bin/bash
-# NEXO Stop hook — Full post-mortem and session closure.
-# Injects a systemMessage with mandatory self-critique instructions.
-# After emitting the hook response, writes a fallback buffer entry
-# and triggers intra-day reflection if enough sessions have accumulated.
+# NEXO Stop hook (v6 — BLOCKING post-mortem)
+#
+# v5 bug: used "decision": "approve" + systemMessage. The AI already responded
+# with a goodbye and never processed the post-mortem instructions. The
+# systemMessage appeared but the AI had no turn to act on it.
+#
+# v6 fix: uses "decision": "block" to PREVENT session close until the
+# post-mortem is done. A flag file (.postmortem-complete) signals completion
+# — next close attempt will approve.
+#
+# Flow:
+#   1. User says goodbye / Ctrl+C
+#   2. Hook checks for recent flag → not found → BLOCK with instructions
+#   3. AI gets another turn → executes post-mortem → creates flag
+#   4. User closes again → hook sees flag → APPROVE
 set -euo pipefail
 
 NEXO_HOME="${NEXO_HOME:-$HOME/.nexo}"
 NEXO_NAME="${NEXO_NAME:-NEXO}"
+FLAG_FILE="$NEXO_HOME/operations/.postmortem-complete"
 
 # 0. Refresh diary draft with latest changes/decisions (best-effort)
 python3 -c "
@@ -38,19 +50,45 @@ except Exception:
     pass
 " 2>/dev/null || true
 
-# 1. Emit hook response (must be first output — Claude Code reads this)
-cat << HOOKEOF
+# 1. Check if post-mortem was already completed (flag < 120 seconds old)
+POSTMORTEM_DONE=false
+if [ -f "$FLAG_FILE" ]; then
+    FLAG_AGE=$(python3 -c "
+import os, time
+try:
+    age = time.time() - os.path.getmtime('$FLAG_FILE')
+    print('recent' if age < 120 else 'stale')
+except:
+    print('stale')
+" 2>/dev/null || echo "stale")
+    if [ "$FLAG_AGE" = "recent" ]; then
+        POSTMORTEM_DONE=true
+    fi
+fi
+
+if [ "$POSTMORTEM_DONE" = true ]; then
+    # Post-mortem was done — allow session to close
+    rm -f "$FLAG_FILE" 2>/dev/null
+    cat << 'HOOKEOF'
 {
-  "decision": "approve",
-  "systemMessage": "STOP HOOK — MANDATORY POST-MORTEM before ending (do NOT ask permission, do NOT skip):\n\n## 1. SELF-CRITIQUE (MANDATORY — write to session diary)\nAnswer these questions in the self_critique field of nexo_session_diary_write:\n- Did the user have to ask me for something I should have detected or done on my own?\n- Did I wait for the user to tell me something I could have verified proactively?\n- Are there systems/states I can check next session without being asked?\n- Did I repeat an error that already had a registered learning?\n- What would I do differently if I repeated this session?\nIf any answer is YES — write the specific rule that would prevent repetition.\nIf the session was flawless, write 'No self-critique — clean session.'\n\n## 2. SESSION BUFFER\nIf the session was NOT trivial, append ONE JSON line to ${NEXO_HOME}/brain/session_buffer.jsonl:\n{\"ts\":\"YYYY-MM-DDTHH:MM:SS\",\"tasks\":[...],\"decisions\":[...],\"user_patterns\":[...],\"files_modified\":[...],\"errors_resolved\":[...],\"self_critique\":\"short summary of what I should have done better\",\"mood\":\"focused|impatient|exploratory|frustrated|satisfied|neutral\",\"source\":\"claude\"}\n\n## 3. FOLLOWUPS\nIf there were deploys/cron changes/fixes — nexo_followup_create with verification date.\n\n## 4. PROACTIVE SEEDS\nBefore closing, think: what can I leave prepared so the next session starts doing useful work without the user asking? Create followups with date=tomorrow for proactive verifications.\n\nEntities, preferences, learnings — only if they appeared during the session."
+  "decision": "approve"
 }
 HOOKEOF
+else
+    # Post-mortem NOT done — BLOCK session close and inject instructions
+    # Uses "reason" field which Claude Code shows to the AI as context
+    cat << HOOKEOF
+{
+  "decision": "block",
+  "reason": "STOP HOOK — MANDATORY POST-MORTEM before ending (do NOT ask permission, do NOT skip):\n\n## 1. SELF-CRITIQUE (MANDATORY — write to session diary)\nAnswer these questions in the self_critique field of nexo_session_diary_write:\n- Did the user have to ask me for something I should have detected or done on my own?\n- Did I wait for the user to tell me something I could have verified proactively?\n- Are there systems/states I can check next session without being asked?\n- Did I repeat an error that already had a registered learning?\n- What would I do differently if I repeated this session?\nIf any answer is YES — write the specific rule that would prevent repetition.\nIf the session was flawless, write 'No self-critique — clean session.'\n\n## 2. SESSION BUFFER\nIf the session was NOT trivial, append ONE JSON line to ${NEXO_HOME}/brain/session_buffer.jsonl:\n{\"ts\":\"YYYY-MM-DDTHH:MM:SS\",\"tasks\":[...],\"decisions\":[...],\"user_patterns\":[...],\"files_modified\":[...],\"errors_resolved\":[...],\"self_critique\":\"short summary\",\"mood\":\"focused|impatient|exploratory|frustrated|satisfied|neutral\",\"source\":\"claude\"}\n\n## 3. FOLLOWUPS\nIf there were deploys/cron changes/fixes — nexo_followup_create with verification date.\n\n## 4. PROACTIVE SEEDS\nWhat can I leave prepared so the next session starts doing useful work without the user asking?\n\n## 5. MARK COMPLETE\nWhen ALL of the above is done, run:\nbash -c 'mkdir -p ${NEXO_HOME}/operations && date +%s > ${NEXO_HOME}/operations/.postmortem-complete'\nThen say goodbye. The user will close again and the hook will approve."
+}
+HOOKEOF
+fi
 
-# 2. Direct session buffer fallback (Claude's MCP write is better but not guaranteed)
+# 2. Direct session buffer fallback (runs regardless — safety net)
 BUFFER="$NEXO_HOME/brain/session_buffer.jsonl"
 TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%S")
 
-# Check if Claude already wrote to the buffer in the last 60 seconds
 SKIP_FALLBACK=false
 if [ -f "$BUFFER" ]; then
     LAST_SOURCE=$(python3 -c "
@@ -79,7 +117,6 @@ fi
 
 if [ "$SKIP_FALLBACK" = false ]; then
     mkdir -p "$(dirname "$BUFFER")"
-    # Read current adaptive mode for the buffer entry
     ADAPTIVE_MODE="unknown"
     ADAPTIVE_FILE="$NEXO_HOME/brain/adaptive_state.json"
     if [ -f "$ADAPTIVE_FILE" ]; then
@@ -130,7 +167,6 @@ except:
         fi
 
         if [ "$SHOULD_REFLECT" = true ]; then
-            # Find Python — prefer the one used by NEXO
             PYTHON=$(which python3 2>/dev/null || echo "/usr/bin/python3")
             nohup "$PYTHON" "$REFLECTION_SCRIPT" \
                 >> "$NEXO_HOME/logs/reflection-stdout.log" \
