@@ -905,7 +905,7 @@
     <div class="container">
         <div class="hero-badge fade-up">
             <span class="dot"></span>
-            <span id="version-badge">v1.2.1</span> &mdash; Stop Hook Post-Mortem Enforcement
+            <span id="version-badge">v1.2.2</span> &mdash; Phantom Farewell Fix
         </div>
         <div class="fade-up" style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;">
             <img src="https://img.shields.io/npm/v/nexo-brain?color=7C3AED&label=npm" alt="npm version">
@@ -1153,8 +1153,24 @@
     </div>
 </section>
 
+<!-- v1.2.2 Phantom Farewell Fix -->
+<section id="v122" style="padding:80px 0;background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
+    <div class="container">
+        <div class="section-label">New in v1.2.2</div>
+        <h2 class="section-title">Phantom Farewell Fix</h2>
+        <p class="section-subtitle">
+            The Stop hook no longer says goodbye when a session ends. Farewell messages were a side-effect of the post-mortem enforcement hook, creating confusing output on every session close.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Fix: Phantom Farewell Messages</h4><p>Stop hook no longer says goodbye when session ends. The farewell was an unintended side-effect of the post-mortem enforcement block — removed cleanly without affecting diary write behavior.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
 <!-- v1.2.1 Hotfix / v1.2.0 Stop Hook Post-Mortem -->
-<section id="v120" style="padding:80px 0;background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
+<section id="v120" style="padding:80px 0;background:linear-gradient(135deg,#1a0f2e 0%,#0F0A1A 100%);">
     <div class="container">
         <div class="section-label">New in v1.2.0 &mdash; Hotfix v1.2.1</div>
         <h2 class="section-title">Stop Hook Post-Mortem Enforcement</h2>
