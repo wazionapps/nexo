@@ -1,65 +1,47 @@
 #!/bin/bash
-# NEXO PreCompact hook — saves context before Claude Code compacts the conversation.
-# Compaction loses context silently. This hook ensures the operator writes a checkpoint
-# before that happens, and saves the last known state to a recovery file.
+# NEXO PreCompact Hook — Save checkpoint + inject preservation instructions
+# This runs BEFORE Claude Code compacts. It:
+# 1. Enriches the session checkpoint in SQLite with latest diary draft data
+# 2. Injects a systemMessage telling the operator to save any WIP via MCP tools
 set -euo pipefail
 
 NEXO_HOME="${NEXO_HOME:-$HOME/.nexo}"
-NEXO_NAME="${NEXO_NAME:-NEXO}"
-CHECKPOINT_FILE="$NEXO_HOME/coordination/pre-compact-checkpoint.json"
+NEXO_DB="$NEXO_HOME/nexo.db"
+TODAY=$(date +%Y-%m-%d)
+LOG_FILE="$NEXO_HOME/operations/tool-logs/${TODAY}.jsonl"
+LOG_LINES=0
+if [ -f "$LOG_FILE" ]; then
+    LOG_LINES=$(wc -l < "$LOG_FILE" | tr -d ' ')
+fi
 
-mkdir -p "$NEXO_HOME/coordination"
+# Enrich checkpoint: copy diary draft context into checkpoint if exists
+if [ -f "$NEXO_DB" ]; then
+    # Get latest active session's diary draft
+    LATEST_SID=$(sqlite3 "$NEXO_DB" "
+        SELECT sid FROM sessions ORDER BY last_update_epoch DESC LIMIT 1
+    " 2>/dev/null || echo "")
 
-# Save current state to checkpoint file
-python3 -c "
-import json, os, sys
-from datetime import datetime
+    if [ -n "$LATEST_SID" ]; then
+        # Pull diary draft data into checkpoint
+        sqlite3 "$NEXO_DB" "
+            INSERT INTO session_checkpoints (sid, task, current_goal, updated_at)
+            SELECT s.sid, s.task, COALESCE(d.last_context_hint, s.task), datetime('now')
+            FROM sessions s
+            LEFT JOIN session_diary_draft d ON d.sid = s.sid
+            WHERE s.sid = '$LATEST_SID'
+            ON CONFLICT(sid) DO UPDATE SET
+                task = excluded.task,
+                current_goal = CASE
+                    WHEN excluded.current_goal != '' THEN excluded.current_goal
+                    ELSE session_checkpoints.current_goal
+                END,
+                updated_at = datetime('now')
+        " 2>/dev/null || true
+    fi
+fi
 
-nexo_home = os.environ.get('NEXO_HOME', os.path.expanduser('~/.nexo'))
-db_path = os.path.join(nexo_home, 'nexo.db')
-
-checkpoint = {
-    'timestamp': datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S'),
-    'active_sessions': [],
-    'last_context_hints': [],
-}
-
-try:
-    import sqlite3
-    if os.path.exists(db_path):
-        db = sqlite3.connect(db_path, timeout=5)
-        db.row_factory = sqlite3.Row
-        sessions = db.execute(
-            'SELECT sid, task, started FROM sessions WHERE completed=0'
-        ).fetchall()
-        checkpoint['active_sessions'] = [
-            {'sid': s['sid'], 'task': s['task'], 'started': s['started']}
-            for s in sessions
-        ]
-        # Get last diary drafts for context
-        try:
-            drafts = db.execute(
-                'SELECT sid, last_context_hint, tasks_seen FROM session_diary_draft '
-                'ORDER BY updated_at DESC LIMIT 3'
-            ).fetchall()
-            checkpoint['last_context_hints'] = [
-                {'sid': d['sid'], 'hint': d['last_context_hint'], 'tasks': d['tasks_seen']}
-                for d in drafts
-            ]
-        except Exception:
-            pass
-        db.close()
-except Exception:
-    pass
-
-with open('$CHECKPOINT_FILE', 'w') as f:
-    json.dump(checkpoint, f, indent=2)
-" 2>/dev/null || true
-
-# Emit hook response with systemMessage
 cat << HOOKEOF
 {
-  "decision": "approve",
-  "systemMessage": "PRE-COMPACT HOOK — Context is about to be compressed. BEFORE continuing:\n\n1. **Write a diary draft NOW** — call nexo_session_diary_write with what you've done so far, decisions made, and current mental state. This is your lifeline after compaction.\n2. **Note your current task** — after compaction you may lose the thread. Write it down in the diary.\n3. **Check pending followups** — if you promised to do something, make sure it's recorded before context is lost.\n4. **Read the checkpoint** after compaction: ${NEXO_HOME}/coordination/pre-compact-checkpoint.json\n\nDo NOT skip this. Compaction without a diary = starting from zero."
+  "systemMessage": "CONTEXT IS ABOUT TO BE COMPRESSED.\n\nOBLIGATORY ACTIONS BEFORE COMPACTION:\n1. Save critical state via MCP: nexo_checkpoint_save with current task, active files, decisions, errors, next step, and reasoning thread.\n2. If there is work in progress without a commit, save data via nexo_entity_create, nexo_preference_set, nexo_learning_add, nexo_followup_create.\n3. PERSISTENT TOOL LOGS: ${NEXO_HOME}/operations/tool-logs/${TODAY}.jsonl has ${LOG_LINES} entries.\n4. After compaction, the PostCompact hook will re-inject a Core Memory Block with the checkpoint.\n5. MCP tools (nexo_*) preserve all state — use them to recover context."
 }
 HOOKEOF

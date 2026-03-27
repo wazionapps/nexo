@@ -1003,6 +1003,30 @@ def _seed_core_rules(conn):
     conn.commit()
 
 
+def _m12_session_checkpoints(conn):
+    """Session checkpoints for intelligent auto-compaction.
+
+    PreCompact saves a checkpoint; PostCompact reads it to re-inject a
+    Core Memory Block that preserves continuity after context compression.
+    """
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS session_checkpoints (
+            sid TEXT PRIMARY KEY,
+            task TEXT DEFAULT '',
+            task_status TEXT DEFAULT 'active',
+            active_files TEXT DEFAULT '[]',
+            current_goal TEXT DEFAULT '',
+            decisions_summary TEXT DEFAULT '',
+            errors_found TEXT DEFAULT '',
+            reasoning_thread TEXT DEFAULT '',
+            next_step TEXT DEFAULT '',
+            compaction_count INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now'))
+        )
+    """)
+
+
 # Migration registry — APPEND ONLY, never reorder or delete
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
@@ -1016,6 +1040,7 @@ MIGRATIONS = [
     (9, "maintenance_schedule", _m9_maintenance_schedule),
     (10, "diary_archive", _m10_diary_archive),
     (11, "core_rules", _m11_core_rules),
+    (12, "session_checkpoints", _m12_session_checkpoints),
 ]
 
 
@@ -2814,3 +2839,71 @@ def update_evolution_log_status(log_id: int, status: str, **kwargs):
             vals.append(kwargs[k])
     vals.append(log_id)
     conn.execute(f"UPDATE evolution_log SET {', '.join(sets)} WHERE id = ?", vals)
+
+
+# ── Session Checkpoint operations ──────────────────────────────────
+
+def save_checkpoint(sid: str, task: str = '', task_status: str = 'active',
+                    active_files: str = '[]', current_goal: str = '',
+                    decisions_summary: str = '', errors_found: str = '',
+                    reasoning_thread: str = '', next_step: str = '') -> dict:
+    """Save or update a session checkpoint. Called by PreCompact hook."""
+    conn = get_db()
+    # Get current compaction count
+    existing = conn.execute(
+        "SELECT compaction_count FROM session_checkpoints WHERE sid = ?", (sid,)
+    ).fetchone()
+    count = (existing["compaction_count"] + 1) if existing else 0
+
+    conn.execute(
+        """INSERT INTO session_checkpoints
+           (sid, task, task_status, active_files, current_goal,
+            decisions_summary, errors_found, reasoning_thread, next_step,
+            compaction_count, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+           ON CONFLICT(sid) DO UPDATE SET
+             task = excluded.task,
+             task_status = excluded.task_status,
+             active_files = excluded.active_files,
+             current_goal = excluded.current_goal,
+             decisions_summary = excluded.decisions_summary,
+             errors_found = excluded.errors_found,
+             reasoning_thread = excluded.reasoning_thread,
+             next_step = excluded.next_step,
+             compaction_count = excluded.compaction_count,
+             updated_at = datetime('now')""",
+        (sid, task, task_status, active_files, current_goal,
+         decisions_summary, errors_found, reasoning_thread, next_step, count)
+    )
+    conn.commit()
+    return {"sid": sid, "compaction_count": count}
+
+
+def read_checkpoint(sid: str = '') -> dict | None:
+    """Read the most recent session checkpoint. If no sid, returns the latest."""
+    conn = get_db()
+    if sid:
+        row = conn.execute(
+            "SELECT * FROM session_checkpoints WHERE sid = ?", (sid,)
+        ).fetchone()
+    else:
+        row = conn.execute(
+            "SELECT * FROM session_checkpoints ORDER BY updated_at DESC LIMIT 1"
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def increment_compaction_count(sid: str) -> int:
+    """Increment and return the compaction count for a session."""
+    conn = get_db()
+    conn.execute(
+        """UPDATE session_checkpoints
+           SET compaction_count = compaction_count + 1, updated_at = datetime('now')
+           WHERE sid = ?""",
+        (sid,)
+    )
+    conn.commit()
+    row = conn.execute(
+        "SELECT compaction_count FROM session_checkpoints WHERE sid = ?", (sid,)
+    ).fetchone()
+    return row["compaction_count"] if row else 0

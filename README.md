@@ -1,12 +1,12 @@
 # NEXO Brain — Your AI Gets a Brain
 
-[![npm v1.0.0](https://img.shields.io/npm/v/nexo-brain?label=npm&color=purple)](https://www.npmjs.com/package/nexo-brain)
+[![npm v1.1.0](https://img.shields.io/npm/v/nexo-brain?label=npm&color=purple)](https://www.npmjs.com/package/nexo-brain)
 [![F1 0.588 on LoCoMo](https://img.shields.io/badge/LoCoMo_F1-0.588-brightgreen)](https://github.com/wazionapps/nexo/blob/main/benchmarks/locomo/results/)
 [![+55% vs GPT-4](https://img.shields.io/badge/vs_GPT--4-%2B55%25-blue)](https://github.com/snap-research/locomo/issues/33)
 [![GitHub stars](https://img.shields.io/github/stars/wazionapps/nexo?style=social)](https://github.com/wazionapps/nexo/stargazers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-> **v1.0.0** — Cognitive Cortex, 30 Core Rules as DNA, Smart Startup, Context Packets, Auto-Prime. The first AI memory system with architectural inhibitory control — the agent reasons about whether to act before acting. Battle-tested from 6 months of production use, validated via multi-AI debate (Claude Opus + GPT-5.4 + Gemini 3.1 Pro).
+> **v1.1.0** — Context Continuity via auto-compaction hooks. PreCompact saves a full session checkpoint; PostCompact re-injects it so long sessions (8+ hours) feel like one continuous conversation. Plus: Cognitive Cortex, 30 Core Rules as DNA, Smart Startup, Context Packets, Auto-Prime. The first AI memory system with architectural inhibitory control — the agent reasons about whether to act before acting. Battle-tested from 6 months of production use, validated via multi-AI debate (Claude Opus + GPT-5.4 + Gemini 3.1 Pro).
 
 **NEXO Brain transforms any MCP-compatible AI agent from a stateless assistant into a cognitive partner that remembers, learns, forgets, adapts, and builds a relationship with you over time.**
 
@@ -163,9 +163,42 @@ User message → Fast Path check → Simple chat? → Respond directly
 
 The Cortex was designed through a 3-way AI debate (Claude Opus 4.6 + GPT-5.4 + Gemini 3.1 Pro) and validated against 6 months of real production failures.
 
+## Context Continuity (Auto-Compaction) (v1.1.0)
+
+NEXO Brain automatically preserves session context when Claude Code compacts conversations. Using PreCompact and PostCompact hooks:
+
+- **PreCompact**: Saves a complete session checkpoint to SQLite (task, files, decisions, errors, reasoning thread, next step)
+- **PostCompact**: Re-injects a structured Core Memory Block into the conversation, so the session continues seamlessly
+
+This means long sessions (8+ hours) feel like one continuous conversation instead of restarting after each compaction.
+
+**How it works:**
+1. Configure the hooks in your Claude Code `settings.json`
+2. NEXO Brain's heartbeat automatically maintains the checkpoint
+3. When compaction happens, the PreCompact hook reads the checkpoint and injects a recovery block
+4. The session continues from exactly where it left off
+
+**Setup:**
+```json
+{
+  "hooks": {
+    "PreCompact": [{
+      "matcher": "*",
+      "hooks": [{"type": "command", "command": "bash path/to/nexo/src/hooks/pre-compact.sh", "timeout": 10}]
+    }],
+    "PostCompact": [{
+      "matcher": "*",
+      "hooks": [{"type": "command", "command": "bash path/to/nexo/src/hooks/post-compact.sh", "timeout": 10}]
+    }]
+  }
+}
+```
+
+2 new MCP tools: `nexo_checkpoint_save` (manual or hook-triggered checkpoint), `nexo_checkpoint_read` (retrieves the latest checkpoint for context injection).
+
 ## Cognitive Features
 
-NEXO Brain provides 29 cognitive tools on top of the 76 base tools, totaling **113+ MCP tools**. These features implement cognitive science concepts that go beyond basic memory:
+NEXO Brain provides 29 cognitive tools on top of the 78 base tools, totaling **115+ MCP tools**. These features implement cognitive science concepts that go beyond basic memory:
 
 ### Input Pipeline
 
@@ -238,7 +271,7 @@ Full results in [`benchmarks/locomo/results/`](benchmarks/locomo/results/).
 
 Memory alone doesn't make a co-operator. What makes the difference is the **behavioral loop** — the automated discipline that ensures every session starts informed, runs with guardrails, and ends with self-reflection.
 
-### 5 Automated Hooks
+### 6 Automated Hooks
 
 These fire automatically at key moments in every Claude Code session:
 
@@ -247,7 +280,8 @@ These fire automatically at key moments in every Claude Code session:
 | **SessionStart** | Session opens | Generates a briefing from SQLite: overdue reminders, today's tasks, pending followups, active sessions |
 | **Stop** | Session ends | Mandatory post-mortem: self-critique (5 questions), session buffer entry, followup creation, proactive seeds for next session |
 | **PostToolUse** | After each tool call | Captures meaningful mutations to the Sensory Register |
-| **PreCompact** | Before context compression | Saves checkpoint, reminds operator to write diary — prevents losing the thread |
+| **PreCompact** | Before context compression | Saves full session checkpoint to SQLite — task, files, decisions, errors, reasoning thread |
+| **PostCompact** | After context compression | Re-injects Core Memory Block so the session continues seamlessly from where it left off |
 | **Caffeinate** | Always (optional) | Keeps Mac awake for nocturnal cognitive processes |
 
 ### The Session Lifecycle
@@ -263,7 +297,9 @@ Heartbeat on every interaction (sentiment, context shifts)
     ↓
 Guard check before every code edit
     ↓
-PreCompact hook saves context if conversation is compressed
+PreCompact hook saves full checkpoint if conversation is compressed
+    ↓
+PostCompact hook re-injects Core Memory Block → session continues seamlessly
     ↓
 Stop hook triggers mandatory post-mortem:
   - Self-critique: 5 questions about what could be better
@@ -346,7 +382,7 @@ The installer handles everything:
     - Node.js project detected
   Configuring MCP server...
   Setting up automated processes...
-    5 automated processes configured.
+    6 automated processes configured.
   Caffeinate enabled.
   Generating operator instructions...
 
@@ -370,25 +406,25 @@ That's it. No need to run `claude` manually. Atlas will greet you immediately �
 | Component | What | Where |
 |-----------|------|-------|
 | Cognitive engine | Python: fastembed, numpy, vector search | pip packages |
-| MCP server | 109+ tools for memory, cognition, learning, guard | ~/.nexo/ |
+| MCP server | 111+ tools for memory, cognition, learning, guard | ~/.nexo/ |
 | Plugins | Guard, episodic memory, cognitive memory, entities, preferences | ~/.nexo/plugins/ |
-| Hooks (5) | SessionStart briefing, Stop post-mortem, PostToolUse capture, PreCompact checkpoint, Caffeinate | ~/.nexo/hooks/ |
+| Hooks (6) | SessionStart briefing, Stop post-mortem, PostToolUse capture, PreCompact checkpoint, PostCompact recovery, Caffeinate | ~/.nexo/hooks/ |
 | Reflection engine | Processes session buffer, extracts patterns, updates user model | ~/.nexo/scripts/ |
 | CLAUDE.md | Complete operator instructions (Codex, hooks, guard, trust, memory) | ~/.claude/CLAUDE.md |
 | LaunchAgents | Decay, sleep, audit, postmortem, catch-up | ~/Library/LaunchAgents/ |
 | Auto-update | Checks for new versions at boot | Built into catch-up |
-| Claude Code config | MCP server + 5 hooks registered | ~/.claude/settings.json |
+| Claude Code config | MCP server + 6 hooks registered | ~/.claude/settings.json |
 
 ### Requirements
 
 - **macOS or Linux** (Windows via [WSL](https://learn.microsoft.com/en-us/windows/wsl/install))
 - **Node.js 18+** (for the installer)
-- **Claude Opus (latest version) strongly recommended.** NEXO Brain provides 109+ MCP tools across 19 categories. This cognitive load requires a top-tier model with large context window. Smaller models (Haiku, Sonnet) may struggle with tool selection and produce inconsistent results. Opus handles all 109+ tools without hesitation.
+- **Claude Opus (latest version) strongly recommended.** NEXO Brain provides 111+ MCP tools across 20 categories. This cognitive load requires a top-tier model with large context window. Smaller models (Haiku, Sonnet) may struggle with tool selection and produce inconsistent results. Opus handles all 111+ tools without hesitation.
 - Python 3, Homebrew, and Claude Code are installed automatically if missing.
 
 ## Architecture
 
-### 109+ MCP Tools across 19 Categories
+### 111+ MCP Tools across 20 Categories
 
 | Category | Count | Tools | Purpose |
 |----------|-------|-------|---------|
@@ -412,6 +448,7 @@ That's it. No need to run `claude` manually. Atlas will greet you immediately �
 | Evolution | 5 | propose, approve, reject, status, history | Self-improvement proposals |
 | Adaptive & Somatic | 4 | adaptive_weights, adaptive_override, somatic_check, somatic_stats | Learned signal weights + pain memory per file |
 | Knowledge Graph | 4 | kg_query, kg_path, kg_neighbors, kg_stats | Bi-temporal entity-relationship graph |
+| Context Continuity | 2 | checkpoint_save, checkpoint_read | Auto-compaction session preservation |
 
 ### Plugin System
 
@@ -469,7 +506,7 @@ NEXO Brain is designed as an MCP server. Claude Code is the primary supported cl
 npx nexo-brain
 ```
 
-All 109+ tools are available immediately after installation. The installer configures Claude Code's `~/.claude/settings.json` automatically.
+All 111+ tools are available immediately after installation. The installer configures Claude Code's `~/.claude/settings.json` automatically.
 
 ### OpenClaw
 

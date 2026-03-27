@@ -126,6 +126,77 @@ def nexo_smart_startup() -> str:
     return handle_smart_startup_query()
 
 
+# ── Session Checkpoints (auto-compaction continuity) ──────────────
+
+@mcp.tool
+def nexo_checkpoint_save(
+    sid: str,
+    task: str = '',
+    task_status: str = 'active',
+    active_files: str = '[]',
+    current_goal: str = '',
+    decisions_summary: str = '',
+    errors_found: str = '',
+    reasoning_thread: str = '',
+    next_step: str = ''
+) -> str:
+    """Save a session checkpoint for auto-compaction continuity.
+
+    Call this BEFORE context compaction to preserve session state.
+    The PostCompact hook reads this checkpoint and re-injects it as a
+    Core Memory Block, so the session continues seamlessly.
+
+    Args:
+        sid: Session ID.
+        task: Current task description.
+        task_status: One of 'active', 'investigating', 'fixing', 'deploying', 'blocked'.
+        active_files: JSON array of file paths currently being worked on.
+        current_goal: What you're trying to achieve right now (1-2 sentences).
+        decisions_summary: Recent decisions with brief reasoning (2-3 lines).
+        errors_found: Errors encountered and their status (resolved/open).
+        reasoning_thread: Your current chain of thought (1-2 sentences).
+        next_step: The concrete next action to take.
+    """
+    from db import save_checkpoint
+    result = save_checkpoint(
+        sid=sid, task=task, task_status=task_status,
+        active_files=active_files, current_goal=current_goal,
+        decisions_summary=decisions_summary, errors_found=errors_found,
+        reasoning_thread=reasoning_thread, next_step=next_step,
+    )
+    return f"Checkpoint saved for {sid}. Compaction #{result['compaction_count']}. PostCompact will re-inject this as Core Memory Block."
+
+
+@mcp.tool
+def nexo_checkpoint_read(sid: str = '') -> str:
+    """Read the latest session checkpoint. Used by PostCompact hook and for manual recovery.
+
+    Args:
+        sid: Session ID. If empty, returns the most recent checkpoint from any session.
+    """
+    from db import read_checkpoint
+    cp = read_checkpoint(sid)
+    if not cp:
+        return "No checkpoint found."
+
+    lines = [f"CHECKPOINT for {cp['sid']} (compaction #{cp['compaction_count']})"]
+    lines.append(f"Task: {cp['task']} ({cp['task_status']})")
+    if cp.get('current_goal'):
+        lines.append(f"Goal: {cp['current_goal']}")
+    if cp.get('active_files') and cp['active_files'] != '[]':
+        lines.append(f"Files: {cp['active_files']}")
+    if cp.get('decisions_summary'):
+        lines.append(f"Decisions: {cp['decisions_summary']}")
+    if cp.get('errors_found'):
+        lines.append(f"Errors: {cp['errors_found']}")
+    if cp.get('reasoning_thread'):
+        lines.append(f"Context: {cp['reasoning_thread']}")
+    if cp.get('next_step'):
+        lines.append(f"Next: {cp['next_step']}")
+    lines.append(f"Updated: {cp['updated_at']}")
+    return "\n".join(lines)
+
+
 # ── File coordination (3 tools) ───────────────────────────────────
 
 @mcp.tool

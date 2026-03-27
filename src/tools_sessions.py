@@ -8,6 +8,7 @@ from db import (
     get_active_sessions, clean_stale_sessions, search_sessions,
     get_inbox, get_pending_questions, now_epoch,
     SESSION_STALE_SECONDS, check_session_has_diary,
+    save_checkpoint, read_checkpoint, increment_compaction_count,
 )
 
 # ── Session Keepalive ────────────────────────────────────────────────
@@ -316,6 +317,16 @@ def handle_heartbeat(sid: str, task: str, context_hint: str = '') -> str:
             )
     except Exception:
         pass  # Draft accumulation is best-effort, never block heartbeat
+
+    # Update session checkpoint with current goal (lightweight, every heartbeat)
+    try:
+        save_checkpoint(
+            sid=sid,
+            task=task,
+            current_goal=context_hint[:300] if context_hint else task,
+        )
+    except Exception:
+        pass  # Checkpoint update is best-effort
 
     # Diary reminder: after 30 min active with no diary entry
     conn = get_db()
