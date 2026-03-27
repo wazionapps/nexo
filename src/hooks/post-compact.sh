@@ -13,15 +13,36 @@ if [ -f "$LOG_FILE" ]; then
     LOG_LINES=$(wc -l < "$LOG_FILE" | tr -d ' ')
 fi
 
-# Read latest checkpoint from SQLite
+# Read checkpoint for the session that just compacted
+# PreCompact writes the SID to /tmp/nexo-compacting-sid
+TARGET_SID=""
+if [ -f /tmp/nexo-compacting-sid ]; then
+    TARGET_SID=$(cat /tmp/nexo-compacting-sid 2>/dev/null || echo "")
+    rm -f /tmp/nexo-compacting-sid
+fi
+
+CHECKPOINT=""
 if [ -f "$NEXO_DB" ]; then
-    CHECKPOINT=$(sqlite3 "$NEXO_DB" "
-        SELECT sid, task, task_status, active_files, current_goal,
-               decisions_summary, errors_found, reasoning_thread,
-               next_step, compaction_count
-        FROM session_checkpoints
-        ORDER BY updated_at DESC LIMIT 1
-    " 2>/dev/null || echo "")
+    if [ -n "$TARGET_SID" ]; then
+        # Read checkpoint for the specific session that compacted
+        CHECKPOINT=$(sqlite3 "$NEXO_DB" "
+            SELECT sid, task, task_status, active_files, current_goal,
+                   decisions_summary, errors_found, reasoning_thread,
+                   next_step, compaction_count
+            FROM session_checkpoints
+            WHERE sid = '$TARGET_SID'
+        " 2>/dev/null || echo "")
+    fi
+    # Fallback: if no target SID or no checkpoint found, use latest
+    if [ -z "$CHECKPOINT" ]; then
+        CHECKPOINT=$(sqlite3 "$NEXO_DB" "
+            SELECT sid, task, task_status, active_files, current_goal,
+                   decisions_summary, errors_found, reasoning_thread,
+                   next_step, compaction_count
+            FROM session_checkpoints
+            ORDER BY updated_at DESC LIMIT 1
+        " 2>/dev/null || echo "")
+    fi
 
     if [ -n "$CHECKPOINT" ]; then
         # Parse pipe-separated fields

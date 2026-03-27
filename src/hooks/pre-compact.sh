@@ -22,6 +22,8 @@ if [ -f "$NEXO_DB" ]; then
     " 2>/dev/null || echo "")
 
     if [ -n "$LATEST_SID" ]; then
+        # Write SID to temp file so PostCompact knows which session compacted
+        echo "$LATEST_SID" > /tmp/nexo-compacting-sid
         # Pull diary draft data into checkpoint
         sqlite3 "$NEXO_DB" "
             INSERT INTO session_checkpoints (sid, task, current_goal, updated_at)
