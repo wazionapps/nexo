@@ -905,7 +905,7 @@
     <div class="container">
         <div class="hero-badge fade-up">
             <span class="dot"></span>
-            <span id="version-badge">v1.2.0</span> &mdash; Stop Hook Post-Mortem Enforcement
+            <span id="version-badge">v1.2.1</span> &mdash; Stop Hook Post-Mortem Enforcement
         </div>
         <div class="fade-up" style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;">
             <img src="https://img.shields.io/npm/v/nexo-brain?color=7C3AED&label=npm" alt="npm version">
@@ -1153,10 +1153,10 @@
     </div>
 </section>
 
-<!-- v1.2.0 Stop Hook Post-Mortem -->
+<!-- v1.2.1 Hotfix / v1.2.0 Stop Hook Post-Mortem -->
 <section id="v120" style="padding:80px 0;background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
     <div class="container">
-        <div class="section-label">New in v1.2.0</div>
+        <div class="section-label">New in v1.2.0 &mdash; Hotfix v1.2.1</div>
         <h2 class="section-title">Stop Hook Post-Mortem Enforcement</h2>
         <p class="section-subtitle">
             The Stop hook now uses <code>decision:block</code> instead of <code>approve</code> to enforce post-mortem execution. This ensures the session diary is always written before Claude exits &mdash; no more lost context on abrupt stops.
@@ -1164,6 +1164,7 @@
         <div class="cognitive-group">
             <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
                 <div class="cognitive-card"><h4>Fix: decision:block</h4><p>Stop hook changed from <code>approve</code> to <code>decision:block</code> so post-mortem writing is enforced architecturally, not just suggested.</p></div>
+                <div class="cognitive-card"><h4>v1.2.1 Hotfix</h4><p>Fixed infinite block loop triggered when the Stop hook blocked its own post-mortem execution. Added trivial session detection to skip diary write on empty or no-op sessions.</p></div>
             </div>
         </div>
     </div>
