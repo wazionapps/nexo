@@ -1,12 +1,12 @@
 # NEXO Brain — Your AI Gets a Brain
 
-[![npm v0.10.0-beta.8](https://img.shields.io/npm/v/nexo-brain?label=npm&color=purple)](https://www.npmjs.com/package/nexo-brain)
+[![npm v1.0.0](https://img.shields.io/npm/v/nexo-brain?label=npm&color=purple)](https://www.npmjs.com/package/nexo-brain)
 [![F1 0.588 on LoCoMo](https://img.shields.io/badge/LoCoMo_F1-0.588-brightgreen)](https://github.com/wazionapps/nexo/blob/main/benchmarks/locomo/results/)
 [![+55% vs GPT-4](https://img.shields.io/badge/vs_GPT--4-%2B55%25-blue)](https://github.com/snap-research/locomo/issues/33)
 [![GitHub stars](https://img.shields.io/github/stars/wazionapps/nexo?style=social)](https://github.com/wazionapps/nexo/stargazers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-> **v0.10.0-beta.8** — 30 Core System Rules (versioned, with migration). Battle-tested behavioral rules from 6 months production use, validated via multi-AI debate (Claude + GPT-4o). 6 categories: Integrity, Execution, Memory, Delegation, Communication, Proactivity. 25 BLOCKING + 5 ADVISORY. Plus: Smart Startup, Context Packets, Auto-Prime, and zero-decay pinning.
+> **v1.0.0** — Cognitive Cortex, 30 Core Rules as DNA, Smart Startup, Context Packets, Auto-Prime. The first AI memory system with architectural inhibitory control — the agent reasons about whether to act before acting. Battle-tested from 6 months of production use, validated via multi-AI debate (Claude Opus + GPT-5.4 + Gemini 3.1 Pro).
 
 **NEXO Brain transforms any MCP-compatible AI agent from a stateless assistant into a cognitive partner that remembers, learns, forgets, adapts, and builds a relationship with you over time.**
 
@@ -136,9 +136,36 @@ Like a human brain, NEXO Brain has automated processes that run while you're not
 
 If your Mac was asleep during any scheduled process, NEXO Brain catches up in order when it wakes.
 
+## Cognitive Cortex (v1.0.0)
+
+The Cortex is a middleware cognitive layer that makes the agent **think before acting**. It implements architectural inhibitory control — the agent cannot bypass reasoning.
+
+```
+User message → Fast Path check → Simple chat? → Respond directly
+                                → Action needed? → Cortex activates
+                                                    ↓
+                                              Generate cognitive state
+                                              (goal, plan, unknowns, evidence)
+                                                    ↓
+                                              Middleware validates
+                                              ├─ Unknowns? → ASK mode (tools blocked)
+                                              ├─ No plan? → PROPOSE mode (read-only)
+                                              └─ Plan + evidence → ACT mode (full access)
+```
+
+| Feature | What It Does |
+|---------|-------------|
+| **Inhibitory Control** | Physically restricts tools based on reasoning quality. Unknowns → can only ask. No plan → can only propose. Evidence + verification → can act. |
+| **Event-Driven Activation** | Only activates on tool intent, ambiguity, destructive actions, or retries. Simple chat has zero overhead. |
+| **Trust-Gated Escalation** | Low trust score → requires more evidence before allowing "act" mode. Trust builds through successful execution. |
+| **Core Rules Injection** | Automatically surfaces relevant behavioral rules based on task type. |
+| **Activation Metrics** | Tracks modes, inhibition rates, and task types for continuous improvement. |
+
+The Cortex was designed through a 3-way AI debate (Claude Opus 4.6 + GPT-5.4 + Gemini 3.1 Pro) and validated against 6 months of real production failures.
+
 ## Cognitive Features
 
-NEXO Brain provides 27 cognitive tools on top of the 76 base tools, totaling **111+ MCP tools**. These features implement cognitive science concepts that go beyond basic memory:
+NEXO Brain provides 29 cognitive tools on top of the 76 base tools, totaling **113+ MCP tools**. These features implement cognitive science concepts that go beyond basic memory:
 
 ### Input Pipeline
 

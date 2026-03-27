@@ -58,6 +58,28 @@ _Subagents inherit zero session memory. Without context = guaranteed errors._
 
 For the full 30 rules across 6 categories (Integrity, Execution, Memory, Delegation, Communication, Proactivity), call `nexo_rules_check`.
 
+## Cognitive Cortex (Pre-Action Reasoning)
+
+Before significant actions, call `nexo_cortex_check` to validate your reasoning. The Cortex determines if you can **act**, should **propose**, or need to **ask** first.
+
+**WHEN to call `nexo_cortex_check`:**
+- Before editing files or running commands
+- Before delegating to subagents
+- When the task has multiple possible approaches
+- After a failed attempt (before retrying differently)
+- When user instruction conflicts with known facts
+
+**DO NOT call** for simple chat, greetings, explanations, or read-only queries.
+
+**How it works:** You provide your goal, plan, knowns, unknowns, and evidence. The Cortex validates and returns:
+- **ACT** — proceed with execution (all tools available)
+- **PROPOSE** — show plan to user first (no write/execute tools)
+- **ASK** — gather missing information first (read/search only)
+
+The Cortex enforces inhibitory control architecturally — it physically restricts available tools based on your reasoning quality. This prevents premature action, hallucinated certainty, and unverified execution.
+
+`nexo_cortex_stats` shows activation metrics and inhibition rates.
+
 ## Personality Calibration
 
 Read `{{NEXO_HOME}}/brain/calibration.json` at startup to load user preferences. These override defaults:
