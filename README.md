@@ -602,6 +602,35 @@ If NEXO Brain is useful to you, consider:
 
 [![Star History Chart](https://api.star-history.com/svg?repos=wazionapps/nexo&type=Date)](https://star-history.com/#wazionapps/nexo&Date)
 
+## Changelog
+
+### v1.1.0 — Context Continuity (2026-03-27)
+- **Context Continuity**: PreCompact/PostCompact hooks preserve session state across compaction events
+- New `session_checkpoints` SQLite table + migration #12
+- New tools: `nexo_checkpoint_save`, `nexo_checkpoint_read`
+- Heartbeat automatically maintains checkpoint every interaction
+- Core Memory Block re-injected post-compaction with task, files, decisions, reasoning thread
+- 115+ total tools, 20 categories, 6 hooks
+
+### v1.0.0 — Cognitive Cortex + Stable Release (2026-03-26)
+- **Cognitive Cortex**: architectural inhibitory control (ASK/PROPOSE/ACT modes)
+- 30 Core Rules as immutable DNA in SQLite
+- Designed via 3-way AI debate (Claude Opus + GPT-5.4 + Gemini 3.1 Pro)
+- Artifact Registry for operational facts
+- Full benchmark suite (LoCoMo F1: 0.588)
+
+### v0.10.0 — Smart Context (2026-03-22)
+- Smart Startup: pre-loads memories from pending followups + diary
+- Context Packet: structured injection for subagents
+- Auto-Prime: keyword-triggered area learnings in heartbeat
+- Diary Archive: permanent subconscious memory (180d+ auto-archived)
+
+### v0.9.0 — Cognitive Memory (2026-03-15)
+- Atkinson-Shiffrin memory model (STM → LTM promotion)
+- Semantic RAG with fastembed (BAAI/bge-small-en-v1.5, 384 dims)
+- Trust scoring, sentiment detection, adaptive personality modes
+- Ebbinghaus decay, sister detection, quarantine system
+
 ## License
 
 MIT -- see [LICENSE](LICENSE)
