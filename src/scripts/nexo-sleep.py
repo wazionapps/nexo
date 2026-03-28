@@ -457,24 +457,48 @@ def stage_c_learning_consolidation() -> dict:
         cat for cat, cnt in stats["category_counts"].items() if cnt > 20
     ]
 
-    # C1: Duplicate detection — O(n²) but learnings table is small
+    # C1: Duplicate detection + auto-archive — O(n²) but learnings table is small
     duplicates = []
+    archived_ids = set()
     for i in range(len(parsed)):
-        if len(duplicates) >= 10:
-            break
+        if parsed[i]["id"] in archived_ids:
+            continue
         for j in range(i + 1, len(parsed)):
-            if len(duplicates) >= 10:
-                break
+            if parsed[j]["id"] in archived_ids:
+                continue
+            if parsed[i]["category"] != parsed[j]["category"]:
+                continue  # only dedup within same category
             overlap = _word_overlap(parsed[i]["words"], parsed[j]["words"])
             if overlap >= 0.80:
+                # Keep the newer one (higher ID = more recent), archive the older
+                keep = parsed[j] if parsed[j]["id"] > parsed[i]["id"] else parsed[i]
+                drop = parsed[i] if keep == parsed[j] else parsed[j]
                 duplicates.append({
-                    "id1": parsed[i]["id"],
-                    "id2": parsed[j]["id"],
-                    "title1": parsed[i]["title"],
-                    "title2": parsed[j]["title"],
+                    "keep_id": keep["id"],
+                    "drop_id": drop["id"],
+                    "title_keep": keep["title"],
+                    "title_drop": drop["title"],
                     "overlap": round(overlap, 2),
                 })
-    stats["potential_duplicates"] = duplicates
+                archived_ids.add(drop["id"])
+
+    # Auto-archive detected duplicates
+    if archived_ids:
+        try:
+            conn = sqlite3.connect(str(NEXO_DB))
+            for aid in archived_ids:
+                conn.execute(
+                    "UPDATE learnings SET status='archived' WHERE id=? AND status='active'",
+                    (aid,)
+                )
+            conn.commit()
+            conn.close()
+            log(f"Stage C: Auto-archived {len(archived_ids)} duplicate learnings.")
+        except Exception as e:
+            log(f"Stage C: WARN: Failed to archive duplicates: {e}")
+
+    stats["potential_duplicates"] = duplicates[:10]  # log max 10 for readability
+    stats["auto_archived"] = len(archived_ids)
 
     # C4: Contradiction detection — NUNCA pairs in same category
     nunca_entries = [p for p in parsed if "nunca" in p["title"].lower()]
@@ -506,7 +530,7 @@ def stage_c_learning_consolidation() -> dict:
     stats["potential_contradictions"] = contradictions
 
     log(f"Stage C: {stats['total_learnings']} learnings analyzed. "
-        f"Potential duplicates: {len(duplicates)}. "
+        f"Duplicates found: {len(duplicates)}, archived: {len(archived_ids)}. "
         f"Categories over 20: {len(stats['categories_over_20'])}. "
         f"Potential contradictions: {len(contradictions)}.")
     if stats["hottest_category_7d"]:

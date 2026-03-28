@@ -1857,6 +1857,51 @@ def gc_stm():
     return (cur1.rowcount or 0) + (cur2.rowcount or 0)
 
 
+def gc_test_memories() -> int:
+    """Purge STM memories from test/dev sessions that pollute strength metrics.
+    Removes memories with test domains or known test content patterns.
+    Returns count of deleted memories.
+    """
+    db = _get_db()
+    test_domains = ("test", "test_session")
+    deleted = 0
+
+    # 1. Delete by test domain
+    for domain in test_domains:
+        cur = db.execute(
+            "DELETE FROM stm_memories WHERE domain = ? "
+            "AND (lifecycle_state IS NULL OR lifecycle_state != 'pinned')",
+            (domain,)
+        )
+        deleted += cur.rowcount or 0
+
+    # 2. Delete known test content patterns (empty domain, test-like content)
+    test_patterns = [
+        "%Secret redact test%",
+        "%quarantine test fact%",
+        "%Pin test memory%",
+        "%API rate limit%AM10%",
+        "%xyzzy server%",
+        "%Quantum entanglement enables FTL%",
+        "%Install Docker%AM10%",
+        "%normal safe content about coding%",
+        "%test diary%",
+        "%test critique%",
+        "%integration test diary%",
+    ]
+    for pattern in test_patterns:
+        cur = db.execute(
+            "DELETE FROM stm_memories WHERE content LIKE ? "
+            "AND (lifecycle_state IS NULL OR lifecycle_state != 'pinned')",
+            (pattern,)
+        )
+        deleted += cur.rowcount or 0
+
+    if deleted > 0:
+        db.commit()
+    return deleted
+
+
 def ingest_sensory(
     content: str,
     source_id: str = "",

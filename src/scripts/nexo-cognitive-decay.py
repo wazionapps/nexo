@@ -37,6 +37,14 @@ def main():
     except Exception as e:
         print(f"[{ts}] Quarantine processing error: {e}")
 
+    # 0b. Purge test/dev memories from STM
+    try:
+        test_purged = cognitive.gc_test_memories()
+        if test_purged > 0:
+            print(f"[{ts}] Purged {test_purged} test/dev memories from STM.")
+    except Exception as e:
+        print(f"[{ts}] Test memory purge error: {e}")
+
     # 1. Apply decay
     cognitive.apply_decay()
     print(f"[{ts}] Decay applied.")
