@@ -340,6 +340,6 @@ The memory isn't perfect — it forgets things, makes consolidation errors, occa
 - **GitHub:** [github.com/wazionapps/nexo](https://github.com/wazionapps/nexo)
 - **npm:** `npx nexo-brain`
 - **Architecture spec:** See `docs/specs/` in the repo for the full cognitive architecture document
-- **License:** MIT
+- **License:** AGPL-3.0
 
 If you're building on top of this or have questions about the memory architecture, open an issue. The sibling memory detection and the dissonance resolution algorithm in particular could use more real-world testing.

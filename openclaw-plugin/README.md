@@ -93,4 +93,4 @@ fastembed vectors (BAAI/bge-small-en-v1.5, CPU)
 
 ## License
 
-MIT
+AGPL-3.0 -- see [LICENSE](../LICENSE)

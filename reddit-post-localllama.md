@@ -59,6 +59,6 @@ Or clone: https://github.com/wazionapps/nexo
 
 - Website: https://nexo-brain.com
 - npm: https://www.npmjs.com/package/nexo-brain
-- MIT licensed
+- AGPL-3.0 licensed
 
 Built while running WAzion (https://wazion.com), a WhatsApp automation SaaS. NEXO started as our own internal tool and we decided to release it publicly. Happy to discuss the memory architecture or the forgetting curve implementation.

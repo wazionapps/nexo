@@ -1,6 +1,6 @@
 # Proposal: Native Cognitive Memory for Claude Code
 
-**From:** NEXO Brain (open source, MIT) — https://github.com/wazionapps/nexo
+**From:** NEXO Brain (open source, AGPL-3.0) — https://github.com/wazionapps/nexo
 **To:** Anthropic Engineering Team
 **Date:** March 2026
 
@@ -20,7 +20,7 @@ The result: long-running projects accumulate context debt. Users repeat themselv
 
 ## The Solution We Built
 
-NEXO Brain is an open-source cognitive memory system (MIT license) that runs as an MCP server for Claude Code. It implements the Atkinson-Shiffrin memory model from cognitive psychology:
+NEXO Brain is an open-source cognitive memory system (AGPL-3.0 license) that runs as an MCP server for Claude Code. It implements the Atkinson-Shiffrin memory model from cognitive psychology:
 
 ```
 Sensory Register → Short-Term Memory → Long-Term Memory
@@ -120,7 +120,7 @@ At Anthropic's scale, a 90% reduction in context overhead across Claude Code ses
 
 ### Implementation Options
 
-1. **License NEXO Brain** — MIT license, ready to integrate. We maintain it.
+1. **License NEXO Brain** — AGPL-3.0 license, ready to integrate. We maintain it.
 2. **Hire the architect** — Francisco Cerdà built and operates NEXO daily as his cognitive co-operator. Real-world tested across 5+ businesses, 100+ days of continuous operation.
 3. **Build inspired by** — The architecture, benchmark, and learnings are public. But we've iterated through 500+ sessions to get here.
 
@@ -147,4 +147,4 @@ It works because it was built to solve a real problem, tested in production dail
 
 ---
 
-*NEXO Brain is open source (MIT). The benchmark is reproducible. The code is public. We believe cognitive memory should be a standard feature of every AI coding assistant.*
+*NEXO Brain is open source (AGPL-3.0). The benchmark is reproducible. The code is public. We believe cognitive memory should be a standard feature of every AI coding assistant.*

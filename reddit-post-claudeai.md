@@ -60,6 +60,6 @@ One command, no config. The installer sets up Claude Code, Python, and all depen
 - Website: https://nexo-brain.com
 - GitHub: https://github.com/wazionapps/nexo
 - npm: https://www.npmjs.com/package/nexo-brain
-- MIT licensed
+- AGPL-3.0 licensed
 
 Built while running [WAzion](https://wazion.com), a WhatsApp automation SaaS. NEXO started as our own internal tool and we decided to release it publicly. Happy to answer questions about the architecture.

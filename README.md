@@ -4,7 +4,7 @@
 [![F1 0.588 on LoCoMo](https://img.shields.io/badge/LoCoMo_F1-0.588-brightgreen)](https://github.com/wazionapps/nexo/blob/main/benchmarks/locomo/results/)
 [![+55% vs GPT-4](https://img.shields.io/badge/vs_GPT--4-%2B55%25-blue)](https://github.com/snap-research/locomo/issues/33)
 [![GitHub stars](https://img.shields.io/github/stars/wazionapps/nexo?style=social)](https://github.com/wazionapps/nexo/stargazers)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 
 > **v1.1.1** — Context Continuity via auto-compaction hooks. PreCompact saves a full session checkpoint; PostCompact re-injects it so long sessions (8+ hours) feel like one continuous conversation. Plus: Cognitive Cortex, 30 Core Rules as DNA, Smart Startup, Context Packets, Auto-Prime. The first AI memory system with architectural inhibitory control — the agent reasons about whether to act before acting. Battle-tested from 6 months of production use, validated via multi-AI debate (Claude Opus + GPT-5.4 + Gemini 3.1 Pro).
 
@@ -650,7 +650,7 @@ If NEXO Brain is useful to you, consider:
 
 ## License
 
-MIT -- see [LICENSE](LICENSE)
+AGPL-3.0 -- see [LICENSE](LICENSE)
 
 ---
 
