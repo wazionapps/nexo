@@ -358,7 +358,7 @@ def handle_context_packet(area: str, files: str = "") -> str:
         (f"%{area}%", f"%{area}%")
     ).fetchall()
     if learnings:
-        parts.append("## ERRORES CONOCIDOS — NO REPETIR")
+        parts.append("## KNOWN ERRORS — DO NOT REPEAT")
         for l in learnings:
             parts.append(f"  L#{l['id']}: {l['title']}")
             # First 200 chars of content
@@ -371,7 +371,7 @@ def handle_context_packet(area: str, files: str = "") -> str:
         (f"%{area}%", f"%{area}%")
     ).fetchall()
     if changes:
-        parts.append("## CAMBIOS RECIENTES")
+        parts.append("## RECENT CHANGES")
         for c in changes:
             parts.append(f"  C#{c['id']}: {c['what_changed'][:150]}")
             if c['why']:
@@ -384,9 +384,9 @@ def handle_context_packet(area: str, files: str = "") -> str:
         (f"%{area}%", f"%{area}%")
     ).fetchall()
     if followups:
-        parts.append("## FOLLOWUPS ACTIVOS")
+        parts.append("## ACTIVE FOLLOWUPS")
         for f in followups:
-            parts.append(f"  {f['id']}: {f['description'][:150]} (fecha: {f['date']})")
+            parts.append(f"  {f['id']}: {f['description'][:150]} (date: {f['date']})")
         parts.append("")
 
     # 4. Preferences related to this area
@@ -396,7 +396,7 @@ def handle_context_packet(area: str, files: str = "") -> str:
             (f"%{area}%", f"%{area}%")
         ).fetchall()
         if prefs:
-            parts.append("## PREFERENCIAS")
+            parts.append("## PREFERENCES")
             for p in prefs:
                 parts.append(f"  {p['key']}: {p['value'][:150]}")
             parts.append("")
@@ -414,7 +414,7 @@ def handle_context_packet(area: str, files: str = "") -> str:
             rehearse=False,
         )
         if results:
-            parts.append("## MEMORIAS COGNITIVAS RELEVANTES")
+            parts.append("## RELEVANT COGNITIVE MEMORIES")
             for r in results:
                 parts.append(f"  [{r['source_type']}] {r['source_title'] or r['content'][:80]}")
             parts.append("")
@@ -422,20 +422,20 @@ def handle_context_packet(area: str, files: str = "") -> str:
         pass
 
     # 6. Data flow tracing requirement (mandatory for all subagents)
-    parts.append("## REGLA OBLIGATORIA: DATA FLOW TRACING")
-    parts.append("ANTES de modificar cualquier archivo o dato, responde estas 3 preguntas:")
-    parts.append("  1. ¿QUIÉN PRODUCE este dato? (qué función/cron/endpoint lo genera)")
-    parts.append("  2. ¿QUIÉN CONSUME este dato? (qué otros archivos/funciones lo leen)")
-    parts.append("  3. ¿QUÉ SE ROMPE si lo cambio? (efectos downstream)")
-    parts.append("Si no puedes responder las 3 → LEE el código que produce y consume ANTES de tocar.")
-    parts.append("Si sigues sin poder → PARA y devuelve la pregunta. NO adivines.")
+    parts.append("## MANDATORY RULE: DATA FLOW TRACING")
+    parts.append("BEFORE modifying any file or data, answer these 3 questions:")
+    parts.append("  1. WHO PRODUCES this data? (which function/cron/endpoint generates it)")
+    parts.append("  2. WHO CONSUMES this data? (which other files/functions read it)")
+    parts.append("  3. WHAT BREAKS if I change it? (downstream effects)")
+    parts.append("If you cannot answer all 3 → READ the code that produces and consumes BEFORE touching it.")
+    parts.append("If you still cannot answer → STOP and return the question. DO NOT guess.")
     parts.append("")
 
     if not parts:
         return f"No context found for area '{area}'. The subagent will start with no project-specific knowledge."
 
     header = f"CONTEXT PACKET — {area.upper()}\n{'='*40}\n\n"
-    footer = f"\n{'='*40}\nINSTRUCCIÓN: Si no estás 100% seguro de un dato, PARA y devuelve la pregunta. NO inventes."
+    footer = f"\n{'='*40}\nRULE: If you are not 100% sure about a piece of data, STOP and return the question. DO NOT make things up."
     return header + "\n".join(parts) + footer
 
 

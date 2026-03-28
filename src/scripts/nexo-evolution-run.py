@@ -329,19 +329,19 @@ def _create_review_followup(conn: sqlite3.Connection, cycle_num: int,
     public_items = [i for i in items if i.get("scope") == "public"]
     local_items = [i for i in items if i.get("scope") != "public"]
 
-    lines = [f"Evolution Cycle #{cycle_num} — {len(items)} propuestas para revisar."]
-    lines.append(f"Análisis: {analysis[:200]}")
+    lines = [f"Evolution Cycle #{cycle_num} — {len(items)} proposals to review."]
+    lines.append(f"Analysis: {analysis[:200]}")
     lines.append("")
 
     if public_items:
-        lines.append(f"PARA TODOS ({len(public_items)}):")
+        lines.append(f"FOR ALL USERS ({len(public_items)}):")
         for i, item in enumerate(public_items, 1):
             lines.append(f"  {i}. [{item['dimension']}] {item['action'][:120]}")
             lines.append(f"     Why: {item['reasoning'][:100]}")
         lines.append("")
 
     if local_items:
-        lines.append(f"SOLO PARA TI ({len(local_items)}):")
+        lines.append(f"LOCAL ONLY ({len(local_items)}):")
         for i, item in enumerate(local_items, 1):
             lines.append(f"  {i}. [{item['dimension']}] {item['action'][:120]}")
             lines.append(f"     Why: {item['reasoning'][:100]}")
