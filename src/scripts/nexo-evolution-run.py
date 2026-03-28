@@ -14,13 +14,9 @@ import json
 import os
 import py_compile
 import shutil
-import ssl
 import sqlite3
 import subprocess
 import sys
-import time
-import urllib.error
-import urllib.request
 from datetime import datetime, date, timedelta
 from pathlib import Path
 
@@ -32,12 +28,6 @@ OBJECTIVE_FILE = CORTEX_DIR / "evolution-objective.json"
 LOG_DIR = CLAUDE_DIR / "logs"
 SNAPSHOTS_DIR = CLAUDE_DIR / "snapshots"
 SANDBOX_DIR = CLAUDE_DIR / "sandbox" / "workspace"
-API_KEY_FILE = Path.home() / ".claude" / "anthropic-api-key.txt"
-BUDGET_FILE = CLAUDE_DIR / "logs" / "evolution-budget.json"
-API_URL = "https://api.anthropic.com/v1/messages"
-MODEL = "claude-opus-4-20250514"
-MAX_TOKENS = 8192
-BUDGET_MONTH_MAX = 500  # USD monthly cap
 MAX_CONSECUTIVE_FAILURES = 3
 MAX_SNAPSHOTS = 8
 
@@ -70,12 +60,23 @@ IMMUTABLE_FILES = {
     "tools_task_history.py", "tools_menu.py",
 }
 
-# ── SSL ──────────────────────────────────────────────────────────────────
-try:
-    import certifi
-    SSL_CTX = ssl.create_default_context(cafile=certifi.where())
-except ImportError:
-    SSL_CTX = ssl.create_default_context()
+# ── Claude CLI path ──────────────────────────────────────────────────────
+def find_claude_cli() -> Path:
+    """Find claude CLI binary, checking multiple locations."""
+    candidates = [
+        Path.home() / ".local" / "bin" / "claude",
+        Path("/usr/local/bin/claude"),
+    ]
+    for c in candidates:
+        if c.exists():
+            return c
+    # Fall back to shutil.which
+    found = shutil.which("claude")
+    if found:
+        return Path(found)
+    raise FileNotFoundError("claude CLI not found. Install with: npm install -g @anthropic-ai/claude-code")
+
+CLAUDE_CLI = find_claude_cli()
 
 # ── Logging ──────────────────────────────────────────────────────────────
 LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -98,40 +99,6 @@ from evolution_cycle import (
 )
 
 
-# ── Budget tracking ──────────────────────────────────────────────────────
-def load_budget() -> dict:
-    if BUDGET_FILE.exists():
-        return json.loads(BUDGET_FILE.read_text())
-    return {"month": date.today().strftime("%Y-%m"), "spent_usd": 0.0, "calls": 0}
-
-
-def save_budget(budget: dict):
-    BUDGET_FILE.write_text(json.dumps(budget, indent=2))
-
-
-def check_budget() -> bool:
-    """Return True if under budget."""
-    budget = load_budget()
-    current_month = date.today().strftime("%Y-%m")
-    if budget.get("month") != current_month:
-        budget = {"month": current_month, "spent_usd": 0.0, "calls": 0}
-        save_budget(budget)
-    return budget["spent_usd"] < BUDGET_MONTH_MAX
-
-
-def record_usage(input_tokens: int, output_tokens: int):
-    """Record API usage cost. Opus pricing: $15/1M input, $75/1M output."""
-    budget = load_budget()
-    current_month = date.today().strftime("%Y-%m")
-    if budget.get("month") != current_month:
-        budget = {"month": current_month, "spent_usd": 0.0, "calls": 0}
-    cost = (input_tokens * 15 + output_tokens * 75) / 1_000_000
-    budget["spent_usd"] = round(budget["spent_usd"] + cost, 4)
-    budget["calls"] += 1
-    save_budget(budget)
-    log(f"  Budget: ${budget['spent_usd']:.4f} / ${BUDGET_MONTH_MAX} ({budget['calls']} calls this month)")
-
-
 # ── Consecutive failure tracking ─────────────────────────────────────────
 def get_consecutive_failures() -> int:
     obj = load_objective()
@@ -144,73 +111,21 @@ def set_consecutive_failures(count: int):
     save_objective(obj)
 
 
-# ── API call ─────────────────────────────────────────────────────────────
-API_TIMEOUT = 600  # 10 minutes — Opus needs time for large prompts
-API_MAX_RETRIES = 3
-API_RETRY_DELAYS = [30, 60, 120]  # seconds between retries
+# ── Claude CLI call ──────────────────────────────────────────────────────
+CLI_TIMEOUT = 600  # 10 minutes — Opus needs time for large prompts
 
 
-def call_anthropic(prompt: str) -> tuple[str, dict]:
-    """Call Anthropic Messages API with streaming + retry logic. Returns (text, usage_dict)."""
-    api_key = API_KEY_FILE.read_text().strip()
-
-    body = json.dumps({
-        "model": MODEL,
-        "max_tokens": MAX_TOKENS,
-        "stream": True,
-        "messages": [{"role": "user", "content": prompt}],
-    }).encode()
-
-    last_error = None
-    for attempt in range(API_MAX_RETRIES):
-        try:
-            if attempt > 0:
-                delay = API_RETRY_DELAYS[min(attempt - 1, len(API_RETRY_DELAYS) - 1)]
-                log(f"  Retry {attempt}/{API_MAX_RETRIES - 1} after {delay}s...")
-                time.sleep(delay)
-
-            req = urllib.request.Request(
-                API_URL,
-                data=body,
-                headers={
-                    "Content-Type": "application/json",
-                    "x-api-key": api_key,
-                    "anthropic-version": "2023-06-01",
-                },
-            )
-
-            resp = urllib.request.urlopen(req, context=SSL_CTX, timeout=API_TIMEOUT)
-            text_parts = []
-            usage = {}
-            for raw_line in resp:
-                line = raw_line.decode("utf-8").strip()
-                if not line.startswith("data: "):
-                    continue
-                payload = line[6:]
-                if payload == "[DONE]":
-                    break
-                try:
-                    event = json.loads(payload)
-                except json.JSONDecodeError:
-                    continue
-                etype = event.get("type", "")
-                if etype == "content_block_delta":
-                    delta = event.get("delta", {})
-                    if delta.get("type") == "text_delta":
-                        text_parts.append(delta.get("text", ""))
-                elif etype == "message_delta":
-                    usage = event.get("usage", usage)
-                elif etype == "message_start":
-                    msg = event.get("message", {})
-                    usage = msg.get("usage", usage)
-
-            return "".join(text_parts), usage
-
-        except Exception as e:
-            last_error = e
-            log(f"  API attempt {attempt + 1} failed: {e}")
-
-    raise last_error
+def call_claude_cli(prompt: str) -> str:
+    """Call claude -p --model opus via subprocess. Returns stdout text."""
+    result = subprocess.run(
+        [str(CLAUDE_CLI), "-p", "--model", "opus", prompt],
+        capture_output=True,
+        text=True,
+        timeout=CLI_TIMEOUT,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"claude CLI exited {result.returncode}: {result.stderr[:500]}")
+    return result.stdout
 
 
 # ── File safety validation ───────────────────────────────────────────────
@@ -460,11 +375,6 @@ def run():
         log(f"Evolution DISABLED: {objective.get('disabled_reason', 'unknown')}")
         return
 
-    # Check API key
-    if not API_KEY_FILE.exists():
-        log("ERROR: No API key at ~/.claude/anthropic-api-key.txt")
-        return
-
     # Circuit breaker: consecutive failures
     failures = get_consecutive_failures()
     if failures >= MAX_CONSECUTIVE_FAILURES:
@@ -472,11 +382,6 @@ def run():
         objective["evolution_enabled"] = False
         objective["disabled_reason"] = f"Circuit breaker: {failures} consecutive failures at {datetime.now().isoformat()}"
         save_objective(objective)
-        return
-
-    # Circuit breaker: budget
-    if not check_budget():
-        log(f"BUDGET CAP: Monthly budget of ${BUDGET_MONTH_MAX} exceeded. Skipping cycle.")
         return
 
     # Dry-run restore test
@@ -499,24 +404,14 @@ def run():
     prompt = build_evolution_prompt(week_data, objective)
     log(f"Prompt built: {len(prompt)} chars")
 
-    # Call Opus
-    log(f"Calling {MODEL}...")
+    # Call Opus via claude -p
+    log("Calling claude -p --model opus...")
     try:
-        raw_response, usage = call_anthropic(prompt)
-    except urllib.error.HTTPError as e:
-        log(f"API error {e.code}: {e.reason}")
-        set_consecutive_failures(failures + 1)
-        return
+        raw_response = call_claude_cli(prompt)
     except Exception as e:
-        log(f"API call failed: {e}")
+        log(f"claude CLI call failed: {e}")
         set_consecutive_failures(failures + 1)
         return
-
-    # Record budget
-    record_usage(
-        usage.get("input_tokens", 0),
-        usage.get("output_tokens", 0)
-    )
 
     log(f"Response received: {len(raw_response)} chars")
 

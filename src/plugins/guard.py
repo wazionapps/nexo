@@ -6,14 +6,8 @@ and provides stats on error prevention effectiveness.
 import json
 import os
 from datetime import datetime, timedelta
-from db import get_db, find_similar_learnings, extract_keywords
+from db import get_db, find_similar_learnings, extract_keywords, search_learnings, search_changes
 
-
-SCHEMA_CACHE_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                                  "nexo-mcp", "schema_cache.json")
-# Fallback: same dir as db
-if not os.path.exists(SCHEMA_CACHE_PATH):
-    SCHEMA_CACHE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "schema_cache.json")
 
 
 def _load_schema_cache() -> dict:
@@ -117,7 +111,8 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
     ).fetchall()
     for r in rows:
         if r["id"] not in seen_ids:
-            result["universal_rules"].append({"id": r["id"], "rule": r["title"]})
+            seen_ids.add(r["id"])
+            result["universal_rules"].append({"id": r["id"], "rule": r["title"], "category": r["category"]})
 
     # 4. DB schemas if files contain SQL keywords
     if include_schemas_bool and file_list:
@@ -141,16 +136,42 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
             elif "cloud_sql" in cache and table in cache["cloud_sql"]:
                 result["schemas"][table] = cache["cloud_sql"][table]
 
-    # 5. Check for blocking rules (5+ repetitions)
-    for learning in result["learnings"]:
+    # 5. Check for blocking rules — two paths:
+    #    (a) 5+ repetitions (existing behavior)
+    #    (b) Learning contains NUNCA/NEVER/PROHIBIDO and matches semantically (aggressive mode)
+    import re
+    BLOCKING_KEYWORDS = re.compile(
+        r'\bNUNCA\b|\bNEVER\b|\bPROHIBIDO\b|\bNO\s+\w+\b|\bFORBIDDEN\b|\bBLOCKING\b|\bSIEMPRE\b|\bALWAYS\b',
+        re.IGNORECASE
+    )
+    # Check both learnings and universal_rules for blocking
+    all_candidates = [(l, "learning") for l in result["learnings"]] + \
+                     [(u, "universal") for u in result["universal_rules"]]
+    blocking_seen = set()
+    for learning, source in all_candidates:
         lid = learning["id"]
+        if lid in blocking_seen:
+            continue
         rep_count = conn.execute(
             "SELECT COUNT(*) as cnt FROM error_repetitions WHERE original_learning_id = ?",
             (lid,)
         ).fetchone()["cnt"]
+
+        # Path (a): 5+ repetitions
         if rep_count >= 5:
+            blocking_seen.add(lid)
             result["blocking_rules"].append({
-                "id": lid, "rule": learning["rule"], "repetitions": rep_count
+                "id": lid, "rule": learning["rule"], "repetitions": rep_count,
+                "reason": "repeated_error"
+            })
+            continue
+
+        # Path (b): Aggressive — learning TITLE contains prohibition keywords
+        if BLOCKING_KEYWORDS.search(learning["rule"]):
+            blocking_seen.add(lid)
+            result["blocking_rules"].append({
+                "id": lid, "rule": learning["rule"], "repetitions": rep_count,
+                "reason": "prohibition_keyword"
             })
 
     # 6. Area repetition rate
@@ -184,15 +205,6 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
         else:
             cog_top_k = 3
             cog_min_score = 0.65
-
-        # Somatic risk lowers threshold further
-        try:
-            risk_result = cognitive.somatic_get_risk(file_list, area)
-            if risk_result["max_risk"] > 0.5:
-                cog_min_score = min(cog_min_score, 0.4)
-                cog_top_k = max(cog_top_k, 5)
-        except Exception:
-            pass
 
         query_parts = []
         if file_list:
@@ -241,7 +253,11 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
     if result["blocking_rules"]:
         lines.append("BLOCKING RULES (resolve BEFORE writing):")
         for r in result["blocking_rules"]:
-            lines.append(f"  #{r['id']} ({r['repetitions']}x repeated): {r['rule']}")
+            reason = r.get("reason", "repeated_error")
+            if reason == "prohibition_keyword":
+                lines.append(f"  #{r['id']} [PROHIBIT]: {r['rule']}")
+            else:
+                lines.append(f"  #{r['id']} ({r['repetitions']}x repeated): {r['rule']}")
         lines.append("")
 
     if result["learnings"]:
@@ -435,10 +451,244 @@ def handle_somatic_stats() -> str:
         return "Error: {}".format(e)
 
 
+def handle_guard_cross_check(findings: list, area: str = "") -> str:
+    """Cross-check audit findings against known learnings to filter false positives.
+
+    Args:
+        findings: List of audit finding strings to cross-check
+        area: System area to narrow the learning search (wazion, shopify, etc.)
+    """
+    # Common English/Spanish stopwords to skip during keyword extraction
+    STOPWORDS = {
+        "the", "a", "an", "is", "in", "on", "at", "to", "of", "and", "or", "but",
+        "for", "with", "that", "this", "it", "as", "are", "was", "be", "by", "not",
+        "has", "have", "from", "which", "when", "if", "then", "do", "does", "can",
+        "el", "la", "los", "las", "un", "una", "en", "de", "del", "al", "y", "o",
+        "que", "se", "no", "es", "por", "con", "su", "pero", "como", "para",
+        "este", "esta", "esto", "son", "hay", "más", "ya",
+    }
+
+    new_issues = []
+    known_issues = []
+
+    for finding in findings:
+        if not finding or not finding.strip():
+            continue
+
+        # Extract significant keywords from the finding text
+        words = finding.lower().split()
+        keywords = [
+            w.strip(".,;:!?\"'()[]{}") for w in words
+            if len(w) >= 4 and w.lower() not in STOPWORDS
+        ]
+        # Use up to 5 most distinctive keywords to build the search query
+        query_keywords = keywords[:5]
+
+        matched_learnings = []
+        if query_keywords:
+            query = " ".join(query_keywords)
+            try:
+                results = search_learnings(query, category=area if area else None)
+                if not results and area:
+                    # Retry without category filter if area-filtered search returns nothing
+                    results = search_learnings(query)
+                matched_learnings = results[:3]  # Top 3 matches per finding
+            except Exception:
+                pass
+
+        if matched_learnings:
+            refs = [
+                {"id": r["id"], "title": r["title"], "category": r.get("category", "")}
+                for r in matched_learnings
+            ]
+            known_issues.append({
+                "finding": finding,
+                "status": "known",
+                "learning_refs": refs,
+            })
+        else:
+            new_issues.append({
+                "finding": finding,
+                "status": "new",
+            })
+
+    # Build output
+    lines = [
+        f"CROSS-CHECK RESULTS: {len(findings)} findings — "
+        f"{len(new_issues)} new, {len(known_issues)} already documented",
+        "",
+    ]
+
+    if new_issues:
+        lines.append(f"NEW ISSUES ({len(new_issues)}) — not in learnings, investigate:")
+        for i, item in enumerate(new_issues, 1):
+            lines.append(f"  {i}. {item['finding']}")
+        lines.append("")
+
+    if known_issues:
+        lines.append(f"KNOWN ISSUES ({len(known_issues)}) — covered by existing learnings:")
+        for i, item in enumerate(known_issues, 1):
+            refs_str = ", ".join(
+                f"#{r['id']} [{r['category']}] {r['title'][:60]}"
+                for r in item["learning_refs"]
+            )
+            lines.append(f"  {i}. {item['finding']}")
+            lines.append(f"     -> {refs_str}")
+        lines.append("")
+
+    summary = {
+        "total": len(findings),
+        "new_count": len(new_issues),
+        "known_count": len(known_issues),
+        "new_issues": [i["finding"] for i in new_issues],
+        "known_issues": [
+            {"finding": i["finding"], "refs": i["learning_refs"]}
+            for i in known_issues
+        ],
+    }
+    lines.append(f"SUMMARY JSON: {json.dumps(summary)}")
+
+    return "\n".join(lines)
+
+
+def handle_guard_file_check(files: list) -> str:
+    """Pre-edit check: surfaces learnings and recent changes for files about to be modified.
+
+    Args:
+        files: List of file paths about to be edited
+    """
+    from pathlib import Path
+    import re
+
+    BLOCKING_KEYWORDS = re.compile(
+        r'\bNUNCA\b|\bNEVER\b|\bPROHIBIDO\b|\bFORBIDDEN\b|\bBLOCKING\b',
+        re.IGNORECASE
+    )
+
+    if not files:
+        return "ERROR: No files provided."
+
+    file_learnings: dict = {}
+    recent_changes: dict = {}
+    warnings: list = []
+    seen_learning_ids: set = set()
+
+    for filepath in files:
+        p = Path(filepath)
+        filename = p.name
+        parent_dir = p.parent.name
+        stem = p.stem  # filename without extension
+
+        # Build search keywords: filename, stem, parent directory (deduplicated)
+        keywords = [kw for kw in [filename, stem, parent_dir] if kw and kw not in (".", "")]
+        seen_kw: set = set()
+        unique_keywords = []
+        for kw in keywords:
+            if kw not in seen_kw:
+                seen_kw.add(kw)
+                unique_keywords.append(kw)
+
+        file_results = []
+        file_seen_ids: set = set()
+
+        for keyword in unique_keywords:
+            try:
+                rows = search_learnings(keyword)
+                for r in rows:
+                    lid = r.get("id")
+                    if lid and lid not in seen_learning_ids and lid not in file_seen_ids:
+                        file_seen_ids.add(lid)
+                        seen_learning_ids.add(lid)
+                        entry = {
+                            "id": lid,
+                            "category": r.get("category", ""),
+                            "title": r.get("title", ""),
+                            "content": (r.get("content") or "")[:300],
+                        }
+                        file_results.append(entry)
+                        # Flag blocking learnings
+                        if BLOCKING_KEYWORDS.search(r.get("title", "")) or \
+                                BLOCKING_KEYWORDS.search(r.get("content") or ""):
+                            warnings.append(
+                                f"[BLOCKING] #{lid} ({filepath}): {r.get('title', '')}"
+                            )
+            except Exception:
+                pass
+
+        file_learnings[filepath] = file_results
+
+        # Search recent changes (last 7 days) for this file by filename/stem
+        file_changes = []
+        for keyword in unique_keywords[:2]:  # filename + stem are most specific
+            try:
+                changes = search_changes(files=keyword, days=7)
+                for c in changes:
+                    cid = c.get("id")
+                    if cid and not any(fc.get("id") == cid for fc in file_changes):
+                        file_changes.append({
+                            "id": cid,
+                            "files": c.get("files", ""),
+                            "what_changed": (c.get("what_changed") or "")[:200],
+                            "why": (c.get("why") or "")[:150],
+                            "created_at": (c.get("created_at") or "")[:16],
+                        })
+            except Exception:
+                pass
+
+        recent_changes[filepath] = file_changes
+
+    # Build summary line
+    total_learnings = sum(len(v) for v in file_learnings.values())
+    total_changes = sum(len(v) for v in recent_changes.values())
+    summary_parts = []
+    if total_learnings:
+        summary_parts.append(f"{total_learnings} learning(s) found")
+    if total_changes:
+        summary_parts.append(f"{total_changes} recent change(s) in last 7 days")
+    if warnings:
+        summary_parts.append(f"{len(warnings)} BLOCKING warning(s)")
+    summary = ", ".join(summary_parts) if summary_parts else "No relevant learnings or recent changes found."
+
+    # Format output
+    lines = []
+
+    if warnings:
+        lines.append("WARNINGS — resolve before editing:")
+        for w in warnings:
+            lines.append(f"  {w}")
+        lines.append("")
+
+    for filepath in files:
+        learnings = file_learnings.get(filepath, [])
+        changes = recent_changes.get(filepath, [])
+        if not learnings and not changes:
+            continue
+        lines.append(f"FILE: {filepath}")
+        if learnings:
+            lines.append(f"  Learnings ({len(learnings)}):")
+            for entry in learnings[:10]:
+                lines.append(f"    #{entry['id']} [{entry['category']}] {entry['title']}")
+                if entry["content"]:
+                    lines.append(f"      {entry['content'][:120]}")
+        if changes:
+            lines.append(f"  Recent changes ({len(changes)}, last 7d):")
+            for c in changes[:5]:
+                lines.append(f"    [{c['created_at']}] {c['what_changed'][:100]}")
+                if c["why"]:
+                    lines.append(f"      Why: {c['why'][:80]}")
+        lines.append("")
+
+    lines.append(f"SUMMARY: {summary}")
+
+    return "\n".join(lines) if lines else summary
+
+
 TOOLS = [
     (handle_guard_check, "nexo_guard_check", "Check learnings relevant to files/area BEFORE editing code. Call this before any code change."),
     (handle_guard_stats, "nexo_guard_stats", "Get guard system statistics: repetition rate, trends, top problem areas"),
     (handle_guard_log_repetition, "nexo_guard_log_repetition", "Log a learning repetition (new learning matches existing one)"),
     (handle_somatic_check, "nexo_somatic_check", "View somatic risk scores for files/areas — pain memory"),
     (handle_somatic_stats, "nexo_somatic_stats", "Top 10 riskiest targets + risk distribution"),
+    (handle_guard_cross_check, "nexo_guard_cross_check", "Cross-check audit findings against known learnings to filter false positives"),
+    (handle_guard_file_check, "nexo_guard_file_check", "Pre-edit check: surfaces learnings and recent changes for files about to be modified"),
 ]
