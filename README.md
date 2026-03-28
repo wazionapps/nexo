@@ -1,12 +1,12 @@
 # NEXO Brain — Your AI Gets a Brain
 
-[![npm v1.2.1](https://img.shields.io/npm/v/nexo-brain?label=npm&color=purple)](https://www.npmjs.com/package/nexo-brain)
+[![npm](https://img.shields.io/npm/v/nexo-brain?label=npm&color=purple)](https://www.npmjs.com/package/nexo-brain)
 [![F1 0.588 on LoCoMo](https://img.shields.io/badge/LoCoMo_F1-0.588-brightgreen)](https://github.com/wazionapps/nexo/blob/main/benchmarks/locomo/results/)
 [![+55% vs GPT-4](https://img.shields.io/badge/vs_GPT--4-%2B55%25-blue)](https://github.com/snap-research/locomo/issues/33)
 [![GitHub stars](https://img.shields.io/github/stars/wazionapps/nexo?style=social)](https://github.com/wazionapps/nexo/stargazers)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 
-> **v1.1.1** — Context Continuity via auto-compaction hooks. PreCompact saves a full session checkpoint; PostCompact re-injects it so long sessions (8+ hours) feel like one continuous conversation. Plus: Cognitive Cortex, 30 Core Rules as DNA, Smart Startup, Context Packets, Auto-Prime. The first AI memory system with architectural inhibitory control — the agent reasons about whether to act before acting. Battle-tested from 6 months of production use, validated via multi-AI debate (Claude Opus + GPT-5.4 + Gemini 3.1 Pro).
+> The first AI memory system with architectural inhibitory control — the agent reasons about whether to act before acting. Cognitive Cortex, Context Continuity via auto-compaction hooks, Smart Startup, Context Packets, Auto-Prime, and 30 Core Rules as DNA. Battle-tested from 6 months of production use, validated via multi-AI debate.
 
 **NEXO Brain transforms any MCP-compatible AI agent from a stateless assistant into a cognitive partner that remembers, learns, forgets, adapts, and builds a relationship with you over time.**
 
@@ -136,7 +136,7 @@ Like a human brain, NEXO Brain has automated processes that run while you're not
 
 If your Mac was asleep during any scheduled process, NEXO Brain catches up in order when it wakes.
 
-## Cognitive Cortex (v1.0.0)
+## Cognitive Cortex
 
 The Cortex is a middleware cognitive layer that makes the agent **think before acting**. It implements architectural inhibitory control — the agent cannot bypass reasoning.
 
@@ -163,7 +163,7 @@ User message → Fast Path check → Simple chat? → Respond directly
 
 The Cortex was designed through a 3-way AI debate (Claude Opus 4.6 + GPT-5.4 + Gemini 3.1 Pro) and validated against 6 months of real production failures.
 
-## Context Continuity (Auto-Compaction) (v1.1.1)
+## Context Continuity (Auto-Compaction)
 
 NEXO Brain automatically preserves session context when Claude Code compacts conversations. Using PreCompact and PostCompact hooks:
 
