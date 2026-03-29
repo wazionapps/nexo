@@ -103,7 +103,7 @@ def handle_decision_search(query: str = '', domain: str = '', days: int = 30) ->
         scope = f"'{query}'" if query else domain or 'todas'
         return f"No decisions found for {scope} in {days} days."
 
-    lines = [f"DECISIONES ({len(results)}):"]
+    lines = [f"DECISIONS ({len(results)}):"]
     for d in results:
         conf = d.get('confidence', '?')
         outcome_str = f" → {d['outcome'][:50]}" if d.get('outcome') else ""

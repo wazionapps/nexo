@@ -319,7 +319,7 @@ def _create_review_followup(conn: sqlite3.Connection, cycle_num: int,
     public_items = [i for i in items if i.get("scope") == "public"]
     local_items = [i for i in items if i.get("scope") != "public"]
 
-    lines = [f"Evolution Cycle #{cycle_num} — {len(items)} propuestas para revisar."]
+    lines = [f"Evolution Cycle #{cycle_num} — {len(items)} proposals to review."]
     lines.append(f"Análisis: {analysis[:200]}")
     lines.append("")
 
