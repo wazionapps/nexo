@@ -866,6 +866,72 @@ def _apply_temporal_boost(results: list[dict], query_text: str) -> list[dict]:
     return results
 
 
+# ============================================================================
+# FEATURE 0.5: Knowledge Graph Boost
+# Memories connected to more KG nodes (files, areas, other learnings) are
+# more structurally important. Apply a small additive boost proportional to
+# their connection count.
+# ============================================================================
+
+def _kg_boost_results(results: list[dict], max_boost: float = 0.08) -> list[dict]:
+    """Boost search results based on Knowledge Graph connectivity.
+
+    Boost formula: min(max_boost, 0.015 * log2(connections + 1))
+    """
+    if not results:
+        return results
+
+    try:
+        db = _get_db()
+    except Exception:
+        return results
+
+    _prefix_map = {"learning": "L", "change": "C", "decision": "D", "entity": "E"}
+    ref_map = {}
+    for i, r in enumerate(results):
+        source_type = r.get("source_type", "")
+        source_id = r.get("source_id", "")
+        if not source_type or not source_id:
+            continue
+        prefix = _prefix_map.get(source_type, "")
+        if prefix and source_id.startswith(prefix):
+            numeric_id = source_id[len(prefix):]
+            node_ref = f"{source_type}:{numeric_id}"
+        else:
+            node_ref = f"{source_type}:{source_id}"
+        ref_map.setdefault(node_ref, []).append(i)
+
+    if not ref_map:
+        return results
+
+    try:
+        placeholders = ",".join(["?"] * len(ref_map))
+        rows = db.execute(f"""
+            SELECT n.node_ref, COUNT(e.id) as connections
+            FROM kg_nodes n
+            LEFT JOIN kg_edges e ON (e.source_id = n.id OR e.target_id = n.id)
+                AND e.valid_until IS NULL
+            WHERE n.node_ref IN ({placeholders})
+            GROUP BY n.id
+        """, list(ref_map.keys())).fetchall()
+    except Exception:
+        return results
+
+    for row in rows:
+        node_ref = row["node_ref"]
+        connections = row["connections"]
+        if connections <= 0:
+            continue
+        boost = min(max_boost, 0.015 * math.log2(connections + 1))
+        for idx in ref_map.get(node_ref, []):
+            r = results[idx]
+            if r.get("score", 0) >= 0.45:
+                r["score"] = min(1.0, r["score"] + boost)
+                r["kg_boost"] = round(boost, 4)
+                r["kg_connections"] = connections
+
+    return results
+
 
 # ============================================================================
 # FEATURE 1: HyDE Query Expansion (adapted from Vestige hyde.rs)
@@ -1270,6 +1336,20 @@ def search(
     # Auto-restore snoozed memories whose snooze_until has passed
     _auto_restore_snoozed(db)
 
+    # HNSW fast-path: use approximate nearest neighbors when available
+    _hnsw_candidates = None
+    try:
+        import hnsw_index
+        if hnsw_index.is_available() and hnsw_index.should_activate(stores):
+            _hnsw_candidates = {}
+            for s in (["stm", "ltm"] if stores == "both" else [stores]):
+                hits = hnsw_index.search(query_vec, store=s, top_k=top_k * 4)
+                if hits:
+                    for db_id, score in hits:
+                        _hnsw_candidates[(s, db_id)] = score
+    except Exception:
+        _hnsw_candidates = None
+
     results = []
     reactivated_ids = set()
 
@@ -1289,6 +1369,9 @@ def search(
         rows = db.execute(f"SELECT * FROM stm_memories {where}", params).fetchall()
 
         for row in rows:
+            # HNSW fast-path: skip rows not in candidate set
+            if _hnsw_candidates is not None and ("stm", row["id"]) not in _hnsw_candidates:
+                continue
             vec = _blob_to_array(row["embedding"])
             score = cosine_similarity(query_vec, vec)
             lifecycle = row["lifecycle_state"] or "active"
@@ -1328,6 +1411,9 @@ def search(
         rows = db.execute(f"SELECT * FROM ltm_memories {where}", params).fetchall()
 
         for row in rows:
+            # HNSW fast-path: skip rows not in candidate set
+            if _hnsw_candidates is not None and ("ltm", row["id"]) not in _hnsw_candidates:
+                continue
             vec = _blob_to_array(row["embedding"])
             score = cosine_similarity(query_vec, vec)
             lifecycle = row["lifecycle_state"] or "active"
@@ -1396,6 +1482,9 @@ def search(
 
     # Recency temporal boost: recent memories get additive bonus (query-adaptive)
     results = _apply_temporal_boost(results, query_text)
+
+    # Knowledge Graph structural boost: connected memories rank higher
+    results = _kg_boost_results(results)
 
     # Sort by score descending, take top-20 for reranking
     results.sort(key=lambda x: x.get("score", 0), reverse=True)
@@ -1468,6 +1557,8 @@ def search(
             ranking_desc = "hyde_centroid_similarity"
         parts = [f"Ranked #{rank}: {ranking_desc}={score:.3f}"]
         parts.append(f"store={store}, strength={strength:.2f}, accesses={access_count}")
+        if r.get("kg_boost"):
+            parts.append(f"kg_boost=+{r['kg_boost']:.3f} ({r.get('kg_connections', 0)} edges)")
         if r.get("co_activation_boost"):
             parts.append(f"co_activation_boost=+{r['co_activation_boost']:.3f}")
         if created:
