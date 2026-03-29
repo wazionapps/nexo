@@ -412,7 +412,7 @@ That's it. No need to run `claude` manually. Your operator will greet you immedi
 | Component | What | Where |
 |-----------|------|-------|
 | Cognitive engine | Python: fastembed, numpy, vector search | pip packages |
-| MCP server | 111+ tools for memory, cognition, learning, guard | ~/.nexo/ |
+| MCP server | 100+ tools for memory, cognition, learning, guard | ~/.nexo/ |
 | Plugins | Guard, episodic memory, cognitive memory, entities, preferences | ~/.nexo/plugins/ |
 | Hooks (6) | SessionStart briefing, Stop post-mortem, PostToolUse capture, PreCompact checkpoint, PostCompact recovery, Caffeinate | ~/.nexo/hooks/ |
 | Reflection engine | Processes session buffer, extracts patterns, updates user model | ~/.nexo/scripts/ |
@@ -425,12 +425,12 @@ That's it. No need to run `claude` manually. Your operator will greet you immedi
 
 - **macOS or Linux** (Windows via [WSL](https://learn.microsoft.com/en-us/windows/wsl/install))
 - **Node.js 18+** (for the installer)
-- **Claude Opus (latest version) strongly recommended.** NEXO Brain provides 111+ MCP tools across 20 categories. This cognitive load requires a top-tier model with large context window. Smaller models (Haiku, Sonnet) may struggle with tool selection and produce inconsistent results. Opus handles all 111+ tools without hesitation.
+- **Claude Opus (latest version) strongly recommended.** NEXO Brain provides 100+ MCP tools across 20 categories. This cognitive load requires a top-tier model with large context window. Smaller models (Haiku, Sonnet) may struggle with tool selection and produce inconsistent results. Opus handles all 100+ tools without hesitation.
 - Python 3, Homebrew, and Claude Code are installed automatically if missing.
 
 ## Architecture
 
-### 111+ MCP Tools across 20 Categories
+### 100+ MCP Tools across 20 Categories
 
 | Category | Count | Tools | Purpose |
 |----------|-------|-------|---------|
@@ -512,7 +512,7 @@ NEXO Brain is designed as an MCP server. Claude Code is the primary supported cl
 npx nexo-brain
 ```
 
-All 111+ tools are available immediately after installation. The installer configures Claude Code's `~/.claude/settings.json` automatically.
+All 100+ tools are available immediately after installation. The installer configures Claude Code's `~/.claude/settings.json` automatically.
 
 ### OpenClaw
 
@@ -609,6 +609,34 @@ If NEXO Brain is useful to you, consider:
 [![Star History Chart](https://api.star-history.com/svg?repos=wazionapps/nexo&type=Date)](https://star-history.com/#wazionapps/nexo&Date)
 
 ## Changelog
+
+### v1.4.1 — Multi-AI Code Review (2026-03-29)
+- **Fix**: 3 bugs found by GPT-5.4 (Codex CLI) + Gemini 2.5 (Gemini CLI) reviewing full codebase
+  - `session_diaries` → `session_diary` table name (smart startup silently failed)
+  - Quarantine contradiction logic distinguished confirmation from opposition
+  - Knowledge Graph timezone import crash
+- **Security**: Memory sanitization prevents prompt injection via stored content
+- **Migration #13**: Normalizes legacy status values (PENDIENTE→PENDING) on upgrade
+
+### v1.4.0 — The Brain Dreams (2026-03-29)
+- **Major**: All 9 nightly scripts migrated from Python word-overlap to CLI wrapper pattern
+  - Postmortem consolidator: opus understands patterns by meaning, not word overlap
+  - Sleep system: detects real duplicates via semantic understanding
+  - Daily synthesis: opus prioritizes what matters for tomorrow
+  - Self-audit: interprets findings for root cause analysis
+  - Evolution: prompt reduced 95% (45K → 2.2K chars) — CLI investigates using tools
+- **Stop Hook v8**: Session-scoped tool counting (not day-wide), buffer fallback removed
+- **Guard**: Behavioral rules section surfaces most-violated rules at session start
+- **Followup hygiene**: Weekly cleanup script normalizes statuses, flags stale items
+- 8 missing core scripts + 1 plugin added to repository
+
+### v1.3.0 — Evolution System (2026-03-28)
+- **New**: Self-improvement cycle — NEXO proposes and applies improvements weekly
+- Dual-mode: auto (low-risk changes) and review (owner approval required)
+- Circuit breaker, snapshot/rollback, immutable file protection
+
+### v1.2.3 — AGPL-3.0 License (2026-03-27)
+- License changed from MIT to AGPL-3.0
 
 ### v1.2.1 — Stop Hook Hotfix (2026-03-27)
 - **Fix**: v1.2.0 deleted the flag on approve, causing infinite block loops if session didn't close immediately
