@@ -179,7 +179,7 @@
         .stat-label { font-size: 14px; color: var(--text-muted); margin-top: 4px; }
 
         /* ===== Section ===== */
-        section { padding: 64px 0; }
+        section { padding: 80px 0; }
         section:nth-child(even) { background: rgba(18, 18, 26, 0.5); }
 
         .section-label {
@@ -190,7 +190,7 @@
 
         .section-title {
             font-size: clamp(28px, 4vw, 42px); font-weight: 800;
-            letter-spacing: -0.02em; margin-bottom: 16px;
+            letter-spacing: -0.02em; margin-bottom: 20px;
             text-align: center;
         }
 
@@ -408,7 +408,7 @@
         .hook-card p { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
 
         /* ===== Cognitive Features (new in v0.5.0) ===== */
-        .cognitive-group { margin-bottom: 32px; }
+        .cognitive-group { margin-bottom: 40px; }
         .cognitive-group:last-child { margin-bottom: 0; }
 
         .cognitive-group-label {
@@ -427,7 +427,7 @@
             background: var(--dark-card);
             border: 1px solid var(--dark-border);
             border-radius: 12px;
-            padding: 24px;
+            padding: 28px;
             transition: all 0.3s;
         }
 
