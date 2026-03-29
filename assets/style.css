@@ -72,7 +72,7 @@
 
         /* ===== Hero ===== */
         .hero {
-            padding: 160px 0 100px;
+            padding: 120px 0 64px;
             text-align: center;
             position: relative;
         }
@@ -179,7 +179,7 @@
         .stat-label { font-size: 14px; color: var(--text-muted); margin-top: 4px; }
 
         /* ===== Section ===== */
-        section { padding: 100px 0; }
+        section { padding: 64px 0; }
         section:nth-child(even) { background: rgba(18, 18, 26, 0.5); }
 
         .section-label {
@@ -196,7 +196,7 @@
 
         .section-subtitle {
             font-size: 18px; color: var(--text-muted);
-            max-width: 640px; margin: 0 auto 64px; text-align: center;
+            max-width: 640px; margin: 0 auto 32px; text-align: center;
         }
 
         /* ===== Features Grid ===== */
@@ -408,7 +408,7 @@
         .hook-card p { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
 
         /* ===== Cognitive Features (new in v0.5.0) ===== */
-        .cognitive-group { margin-bottom: 48px; }
+        .cognitive-group { margin-bottom: 32px; }
         .cognitive-group:last-child { margin-bottom: 0; }
 
         .cognitive-group-label {
@@ -589,7 +589,7 @@
 
         /* ===== CTA Section ===== */
         .cta-section {
-            text-align: center; padding: 120px 0;
+            text-align: center; padding: 80px 0;
             position: relative;
         }
 
@@ -650,7 +650,7 @@
             .cognitive-grid { grid-template-columns: 1fr; }
             .inspired-grid { grid-template-columns: 1fr; }
             .architecture { flex-direction: column; }
-            .hero { padding: 120px 0 60px; }
+            .hero { padding: 100px 0 48px; }
             .hero h1 { font-size: 2rem; }
             .install-block { font-size: 13px; }
             .code-body { font-size: 12px; }
