@@ -401,8 +401,9 @@ atlas
 
 Under the hood, the alias runs:
 ```bash
-claude --system-prompt "Start NEXO session. Run nexo_startup, load context, greet the user."
+claude --append-system-prompt "You are NEXO. Run nexo_startup immediately, load context, greet the user." "."
 ```
+`--append-system-prompt` adds to the default system prompt without replacing it (preserves CLAUDE.md). The `"."` triggers the operator to start immediately.
 
 That's it. No need to run `claude` manually. Your operator will greet you immediately — adapted to the time of day, resuming from where you left off if there's a previous session. No cold starts, no waiting for your input.
 
