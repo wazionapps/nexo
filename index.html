@@ -893,7 +893,7 @@
             <a href="#architecture"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Architecture</a>
             <a href="#tools"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>Tools</a>
             <a href="#benchmark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>Benchmark</a>
-            <a href="#v110"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/></svg>Changelog</a>
+            <a href="#v140"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/></svg>Changelog</a>
             <a href="https://github.com/wazionapps/nexo/wiki"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>Docs</a>
             <a href="https://github.com/wazionapps/nexo" class="nav-cta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>GitHub</a>
         </div>
@@ -1153,24 +1153,30 @@
     </div>
 </section>
 
-<!-- v1.4.1 The Brain Dreams -->
+<!-- v1.4.1 The Brain Dreams + Multi-AI Review -->
 <section id="v140" style="padding:80px 0;background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
     <div class="container">
         <div class="section-label">New in v1.4.1</div>
-        <h2 class="section-title">The Brain Dreams</h2>
+        <h2 class="section-title">The Brain Dreams + Multi-AI Code Review</h2>
         <p class="section-subtitle">
-            All 9 nightly processes now use Claude CLI (opus) for intelligent decisions instead of Python word-matching. Like a human brain during sleep: consolidate important memories, discard noise, detect conflicts.
+            All 9 nightly processes now use Claude CLI (opus) for intelligent decisions instead of Python word-matching. Plus: 3 bugs found by giving GPT-5.4 and Gemini 2.5 full access to the codebase.
         </p>
         <div class="cognitive-group">
             <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
-                <div class="cognitive-card"><h4>CLI Wrapper Pattern</h4><p>Pure Python collects data (SQL queries, API calls), then Claude CLI opus makes intelligent decisions. The brain uses its own intelligence to dream.</p></div>
-                <div class="cognitive-card"><h4>Semantic Consolidation</h4><p>Post-mortem consolidator now understands meaning, not word overlap. Only truly actionable patterns get promoted to permanent memory.</p></div>
-                <div class="cognitive-card"><h4>Intelligent Sleep</h4><p>Memory cleanup detects real duplicates and contradictions by understanding content, not counting shared words at 50% threshold.</p></div>
-                <div class="cognitive-card"><h4>Root Cause Analysis</h4><p>Self-audit interprets findings to identify root causes and suggest specific actions, not just list symptoms.</p></div>
+                <div class="cognitive-card"><h4>CLI Wrapper Pattern</h4><p>Pure Python collects data, then Claude CLI opus makes intelligent decisions. The brain uses its own intelligence to dream &mdash; not a calculator.</p></div>
+                <div class="cognitive-card"><h4>Multi-AI Code Review</h4><p>GPT-5.4 (Codex CLI) + Gemini 2.5 (Gemini CLI) + Claude Opus reviewed the full codebase simultaneously. Found 3 real bugs with exact file:line references.</p></div>
+                <div class="cognitive-card"><h4>Memory Sanitization</h4><p>Retrieved memories are now sanitized to prevent prompt injection. Stored content is treated as quoted evidence, not executable instructions.</p></div>
+                <div class="cognitive-card"><h4>Quarantine Fix</h4><p>The quarantine system now distinguishes confirmation from contradiction. Similar memories that reinforce each other are no longer rejected as conflicts.</p></div>
             </div>
         </div>
     </div>
 </section>
+
+<!-- Older versions toggle -->
+<div style="text-align:center;padding:20px 0;">
+    <button onclick="document.getElementById('older-versions').style.display=document.getElementById('older-versions').style.display==='none'?'block':'none'" style="background:#7C3AED;color:white;border:none;padding:12px 32px;border-radius:8px;cursor:pointer;font-size:16px;font-weight:600;">Show Older Versions</button>
+</div>
+<div id="older-versions" style="display:none;">
 
 <!-- v1.3.0 Evolution System -->
 <section id="v130" style="padding:80px 0;background:linear-gradient(135deg,#1a0f2e 0%,#0F0A1A 100%);">
@@ -2070,6 +2076,7 @@
         </div>
     </div>
 </section>
+</div><!-- /older-versions -->
 </main>
 
 <!-- Translate -->
