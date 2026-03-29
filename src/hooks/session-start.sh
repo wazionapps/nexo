@@ -1,4 +1,7 @@
 #!/bin/bash
+
+# Write session start timestamp for session-scoped tool counting
+date +%s > "${NEXO_HOME:-$HOME/.nexo}/operations/.session-start-ts"
 # NEXO SessionStart hook — generates a comprehensive briefing.
 # Reads SQLite directly for reminders, followups, active sessions.
 # Caches output for 1 hour to avoid regenerating on rapid successive sessions.

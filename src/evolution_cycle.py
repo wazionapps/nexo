@@ -1,7 +1,7 @@
 """NEXO Evolution Cycle — Self-improvement via Opus API.
 
 Runs weekly after DMN. Analyzes patterns, proposes improvements.
-v1: observe-only (all proposals logged as 'proposed' for the owner to review).
+v1: observe-only (all proposals logged as 'proposed' for the user to review).
 v1.1 (future): sandbox execution of auto-approved changes.
 """
 
@@ -14,9 +14,9 @@ import time
 from datetime import datetime, date, timedelta
 from pathlib import Path
 
-NEXO_DB = Path.home() / "claude" / "nexo-mcp" / "nexo.db"
+NEXO_DB = Path.home() / ".nexo" / "nexo-mcp" / "nexo.db"
 CORTEX_DIR = Path(__file__).parent
-CLAUDE_DIR = Path.home() / "claude"
+CLAUDE_DIR = Path.home() / ".nexo"
 SANDBOX_DIR = CLAUDE_DIR / "sandbox" / "workspace"
 SNAPSHOTS_DIR = CLAUDE_DIR / "snapshots"
 OBJECTIVE_FILE = CORTEX_DIR / "evolution-objective.json"
@@ -162,97 +162,75 @@ def dry_run_restore_test() -> bool:
 
 
 def build_evolution_prompt(week_data: dict, objective: dict) -> str:
-    """Build the prompt for the Opus Evolution cycle."""
-    if PROMPT_FILE.exists():
-        template = PROMPT_FILE.read_text()
-    else:
-        template = "You are NEXO Evolution. Analyze the data and propose improvements."
+    """Build a SHORT prompt — CLI investigates on its own using tools."""
 
-    prompt = template + "\n\n## WEEKLY DATA\n\n"
-    prompt += f"### Learnings ({len(week_data.get('learnings', []))} this week)\n"
-    for l in week_data.get("learnings", [])[:30]:
-        prompt += f"- [{l['category']}] {l['title']}: {str(l['content'])[:150]}\n"
+    # Summary stats only — CLI will dig deeper with tools
+    stats = {
+        "learnings_this_week": len(week_data.get("learnings", [])),
+        "decisions_this_week": len(week_data.get("decisions", [])),
+        "changes_this_week": len(week_data.get("changes", [])),
+        "diaries_this_week": len(week_data.get("diaries", [])),
+        "evolution_history": len(week_data.get("evolution_history", [])),
+        "current_scores": {dim: m["score"] for dim, m in week_data.get("current_metrics", {}).items()},
+    }
 
-    prompt += f"\n### Decisions ({len(week_data.get('decisions', []))} this week)\n"
-    for d in week_data.get("decisions", [])[:15]:
-        outcome = f" → {str(d['outcome'])[:80]}" if d.get("outcome") else " → no outcome yet"
-        prompt += f"- [{d['domain']}] {str(d['decision'])[:150]}{outcome}\n"
+    mode = objective.get("evolution_mode", "auto")
+    total = objective.get("total_evolutions", 0)
+    max_auto = max_auto_changes(total)
 
-    prompt += f"\n### Changes ({len(week_data.get('changes', []))} this week)\n"
-    for c in week_data.get("changes", [])[:20]:
-        prompt += f"- {str(c['files'])[:60]}: {str(c['what_changed'])[:100]}\n"
+    prompt = f"""You are NEXO Evolution — the weekly self-improvement cycle.
 
-    prompt += f"\n### Session Diaries ({len(week_data.get('diaries', []))} this week)\n"
-    for s in week_data.get("diaries", [])[:10]:
-        prompt += f"- [{s.get('domain','')}] {str(s['summary'])[:150]}\n"
-        if s.get("user_signals"):
-            prompt += f"  the owner: {str(s['user_signals'])[:100]}\n"
+YOUR JOB: Analyze the past week and propose concrete improvements to NEXO's codebase.
 
-    prompt += "\n### Current Dimension Scores\n"
-    for dim, m in week_data.get("current_metrics", {}).items():
-        prompt += f"- {dim}: {m['score']}% (delta: {m.get('delta', 0)})\n"
+WEEK SUMMARY:
+- {stats['learnings_this_week']} new learnings
+- {stats['decisions_this_week']} decisions made
+- {stats['changes_this_week']} code changes deployed
+- {stats['diaries_this_week']} session diaries
+- {stats['evolution_history']} past evolution proposals
+- Current scores: {json.dumps(stats['current_scores'])}
 
-    prompt += f"\n### Evolution History ({len(week_data.get('evolution_history', []))} entries)\n"
-    for h in week_data.get("evolution_history", [])[:10]:
-        prompt += f"- #{h['id']} [{h['status']}] {str(h['proposal'])[:100]}\n"
+MODE: {mode} ({"proposals only, owner reviews" if mode == "review" else f"max {max_auto} auto-applied changes"})
+CYCLE: #{total + 1}
 
-    prompt += f"\n### Objective\n{json.dumps(objective, indent=2)}\n"
+INVESTIGATE using these tools:
+1. Bash: sqlite3 {NEXO_DB} "SELECT category, title FROM learnings WHERE created_at > {time.time() - 7*86400} ORDER BY created_at DESC LIMIT 30"
+2. Bash: sqlite3 {NEXO_DB} "SELECT area, COUNT(*) as cnt FROM error_repetitions GROUP BY area ORDER BY cnt DESC LIMIT 10"
+3. Read ~/.nexo/coordination/daily-synthesis.md — today's context
+4. Read ~/.nexo/coordination/postmortem-daily.md — self-critique patterns
+5. Read ~/.nexo/logs/self-audit-summary.json — system health
+6. Glob ~/.nexo/scripts/*.py — existing scripts
+7. Glob ~/.nexo/nexo-mcp/plugins/*.py — existing plugins
 
-    # Guard stats — error prevention effectiveness
-    try:
-        guard_conn = sqlite3.connect(str(NEXO_DB), timeout=10)
-        cutoff_7d = (date.today() - timedelta(days=7)).isoformat()
-        cutoff_epoch_7d = time.time() - 7 * 86400
+LOOK FOR:
+- Repeated errors that guard isn't preventing
+- Scripts or processes that are failing or underperforming
+- Missing functionality that session diaries keep asking for
+- Redundant code or config that could be simplified
+- Patterns in self-critique that suggest systemic issues
 
-        total_reps = guard_conn.execute(
-            "SELECT COUNT(*) FROM error_repetitions WHERE created_at > ?", (cutoff_7d,)
-        ).fetchone()[0]
-        new_learnings_7d = guard_conn.execute(
-            "SELECT COUNT(*) FROM learnings WHERE created_at > ?", (cutoff_epoch_7d,)
-        ).fetchone()[0]
-        rep_rate = round(total_reps / new_learnings_7d, 2) if new_learnings_7d > 0 else 0.0
-        guard_checks = guard_conn.execute(
-            "SELECT COUNT(*) FROM guard_checks WHERE created_at > ?", (cutoff_7d,)
-        ).fetchone()[0]
+SAFETY:
+- Safe zones for auto changes: ~/.nexo/scripts/, ~/.nexo/nexo-mcp/plugins/, ~/.nexo/cortex/
+- IMMUTABLE files (never touch): db.py, server.py, plugin_loader.py, cognitive.py, CLAUDE.md
+- Every change needs: what file, what to change, why, risk, how to verify
 
-        top_areas = guard_conn.execute(
-            "SELECT area, COUNT(*) as cnt FROM error_repetitions WHERE created_at > ? GROUP BY area ORDER BY cnt DESC LIMIT 5",
-            (cutoff_7d,)
-        ).fetchall()
+OUTPUT FORMAT (JSON):
+{{
+  "analysis": "one paragraph summary of what you found",
+  "patterns": [{{"type": "...", "description": "...", "frequency": "..."}}],
+  "proposals": [
+    {{
+      "classification": "auto" or "propose",
+      "dimension": "reliability|proactivity|efficiency|safety|learning",
+      "action": "what to do",
+      "reasoning": "why",
+      "scope": "local",
+      "changes": [{{"file": "path", "operation": "create|replace|append", "search": "text to find", "content": "new text"}}]
+    }}
+  ]
+}}
 
-        most_ignored = guard_conn.execute(
-            "SELECT original_learning_id, COUNT(*) as cnt FROM error_repetitions "
-            "GROUP BY original_learning_id HAVING cnt >= 3 ORDER BY cnt DESC LIMIT 5"
-        ).fetchall()
-
-        guard_conn.close()
-
-        prompt += "\n### Guard Stats (Error Prevention)\n"
-        prompt += f"- Repetition rate: {rep_rate:.0%} (target: <15%)\n"
-        prompt += f"- Guard checks this week: {guard_checks} (target: >5/session)\n"
-        prompt += f"- New learnings: {new_learnings_7d}, Repetitions: {total_reps}\n"
-        if top_areas:
-            prompt += "- Top problem areas: " + ", ".join(f"{r[0]}({r[1]})" for r in top_areas) + "\n"
-        if most_ignored:
-            prompt += "- Most ignored learnings (3+ repeats): " + ", ".join(f"#{r[0]}({r[1]}x)" for r in most_ignored) + "\n"
-        prompt += "- Propose more aggressive rules for areas with high repetition rate.\n"
-    except Exception:
-        pass
-
-    # Infrastructure inventory — so Opus knows what exists before proposing changes
-    inventory_script = Path.home() / "claude" / "scripts" / "nexo-infra-inventory.sh"
-    if inventory_script.exists():
-        try:
-            result = subprocess.run(
-                ["bash", str(inventory_script)],
-                capture_output=True, text=True, timeout=10
-            )
-            if result.stdout.strip():
-                prompt += f"\n### Infrastructure Inventory (hooks, scripts, memory, crons)\n"
-                prompt += "Before proposing any change, check this inventory to avoid duplicating existing infrastructure.\n"
-                prompt += f"```json\n{result.stdout.strip()}\n```\n"
-        except Exception:
-            pass
+Max 3 proposals. Quality over quantity. If nothing needs improving, say so."""
 
     return prompt
 
