@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive memory system. Every feature, fix, and improvement from v0.8.10 to v1.4.1.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive memory system. Every feature, fix, and improvement from v0.8.10 to v1.5.0.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive memory system. Every feature, fix, and improvement from v0.8.10 to v1.4.1.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive memory system. Every feature, fix, and improvement from v0.8.10 to v1.5.0.">
     <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
     <meta property="og:image:width" content="1536">
     <meta property="og:image:height" content="1024">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive memory system. Every feature, fix, and improvement from v0.8.10 to v1.4.1.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive memory system. Every feature, fix, and improvement from v0.8.10 to v1.5.0.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
 
     <!-- Google Analytics (GA4) -->
@@ -72,8 +72,29 @@
     </div>
 </section>
 
+<!-- v1.5.0 Modular Architecture + KG Search + HNSW + Claim Graph + D+ Inbox -->
+<section id="v150" class="section-compact" style="background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
+    <div class="container">
+        <div class="section-label">New in v1.5.0</div>
+        <h2 class="section-title">Modular Architecture + KG Search + HNSW</h2>
+        <p class="section-subtitle">
+            The two largest files are now modular packages. Search is smarter with Knowledge Graph boosting. Vector indexing scales to 10K+ memories. Claims decompose blobs into verifiable atomic facts. Terminals talk to each other automatically.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Modular Packages</h4><p>db.py (2,900 lines) &rarr; db/ package with 11 modules. cognitive.py (3,900 lines) &rarr; cognitive/ package with 6 modules. All imports unchanged &mdash; zero breaking changes.</p></div>
+                <div class="cognitive-card"><h4>KG-Boosted Search</h4><p>Memories connected to more Knowledge Graph nodes rank higher. Logarithmic boost based on structural importance bridges semantic and graph retrieval.</p></div>
+                <div class="cognitive-card"><h4>HNSW Vector Indexing</h4><p>Optional hnswlib integration for approximate nearest neighbor search. Auto-activates when memory count exceeds 10,000. Hooks into ingest, search, and GC.</p></div>
+                <div class="cognitive-card"><h4>Claim Graph</h4><p>Decompose blob memories into atomic verifiable claims with provenance, contradiction detection, and verification status. Each fact tracked individually.</p></div>
+                <div class="cognitive-card"><h4>Inter-Terminal Auto-Inbox</h4><p>PostToolUse hook checks inbox automatically via sqlite3. 2-second debounce, skips read-only tools. Zero tokens consumed when no messages waiting.</p></div>
+                <div class="cognitive-card"><h4>Test Suite</h4><p>24 pytest tests covering migrations, CRUD, cosine similarity, KG boost, knowledge graph traversal, and temporal boost. Isolated temp databases per test.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
 <!-- v1.4.1 The Brain Dreams + Multi-AI Review -->
-<section id="v141" class="section-compact" style="background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
+<section id="v141" class="section-compact" style="background:linear-gradient(135deg,#1a0f2e 0%,#0F0A1A 100%);">
     <div class="container">
         <div class="section-label">New in v1.4.1</div>
         <h2 class="section-title">The Brain Dreams + Multi-AI Code Review</h2>
