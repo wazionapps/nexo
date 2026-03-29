@@ -72,6 +72,25 @@
     </div>
 </section>
 
+<!-- v1.5.2 Deep Sleep + Watchdog Auto-Repair -->
+<section id="v152" class="section-compact" style="background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
+    <div class="container">
+        <div class="section-label">New in v1.5.2</div>
+        <h2 class="section-title">Deep Sleep + Watchdog Auto-Repair</h2>
+        <p class="section-subtitle">
+            NEXO Brain now reads your complete session transcripts overnight, finding what the agent missed during the day. Plus: the watchdog can re-execute missed crons and verify its own repairs.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Deep Sleep Analyzer</h4><p>Reads every message, tool call, and correction from the day's sessions. Finds uncaptured corrections, protocol violations, missed commitments, and quality issues. Applies findings as learnings, feedback memories, followups, and trust adjustments.</p></div>
+                <div class="cognitive-card"><h4>Transcript Analysis</h4><p>Uses Claude CLI in bare mode to analyze each session independently. No hooks, no CLAUDE.md interference. Processes 10+ sessions per night with catch-up for missed days.</p></div>
+                <div class="cognitive-card"><h4>Watchdog Level 3</h4><p>When a scheduled cron misses its run (Mac was asleep), the watchdog extracts ProgramArguments from the plist and re-executes it directly. No more lost nightly jobs.</p></div>
+                <div class="cognitive-card"><h4>Post-Repair Verification</h4><p>After Level 2 Claude CLI repair, the watchdog waits and verifies the fix actually worked — checks loaded state, process running, and log freshness. No more silent failures.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
 <!-- v1.5.0 Modular Architecture + KG Search + HNSW + Claim Graph + D+ Inbox -->
 <section id="v150" class="section-compact" style="background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
     <div class="container">
