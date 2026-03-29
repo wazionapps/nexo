@@ -66,6 +66,241 @@
     }
     </script>
 
+    <!-- Organization -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "WAzion",
+        "url": "https://www.wazion.com",
+        "logo": "https://nexo-brain.com/assets/logo-64.png",
+        "sameAs": [
+            "https://github.com/wazionapps",
+            "https://x.com/NEXOBRAIN"
+        ]
+    }
+    </script>
+
+    <!-- WebSite -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "NEXO Brain",
+        "url": "https://nexo-brain.com",
+        "description": "Open-source cognitive memory system for AI agents built on the Atkinson-Shiffrin memory model.",
+        "publisher": {
+            "@type": "Organization",
+            "name": "WAzion",
+            "url": "https://www.wazion.com"
+        }
+    }
+    </script>
+
+    <!-- BreadcrumbList -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+            {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "Home",
+                "item": "https://nexo-brain.com"
+            },
+            {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "Features",
+                "item": "https://nexo-brain.com/features/"
+            },
+            {
+                "@type": "ListItem",
+                "position": 3,
+                "name": "Docs",
+                "item": "https://nexo-brain.com/docs/"
+            },
+            {
+                "@type": "ListItem",
+                "position": 4,
+                "name": "Changelog",
+                "item": "https://nexo-brain.com/changelog/"
+            }
+        ]
+    }
+    </script>
+
+    <!-- FAQPage -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+            {
+                "@type": "Question",
+                "name": "What is NEXO Brain?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "NEXO Brain is an open-source cognitive memory system for AI agents. It gives your AI persistent memory across sessions using the Atkinson-Shiffrin memory model (Sensory Register, Short-Term Memory, Long-Term Memory), with 115+ MCP tools, knowledge graph search, and metacognitive error prevention."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "How does NEXO Brain work?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "NEXO Brain implements the Atkinson-Shiffrin multi-store memory model from cognitive psychology. Information flows through three stores: Sensory Register (immediate context), Short-Term Memory (session-level working memory), and Long-Term Memory (persistent vector-indexed storage with Ebbinghaus decay). Memories are encoded as vectors, retrieved via RAG, and strengthened or forgotten naturally over time."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "What is MCP (Model Context Protocol)?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "MCP (Model Context Protocol) is an open standard by Anthropic that lets AI agents connect to external tools and data sources. NEXO Brain exposes all its cognitive capabilities as MCP tools, so any MCP-compatible client (Claude Code, Claude Desktop, Cursor, etc.) can use persistent memory, knowledge graphs, and error prevention natively."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "How do I install NEXO Brain?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Run 'npx nexo-brain init' in your terminal. The installer automatically configures your MCP client (Claude Code or Claude Desktop), downloads the embedding model, and creates the SQLite databases. No API keys or cloud accounts required."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "Is NEXO Brain free and open-source?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Yes, NEXO Brain is fully open-source under the AGPL-3.0 license. The complete source code is available on GitHub at github.com/wazionapps/nexo. You can use it, modify it, and contribute to it freely."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "Does my data leave my machine?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "No. NEXO Brain runs 100% locally on your machine. All data is stored in local SQLite databases, and the vector embedding model (ONNX Runtime) runs on your CPU. Zero data is sent to any external server, cloud, or API."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "What LLMs and clients does NEXO Brain work with?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "NEXO Brain works with any MCP-compatible client. This includes Claude Code, Claude Desktop, Cursor, Windsurf, and any other tool that supports the Model Context Protocol. It is LLM-agnostic — it provides memory infrastructure, not inference."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "What vector embedding model does it use?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "NEXO Brain uses BAAI/bge-base-en-v1.5, a 768-dimensional embedding model running locally via ONNX Runtime on CPU. No GPU required. The model is downloaded automatically during installation and provides high-quality semantic search for memory retrieval."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "How is NEXO Brain different from just using context windows?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Context windows are ephemeral — they reset every session. NEXO Brain provides persistent memory that survives across sessions, with natural forgetting (Ebbinghaus decay), rehearsal-based strengthening, a metacognitive guard that prevents repeating known errors, and a knowledge graph for entity relationships. It is a cognitive system, not just storage."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "What is the metacognitive guard?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "The metacognitive guard (nexo_guard_check) is a pre-action safety system. Before your agent edits code or makes changes, it checks for known errors, blocking rules, and relevant learnings. It prevents the agent from repeating mistakes it has already encountered — like a developer checking past incident reports before deploying."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "What is trust scoring?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Trust scoring is a 0-100 alignment index that reflects how well the agent aligns with the user's expectations. It adjusts based on events: corrections lower it, successful proactive actions raise it. When trust is low, the system becomes more cautious (more guard checks). When high, it operates more fluidly."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "What is cognitive dissonance detection?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "When the agent receives a new instruction that contradicts an existing strong memory, NEXO Brain detects the conflict automatically. It surfaces the contradiction so the user can decide whether it is a permanent change or a one-time exception, preventing the agent from silently overwriting established knowledge."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "Can I use NEXO Brain with Docker?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Yes. A Dockerfile is included in the repository for containerized deployments. You can run NEXO Brain in a Docker container for isolated environments, CI/CD pipelines, or server-side agent deployments."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "What is the knowledge graph?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "The knowledge graph stores typed relationships between entities (people, services, projects, files). It enables neighbor traversal, path finding, and contextual queries like 'what is connected to this project?' — giving the agent structural understanding beyond flat vector search."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "How does Ebbinghaus decay work?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Based on Hermann Ebbinghaus's forgetting curve research, memories in NEXO Brain naturally decay over time if not accessed. Each retrieval (rehearsal) strengthens the memory and resets its decay timer. Frequently accessed memories become long-term; unused ones gradually fade — mimicking how human memory works."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "What are somatic markers?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Inspired by Antonio Damasio's somatic marker hypothesis, these are 'pain memories' associated with specific files or areas. When the agent encounters repeated errors in a file, the somatic marker increases, making the guard more cautious in that area. It is emotional memory for code."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "How does the plugin system work?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "NEXO Brain supports hot-reload plugins — Python files dropped into the plugins/ directory are automatically loaded at startup. You can add, remove, or update plugins at runtime without restarting the server. Each plugin can register new MCP tools that extend the system's capabilities."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "What is the LoCoMo benchmark score?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "On the LoCoMo long-conversation memory benchmark, NEXO Brain achieves an F1 score of 0.588, which is 55% higher than GPT-4 Turbo's 128K context window (0.379). This demonstrates that structured cognitive memory significantly outperforms raw context length for long-term information retention."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "Can I use NEXO Brain in production?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Yes. NEXO Brain is designed for continuous, production-grade operation. It runs 24/7 with autonomous processes (nightly decay, deep sleep analysis, watchdog monitoring), handles concurrent sessions, and includes backup/restore capabilities. It has been battle-tested in real daily operations."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "Is there a community?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Yes. You can find the community on GitHub (github.com/wazionapps/nexo) for issues, discussions, and contributions. Follow @NEXOBRAIN on X/Twitter for updates, releases, and development insights. The project welcomes contributions and sponsorships."
+                }
+            }
+        ]
+    }
+    </script>
+
     <link rel="stylesheet" href="/assets/style.css">
 </head>
 <body>
@@ -90,6 +325,7 @@
             <a href="/features/tools/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>Tools</a>
             <a href="/features/benchmark/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>Benchmark</a>
             <a href="/changelog/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/></svg>Changelog</a>
+            <a href="#faq"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>FAQ</a>
             <a href="/docs/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>Docs</a>
             <a href="https://github.com/wazionapps/nexo" class="nav-cta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>GitHub</a>
         </div>
@@ -437,6 +673,177 @@
     </div>
 </section>
 
+<!-- FAQ -->
+<section id="faq">
+    <div class="container">
+        <div class="section-label">Frequently Asked Questions</div>
+        <h2 class="section-title">Everything you need to know</h2>
+        <p class="section-subtitle">Common questions about NEXO Brain, how it works, and how to get started.</p>
+
+        <div class="faq-list">
+            <details class="faq-item">
+                <summary class="faq-question">
+                    <span>What is NEXO Brain?</span>
+                    <svg class="faq-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </summary>
+                <div class="faq-answer">NEXO Brain is an open-source cognitive memory system for AI agents. It gives your AI persistent memory across sessions using the Atkinson-Shiffrin memory model (Sensory Register, Short-Term Memory, Long-Term Memory), with 115+ MCP tools, knowledge graph search, and metacognitive error prevention.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary class="faq-question">
+                    <span>How does NEXO Brain work?</span>
+                    <svg class="faq-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </summary>
+                <div class="faq-answer">NEXO Brain implements the Atkinson-Shiffrin multi-store memory model from cognitive psychology. Information flows through three stores: Sensory Register (immediate context), Short-Term Memory (session-level working memory), and Long-Term Memory (persistent vector-indexed storage with Ebbinghaus decay). Memories are encoded as vectors, retrieved via RAG, and strengthened or forgotten naturally over time.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary class="faq-question">
+                    <span>What is MCP (Model Context Protocol)?</span>
+                    <svg class="faq-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </summary>
+                <div class="faq-answer">MCP (Model Context Protocol) is an open standard by Anthropic that lets AI agents connect to external tools and data sources. NEXO Brain exposes all its cognitive capabilities as MCP tools, so any MCP-compatible client (Claude Code, Claude Desktop, Cursor, etc.) can use persistent memory, knowledge graphs, and error prevention natively.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary class="faq-question">
+                    <span>How do I install NEXO Brain?</span>
+                    <svg class="faq-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </summary>
+                <div class="faq-answer">Run <code>npx nexo-brain init</code> in your terminal. The installer automatically configures your MCP client (Claude Code or Claude Desktop), downloads the embedding model, and creates the SQLite databases. No API keys or cloud accounts required.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary class="faq-question">
+                    <span>Is NEXO Brain free and open-source?</span>
+                    <svg class="faq-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </summary>
+                <div class="faq-answer">Yes, NEXO Brain is fully open-source under the AGPL-3.0 license. The complete source code is available on <a href="https://github.com/wazionapps/nexo">GitHub</a>. You can use it, modify it, and contribute to it freely.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary class="faq-question">
+                    <span>Does my data leave my machine?</span>
+                    <svg class="faq-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </summary>
+                <div class="faq-answer">No. NEXO Brain runs 100% locally on your machine. All data is stored in local SQLite databases, and the vector embedding model (ONNX Runtime) runs on your CPU. Zero data is sent to any external server, cloud, or API.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary class="faq-question">
+                    <span>What LLMs and clients does it work with?</span>
+                    <svg class="faq-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </summary>
+                <div class="faq-answer">NEXO Brain works with any MCP-compatible client, including Claude Code, Claude Desktop, Cursor, Windsurf, and more. It is LLM-agnostic -- it provides memory infrastructure, not inference.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary class="faq-question">
+                    <span>What vector embedding model does it use?</span>
+                    <svg class="faq-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </summary>
+                <div class="faq-answer">NEXO Brain uses BAAI/bge-base-en-v1.5, a 768-dimensional embedding model running locally via ONNX Runtime on CPU. No GPU required. The model is downloaded automatically during installation.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary class="faq-question">
+                    <span>How is it different from just using context windows?</span>
+                    <svg class="faq-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </summary>
+                <div class="faq-answer">Context windows are ephemeral -- they reset every session. NEXO Brain provides persistent memory that survives across sessions, with natural forgetting (Ebbinghaus decay), rehearsal-based strengthening, a metacognitive guard that prevents repeating known errors, and a knowledge graph for entity relationships.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary class="faq-question">
+                    <span>What is the metacognitive guard?</span>
+                    <svg class="faq-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </summary>
+                <div class="faq-answer">The metacognitive guard (<code>nexo_guard_check</code>) is a pre-action safety system. Before your agent edits code or makes changes, it checks for known errors, blocking rules, and relevant learnings. It prevents the agent from repeating mistakes it has already encountered.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary class="faq-question">
+                    <span>What is trust scoring?</span>
+                    <svg class="faq-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </summary>
+                <div class="faq-answer">Trust scoring is a 0-100 alignment index that reflects how well the agent aligns with the user's expectations. Corrections lower it, successful proactive actions raise it. When trust is low, the system becomes more cautious. When high, it operates more fluidly.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary class="faq-question">
+                    <span>What is cognitive dissonance detection?</span>
+                    <svg class="faq-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </summary>
+                <div class="faq-answer">When the agent receives a new instruction that contradicts an existing strong memory, NEXO Brain detects the conflict automatically. It surfaces the contradiction so the user can decide whether it is a permanent change or a one-time exception, preventing silent overwrites of established knowledge.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary class="faq-question">
+                    <span>Can I use NEXO Brain with Docker?</span>
+                    <svg class="faq-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </summary>
+                <div class="faq-answer">Yes. A Dockerfile is included in the repository for containerized deployments. You can run NEXO Brain in a Docker container for isolated environments, CI/CD pipelines, or server-side agent deployments.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary class="faq-question">
+                    <span>What is the knowledge graph?</span>
+                    <svg class="faq-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </summary>
+                <div class="faq-answer">The knowledge graph stores typed relationships between entities (people, services, projects, files). It enables neighbor traversal, path finding, and contextual queries like "what is connected to this project?" -- giving the agent structural understanding beyond flat vector search.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary class="faq-question">
+                    <span>How does Ebbinghaus decay work?</span>
+                    <svg class="faq-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </summary>
+                <div class="faq-answer">Based on Hermann Ebbinghaus's forgetting curve research, memories in NEXO Brain naturally decay over time if not accessed. Each retrieval (rehearsal) strengthens the memory and resets its decay timer. Frequently accessed memories become long-term; unused ones gradually fade -- mimicking how human memory works.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary class="faq-question">
+                    <span>What are somatic markers?</span>
+                    <svg class="faq-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </summary>
+                <div class="faq-answer">Inspired by Antonio Damasio's somatic marker hypothesis, these are "pain memories" associated with specific files or areas. When the agent encounters repeated errors in a file, the somatic marker increases, making the guard more cautious in that area. It is emotional memory for code.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary class="faq-question">
+                    <span>How does the plugin system work?</span>
+                    <svg class="faq-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </summary>
+                <div class="faq-answer">NEXO Brain supports hot-reload plugins -- Python files dropped into the <code>plugins/</code> directory are automatically loaded at startup. You can add, remove, or update plugins at runtime without restarting the server. Each plugin can register new MCP tools.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary class="faq-question">
+                    <span>What is the LoCoMo benchmark score?</span>
+                    <svg class="faq-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </summary>
+                <div class="faq-answer">On the LoCoMo long-conversation memory benchmark, NEXO Brain achieves an F1 score of 0.588, which is 55% higher than GPT-4 Turbo's 128K context window (0.379). This demonstrates that structured cognitive memory significantly outperforms raw context length for long-term retention.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary class="faq-question">
+                    <span>Can I use NEXO Brain in production?</span>
+                    <svg class="faq-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </summary>
+                <div class="faq-answer">Yes. NEXO Brain is designed for continuous, production-grade operation. It runs 24/7 with autonomous processes (nightly decay, deep sleep analysis, watchdog monitoring), handles concurrent sessions, and includes backup/restore capabilities.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary class="faq-question">
+                    <span>Is there a community?</span>
+                    <svg class="faq-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </summary>
+                <div class="faq-answer">Yes! Find us on <a href="https://github.com/wazionapps/nexo">GitHub</a> for issues, discussions, and contributions. Follow <a href="https://x.com/NEXOBRAIN">@NEXOBRAIN on X/Twitter</a> for updates, releases, and development insights. The project welcomes contributions and sponsorships.</div>
+            </details>
+        </div>
+    </div>
+</section>
+
 <!-- CTA -->
 <section class="cta-section">
     <div class="container">
@@ -506,7 +913,7 @@ const observer = new IntersectionObserver((entries) => {
     });
 }, { threshold: 0.1 });
 
-document.querySelectorAll('.feature-card, .tool-card, .integration-card, .process-card, .hook-card, .listed-badge, .cognitive-card, .inspired-card, .benchmark-stat-card').forEach(el => {
+document.querySelectorAll('.feature-card, .tool-card, .integration-card, .process-card, .hook-card, .listed-badge, .cognitive-card, .inspired-card, .benchmark-stat-card, .faq-item').forEach(el => {
     el.style.opacity = '0';
     el.style.transform = 'translateY(20px)';
     el.style.transition = 'all 0.5s ease';

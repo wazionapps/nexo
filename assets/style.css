@@ -790,6 +790,80 @@
         .fade-up:nth-child(3) { animation-delay: 0.2s; }
         .fade-up:nth-child(4) { animation-delay: 0.3s; }
 
+        /* ===== FAQ Section ===== */
+        .faq-list {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .faq-item {
+            border-bottom: 1px solid var(--dark-border);
+        }
+
+        .faq-item:first-child {
+            border-top: 1px solid var(--dark-border);
+        }
+
+        .faq-question {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 20px 0;
+            cursor: pointer;
+            list-style: none;
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text);
+            transition: color 0.2s;
+        }
+
+        .faq-question::-webkit-details-marker { display: none; }
+        .faq-question::marker { display: none; content: ''; }
+
+        .faq-question:hover { color: var(--purple-light); }
+
+        .faq-arrow {
+            flex-shrink: 0;
+            margin-left: 16px;
+            color: var(--text-muted);
+            transition: transform 0.3s ease, color 0.2s;
+        }
+
+        details[open] .faq-arrow {
+            transform: rotate(180deg);
+            color: var(--purple-light);
+        }
+
+        .faq-answer {
+            padding: 0 0 20px 0;
+            font-size: 15px;
+            color: var(--text-muted);
+            line-height: 1.7;
+            animation: faqFadeIn 0.3s ease;
+        }
+
+        .faq-answer code {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 13px;
+            color: var(--pink);
+            background: rgba(236, 72, 153, 0.1);
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+
+        .faq-answer a { color: var(--purple-light); }
+        .faq-answer a:hover { color: var(--pink); }
+
+        @keyframes faqFadeIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @media (max-width: 768px) {
+            .faq-question { font-size: 15px; padding: 16px 0; }
+            .faq-answer { font-size: 14px; }
+        }
+
         /* Google Translate — clean integration */
         .goog-te-gadget { font-family: inherit !important; font-size: 0 !important; }
         .goog-te-gadget .goog-te-combo {
