@@ -183,7 +183,7 @@
         section:nth-child(even) { background: rgba(18, 18, 26, 0.5); }
 
         /* Spacing utilities */
-        .pt-nav { padding-top: 80px; }
+        .pt-nav { padding-top: 100px; }
         .section-compact { padding: 48px 0; }
         .section-tight { padding: 32px 0; }
         .section-flush-top { padding-top: 0; }
@@ -203,7 +203,7 @@
 
         .section-subtitle {
             font-size: 18px; color: var(--text-muted);
-            max-width: 640px; margin: 0 auto 32px; text-align: center;
+            max-width: 640px; margin: 0 auto 48px; text-align: center;
         }
 
         /* ===== Features Grid ===== */
@@ -217,7 +217,7 @@
             background: var(--dark-card);
             border: 1px solid var(--dark-border);
             border-radius: 16px;
-            padding: 24px;
+            padding: 32px;
             transition: all 0.3s;
         }
 
@@ -427,7 +427,7 @@
         .cognitive-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 16px;
+            gap: 20px;
         }
 
         .cognitive-card {
