@@ -68,7 +68,7 @@ def collect_data() -> dict:
     conn = sqlite3.connect(str(NEXO_DB))
     conn.row_factory = sqlite3.Row
 
-    # Diarios de hoy con autocrítica
+    # Today diaries with self-critique
     rows = conn.execute(
         "SELECT id, session_id, summary, self_critique, user_signals, "
         "mental_state, domain, created_at "
@@ -106,7 +106,7 @@ def consolidate_with_cli(data: dict) -> bool:
 
     diaries_with_critique = [
         d for d in data["diaries"]
-        if d.get("self_critique") and not (d["self_critique"] or "").strip().lower().startswith("sin autocrítica")
+        if d.get("self_critique") and not (d["self_critique"] or "").strip().lower().startswith("no self-critique")
     ]
 
     if not diaries_with_critique:
@@ -118,13 +118,13 @@ def consolidate_with_cli(data: dict) -> bool:
     if len(diaries_json) > 12000:
         diaries_json = diaries_json[:12000] + "\n... (truncado)"
 
-    prompt = f"""Eres el consolidador nocturno de NEXO. Tu trabajo es revisar las autocríticas
-del día y decidir cuáles merecen convertirse en reglas permanentes (feedback_postmortem_*.md).
+    prompt = f"""You are NEXO nightly consolidator. Your job is to review self-critiques
+from today and decide which deserve to become permanent rules (feedback_postmortem_*.md).
 
 FECHA: {data['date']}
-SESIONES HOY: {len(data['diaries'])} total, {len(diaries_with_critique)} con autocrítica
+SESSIONS TODAY: {len(data['diaries'])} total, {len(diaries_with_critique)} with self-critique
 
-DIARIOS CON AUTOCRÍTICA:
+DIARIES WITH SELF-CRITIQUE:
 {diaries_json}
 
 FEEDBACKS POSTMORTEM QUE YA EXISTEN ({len(data['existing_feedbacks'])}):
@@ -138,44 +138,44 @@ INSTRUCCIONES:
 1. Lee cada self_critique y entiende su SIGNIFICADO (no cuentes palabras).
 
 2. PROMOVER a feedback permanente SOLO SI:
-   - Un patrón aparece en 2+ sesiones diferentes del día (por significado, no texto literal)
+   - A pattern appears in 2+ different sessions today (by meaning, not literal text)
    - O the user corrigió explícitamente (user_signals contiene corrección)
-   - Y la autocrítica contiene una ACCIÓN CONCRETA que prevenga un error futuro
+   - Y the self-critique contains a CONCRETE ACTION that prevents a future error
    - Y NO existe ya un feedback similar en los existentes
 
 3. NO promover si:
-   - Es una respuesta negativa ("No pasó nada", "sesión limpia")
-   - Es genérica sin acción concreta
-   - Ya existe un feedback que cubre el mismo tema
+   - It is a negative response ("No pasó nada", "sesión limpia")
+   - It is generic without concrete action
+   - A feedback already exists covering the same topic
 
-4. Para cada regla a promover, crea el archivo con Write en {MEMORY_DIR}/:
+4. For each rule to promote, create the file with Write en {MEMORY_DIR}/:
    Nombre: feedback_postmortem_[slug_descriptivo].md
    Formato:
    ---
-   name: [título descriptivo]
-   description: Regla de comportamiento extraída de autocrítica — patrón recurrente
+   name: [descriptive title]
+   description: Behavioral rule extracted from self-critique — recurring pattern
    type: feedback
    ---
 
-   [Descripción clara del patrón y la regla]
+   [Clear description of the pattern and rule]
 
-   **Why:** [Por qué esto importa — con evidencia de las sesiones]
-   **How to apply:** [Cuándo y cómo aplicar esta regla]
+   **Why:** [Why this matters — with evidence from sessions]
+   **How to apply:** [When and how to apply this rule]
 
-5. Escribe el resumen diario en ~/.nexo/coordination/postmortem-daily.md:
+5. Write the daily summary en ~/.nexo/coordination/postmortem-daily.md:
    # Post-Mortem Daily — {data['date']}
-   Sesiones: X | Autocríticas: Y | Promovidos: Z
+   Sessions: X | Self-critiques: Y | Promoted: Z
 
-   ## Autocríticas del día (resumen)
-   [Lista breve]
+   ## Self-critiques of the day (summary)
+   [Brief list]
 
    ## Promovido a memoria permanente
-   [Lo que promoviste y por qué]
+   [What you promoted and why]
 
-   ## Descartado (y por qué)
-   [Lo que NO promoviste y la razón]
+   ## Discarded (and why)
+   [What you did NOT promote and why]
 
-Ejecuta sin preguntar."""
+Execute without asking."""
 
     log(f"Stage 2: Invoking Claude CLI (opus) with {len(diaries_with_critique)} critiques...")
 

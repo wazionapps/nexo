@@ -138,7 +138,7 @@ def handle_menu() -> str:
             lines.append("║" + entry.ljust(W) + "║")
         lines.append("╠" + "═" * W + "╣")
 
-    # Backlog: ideas, proyectos futuros, tareas sin fecha o lejanas
+    # Backlog: ideas, future projects, tasks without date or far ahead
     try:
         conn = get_db()
         cutoff = (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d")

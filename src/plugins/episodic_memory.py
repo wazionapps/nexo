@@ -265,7 +265,7 @@ def handle_change_log(files: str, what_changed: str, why: str,
                       triggered_by: str = '', affects: str = '',
                       risks: str = '', verify: str = '',
                       commit_ref: str = '', session_id: str = '') -> str:
-    """Log a code/config change with full context. OBLIGATORIO after every edit to production code.
+    """Log a code/config change with full context. MANDATORY after every edit to production code.
 
     Args:
         files: File path(s) modified (comma-separated if multiple)
@@ -279,7 +279,7 @@ def handle_change_log(files: str, what_changed: str, why: str,
         session_id: Current session ID
     """
     if not files or not what_changed or not why:
-        return "ERROR: files, what_changed, y why son obligatorios"
+        return "ERROR: files, what_changed, and why are required"
     sid = session_id or 'unknown'
     result = log_change(sid, files, what_changed, why, triggered_by, affects, risks, verify, commit_ref)
     if "error" in result:

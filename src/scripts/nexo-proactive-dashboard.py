@@ -116,7 +116,7 @@ def check_stale_ideas() -> list[dict]:
         alerts.append({
             "type": "stale_ideas",
             "severity": "low",
-            "title": f"{stale_count} ideas/reminders sin fecha llevan >14 dias. Revisar o archivar.",
+            "title": f"{stale_count} ideas/reminders without date are >14 days old. Review or archive.",
             "count": stale_count,
         })
     return alerts
@@ -138,7 +138,7 @@ def check_session_gaps() -> list[dict]:
                 alerts.append({
                     "type": "session_gap",
                     "severity": "low",
-                    "title": f"Sin sesiones registradas en {gap_hours:.0f}h ({gap_hours/24:.1f} dias)",
+                    "title": f"No sessions registered in {gap_hours:.0f}h ({gap_hours/24:.1f} days)",
                     "gap_hours": gap_hours,
                 })
         except (ValueError, TypeError):

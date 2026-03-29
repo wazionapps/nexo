@@ -1031,7 +1031,7 @@ def _m12_session_checkpoints(conn):
 def _m13_normalize_statuses(conn):
     """Normalize dirty statuses and standardize to English.
 
-    Historical bug: complete handlers appended dates to status ('COMPLETADO 2026-03-28').
+    Historical bug: complete handlers appended dates to status ('COMPLETED 2026-03-28').
     This migration cleans all dirty statuses and normalizes Spanish→English for new installs.
     Existing queries use LIKE 'COMPLET%' to match both languages during transition.
     """
