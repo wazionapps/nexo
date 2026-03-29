@@ -1028,6 +1028,21 @@ def _m12_session_checkpoints(conn):
 
 
 # Migration registry — APPEND ONLY, never reorder or delete
+def _m13_normalize_statuses(conn):
+    """Normalize dirty statuses and standardize to English.
+
+    Historical bug: complete handlers appended dates to status ('COMPLETADO 2026-03-28').
+    This migration cleans all dirty statuses and normalizes Spanish→English for new installs.
+    Existing queries use LIKE 'COMPLET%' to match both languages during transition.
+    """
+    # Clean dirty statuses (date appended)
+    conn.execute("UPDATE followups SET status='COMPLETED' WHERE status LIKE 'COMPLETADO %' OR status = 'COMPLETADO'")
+    conn.execute("UPDATE reminders SET status='COMPLETED' WHERE status LIKE 'COMPLETADO %' OR status = 'COMPLETADO'")
+    # Normalize pending
+    conn.execute("UPDATE followups SET status='PENDING' WHERE status = 'PENDIENTE' OR status LIKE 'PENDIENTE%'")
+    conn.execute("UPDATE reminders SET status='PENDING' WHERE status = 'PENDIENTE' OR status LIKE 'PENDIENTE%'")
+
+
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
     (2, "followups_reasoning", _m2_followups_reasoning),
@@ -1041,6 +1056,7 @@ MIGRATIONS = [
     (10, "diary_archive", _m10_diary_archive),
     (11, "core_rules", _m11_core_rules),
     (12, "session_checkpoints", _m12_session_checkpoints),
+    (13, "normalize_statuses", _m13_normalize_statuses),
 ]
 
 

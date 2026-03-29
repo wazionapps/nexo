@@ -174,6 +174,23 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
                 "reason": "prohibition_keyword"
             })
 
+    # 5b. Behavioral rules — when called without files (session-level check)
+    if not file_list:
+        behavioral = conn.execute(
+            """SELECT l.id, l.title, l.category, COUNT(e.id) as violations
+               FROM learnings l
+               LEFT JOIN error_repetitions e ON e.original_learning_id = l.id
+               WHERE l.category = 'nexo-ops' AND l.status = 'active'
+               GROUP BY l.id
+               ORDER BY violations DESC, l.created_at DESC
+               LIMIT 5"""
+        ).fetchall()
+        if behavioral:
+            result["behavioral_rules"] = [
+                {"id": r["id"], "rule": r["title"], "violations": r["violations"]}
+                for r in behavioral
+            ]
+
     # 6. Area repetition rate
     if area:
         total_area = conn.execute(
@@ -264,6 +281,13 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
         lines.append(f"RELEVANT LEARNINGS ({len(result['learnings'])}):")
         for l in result["learnings"][:15]:
             lines.append(f"  #{l['id']} [{l['category']}] {l['rule']}")
+        lines.append("")
+
+    if result.get("behavioral_rules"):
+        lines.append("SESSION BEHAVIORAL RULES (top 5 most-violated):")
+        for r in result["behavioral_rules"]:
+            v = f" ({r['violations']}x violated)" if r["violations"] > 0 else ""
+            lines.append(f"  #{r['id']} {r['rule']}{v}")
         lines.append("")
 
     if result["universal_rules"]:
