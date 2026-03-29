@@ -129,7 +129,7 @@ async def api_graph(
     # If node_type+node_ref given, resolve to center ID
     if center is None and node_type and node_ref:
         node = kg.get_node(node_type, node_ref)
-        # Fallback: try with type prefix (refs stored as "area:wazion", "file:path")
+        # Fallback: try with type prefix (refs stored as "area:my-project", "file:path")
         if not node:
             node = kg.get_node(node_type, f"{node_type}:{node_ref}")
         if node:

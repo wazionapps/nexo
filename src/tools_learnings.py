@@ -5,7 +5,7 @@ from db import (create_learning, update_learning, delete_learning, search_learni
 
 VALID_CATEGORIES = {
     "nexo-ops", "google-ads", "meta-ads", "google-analytics",
-    "shopify", "wazion", "cloud-sql", "infrastructure", "security", "brain-engine"
+    "shopify", "my-project", "cloud-sql", "infrastructure", "security", "brain-engine"
 }
 
 

@@ -1,7 +1,7 @@
 """NEXO Knowledge Graph — Bi-temporal entity-relationship graph on SQLite."""
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 import os
 
@@ -58,7 +58,7 @@ def upsert_edge(source_type: str, source_ref: str, relation: str,
     source_id = source_node["id"]
     target_id = target_node["id"]
     props_json = json.dumps(properties or {})
-    now = datetime.now(datetime.timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%dT%H:%M:%S")
+    now = datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%dT%H:%M:%S")
     existing = db.execute(
         "SELECT id, weight, confidence, properties FROM kg_edges "
         "WHERE source_id = ? AND target_id = ? AND relation = ? AND valid_until IS NULL",
@@ -90,7 +90,7 @@ def delete_edge(source_type: str, source_ref: str, relation: str,
     target = get_node(target_type, target_ref)
     if not source or not target:
         return False
-    now = datetime.now(datetime.timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%dT%H:%M:%S")
+    now = datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%dT%H:%M:%S")
     cursor = db.execute(
         "UPDATE kg_edges SET valid_until = ? WHERE source_id = ? AND target_id = ? "
         "AND relation = ? AND valid_until IS NULL",

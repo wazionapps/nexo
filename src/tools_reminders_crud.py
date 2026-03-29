@@ -21,8 +21,8 @@ def handle_reminder_create(id: str, description: str, date: str = '', category: 
         error_msg = result.get("error", "desconocido") if isinstance(result, dict) else "desconocido"
         return f"ERROR: {error_msg}"
 
-    fecha_str = date if date else 'no date'
-    return f"Reminder {id} created. Date: {fecha_str}. Category: {category}."
+    fecha_str = date if date else 'sin fecha'
+    return f"Recordatorio {id} creado. Fecha: {fecha_str}. Categoría: {category}."
 
 
 def handle_reminder_update(id: str, description: str = '', date: str = '', status: str = '', category: str = '') -> str:
@@ -38,32 +38,32 @@ def handle_reminder_update(id: str, description: str = '', date: str = '', statu
         fields['category'] = category
 
     if not fields:
-        return f"ERROR: No fields specified to update for {id}."
+        return f"ERROR: No se especificó ningún campo a actualizar para {id}."
 
     result = update_reminder(id=id, **fields)
     if not result:
-        return f"ERROR: Reminder {id} not found."
+        return f"ERROR: Recordatorio {id} no encontrado."
 
     changed = ', '.join(fields.keys())
-    return f"Reminder {id} updated: {changed}."
+    return f"Recordatorio {id} actualizado: {changed}."
 
 
 def handle_reminder_complete(id: str) -> str:
     """Mark a reminder as completed."""
     result = complete_reminder(id=id)
     if not result or "error" in result:
-        return f"ERROR: Reminder {id} not found."
+        return f"ERROR: Recordatorio {id} no encontrado."
 
-    return f"Reminder {id} marked COMPLETED."
+    return f"Recordatorio {id} marcado COMPLETADO."
 
 
 def handle_reminder_delete(id: str) -> str:
     """Delete a reminder permanently."""
     result = delete_reminder(id=id)
     if not result:
-        return f"ERROR: Reminder {id} not found."
+        return f"ERROR: Recordatorio {id} no encontrado."
 
-    return f"Reminder {id} deleted."
+    return f"Recordatorio {id} eliminado."
 
 
 # ── Followups ──────────────────────────────────────────────────────────────────
@@ -81,16 +81,16 @@ def handle_followup_create(id: str, description: str, date: str = '', verificati
                     When completed, auto-creates the next occurrence.
     """
     if not id.startswith('NF'):
-        return f"ERROR: Followup ID must start with 'NF' (received: '{id}')."
+        return f"ERROR: El ID del followup debe empezar por 'NF' (recibido: '{id}')."
 
     result = create_followup(id=id, description=description, date=date or None, verification=verification, reasoning=reasoning, recurrence=recurrence or None)
     if not result or "error" in result:
         error_msg = result.get("error", "desconocido") if isinstance(result, dict) else "desconocido"
         return f"ERROR: {error_msg}"
 
-    fecha_str = date if date else 'no date'
-    rec_str = f" Recurrence: {recurrence}." if recurrence else ""
-    return f"Followup {id} created. Date: {fecha_str}.{rec_str}"
+    fecha_str = date if date else 'sin fecha'
+    rec_str = f" Recurrencia: {recurrence}." if recurrence else ""
+    return f"Followup {id} creado. Fecha: {fecha_str}.{rec_str}"
 
 
 def handle_followup_update(id: str, description: str = '', date: str = '', verification: str = '', status: str = '') -> str:
@@ -106,14 +106,14 @@ def handle_followup_update(id: str, description: str = '', date: str = '', verif
         fields['status'] = status
 
     if not fields:
-        return f"ERROR: No fields specified to update for {id}."
+        return f"ERROR: No se especificó ningún campo a actualizar para {id}."
 
     result = update_followup(id=id, **fields)
     if not result:
-        return f"ERROR: Followup {id} not found."
+        return f"ERROR: Followup {id} no encontrado."
 
     changed = ', '.join(fields.keys())
-    return f"Followup {id} updated: {changed}."
+    return f"Followup {id} actualizado: {changed}."
 
 
 def handle_followup_complete(id: str, result: str = '') -> str:
@@ -128,10 +128,10 @@ def handle_followup_complete(id: str, result: str = '') -> str:
 
     db_result = complete_followup(id=id, result=result)
     if not db_result or "error" in db_result:
-        return f"ERROR: Followup {id} not found."
+        return f"ERROR: Followup {id} no encontrado."
 
     # Auto-link: find decisions whose context_ref matches this followup ID
-    msg = f"Followup {id} marked COMPLETED."
+    msg = f"Followup {id} marcado COMPLETADO."
     if has_recurrence:
         # The new one was auto-created by complete_followup
         new_row = conn.execute("SELECT date FROM followups WHERE id = ?", (id,)).fetchone()
@@ -143,7 +143,7 @@ def handle_followup_complete(id: str, result: str = '') -> str:
         for dec in linked_decisions:
             update_decision_outcome(dec['id'], outcome_text)
         dec_ids = ', '.join(f"#{d['id']}" for d in linked_decisions)
-        msg += f" Decision(s) {dec_ids} updated with automatic outcome."
+        msg += f" Decision(s) {dec_ids} actualizada(s) con outcome automático."
 
     return msg
 
@@ -152,6 +152,6 @@ def handle_followup_delete(id: str) -> str:
     """Delete a followup permanently."""
     result = delete_followup(id=id)
     if not result:
-        return f"ERROR: Followup {id} not found."
+        return f"ERROR: Followup {id} no encontrado."
 
-    return f"Followup {id} deleted."
+    return f"Followup {id} eliminado."

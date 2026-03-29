@@ -25,7 +25,7 @@ def handle_track(sid: str, paths: list[str]) -> str:
             for f in c["files"]:
                 lines.append(f"    {f}")
         lines.append("")
-        lines.append("PARAR e informar a Francisco antes de editar.")
+        lines.append("PARAR e inform the user antes de editar.")
 
     return "\n".join(lines)
 

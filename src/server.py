@@ -52,7 +52,7 @@ mcp = FastMCP(
     name="nexo",
     instructions=(
         "NEXO operational server. Provides session coordination, "
-        "reminders, followups, and menu for the user's operations.\n\n"
+        "reminders, followups, and menu for user's operations.\n\n"
         "When working with tool results, write down any important information "
         "you might need later in your response, as the original tool result "
         "may be cleared later."
@@ -65,13 +65,18 @@ _plugins_loaded = load_all_plugins(mcp)
 # ── Session management (3 tools) ──────────────────────────────────
 
 @mcp.tool
-def nexo_startup(task: str = "Startup") -> str:
+def nexo_startup(task: str = "Startup", claude_session_id: str = "") -> str:
     """Register new session, clean stale ones, return active sessions + alerts.
 
     Call this ONCE at the start of every conversation.
     Returns the session ID (SID) — store it for use in all other nexo_ tools.
+
+    Args:
+        task: Initial task description.
+        claude_session_id: The Claude Code session UUID (from session-briefing or hook).
+                          Pass this to enable automatic inter-terminal inbox detection.
     """
-    return handle_startup(task)
+    return handle_startup(task, claude_session_id=claude_session_id)
 
 
 @mcp.tool
@@ -110,7 +115,7 @@ def nexo_context_packet(area: str, files: str = "") -> str:
     MUST call before delegating ANY task to a subagent. Inject the result into the subagent's prompt.
 
     Args:
-        area: Project/area name (e.g., 'wazion', 'shopify', 'meta-ads', 'project_a', 'nexo', 'infrastructure').
+        area: Project/area name (e.g., 'project-a', 'shopify', 'meta-ads', 'project-b', 'nexo', 'infrastructure').
         files: Optional comma-separated file paths for additional context.
     """
     return handle_context_packet(area, files)
@@ -407,7 +412,7 @@ def nexo_learning_add(category: str, title: str, content: str, reasoning: str = 
     """Add a new learning (resolved error, pattern, gotcha).
 
     Args:
-        category: One of: nexo-ops, google-ads, meta-ads, google-analytics, shopify, wazion, cloud-sql, infrastructure, security, brain-engine.
+        category: One of: nexo-ops, google-ads, meta-ads, google-analytics, shopify, my-project, cloud-sql, infrastructure, security, brain-engine.
         title: Short title for the learning.
         content: Full description with context and solution.
         reasoning: WHY this matters — what led to discovering this (optional).

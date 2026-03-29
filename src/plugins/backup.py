@@ -33,10 +33,10 @@ def handle_backup_now() -> str:
 def handle_backup_list() -> str:
     """List available backups with dates and sizes."""
     if not os.path.isdir(BACKUP_DIR):
-        return "No backups."
+        return "Sin backups."
     files = sorted(glob.glob(os.path.join(BACKUP_DIR, "nexo-*.db")), reverse=True)
     if not files:
-        return "No backups."
+        return "Sin backups."
     lines = [f"BACKUPS ({len(files)}):"]
     total_size = 0
     for f in files:
@@ -56,7 +56,7 @@ def handle_backup_restore(filename: str) -> str:
     """
     src = os.path.join(BACKUP_DIR, filename)
     if not os.path.isfile(src):
-        return f"Backup not found: {filename}"
+        return f"Backup no encontrado: {filename}"
 
     # Create safety backup first
     safety = os.path.join(BACKUP_DIR, f"nexo-pre-restore-{time.strftime('%Y%m%d%H%M%S')}.db")

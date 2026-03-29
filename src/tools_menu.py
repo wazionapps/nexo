@@ -39,8 +39,8 @@ MENU_ITEMS = [
         ("6", "Cambiar Promocion Shopify"),
     ]),
     ("Servidor e Infraestructura", [
-        ("2", "Servidor - Chequeo server health check"),
-        ("3", "WhatsApp Logs - Review WhatsApp logs"),
+        ("2", "Servidor - Chequeo your-server.example.com"),
+        ("3", "WhatsApp Logs - Revisar logs your-whatsapp-account"),
         ("11", "File Tracker - Reporte archivos PHP"),
         ("12", "Google Cloud - Gasto, consumo y estado GCP"),
     ]),
@@ -116,10 +116,10 @@ def handle_menu() -> str:
     dashboard_alerts = _get_dashboard_alerts()
     memory_reviews = _get_memory_review_summary()
     due = handle_reminders("due")
-    has_alerts = dashboard_alerts or memory_reviews["total"] > 0 or (due and "No pending reminders" not in due)
+    has_alerts = dashboard_alerts or memory_reviews["total"] > 0 or (due and "Sin recordatorios" not in due)
 
     if has_alerts:
-        lines.append("║" + "  PROACTIVE ALERTS".ljust(W) + "║")
+        lines.append("║" + "  ALERTAS PROACTIVAS".ljust(W) + "║")
         lines.append("╠" + "═" * W + "╣")
 
         if dashboard_alerts:
@@ -139,7 +139,7 @@ def handle_menu() -> str:
             )[:W - 4]
             lines.append("║" + f"  !  {text}".ljust(W) + "║")
 
-        if due and "No pending reminders" not in due:
+        if due and "Sin recordatorios" not in due:
             for reminder_line in due.split("\n"):
                 if reminder_line.strip():
                     truncated = reminder_line[:W - 2]
@@ -208,11 +208,11 @@ def handle_menu() -> str:
 
     # Active sessions
     sessions = handle_status()
-    if "No active sessions" not in sessions:
-        lines.append("║" + "  ACTIVE SESSIONS".ljust(W) + "║")
+    if "Sin sesiones" not in sessions:
+        lines.append("║" + "  SESIONES ACTIVAS".ljust(W) + "║")
         lines.append("║" + "─" * W + "║")
         for s_line in sessions.split("\n"):
-            if s_line.strip() and "ACTIVE SESSIONS" not in s_line:
+            if s_line.strip() and "SESIONES ACTIVAS" not in s_line:
                 truncated = s_line[:W - 2]
                 lines.append("║" + f"  {truncated}".ljust(W) + "║")
         lines.append("╠" + "═" * W + "╣")

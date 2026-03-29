@@ -249,6 +249,13 @@ def _m12_session_checkpoints(conn):
     """)
 
 
+def _m13_claude_session_id(conn):
+    """Add claude_session_id to sessions for inter-terminal coordination (D+)."""
+    _migrate_add_column(conn, "sessions", "claude_session_id", "TEXT DEFAULT ''")
+    _migrate_add_index(conn, "idx_sessions_claude_sid", "sessions", "claude_session_id")
+    conn.commit()
+
+
 # Migration registry — APPEND ONLY, never reorder or delete
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
@@ -263,6 +270,7 @@ MIGRATIONS = [
     (10, "diary_archive", _m10_diary_archive),
     (11, "artifact_registry", _m11_artifact_registry),
     (12, "session_checkpoints", _m12_session_checkpoints),
+    (13, "claude_session_id", _m13_claude_session_id),
 ]
 
 

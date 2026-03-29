@@ -14,14 +14,14 @@ def local_time_str() -> str:
     return datetime.now().strftime("%H:%M")
 
 
-def register_session(sid: str, task: str) -> dict:
+def register_session(sid: str, task: str, claude_session_id: str = "") -> dict:
     """Register or re-register a session."""
     conn = get_db()
     now = now_epoch()
     conn.execute(
-        "INSERT OR REPLACE INTO sessions (sid, task, started_epoch, last_update_epoch, local_time) "
-        "VALUES (?, ?, ?, ?, ?)",
-        (sid, task, now, now, local_time_str())
+        "INSERT OR REPLACE INTO sessions (sid, task, started_epoch, last_update_epoch, local_time, claude_session_id) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (sid, task, now, now, local_time_str(), claude_session_id)
     )
     conn.commit()
     return {"sid": sid, "task": task}
