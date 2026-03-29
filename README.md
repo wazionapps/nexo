@@ -399,7 +399,12 @@ The installer creates a shell alias with your chosen name. Just type it:
 atlas
 ```
 
-That's it. No need to run `claude` manually. Atlas will greet you immediately — adapted to the time of day, resuming from where you left off if there's a previous session. No cold starts, no waiting for your input.
+Under the hood, the alias runs:
+```bash
+claude --system-prompt "Start NEXO session. Run nexo_startup, load context, greet the user."
+```
+
+That's it. No need to run `claude` manually. Your operator will greet you immediately — adapted to the time of day, resuming from where you left off if there's a previous session. No cold starts, no waiting for your input.
 
 ### What Gets Installed
 

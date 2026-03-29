@@ -1,43 +1,35 @@
 #!/usr/bin/env python3
 """
-NEXO Synthesis Engine — Daily intelligence brief.
+NEXO Synthesis Engine v2 — Daily intelligence brief.
+
+Before: ~400 lines of Python concatenating SQL results into markdown sections.
+Now: Collects raw data, passes to Claude CLI (sonnet) which synthesizes
+with real understanding of what matters for tomorrow.
 
 Runs every 2 hours via LaunchAgent. Executes ONCE per day (internal gate).
-Queries nexo.db + claude-mem.db and writes ~/claude/coordination/daily-synthesis.md
-
-Zero external dependencies beyond stdlib + sqlite3.
 """
 
 import fcntl
 import json
 import os
 import sqlite3
+import subprocess
 import sys
-from collections import Counter, defaultdict
 from datetime import datetime, date, timedelta
 from pathlib import Path
 
-# ─── Paths ────────────────────────────────────────────────────────────────────
 HOME = Path.home()
-CLAUDE_DIR = HOME / "claude"
+CLAUDE_DIR = HOME / ".nexo"
 COORD_DIR = CLAUDE_DIR / "coordination"
-NEXO_HOME = os.environ.get("NEXO_HOME", str(Path.home() / ".nexo"))
-
-NEXO_DB = Path(NEXO_HOME) / "nexo.db"
-CLAUDE_MEM_DB = HOME / ".claude-mem" / "claude-mem.db"
-
+NEXO_DB = HOME / ".nexo" / "nexo.db"
 OUTPUT_FILE = COORD_DIR / "daily-synthesis.md"
-SYNTHESIS_LOG = COORD_DIR / "synthesis-log.json"
 LAST_RUN_FILE = COORD_DIR / "synthesis-last-run"
 LOCK_FILE = COORD_DIR / "synthesis.lock"
+CLAUDE_CLI = HOME / ".local" / "bin" / "claude"
 
 TODAY = date.today()
 TODAY_STR = TODAY.isoformat()
-SEVEN_DAYS_AGO = (TODAY - timedelta(days=7)).isoformat()
-TOMORROW = (TODAY + timedelta(days=1)).isoformat()
 
-
-# ─── Utilities ────────────────────────────────────────────────────────────────
 
 def log(msg: str):
     ts = datetime.now().strftime("%H:%M:%S")
@@ -45,12 +37,8 @@ def log(msg: str):
 
 
 def should_run() -> bool:
-    """Gate: run at most once per day."""
     if LAST_RUN_FILE.exists():
-        last = LAST_RUN_FILE.read_text().strip()
-        if last == TODAY_STR:
-            log(f"Already ran today ({TODAY_STR}). Skipping.")
-            return False
+        return LAST_RUN_FILE.read_text().strip() != TODAY_STR
     return True
 
 
@@ -64,474 +52,195 @@ def acquire_lock():
         fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         return lock_fd
     except BlockingIOError:
-        log("Another instance is running. Exiting.")
+        log("Another instance running. Exiting.")
         sys.exit(0)
 
 
 def release_lock(lock_fd):
     fcntl.flock(lock_fd, fcntl.LOCK_UN)
     lock_fd.close()
-    try:
-        LOCK_FILE.unlink()
-    except FileNotFoundError:
-        pass
+    LOCK_FILE.unlink(missing_ok=True)
 
 
-def safe_query(db_path: Path, sql: str, params=()) -> list:
-    """Run a query against a SQLite DB, return rows or [] on any error."""
-    if not db_path.exists():
+def safe_query(sql: str, params=()) -> list:
+    if not NEXO_DB.exists():
         return []
     try:
-        conn = sqlite3.connect(db_path)
+        conn = sqlite3.connect(str(NEXO_DB))
         conn.row_factory = sqlite3.Row
-        cur = conn.execute(sql, params)
-        rows = [dict(r) for r in cur.fetchall()]
+        rows = [dict(r) for r in conn.execute(sql, params).fetchall()]
         conn.close()
         return rows
     except Exception as e:
-        log(f"Query error on {db_path.name}: {e}")
+        log(f"Query error: {e}")
         return []
 
 
-def truncate(text: str, max_len: int = 200) -> str:
-    if not text:
-        return ""
-    text = text.strip().replace("\n", " ")
-    return text[:max_len] + ("…" if len(text) > max_len else "")
+def collect_data() -> dict:
+    """Collect all raw data for synthesis."""
+    data = {"date": TODAY_STR}
 
-
-# ─── Section builders ─────────────────────────────────────────────────────────
-
-def section_learnings() -> str:
-    rows = safe_query(
-        NEXO_DB,
+    # Today's learnings
+    data["learnings"] = safe_query(
         "SELECT category, title, content, reasoning FROM learnings "
         "WHERE date(created_at, 'unixepoch') = ? ORDER BY created_at DESC",
-        (TODAY_STR,),
+        (TODAY_STR,)
     )
-    if not rows:
-        return "No new errors recorded."
 
-    lines = []
-    for r in rows:
-        cat = r.get("category") or "general"
-        title = r.get("title") or ""
-        content = truncate(r.get("content") or "", 180)
-        lines.append(f"- **[{cat}]** {title}: {content}")
-    return "\n".join(lines)
-
-
-def section_decisions() -> str:
-    # decisions table uses columns: domain, decision, alternatives, based_on, outcome
-    rows = safe_query(
-        NEXO_DB,
+    # Today's decisions
+    data["decisions"] = safe_query(
         "SELECT domain, decision, alternatives, based_on, outcome FROM decisions "
         "WHERE date(created_at) = ? ORDER BY created_at DESC",
-        (TODAY_STR,),
+        (TODAY_STR,)
     )
-    if not rows:
-        return "No decisions recorded."
 
-    lines = []
-    for r in rows:
-        domain = r.get("domain") or ""
-        chosen = truncate(r.get("decision") or "", 160)
-        discarded = truncate(r.get("alternatives") or "", 120)
-        why = truncate(r.get("based_on") or "", 120)
-        outcome = r.get("outcome") or ""
-
-        line = f"- **[{domain}]** Chosen: {chosen}"
-        if discarded:
-            line += f"\n  Discarded: {discarded}"
-        if why:
-            line += f"\n  Why: {why}"
-        if outcome:
-            line += f"\n  Result: {truncate(outcome, 100)}"
-        lines.append(line)
-    return "\n".join(lines)
-
-
-def section_changes() -> str:
-    rows = safe_query(
-        NEXO_DB,
-        "SELECT files, what_changed, why, risks, affects FROM change_log "
+    # Today's changes
+    data["changes"] = safe_query(
+        "SELECT files, what_changed, why, affects, risks FROM change_log "
         "WHERE date(created_at) = ? ORDER BY created_at DESC",
-        (TODAY_STR,),
-    )
-    if not rows:
-        return "No code changes recorded."
-
-    # Group by "system" (first part of first file path)
-    by_system = defaultdict(list)
-    for r in rows:
-        files_raw = r.get("files") or ""
-        # Take first file, extract top-level system name
-        first_file = files_raw.split(",")[0].strip()
-        parts = [p for p in first_file.replace("\\", "/").split("/") if p and p != "_public"]
-        system = parts[0] if parts else "misc"
-        by_system[system].append(r)
-
-    lines = []
-    for system, entries in by_system.items():
-        lines.append(f"**{system}** ({len(entries)} change{'s' if len(entries) > 1 else ''}):")
-        for r in entries[:3]:  # cap per system
-            what = truncate(r.get("what_changed") or "", 160)
-            risks = truncate(r.get("risks") or "", 100)
-            lines.append(f"  - {what}")
-            if risks:
-                lines.append(f"    ⚠ Risks: {risks}")
-    return "\n".join(lines)
-
-
-def section_patterns() -> str:
-    # Learnings by category — last 7 days
-    learn_rows = safe_query(
-        NEXO_DB,
-        "SELECT category, title FROM learnings "
-        "WHERE date(created_at, 'unixepoch') >= ? ORDER BY created_at DESC",
-        (SEVEN_DAYS_AGO,),
-    )
-    # change_log — last 7 days
-    change_rows = safe_query(
-        NEXO_DB,
-        "SELECT files FROM change_log WHERE date(created_at) >= ?",
-        (SEVEN_DAYS_AGO,),
+        (TODAY_STR,)
     )
 
-    total_learn = len(learn_rows)
-    total_changes = len(change_rows)
-
-    if total_learn < 3 and total_changes < 3:
-        return "Insufficient data for pattern analysis (< 7 days)."
-
-    lines = []
-
-    # Categories with most learnings
-    if learn_rows:
-        cat_counter = Counter(r.get("category") or "general" for r in learn_rows)
-        top_cats = cat_counter.most_common(3)
-        lines.append(f"**Areas with most errors** (last 7d, {total_learn} learnings):")
-        for cat, count in top_cats:
-            lines.append(f"  - {cat}: {count} {'error' if count == 1 else 'errors'}")
-
-    # Systems most touched in change_log
-    if change_rows:
-        sys_counter: Counter = Counter()
-        for r in change_rows:
-            files_raw = r.get("files") or ""
-            for f in files_raw.split(",")[:3]:
-                f = f.strip()
-                parts = [p for p in f.replace("\\", "/").split("/") if p and p != "_public"]
-                if parts:
-                    sys_counter[parts[0]] += 1
-        top_sys = sys_counter.most_common(3)
-        lines.append(f"**Most touched systems** (last 7d, {total_changes} changes):")
-        for sys_name, count in top_sys:
-            lines.append(f"  - {sys_name}: {count} {'modification' if count == 1 else 'modifications'}")
-
-    # Recurring error patterns — categories with learnings on 3+ different days
-    if learn_rows:
-        # Get daily breakdown per category
-        daily_cats = safe_query(
-            NEXO_DB,
-            "SELECT category, date(created_at, 'unixepoch') as day "
-            "FROM learnings WHERE date(created_at, 'unixepoch') >= ? "
-            "GROUP BY category, day",
-            (SEVEN_DAYS_AGO,),
-        )
-        if daily_cats:
-            cat_days = Counter(r.get("category") or "general" for r in daily_cats)
-            recurring = [(c, d) for c, d in cat_days.items() if d >= 3]
-            if recurring:
-                lines.append("**Categories with recurring errors** (3+ different days):")
-                for cat, days in sorted(recurring, key=lambda x: -x[1]):
-                    lines.append(f"  - {cat}: errors on {days} days — weak point")
-
-    return "\n".join(lines) if lines else "No significant patterns detected."
-
-
-def section_manana() -> str:
-    lines = []
-
-    # Reminders due <= tomorrow, PENDIENTE
-    rem_rows = safe_query(
-        NEXO_DB,
-        "SELECT id, date, description, category FROM reminders "
-        "WHERE status LIKE 'PENDIENTE%' AND date IS NOT NULL AND date <= ? "
-        "ORDER BY date ASC",
-        (TOMORROW,),
-    )
-    if rem_rows:
-        lines.append("### Overdue/tomorrow reminders")
-        for r in rem_rows:
-            d = r.get("date") or ""
-            cat = r.get("category") or ""
-            desc = truncate(r.get("description") or "", 150)
-            overdue = " ⚠ OVERDUE" if d and d < TODAY_STR else ""
-            lines.append(f"- [{d}]{overdue} {desc}" + (f" ({cat})" if cat else ""))
-    else:
-        lines.append("### Reminders\nNone overdue or due tomorrow.")
-
-    # Followups due <= tomorrow, PENDIENTE
-    fol_rows = safe_query(
-        NEXO_DB,
-        "SELECT id, date, description FROM followups "
-        "WHERE status = 'PENDIENTE' AND date IS NOT NULL AND date <= ? "
-        "ORDER BY date ASC",
-        (TOMORROW,),
-    )
-    if fol_rows:
-        lines.append("### Overdue/tomorrow followups")
-        for r in fol_rows:
-            d = r.get("date") or ""
-            desc = truncate(r.get("description") or "", 150)
-            overdue = " ⚠ OVERDUE" if d and d < TODAY_STR else ""
-            lines.append(f"- [{d}]{overdue} {desc}")
-    else:
-        lines.append("### Followups\nNone overdue or due tomorrow.")
-
-    # Last 3 session diary entries — pending + next_session_context
-    diary_rows = safe_query(
-        NEXO_DB,
-        "SELECT domain, pending, context_next, created_at FROM session_diary "
-        "ORDER BY created_at DESC LIMIT 3",
-    )
-    if diary_rows:
-        lines.append("### Active context (recent sessions)")
-        for r in diary_rows:
-            domain = r.get("domain") or "general"
-            pending = truncate(r.get("pending") or "", 200)
-            nxt = truncate(r.get("context_next") or "", 200)
-            ts = r.get("created_at") or ""
-            if pending or nxt:
-                lines.append(f"**[{domain}]** ({ts[:16]}):")
-                if pending:
-                    lines.append(f"  Pending: {pending}")
-                if nxt:
-                    lines.append(f"  For next session: {nxt}")
-
-    return "\n".join(lines) if lines else "No items for tomorrow."
-
-
-def section_autoevaluacion() -> str:
-    diary_rows = safe_query(
-        NEXO_DB,
-        "SELECT mental_state, user_signals, self_critique, summary, created_at FROM session_diary "
+    # Session diaries (summaries + mental_state)
+    data["diaries"] = safe_query(
+        "SELECT summary, self_critique, mental_state, user_signals FROM session_diary "
         "WHERE date(created_at) = ? ORDER BY created_at DESC",
-        (TODAY_STR,),
+        (TODAY_STR,)
     )
-    if not diary_rows:
-        return "No session diaries recorded today."
 
-    lines = []
-
-    # Self-critique section (NEW — most important)
-    all_critiques = []
-    for r in diary_rows:
-        sc = r.get("self_critique") or ""
-        if sc.strip() and not sc.strip().lower().startswith("no self-critique"):
-            all_critiques.append(truncate(sc, 300))
-
-    if all_critiques:
-        lines.append(f"**SELF-CRITIQUES ({len(all_critiques)} sessions with detected failures):**")
-        for c in all_critiques[:5]:
-            lines.append(f"  - {c}")
-        lines.append("**ACTION:** These self-critiques should inform tomorrow's behavior. If a pattern repeats 3+ days, the nightly consolidator will promote it to permanent memory.")
-        lines.append("")
-
-    # user_signals patterns
-    all_signals = []
-    mental_states = []
-    for r in diary_rows:
-        sig = r.get("user_signals") or ""
-        if sig.strip():
-            all_signals.append(truncate(sig, 200))
-        ms = r.get("mental_state") or ""
-        if ms.strip():
-            mental_states.append(truncate(ms, 200))
-
-    if user_signals_text := "\n".join(f"  - {s}" for s in all_signals[:3] if s):
-        lines.append(f"**User signals:**\n{user_signals_text}")
-
-    if mental_states:
-        lines.append(f"**Session mental states:**")
-        for ms in mental_states[:2]:
-            lines.append(f"  - {ms}")
-
-    # Derive what to do differently based on signal analysis
-    if all_signals:
-        # Detect repeated corrections
-        correction_words = ["corrig", "frustrat", "don't understand", "demand", "repeat",
-                           "shouldn't", "why not", "again", "tiring",
-                           "always wait", "reactive", "not proactive"]
-        correction_count = sum(
-            1 for s in all_signals
-            if any(w in s.lower() for w in correction_words)
-        )
-        if correction_count >= 2:
-            lines.append(f"**ALERT:** User corrected {correction_count} times today — review what is repeating.")
-        lines.append("**For tomorrow:** Review previous signals before acting.")
-    elif not diary_rows:
-        lines.append("**For tomorrow:** Remember to write diary before closing session.")
-
-    # Check for postmortem daily summary
-    postmortem_file = COORD_DIR / "postmortem-daily.md"
-    if postmortem_file.exists():
-        pm_content = postmortem_file.read_text().strip()
-        if "Promovido a memoria permanente" in pm_content:
-            lines.append("")
-            lines.append("**NEW PERMANENT RULES (generated last night by the consolidator):**")
-            for line in pm_content.split("\n"):
-                if line.startswith("- ") and "Promovido" not in line:
-                    lines.append(f"  {line}")
-
-    return "\n".join(lines) if lines else "No self-evaluation data."
-
-
-def section_user_observer() -> str:
-    """Track user's patterns: forgotten ideas, abandoned topics, recurring requests."""
-    lines = []
-
-    # 1. Reminders without dates (ideas that accumulate without agenda)
-    no_date = safe_query(
-        NEXO_DB,
-        "SELECT id, description FROM reminders "
-        "WHERE date IS NULL AND status LIKE 'PENDIENTE%' ORDER BY rowid",
+    # Overdue reminders
+    data["overdue_reminders"] = safe_query(
+        "SELECT id, title, due_date FROM reminders "
+        "WHERE status='PENDING' AND due_date <= ? ORDER BY due_date",
+        (TODAY_STR,)
     )
-    if no_date:
-        lines.append(f"**Ideas sin agenda:** {len(no_date)} reminders sin fecha")
-        # Show oldest 3 as examples
-        for r in no_date[:3]:
-            desc = truncate(r.get("description") or "", 80)
-            lines.append(f"  - {r.get('id')}: {desc}")
-        if len(no_date) > 3:
-            lines.append(f"  - ... and {len(no_date) - 3} more")
 
-    # 2. Followups waiting on user or external responses
-    waiting = safe_query(
-        NEXO_DB,
-        "SELECT id, description, date FROM followups "
-        "WHERE status = 'PENDIENTE' "
-        "AND (description LIKE '%respuesta%' "
-        "     OR description LIKE '%preguntar%' OR description LIKE '%confirme%' "
-        "     OR description LIKE '%decidió%') "
-        "ORDER BY date",
+    # Pending followups
+    data["pending_followups"] = safe_query(
+        "SELECT id, title, description, due_date FROM followups "
+        "WHERE status='pending' ORDER BY due_date"
     )
-    if waiting:
-        lines.append(f"**Waiting for user or third-party response/decision:** {len(waiting)}")
-        for r in waiting[:5]:
-            d = r.get("date") or "no date"
-            desc = truncate(r.get("description") or "", 100)
-            lines.append(f"  - {r.get('id')} ({d}): {desc}")
 
-    # 3. Overdue reminders that keep getting postponed (same reminder, multiple updates)
-    # Detect by looking at reminders with dates far past
-    stale = safe_query(
-        NEXO_DB,
-        "SELECT id, description, date FROM reminders "
-        "WHERE status LIKE 'PENDIENTE%' AND date IS NOT NULL AND date < ? "
-        "ORDER BY date ASC LIMIT 5",
-        (TODAY_STR,),
+    # Guard stats
+    data["guard_stats"] = safe_query(
+        "SELECT category, COUNT(*) as cnt FROM learnings WHERE status='active' "
+        "GROUP BY category ORDER BY cnt DESC LIMIT 10"
     )
-    if stale:
-        lines.append(f"**Overdue reminders not attended:**")
-        for r in stale:
-            desc = truncate(r.get("description") or "", 80)
-            lines.append(f"  - {r.get('id')} (overdue since {r.get('date')}): {desc}")
 
-    if not lines:
-        return "No observations on user patterns."
+    # Postmortem daily (if exists)
+    pm_file = COORD_DIR / "postmortem-daily.md"
+    if pm_file.exists():
+        data["postmortem_summary"] = pm_file.read_text()[:2000]
 
-    return "\n".join(lines)
+    return data
 
 
-# ─── Log history ──────────────────────────────────────────────────────────────
+def synthesize(data: dict) -> bool:
+    """CLI synthesizes the daily brief."""
 
-def append_synthesis_log(entry: dict):
-    log_data = []
-    if SYNTHESIS_LOG.exists():
-        try:
-            log_data = json.loads(SYNTHESIS_LOG.read_text())
-        except Exception:
-            log_data = []
-    log_data.append(entry)
-    # Keep last 30 entries
-    log_data = log_data[-30:]
-    SYNTHESIS_LOG.write_text(json.dumps(log_data, ensure_ascii=False, indent=2))
+    data_json = json.dumps(data, ensure_ascii=False, indent=1)
+    if len(data_json) > 15000:
+        data_json = data_json[:15000] + "\n... (truncated)"
 
+    prompt = f"""You are NEXO's synthesis engine. Write the daily intelligence brief for tomorrow's
+startup. This file is read by NEXO at the beginning of each session to understand
+what happened today and what to focus on tomorrow.
 
-# ─── Main ─────────────────────────────────────────────────────────────────────
+TODAY'S RAW DATA:
+{data_json}
 
-def main():
-    log("NEXO Synthesis Engine starting.")
+Write the synthesis to {OUTPUT_FILE} with this structure:
 
-    if not should_run():
-        sys.exit(0)
+# NEXO Daily Synthesis — {TODAY_STR}
 
-    lock_fd = acquire_lock()
-
-    try:
-        COORD_DIR.mkdir(parents=True, exist_ok=True)
-
-        now = datetime.now()
-        ts = now.strftime("%Y-%m-%d %H:%M")
-        log("Querying databases...")
-
-        s_learnings = section_learnings()
-        s_decisions = section_decisions()
-        s_changes = section_changes()
-        s_patterns = section_patterns()
-        s_manana = section_manana()
-        s_autoeval = section_autoevaluacion()
-        s_user_obs = section_user_observer()
-
-        md = f"""# NEXO Daily Synthesis — {TODAY_STR}
-Generated at {ts}
-
-## Errors and Lessons (today)
-{s_learnings}
+## Errors & Learnings
+[New learnings from today — what went wrong, what was learned]
 
 ## Decisions Made
-{s_decisions}
+[Key decisions and their reasoning]
 
-## Systems Touched
-{s_changes}
+## Changes Deployed
+[What was changed in production today]
 
-## Patterns Detected
-{s_patterns}
+## the user — Observations
+[Patterns in the user's behavior: frustrations, pending decisions, ideas without
+deadlines, topics he started but didn't close. This is NEXO's peripheral vision.]
 
-## User — Observations
-{s_user_obs}
+## Weak Points (self-assessment)
+[Where NEXO failed or could have done better today — from session diaries]
 
-## Tomorrow
-{s_manana}
+## Tomorrow's Context
+[What the next session needs to know: pending followups, overdue reminders,
+in-progress tasks, things to verify]
 
-## Self-Evaluation
-{s_autoeval}
-"""
+## Guard Status
+[Areas with most learnings — where errors concentrate]
 
-        OUTPUT_FILE.write_text(md, encoding="utf-8")
-        log(f"Written: {OUTPUT_FILE}")
+Be concise. Each section 3-8 bullet points max. Focus on what CHANGES BEHAVIOR,
+not what merely happened. If a section has nothing, write "Nothing notable."
 
-        line_count = len(md.splitlines())
-        log(f"Output: {line_count} lines.")
+Execute without asking."""
 
-        # Log history
-        append_synthesis_log({
-            "date": TODAY_STR,
-            "generated_at": ts,
-            "lines": line_count,
-            "learnings_today": s_learnings.count("\n- ") + (1 if s_learnings.startswith("- ") else 0),
-        })
+    log("Invoking Claude CLI (sonnet) for synthesis...")
 
-        mark_done()
-        log("Done.")
+    env = os.environ.copy()
+    env.pop("CLAUDECODE", None)
+    env.pop("CLAUDE_CODE", None)
 
+    try:
+        result = subprocess.run(
+            [str(CLAUDE_CLI), "-p", prompt, "--model", "opus",
+             "--allowedTools", "Read,Write,Edit,Glob,Grep"],
+            capture_output=True, text=True, timeout=180, env=env
+        )
+
+        if result.returncode != 0:
+            log(f"CLI error ({result.returncode}): {(result.stderr or '')[:300]}")
+            return False
+
+        log(f"Synthesis complete. Output: {len(result.stdout or '')} chars")
+        return True
+
+    except subprocess.TimeoutExpired:
+        log("CLI timed out (180s)")
+        return False
     except Exception as e:
-        log(f"Fatal error: {e}")
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
+        log(f"Exception: {e}")
+        return False
+
+
+def main():
+    if not should_run():
+        log(f"Already ran today ({TODAY_STR}). Skipping.")
+        return
+
+    lock_fd = acquire_lock()
+    try:
+        log(f"=== NEXO Synthesis v2 — {TODAY_STR} ===")
+
+        data = collect_data()
+        log(f"Collected: {len(data.get('learnings', []))} learnings, "
+            f"{len(data.get('decisions', []))} decisions, "
+            f"{len(data.get('changes', []))} changes, "
+            f"{len(data.get('diaries', []))} diaries")
+
+        success = synthesize(data)
+
+        if success:
+            mark_done()
+            log("Synthesis v2 complete.")
+        else:
+            log("Synthesis failed — will retry next trigger.")
+
+        # Register for catch-up
+        try:
+            state_file = HOME / ".nexo" / "operations" / ".catchup-state.json"
+            st = json.loads(state_file.read_text()) if state_file.exists() else {}
+            st["synthesis"] = datetime.now().isoformat()
+            state_file.write_text(json.dumps(st, indent=2))
+        except Exception:
+            pass
+
     finally:
         release_lock(lock_fd)
 

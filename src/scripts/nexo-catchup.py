@@ -24,16 +24,17 @@ import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
+CLAUDE_CLI = Path.home() / ".local" / "bin" / "claude"
+
 HOME = Path.home()
-NEXO_HOME = os.environ.get("NEXO_HOME", str(Path.home() / ".nexo"))
-LOG_DIR = HOME / "claude" / "logs"
+LOG_DIR = HOME / ".nexo" / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE = LOG_DIR / "catchup.log"
-STATE_FILE = HOME / "claude" / "operations" / ".catchup-state.json"
+STATE_FILE = HOME / ".nexo" / "operations" / ".catchup-state.json"
 
 PYTHON_BREW = "/opt/homebrew/bin/python3"
 PYTHON_SYS = "/Library/Frameworks/Python.framework/Versions/3.12/bin/python3"
-SCRIPTS = HOME / "claude" / "scripts"
+SCRIPTS = HOME / ".nexo" / "scripts"
 
 
 def log(msg: str):
@@ -140,7 +141,7 @@ def main():
             subprocess.run(
                 [PYTHON_BREW if os.path.exists(PYTHON_BREW) else PYTHON_SYS, str(update_script)],
                 capture_output=True, text=True, timeout=60,
-                env={**os.environ, "HOME": str(HOME), "NEXO_HOME": NEXO_HOME}
+                env={**os.environ, "HOME": str(HOME), "NEXO_HOME": str(HOME / ".nexo")}
             )
         except Exception as e:
             log(f"  Update check failed: {e}")
@@ -167,10 +168,63 @@ def main():
 
     if ran == 0:
         log("All tasks up to date, nothing to catch up.")
+    elif ran >= 3:
+        # Many tasks caught up — ask CLI to assess system state
+        _cli_post_catchup_assessment(ran, skipped, state)
     else:
         log(f"Caught up {ran} tasks, {skipped} already current.")
 
     log("=== Catch-Up complete ===")
+
+
+def _cli_post_catchup_assessment(ran: int, skipped: int, state: dict):
+    """When 3+ tasks were missed, use CLI to assess if there are concerns."""
+    if not CLAUDE_CLI.exists():
+        log(f"Caught up {ran} tasks, {skipped} already current. (CLI unavailable for assessment)")
+        return
+
+    assessment_file = LOG_DIR / "catchup-assessment.md"
+    state_summary = json.dumps(state, indent=2, default=str)
+
+    prompt = f"""You are the NEXO Catch-Up system. The Mac was off/asleep and {ran} scheduled tasks just ran as catch-up ({skipped} were already current).
+
+Task run state (timestamps of last successful runs):
+{state_summary}
+
+Assess:
+1. How long was the system likely offline? (compare timestamps to now)
+2. Are there any tasks that depend on each other where order matters?
+3. Any tasks that may have produced stale results because they ran late?
+4. Should any task be re-run at its normal time today?
+
+Write a brief assessment (max 20 lines) to: {assessment_file}
+
+Format:
+## Catch-Up Assessment — {datetime.now().strftime('%Y-%m-%d %H:%M')}
+- Offline duration: ~Xh
+- Tasks caught up: {ran}
+- Concerns: ...
+- Recommendation: ..."""
+
+    log(f"Caught up {ran} tasks — running CLI assessment...")
+    env = os.environ.copy()
+    env.pop("CLAUDECODE", None)
+    env.pop("CLAUDE_CODE", None)
+
+    try:
+        result = subprocess.run(
+            [str(CLAUDE_CLI), "-p", prompt, "--model", "opus",
+             "--allowedTools", "Read,Write,Edit,Glob,Grep"],
+            capture_output=True, text=True, timeout=90, env=env
+        )
+        if result.returncode == 0:
+            log(f"Assessment written to {assessment_file}")
+        else:
+            log(f"CLI assessment exited {result.returncode}")
+    except subprocess.TimeoutExpired:
+        log("CLI assessment timed out (90s)")
+    except Exception as e:
+        log(f"CLI assessment error: {e}")
 
 
 if __name__ == "__main__":

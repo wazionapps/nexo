@@ -4,7 +4,7 @@ NEXO Immune System — Health monitor & auto-repair.
 
 Runs every 30 minutes via LaunchAgent. Checks tokens, LaunchAgents, DBs,
 scripts, logs, disk, and server crons. Auto-repairs what it can, alerts
-User via WhatsApp only on NEW failures.
+the user via notification only on NEW failures.
 
 Zero external dependencies. Stdlib + sqlite3 + urllib only.
 """
@@ -14,7 +14,6 @@ import json
 import os
 import re
 import shlex
-import shutil
 import signal
 import sqlite3
 import ssl
@@ -56,62 +55,38 @@ SSL_CTX = _make_ssl_context()
 
 # ─── Paths ────────────────────────────────────────────────────────────────────
 HOME = Path.home()
-CLAUDE_DIR = HOME / "claude"
+CLAUDE_DIR = HOME / ".nexo"
 COORD_DIR = CLAUDE_DIR / "coordination"
 BRAIN_DIR = CLAUDE_DIR / "brain"
 SCRIPTS_DIR = CLAUDE_DIR / "scripts"
-NEXO_HOME = os.environ.get("NEXO_HOME", str(Path.home() / ".nexo"))
 
 IMMUNE_STATUS = COORD_DIR / "immune-status.json"
 IMMUNE_LOG = COORD_DIR / "immune-log.json"
 LOCK_FILE = COORD_DIR / "immune-process.lock"
 
-WA_NOTIFY = SCRIPTS_DIR / "nexo-whatsapp-notify.sh"
+# Configure your alert script here (optional)
+# ALERT_SCRIPT = SCRIPTS_DIR / "my-notify.sh"
 
 CLAUDE_MEM_DB = HOME / ".claude-mem" / "claude-mem.db"
 
 LAUNCH_AGENTS_DIR = HOME / "Library" / "LaunchAgents"
+CLAUDE_CLI = HOME / ".local" / "bin" / "claude"
 
 NOW = datetime.now()
 TODAY = date.today()
 
 # ─── Config ───────────────────────────────────────────────────────────────────
 
+# Token checks — NEXO core infrastructure only.
+# Add your own service tokens here if you want immune to monitor them.
+# Supported types: file_text (read file), json_field (read JSON), service_account (gcloud)
 TOKEN_CHECKS = [
-    {
-        "name": "Meta Ads",
-        "path": "~/.claude/meta_token.txt",
-        "type": "file_text",
-        "test_url": "https://graph.facebook.com/v21.0/me?access_token={token}",
-    },
-    {
-        "name": "Instagram",
-        "path": "~/.claude/instagram_token.txt",
-        "type": "file_text",
-        "test_url": "https://graph.instagram.com/v21.0/me?access_token={token}",
-    },
-    {
-        "name": "YouTube",
-        "path": "~/.claude/youtube_token.json",
-        "type": "json_field",
-    },
-    {
-        "name": "X/Twitter",
-        "path": "~/.claude/x_credentials.json",
-        "type": "json_field",
-    },
-    {
-        "name": "GA4 Service Account",
-        "path": "~/.claude/ga4-service-account.json",
-        "type": "service_account",
-    },
-    # Example: Shopify Admin token check
+    # Example: uncomment and configure for your services
     # {
-    #     "name": "Shopify Admin",
-    #     "type": "hardcoded",
-    #     "test_url": "https://YOUR_STORE.myshopify.com/admin/api/2024-01/shop.json",
-    #     "token": "YOUR_SHOPIFY_ADMIN_TOKEN",
-    #     "header": "X-Shopify-Access-Token",
+    #     "name": "My API",
+    #     "path": "~/.nexo/my_api_token.txt",
+    #     "type": "file_text",
+    #     "test_url": "https://api.example.com/health?token={token}",
     # },
 ]
 
@@ -133,7 +108,7 @@ LOG_TRUNCATE_SIZE = 50 * 1024 * 1024  # 50 MB — auto-truncate threshold
 DISK_WARN_PCT = 85
 DISK_FAIL_PCT = 95
 
-# Quiet hours — no WhatsApp alerts
+# Quiet hours — no notification alerts
 QUIET_START = 23  # 23:00
 QUIET_END = 7     # 07:00
 
@@ -167,7 +142,7 @@ def save_json(path, data):
 
 
 def is_quiet_hours():
-    """Check if within WhatsApp quiet hours (23:00 - 07:00)."""
+    """Check if within quiet hours (23:00 - 07:00). No alerts sent."""
     h = NOW.hour
     if QUIET_START > QUIET_END:
         return h >= QUIET_START or h < QUIET_END
@@ -175,22 +150,21 @@ def is_quiet_hours():
 
 
 def is_skip_hours():
-    """Check if within skip hours (00:00 - 06:00)."""
+    """Check if within skip hours (00:00 - 06:00). Full immune cycle skipped."""
     return SKIP_START <= NOW.hour < SKIP_END
 
 
-def send_wa_alert(title, message):
-    """Send WhatsApp alert if not in quiet hours."""
+def send_alert(title, message):
+    """Send alert for critical failures. Override this for your notification system.
+
+    Default: prints to stdout (captured by LaunchAgent logs).
+    Customize: webhook, email, Slack, etc.
+    """
     if is_quiet_hours():
-        print(f"  [QUIET] Suppressed WA alert: {title}")
+        print(f"  [QUIET] Suppressed alert: {title}")
         return False
     try:
-        subprocess.run(
-            [str(WA_NOTIFY), title, message],
-            timeout=15,
-            capture_output=True,
-        )
-        print(f"  [WA] Sent alert: {title}")
+        print(f"  [ALERT] {title}: {message}")
         return True
     except Exception as e:
         print(f"  [WA] Failed to send: {e}")
@@ -369,8 +343,8 @@ def check_databases():
     results = []
 
     dbs = [
-        ("nexo.db", Path(NEXO_HOME) / "nexo.db"),
-        ("cognitive.db", Path(NEXO_HOME) / "cognitive.db"),
+        ("nexo.db", Path.home() / ".nexo" / "nexo.db"),
+        ("cognitive.db", Path.home() / ".nexo" / "cognitive.db"),
         ("claude-mem.db", CLAUDE_MEM_DB),
     ]
 
@@ -549,44 +523,16 @@ def check_disk():
 
 
 def check_server_crons():
-    """Check remote server crons via SSH. Only runs every 2 hours.
+    """Check external server health via SSH. Configure SSH_CHECKS for your servers.
 
-    Configure SSH_HOST, SSH_PORT, SSH_USER and the cron check command for your server.
-    Example: check that a MySQL/cron log table has entries for today.
+    This is a stub — add your own SSH checks to SSH_CHECKS at the top of the file.
+    Example: SSH_CHECKS = [{"host": "myserver.com", "port": 22, "command": "uptime"}]
     """
     results = []
-    result = {"name": "server-crons", "status": "OK", "detail": ""}
-
-    # ── Configure for your server ──────────────────────────────────────────────
-    # SSH_HOST = "your-server.example.com"
-    # SSH_PORT = 22
-    # SSH_USER = "root"
-    # CRON_CHECK_CMD = '"echo cron-check-not-configured"'
-    # ───────────────────────────────────────────────────────────────────────────
-
-    # Check if we should run (every 2 hours based on last check)
-    status = load_json(IMMUNE_STATUS)
-    last_ssh_str = status.get("last_ssh_check", "")
-    should_run = True
-
-    if last_ssh_str:
-        try:
-            last_ssh = datetime.strptime(last_ssh_str, "%Y-%m-%d %H:%M")
-            hours_ago = (NOW - last_ssh).total_seconds() / 3600
-            if hours_ago < SSH_CHECK_INTERVAL_HOURS:
-                result["detail"] = f"Skipped (last check {hours_ago:.1f}h ago, interval {SSH_CHECK_INTERVAL_HOURS}h)"
-                should_run = False
-        except Exception:
-            pass
-
-    if should_run:
-        result["status"] = "WARN"
-        result["detail"] = "Server cron check not configured — see check_server_crons() to set up SSH+command"
-
-    results.append(result)
-    rc = 1  # Default to indicate SSH did not run
-
-    return results, should_run
+    # No external server checks configured by default.
+    # NEXO immune focuses on local NEXO infrastructure health.
+    # Add SSH_CHECKS config at the top of the file if you have servers to monitor.
+    return results, False
 
 
 # ─── Alerting ─────────────────────────────────────────────────────────────────
@@ -660,11 +606,11 @@ def detect_new_failures(current_results, previous_status):
 
 
 def send_failure_alerts(new_failures):
-    """Send WhatsApp alerts for new failures. Max 1 alert per 30 min."""
+    """Send notification alerts for new failures. Max 1 alert per 30 min."""
     if not new_failures:
         return
 
-    # Global alert cooldown — max 1 WhatsApp alert per 30 minutes
+    # Global alert cooldown — max 1 notification alert per 30 minutes
     cooldown_file = COORD_DIR / "immune-last-alert.txt"
     if cooldown_file.exists():
         try:
@@ -685,7 +631,7 @@ def send_failure_alerts(new_failures):
         msg = "\n".join(lines)
         if len(fails) > 5:
             msg += f"\n... +{len(fails) - 5} more"
-        sent = send_wa_alert(
+        sent = send_alert(
             "NEXO Immune FAIL",
             f"{len(fails)} new failure(s):\n{msg}"
         )
@@ -693,7 +639,7 @@ def send_failure_alerts(new_failures):
     if warns and not fails:
         lines = [f"- {f['name']}: {f['detail']}" for f in warns[:3]]
         msg = "\n".join(lines)
-        sent = send_wa_alert(
+        sent = send_alert(
             "NEXO Immune WARN",
             f"{len(warns)} new warning(s):\n{msg}"
         )
@@ -864,6 +810,77 @@ def _run_checks(lock_fd):
 
     print(f"Status saved to {IMMUNE_STATUS}")
     print(f"Log appended to {IMMUNE_LOG} ({len(log)} entries)")
+
+    # ─── Stage B: CLI interpretation (only when issues found) ────────────
+    if counts["FAIL"] > 0 or counts["WARN"] > 2 or repairs:
+        _run_cli_triage(all_results, repairs, counts)
+
+
+def _run_cli_triage(all_results: dict, repairs: list, counts: dict):
+    """Pass all findings to Claude CLI for intelligent triage and recommendations."""
+    if not CLAUDE_CLI.exists():
+        print("[SKIP] Claude CLI not found, skipping triage")
+        return
+
+    triage_file = COORD_DIR / "immune-triage.md"
+    findings_json = json.dumps({
+        "timestamp": NOW.strftime("%Y-%m-%d %H:%M"),
+        "counts": counts,
+        "repairs": repairs,
+        "checks": all_results,
+    }, indent=2, default=str)
+
+    prompt = f"""You are the NEXO Immune System triage analyst.
+
+Below are the raw health check results from a scheduled scan. Your job:
+
+1. Identify which failures are REAL problems vs transient/expected
+2. Group related issues (e.g. SSH failure + server cron failure = same root cause)
+3. Prioritize: what needs attention NOW vs can wait
+4. For each real issue, suggest a specific remediation action
+5. Note any patterns across recent runs if visible
+
+Write a concise triage report to: {triage_file}
+
+Format:
+## Immune Triage — YYYY-MM-DD HH:MM
+
+### Critical (act now)
+- ...
+
+### Monitor (watch next run)
+- ...
+
+### Resolved (auto-repaired)
+- ...
+
+### Patterns
+- ...
+
+Raw findings:
+{findings_json}
+
+Write the report. Be concise — max 40 lines."""
+
+    print("\n[TRIAGE] Running CLI interpretation...")
+    env = os.environ.copy()
+    env.pop("CLAUDECODE", None)
+    env.pop("CLAUDE_CODE", None)
+
+    try:
+        result = subprocess.run(
+            [str(CLAUDE_CLI), "-p", prompt, "--model", "opus",
+             "--allowedTools", "Read,Write,Edit,Glob,Grep"],
+            capture_output=True, text=True, timeout=120, env=env
+        )
+        if result.returncode == 0:
+            print(f"[TRIAGE] Report written to {triage_file}")
+        else:
+            print(f"[TRIAGE] CLI exited {result.returncode}: {result.stderr[:200]}")
+    except subprocess.TimeoutExpired:
+        print("[TRIAGE] CLI timed out (120s)")
+    except Exception as e:
+        print(f"[TRIAGE] Error: {e}")
 
 
 if __name__ == "__main__":

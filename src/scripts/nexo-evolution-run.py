@@ -7,13 +7,12 @@ Runs independently of Cortex. Calls Opus API directly to analyze
 the past week and generate improvement proposals.
 
 AUTO proposals are executed: snapshot → apply → validate → commit/rollback.
-PROPOSE proposals are logged for the owner's review.
+PROPOSE proposals are logged for the user's review.
 """
 
 import json
 import os
 import py_compile
-import shutil
 import sqlite3
 import subprocess
 import sys
@@ -21,8 +20,8 @@ from datetime import datetime, date, timedelta
 from pathlib import Path
 
 # ── Paths ────────────────────────────────────────────────────────────────
-CLAUDE_DIR = Path.home() / "claude"
-NEXO_DB = CLAUDE_DIR / "nexo-mcp" / "nexo.db"
+CLAUDE_DIR = Path.home() / ".nexo"
+NEXO_DB = CLAUDE_DIR / "nexo.db"
 CORTEX_DIR = CLAUDE_DIR / "cortex"
 OBJECTIVE_FILE = CORTEX_DIR / "evolution-objective.json"
 LOG_DIR = CLAUDE_DIR / "logs"
@@ -37,7 +36,7 @@ MAX_SNAPSHOTS = 8
 AUTO_SAFE_PREFIXES = [
     str(CLAUDE_DIR / "scripts") + "/",
     str(CLAUDE_DIR / "cortex") + "/",
-    str(CLAUDE_DIR / "nexo-mcp" / "plugins") + "/",
+    str(CLAUDE_DIR / "plugins") + "/",
     str(CLAUDE_DIR / "logs") + "/",
     str(CLAUDE_DIR / "coordination") + "/",
 ]
@@ -51,7 +50,7 @@ AUTO_SAFE_PREFIXES_PUBLIC = [
 IMMUTABLE_FILES = {
     "db.py", "server.py", "plugin_loader.py", "nexo-watchdog.sh",
     "cortex-wrapper.py", "CLAUDE.md", "personality.md",
-    "owner-profile.md", "evolution_cycle.py",
+    "the user-profile.md", "evolution_cycle.py",
     # Core cognitive engine — never auto-modified
     "cognitive.py", "knowledge_graph.py", "storage_router.py",
     # Core tools — never auto-modified
@@ -61,22 +60,7 @@ IMMUTABLE_FILES = {
 }
 
 # ── Claude CLI path ──────────────────────────────────────────────────────
-def find_claude_cli() -> Path:
-    """Find claude CLI binary, checking multiple locations."""
-    candidates = [
-        Path.home() / ".local" / "bin" / "claude",
-        Path("/usr/local/bin/claude"),
-    ]
-    for c in candidates:
-        if c.exists():
-            return c
-    # Fall back to shutil.which
-    found = shutil.which("claude")
-    if found:
-        return Path(found)
-    raise FileNotFoundError("claude CLI not found. Install with: npm install -g @anthropic-ai/claude-code")
-
-CLAUDE_CLI = find_claude_cli()
+CLAUDE_CLI = Path.home() / ".local" / "bin" / "claude"
 
 # ── Logging ──────────────────────────────────────────────────────────────
 LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -116,12 +100,18 @@ CLI_TIMEOUT = 600  # 10 minutes — Opus needs time for large prompts
 
 
 def call_claude_cli(prompt: str) -> str:
-    """Call claude -p --model opus via subprocess. Returns stdout text."""
+    """Call claude -p prompt --model opus via subprocess. Returns stdout text."""
+    env = os.environ.copy()
+    env.pop("CLAUDECODE", None)
+    env.pop("CLAUDE_CODE", None)
+
     result = subprocess.run(
-        [str(CLAUDE_CLI), "-p", "--model", "opus", prompt],
+        [str(CLAUDE_CLI), "-p", prompt, "--model", "opus",
+         "--allowedTools", "Read,Write,Edit,Glob,Grep"],
         capture_output=True,
         text=True,
         timeout=CLI_TIMEOUT,
+        env=env,
     )
     if result.returncode != 0:
         raise RuntimeError(f"claude CLI exited {result.returncode}: {result.stderr[:500]}")
@@ -329,19 +319,19 @@ def _create_review_followup(conn: sqlite3.Connection, cycle_num: int,
     public_items = [i for i in items if i.get("scope") == "public"]
     local_items = [i for i in items if i.get("scope") != "public"]
 
-    lines = [f"Evolution Cycle #{cycle_num} — {len(items)} proposals to review."]
-    lines.append(f"Analysis: {analysis[:200]}")
+    lines = [f"Evolution Cycle #{cycle_num} — {len(items)} propuestas para revisar."]
+    lines.append(f"Análisis: {analysis[:200]}")
     lines.append("")
 
     if public_items:
-        lines.append(f"FOR ALL USERS ({len(public_items)}):")
+        lines.append(f"PARA TODOS ({len(public_items)}):")
         for i, item in enumerate(public_items, 1):
             lines.append(f"  {i}. [{item['dimension']}] {item['action'][:120]}")
             lines.append(f"     Why: {item['reasoning'][:100]}")
         lines.append("")
 
     if local_items:
-        lines.append(f"LOCAL ONLY ({len(local_items)}):")
+        lines.append(f"SOLO PARA TI ({len(local_items)}):")
         for i, item in enumerate(local_items, 1):
             lines.append(f"  {i}. [{item['dimension']}] {item['action'][:120]}")
             lines.append(f"     Why: {item['reasoning'][:100]}")
@@ -349,11 +339,13 @@ def _create_review_followup(conn: sqlite3.Connection, cycle_num: int,
     description = "\n".join(lines)
 
     try:
+        now_epoch = datetime.now().timestamp()
         conn.execute(
-            "INSERT OR REPLACE INTO followups (id, description, date, status, verification) "
-            "VALUES (?, ?, ?, 'pending', ?)",
+            "INSERT OR REPLACE INTO followups (id, description, date, status, verification, created_at, updated_at) "
+            "VALUES (?, ?, ?, 'pending', ?, ?, ?)",
             (followup_id, description, tomorrow,
-             f"SELECT * FROM evolution_log WHERE cycle_number={cycle_num}")
+             f"SELECT * FROM evolution_log WHERE cycle_number={cycle_num}",
+             now_epoch, now_epoch)
         )
         conn.commit()
         log(f"  Followup {followup_id} created for {tomorrow}")
@@ -573,7 +565,7 @@ def _update_catchup_state():
     try:
         import json as _json
         from pathlib import Path as _Path
-        _state_file = _Path.home() / "claude" / "operations" / ".catchup-state.json"
+        _state_file = _Path.home() / ".nexo" / "operations" / ".catchup-state.json"
         _state = _json.loads(_state_file.read_text()) if _state_file.exists() else {}
         _state["evolution"] = datetime.now().isoformat()
         _state_file.write_text(_json.dumps(_state, indent=2))

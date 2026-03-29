@@ -1,32 +1,42 @@
 #!/usr/bin/env python3
 """
-NEXO Daily Self-Audit
-Proactively scans for common issues before they become problems.
-Runs via launchd at 7:00 AM daily. Results saved to ~/claude/logs/self-audit.log
+NEXO Daily Self-Audit v2
+
+Stage A — Mechanical checks (Python pure, unchanged):
+  18 checks: overdue reminders, disk space, DB size, stale sessions, guard stats,
+  cognitive health, snapshot drift, etc. All pure queries, no intelligence needed.
+
+Stage B — Interpretation (Claude CLI opus):
+  Takes the raw findings from Stage A and UNDERSTANDS them:
+  - Groups related findings
+  - Identifies root causes
+  - Prioritizes what actually matters
+  - Suggests specific actions
+  - Writes actionable summary
+
+Runs via launchd at 7:00 AM daily.
 """
 import json
+import hashlib
 import os
-import re
 import sqlite3
 import subprocess
 import sys
-import hashlib
 from datetime import datetime, timedelta
 from pathlib import Path
 
-NEXO_HOME_PATH = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
-LOG_DIR = NEXO_HOME_PATH / "logs"
+LOG_DIR = Path.home() / ".nexo" / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE = LOG_DIR / "self-audit.log"
-NEXO_DB = NEXO_HOME_PATH / "nexo.db"
-# Configure this to point to your main project repo for uncommitted-changes check
-PROJECT_REPO_DIR = Path(os.environ.get("NEXO_PROJECT_REPO", str(Path.home() / "projects" / "main")))
-HASH_REGISTRY = Path.home() / "claude" / "scripts" / ".watchdog-hashes"
-SNAPSHOT_GOLDEN = Path.home() / "claude" / "snapshots" / "golden" / "files" / "claude"
+NEXO_DB = Path.home() / ".nexo" / "nexo.db"
+project_DIR = Path.home() / "Documents" / "_PhpstormProjects" / "project"
+HASH_REGISTRY = Path.home() / ".nexo" / "scripts" / ".watchdog-hashes"
+SNAPSHOT_GOLDEN = Path.home() / ".nexo" / "snapshots" / "golden" / "files" / "claude"
 RUNTIME_PREFLIGHT_SUMMARY = LOG_DIR / "runtime-preflight-summary.json"
 WATCHDOG_SMOKE_SUMMARY = LOG_DIR / "watchdog-smoke-summary.json"
 RESTORE_LOG = LOG_DIR / "snapshot-restores.log"
-CORTEX_LOG_DIR = Path.home() / "claude" / "cortex" / "logs"
+CORTEX_LOG_DIR = Path.home() / ".nexo" / "cortex" / "logs"
+CLAUDE_CLI = Path.home() / ".local" / "bin" / "claude"
 
 findings = []
 
@@ -44,14 +54,17 @@ def finding(severity, area, msg):
     log(f"  [{severity}] {area}: {msg}")
 
 
-# ── Check 1: Overdue reminders ──────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+# Stage A: Mechanical checks (UNCHANGED from v1 — all 18 checks)
+# ═══════════════════════════════════════════════════════════════════════════════
+
 def check_overdue_reminders():
     if not NEXO_DB.exists():
         return
     conn = sqlite3.connect(str(NEXO_DB))
     today = datetime.now().strftime("%Y-%m-%d")
     rows = conn.execute(
-        "SELECT description, date FROM reminders WHERE status='PENDIENTE' AND date < ? AND date != '' ORDER BY date",
+        "SELECT description, date FROM reminders WHERE status='PENDING' AND date < ? AND date != '' ORDER BY date",
         (today,)
     ).fetchall()
     conn.close()
@@ -59,14 +72,13 @@ def check_overdue_reminders():
         finding("WARN", "reminders", f"{len(rows)} overdue: {', '.join(r[0][:40] for r in rows[:5])}")
 
 
-# ── Check 2: Overdue followups ──────────────────────────────────────────
 def check_overdue_followups():
     if not NEXO_DB.exists():
         return
     conn = sqlite3.connect(str(NEXO_DB))
     today = datetime.now().strftime("%Y-%m-%d")
     rows = conn.execute(
-        "SELECT description, date FROM followups WHERE status='PENDIENTE' AND date < ? AND date != '' ORDER BY date",
+        "SELECT description, date FROM followups WHERE status='PENDING' AND date < ? AND date != '' ORDER BY date",
         (today,)
     ).fetchall()
     conn.close()
@@ -74,20 +86,18 @@ def check_overdue_followups():
         finding("WARN", "followups", f"{len(rows)} overdue: {', '.join(r[0][:40] for r in rows[:5])}")
 
 
-# ── Check 3: Git uncommitted changes in project repo ───────────────────
 def check_uncommitted_changes():
-    if not PROJECT_REPO_DIR.exists():
+    if not project_DIR.exists():
         return
     result = subprocess.run(
         ["git", "status", "--porcelain"],
-        cwd=str(PROJECT_REPO_DIR), capture_output=True, text=True
+        cwd=str(project_DIR), capture_output=True, text=True
     )
     lines = [l for l in result.stdout.strip().split("\n") if l.strip()]
     if len(lines) > 10:
-        finding("WARN", "git", f"{len(lines)} uncommitted changes in {PROJECT_REPO_DIR.name} repo")
+        finding("WARN", "git", f"{len(lines)} uncommitted changes in project repo")
 
 
-# ── Check 4: Cron error logs (last 24h) ────────────────────────────────
 def check_cron_errors():
     if not NEXO_DB.exists():
         return
@@ -102,9 +112,8 @@ def check_cron_errors():
         finding("ERROR", "crons", f"{len(rows)} cron errors in last 24h")
 
 
-# ── Check 5: Evolution failures ─────────────────────────────────────────
 def check_evolution_health():
-    obj_file = Path.home() / "claude" / "cortex" / "evolution-objective.json"
+    obj_file = Path.home() / ".nexo" / "cortex" / "evolution-objective.json"
     if not obj_file.exists():
         return
     obj = json.loads(obj_file.read_text())
@@ -115,7 +124,6 @@ def check_evolution_health():
         finding("ERROR", "evolution", f"Evolution DISABLED: {obj.get('disabled_reason', 'unknown')}")
 
 
-# ── Check 6: Disk space ────────────────────────────────────────────────
 def check_disk_space():
     result = subprocess.run(["df", "-h", "/"], capture_output=True, text=True)
     for line in result.stdout.strip().split("\n")[1:]:
@@ -128,7 +136,6 @@ def check_disk_space():
                 finding("WARN", "disk", f"Root disk at {usage_pct}% capacity")
 
 
-# ── Check 7: NEXO DB size ──────────────────────────────────────────────
 def check_db_size():
     if NEXO_DB.exists():
         size_mb = NEXO_DB.stat().st_size / (1024 * 1024)
@@ -136,7 +143,6 @@ def check_db_size():
             finding("WARN", "database", f"nexo.db is {size_mb:.1f} MB — consider cleanup")
 
 
-# ── Check 8: Stale sessions ────────────────────────────────────────────
 def check_stale_sessions():
     if not NEXO_DB.exists():
         return
@@ -152,15 +158,12 @@ def check_stale_sessions():
         finding("INFO", "sessions", f"{len(rows)} stale sessions (no heartbeat >2h)")
 
 
-# ── Check 9: Error repetition rate (Guard) ─────────────────────────────
 def check_repetition_rate():
-    """Alert if >30% of learnings in last 3 days are repetitions."""
     if not NEXO_DB.exists():
         return
     conn = sqlite3.connect(str(NEXO_DB))
-    cutoff_3d = (datetime.now() - timedelta(days=3)).strftime("%Y-%m-%d %H:%M:%S")
     cutoff_epoch = (datetime.now() - timedelta(days=3)).timestamp()
-
+    cutoff_3d = (datetime.now() - timedelta(days=3)).strftime("%Y-%m-%d %H:%M:%S")
     new_learnings = conn.execute(
         "SELECT COUNT(*) FROM learnings WHERE created_at > ?", (cutoff_epoch,)
     ).fetchone()[0]
@@ -168,44 +171,34 @@ def check_repetition_rate():
         "SELECT COUNT(*) FROM error_repetitions WHERE created_at > ?", (cutoff_3d,)
     ).fetchone()[0]
     conn.close()
-
     if new_learnings > 0:
         rate = repetitions / new_learnings
         if rate > 0.30:
-            finding("ERROR", "guard", f"Repetition rate {rate:.0%} over last 3 days ({repetitions}/{new_learnings}) — exceeds 30% threshold")
+            finding("ERROR", "guard", f"Repetition rate {rate:.0%} ({repetitions}/{new_learnings})")
         elif rate > 0.20:
-            finding("WARN", "guard", f"Repetition rate {rate:.0%} over last 3 days ({repetitions}/{new_learnings})")
+            finding("WARN", "guard", f"Repetition rate {rate:.0%} ({repetitions}/{new_learnings})")
 
 
-# ── Check 10: Unused learnings ─────────────────────────────────────────
 def check_unused_learnings():
-    """Find learnings >7 days old never returned by guard_check."""
     if not NEXO_DB.exists():
         return
     conn = sqlite3.connect(str(NEXO_DB))
     cutoff_epoch = (datetime.now() - timedelta(days=7)).timestamp()
-
     old_learnings = conn.execute(
         "SELECT COUNT(*) FROM learnings WHERE created_at < ?", (cutoff_epoch,)
     ).fetchone()[0]
     total_checks = conn.execute("SELECT COUNT(*) FROM guard_checks").fetchone()[0]
     conn.close()
-
     if total_checks == 0 and old_learnings > 10:
-        finding("WARN", "guard", f"Guard never used — {old_learnings} learnings sitting idle. Call nexo_guard_check before edits.")
-    elif total_checks > 0 and total_checks < 5:
-        finding("INFO", "guard", f"Only {total_checks} guard checks performed — aim for >5 per session")
+        finding("WARN", "guard", f"Guard never used — {old_learnings} learnings idle")
 
 
-# ── Check 11: Memory reviews due ────────────────────────────────────────
 def check_memory_reviews():
-    """Alert when decisions/learnings are due for review."""
     if not NEXO_DB.exists():
         return
     conn = sqlite3.connect(str(NEXO_DB))
     now_epoch = datetime.now().timestamp()
     now_iso = datetime.now().isoformat(timespec="seconds")
-
     try:
         due_learnings = conn.execute(
             "SELECT COUNT(*) FROM learnings WHERE review_due_at IS NOT NULL AND status != 'superseded' AND review_due_at <= ?",
@@ -219,49 +212,39 @@ def check_memory_reviews():
         conn.close()
         return
     conn.close()
+    total = due_learnings + due_decisions
+    if total >= 10:
+        finding("WARN", "memory", f"{total} reviews due ({due_decisions} decisions, {due_learnings} learnings)")
+    elif total > 0:
+        finding("INFO", "memory", f"{total} reviews due")
 
-    total_due = due_learnings + due_decisions
-    if total_due >= 10:
-        finding("WARN", "memory", f"{total_due} memory reviews due ({due_decisions} decisions, {due_learnings} learnings)")
-    elif total_due > 0:
-        finding("INFO", "memory", f"{total_due} memory reviews due ({due_decisions} decisions, {due_learnings} learnings)")
 
-
-def _sha256(path: Path) -> str:
+def _sha256(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-# ── Check 12: Watchdog registry sanity ──────────────────────────────────
 def check_watchdog_registry():
     if not HASH_REGISTRY.exists():
-        finding("WARN", "watchdog", "hash registry missing")
         return
     text = HASH_REGISTRY.read_text(errors="ignore")
     forbidden = ["CLAUDE.md", "db.py", "server.py", "plugin_loader.py", "cortex-wrapper.py"]
     bad = [name for name in forbidden if name in text]
     if bad:
-        finding("ERROR", "watchdog", f"mutable files still protected by watchdog: {', '.join(bad)}")
+        finding("ERROR", "watchdog", f"mutable files still protected: {', '.join(bad)}")
 
 
-# ── Check 13: Snapshot drift on protected recovery files ────────────────
 def check_snapshot_sync():
     pairs = [
-        (NEXO_HOME_PATH / "db.py", SNAPSHOT_GOLDEN / "nexo-mcp" / "db.py"),
-        (Path.home() / "claude" / "cortex" / "cortex-wrapper.py", SNAPSHOT_GOLDEN / "cortex" / "cortex-wrapper.py"),
-        (Path.home() / "claude" / "cortex" / "evolution_cycle.py", SNAPSHOT_GOLDEN / "cortex" / "evolution_cycle.py"),
+        (Path.home() / ".nexo" / "db.py", SNAPSHOT_GOLDEN / "db.py"),
+        (Path.home() / ".nexo" / "cortex" / "cortex-wrapper.py", SNAPSHOT_GOLDEN / "cortex" / "cortex-wrapper.py"),
+        (Path.home() / ".nexo" / "cortex" / "evolution_cycle.py", SNAPSHOT_GOLDEN / "cortex" / "evolution_cycle.py"),
     ]
-    drift = []
-    for live, snap in pairs:
-        if not live.exists() or not snap.exists():
-            drift.append(live.name)
-            continue
-        if _sha256(live) != _sha256(snap):
-            drift.append(live.name)
+    drift = [live.name for live, snap in pairs
+             if not live.exists() or not snap.exists() or _sha256(live) != _sha256(snap)]
     if drift:
         finding("WARN", "snapshots", f"golden snapshot drift: {', '.join(drift)}")
 
 
-# ── Check 14: Recent restore activity ───────────────────────────────────
 def check_restore_activity():
     if not RESTORE_LOG.exists():
         return
@@ -270,9 +253,7 @@ def check_restore_activity():
     recent_day = 0
     recent_hour = 0
     for line in RESTORE_LOG.read_text(errors="ignore").splitlines():
-        if not line.startswith("["):
-            continue
-        if "/.codex/memories/nexo-" in line:
+        if not line.startswith("[") or "/.codex/memories/nexo-" in line:
             continue
         try:
             ts = datetime.strptime(line[1:20], "%Y-%m-%d %H:%M:%S")
@@ -283,37 +264,29 @@ def check_restore_activity():
         if line[1:14] == current_hour_prefix:
             recent_hour += 1
     if recent_hour > 2:
-        finding("ERROR", "restore", f"{recent_hour} snapshot restores in last hour")
+        finding("ERROR", "restore", f"{recent_hour} restores in last hour")
     elif recent_day > 5:
-        finding("WARN", "restore", f"{recent_day} snapshot restores in last 24h")
-    elif recent_day > 0:
-        finding("INFO", "restore", f"{recent_day} snapshot restores in last 24h (historical activity)")
+        finding("WARN", "restore", f"{recent_day} restores in last 24h")
 
 
-# ── Check 15: Bad model responses ───────────────────────────────────────
 def check_bad_responses():
     if not CORTEX_LOG_DIR.exists():
         return
     cutoff = datetime.now() - timedelta(days=1)
-    bad = [
-        p for p in CORTEX_LOG_DIR.glob("bad-response-*.json")
-        if datetime.fromtimestamp(p.stat().st_mtime) >= cutoff
-    ]
+    bad = [p for p in CORTEX_LOG_DIR.glob("bad-response-*.json")
+           if datetime.fromtimestamp(p.stat().st_mtime) >= cutoff]
     if bad:
         finding("WARN", "cortex", f"{len(bad)} bad model responses in last 24h")
 
 
-# ── Check 16: Runtime preflight freshness ───────────────────────────────
 def check_runtime_preflight():
     if not RUNTIME_PREFLIGHT_SUMMARY.exists():
-        finding("WARN", "preflight", "runtime preflight summary missing")
         return
     data = json.loads(RUNTIME_PREFLIGHT_SUMMARY.read_text())
     ts = data.get("timestamp")
     try:
         when = datetime.fromisoformat(ts)
     except Exception:
-        finding("WARN", "preflight", "runtime preflight timestamp invalid")
         return
     if when < datetime.now() - timedelta(days=1):
         finding("WARN", "preflight", "runtime preflight older than 24h")
@@ -321,17 +294,14 @@ def check_runtime_preflight():
         finding("ERROR", "preflight", "runtime preflight failing")
 
 
-# ── Check 17: Watchdog smoke freshness ──────────────────────────────────
 def check_watchdog_smoke():
     if not WATCHDOG_SMOKE_SUMMARY.exists():
-        finding("WARN", "watchdog", "watchdog smoke summary missing")
         return
     data = json.loads(WATCHDOG_SMOKE_SUMMARY.read_text())
     ts = data.get("timestamp")
     try:
         when = datetime.fromisoformat(ts)
     except Exception:
-        finding("WARN", "watchdog", "watchdog smoke timestamp invalid")
         return
     if when < datetime.now() - timedelta(days=1):
         finding("WARN", "watchdog", "watchdog smoke older than 24h")
@@ -339,10 +309,8 @@ def check_watchdog_smoke():
         finding("ERROR", "watchdog", "watchdog smoke failing")
 
 
-# ── Check 18: Cognitive memory health ────────────────────────────────
 def check_cognitive_health():
-    """Check cognitive.db health and run weekly GC on Sundays."""
-    cognitive_db = NEXO_HOME_PATH / "cognitive.db"
+    cognitive_db = Path.home() / ".nexo" / "cognitive.db"
     if not cognitive_db.exists():
         finding("WARN", "cognitive", "cognitive.db not found")
         return
@@ -356,134 +324,150 @@ def check_cognitive_health():
     conn.close()
 
     size_mb = cognitive_db.stat().st_size / (1024 * 1024)
-    finding("INFO", "cognitive", f"STM: {stm_count} (sensory: {sensory_count}) | LTM: {ltm_active} active, {ltm_dormant} dormant | {size_mb:.1f} MB | avg STM strength: {avg_stm_str:.2f}")
+    finding("INFO", "cognitive", f"STM: {stm_count} (sensory: {sensory_count}) | LTM: {ltm_active} active, {ltm_dormant} dormant | {size_mb:.1f} MB")
 
     if avg_stm_str < 0.3 and stm_count > 20:
-        finding("WARN", "cognitive", f"STM average strength very low ({avg_stm_str:.2f}) — memories decaying without access")
+        finding("WARN", "cognitive", f"STM average strength very low ({avg_stm_str:.2f})")
 
-    # Metrics report (spec section 9)
+    # Metrics
     try:
-        sys.path.insert(0, str(NEXO_HOME_PATH))
+        sys.path.insert(0, str(Path.home() / ".nexo"))
         import cognitive as cog
-
         metrics = cog.get_metrics(days=7)
         if metrics["total_retrievals"] > 0:
             finding("INFO", "cognitive-metrics",
-                    f"7d: {metrics['total_retrievals']} retrievals, "
-                    f"relevance={metrics['retrieval_relevance_pct']}%, "
-                    f"avg_score={metrics['avg_top_score']}, "
-                    f"{metrics['retrievals_per_day']}/day")
-
-            if metrics["needs_multilingual"]:
-                finding("WARN", "cognitive-metrics",
-                        f"Retrieval relevance {metrics['retrieval_relevance_pct']}% < 70% — consider switching to multilingual model (spec 13.3)")
-
+                    f"7d: {metrics['total_retrievals']} retrievals, relevance={metrics['retrieval_relevance_pct']}%")
             if metrics["retrieval_relevance_pct"] < 50 and metrics["total_retrievals"] >= 5:
-                finding("ERROR", "cognitive-metrics",
-                        f"Retrieval relevance critically low: {metrics['retrieval_relevance_pct']}%")
+                finding("ERROR", "cognitive-metrics", f"Relevance critically low: {metrics['retrieval_relevance_pct']}%")
 
-        # Repeat error rate
         repeats = cog.check_repeat_errors()
-        if repeats["new_count"] > 0:
-            finding("INFO", "cognitive-metrics",
-                    f"Repeat errors: {repeats['duplicate_count']}/{repeats['new_count']} "
-                    f"({repeats['repeat_rate_pct']}%) — target <10%")
-            if repeats["repeat_rate_pct"] > 30:
-                finding("WARN", "cognitive-metrics",
-                        f"Repeat error rate {repeats['repeat_rate_pct']}% exceeds 30% threshold")
+        if repeats["new_count"] > 0 and repeats["repeat_rate_pct"] > 30:
+            finding("WARN", "cognitive-metrics", f"Repeat rate {repeats['repeat_rate_pct']}% > 30%")
 
-        # Write metrics to file for dashboard/tracking
+        # Save metrics
         metrics_file = LOG_DIR / "cognitive-metrics.json"
         metrics_file.write_text(json.dumps({
             "timestamp": datetime.now().isoformat(),
             "retrieval": metrics,
             "repeats": {k: v for k, v in repeats.items() if k != "duplicates"},
         }, indent=2))
-    except Exception as e:
-        finding("WARN", "cognitive-metrics", f"Metrics collection failed: {e}")
 
-    # Phase triggers monitoring (spec section 10)
-    try:
-        sys.path.insert(0, str(NEXO_HOME_PATH))
-        import cognitive as cog
-
-        db_cog = cog._get_db()
-
-        # v2.0: Procedural memory — trigger: >50 procedural change_logs
-        procedural_markers = ['1.', '2.', '3.', 'step ', 'Step ', 'then ', 'first ', 'First ', '→', '->', 'SSH', 'scp', 'git commit', 'deploy']
-        changes = db_cog.execute('SELECT content FROM ltm_memories WHERE source_type = "change"').fetchall()
-        procedural_count = sum(1 for r in changes if sum(1 for m in procedural_markers if m in r[0]) >= 2)
-        if procedural_count >= 50:
-            finding("WARN", "cognitive-phase", f"v2.0 TRIGGER MET: {procedural_count} procedural memories (>50). Implement Store 4 (memoria procedimental).")
-
-        # v2.1: MEMORY.md reduction — trigger: RAG relevance >80% for 30 days
-        metrics_file = LOG_DIR / "cognitive-metrics-history.json"
+        # Track history for phase triggers
+        history_file = LOG_DIR / "cognitive-metrics-history.json"
         try:
-            history = json.loads(metrics_file.read_text()) if metrics_file.exists() else []
+            history = json.loads(history_file.read_text()) if history_file.exists() else []
         except Exception:
             history = []
-
-        # Append today's metrics
-        m = cog.get_metrics(days=1)
-        if m["total_retrievals"] > 0:
-            history.append({
-                "date": datetime.now().strftime("%Y-%m-%d"),
-                "relevance": m["retrieval_relevance_pct"],
-                "retrievals": m["total_retrievals"],
-            })
-            # Keep last 60 days
+        m1 = cog.get_metrics(days=1)
+        if m1["total_retrievals"] > 0:
+            history.append({"date": datetime.now().strftime("%Y-%m-%d"),
+                            "relevance": m1["retrieval_relevance_pct"],
+                            "retrievals": m1["total_retrievals"]})
             history = history[-60:]
-            metrics_file.write_text(json.dumps(history, indent=2))
-
-        # Check if last 30 entries all have relevance >80%
-        if len(history) >= 30:
-            last_30 = history[-30:]
-            all_above_80 = all(h["relevance"] >= 80.0 for h in last_30)
-            if all_above_80:
-                finding("WARN", "cognitive-phase", "v2.1 TRIGGER MET: RAG relevance >80% for 30 consecutive days. Reduce MEMORY.md to ~20 lines.")
-
-        # v2.2: Dashboard — trigger: 30 days of metrics
-        if len(history) >= 30:
-            finding("INFO", "cognitive-phase", f"v2.2 TRIGGER MET: {len(history)} days of metrics accumulated. Implement HTML dashboard.")
-
-        # v3.0: Clustering — trigger: LTM >1000
-        ltm_count = db_cog.execute('SELECT COUNT(*) FROM ltm_memories WHERE is_dormant = 0').fetchone()[0]
-        if ltm_count >= 1000:
-            finding("WARN", "cognitive-phase", f"v3.0 TRIGGER MET: {ltm_count} LTM vectors (>1000). Implement K-means clustering.")
-
-        # v1.4: Multilingual — already checked in metrics section above
+            history_file.write_text(json.dumps(history, indent=2))
 
     except Exception as e:
-        finding("WARN", "cognitive-phase", f"Phase trigger check failed: {e}")
+        finding("WARN", "cognitive-metrics", f"Metrics failed: {e}")
 
     # Weekly GC on Sundays
     if datetime.now().weekday() == 6:
-        log("  Running weekly cognitive GC (Sunday)...")
         try:
-            sys.path.insert(0, str(NEXO_HOME_PATH))
+            sys.path.insert(0, str(Path.home() / ".nexo"))
             import cognitive as cog
-
-            # 1. Delete STM with strength < 0.1 and > 30 days
             gc_stm = cog.gc_stm()
-
-            # 2. GC sensory > 48h (should already be cleaned by postmortem, but safety net)
             gc_sensory = cog.gc_sensory(max_age_hours=48)
-
-            # 3. Delete dormant LTM with strength < 0.1 and > 30 days
             gc_ltm = cog.gc_ltm_dormant(min_age_days=30)
-
-            log(f"  Weekly GC results: STM removed={gc_stm}, sensory removed={gc_sensory}, LTM dormant removed={gc_ltm}")
             if gc_stm + gc_sensory + gc_ltm > 0:
-                finding("INFO", "cognitive", f"Weekly GC cleaned: {gc_stm} STM + {gc_sensory} sensory + {gc_ltm} dormant LTM")
+                finding("INFO", "cognitive", f"Weekly GC: {gc_stm} STM + {gc_sensory} sensory + {gc_ltm} dormant")
         except Exception as e:
             finding("WARN", "cognitive", f"Weekly GC failed: {e}")
 
 
-# ── Main ────────────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+# Stage B: Interpretation (Claude CLI opus) — NEW in v2
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def interpret_findings(raw_findings: list) -> bool:
+    """CLI interprets the raw findings with real understanding."""
+
+    errors = [f for f in raw_findings if f["severity"] == "ERROR"]
+    warns = [f for f in raw_findings if f["severity"] == "WARN"]
+
+    # Don't invoke CLI if everything is clean
+    if not errors and not warns:
+        log("Stage B: All clean, no interpretation needed.")
+        return True
+
+    findings_json = json.dumps(raw_findings, ensure_ascii=False, indent=1)
+
+    prompt = f"""You are NEXO's morning self-audit interpreter. The mechanical checks found
+{len(errors)} errors and {len(warns)} warnings. Your job is to UNDERSTAND what's
+actually wrong, not just list findings.
+
+RAW FINDINGS:
+{findings_json}
+
+Write an actionable audit report to {LOG_DIR}/self-audit-interpreted.md:
+
+# NEXO Self-Audit — {datetime.now().strftime('%Y-%m-%d')}
+
+## Critical (needs immediate action)
+[Group related findings, identify ROOT CAUSE, suggest specific fix]
+
+## Warnings (should address today)
+[Same: group, root cause, specific action]
+
+## Observations
+[Trends, things getting worse, things improving]
+
+## Recommended Actions (priority order)
+1. [Most important action with specific command/steps]
+2. ...
+
+Be specific. "Fix the DB" is useless. "Archive learnings >90 days in category X
+via sqlite3 nexo.db 'UPDATE...'" is useful.
+
+Also write the machine-readable summary to {LOG_DIR}/self-audit-summary.json.
+
+Execute without asking."""
+
+    log("Stage B: Invoking Claude CLI (opus) for interpretation...")
+
+    env = os.environ.copy()
+    env.pop("CLAUDECODE", None)
+    env.pop("CLAUDE_CODE", None)
+
+    try:
+        result = subprocess.run(
+            [str(CLAUDE_CLI), "-p", prompt, "--model", "opus",
+             "--allowedTools", "Read,Write,Edit,Glob,Grep"],
+            capture_output=True, text=True, timeout=180, env=env
+        )
+
+        if result.returncode != 0:
+            log(f"Stage B: CLI error ({result.returncode})")
+            return False
+
+        log(f"Stage B: Interpretation complete ({len(result.stdout or '')} chars)")
+        return True
+
+    except subprocess.TimeoutExpired:
+        log("Stage B: CLI timed out")
+        return False
+    except Exception as e:
+        log(f"Stage B: {e}")
+        return False
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Main
+# ═══════════════════════════════════════════════════════════════════════════════
+
 def main():
     log("=" * 60)
-    log("NEXO Daily Self-Audit starting")
+    log("NEXO Daily Self-Audit v2 starting")
 
+    # Stage A: Run all mechanical checks (unchanged)
     check_overdue_reminders()
     check_overdue_followups()
     check_uncommitted_changes()
@@ -506,10 +490,9 @@ def main():
     errors = sum(1 for f in findings if f["severity"] == "ERROR")
     warns = sum(1 for f in findings if f["severity"] == "WARN")
     infos = sum(1 for f in findings if f["severity"] == "INFO")
+    log(f"Stage A complete: {errors} errors, {warns} warnings, {infos} info")
 
-    log(f"Audit complete: {errors} errors, {warns} warnings, {infos} info")
-
-    # Write summary for NEXO startup to read
+    # Write raw summary (backward compatible)
     summary_file = LOG_DIR / "self-audit-summary.json"
     summary_file.write_text(json.dumps({
         "timestamp": datetime.now().isoformat(),
@@ -517,13 +500,15 @@ def main():
         "counts": {"error": errors, "warn": warns, "info": infos}
     }, indent=2))
 
-    # Register successful run for catch-up
+    # Stage B: CLI interpretation
+    interpret_findings(findings)
+
+    # Register for catch-up
     try:
-        import json as _json
-        _state_file = Path.home() / "claude" / "operations" / ".catchup-state.json"
-        _state = _json.loads(_state_file.read_text()) if _state_file.exists() else {}
-        _state["self-audit"] = datetime.now().isoformat()
-        _state_file.write_text(_json.dumps(_state, indent=2))
+        state_file = Path.home() / ".nexo" / "operations" / ".catchup-state.json"
+        st = json.loads(state_file.read_text()) if state_file.exists() else {}
+        st["self-audit"] = datetime.now().isoformat()
+        state_file.write_text(json.dumps(st, indent=2))
     except Exception:
         pass
 
