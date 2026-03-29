@@ -79,6 +79,44 @@ def adjust_trust(points: int, context: str):
         pass
 
 
+def add_learning(category: str, title: str, content: str) -> bool:
+    """Add a learning to nexo.db using real schema."""
+    if not NEXO_DB.exists():
+        return False
+    try:
+        now = datetime.now().timestamp()
+        conn = sqlite3.connect(str(NEXO_DB))
+        conn.execute(
+            "INSERT INTO learnings (category, title, content, created_at, updated_at, reasoning) VALUES (?, ?, ?, ?, ?, ?)",
+            (category, title, content, now, now, "Deep Sleep overnight analysis")
+        )
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"  Error adding learning: {e}", file=sys.stderr)
+        return False
+
+
+def add_followup(followup_id: str, description: str, date: str = None) -> bool:
+    """Add a followup to nexo.db using real schema."""
+    if not NEXO_DB.exists():
+        return False
+    try:
+        now = datetime.now().timestamp()
+        conn = sqlite3.connect(str(NEXO_DB))
+        conn.execute(
+            "INSERT OR IGNORE INTO followups (id, description, date, status, created_at, updated_at, reasoning) VALUES (?, ?, ?, 'PENDIENTE', ?, ?, ?)",
+            (followup_id, description, date or "", now, now, "Deep Sleep overnight analysis")
+        )
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"  Error adding followup: {e}", file=sys.stderr)
+        return False
+
+
 def apply(analysis: dict):
     """Apply all findings from deep sleep analysis."""
     memory_dir = find_memory_dir()
@@ -88,32 +126,44 @@ def apply(analysis: dict):
 
     print(f"\nApplying findings for {date}...")
 
-    # 1. Uncaptured corrections → feedback memories (high/critical only)
+    # 1. Uncaptured corrections → learnings + feedback memories
     for i, correction in enumerate(analysis.get("uncaptured_corrections", [])):
         severity = correction.get("severity", "medium")
-        if severity not in ("high", "critical"):
-            continue
-
         category = correction.get("category", "process")
         content = correction.get("what_nexo_should_have_saved", "")
         quote = correction.get("quote", "")
 
-        safe_name = category.replace(" ", "_").lower()
-        filename = f"ds_{date}_{safe_name}_{i}.md"
-        write_feedback_memory(
-            memory_dir, filename,
-            name=content[:60],
-            description=f"Deep sleep detected uncaptured correction ({severity})",
-            content=f"{content}\n\n**Why:** User said: \"{quote}\"\nContext: {correction.get('context', '')}\n\n**How to apply:** {content}"
-        )
-        memory_entries.append({
-            "title": content[:40],
-            "filename": filename,
-            "summary": f"Deep sleep {date}, severity {severity}"
-        })
-        actions_taken.append(f"feedback_write: {filename}")
+        # All corrections → learnings
+        learning_title = f"[Deep Sleep] {content[:80]}"
+        learning_content = f"User said: \"{quote}\"\nContext: {correction.get('context', '')}\nRepeated: {correction.get('times_repeated', 1)} times"
+        if add_learning(category, learning_title, learning_content):
+            actions_taken.append(f"learning_add: {learning_title[:50]}")
 
-    # 2. Trust adjustments for critical violations
+        # High/critical → also feedback memories
+        if severity in ("high", "critical"):
+            safe_name = category.replace(" ", "_").lower()
+            filename = f"ds_{date}_{safe_name}_{i}.md"
+            write_feedback_memory(
+                memory_dir, filename,
+                name=content[:60],
+                description=f"Deep sleep detected uncaptured correction ({severity})",
+                content=f"{content}\n\n**Why:** User said: \"{quote}\"\nContext: {correction.get('context', '')}\n\n**How to apply:** {content}"
+            )
+            memory_entries.append({
+                "title": content[:40],
+                "filename": filename,
+                "summary": f"Deep sleep {date}, severity {severity}"
+            })
+            actions_taken.append(f"feedback_write: {filename}")
+
+    # 2. Missed commitments → followups
+    for i, commitment in enumerate(analysis.get("missed_commitments", [])):
+        fid = f"NF-DS-{date}-{i}"
+        desc = f"[Deep Sleep] {commitment.get('commitment', '')[:100]}"
+        if add_followup(fid, desc, commitment.get("due_date")):
+            actions_taken.append(f"followup: {desc[:50]}")
+
+    # 3. Trust adjustments for critical violations
     critical_violations = [v for v in analysis.get("protocol_violations", []) if v.get("severity") == "critical"]
     if critical_violations:
         points = -3 * len(critical_violations)
