@@ -139,6 +139,80 @@ try_repair_cron() {
   return 1
 }
 
+try_reexecute_missed_cron() {
+  # Re-execute a cron that missed its scheduled run
+  local plist_id="$1"
+  local plist_file="$HOME_DIR/Library/LaunchAgents/${plist_id}.plist"
+
+  if [ ! -f "$plist_file" ]; then
+    return 1
+  fi
+
+  local cmd
+  cmd=$(python3 -c "
+import plistlib, sys
+try:
+    with open('$plist_file', 'rb') as f:
+        d = plistlib.load(f)
+    if d.get('KeepAlive'):
+        sys.exit(1)
+    if not d.get('StartCalendarInterval') and not d.get('StartInterval'):
+        sys.exit(1)
+    print(' '.join(d.get('ProgramArguments', [])))
+except:
+    sys.exit(1)
+" 2>/dev/null)
+
+  if [ -z "$cmd" ] || [ $? -ne 0 ]; then
+    return 1
+  fi
+
+  log "Re-executing missed cron: $plist_id"
+  timeout 300 bash -c "$cmd" >> "$LOG_DIR/watchdog-reexec.log" 2>&1 &
+  local pid=$!
+  sleep 2
+  if kill -0 "$pid" 2>/dev/null || wait "$pid" 2>/dev/null; then
+    log_repair "$plist_id: re-executed missed cron (PID $pid)"
+    return 0
+  fi
+  return 1
+}
+
+try_verify_repair() {
+  # After Level 2 repair, verify the service is healthy
+  local plist_id="$1"
+  local log_stdout="$2"
+  local proc_grep="$3"
+  local max_wait=30
+
+  if ! is_loaded "$plist_id"; then
+    return 1
+  fi
+
+  if [ -n "$proc_grep" ]; then
+    local waited=0
+    while [ $waited -lt $max_wait ]; do
+      if process_running "$proc_grep"; then
+        log "Verify OK: $plist_id process running after ${waited}s"
+        return 0
+      fi
+      sleep 5
+      waited=$((waited + 5))
+    done
+    return 1
+  fi
+
+  if [ -n "$log_stdout" ] && [ -f "$log_stdout" ]; then
+    local age
+    age=$(file_age "$log_stdout")
+    if [ "$age" -lt 300 ]; then
+      return 0
+    fi
+  fi
+
+  return 0
+}
+
 try_repair_backup() {
   local backup_script="$NEXO_DIR/backup_cron.sh"
   if [ -x "$backup_script" ]; then
@@ -263,13 +337,19 @@ for monitor in "${MONITORS[@]}"; do
     fi
   fi
 
-  # Check 3: Log staleness
+  # Check 3: Log staleness + AUTO RE-EXECUTE missed crons
   if [ -n "$log_stdout" ] && [ "$max_stale" -gt 0 ]; then
     age=$(file_age "$log_stdout")
     stale_age=$(format_age "$age")
     if [ "$age" -gt $(( max_stale * 3 )) ]; then
-      status="FAIL"
-      details="${details}Log stale: $stale_age (limit: $(format_age "$max_stale")). "
+      if try_reexecute_missed_cron "$plist_id"; then
+        status="HEALED"
+        details="${details}Self-healed: re-executed missed cron (was stale: $stale_age). "
+        TOTAL_HEALED=$((TOTAL_HEALED + 1))
+      else
+        status="FAIL"
+        details="${details}Log stale: $stale_age (limit: $(format_age "$max_stale")). Re-execute failed. "
+      fi
     elif [ "$age" -gt "$max_stale" ]; then
       [ "$status" = "PASS" ] && status="WARN"
       details="${details}Log slightly stale: $stale_age. "
