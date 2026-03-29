@@ -77,10 +77,10 @@ def handle_evolution_approve(log_id: int, notes: str = '') -> str:
 
     Args:
         log_id: Evolution log entry ID to approve
-        notes: Optional notes from Francisco
+        notes: Optional notes from the owner
     """
     update_evolution_log_status(log_id, "accepted",
-                                test_result=f"Approved by Francisco. {notes}".strip())
+                                test_result=f"Approved by the owner. {notes}".strip())
     return f"Proposal #{log_id} APPROVED. Will be applied in next Evolution cycle."
 
 
@@ -92,7 +92,7 @@ def handle_evolution_reject(log_id: int, reason: str = '') -> str:
         reason: Why this proposal was rejected
     """
     update_evolution_log_status(log_id, "rejected",
-                                test_result=f"Rejected: {reason}" if reason else "Rejected by Francisco")
+                                test_result=f"Rejected: {reason}" if reason else "Rejected by the owner")
     return f"Proposal #{log_id} REJECTED. Reason: {reason or 'no reason given'}"
 
 
@@ -104,7 +104,7 @@ TOOLS = [
     (handle_evolution_propose, "nexo_evolution_propose",
      "Manually trigger an evolution analysis outside weekly schedule"),
     (handle_evolution_approve, "nexo_evolution_approve",
-     "Approve a pending Evolution proposal (Francisco only)"),
+     "Approve a pending Evolution proposal (owner only)"),
     (handle_evolution_reject, "nexo_evolution_reject",
      "Reject a pending Evolution proposal with reason"),
 ]

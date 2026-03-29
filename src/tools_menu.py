@@ -11,52 +11,34 @@ from db import get_db
 
 
 def _get_date_str() -> str:
-    """Get formatted date in Madrid timezone."""
+    """Get formatted current date and time."""
     try:
         result = subprocess.run(
-            ["date", "+%A %d de %B de %Y, %H:%M"],
+            ["date", "+%A %d %B %Y, %H:%M"],
             capture_output=True, text=True,
-            env={"TZ": "Europe/Madrid", "PATH": "/usr/bin:/bin", "LANG": "es_ES.UTF-8"}
+            env={"PATH": "/usr/bin:/bin"}
         )
         return result.stdout.strip()
     except Exception:
         return datetime.now().strftime("%Y-%m-%d %H:%M")
 
 
+# Default menu items — customize for your operations.
+# Each tuple: (category_name, [(item_number, item_description), ...])
 MENU_ITEMS = [
-    ("Proyectos", [
-        ("1", "WAzion - Revisar estado del proyecto"),
-        ("9", "Claude Agent VPS - Revisar cambios autonomos"),
+    ("System", [
+        ("1", "Server health check"),
+        ("2", "Review logs and errors"),
+        ("3", "Check scheduled tasks status"),
     ]),
-    ("Publicidad", [
-        ("7", "Google Ads - Administrar campanas (Recambios + WAzion)"),
-        ("7b", "Meta Ads - Administrar campanas Facebook/Instagram"),
-        ("7c", "Ads Tracking - Revision combinada Google+Meta"),
+    ("Memory & Learning", [
+        ("4", "Review pending learnings"),
+        ("5", "Search learnings by topic"),
+        ("6", "Memory health check"),
     ]),
-    ("Shopify", [
-        ("4", "Shopify Theme Sync - Sincronizar tema"),
-        ("5", "Shopify Scripts - Ejecutar scripts periodicos"),
-        ("6", "Cambiar Promocion Shopify"),
-    ]),
-    ("Servidor e Infraestructura", [
-        ("2", "Servidor - Chequeo server health check"),
-        ("3", "WhatsApp Logs - Review WhatsApp logs"),
-        ("11", "File Tracker - Reporte archivos PHP"),
-        ("12", "Google Cloud - Gasto, consumo y estado GCP"),
-    ]),
-    ("Comunicacion y Monitorizacion", [
-        ("8", "Recovery Optimizer - Analisis IA semanal (LUNES)"),
-        ("10", "Recovery Monitor - Estado emails/WA recovery (24h)"),
-        ("13", "Review Monitor - Estado emails/WA resenas"),
-        ("14", "WhatsApp Analisis Completo - Estadisticas globales"),
-        ("15", "Google Analytics - Revisar analiticas web"),
-        ("16", "Email Review - Revisar bandejas y spam"),
-    ]),
-    ("Informes y SEO", [
-        ("17", "Auditoria Search Console (cada 2 semanas)"),
-        ("18", "Re-envio sitemaps (cada 30 dias)"),
-        ("19", "Verificacion SEO metas"),
-        ("20", "Informe Email Semanal (domingos)"),
+    ("Analytics & Reports", [
+        ("7", "Daily metrics overview"),
+        ("8", "Weekly performance report"),
     ]),
 ]
 
@@ -108,7 +90,7 @@ def handle_menu() -> str:
 
     lines = []
     lines.append("╔" + "═" * W + "╗")
-    lines.append("║" + "NEXO — CENTRO DE OPERACIONES".center(W) + "║")
+    lines.append("║" + "NEXO — OPERATIONS CENTER".center(W) + "║")
     lines.append("║" + date_str.center(W) + "║")
     lines.append("╠" + "═" * W + "╣")
 
@@ -130,12 +112,12 @@ def handle_menu() -> str:
                 lines.append("║" + f"  {icon} {text}".ljust(W) + "║")
             if len(dashboard_alerts) > 10:
                 more = len(dashboard_alerts) - 10
-                lines.append("║" + f"  ... y {more} alertas mas".ljust(W) + "║")
+                lines.append("║" + f"  ... and {more} more alerts".ljust(W) + "║")
 
         if memory_reviews["total"] > 0:
             text = (
-                f"MEMORIA: {memory_reviews['total']} revisiones pendientes "
-                f"({memory_reviews['decisions']} decisiones, {memory_reviews['learnings']} learnings)"
+                f"MEMORIA: {memory_reviews['total']} reviews pending "
+                f"({memory_reviews['decisions']} decisions, {memory_reviews['learnings']} learnings)"
             )[:W - 4]
             lines.append("║" + f"  !  {text}".ljust(W) + "║")
 
@@ -160,22 +142,22 @@ def handle_menu() -> str:
     try:
         conn = get_db()
         cutoff = (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d")
-        # Reminders sin fecha (backlog/ideas)
+        # Reminders without date (backlog/ideas)
         no_date = conn.execute(
-            "SELECT id, description, category FROM reminders WHERE status LIKE 'PENDIENTE%' AND (date IS NULL OR date='') ORDER BY category, id"
+            "SELECT id, description, category FROM reminders WHERE status LIKE 'PENDING%' AND (date IS NULL OR date='') ORDER BY category, id"
         ).fetchall()
-        # Reminders con fecha > 7 días (futuro)
+        # Reminders with date > 7 days (future)
         future = conn.execute(
-            "SELECT id, description, date, category FROM reminders WHERE status LIKE 'PENDIENTE%' AND date > ? ORDER BY date",
+            "SELECT id, description, date, category FROM reminders WHERE status LIKE 'PENDING%' AND date > ? ORDER BY date",
             (cutoff,)
         ).fetchall()
-        # Followups sin fecha
+        # Followups without date
         nf_no_date = conn.execute(
-            "SELECT id, description FROM followups WHERE status NOT LIKE 'COMPLETADO%' AND (date IS NULL OR date='') ORDER BY id"
+            "SELECT id, description FROM followups WHERE status NOT LIKE 'COMPLETED%' AND (date IS NULL OR date='') ORDER BY id"
         ).fetchall()
 
         if no_date or future or nf_no_date:
-            lines.append("║" + "  BACKLOG / IDEAS / FUTURO".ljust(W) + "║")
+            lines.append("║" + "  BACKLOG / IDEAS / FUTURE".ljust(W) + "║")
             lines.append("║" + "─" * W + "║")
 
             if no_date:
@@ -190,20 +172,20 @@ def handle_menu() -> str:
                         lines.append("║" + f"    {r['id']}: {short}".ljust(W) + "║")
 
             if future:
-                lines.append("║" + f"  [Programado]".ljust(W) + "║")
+                lines.append("║" + f"  [Scheduled]".ljust(W) + "║")
                 for r in future:
                     short = r["description"][:W - 18]
                     lines.append("║" + f"    {r['id']} ({r['date']}): {short}".ljust(W) + "║")
 
             if nf_no_date:
-                lines.append("║" + f"  [Followups pendientes]".ljust(W) + "║")
+                lines.append("║" + f"  [Pending followups]".ljust(W) + "║")
                 for r in nf_no_date:
                     short = r["description"][:W - 12]
                     lines.append("║" + f"    {r['id']}: {short}".ljust(W) + "║")
 
             lines.append("╠" + "═" * W + "╣")
     except Exception as e:
-        lines.append("║" + f"  ⚠ Error backlog: {e}".ljust(W) + "║")
+        lines.append("║" + f"  ⚠ Backlog error: {e}".ljust(W) + "║")
         lines.append("╠" + "═" * W + "╣")
 
     # Active sessions

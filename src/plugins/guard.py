@@ -59,7 +59,7 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
 
     Args:
         files: Comma-separated file paths about to be edited
-        area: System area (wazion, shopify, infrastructure, nexo-ops, etc.)
+        area: System area (my-project, shopify, infrastructure, nexo-ops, etc.)
         include_schemas: Include DB table schemas if files touch database code (true/false)
     """
     conn = get_db()
@@ -456,7 +456,7 @@ def handle_guard_cross_check(findings: list, area: str = "") -> str:
 
     Args:
         findings: List of audit finding strings to cross-check
-        area: System area to narrow the learning search (wazion, shopify, etc.)
+        area: System area to narrow the learning search (my-project, shopify, etc.)
     """
     # Common English/Spanish stopwords to skip during keyword extraction
     STOPWORDS = {

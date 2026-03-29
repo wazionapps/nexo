@@ -89,7 +89,7 @@ def handle_startup(task: str = "Startup") -> str:
 
     if inbox:
         lines.append("")
-        lines.append("MENSAJES PENDIENTES:")
+        lines.append("PENDING MESSAGES:")
         for m in inbox:
             age = _format_age(m["created_epoch"])
             lines.append(f"  [{m['from_sid']}] ({age}): {m['text']}")
@@ -121,7 +121,7 @@ def handle_heartbeat(sid: str, task: str, context_hint: str = '') -> str:
     questions = get_pending_questions(sid)
     if questions:
         parts.append("")
-        parts.append("PREGUNTAS PENDIENTES (responder con nexo_answer):")
+        parts.append("PENDING QUESTIONS (responder con nexo_answer):")
         for q in questions:
             age = _format_age(q["created_epoch"])
             parts.append(f"  {q['qid']} de {q['from_sid']} ({age}): {q['question']}")
@@ -236,7 +236,7 @@ def handle_heartbeat(sid: str, task: str, context_hint: str = '') -> str:
             # Auto-prime: detect project/area keywords and fetch targeted learnings
             _PROJECT_KEYWORDS = {
                 'shopify': 'shopify', 'theme': 'shopify', 'dawn': 'shopify',
-                'wazion': 'wazion', 'chrome extension': 'wazion', 'vps': 'wazion',
+                'my-project': 'my-project',
                 'meta': 'meta-ads', 'facebook': 'meta-ads', 'advantage': 'meta-ads',
                 'google ads': 'google-ads', 'pmax': 'google-ads', 'campaign': 'google-ads',
                 'server': 'infrastructure', 'ssh': 'infrastructure', 'deploy': 'infrastructure',
@@ -380,7 +380,7 @@ def handle_context_packet(area: str, files: str = "") -> str:
 
     # 3. Active followups for this area
     followups = conn.execute(
-        "SELECT id, description, date, verification FROM followups WHERE status = 'PENDIENTE' AND (description LIKE ? OR verification LIKE ?) ORDER BY date ASC LIMIT 10",
+        "SELECT id, description, date, verification FROM followups WHERE status NOT LIKE 'COMPLET%' AND (description LIKE ? OR verification LIKE ?) ORDER BY date ASC LIMIT 10",
         (f"%{area}%", f"%{area}%")
     ).fetchall()
     if followups:
@@ -451,14 +451,14 @@ def handle_smart_startup_query() -> str:
 
     # 1. Pending followups (what NEXO needs to do)
     followups = conn.execute(
-        "SELECT description FROM followups WHERE status = 'PENDIENTE' ORDER BY date ASC LIMIT 5"
+        "SELECT description FROM followups WHERE status NOT LIKE 'COMPLET%' ORDER BY date ASC LIMIT 5"
     ).fetchall()
     for f in followups:
         query_parts.append(f['description'][:100])
 
     # 2. Due reminders (what the owner needs to know)
     reminders = conn.execute(
-        "SELECT description FROM reminders WHERE status = 'PENDIENTE' AND date <= date('now', '+1 day') ORDER BY date ASC LIMIT 5"
+        "SELECT description FROM reminders WHERE status NOT LIKE 'COMPLET%' AND date <= date('now', '+1 day') ORDER BY date ASC LIMIT 5"
     ).fetchall()
     for r in reminders:
         query_parts.append(r['description'][:100])

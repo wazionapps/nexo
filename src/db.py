@@ -168,7 +168,7 @@ def init_db():
             id TEXT PRIMARY KEY,
             date TEXT,
             description TEXT NOT NULL,
-            status TEXT NOT NULL DEFAULT 'PENDIENTE',
+            status TEXT NOT NULL DEFAULT 'PENDING',
             category TEXT DEFAULT 'general',
             created_at REAL NOT NULL,
             updated_at REAL NOT NULL
@@ -179,7 +179,7 @@ def init_db():
             date TEXT,
             description TEXT NOT NULL,
             verification TEXT DEFAULT '',
-            status TEXT NOT NULL DEFAULT 'PENDIENTE',
+            status TEXT NOT NULL DEFAULT 'PENDING',
             recurrence TEXT DEFAULT NULL,
             created_at REAL NOT NULL,
             updated_at REAL NOT NULL
@@ -1396,7 +1396,7 @@ def _expire_old_questions(conn: sqlite3.Connection):
 # ── Reminders ──────────────────────────────────────────────────────
 
 def create_reminder(id: str, description: str, date: str = None,
-                    status: str = 'PENDIENTE', category: str = 'general') -> dict:
+                    status: str = 'PENDING', category: str = 'general') -> dict:
     """Create a new reminder."""
     conn = get_db()
     now = now_epoch()
@@ -1435,7 +1435,7 @@ def update_reminder(id: str, **kwargs) -> dict:
 def complete_reminder(id: str) -> dict:
     """Mark a reminder as completed with today's date."""
     today = datetime.date.today().isoformat()
-    return update_reminder(id, status=f"COMPLETADO {today}")
+    return update_reminder(id, status=f"COMPLETED {today}")
 
 
 def delete_reminder(id: str) -> bool:
@@ -1453,18 +1453,18 @@ def get_reminders(filter_type: str = 'all') -> list[dict]:
     today = datetime.date.today().isoformat()
     if filter_type == 'completed':
         rows = conn.execute(
-            "SELECT * FROM reminders WHERE status LIKE 'COMPLETADO%' ORDER BY updated_at DESC"
+            "SELECT * FROM reminders WHERE status LIKE 'COMPLET%' ORDER BY updated_at DESC"
         ).fetchall()
     elif filter_type == 'due':
         rows = conn.execute(
-            "SELECT * FROM reminders WHERE status NOT LIKE 'COMPLETADO%' "
+            "SELECT * FROM reminders WHERE status NOT LIKE 'COMPLET%' "
             "AND status != 'ELIMINADO' AND date IS NOT NULL AND date <= ? "
             "ORDER BY date ASC",
             (today,)
         ).fetchall()
     else:  # 'all' — active only
         rows = conn.execute(
-            "SELECT * FROM reminders WHERE status NOT LIKE 'COMPLETADO%' "
+            "SELECT * FROM reminders WHERE status NOT LIKE 'COMPLET%' "
             "AND status != 'ELIMINADO' ORDER BY date ASC NULLS LAST"
         ).fetchall()
     return [dict(r) for r in rows]
@@ -1480,7 +1480,7 @@ def get_reminder(id: str) -> dict | None:
 # ── Followups ──────────────────────────────────────────────────────
 
 def create_followup(id: str, description: str, date: str = None,
-                    verification: str = '', status: str = 'PENDIENTE',
+                    verification: str = '', status: str = 'PENDING',
                     reasoning: str = '', recurrence: str = None) -> dict:
     """Create a new followup with optional reasoning and recurrence.
 
@@ -1579,7 +1579,7 @@ def complete_followup(id: str, result: str = '') -> dict:
         return {"error": f"Followup {id} not found"}
 
     today = datetime.date.today().isoformat()
-    kwargs = {"status": f"COMPLETADO {today}"}
+    kwargs = {"status": f"COMPLETED {today}"}
     if result:
         existing = row["verification"] or ''
         kwargs["verification"] = f"{existing}\n{result}".strip() if existing else result
@@ -1623,18 +1623,18 @@ def get_followups(filter_type: str = 'all') -> list[dict]:
     today = datetime.date.today().isoformat()
     if filter_type == 'completed':
         rows = conn.execute(
-            "SELECT * FROM followups WHERE status LIKE 'COMPLETADO%' ORDER BY updated_at DESC"
+            "SELECT * FROM followups WHERE status LIKE 'COMPLET%' ORDER BY updated_at DESC"
         ).fetchall()
     elif filter_type == 'due':
         rows = conn.execute(
-            "SELECT * FROM followups WHERE status NOT LIKE 'COMPLETADO%' "
+            "SELECT * FROM followups WHERE status NOT LIKE 'COMPLET%' "
             "AND status != 'ELIMINADO' AND date IS NOT NULL AND date <= ? "
             "ORDER BY date ASC",
             (today,)
         ).fetchall()
     else:  # 'all' — active only
         rows = conn.execute(
-            "SELECT * FROM followups WHERE status NOT LIKE 'COMPLETADO%' "
+            "SELECT * FROM followups WHERE status NOT LIKE 'COMPLET%' "
             "AND status != 'ELIMINADO' ORDER BY date ASC NULLS LAST"
         ).fetchall()
     return [dict(r) for r in rows]
@@ -2478,7 +2478,7 @@ def diary_archive_search(query: str = '', domain: str = '',
 
     Args:
         query: Text to search in summary, decisions, mental_state, pending
-        domain: Filter by domain (e.g. 'wazion', 'my-store')
+        domain: Filter by domain (e.g. 'my-project', 'my-store')
         year: Filter by year (e.g. 2026)
         month: Filter by month (1-12), requires year
         limit: Max results (default 20)

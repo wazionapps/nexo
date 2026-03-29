@@ -61,7 +61,7 @@ try:
         try:
             reminders_rows = [dict(r) for r in db.execute(
                 'SELECT id, date, description, status, category FROM reminders '
-                'WHERE status NOT LIKE \"%COMPLETADO%\" AND status NOT LIKE \"%ELIMINADO%\" '
+                'WHERE status NOT LIKE \"%COMPLET%\" AND status NOT LIKE \"%DELET%\" '
                 'AND status NOT LIKE \"%COMPLETED%\" AND status NOT LIKE \"%DELETED%\"'
             ).fetchall()]
         except Exception:
@@ -70,7 +70,7 @@ try:
         try:
             followups_rows = [dict(r) for r in db.execute(
                 'SELECT id, date, description, status FROM followups '
-                'WHERE status NOT LIKE \"%COMPLETADO%\" AND status NOT LIKE \"%COMPLETED%\"'
+                'WHERE status NOT LIKE \"%COMPLET%\" AND status NOT LIKE \"%COMPLETED%\"'
             ).fetchall()]
         except Exception:
             pass

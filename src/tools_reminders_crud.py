@@ -139,7 +139,7 @@ def handle_followup_complete(id: str, result: str = '') -> str:
             msg += f" ♻️ Siguiente auto-creado para {new_row['date']}."
     linked_decisions = find_decisions_by_context_ref(id)
     if linked_decisions:
-        outcome_text = result if result else f"Followup {id} completado"
+        outcome_text = result if result else f"Followup {id} completed"
         for dec in linked_decisions:
             update_decision_outcome(dec['id'], outcome_text)
         dec_ids = ', '.join(f"#{d['id']}" for d in linked_decisions)

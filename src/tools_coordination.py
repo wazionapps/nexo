@@ -25,7 +25,7 @@ def handle_track(sid: str, paths: list[str]) -> str:
             for f in c["files"]:
                 lines.append(f"    {f}")
         lines.append("")
-        lines.append("PARAR e informar a Francisco antes de editar.")
+        lines.append("STOP and inform the user before editing.")
 
     return "\n".join(lines)
 
@@ -99,4 +99,4 @@ def handle_check_answer(qid: str) -> str:
         return f"RESPUESTA de {qid}: {result['answer']}"
     elif result["status"] == "expired":
         return f"Pregunta {qid} expirada sin respuesta."
-    return f"Pregunta {qid} sigue pendiente. Reintentar en unos segundos."
+    return f"Question {qid} still pending. Retry in a few seconds."

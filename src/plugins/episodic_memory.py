@@ -27,7 +27,7 @@ def handle_decision_log(domain: str, decision: str, alternatives: str = '',
     """Log a non-trivial decision with reasoning context.
 
     Args:
-        domain: Area (ads, shopify, server, wazion, nexo, project, other)
+        domain: Area (ads, shopify, server, my-project, nexo, project, other)
         decision: What was decided
         alternatives: JSON array or text of options considered and why discarded
         based_on: Data, metrics, or observations that informed this decision
@@ -35,7 +35,7 @@ def handle_decision_log(domain: str, decision: str, alternatives: str = '',
         context_ref: Related followup/reminder ID (e.g., NF-ADS1, R71)
         session_id: Current session ID (auto-filled if empty)
     """
-    valid_domains = {'ads', 'shopify', 'server', 'wazion', 'nexo', 'project', 'other'}
+    valid_domains = {'ads', 'shopify', 'server', 'my-project', 'nexo', 'project', 'other'}
     if domain not in valid_domains:
         return f"ERROR: domain debe ser uno de: {', '.join(sorted(valid_domains))}"
     if confidence not in ('high', 'medium', 'low'):
@@ -92,10 +92,10 @@ def handle_decision_search(query: str = '', domain: str = '', days: int = 30) ->
 
     Args:
         query: Text to search in decision, alternatives, based_on, outcome
-        domain: Filter by area (ads, shopify, server, wazion, nexo, project, other)
+        domain: Filter by area (ads, shopify, server, my-project, nexo, project, other)
         days: Look back N days (default 30)
     """
-    valid_domains = {'ads', 'shopify', 'server', 'wazion', 'nexo', 'project', 'other'}
+    valid_domains = {'ads', 'shopify', 'server', 'my-project', 'nexo', 'project', 'other'}
     if domain and domain not in valid_domains:
         return f"ERROR: domain debe ser uno de: {', '.join(sorted(valid_domains))}"
     results = search_decisions(query, domain, days)
@@ -422,7 +422,7 @@ def handle_diary_archive_search(
 
     Args:
         query: Text to search in diary content
-        domain: Filter by project domain (e.g. 'wazion', 'my-store')
+        domain: Filter by project domain (e.g. 'my-project', 'my-store')
         year: Filter by year (e.g. 2026)
         month: Filter by month (1-12), requires year
         limit: Max results (default 20)

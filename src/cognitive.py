@@ -30,7 +30,7 @@ DISCRIMINATING_ENTITIES = {
     # OS / Environment
     "linux", "mac", "macos", "windows", "darwin", "ubuntu", "debian", "alpine",
     # Platforms
-    "shopify", "wazion", "project_a", "ecommerce", "whatsapp", "chrome", "firefox",
+    "shopify", "my-project", "project_a", "ecommerce", "whatsapp", "chrome", "firefox",
     # Languages / Runtimes
     "python", "php", "javascript", "typescript", "node", "deno", "ruby",
     # Versions

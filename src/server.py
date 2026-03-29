@@ -110,7 +110,7 @@ def nexo_context_packet(area: str, files: str = "") -> str:
     MUST call before delegating ANY task to a subagent. Inject the result into the subagent's prompt.
 
     Args:
-        area: Project/area name (e.g., 'wazion', 'shopify', 'meta-ads', 'project_a', 'nexo', 'infrastructure').
+        area: Project/area name (e.g., 'my-project', 'shopify', 'meta-ads', 'project_a', 'nexo', 'infrastructure').
         files: Optional comma-separated file paths for additional context.
     """
     return handle_context_packet(area, files)
@@ -329,7 +329,7 @@ def nexo_reminder_update(id: str, description: str = "", date: str = "", status:
 
 @mcp.tool
 def nexo_reminder_complete(id: str) -> str:
-    """Mark a reminder as COMPLETADO with today's date.
+    """Mark a reminder as COMPLETED with today's date.
 
     Args:
         id: Reminder ID (e.g., R87).
@@ -381,7 +381,7 @@ def nexo_followup_update(id: str, description: str = "", date: str = "", verific
 
 @mcp.tool
 def nexo_followup_complete(id: str, result: str = "") -> str:
-    """Mark a followup as COMPLETADO. Appends result to verification field.
+    """Mark a followup as COMPLETED. Appends result to verification field.
 
     Args:
         id: Followup ID (e.g., NF45).
@@ -407,7 +407,7 @@ def nexo_learning_add(category: str, title: str, content: str, reasoning: str = 
     """Add a new learning (resolved error, pattern, gotcha).
 
     Args:
-        category: One of: nexo-ops, google-ads, meta-ads, google-analytics, shopify, wazion, cloud-sql, infrastructure, security, brain-engine.
+        category: One of: nexo-ops, google-ads, meta-ads, analytics, shopify, ecommerce, cloud-sql, infrastructure, security, brain-engine.
         title: Short title for the learning.
         content: Full description with context and solution.
         reasoning: WHY this matters — what led to discovering this (optional).
