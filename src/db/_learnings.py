@@ -1,20 +1,7 @@
-"""NEXO DB — Learnings CRUD and similarity search."""
-import re
-import time
-
-def _get_db():
-    from db import get_db
-    return get_db()
-
-
-def __now_epoch():
-    return time.time()
-
-
-def __fts_upsert(*args, **kwargs):
-    from db import fts_upsert
-    return _fts_upsert(*args, **kwargs)
-
+"""NEXO DB — Learnings module."""
+import re, time
+from db._core import get_db, now_epoch
+from db._fts import fts_upsert, fts_search
 
 # ── Learnings ──────────────────────────────────────────────────────
 
@@ -30,8 +17,8 @@ def create_learning(
     last_reviewed_at: float | None = None,
 ) -> dict:
     """Create a new learning entry with optional reasoning."""
-    conn = _get_db()
-    now = _now_epoch()
+    conn = get_db()
+    now = now_epoch()
     cursor = conn.execute(
         "INSERT INTO learnings "
         "(category, title, content, reasoning, prevention, applies_to, status, review_due_at, last_reviewed_at, created_at, updated_at) "
@@ -43,14 +30,14 @@ def create_learning(
     )
     conn.commit()
     lid = cursor.lastrowid
-    _fts_upsert("learning", str(lid), title, f"{content} {reasoning or ''}", category, commit=False)
+    fts_upsert("learning", str(lid), title, f"{content} {reasoning or ''}", category, commit=False)
     row = conn.execute("SELECT * FROM learnings WHERE id = ?", (lid,)).fetchone()
     return dict(row)
 
 
 def update_learning(id: int, **kwargs) -> dict:
     """Update any fields of a learning: category, title, content, reasoning."""
-    conn = _get_db()
+    conn = get_db()
     row = conn.execute("SELECT * FROM learnings WHERE id = ?", (id,)).fetchone()
     if not row:
             return {"error": f"Learning {id} not found"}
@@ -61,20 +48,20 @@ def update_learning(id: int, **kwargs) -> dict:
     updates = {k: v for k, v in kwargs.items() if k in allowed}
     if not updates:
             return dict(row)
-    updates["updated_at"] = _now_epoch()
+    updates["updated_at"] = now_epoch()
     set_clause = ", ".join(f"{k} = ?" for k in updates)
     values = list(updates.values()) + [id]
     conn.execute(f"UPDATE learnings SET {set_clause} WHERE id = ?", values)
     conn.commit()
     row = conn.execute("SELECT * FROM learnings WHERE id = ?", (id,)).fetchone()
     r = dict(row)
-    _fts_upsert("learning", str(id), r.get("title", ""), f"{r.get('content', '')} {r.get('reasoning', '')}", r.get("category", ""), commit=False)
+    fts_upsert("learning", str(id), r.get("title", ""), f"{r.get('content', '')} {r.get('reasoning', '')}", r.get("category", ""), commit=False)
     return r
 
 
 def delete_learning(id: int) -> bool:
     """Delete a learning entry."""
-    conn = _get_db()
+    conn = get_db()
     result = conn.execute("DELETE FROM learnings WHERE id = ?", (id,))
     conn.execute("DELETE FROM unified_search WHERE source = 'learning' AND source_id = ?", (str(id),))
     conn.commit()
@@ -85,10 +72,9 @@ def delete_learning(id: int) -> bool:
 def search_learnings(query: str, category: str = None) -> list[dict]:
     """Search learnings using FTS5 for ranked results. Falls back to LIKE if FTS fails."""
     # Try FTS5 first
-    from db import fts_search
     fts_results = fts_search(query, source_filter="learning", limit=30)
     if fts_results:
-        conn = _get_db()
+        conn = get_db()
         ids = [int(r['source_id']) for r in fts_results]
         placeholders = ','.join('?' * len(ids))
         rows = conn.execute(
@@ -101,7 +87,7 @@ def search_learnings(query: str, category: str = None) -> list[dict]:
         return filtered
 
     # Fallback to LIKE
-    conn = _get_db()
+    conn = get_db()
     words = query.strip().split()
     if not words:
         return []
@@ -124,7 +110,7 @@ def search_learnings(query: str, category: str = None) -> list[dict]:
 
 def list_learnings(category: str = None) -> list[dict]:
     """List all learnings, optionally filtered by category."""
-    conn = _get_db()
+    conn = get_db()
     if category:
         rows = conn.execute(
             "SELECT * FROM learnings WHERE category = ? ORDER BY updated_at DESC",
@@ -161,7 +147,7 @@ def find_similar_learnings(new_id: int, title: str, content: str, category: str)
     keywords_new = set(extract_keywords(f"{title} {content}"))
     if not keywords_new:
         return []
-    conn = _get_db()
+    conn = get_db()
     rows = conn.execute(
         "SELECT id, title, content FROM learnings WHERE category = ? AND id != ?",
         (category, new_id)
@@ -178,3 +164,5 @@ def find_similar_learnings(new_id: int, title: str, content: str, category: str)
             results.append((row['id'], round(similarity, 2)))
     results.sort(key=lambda x: x[1], reverse=True)
     return results[:5]
+
+

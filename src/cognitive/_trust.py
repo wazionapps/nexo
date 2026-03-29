@@ -1,59 +1,21 @@
-"""NEXO Cognitive — Trust scoring, sentiment detection, dissonance."""
+"""NEXO Cognitive — Trust scoring, sentiment, dissonance."""
 import re
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime
+from cognitive._core import _get_db, embed, cosine_similarity, _blob_to_array
+from cognitive._core import POSITIVE_SIGNALS, NEGATIVE_SIGNALS, URGENCY_SIGNALS
 
-
-def _get_db():
-    import cognitive
-    return cognitive._get_db()
-
-
-def _embed(text):
-    import cognitive
-    return cognitive.embed(text)
-
-
-def _cosine_similarity(a, b):
-    import cognitive
-    return cognitive.cosine_similarity(a, b)
-
-
-def _blob_to_array(blob):
-    import cognitive
-    return cognitive._blob_to_array(blob)
-
-
-# Sentiment detection keywords
-POSITIVE_SIGNALS = {
-    "gracias", "genial", "perfecto", "bien", "excelente", "bueno", "me gusta",
-    "correcto", "sí", "dale", "hazlo", "adelante", "ok", "vale", "great",
-    "nice", "good", "exactly", "buen trabajo", "bien hecho", "fenomenal",
-}
-NEGATIVE_SIGNALS = {
-    "no", "mal", "otra vez", "ya te dije", "frustr", "error", "fallo",
-    "cansad", "siempre", "nunca", "por qué no", "no funciona", "roto",
-    "no sirve", "horrible", "desastre", "qué coño", "joder", "mierda",
-    "hostia", "me cago", "irritad", "harto",
-    "broken", "nothing works", "doesn't work", "not working", "fix it",
-    "wrong", "failed", "failing", "annoying", "frustrated", "damn", "shit",
-    "wtf", "terrible", "useless", "stupid", "hate", "worst", "sucks",
-    "again",
-}
-URGENCY_SIGNALS = {
-    "rápido", "ya", "ahora", "urgente", "asap", "inmediatamente", "corre",
-}
 
 # Trust score events — default deltas (overridable via trust_event_config table)
 _DEFAULT_TRUST_EVENTS = {
     # Positive
     "explicit_thanks": +3,
-    "delegation": +2,        # Francisco delegates new task without micromanaging
-    "paradigm_shift": +2,    # Francisco teaches, NEXO learns
+    "delegation": +2,        # user delegates new task without micromanaging
+    "paradigm_shift": +2,    # user teaches, NEXO learns
     "sibling_detected": +3,  # NEXO avoided context error on its own
     "proactive_action": +2,  # NEXO did something useful without being asked
     # Negative
-    "correction": -3,        # Francisco corrects NEXO
+    "correction": -3,        # user corrects NEXO
     "repeated_error": -7,    # Error on something NEXO already had a learning for
     "override": -5,          # NEXO's memory was wrong
     "correction_fatigue": -10, # Same memory corrected 3+ times
@@ -63,6 +25,39 @@ _DEFAULT_TRUST_EVENTS = {
 # Lazy-loaded from DB (trust_event_config table overrides defaults)
 _trust_events_cache = None
 _trust_events_cache_ts = 0
+
+
+def get_trust_events() -> dict:
+    """Get trust events with deltas. DB overrides take priority over defaults."""
+    global _trust_events_cache, _trust_events_cache_ts
+    import time
+    now = time.time()
+    # Cache for 60s to avoid constant DB reads
+    if _trust_events_cache is not None and (now - _trust_events_cache_ts) < 60:
+        return _trust_events_cache
+
+    events = dict(_DEFAULT_TRUST_EVENTS)
+    try:
+        db = _get_db()
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS trust_event_config (
+                event TEXT PRIMARY KEY,
+                delta REAL NOT NULL,
+                description TEXT DEFAULT '',
+                updated_at TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        rows = db.execute("SELECT event, delta FROM trust_event_config").fetchall()
+        for r in rows:
+            events[r[0]] = r[1]
+    except Exception:
+        pass
+    _trust_events_cache = events
+    _trust_events_cache_ts = now
+    return events
+
+# For backward compat — code that reads TRUST_EVENTS directly
+TRUST_EVENTS = _DEFAULT_TRUST_EVENTS
 
 # Auto-detection patterns for trust events from user text
 # Each pattern: (event_name, keywords/phrases that trigger it, min_matches)
@@ -103,36 +98,6 @@ TRUST_AUTO_PATTERNS = {
 }
 
 
-def get_trust_events() -> dict:
-    """Get trust events with deltas. DB overrides take priority over defaults."""
-    global _trust_events_cache, _trust_events_cache_ts
-    import time
-    now = time.time()
-    # Cache for 60s to avoid constant DB reads
-    if _trust_events_cache is not None and (now - _trust_events_cache_ts) < 60:
-        return _trust_events_cache
-
-    events = dict(_DEFAULT_TRUST_EVENTS)
-    try:
-        db = _get_db()
-        db.execute("""
-            CREATE TABLE IF NOT EXISTS trust_event_config (
-                event TEXT PRIMARY KEY,
-                delta REAL NOT NULL,
-                description TEXT DEFAULT '',
-                updated_at TEXT DEFAULT (datetime('now'))
-            )
-        """)
-        rows = db.execute("SELECT event, delta FROM trust_event_config").fetchall()
-        for r in rows:
-            events[r[0]] = r[1]
-    except Exception:
-        pass
-    _trust_events_cache = events
-    _trust_events_cache_ts = now
-    return events
-
-
 def auto_detect_trust_events(text: str) -> list[dict]:
     """Detect trust events from user text. Returns list of {event, delta, reason}.
 
@@ -164,23 +129,22 @@ def auto_detect_trust_events(text: str) -> list[dict]:
 
     return detected
 
-
 def detect_dissonance(new_instruction: str, min_score: float = 0.65) -> list[dict]:
     """Detect cognitive dissonance: find LTM memories that contradict a new instruction.
 
-    When Francisco gives a new instruction that conflicts with established LTM memories
+    When user gives a new instruction that conflicts with established LTM memories
     (strength > 0.8), this function surfaces the conflict so NEXO can verbalize it
     rather than silently obeying or silently resisting.
 
     Args:
-        new_instruction: The new instruction or preference from Francisco
+        new_instruction: The new instruction or preference from user
         min_score: Minimum cosine similarity to consider as potential conflict
 
     Returns:
         List of conflicting memories with their strength and content
     """
     db = _get_db()
-    query_vec = _embed(new_instruction[:500])
+    query_vec = embed(new_instruction[:500])
     if np.linalg.norm(query_vec) == 0:
         return []
 
@@ -191,7 +155,7 @@ def detect_dissonance(new_instruction: str, min_score: float = 0.65) -> list[dic
     conflicts = []
     for row in rows:
         vec = _blob_to_array(row["embedding"])
-        score = _cosine_similarity(query_vec, vec)
+        score = cosine_similarity(query_vec, vec)
         if score >= min_score:
             conflicts.append({
                 "memory_id": row["id"],
@@ -208,12 +172,12 @@ def detect_dissonance(new_instruction: str, min_score: float = 0.65) -> list[dic
 
 
 def resolve_dissonance(memory_id: int, resolution: str, context: str = "") -> str:
-    """Resolve a cognitive dissonance by applying Francisco's decision.
+    """Resolve a cognitive dissonance by applying user's decision.
 
     Args:
         memory_id: The LTM memory that conflicts with the new instruction
         resolution: One of:
-            - 'paradigm_shift': Francisco changed his mind permanently. Decay old memory,
+            - 'paradigm_shift': user changed his mind permanently. Decay old memory,
               new instruction becomes the standard.
             - 'exception': This is a one-time override. Keep old memory as standard.
             - 'override': Old memory was wrong. Mark as corrupted and decay to dormant.
@@ -264,7 +228,7 @@ def resolve_dissonance(memory_id: int, resolution: str, context: str = "") -> st
 def check_correction_fatigue() -> list[dict]:
     """Find memories corrected 3+ times in the last 7 days — mark as 'under review'.
 
-    These memories are unreliable: Francisco keeps overriding them, suggesting
+    These memories are unreliable: user keeps overriding them, suggesting
     the memory itself may be wrong or outdated.
 
     Returns:
@@ -310,9 +274,8 @@ def check_correction_fatigue() -> list[dict]:
 
     return fatigued
 
-
 def detect_sentiment(text: str) -> dict:
-    """Analyze Francisco's text for sentiment signals.
+    """Analyze user's text for sentiment signals.
 
     Returns detected sentiment, intensity, and action guidance for NEXO.
     Not a model — keyword + heuristic based. Fast and deterministic.
@@ -376,7 +339,7 @@ def detect_sentiment(text: str) -> dict:
 
 
 def log_sentiment(text: str) -> dict:
-    """Detect and log Francisco's sentiment. Returns the detection result."""
+    """Detect and log user's sentiment. Returns the detection result."""
     result = detect_sentiment(text)
     if result["sentiment"] != "neutral":
         db = _get_db()

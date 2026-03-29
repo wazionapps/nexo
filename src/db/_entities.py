@@ -1,27 +1,13 @@
-"""NEXO DB — Entities, Preferences, and Agents CRUD."""
+"""NEXO DB — Entities module."""
 import time
-
-
-def _get_db():
-    from db import get_db
-    return get_db()
-
-
-def _fts_upsert(*args, **kwargs):
-    from db import fts_upsert
-    return fts_upsert(*args, **kwargs)
-
-
-def _multi_word_like(query, columns):
-    from db import _multi_word_like
-    return _multi_word_like(query, columns)
-
+from db._core import get_db, _multi_word_like
+from db._fts import fts_upsert
 
 # ── Entities ──────────────────────────────────────────────────────
 
 def create_entity(name: str, type: str, value: str, notes: str = "") -> int:
     """Create a new entity. Returns the entity ID."""
-    conn = _get_db()
+    conn = get_db()
     now = time.time()
     cursor = conn.execute(
         "INSERT INTO entities (name, type, value, notes, created_at, updated_at) "
@@ -30,13 +16,13 @@ def create_entity(name: str, type: str, value: str, notes: str = "") -> int:
     )
     conn.commit()
     eid = cursor.lastrowid
-    _fts_upsert("entity", str(eid), name, f"{name} {value} {notes}", type or "general", commit=False)
+    fts_upsert("entity", str(eid), name, f"{name} {value} {notes}", type or "general", commit=False)
     return eid
 
 
 def search_entities(query: str, type: str = "") -> list[dict]:
     """Search entities by name or value. Multi-word AND search."""
-    conn = _get_db()
+    conn = get_db()
     frag, params = _multi_word_like(query, ["name", "value"])
     if type:
         where = f"type = ? AND ({frag})"
@@ -52,7 +38,7 @@ def search_entities(query: str, type: str = "") -> list[dict]:
 
 def list_entities(type: str = "") -> list[dict]:
     """List all entities, optionally filtered by type."""
-    conn = _get_db()
+    conn = get_db()
     if type:
         rows = conn.execute(
             "SELECT * FROM entities WHERE type = ? ORDER BY name ASC",
@@ -67,11 +53,11 @@ def list_entities(type: str = "") -> list[dict]:
 
 def update_entity(id: int, **kwargs):
     """Update entity fields: name, type, value, notes."""
-    conn = _get_db()
+    conn = get_db()
     allowed = {"name", "type", "value", "notes"}
     updates = {k: v for k, v in kwargs.items() if k in allowed}
     if not updates:
-        return
+            return
     updates["updated_at"] = time.time()
     set_clause = ", ".join(f"{k} = ?" for k in updates)
     values = list(updates.values()) + [id]
@@ -80,14 +66,12 @@ def update_entity(id: int, **kwargs):
     row = conn.execute("SELECT * FROM entities WHERE id = ?", (id,)).fetchone()
     if row:
         r = dict(row)
-        _fts_upsert("entity", str(id), r.get("name", ""),
-                     f"{r.get('name', '')} {r.get('value', '')} {r.get('notes', '')}",
-                     r.get("type", "general"), commit=False)
+        fts_upsert("entity", str(id), r.get("name",""), f"{r.get('name','')} {r.get('value','')} {r.get('notes','')}", r.get("type","general"), commit=False)
 
 
 def delete_entity(id: int) -> bool:
     """Delete an entity. Returns True if deleted, False if not found."""
-    conn = _get_db()
+    conn = get_db()
     result = conn.execute("DELETE FROM entities WHERE id = ?", (id,))
     conn.execute("DELETE FROM unified_search WHERE source = 'entity' AND source_id = ?", (str(id),))
     conn.commit()
@@ -98,7 +82,7 @@ def delete_entity(id: int) -> bool:
 
 def set_preference(key: str, value: str, category: str = "general"):
     """Set a preference (insert or update)."""
-    conn = _get_db()
+    conn = get_db()
     now = time.time()
     conn.execute(
         "INSERT OR REPLACE INTO preferences (key, value, category, updated_at) "
@@ -110,14 +94,14 @@ def set_preference(key: str, value: str, category: str = "general"):
 
 def get_preference(key: str) -> dict | None:
     """Get a single preference by key."""
-    conn = _get_db()
+    conn = get_db()
     row = conn.execute("SELECT * FROM preferences WHERE key = ?", (key,)).fetchone()
     return dict(row) if row else None
 
 
 def list_preferences(category: str = "") -> list[dict]:
     """List all preferences, optionally filtered by category."""
-    conn = _get_db()
+    conn = get_db()
     if category:
         rows = conn.execute(
             "SELECT * FROM preferences WHERE category = ? ORDER BY key ASC",
@@ -132,7 +116,7 @@ def list_preferences(category: str = "") -> list[dict]:
 
 def delete_preference(key: str) -> bool:
     """Delete a preference. Returns True if deleted, False if not found."""
-    conn = _get_db()
+    conn = get_db()
     result = conn.execute("DELETE FROM preferences WHERE key = ?", (key,))
     conn.commit()
     return result.rowcount > 0
@@ -143,7 +127,7 @@ def delete_preference(key: str) -> bool:
 def create_agent(id: str, name: str, specialization: str, model: str = "sonnet",
                  tools: str = "", context_files: str = "", rules: str = "") -> dict:
     """Register a new agent. Uses INSERT OR REPLACE to allow re-registration."""
-    conn = _get_db()
+    conn = get_db()
     now = time.time()
     conn.execute(
         "INSERT OR REPLACE INTO agents (id, name, specialization, model, tools, context_files, rules, created_at, updated_at) "
@@ -156,25 +140,27 @@ def create_agent(id: str, name: str, specialization: str, model: str = "sonnet",
 
 def get_agent(id: str) -> dict | None:
     """Get an agent by ID."""
-    conn = _get_db()
+    conn = get_db()
     row = conn.execute("SELECT * FROM agents WHERE id = ?", (id,)).fetchone()
     return dict(row) if row else None
 
 
 def list_agents() -> list[dict]:
     """List all registered agents."""
-    conn = _get_db()
-    rows = conn.execute("SELECT * FROM agents ORDER BY name ASC").fetchall()
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM agents ORDER BY name ASC"
+    ).fetchall()
     return [dict(r) for r in rows]
 
 
 def update_agent(id: str, **kwargs):
     """Update agent fields: name, specialization, model, tools, context_files, rules."""
-    conn = _get_db()
+    conn = get_db()
     allowed = {"name", "specialization", "model", "tools", "context_files", "rules"}
     updates = {k: v for k, v in kwargs.items() if k in allowed}
     if not updates:
-        return
+            return
     updates["updated_at"] = time.time()
     set_clause = ", ".join(f"{k} = ?" for k in updates)
     values = list(updates.values()) + [id]
@@ -184,7 +170,9 @@ def update_agent(id: str, **kwargs):
 
 def delete_agent(id: str) -> bool:
     """Delete an agent. Returns True if deleted, False if not found."""
-    conn = _get_db()
+    conn = get_db()
     result = conn.execute("DELETE FROM agents WHERE id = ?", (id,))
     conn.commit()
     return result.rowcount > 0
+
+

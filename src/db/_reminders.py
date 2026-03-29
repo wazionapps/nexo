@@ -1,29 +1,16 @@
-"""NEXO DB — Reminders and Followups CRUD."""
-import sqlite3
-import time
-from datetime import datetime, timedelta
-
-def _get_db():
-    from db import get_db
-    return get_db()
-
-
-def __now_epoch():
-    return time.time()
-
-
-def __fts_upsert(*args, **kwargs):
-    from db import fts_upsert
-    return _fts_upsert(*args, **kwargs)
-
+"""NEXO DB — Reminders module."""
+import sqlite3, time, datetime
+from datetime import timedelta
+from db._core import get_db, now_epoch
+from db._fts import fts_upsert
 
 # ── Reminders ──────────────────────────────────────────────────────
 
 def create_reminder(id: str, description: str, date: str = None,
                     status: str = 'PENDIENTE', category: str = 'general') -> dict:
     """Create a new reminder."""
-    conn = _get_db()
-    now = _now_epoch()
+    conn = get_db()
+    now = now_epoch()
     try:
         conn.execute(
             "INSERT INTO reminders (id, date, description, status, category, created_at, updated_at) "
@@ -39,7 +26,7 @@ def create_reminder(id: str, description: str, date: str = None,
 
 def update_reminder(id: str, **kwargs) -> dict:
     """Update any fields of a reminder: description, date, status, category."""
-    conn = _get_db()
+    conn = get_db()
     row = conn.execute("SELECT * FROM reminders WHERE id = ?", (id,)).fetchone()
     if not row:
             return {"error": f"Reminder {id} not found"}
@@ -47,7 +34,7 @@ def update_reminder(id: str, **kwargs) -> dict:
     updates = {k: v for k, v in kwargs.items() if k in allowed}
     if not updates:
             return {"error": "No valid fields to update"}
-    updates["updated_at"] = _now_epoch()
+    updates["updated_at"] = now_epoch()
     set_clause = ", ".join(f"{k} = ?" for k in updates)
     values = list(updates.values()) + [id]
     conn.execute(f"UPDATE reminders SET {set_clause} WHERE id = ?", values)
@@ -64,7 +51,7 @@ def complete_reminder(id: str) -> dict:
 
 def delete_reminder(id: str) -> bool:
     """Delete a reminder."""
-    conn = _get_db()
+    conn = get_db()
     result = conn.execute("DELETE FROM reminders WHERE id = ?", (id,))
     conn.commit()
     deleted = result.rowcount > 0
@@ -73,7 +60,7 @@ def delete_reminder(id: str) -> bool:
 
 def get_reminders(filter_type: str = 'all') -> list[dict]:
     """Get reminders by filter: 'all' (active), 'due' (date <= today), 'completed'."""
-    conn = _get_db()
+    conn = get_db()
     today = datetime.date.today().isoformat()
     if filter_type == 'completed':
         rows = conn.execute(
@@ -96,7 +83,7 @@ def get_reminders(filter_type: str = 'all') -> list[dict]:
 
 def get_reminder(id: str) -> dict | None:
     """Get a single reminder by id."""
-    conn = _get_db()
+    conn = get_db()
     row = conn.execute("SELECT * FROM reminders WHERE id = ?", (id,)).fetchone()
     return dict(row) if row else None
 
@@ -111,8 +98,8 @@ def create_followup(id: str, description: str, date: str = None,
     recurrence format: 'weekly:monday', 'monthly:1', 'monthly:10', 'quarterly', etc.
     When a recurring followup is completed, a new one is auto-created with the next date.
     """
-    conn = _get_db()
-    now = _now_epoch()
+    conn = get_db()
+    now = now_epoch()
     try:
         conn.execute(
             "INSERT INTO followups (id, date, description, verification, status, reasoning, recurrence, created_at, updated_at) "
@@ -120,7 +107,7 @@ def create_followup(id: str, description: str, date: str = None,
             (id, date, description, verification, status, reasoning, recurrence, now, now)
         )
         conn.commit()
-        _fts_upsert("followup", id, id, f"{description} {verification} {reasoning}", "followup", commit=False)
+        fts_upsert("followup", id, id, f"{description} {verification} {reasoning}", "followup", commit=False)
     except sqlite3.IntegrityError:
         return {"error": f"Followup {id} already exists. Use update instead."}
     row = conn.execute("SELECT * FROM followups WHERE id = ?", (id,)).fetchone()
@@ -129,7 +116,7 @@ def create_followup(id: str, description: str, date: str = None,
 
 def update_followup(id: str, **kwargs) -> dict:
     """Update any fields of a followup: description, date, verification, status, reasoning."""
-    conn = _get_db()
+    conn = get_db()
     row = conn.execute("SELECT * FROM followups WHERE id = ?", (id,)).fetchone()
     if not row:
             return {"error": f"Followup {id} not found"}
@@ -137,14 +124,14 @@ def update_followup(id: str, **kwargs) -> dict:
     updates = {k: v for k, v in kwargs.items() if k in allowed}
     if not updates:
             return {"error": "No valid fields to update"}
-    updates["updated_at"] = _now_epoch()
+    updates["updated_at"] = now_epoch()
     set_clause = ", ".join(f"{k} = ?" for k in updates)
     values = list(updates.values()) + [id]
     conn.execute(f"UPDATE followups SET {set_clause} WHERE id = ?", values)
     conn.commit()
     row = conn.execute("SELECT * FROM followups WHERE id = ?", (id,)).fetchone()
     r = dict(row)
-    _fts_upsert("followup", id, id, f"{r.get('description','')} {r.get('verification','')} {r.get('reasoning','')}", "followup", commit=False)
+    fts_upsert("followup", id, id, f"{r.get('description','')} {r.get('verification','')} {r.get('reasoning','')}", "followup", commit=False)
     return r
 
 
@@ -197,7 +184,7 @@ def _calc_next_recurrence_date(recurrence: str, current_date: str = None) -> str
 def complete_followup(id: str, result: str = '') -> dict:
     """Mark a followup as completed with today's date and optional result.
     If the followup has a recurrence pattern, auto-creates the next occurrence."""
-    conn = _get_db()
+    conn = get_db()
     row = conn.execute("SELECT * FROM followups WHERE id = ?", (id,)).fetchone()
     if not row:
         return {"error": f"Followup {id} not found"}
@@ -233,7 +220,7 @@ def complete_followup(id: str, result: str = '') -> dict:
 
 def delete_followup(id: str) -> bool:
     """Delete a followup."""
-    conn = _get_db()
+    conn = get_db()
     result = conn.execute("DELETE FROM followups WHERE id = ?", (id,))
     conn.execute("DELETE FROM unified_search WHERE source = 'followup' AND source_id = ?", (str(id),))
     conn.commit()
@@ -243,7 +230,7 @@ def delete_followup(id: str) -> bool:
 
 def get_followups(filter_type: str = 'all') -> list[dict]:
     """Get followups by filter: 'all' (active), 'due' (date <= today), 'completed'."""
-    conn = _get_db()
+    conn = get_db()
     today = datetime.date.today().isoformat()
     if filter_type == 'completed':
         rows = conn.execute(
@@ -266,6 +253,8 @@ def get_followups(filter_type: str = 'all') -> list[dict]:
 
 def get_followup(id: str) -> dict | None:
     """Get a single followup by id."""
-    conn = _get_db()
+    conn = get_db()
     row = conn.execute("SELECT * FROM followups WHERE id = ?", (id,)).fetchone()
     return dict(row) if row else None
+
+

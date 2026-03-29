@@ -1,25 +1,7 @@
-"""NEXO DB — Session, file tracking, messaging, and questions."""
-import time
-import secrets
-import string
-import sqlite3
+"""NEXO DB — Sessions module."""
+import time, secrets, string, sqlite3
 from datetime import datetime
-
-SESSION_STALE_SECONDS = 900
-MESSAGE_TTL_SECONDS = 3600
-QUESTION_TTL_SECONDS = 600
-
-
-def _get_db():
-    from db import get_db
-    return get_db()
-
-
-def _gen_id(prefix: str, length: int = 8) -> str:
-    chars = string.ascii_lowercase + string.digits
-    suffix = ''.join(secrets.choice(chars) for _ in range(length))
-    return f"{prefix}-{suffix}"
-
+from db._core import get_db, _gen_id, now_epoch, local_time_str, SESSION_STALE_SECONDS, MESSAGE_TTL_SECONDS, QUESTION_TTL_SECONDS
 
 # ── Session operations ──────────────────────────────────────────────
 
@@ -34,7 +16,7 @@ def local_time_str() -> str:
 
 def register_session(sid: str, task: str) -> dict:
     """Register or re-register a session."""
-    conn = _get_db()
+    conn = get_db()
     now = now_epoch()
     conn.execute(
         "INSERT OR REPLACE INTO sessions (sid, task, started_epoch, last_update_epoch, local_time) "
@@ -52,7 +34,7 @@ def update_session(sid: str, task: str | None) -> dict:
         sid: Session ID.
         task: New task description, or None to keep current task (keepalive touch).
     """
-    conn = _get_db()
+    conn = get_db()
     now = now_epoch()
     row = conn.execute("SELECT started_epoch, task FROM sessions WHERE sid = ?", (sid,)).fetchone()
     if row:
@@ -74,7 +56,7 @@ def update_session(sid: str, task: str | None) -> dict:
 
 def complete_session(sid: str):
     """Remove session and its tracked files."""
-    conn = _get_db()
+    conn = get_db()
     conn.execute("PRAGMA foreign_keys=ON")
     conn.execute("DELETE FROM tracked_files WHERE sid = ?", (sid,))
     conn.execute("DELETE FROM sessions WHERE sid = ?", (sid,))
@@ -83,7 +65,7 @@ def complete_session(sid: str):
 
 def get_active_sessions() -> list[dict]:
     """Get all sessions updated within STALE threshold."""
-    conn = _get_db()
+    conn = get_db()
     cutoff = now_epoch() - SESSION_STALE_SECONDS
     rows = conn.execute(
         "SELECT sid, task, started_epoch, last_update_epoch, local_time "
@@ -95,7 +77,7 @@ def get_active_sessions() -> list[dict]:
 
 def clean_stale_sessions() -> int:
     """Remove stale sessions. Returns count removed."""
-    conn = _get_db()
+    conn = get_db()
     cutoff = now_epoch() - SESSION_STALE_SECONDS
     stale = conn.execute(
         "SELECT sid FROM sessions WHERE last_update_epoch <= ?", (cutoff,)
@@ -112,7 +94,7 @@ def clean_stale_sessions() -> int:
 
 def search_sessions(keyword: str) -> list[dict]:
     """Find sessions whose task contains keyword (case-insensitive)."""
-    conn = _get_db()
+    conn = get_db()
     cutoff = now_epoch() - SESSION_STALE_SECONDS
     rows = conn.execute(
         "SELECT sid, task, last_update_epoch, local_time FROM sessions "
@@ -126,7 +108,7 @@ def search_sessions(keyword: str) -> list[dict]:
 
 def track_files(sid: str, paths: list[str]) -> dict:
     """Track files for a session. Returns conflicts if any."""
-    conn = _get_db()
+    conn = get_db()
     now = now_epoch()
     session = conn.execute("SELECT sid FROM sessions WHERE sid = ?", (sid,)).fetchone()
     if not session:
@@ -144,7 +126,7 @@ def track_files(sid: str, paths: list[str]) -> dict:
 
 def untrack_files(sid: str, paths: list[str] | None = None):
     """Untrack files. If paths is None, untrack all."""
-    conn = _get_db()
+    conn = get_db()
     if paths:
         for path in paths:
             conn.execute(
@@ -158,7 +140,7 @@ def untrack_files(sid: str, paths: list[str] | None = None):
 
 def get_all_tracked_files() -> dict:
     """Get all tracked files grouped by session."""
-    conn = _get_db()
+    conn = get_db()
     cutoff = now_epoch() - SESSION_STALE_SECONDS
     rows = conn.execute(
         "SELECT tf.sid, tf.path, s.task FROM tracked_files tf "
@@ -206,7 +188,7 @@ def _check_conflicts(conn: sqlite3.Connection, sid: str) -> list[dict]:
 
 def send_message(from_sid: str, to_sid: str, text: str) -> str:
     """Send a message. to_sid can be 'all' for broadcast."""
-    conn = _get_db()
+    conn = get_db()
     _clean_old_messages(conn)
     msg_id = _gen_id("msg", 6)
     conn.execute(
@@ -220,7 +202,7 @@ def send_message(from_sid: str, to_sid: str, text: str) -> str:
 
 def get_inbox(sid: str) -> list[dict]:
     """Get unread messages for a session."""
-    conn = _get_db()
+    conn = get_db()
     _clean_old_messages(conn)
     rows = conn.execute(
         "SELECT m.id, m.from_sid, m.to_sid, m.text, m.created_epoch "
@@ -251,7 +233,7 @@ def _clean_old_messages(conn: sqlite3.Connection):
 
 def ask_question(from_sid: str, to_sid: str, question: str) -> str:
     """Create a pending question. Returns qid."""
-    conn = _get_db()
+    conn = get_db()
     _expire_old_questions(conn)
     qid = _gen_id("q", 8)
     conn.execute(
@@ -265,7 +247,7 @@ def ask_question(from_sid: str, to_sid: str, question: str) -> str:
 
 def answer_question(qid: str, answer: str) -> dict:
     """Answer a pending question."""
-    conn = _get_db()
+    conn = get_db()
     row = conn.execute(
         "SELECT * FROM questions WHERE qid = ?", (qid,)
     ).fetchone()
@@ -284,7 +266,7 @@ def answer_question(qid: str, answer: str) -> dict:
 
 def get_pending_questions(sid: str) -> list[dict]:
     """Get pending questions addressed to this session."""
-    conn = _get_db()
+    conn = get_db()
     _expire_old_questions(conn)
     rows = conn.execute(
         "SELECT qid, from_sid, question, created_epoch FROM questions "
@@ -297,7 +279,7 @@ def get_pending_questions(sid: str) -> list[dict]:
 
 def check_answer(qid: str) -> dict | None:
     """Check if a question has been answered. Returns answer or None."""
-    conn = _get_db()
+    conn = get_db()
     row = conn.execute(
         "SELECT qid, answer, status FROM questions WHERE qid = ?", (qid,)
     ).fetchone()
@@ -314,3 +296,5 @@ def _expire_old_questions(conn: sqlite3.Connection):
         "WHERE status = 'pending' AND created_epoch < ?",
         (cutoff,)
     )
+
+

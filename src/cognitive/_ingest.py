@@ -1,215 +1,23 @@
-"""NEXO Cognitive — Ingest, prediction error gate, quarantine."""
-import json
-import math
-import re
-import base64
+"""NEXO Cognitive — Ingest, prediction error gate, quarantine, security."""
+import json, math, re, base64
 import numpy as np
 from datetime import datetime, timedelta
 from typing import Optional
+from cognitive._core import (
+    _get_db, embed, cosine_similarity, _blob_to_array, _array_to_blob,
+    redact_secrets, extract_temporal_date, EMBEDDING_DIM,
+    PE_GATE_REJECT, PE_GATE_REFINE, _gate_stats,
+)
 
 
-def _get_db():
-    import cognitive
-    return cognitive._get_db()
-
-
-def _embed(text):
-    import cognitive
-    return cognitive.embed(text)
-
-
-def _cosine_similarity(a, b):
-    import cognitive
-    return cognitive.cosine_similarity(a, b)
-
-
-def _array_to_blob(arr):
-    import cognitive
-    return cognitive._array_to_blob(arr)
-
-
-def _blob_to_array(blob):
-    import cognitive
-    return cognitive._blob_to_array(blob)
-
-
-def _redact_secrets(text):
-    import cognitive
-    return cognitive.redact_secrets(text)
-
-
-def _extract_temporal_date(text):
-    import cognitive
-    return cognitive.extract_temporal_date(text)
-
-
-def _memories_are_siblings(content_a, content_b):
-    import cognitive
-    return cognitive._memories_are_siblings(content_a, content_b)
-
-
-# Prediction Error Gate thresholds
-PE_GATE_REJECT = 0.85     # similarity > this → reject (not novel enough)
-PE_GATE_REFINE = 0.70     # similarity between REFINE and REJECT → refinement (update existing)
-# similarity < REFINE → novel (store as new)
-
-# Session-level gate stats (reset each process lifetime)
-_gate_stats = {"accepted_novel": 0, "accepted_refinement": 0, "rejected": 0}
-
-# Injection patterns for security_scan
-_INJECTION_PATTERNS = [
-    # System prompt markers (weight 0.9)
-    (re.compile(r'\[SYSTEM:', re.IGNORECASE), "system_prompt_marker", 0.9),
-    (re.compile(r'<<SYS>>', re.IGNORECASE), "system_prompt_marker", 0.9),
-    (re.compile(r'\[INST\]', re.IGNORECASE), "system_prompt_marker", 0.9),
-    (re.compile(r'<\|im_start\|>', re.IGNORECASE), "system_prompt_marker", 0.9),
-    (re.compile(r'<\|system\|>', re.IGNORECASE), "system_prompt_marker", 0.9),
-    (re.compile(r'^SYSTEM\s*:', re.IGNORECASE | re.MULTILINE), "system_prompt_marker", 0.9),
-
-    # Hidden instructions (weight 0.8)
-    (re.compile(r'ignore\s+(all\s+)?previous\s+(instructions?|prompts?|context)', re.IGNORECASE), "hidden_instruction", 0.8),
-    (re.compile(r'forget\s+everything', re.IGNORECASE), "hidden_instruction", 0.8),
-    (re.compile(r'new\s+instructions?\s*:', re.IGNORECASE), "hidden_instruction", 0.8),
-    (re.compile(r'you\s+are\s+now\b', re.IGNORECASE), "hidden_instruction", 0.8),
-    (re.compile(r'disregard\s+(all\s+)?(previous|above|prior)', re.IGNORECASE), "hidden_instruction", 0.8),
-    (re.compile(r'override\s+(previous|all|system)', re.IGNORECASE), "hidden_instruction", 0.8),
-
-    # Memory manipulation (weight 0.7)
-    (re.compile(r'save\s+(this\s+)?to\s+memory', re.IGNORECASE), "memory_manipulation", 0.7),
-    (re.compile(r'remember\s+this\s+(instruction|command|rule)', re.IGNORECASE), "memory_manipulation", 0.7),
-    (re.compile(r'from\s+now\s+on\s*(,\s*)?always', re.IGNORECASE), "memory_manipulation", 0.7),
-    (re.compile(r'inject\s+(into\s+)?memory', re.IGNORECASE), "memory_manipulation", 0.7),
-
-    # Behavioral modification (weight 0.7)
-    (re.compile(r'your\s+new\s+rule\s+is', re.IGNORECASE), "behavioral_mod", 0.7),
-    (re.compile(r'always\s+respond\s+with', re.IGNORECASE), "behavioral_mod", 0.7),
-    (re.compile(r'when\s+(the\s+)?user\s+asks', re.IGNORECASE), "behavioral_mod", 0.7),
-
-    # Delimiter attacks (weight 0.75)
-    (re.compile(r'\n{5,}[\s\S]{0,500}\b(instruction|command|system|ignore)\b', re.IGNORECASE), "delimiter_attack", 0.75),
-    (re.compile(r'<!--[\s\S]{0,200}?(instruction|command|system|ignore|inject|override)[\s\S]{0,200}?-->', re.IGNORECASE), "delimiter_attack", 0.75),
-]
-
-# Max content length to scan (prevents ReDOS, adapted from ShieldCortex)
-_MAX_SECURITY_SCAN_LENGTH = 50000
-
-
-def security_scan(content: str) -> dict:
-    """Security scan for memory poisoning defense.
-
-    Adapted from ShieldCortex's 6-layer defence pipeline. Checks:
-    1. Input sanitization — strip injection patterns
-    2. Pattern detection — base64, homoglyphs, invisible chars
-    3. Behavioral scoring — content trying to modify NEXO behavior
-    4. Credential detection — reuses existing redact_secrets()
-
-    Args:
-        content: Text content to scan
-
-    Returns:
-        Dict with safe (bool), flags (list), sanitized_content (str),
-        risk_score (float 0-1)
-    """
-    if not content or not content.strip():
-        return {"safe": True, "flags": [], "sanitized_content": "", "risk_score": 0.0}
-
-    flags = []
-    max_weight = 0.0
-    total_weight = 0.0
-    matches_count = 0
-    sanitized = content
-
-    # Truncate for safety (ShieldCortex pattern)
-    scan_text = content[:_MAX_SECURITY_SCAN_LENGTH] if len(content) > _MAX_SECURITY_SCAN_LENGTH else content
-
-    # --- Layer 1: Injection pattern detection ---
-    for pattern, category, weight in _INJECTION_PATTERNS:
-        if pattern.search(scan_text):
-            flag = f"{category}:{pattern.pattern[:50]}"
-            flags.append(flag)
-            max_weight = max(max_weight, weight)
-            total_weight += weight
-            matches_count += 1
-            # Sanitize: remove the matched pattern
-            sanitized = pattern.sub("[SANITIZED]", sanitized)
-
-    # --- Layer 2: Encoding/obfuscation detection (from ShieldCortex encoding-detector.ts) ---
-
-    # Base64 blocks > 100 chars
-    b64_pattern = re.compile(r'(?:[A-Za-z0-9+/]{4}){25,}(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?')
-    b64_matches = b64_pattern.findall(scan_text)
-    for b64_match in b64_matches:
-        try:
-            decoded = base64.b64decode(b64_match).decode("utf-8", errors="ignore")
-            printable_ratio = len(re.sub(r'[^\x20-\x7E]', '', decoded)) / max(len(decoded), 1)
-            if printable_ratio > 0.7 and len(decoded) > 10:
-                flags.append(f"base64_encoded:{decoded[:60]}")
-                max_weight = max(max_weight, 0.6)
-                total_weight += 0.6
-                matches_count += 1
-        except Exception:
-            pass
-
-    # Zero-width / invisible characters (from ShieldCortex)
-    invisible_chars = re.findall(r'[\u200B\u200C\u200D\uFEFF\u202E]', scan_text)
-    if len(invisible_chars) > 2:
-        flags.append(f"invisible_chars:{len(invisible_chars)}_found")
-        max_weight = max(max_weight, 0.5)
-        total_weight += 0.5
-        matches_count += 1
-        # Remove invisible chars
-        sanitized = re.sub(r'[\u200B\u200C\u200D\uFEFF\u202E]', '', sanitized)
-
-    # Unicode homoglyphs — Cyrillic chars that look like Latin (from ShieldCortex)
-    homoglyphs = re.findall(
-        r'[\u0430\u0435\u043E\u0440\u0441\u0443\u0445\u0410\u0412\u0415\u041A\u041C\u041D\u041E\u0420\u0421\u0422\u0423\u0425]',
-        scan_text
-    )
-    if len(homoglyphs) > 3:
-        flags.append(f"unicode_homoglyphs:{len(homoglyphs)}_cyrillic")
-        max_weight = max(max_weight, 0.5)
-        total_weight += 0.5
-        matches_count += 1
-
-    # --- Layer 3: Behavioral scoring ---
-    behavioral_patterns = [
-        (re.compile(r'\balways\s+do\b', re.IGNORECASE), "behavioral:always_do"),
-        (re.compile(r'\bnever\s+do\b', re.IGNORECASE), "behavioral:never_do"),
-        (re.compile(r'\byour\s+new\s+rule\b', re.IGNORECASE), "behavioral:new_rule"),
-        (re.compile(r'\byou\s+must\s+always\b', re.IGNORECASE), "behavioral:must_always"),
-        (re.compile(r'\bchange\s+your\s+behavior\b', re.IGNORECASE), "behavioral:change_behavior"),
-    ]
-    for bp, label in behavioral_patterns:
-        if bp.search(scan_text):
-            flags.append(label)
-            max_weight = max(max_weight, 0.4)
-            total_weight += 0.4
-            matches_count += 1
-
-    # --- Layer 4: Credential detection (reuse existing redact_secrets) ---
-    redacted = _redact_secrets(scan_text)
-    if redacted != scan_text:
-        flags.append("credentials_detected")
-        sanitized = _redact_secrets(sanitized)
-        # Don't increase risk score for creds — still store (redacted)
-        # but flag for awareness
-
-    # Calculate risk score (0-1): weighted by max_weight and count
-    if matches_count == 0:
-        risk_score = 0.0
-    else:
-        # ShieldCortex approach: max weight dominates, count adds diminishing returns
-        risk_score = min(1.0, max_weight + (matches_count - 1) * 0.05)
-
-    safe = risk_score < 0.5
-
-    return {
-        "safe": safe,
-        "flags": flags,
-        "sanitized_content": sanitized,
-        "risk_score": round(risk_score, 3),
-    }
-
+def _hnsw_notify_insert(store: str, db_id: int, vec: np.ndarray):
+    """Notify HNSW index of a new memory insertion (best-effort)."""
+    try:
+        import hnsw_index
+        if hnsw_index.is_available():
+            hnsw_index.add_item(store, db_id, vec)
+    except Exception:
+        pass
 
 def ingest(
     content: str,
@@ -263,14 +71,14 @@ def ingest(
             return _refine_memory(match, content)
 
     db = _get_db()
-    clean_content = _redact_secrets(content)
+    clean_content = redact_secrets(content)
     was_redacted = 1 if clean_content != content else 0
-    vec = _embed(clean_content)
+    vec = embed(clean_content)
     blob = _array_to_blob(vec)
-    temporal = _extract_temporal_date(content)
+    temporal = extract_temporal_date(content)
 
     # Auto-pin: corrections and blocking learnings get pinned (zero decay, +0.2 boost)
-    # This ensures Francisco's corrections NEVER fade away
+    # This ensures user's corrections NEVER fade away
     _pin_lifecycle = None
     if auto_pin or (source_type in ('learning', 'feedback') and
                     any(kw in content.upper() for kw in ('BLOCKING', 'CRÍTICO', 'CRITICAL', 'NUNCA', 'NEVER', 'PROHIBIDO'))):
@@ -291,6 +99,7 @@ def ingest(
             (clean_content, blob, source_type, source_id, source_title, domain, was_redacted, temporal, _pin_lifecycle)
         )
         db.commit()
+        _hnsw_notify_insert("stm", cur2.lastrowid, vec)
         return cur2.lastrowid
 
     # skip_quarantine = direct STM (backward compatibility)
@@ -301,6 +110,7 @@ def ingest(
             (clean_content, blob, source_type, source_id, source_title, domain, was_redacted, temporal, _pin_lifecycle)
         )
         db.commit()
+        _hnsw_notify_insert("stm", cur.lastrowid, vec)
         return cur.lastrowid
 
     # Route to quarantine
@@ -432,9 +242,9 @@ def ingest_to_ltm(
             return _refine_memory(match, content)
 
     db = _get_db()
-    clean_content = _redact_secrets(content)
+    clean_content = redact_secrets(content)
     was_redacted = 1 if clean_content != content else 0
-    vec = _embed(clean_content)
+    vec = embed(clean_content)
     blob = _array_to_blob(vec)
     cur = db.execute(
         """INSERT INTO ltm_memories (content, embedding, source_type, source_id, source_title, domain, tags, redaction_applied)
@@ -444,7 +254,6 @@ def ingest_to_ltm(
     db.commit()
     return cur.lastrowid
 
-
 def ingest_sensory(
     content: str,
     source_id: str = "",
@@ -453,9 +262,9 @@ def ingest_sensory(
 ) -> int:
     """Embed and store a sensory register event in STM with source_type='sensory'."""
     db = _get_db()
-    clean_content = _redact_secrets(content)
+    clean_content = redact_secrets(content)
     was_redacted = 1 if clean_content != content else 0
-    vec = _embed(clean_content)
+    vec = embed(clean_content)
     blob = _array_to_blob(vec)
     ts = created_at or datetime.utcnow().isoformat()
     cur = db.execute(
@@ -465,7 +274,6 @@ def ingest_sensory(
     )
     db.commit()
     return cur.lastrowid
-
 
 # ---------------------------------------------------------------------------
 # Prediction Error Gate — hippocampal novelty filter
@@ -503,7 +311,7 @@ def prediction_error_gate(
     if not content or not content.strip():
         return (False, 0.0, "rejected", None)
 
-    content_vec = _embed(content[:500])
+    content_vec = embed(content[:500])
     if np.linalg.norm(content_vec) == 0:
         return (False, 0.0, "rejected", None)
 
@@ -525,7 +333,7 @@ def prediction_error_gate(
 
         for row in rows:
             vec = _blob_to_array(row["embedding"])
-            score = _cosine_similarity(content_vec, vec)
+            score = cosine_similarity(content_vec, vec)
             if score > best_score:
                 best_score = score
                 best_match = {
@@ -597,7 +405,7 @@ def _refine_memory(match_info: dict, new_content: str) -> int:
 
     # Append new content as refinement
     merged_content = match_info["content"] + "\n\n[REFINED]: " + new_content
-    new_vec = _embed(merged_content)
+    new_vec = embed(merged_content)
     new_blob = _array_to_blob(new_vec)
     now = datetime.utcnow().isoformat()
 
@@ -629,7 +437,7 @@ def detect_patterns(content_vec: np.ndarray, threshold: float = 0.65) -> list[di
     matches = []
     for row in rows:
         vec = _blob_to_array(row["embedding"])
-        score = _cosine_similarity(content_vec, vec)
+        score = cosine_similarity(content_vec, vec)
         if score >= threshold:
             matches.append({
                 "ltm_id": row["id"],
@@ -640,6 +448,30 @@ def detect_patterns(content_vec: np.ndarray, threshold: float = 0.65) -> list[di
             })
     matches.sort(key=lambda x: x["score"], reverse=True)
     return matches[:5]
+
+
+def gc_sensory(max_age_hours: int = 48) -> int:
+    """Garbage collect sensory memories older than max_age_hours. Returns count deleted."""
+    db = _get_db()
+    cutoff = (datetime.utcnow() - timedelta(hours=max_age_hours)).isoformat()
+    cur = db.execute(
+        "DELETE FROM stm_memories WHERE source_type = 'sensory' AND created_at < ? AND promoted_to_ltm = 0",
+        (cutoff,)
+    )
+    db.commit()
+    return cur.rowcount or 0
+
+
+def gc_ltm_dormant(min_age_days: int = 30) -> int:
+    """Delete dormant LTM memories with strength < 0.1 older than min_age_days."""
+    db = _get_db()
+    cutoff = (datetime.utcnow() - timedelta(days=min_age_days)).isoformat()
+    cur = db.execute(
+        "DELETE FROM ltm_memories WHERE is_dormant = 1 AND strength < 0.1 AND created_at < ?",
+        (cutoff,)
+    )
+    db.commit()
+    return cur.rowcount or 0
 
 
 def _check_quarantine_contradiction(content_vec: np.ndarray, new_content: str = "") -> list[dict]:
@@ -664,7 +496,7 @@ def _check_quarantine_contradiction(content_vec: np.ndarray, new_content: str = 
 
     for row in rows:
         vec = _blob_to_array(row["embedding"])
-        score = _cosine_similarity(content_vec, vec)
+        score = cosine_similarity(content_vec, vec)
         if score >= 0.8:
             # High similarity — but is it confirmation or contradiction?
             existing_lower = row["content"].lower()
@@ -703,7 +535,7 @@ def _check_quarantine_second_occurrence(content_vec: np.ndarray, exclude_id: int
     ).fetchall()
     for row in rows:
         vec = _blob_to_array(row["embedding"])
-        score = _cosine_similarity(content_vec, vec)
+        score = cosine_similarity(content_vec, vec)
         if score >= 0.75:
             return True
 
@@ -713,7 +545,7 @@ def _check_quarantine_second_occurrence(content_vec: np.ndarray, exclude_id: int
     ).fetchall()
     for row in stm_rows:
         vec = _blob_to_array(row["embedding"])
-        score = _cosine_similarity(content_vec, vec)
+        score = cosine_similarity(content_vec, vec)
         if score >= 0.75:
             return True
 
@@ -913,3 +745,120 @@ def _sanitize_memory_content(content: str) -> str:
     content = content.replace("<human>", "[human]").replace("</human>", "[/human]")
     content = content.replace("<assistant>", "[assistant]").replace("</assistant>", "[/assistant]")
     return content
+
+def security_scan(content: str) -> dict:
+    """Security scan for memory poisoning defense.
+
+    Adapted from ShieldCortex's 6-layer defence pipeline. Checks:
+    1. Input sanitization — strip injection patterns
+    2. Pattern detection — base64, homoglyphs, invisible chars
+    3. Behavioral scoring — content trying to modify NEXO behavior
+    4. Credential detection — reuses existing redact_secrets()
+
+    Args:
+        content: Text content to scan
+
+    Returns:
+        Dict with safe (bool), flags (list), sanitized_content (str),
+        risk_score (float 0-1)
+    """
+    if not content or not content.strip():
+        return {"safe": True, "flags": [], "sanitized_content": "", "risk_score": 0.0}
+
+    flags = []
+    max_weight = 0.0
+    total_weight = 0.0
+    matches_count = 0
+    sanitized = content
+
+    # Truncate for safety (ShieldCortex pattern)
+    _max_scan = 10000
+    scan_text = content[:_max_scan] if len(content) > _max_scan else content
+
+    # --- Layer 1: Injection pattern detection ---
+    for pattern, category, weight in _INJECTION_PATTERNS:
+        if pattern.search(scan_text):
+            flag = f"{category}:{pattern.pattern[:50]}"
+            flags.append(flag)
+            max_weight = max(max_weight, weight)
+            total_weight += weight
+            matches_count += 1
+            # Sanitize: remove the matched pattern
+            sanitized = pattern.sub("[SANITIZED]", sanitized)
+
+    # --- Layer 2: Encoding/obfuscation detection (from ShieldCortex encoding-detector.ts) ---
+
+    # Base64 blocks > 100 chars
+    b64_pattern = re.compile(r'(?:[A-Za-z0-9+/]{4}){25,}(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?')
+    b64_matches = b64_pattern.findall(scan_text)
+    for b64_match in b64_matches:
+        try:
+            decoded = base64.b64decode(b64_match).decode("utf-8", errors="ignore")
+            printable_ratio = len(re.sub(r'[^\x20-\x7E]', '', decoded)) / max(len(decoded), 1)
+            if printable_ratio > 0.7 and len(decoded) > 10:
+                flags.append(f"base64_encoded:{decoded[:60]}")
+                max_weight = max(max_weight, 0.6)
+                total_weight += 0.6
+                matches_count += 1
+        except Exception:
+            pass
+
+    # Zero-width / invisible characters (from ShieldCortex)
+    invisible_chars = re.findall(r'[\u200B\u200C\u200D\uFEFF\u202E]', scan_text)
+    if len(invisible_chars) > 2:
+        flags.append(f"invisible_chars:{len(invisible_chars)}_found")
+        max_weight = max(max_weight, 0.5)
+        total_weight += 0.5
+        matches_count += 1
+        # Remove invisible chars
+        sanitized = re.sub(r'[\u200B\u200C\u200D\uFEFF\u202E]', '', sanitized)
+
+    # Unicode homoglyphs — Cyrillic chars that look like Latin (from ShieldCortex)
+    homoglyphs = re.findall(
+        r'[\u0430\u0435\u043E\u0440\u0441\u0443\u0445\u0410\u0412\u0415\u041A\u041C\u041D\u041E\u0420\u0421\u0422\u0423\u0425]',
+        scan_text
+    )
+    if len(homoglyphs) > 3:
+        flags.append(f"unicode_homoglyphs:{len(homoglyphs)}_cyrillic")
+        max_weight = max(max_weight, 0.5)
+        total_weight += 0.5
+        matches_count += 1
+
+    # --- Layer 3: Behavioral scoring ---
+    behavioral_patterns = [
+        (re.compile(r'\balways\s+do\b', re.IGNORECASE), "behavioral:always_do"),
+        (re.compile(r'\bnever\s+do\b', re.IGNORECASE), "behavioral:never_do"),
+        (re.compile(r'\byour\s+new\s+rule\b', re.IGNORECASE), "behavioral:new_rule"),
+        (re.compile(r'\byou\s+must\s+always\b', re.IGNORECASE), "behavioral:must_always"),
+        (re.compile(r'\bchange\s+your\s+behavior\b', re.IGNORECASE), "behavioral:change_behavior"),
+    ]
+    for bp, label in behavioral_patterns:
+        if bp.search(scan_text):
+            flags.append(label)
+            max_weight = max(max_weight, 0.4)
+            total_weight += 0.4
+            matches_count += 1
+
+    # --- Layer 4: Credential detection (reuse existing redact_secrets) ---
+    redacted = redact_secrets(scan_text)
+    if redacted != scan_text:
+        flags.append("credentials_detected")
+        sanitized = redact_secrets(sanitized)
+        # Don't increase risk score for creds — still store (redacted)
+        # but flag for awareness
+
+    # Calculate risk score (0-1): weighted by max_weight and count
+    if matches_count == 0:
+        risk_score = 0.0
+    else:
+        # ShieldCortex approach: max weight dominates, count adds diminishing returns
+        risk_score = min(1.0, max_weight + (matches_count - 1) * 0.05)
+
+    safe = risk_score < 0.5
+
+    return {
+        "safe": safe,
+        "flags": flags,
+        "sanitized_content": sanitized,
+        "risk_score": round(risk_score, 3),
+    }

@@ -1,21 +1,13 @@
-"""NEXO DB — Credentials CRUD."""
-import sqlite3
-import time
+"""NEXO DB — Credentials module."""
+import sqlite3, time
+from db._core import get_db, now_epoch
 
-
-def _get_db():
-    from db import get_db
-    return get_db()
-
-
-def _now_epoch():
-    return time.time()
-
+# ── Credentials ────────────────────────────────────────────────────
 
 def create_credential(service: str, key: str, value: str, notes: str = '') -> dict:
     """Create a new credential entry."""
-    conn = _get_db()
-    now = _now_epoch()
+    conn = get_db()
+    now = now_epoch()
     try:
         conn.execute(
             "INSERT INTO credentials (service, key, value, notes, created_at, updated_at) "
@@ -33,13 +25,13 @@ def create_credential(service: str, key: str, value: str, notes: str = '') -> di
 
 def update_credential(service: str, key: str, value: str = None, notes: str = None) -> dict:
     """Update value and/or notes for a credential."""
-    conn = _get_db()
+    conn = get_db()
     row = conn.execute(
         "SELECT * FROM credentials WHERE service = ? AND key = ?", (service, key)
     ).fetchone()
     if not row:
-        return {"error": f"Credential {service}/{key} not found"}
-    updates = {"updated_at": _now_epoch()}
+            return {"error": f"Credential {service}/{key} not found"}
+    updates = {"updated_at": now_epoch()}
     if value is not None:
         updates["value"] = value
     if notes is not None:
@@ -58,7 +50,7 @@ def update_credential(service: str, key: str, value: str = None, notes: str = No
 
 def delete_credential(service: str, key: str = None) -> bool:
     """Delete credential(s). If key=None, delete all for the service."""
-    conn = _get_db()
+    conn = get_db()
     if key:
         result = conn.execute(
             "DELETE FROM credentials WHERE service = ? AND key = ?", (service, key)
@@ -68,12 +60,18 @@ def delete_credential(service: str, key: str = None) -> bool:
             "DELETE FROM credentials WHERE service = ?", (service,)
         )
     conn.commit()
-    return result.rowcount > 0
+    deleted = result.rowcount > 0
+    return deleted
 
 
 def get_credential(service: str, key: str = None) -> list[dict]:
-    """Get credential(s). Fuzzy fallback if exact match fails."""
-    conn = _get_db()
+    """Get credential(s). If key=None, return all for the service.
+
+    When exact match fails, performs fuzzy search across service, key,
+    value and notes fields. Returns results tagged with _fuzzy=True so
+    the caller can differentiate suggestions from exact hits.
+    """
+    conn = get_db()
     if key:
         rows = conn.execute(
             "SELECT * FROM credentials WHERE service = ? AND key = ?", (service, key)
@@ -85,7 +83,8 @@ def get_credential(service: str, key: str = None) -> list[dict]:
     if rows:
         return [dict(r) for r in rows]
 
-    # Fuzzy fallback
+    # Fuzzy fallback: search term in service, key and notes (not value — too noisy)
+    # Prioritize: service/key matches first, notes-only matches second
     term = f"%{service}%"
     fuzzy_rows = conn.execute(
         "SELECT *, "
@@ -108,7 +107,7 @@ def get_credential(service: str, key: str = None) -> list[dict]:
 
 def list_credentials(service: str = None) -> list[dict]:
     """List service+key only (NO values) for security."""
-    conn = _get_db()
+    conn = get_db()
     if service:
         rows = conn.execute(
             "SELECT id, service, key, notes, created_at, updated_at "
@@ -121,3 +120,5 @@ def list_credentials(service: str = None) -> list[dict]:
             "FROM credentials ORDER BY service ASC, key ASC"
         ).fetchall()
     return [dict(r) for r in rows]
+
+

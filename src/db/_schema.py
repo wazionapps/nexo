@@ -1,29 +1,6 @@
-"""NEXO DB Schema Migrations."""
-import sqlite3
-
-
-def _get_db():
-    from db import get_db
-    return get_db()
-
-
-def _migrate_add_column(conn, table: str, column: str, col_type: str):
-    """Add column if it doesn't exist (idempotent)."""
-    try:
-        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}")
-        conn.commit()
-    except sqlite3.OperationalError as e:
-        if "duplicate column" in str(e).lower():
-            pass
-        else:
-            raise
-
-
-def _migrate_add_index(conn, index_name: str, table: str, column: str):
-    """Create index if it doesn't exist (idempotent)."""
-    conn.execute(f"CREATE INDEX IF NOT EXISTS {index_name} ON {table}({column})")
-    conn.commit()
-
+"""NEXO DB — Schema module."""
+from db._core import get_db
+from db._fts import _migrate_add_column, _migrate_add_index
 
 # ── Formal Migration System ─────────────────────────────────────
 #
@@ -145,58 +122,6 @@ def _m8_adaptive_log_and_somatic(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_somatic_events_projected ON somatic_events(projected)")
 
 
-def _m9_maintenance_schedule(conn):
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS maintenance_schedule (
-            task_name TEXT PRIMARY KEY,
-            interval_hours REAL NOT NULL,
-            last_run_at TEXT DEFAULT NULL,
-            last_duration_ms INTEGER DEFAULT 0,
-            run_count INTEGER DEFAULT 0
-        )
-    """)
-    tasks = [
-        ('cognitive_decay', 20), ('synthesis', 20), ('self_audit', 144),
-        ('weight_learning', 20), ('somatic_projection', 20), ('somatic_decay', 20),
-        ('graph_maintenance', 48),
-    ]
-    for name, hours in tasks:
-        conn.execute(
-            "INSERT OR IGNORE INTO maintenance_schedule (task_name, interval_hours) VALUES (?, ?)",
-            (name, hours)
-        )
-
-
-def _m10_diary_archive(conn):
-    """Permanent diary archive — diaries are never truly deleted, just moved here."""
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS diary_archive (
-            id INTEGER PRIMARY KEY,
-            session_id TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            decisions TEXT NOT NULL,
-            discarded TEXT,
-            pending TEXT,
-            context_next TEXT,
-            summary TEXT NOT NULL,
-            mental_state TEXT,
-            domain TEXT,
-            user_signals TEXT,
-            self_critique TEXT DEFAULT '',
-            source TEXT DEFAULT 'claude',
-            archived_at TEXT DEFAULT (datetime('now'))
-        )
-    """)
-    conn.execute("""
-        CREATE INDEX IF NOT EXISTS idx_diary_archive_created
-        ON diary_archive (created_at)
-    """)
-    conn.execute("""
-        CREATE INDEX IF NOT EXISTS idx_diary_archive_domain
-        ON diary_archive (domain)
-    """)
-
-
 def _m11_artifact_registry(conn):
     """Artifact Registry — structured index of things NEXO creates/deploys.
 
@@ -248,6 +173,58 @@ def _m11_artifact_registry(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_artifact_aliases_aid ON artifact_aliases(artifact_id)")
 
 
+def _m10_diary_archive(conn):
+    """Permanent diary archive — diaries are never truly deleted, just moved here."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS diary_archive (
+            id INTEGER PRIMARY KEY,
+            session_id TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            decisions TEXT NOT NULL,
+            discarded TEXT,
+            pending TEXT,
+            context_next TEXT,
+            summary TEXT NOT NULL,
+            mental_state TEXT,
+            domain TEXT,
+            user_signals TEXT,
+            self_critique TEXT DEFAULT '',
+            source TEXT DEFAULT 'claude',
+            archived_at TEXT DEFAULT (datetime('now'))
+        )
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_diary_archive_created
+        ON diary_archive (created_at)
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_diary_archive_domain
+        ON diary_archive (domain)
+    """)
+
+
+def _m9_maintenance_schedule(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS maintenance_schedule (
+            task_name TEXT PRIMARY KEY,
+            interval_hours REAL NOT NULL,
+            last_run_at TEXT DEFAULT NULL,
+            last_duration_ms INTEGER DEFAULT 0,
+            run_count INTEGER DEFAULT 0
+        )
+    """)
+    tasks = [
+        ('cognitive_decay', 20), ('synthesis', 20), ('self_audit', 144),
+        ('weight_learning', 20), ('somatic_projection', 20), ('somatic_decay', 20),
+        ('graph_maintenance', 48),
+    ]
+    for name, hours in tasks:
+        conn.execute(
+            "INSERT OR IGNORE INTO maintenance_schedule (task_name, interval_hours) VALUES (?, ?)",
+            (name, hours)
+        )
+
+
 def _m12_session_checkpoints(conn):
     """Session checkpoints for intelligent auto-compaction.
 
@@ -296,7 +273,7 @@ def run_migrations(conn=None):
     Called automatically by init_db() on every server start.
     """
     if conn is None:
-        conn = _get_db()
+        conn = get_db()
 
     conn.execute("""
         CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -328,9 +305,11 @@ def run_migrations(conn=None):
 
 def get_schema_version() -> int:
     """Return the highest applied migration version, or 0 if none."""
-    conn = _get_db()
+    conn = get_db()
     try:
         row = conn.execute("SELECT MAX(version) FROM schema_migrations").fetchone()
         return row[0] or 0
     except Exception:
         return 0
+
+

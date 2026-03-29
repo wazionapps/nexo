@@ -1,20 +1,12 @@
-"""NEXO DB — Task History and Frequencies."""
-import time
+"""NEXO DB — Tasks module."""
+from db._core import get_db, now_epoch
 
-
-def _get_db():
-    from db import get_db
-    return get_db()
-
-
-def _now_epoch():
-    return time.time()
-
+# ── Task History & Frequencies ─────────────────────────────────────
 
 def log_task(task_num: str, task_name: str, notes: str = '', reasoning: str = '') -> dict:
     """Log a task execution with optional reasoning."""
-    conn = _get_db()
-    now = _now_epoch()
+    conn = get_db()
+    now = now_epoch()
     cursor = conn.execute(
         "INSERT INTO task_history (task_num, task_name, executed_at, notes, reasoning) "
         "VALUES (?, ?, ?, ?, ?)",
@@ -29,8 +21,8 @@ def log_task(task_num: str, task_name: str, notes: str = '', reasoning: str = ''
 
 def list_task_history(task_num: str = None, days: int = 30) -> list[dict]:
     """List task execution history, optionally filtered by task_num."""
-    conn = _get_db()
-    cutoff = _now_epoch() - (days * 86400)
+    conn = get_db()
+    cutoff = now_epoch() - (days * 86400)
     if task_num:
         rows = conn.execute(
             "SELECT * FROM task_history WHERE task_num = ? AND executed_at >= ? "
@@ -49,7 +41,7 @@ def list_task_history(task_num: str = None, days: int = 30) -> list[dict]:
 def set_task_frequency(task_num: str, task_name: str,
                        frequency_days: int, description: str = '') -> dict:
     """Set or update the expected frequency for a task."""
-    conn = _get_db()
+    conn = get_db()
     conn.execute(
         "INSERT OR REPLACE INTO task_frequencies (task_num, task_name, frequency_days, description) "
         "VALUES (?, ?, ?, ?)",
@@ -64,9 +56,9 @@ def set_task_frequency(task_num: str, task_name: str,
 
 def get_overdue_tasks() -> list[dict]:
     """Get tasks where last execution exceeds the configured frequency."""
-    conn = _get_db()
+    conn = get_db()
     freqs = conn.execute("SELECT * FROM task_frequencies").fetchall()
-    now = _now_epoch()
+    now = now_epoch()
     overdue = []
     for f in freqs:
         last = conn.execute(
@@ -90,8 +82,10 @@ def get_overdue_tasks() -> list[dict]:
 
 def get_task_frequencies() -> list[dict]:
     """Get all configured task frequencies."""
-    conn = _get_db()
+    conn = get_db()
     rows = conn.execute(
         "SELECT * FROM task_frequencies ORDER BY task_num ASC"
     ).fetchall()
     return [dict(r) for r in rows]
+
+

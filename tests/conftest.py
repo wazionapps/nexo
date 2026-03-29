@@ -21,25 +21,25 @@ def isolated_db(tmp_path, monkeypatch):
 
     monkeypatch.setenv("NEXO_TEST_DB", test_db)
     monkeypatch.setenv("NEXO_COGNITIVE_DB", test_cog_db)
-    monkeypatch.setenv("NEXO_SKIP_FS_INDEX", "1")  # Don't spawn FTS background threads
+    monkeypatch.setenv("NEXO_SKIP_FS_INDEX", "1")
 
-    import db as db_mod
-    import cognitive as cog_mod
+    import db._core as db_core
+    import cognitive._core as cog_core
 
-    # Close existing connections completely
-    db_mod.close_db()
-    if cog_mod._conn is not None:
+    # Close existing connections
+    db_core.close_db()
+    if cog_core._conn is not None:
         try:
-            cog_mod._conn.close()
+            cog_core._conn.close()
         except Exception:
             pass
-        cog_mod._conn = None
+        cog_core._conn = None
 
     # Point to temp paths
-    db_mod.DB_PATH = test_db
-    cog_mod.COGNITIVE_DB = test_cog_db
+    db_core.DB_PATH = test_db
+    cog_core.COGNITIVE_DB = test_cog_db
 
-    # Create a fresh raw connection (bypass _SerializedConnection for init)
+    # Create a fresh raw connection
     raw = sqlite3.connect(test_db, timeout=30, check_same_thread=False,
                           isolation_level=None)
     raw.execute("PRAGMA journal_mode=WAL")
@@ -47,13 +47,14 @@ def isolated_db(tmp_path, monkeypatch):
     raw.execute("PRAGMA foreign_keys=ON")
     raw.row_factory = sqlite3.Row
 
-    # Wrap it as the shared connection
-    wrapped = db_mod._SerializedConnection(raw)
-    db_mod._shared_conn = wrapped
+    wrapped = db_core._SerializedConnection(raw)
+    db_core._shared_conn = wrapped
 
     # Initialize schemas
-    db_mod.init_db()
-    db_mod.run_migrations()
+    from db._core import init_db
+    from db._schema import run_migrations
+    init_db()
+    run_migrations()
 
     yield {
         "nexo_db": test_db,
@@ -61,10 +62,10 @@ def isolated_db(tmp_path, monkeypatch):
     }
 
     # Cleanup
-    db_mod.close_db()
-    if cog_mod._conn is not None:
+    db_core.close_db()
+    if cog_core._conn is not None:
         try:
-            cog_mod._conn.close()
+            cog_core._conn.close()
         except Exception:
             pass
-        cog_mod._conn = None
+        cog_core._conn = None

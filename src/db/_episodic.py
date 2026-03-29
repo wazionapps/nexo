@@ -1,32 +1,13 @@
-"""NEXO DB — Episodic memory: changes, decisions, diary, archive, checkpoints, recall."""
-import datetime
-import json
-import time
-
-def _get_db():
-    from db import get_db
-    return get_db()
-
-
-def _now_epoch():
-    return time.time()
-
-
-def _fts_upsert(*args, **kwargs):
-    from db import fts_upsert
-    return fts_upsert(*args, **kwargs)
-
-
-def _fts_search(*args, **kwargs):
-    from db import fts_search
-    return fts_search(*args, **kwargs)
-
+"""NEXO DB — Episodic module."""
+import datetime, time, json
+from db._core import get_db, now_epoch, _multi_word_like
+from db._fts import fts_upsert, fts_search
 
 # ── Change Log ───────────────────────────────────────────────────
 
 def cleanup_old_changes(retention_days: int = 90) -> int:
     """Delete change_log entries older than retention_days. Returns count deleted."""
-    conn = _get_db()
+    conn = get_db()
     # Get IDs before deleting so we can clean FTS
     ids = [str(r[0]) for r in conn.execute(
         "SELECT id FROM change_log WHERE created_at < datetime('now', ?)",
@@ -46,7 +27,7 @@ def log_change(session_id: str, files: str, what_changed: str, why: str,
                triggered_by: str = '', affects: str = '', risks: str = '',
                verify: str = '', commit_ref: str = '') -> dict:
     """Log a code/config change with full context."""
-    conn = _get_db()
+    conn = get_db()
     cleanup_old_changes()
     try:
         cursor = conn.execute(
@@ -57,7 +38,7 @@ def log_change(session_id: str, files: str, what_changed: str, why: str,
         conn.commit()
         cid = cursor.lastrowid
         body = f"{what_changed} {why} {triggered_by} {affects} {risks}"
-        _fts_upsert("change", str(cid), files, body, "change_log", commit=False)
+        fts_upsert("change", str(cid), files, body, "change_log", commit=False)
         row = conn.execute("SELECT * FROM change_log WHERE id = ?", (cid,)).fetchone()
         return dict(row)
     except Exception as e:
@@ -66,7 +47,7 @@ def log_change(session_id: str, files: str, what_changed: str, why: str,
 
 def search_changes(query: str = '', files: str = '', days: int = 30) -> list[dict]:
     """Search change log by text and/or file path."""
-    conn = _get_db()
+    conn = get_db()
     days = max(1, int(days))
     conditions = []
     params = []
@@ -90,7 +71,7 @@ def search_changes(query: str = '', files: str = '', days: int = 30) -> list[dic
 
 def update_change_commit(id: int, commit_ref: str) -> dict:
     """Link a change log entry to its git commit after commit."""
-    conn = _get_db()
+    conn = get_db()
     row = conn.execute("SELECT * FROM change_log WHERE id = ?", (id,)).fetchone()
     if not row:
         return {"error": f"Change {id} not found"}
@@ -99,7 +80,7 @@ def update_change_commit(id: int, commit_ref: str) -> dict:
     row = conn.execute("SELECT * FROM change_log WHERE id = ?", (id,)).fetchone()
     r = dict(row)
     body = f"{r.get('what_changed','')} {r.get('why','')} {r.get('triggered_by','')} {r.get('affects','')} {r.get('risks','')}"
-    _fts_upsert("change", str(id), r.get("files",""), body, "change_log", commit=False)
+    fts_upsert("change", str(id), r.get("files",""), body, "change_log", commit=False)
     return r
 
 
@@ -107,7 +88,7 @@ def update_change_commit(id: int, commit_ref: str) -> dict:
 
 def cleanup_old_decisions(retention_days: int = 90) -> int:
     """Delete decisions entries older than retention_days. Returns count deleted."""
-    conn = _get_db()
+    conn = get_db()
     ids = [str(r[0]) for r in conn.execute(
         "SELECT id FROM decisions WHERE created_at < datetime('now', ?)",
         (f"-{retention_days} days",)
@@ -128,7 +109,7 @@ def log_decision(session_id: str, domain: str, decision: str,
                  status: str = 'pending_review',
                  review_due_at: str | None = None) -> dict:
     """Log a decision with reasoning context."""
-    conn = _get_db()
+    conn = get_db()
     cleanup_old_decisions()
     try:
         cursor = conn.execute(
@@ -143,7 +124,7 @@ def log_decision(session_id: str, domain: str, decision: str,
         conn.commit()
         did = cursor.lastrowid
         body = f"{decision} {alternatives} {based_on}"
-        _fts_upsert("decision", str(did), decision[:200], body, domain or '', commit=False)
+        fts_upsert("decision", str(did), decision[:200], body, domain or '', commit=False)
         row = conn.execute("SELECT * FROM decisions WHERE id = ?", (did,)).fetchone()
         return dict(row)
     except Exception as e:
@@ -152,7 +133,7 @@ def log_decision(session_id: str, domain: str, decision: str,
 
 def update_decision_outcome(id: int, outcome: str) -> dict:
     """Record the outcome of a past decision."""
-    conn = _get_db()
+    conn = get_db()
     row = conn.execute("SELECT * FROM decisions WHERE id = ?", (id,)).fetchone()
     if not row:
         return {"error": f"Decision {id} not found"}
@@ -167,14 +148,14 @@ def update_decision_outcome(id: int, outcome: str) -> dict:
     row = conn.execute("SELECT * FROM decisions WHERE id = ?", (id,)).fetchone()
     r = dict(row)
     body = f"{r.get('decision','')} {r.get('alternatives','')} {r.get('based_on','')} {r.get('outcome','')}"
-    _fts_upsert("decision", str(id), r.get("decision","")[:200], body, r.get("domain",""), commit=False)
+    fts_upsert("decision", str(id), r.get("decision","")[:200], body, r.get("domain",""), commit=False)
     return r
 
 
 def get_memory_review_queue(days: int = 7) -> dict:
     """Return learnings and decisions whose review date falls within N days."""
-    conn = _get_db()
-    learning_cutoff = _now_epoch() + (days * 86400)
+    conn = get_db()
+    learning_cutoff = now_epoch() + (days * 86400)
     learnings = conn.execute(
         "SELECT * FROM learnings "
         "WHERE review_due_at IS NOT NULL AND review_due_at <= ? "
@@ -195,7 +176,7 @@ def get_memory_review_queue(days: int = 7) -> dict:
 
 def find_decisions_by_context_ref(ref: str) -> list[dict]:
     """Find decisions linked to a specific context_ref (e.g., followup ID)."""
-    conn = _get_db()
+    conn = get_db()
     rows = conn.execute(
         "SELECT * FROM decisions WHERE context_ref = ? AND (outcome IS NULL OR outcome = '')",
         (ref,)
@@ -205,7 +186,7 @@ def find_decisions_by_context_ref(ref: str) -> list[dict]:
 
 def search_decisions(query: str = '', domain: str = '', days: int = 30) -> list[dict]:
     """Search decisions by text and/or domain within a time window."""
-    conn = _get_db()
+    conn = get_db()
     days = max(1, int(days))
     conditions = []
     params = []
@@ -235,7 +216,7 @@ def cleanup_old_diaries(retention_days: int = 180) -> int:
     Diaries are moved to diary_archive (permanent) before being removed from
     the active session_diary table. Nothing is ever truly lost.
     """
-    conn = _get_db()
+    conn = get_db()
     cutoff = f"-{retention_days} days"
 
     # Archive before deleting — permanent subconscious memory
@@ -274,7 +255,7 @@ def write_session_diary(session_id: str, decisions: str, summary: str,
                         domain: str = '', user_signals: str = '',
                         self_critique: str = '', source: str = 'claude') -> dict:
     """Write a session diary entry with mental state and self-critique for continuity."""
-    conn = _get_db()
+    conn = get_db()
     cleanup_old_diaries()
     cursor = conn.execute(
         "INSERT INTO session_diary (session_id, decisions, discarded, pending, context_next, mental_state, summary, domain, user_signals, self_critique, source) "
@@ -284,7 +265,7 @@ def write_session_diary(session_id: str, decisions: str, summary: str,
     conn.commit()
     did = cursor.lastrowid
     body = f"{summary} {decisions} {pending} {context_next} {mental_state} {self_critique}"
-    _fts_upsert("diary", str(did), (summary or '')[:200], body, domain or "general", commit=False)
+    fts_upsert("diary", str(did), (summary or '')[:200], body, domain or "general", commit=False)
     row = conn.execute("SELECT * FROM session_diary WHERE id = ?", (did,)).fetchone()
     return dict(row)
 
@@ -304,7 +285,7 @@ def diary_archive_search(query: str = '', domain: str = '',
         month: Filter by month (1-12), requires year
         limit: Max results (default 20)
     """
-    conn = _get_db()
+    conn = get_db()
     try:
         conn.execute("SELECT 1 FROM diary_archive LIMIT 1")
     except Exception:
@@ -355,7 +336,7 @@ def diary_archive_search(query: str = '', domain: str = '',
 
 def diary_archive_read(diary_id: int) -> dict | None:
     """Read a single archived diary entry by ID — full content."""
-    conn = _get_db()
+    conn = get_db()
     try:
         row = conn.execute(
             "SELECT * FROM diary_archive WHERE id = ?", (diary_id,)
@@ -367,7 +348,7 @@ def diary_archive_read(diary_id: int) -> dict | None:
 
 def diary_archive_stats() -> dict:
     """Get archive statistics: count, date range, domains."""
-    conn = _get_db()
+    conn = get_db()
     try:
         count = conn.execute("SELECT COUNT(*) FROM diary_archive").fetchone()[0]
         if count == 0:
@@ -384,7 +365,7 @@ def diary_archive_stats() -> dict:
 
 def check_session_has_diary(session_id: str) -> bool:
     """Return True if this session already has a diary entry."""
-    conn = _get_db()
+    conn = get_db()
     row = conn.execute(
         "SELECT id FROM session_diary WHERE session_id = ? LIMIT 1",
         (session_id,)
@@ -399,7 +380,7 @@ def upsert_diary_draft(sid: str, tasks_seen: str, change_ids: str,
                        decision_ids: str, last_context_hint: str,
                        heartbeat_count: int, summary_draft: str = '') -> dict:
     """UPSERT diary draft for a session. Called by heartbeat to accumulate context."""
-    conn = _get_db()
+    conn = get_db()
     conn.execute(
         """INSERT INTO session_diary_draft
            (sid, summary_draft, tasks_seen, change_ids, decision_ids,
@@ -422,7 +403,7 @@ def upsert_diary_draft(sid: str, tasks_seen: str, change_ids: str,
 
 def get_diary_draft(sid: str) -> dict | None:
     """Get diary draft for a session, or None."""
-    conn = _get_db()
+    conn = get_db()
     row = conn.execute(
         "SELECT * FROM session_diary_draft WHERE sid = ?", (sid,)
     ).fetchone()
@@ -431,7 +412,7 @@ def get_diary_draft(sid: str) -> dict | None:
 
 def delete_diary_draft(sid: str):
     """Delete diary draft after real diary is written."""
-    conn = _get_db()
+    conn = get_db()
     conn.execute("DELETE FROM session_diary_draft WHERE sid = ?", (sid,))
     conn.commit()
 
@@ -443,7 +424,7 @@ def save_checkpoint(sid: str, task: str = '', task_status: str = 'active',
                     decisions_summary: str = '', errors_found: str = '',
                     reasoning_thread: str = '', next_step: str = '') -> dict:
     """Save or update a session checkpoint. Called by PreCompact hook."""
-    conn = _get_db()
+    conn = get_db()
     # Get current compaction count
     existing = conn.execute(
         "SELECT compaction_count FROM session_checkpoints WHERE sid = ?", (sid,)
@@ -476,7 +457,7 @@ def save_checkpoint(sid: str, task: str = '', task_status: str = 'active',
 
 def read_checkpoint(sid: str = '') -> dict | None:
     """Read the most recent session checkpoint. If no sid, returns the latest."""
-    conn = _get_db()
+    conn = get_db()
     if sid:
         row = conn.execute(
             "SELECT * FROM session_checkpoints WHERE sid = ?", (sid,)
@@ -490,7 +471,7 @@ def read_checkpoint(sid: str = '') -> dict | None:
 
 def increment_compaction_count(sid: str) -> int:
     """Increment and return the compaction count for a session."""
-    conn = _get_db()
+    conn = get_db()
     conn.execute(
         """UPDATE session_checkpoints
            SET compaction_count = compaction_count + 1, updated_at = datetime('now')
@@ -506,8 +487,8 @@ def increment_compaction_count(sid: str) -> int:
 
 def get_orphan_sessions(ttl_seconds: int = 900) -> list[dict]:
     """Get sessions that exceeded TTL and have no diary."""
-    conn = _get_db()
-    cutoff = _now_epoch() - ttl_seconds
+    conn = get_db()
+    cutoff = now_epoch() - ttl_seconds
     rows = conn.execute(
         """SELECT s.sid, s.task, s.started_epoch, s.last_update_epoch
            FROM sessions s
@@ -518,8 +499,6 @@ def get_orphan_sessions(ttl_seconds: int = 900) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-# ── Read Session Diary ───────────────────────────────────────────
-
 def read_session_diary(session_id: str = '', last_n: int = 3, last_day: bool = False,
                        domain: str = '') -> list[dict]:
     """Read session diary entries.
@@ -529,7 +508,7 @@ def read_session_diary(session_id: str = '', last_n: int = 3, last_day: bool = F
     - last_n: returns last N entries (default)
     - domain: filter by project context (nexo, other)
     """
-    conn = _get_db()
+    conn = get_db()
     domain_clause = " AND domain = ?" if domain else ""
     domain_params = (domain,) if domain else ()
 
@@ -563,8 +542,6 @@ def read_session_diary(session_id: str = '', last_n: int = 3, last_day: bool = F
     return [dict(r) for r in rows]
 
 
-# ── Recall + helpers ─────────────────────────────────────────────
-
 def _multi_word_like(query: str, columns: list[str]) -> tuple[str, list]:
     """Build AND-ed LIKE conditions: every word must appear in at least one of the columns.
 
@@ -593,9 +570,9 @@ def recall(query: str, days: int = 30) -> list[dict]:
     Falls back to LIKE-based search if FTS fails.
     """
     # Try FTS5 first (fast, ranked), then filter by days
-    results = _fts_search(query, limit=40)  # fetch extra to allow filtering
+    results = fts_search(query, limit=40)  # fetch extra to allow filtering
     if results:
-        cutoff_epoch = _now_epoch() - (days * 86400)
+        cutoff_epoch = now_epoch() - (days * 86400)
         filtered = []
         for r in results:
             ua = str(r.get('updated_at', ''))
@@ -623,10 +600,10 @@ def recall(query: str, days: int = 30) -> list[dict]:
 
     # Fallback to old LIKE-based search
     days = max(1, int(days))
-    conn = _get_db()
+    conn = get_db()
     cutoff_dt = datetime.datetime.now() - datetime.timedelta(days=days)
     cutoff_str = cutoff_dt.strftime("%Y-%m-%d")
-    cutoff_epoch = _now_epoch() - (days * 86400)
+    cutoff_epoch = now_epoch() - (days * 86400)
 
     results = []
 
@@ -689,3 +666,5 @@ def recall(query: str, days: int = 30) -> list[dict]:
 
     results.sort(key=lambda r: r.get('created_at', ''), reverse=True)
     return results[:20]
+
+
