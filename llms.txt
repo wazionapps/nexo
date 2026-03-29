@@ -33,6 +33,8 @@ npx nexo-brain
 ## Documentation
 
 - Website: https://nexo-brain.com
+- Changelog: https://nexo-brain.com/changelog/
+- Docs: https://nexo-brain.com/docs/
 - GitHub: https://github.com/wazionapps/nexo
 - Wiki: https://github.com/wazionapps/nexo/wiki
 - npm: https://www.npmjs.com/package/nexo-brain
@@ -52,4 +54,4 @@ Tool categories: Cognitive (8), Cognitive Input (5), Cognitive Advanced (8), Gua
 
 ## License
 
-MIT License. Built by WAzion (https://www.wazion.com).
+AGPL-3.0 License. Built by WAzion (https://www.wazion.com).
