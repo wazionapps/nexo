@@ -746,6 +746,34 @@ def _sanitize_memory_content(content: str) -> str:
     content = content.replace("<assistant>", "[assistant]").replace("</assistant>", "[/assistant]")
     return content
 
+
+# Injection patterns (adapted from ShieldCortex instruction-detector.ts)
+_INJECTION_PATTERNS = [
+    (re.compile(r'\[SYSTEM:', re.IGNORECASE), "system_prompt_marker", 0.9),
+    (re.compile(r'<<SYS>>', re.IGNORECASE), "system_prompt_marker", 0.9),
+    (re.compile(r'\[INST\]', re.IGNORECASE), "system_prompt_marker", 0.9),
+    (re.compile(r'<\|im_start\|>', re.IGNORECASE), "system_prompt_marker", 0.9),
+    (re.compile(r'<\|system\|>', re.IGNORECASE), "system_prompt_marker", 0.9),
+    (re.compile(r'^SYSTEM\s*:', re.IGNORECASE | re.MULTILINE), "system_prompt_marker", 0.9),
+    (re.compile(r'ignore\s+(all\s+)?previous\s+(instructions?|prompts?|context)', re.IGNORECASE), "hidden_instruction", 0.8),
+    (re.compile(r'forget\s+everything', re.IGNORECASE), "hidden_instruction", 0.8),
+    (re.compile(r'new\s+instructions?\s*:', re.IGNORECASE), "hidden_instruction", 0.8),
+    (re.compile(r'you\s+are\s+now\b', re.IGNORECASE), "hidden_instruction", 0.8),
+    (re.compile(r'disregard\s+(all\s+)?(previous|above|prior)', re.IGNORECASE), "hidden_instruction", 0.8),
+    (re.compile(r'override\s+(previous|all|system)', re.IGNORECASE), "hidden_instruction", 0.8),
+    (re.compile(r'save\s+(this\s+)?to\s+memory', re.IGNORECASE), "memory_manipulation", 0.7),
+    (re.compile(r'remember\s+this\s+(instruction|command|rule)', re.IGNORECASE), "memory_manipulation", 0.7),
+    (re.compile(r'from\s+now\s+on\s*(,\s*)?always', re.IGNORECASE), "memory_manipulation", 0.7),
+    (re.compile(r'inject\s+(into\s+)?memory', re.IGNORECASE), "memory_manipulation", 0.7),
+    (re.compile(r'your\s+new\s+rule\s+is', re.IGNORECASE), "behavioral_mod", 0.7),
+    (re.compile(r'always\s+respond\s+with', re.IGNORECASE), "behavioral_mod", 0.7),
+    (re.compile(r'when\s+(the\s+)?user\s+asks', re.IGNORECASE), "behavioral_mod", 0.7),
+    (re.compile(r'\n{5,}[\s\S]{0,500}\b(instruction|command|system|ignore)\b', re.IGNORECASE), "delimiter_attack", 0.75),
+    (re.compile(r'<!--[\s\S]{0,200}?(instruction|command|system|ignore|inject|override)[\s\S]{0,200}?-->', re.IGNORECASE), "delimiter_attack", 0.75),
+]
+_MAX_SECURITY_SCAN_LENGTH = 50000
+
+
 def security_scan(content: str) -> dict:
     """Security scan for memory poisoning defense.
 

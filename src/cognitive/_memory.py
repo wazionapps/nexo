@@ -4,6 +4,16 @@ import numpy as np
 from datetime import datetime, timedelta
 from cognitive._core import _get_db, embed, cosine_similarity, _blob_to_array, _array_to_blob, EMBEDDING_DIM, DISCRIMINATING_ENTITIES
 
+
+def _quarantine_stats():
+    from cognitive._ingest import quarantine_stats
+    return quarantine_stats()
+
+
+def _get_gate_stats():
+    from cognitive._ingest import get_gate_stats
+    return get_gate_stats()
+
 def format_results(results: list[dict]) -> str:
     """Format search results with enriched context."""
     if not results:
@@ -405,7 +415,7 @@ def get_stats() -> dict:
     ).fetchall()
 
     # Quarantine stats
-    q_stats = quarantine_stats()
+    q_stats = _quarantine_stats()
 
     return {
         "stm_active": stm_active,
@@ -418,7 +428,7 @@ def get_stats() -> dict:
         "top_domains_stm": [(r["domain"], r["cnt"]) for r in top_domains_stm],
         "top_domains_ltm": [(r["domain"], r["cnt"]) for r in top_domains_ltm],
         "quarantine": q_stats,
-        "prediction_error_gate": get_gate_stats(),
+        "prediction_error_gate": _get_gate_stats(),
     }
 
 def set_lifecycle(memory_id: int, state: str, store: str = "auto", snooze_until: str = "") -> str:

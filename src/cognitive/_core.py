@@ -84,6 +84,7 @@ _trust_events_cache_ts = 0
 
 
 # Module-level state
+_model = None
 _embed_model = None
 _reranker_model = None
 _reranker = None

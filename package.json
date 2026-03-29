@@ -1,8 +1,8 @@
 {
   "name": "nexo-brain",
-  "version": "1.3.0",
+  "version": "1.5.0-beta.1",
   "mcpName": "io.github.wazionapps/nexo",
-  "description": "NEXO — Cognitive co-operator for Claude Code. Atkinson-Shiffrin memory, semantic RAG, trust scoring, and metacognitive error prevention.",
+  "description": "NEXO — Cognitive co-operator for Claude Code. Atkinson-Shiffrin memory, semantic RAG, knowledge graph, HNSW vector indexing, trust scoring, and metacognitive error prevention.",
   "bin": {
     "nexo-brain": "./bin/nexo-brain.js"
   },
@@ -30,6 +30,7 @@
     "bin/",
     "src/",
     "templates/",
-    "scripts/"
+    "scripts/",
+    "tests/"
   ]
 }
