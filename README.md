@@ -605,11 +605,11 @@ NEXO Brain builds on ideas from several open-source projects. We're grateful for
 
 | Project | Inspired Features |
 |---------|------------------|
-| [Vestige](https://github.com/pchaganti/gx-vestige) | HyDE query expansion, spreading activation, prediction error gating, memory dreaming, prospective memory |
-| [ShieldCortex](https://github.com/PShieldCortex/ShieldCortex) | Security pipeline (4-layer memory poisoning defense) |
-| [Bicameral](https://github.com/nicobailey/Bicameral) | Quarantine queue (trust promotion policy for new facts) |
-| [claude-mem](https://github.com/nicobailey/claude-mem) | Hook auto-capture (extracting decisions and facts from conversations) |
-| [ClawMem](https://github.com/nicobailey/ClawMem) | Co-activation reinforcement (memories retrieved together strengthen connections) |
+| Vestige | HyDE query expansion, spreading activation, prediction error gating, memory dreaming, prospective memory |
+| ShieldCortex | Security pipeline (4-layer memory poisoning defense) |
+| Bicameral | Quarantine queue (trust promotion policy for new facts) |
+| claude-mem | Hook auto-capture (extracting decisions and facts from conversations) |
+| ClawMem | Co-activation reinforcement (memories retrieved together strengthen connections) |
 
 ## Support the Project
 
