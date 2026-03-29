@@ -466,7 +466,7 @@ def handle_smart_startup_query() -> str:
     # 3. Last session diary topics
     try:
         last_diary = conn.execute(
-            "SELECT summary FROM session_diaries ORDER BY id DESC LIMIT 1"
+            "SELECT summary FROM session_diary ORDER BY id DESC LIMIT 1"
         ).fetchone()
         if last_diary and last_diary['summary']:
             query_parts.append(last_diary['summary'][:200])

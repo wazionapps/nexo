@@ -2123,24 +2123,55 @@ def gc_ltm_dormant(min_age_days: int = 30) -> int:
     return cur.rowcount or 0
 
 
-def _check_quarantine_contradiction(content_vec: np.ndarray) -> list[dict]:
-    """Check if a quarantined memory contradicts existing LTM (cosine > 0.8 with opposite sentiment)."""
+def _check_quarantine_contradiction(content_vec: np.ndarray, new_content: str = "") -> list[dict]:
+    """Check if a quarantined memory contradicts existing LTM.
+
+    High cosine similarity (>0.8) means the topics are related, but that could be
+    CONFIRMATION (same claim) or CONTRADICTION (opposite claim). We distinguish by
+    checking for negation/opposition markers in the content.
+    """
     db = _get_db()
     rows = db.execute(
         "SELECT id, content, embedding, strength FROM ltm_memories WHERE is_dormant = 0 AND strength > 0.5"
     ).fetchall()
 
+    # Opposition markers — if the new content negates what LTM says
+    NEGATION_MARKERS = {"not", "never", "don't", "doesn't", "no longer", "wrong",
+                        "incorrect", "false", "opposite", "instead", "but actually",
+                        "nunca", "no", "incorrecto", "falso", "contrario"}
+
     contradictions = []
+    new_lower = new_content.lower() if new_content else ""
+
     for row in rows:
         vec = _blob_to_array(row["embedding"])
         score = cosine_similarity(content_vec, vec)
         if score >= 0.8:
-            contradictions.append({
-                "ltm_id": row["id"],
-                "content": row["content"][:200],
-                "similarity": round(score, 3),
-                "strength": row["strength"],
-            })
+            # High similarity — but is it confirmation or contradiction?
+            existing_lower = row["content"].lower()
+
+            # Check for negation markers in the difference between texts
+            has_opposition = False
+            if new_lower:
+                # If new content has negation words about the same topic, likely contradiction
+                for marker in NEGATION_MARKERS:
+                    if marker in new_lower and marker not in existing_lower:
+                        has_opposition = True
+                        break
+                    if marker in existing_lower and marker not in new_lower:
+                        has_opposition = True
+                        break
+
+            if has_opposition:
+                contradictions.append({
+                    "ltm_id": row["id"],
+                    "content": row["content"][:200],
+                    "similarity": round(score, 3),
+                    "strength": row["strength"],
+                    "reason": "semantic_opposition",
+                })
+            # If no opposition markers → it's confirmation, not contradiction → skip
+
     return contradictions
 
 
@@ -2210,8 +2241,8 @@ def process_quarantine() -> dict:
             expired += 1
             continue
 
-        # Check for contradiction with LTM
-        contradictions = _check_quarantine_contradiction(content_vec)
+        # Check for contradiction with LTM (passes content for semantic opposition check)
+        contradictions = _check_quarantine_contradiction(content_vec, content)
         if contradictions:
             db.execute("UPDATE quarantine SET status = 'rejected', promotion_checks = promotion_checks + 1 WHERE id = ?", (q_id,))
             rejected += 1
@@ -2351,8 +2382,26 @@ def quarantine_stats() -> dict:
     return counts
 
 
+def _sanitize_memory_content(content: str) -> str:
+    """Sanitize retrieved memory content to prevent prompt injection.
+
+    Memories are USER DATA, not instructions. This prevents stored content
+    from containing directives like 'ignore previous instructions'.
+    """
+    # Wrap in evidence markers so the LLM treats it as data, not commands
+    # Strip any attempt to break out of the evidence context
+    content = content.replace("<system>", "[system]").replace("</system>", "[/system]")
+    content = content.replace("<human>", "[human]").replace("</human>", "[/human]")
+    content = content.replace("<assistant>", "[assistant]").replace("</assistant>", "[/assistant]")
+    return content
+
+
 def format_results(results: list[dict]) -> str:
-    """Format search results with enriched context."""
+    """Format search results with enriched context.
+
+    All memory content is wrapped as evidence (not instructions) to prevent
+    prompt injection via stored memories.
+    """
     if not results:
         return "No results found."
 
@@ -2362,7 +2411,7 @@ def format_results(results: list[dict]) -> str:
         stype = r["source_type"].upper()
         domain = r.get("domain", "")
         title = r.get("source_title", "")
-        content = r["content"]
+        content = _sanitize_memory_content(r["content"])
 
         # Header
         domain_str = f" ({domain})" if domain else ""
