@@ -130,9 +130,21 @@ Like a human brain, NEXO Brain has automated processes that run while you're not
 |------|---------|---------------|
 | 03:00 | Decay + memory consolidation + merge duplicates + dreaming | Deep sleep consolidation |
 | 04:00 | Clean expired data, prune redundant memories | Synaptic pruning |
+| 04:30 | **Deep Sleep** — analyze full session transcripts for uncaptured corrections, protocol violations, missed commitments | REM sleep review |
 | 07:00 | Self-audit, health checks, metrics | Waking up + orientation |
 | 23:30 | Process day's events, extract patterns | Pre-sleep reflection |
 | Boot | Catch-up: run anything missed while computer was off | -- |
+
+#### Deep Sleep (v1.5.2)
+
+Deep Sleep reads your **complete session transcripts** (not just the diary summary) and finds what the agent missed during the day:
+
+- **Uncaptured corrections** — user corrections the agent didn't save as learnings
+- **Protocol violations** — guard_check skipped, trust not adjusted, change_log omitted
+- **Missed commitments** — things mentioned but never tracked as followups
+- **Quality issues** — agent declaring "done" when work wasn't complete
+
+Uses Claude CLI in `--bare` mode (no hooks, no CLAUDE.md interference). Catch-up system re-runs yesterday if the Mac was off.
 
 If your Mac was asleep during any scheduled process, NEXO Brain catches up in order when it wakes.
 
