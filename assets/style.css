@@ -183,7 +183,7 @@
         section:nth-child(even) { background: rgba(18, 18, 26, 0.5); }
 
         /* Spacing utilities */
-        .pt-nav { padding-top: 100px; }
+        .pt-nav { padding-top: 128px; }
         .section-compact { padding: 48px 0; }
         .section-tight { padding: 32px 0; }
         .section-flush-top { padding-top: 0; }
@@ -205,6 +205,7 @@
             font-size: 18px; color: var(--text-muted);
             max-width: 640px; margin: 0 auto 48px; text-align: center;
         }
+        .section-subtitle:last-child { margin-bottom: 0; }
 
         /* ===== Features Grid ===== */
         .features-grid {
