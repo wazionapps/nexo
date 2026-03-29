@@ -30,7 +30,7 @@ def handle_cognitive_retrieve(
         min_score: Minimum cosine similarity score (default 0.5)
         stores: Which store to search — "both", "stm", or "ltm" (default "both")
         source_type: Filter by source type e.g. "change", "learning", "diary" (default: all)
-        domain: Filter by domain e.g. "my-project", "shopify" (default: all)
+        domain: Filter by domain e.g. "project-a", "shopify" (default: all)
         include_archived: If True, also search archived memories (default False)
         use_hyde: If True, use HyDE query expansion — embeds 3-5 query variants and searches with centroid. Better recall for conceptual queries. (default False)
         spreading_depth: If >0, boost co-activated neighbors (memories frequently retrieved together). 1=direct neighbors only. (default 0)
@@ -222,13 +222,13 @@ def handle_cognitive_metrics(days: int = 7) -> str:
 
 
 def handle_cognitive_sentiment(text: str) -> str:
-    """Detect the user's sentiment from his text. Returns mood, intensity, and guidance.
+    """Detect user's sentiment from his text. Returns mood, intensity, and guidance.
 
-    Call this with the user's recent message to adapt NEXO's tone and behavior.
+    Call this with user's recent message to adapt NEXO's tone and behavior.
     Also logs the sentiment for historical tracking.
 
     Args:
-        text: The user's recent message or instruction
+        text: user's recent message or instruction
     """
     result = cognitive.log_sentiment(text)
     trust = cognitive.get_trust_score()
@@ -294,8 +294,8 @@ def handle_cognitive_trust(event: str = '', context: str = '', delta: float = No
 def handle_cognitive_dissonance(instruction: str, force: bool = False) -> str:
     """Detect cognitive dissonance: find established memories that conflict with a new instruction.
 
-    Use BEFORE applying a new preference or rule from the user that might contradict
-    existing knowledge. If conflicts found, verbalize them and ask the user to resolve.
+    Use BEFORE applying a new preference or rule from user that might contradict
+    existing knowledge. If conflicts found, verbalize them and ask user to resolve.
 
     Args:
         instruction: The new instruction or preference to check against LTM
@@ -328,7 +328,7 @@ def handle_cognitive_dissonance(instruction: str, force: bool = False) -> str:
         lines.append("")
 
     lines.append("RESOLVE with nexo_cognitive_resolve, or use force=True to skip:")
-    lines.append("  - 'paradigm_shift': The user changed their mind permanently.")
+    lines.append("  - 'paradigm_shift': user changed his mind permanently.")
     lines.append("  - 'exception': One-time override. Old memory stays.")
     lines.append("  - 'override': Old memory was wrong.")
 
@@ -336,7 +336,7 @@ def handle_cognitive_dissonance(instruction: str, force: bool = False) -> str:
 
 
 def handle_cognitive_resolve(memory_id: int, resolution: str, context: str = '') -> str:
-    """Resolve a cognitive dissonance by applying the user's decision.
+    """Resolve a cognitive dissonance by applying user's decision.
 
     Args:
         memory_id: The LTM memory ID from the dissonance detection
@@ -546,7 +546,7 @@ TOOLS = [
     (handle_cognitive_metrics, "nexo_cognitive_metrics", "Performance metrics: retrieval relevance %, repeat error rate, multilingual recommendation (spec section 9)"),
     (handle_cognitive_dissonance, "nexo_cognitive_dissonance", "Detect conflicts between a new instruction and established LTM memories. force=True to skip discussion."),
     (handle_cognitive_resolve, "nexo_cognitive_resolve", "Resolve a cognitive dissonance: paradigm_shift, exception, or override."),
-    (handle_cognitive_sentiment, "nexo_cognitive_sentiment", "Detect the user's sentiment and get tone guidance. Also logs for tracking."),
+    (handle_cognitive_sentiment, "nexo_cognitive_sentiment", "Detect user's sentiment and get tone guidance. Also logs for tracking."),
     (handle_cognitive_trust, "nexo_cognitive_trust", "View or adjust trust score (0-100). Without args: view. With event: adjust."),
     (handle_cognitive_pin, "nexo_cognitive_pin", "Pin a memory — never decays, boosted +0.2 in search results."),
     (handle_cognitive_snooze, "nexo_cognitive_snooze", "Snooze a memory — hidden from searches until a date, then auto-restores."),

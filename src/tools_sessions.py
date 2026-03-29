@@ -63,11 +63,17 @@ def _format_age(epoch: float) -> str:
         return f"{int(seconds / 3600)}h{int((seconds % 3600) / 60)}m"
 
 
-def handle_startup(task: str = "Startup") -> str:
-    """Full startup sequence: register, clean, report."""
+def handle_startup(task: str = "Startup", claude_session_id: str = "") -> str:
+    """Full startup sequence: register, clean, report.
+
+    Args:
+        task: Initial task description
+        claude_session_id: UUID from Claude Code (passed via SessionStart hook file).
+                          Enables automatic inbox detection via PostToolUse hook.
+    """
     sid = _generate_sid()
     cleaned = clean_stale_sessions()
-    register_session(sid, task)
+    register_session(sid, task, claude_session_id=claude_session_id)
     _start_keepalive(sid)
     active = get_active_sessions()
     other_sessions = [s for s in active if s["sid"] != sid]
@@ -76,20 +82,20 @@ def handle_startup(task: str = "Startup") -> str:
     lines = [f"SID: {sid}"]
 
     if cleaned > 0:
-        lines.append(f"Cleaned {cleaned} stale sessions.")
+        lines.append(f"Limpiadas {cleaned} sesiones stale.")
 
     if other_sessions:
         lines.append("")
-        lines.append("ACTIVE SESSIONS:")
+        lines.append("SESIONES ACTIVAS:")
         for s in other_sessions:
             age = _format_age(s["last_update_epoch"])
             lines.append(f"  {s['sid']} ({age}) — {s['task']}")
     else:
-        lines.append("No other active sessions.")
+        lines.append("Sin otras sesiones activas.")
 
     if inbox:
         lines.append("")
-        lines.append("PENDING MESSAGES:")
+        lines.append("MENSAJES PENDIENTES:")
         for m in inbox:
             age = _format_age(m["created_epoch"])
             lines.append(f"  [{m['from_sid']}] ({age}): {m['text']}")
@@ -121,7 +127,7 @@ def handle_heartbeat(sid: str, task: str, context_hint: str = '') -> str:
     questions = get_pending_questions(sid)
     if questions:
         parts.append("")
-        parts.append("PENDING QUESTIONS (responder con nexo_answer):")
+        parts.append("PREGUNTAS PENDIENTES (responder con nexo_answer):")
         for q in questions:
             age = _format_age(q["created_epoch"])
             parts.append(f"  {q['qid']} de {q['from_sid']} ({age}): {q['question']}")
@@ -236,12 +242,14 @@ def handle_heartbeat(sid: str, task: str, context_hint: str = '') -> str:
             # Auto-prime: detect project/area keywords and fetch targeted learnings
             _PROJECT_KEYWORDS = {
                 'shopify': 'shopify', 'theme': 'shopify', 'dawn': 'shopify',
-                'my-project': 'my-project',
+                'my-project': 'my-project', 'chrome extension': 'my-project', 'vps': 'my-project',
                 'meta': 'meta-ads', 'facebook': 'meta-ads', 'advantage': 'meta-ads',
                 'google ads': 'google-ads', 'pmax': 'google-ads', 'campaign': 'google-ads',
-                'server': 'infrastructure', 'ssh': 'infrastructure', 'deploy': 'infrastructure',
+                'project-b': 'project-b',
+                'shared-hosting': 'infrastructure', 'servidor': 'infrastructure', 'ssh': 'infrastructure',
                 'analytics': 'google-analytics', 'ga4': 'google-analytics',
                 'nexo brain': 'nexo', 'nexo-brain': 'nexo', 'cognitive': 'nexo',
+                'ecommerce': 'shopify',
             }
             hint_lower = context_hint.lower()
             detected_area = None
@@ -345,7 +353,7 @@ def handle_context_packet(area: str, files: str = "") -> str:
     for the given area. Use this before delegating to a subagent.
 
     Args:
-        area: Project/area name (e.g., 'shopify', 'meta-ads', 'infrastructure', 'nexo')
+        area: Project/area name (e.g., 'project-a', 'shopify', 'meta-ads', 'project-b', 'nexo')
         files: Optional comma-separated file paths for guard check
     """
     from db import get_db
@@ -358,7 +366,7 @@ def handle_context_packet(area: str, files: str = "") -> str:
         (f"%{area}%", f"%{area}%")
     ).fetchall()
     if learnings:
-        parts.append("## KNOWN ERRORS — DO NOT REPEAT")
+        parts.append("## ERRORES CONOCIDOS — NO REPETIR")
         for l in learnings:
             parts.append(f"  L#{l['id']}: {l['title']}")
             # First 200 chars of content
@@ -371,7 +379,7 @@ def handle_context_packet(area: str, files: str = "") -> str:
         (f"%{area}%", f"%{area}%")
     ).fetchall()
     if changes:
-        parts.append("## RECENT CHANGES")
+        parts.append("## CAMBIOS RECIENTES")
         for c in changes:
             parts.append(f"  C#{c['id']}: {c['what_changed'][:150]}")
             if c['why']:
@@ -380,13 +388,13 @@ def handle_context_packet(area: str, files: str = "") -> str:
 
     # 3. Active followups for this area
     followups = conn.execute(
-        "SELECT id, description, date, verification FROM followups WHERE status NOT LIKE 'COMPLET%' AND (description LIKE ? OR verification LIKE ?) ORDER BY date ASC LIMIT 10",
+        "SELECT id, description, date, verification FROM followups WHERE status = 'PENDIENTE' AND (description LIKE ? OR verification LIKE ?) ORDER BY date ASC LIMIT 10",
         (f"%{area}%", f"%{area}%")
     ).fetchall()
     if followups:
-        parts.append("## ACTIVE FOLLOWUPS")
+        parts.append("## FOLLOWUPS ACTIVOS")
         for f in followups:
-            parts.append(f"  {f['id']}: {f['description'][:150]} (date: {f['date']})")
+            parts.append(f"  {f['id']}: {f['description'][:150]} (fecha: {f['date']})")
         parts.append("")
 
     # 4. Preferences related to this area
@@ -396,7 +404,7 @@ def handle_context_packet(area: str, files: str = "") -> str:
             (f"%{area}%", f"%{area}%")
         ).fetchall()
         if prefs:
-            parts.append("## PREFERENCES")
+            parts.append("## PREFERENCIAS")
             for p in prefs:
                 parts.append(f"  {p['key']}: {p['value'][:150]}")
             parts.append("")
@@ -414,7 +422,7 @@ def handle_context_packet(area: str, files: str = "") -> str:
             rehearse=False,
         )
         if results:
-            parts.append("## RELEVANT COGNITIVE MEMORIES")
+            parts.append("## MEMORIAS COGNITIVAS RELEVANTES")
             for r in results:
                 parts.append(f"  [{r['source_type']}] {r['source_title'] or r['content'][:80]}")
             parts.append("")
@@ -422,20 +430,20 @@ def handle_context_packet(area: str, files: str = "") -> str:
         pass
 
     # 6. Data flow tracing requirement (mandatory for all subagents)
-    parts.append("## MANDATORY RULE: DATA FLOW TRACING")
-    parts.append("BEFORE modifying any file or data, answer these 3 questions:")
-    parts.append("  1. WHO PRODUCES this data? (which function/cron/endpoint generates it)")
-    parts.append("  2. WHO CONSUMES this data? (which other files/functions read it)")
-    parts.append("  3. WHAT BREAKS if I change it? (downstream effects)")
-    parts.append("If you cannot answer all 3 → READ the code that produces and consumes BEFORE touching it.")
-    parts.append("If you still cannot answer → STOP and return the question. DO NOT guess.")
+    parts.append("## REGLA OBLIGATORIA: DATA FLOW TRACING")
+    parts.append("ANTES de modificar cualquier archivo o dato, responde estas 3 preguntas:")
+    parts.append("  1. ¿QUIÉN PRODUCE este dato? (qué función/cron/endpoint lo genera)")
+    parts.append("  2. ¿QUIÉN CONSUME este dato? (qué otros archivos/funciones lo leen)")
+    parts.append("  3. ¿QUÉ SE ROMPE si lo cambio? (efectos downstream)")
+    parts.append("Si no puedes responder las 3 → LEE el código que produce y consume ANTES de tocar.")
+    parts.append("Si sigues sin poder → PARA y devuelve la pregunta. NO adivines.")
     parts.append("")
 
     if not parts:
         return f"No context found for area '{area}'. The subagent will start with no project-specific knowledge."
 
     header = f"CONTEXT PACKET — {area.upper()}\n{'='*40}\n\n"
-    footer = f"\n{'='*40}\nRULE: If you are not 100% sure about a piece of data, STOP and return the question. DO NOT make things up."
+    footer = f"\n{'='*40}\nINSTRUCCIÓN: Si no estás 100% seguro de un dato, PARA y devuelve la pregunta. NO inventes."
     return header + "\n".join(parts) + footer
 
 
@@ -451,14 +459,14 @@ def handle_smart_startup_query() -> str:
 
     # 1. Pending followups (what NEXO needs to do)
     followups = conn.execute(
-        "SELECT description FROM followups WHERE status NOT LIKE 'COMPLET%' ORDER BY date ASC LIMIT 5"
+        "SELECT description FROM followups WHERE status = 'PENDIENTE' ORDER BY date ASC LIMIT 5"
     ).fetchall()
     for f in followups:
         query_parts.append(f['description'][:100])
 
-    # 2. Due reminders (what the owner needs to know)
+    # 2. Due reminders (what user needs to know)
     reminders = conn.execute(
-        "SELECT description FROM reminders WHERE status NOT LIKE 'COMPLET%' AND date <= date('now', '+1 day') ORDER BY date ASC LIMIT 5"
+        "SELECT description FROM reminders WHERE status = 'PENDIENTE' AND date <= date('now', '+1 day') ORDER BY date ASC LIMIT 5"
     ).fetchall()
     for r in reminders:
         query_parts.append(r['description'][:100])
@@ -517,9 +525,9 @@ def handle_status(keyword: str | None = None) -> str:
         sessions = get_active_sessions()
 
     if not sessions:
-        return "No active sessions."
+        return "Sin sesiones activas."
 
-    lines = ["ACTIVE SESSIONS:"]
+    lines = ["SESIONES ACTIVAS:"]
     for s in sessions:
         age = _format_age(s["last_update_epoch"])
         lines.append(f"  {s['sid']} ({age}) — {s['task']}")

@@ -25,7 +25,7 @@ def handle_track(sid: str, paths: list[str]) -> str:
             for f in c["files"]:
                 lines.append(f"    {f}")
         lines.append("")
-        lines.append("STOP and inform the user before editing.")
+        lines.append("PARAR e inform the user antes de editar.")
 
     return "\n".join(lines)
 
@@ -66,7 +66,7 @@ def handle_files() -> str:
 def handle_send(from_sid: str, to_sid: str, text: str) -> str:
     """Send a message. to_sid='all' for broadcast."""
     msg_id = send_message(from_sid, to_sid, text)
-    target = "all sessions" if to_sid == "all" else to_sid
+    target = "todas las sesiones" if to_sid == "all" else to_sid
     return f"Mensaje {msg_id} enviado a {target}."
 
 
@@ -99,4 +99,4 @@ def handle_check_answer(qid: str) -> str:
         return f"RESPUESTA de {qid}: {result['answer']}"
     elif result["status"] == "expired":
         return f"Pregunta {qid} expirada sin respuesta."
-    return f"Question {qid} still pending. Retry in a few seconds."
+    return f"Pregunta {qid} sigue pendiente. Reintentar en unos segundos."

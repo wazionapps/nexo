@@ -34,7 +34,7 @@ def handle_reminders(filter_type: str = "due") -> str:
             parts.append(f)
 
     result = "\n\n".join(parts)
-    return result if result else "No pending reminders."
+    return result if result else "Sin recordatorios pendientes."
 
 
 def _format_reminders(filter_type: str) -> str:
