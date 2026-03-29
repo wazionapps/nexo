@@ -198,7 +198,7 @@ This means long sessions (8+ hours) feel like one continuous conversation instea
 
 ## Cognitive Features
 
-NEXO Brain provides 29 cognitive tools on top of the 78 base tools, totaling **115+ MCP tools**. These features implement cognitive science concepts that go beyond basic memory:
+NEXO Brain provides **100+ MCP tools** implementing cognitive science concepts that go beyond basic memory:
 
 ### Input Pipeline
 
@@ -226,11 +226,13 @@ NEXO Brain provides 29 cognitive tools on top of the 78 base tools, totaling **1
 |---------|-------------|
 | **HyDE Query Expansion** | Generates hypothetical answer embeddings for richer semantic search. Instead of searching for "deploy error", it imagines what a helpful memory about deploy errors would look like, then searches for that. |
 | **Hybrid Search (FTS5+BM25+RRF)** | Combines dense vector search with BM25 keyword search via Reciprocal Rank Fusion. Outperforms pure semantic search on precise terminology and code identifiers. |
+| **KG Boost** | Knowledge Graph connection count influences retrieval ranking. Memories linked to well-connected entities (many edges) receive a logarithmic score bonus, surfacing contextually important facts higher. |
+| **HNSW Vector Index** | Optional approximate nearest neighbor index (hnswlib). Activates automatically when memory count exceeds 10,000. Falls back to exact brute-force below that threshold — no configuration needed. |
 | **Cross-Encoder Reranking** | After initial vector retrieval, a cross-encoder model rescores candidates for precision. The top-k results are reordered by true semantic relevance before being returned to the agent. |
 | **Multi-Query Decomposition** | Complex questions are automatically split into sub-queries. Each component is retrieved independently, then fused for a higher-quality answer — improves recall on multi-faceted prompts. |
 | **Temporal Indexing** | Memories are indexed by time in addition to semantics. Time-sensitive queries ("what did we decide last Tuesday?") use temporal proximity scoring alongside semantic similarity. |
 | **Spreading Activation** | Graph-based co-activation network. Memories retrieved together reinforce each other's connections, building an associative web that improves over time. |
-| **Recall Explanations** | Transparent score breakdown for every retrieval result. Shows exactly why a memory was returned: semantic similarity, recency, access frequency, and co-activation bonuses. |
+| **Recall Explanations** | Transparent score breakdown for every retrieval result. Shows exactly why a memory was returned: semantic similarity, recency, access frequency, KG boost, and co-activation bonuses. |
 
 ### Proactive
 
@@ -430,6 +432,17 @@ That's it. No need to run `claude` manually. Your operator will greet you immedi
 
 ## Architecture
 
+### Modular Package Structure (v1.5.0)
+
+The core is organized into two Python packages:
+
+| Package | Modules | Responsibility |
+|---------|---------|----------------|
+| `db/` | 11 modules (`_core`, `_schema`, `_sessions`, `_learnings`, `_episodic`, `_credentials`, `_entities`, `_evolution`, `_fts`, `_reminders`, `_tasks`) | All SQLite persistence: schema migrations, CRUD, FTS indexing |
+| `cognitive/` | 6 modules (`_core`, `_memory`, `_ingest`, `_search`, `_decay`, `_trust`) | Cognitive engine: embeddings, RAG, decay, trust scoring |
+
+The rest of the server (`server.py`, `tools_*.py`, `plugins/`) stays flat for clarity.
+
 ### 100+ MCP Tools across 20 Categories
 
 | Category | Count | Tools | Purpose |
@@ -439,7 +452,7 @@ That's it. No need to run `claude` manually. Your operator will greet you immedi
 | Cognitive Advanced | 8 | hyde_search, spread_activate, explain_recall, dream, prospect, hook_capture, pin, archive | Advanced retrieval, proactive, lifecycle |
 | Guard | 3 | check, stats, log_repetition | Metacognitive error prevention |
 | Episodic | 10 | change_log/search/commit, decision_log/outcome/search, review_queue, diary_write/read, recall | What happened and why |
-| Sessions | 4 | startup, heartbeat, stop, status | Session lifecycle + context shift detection |
+| Sessions | 4 | startup, heartbeat, stop, status | Session lifecycle + context shift detection + inter-terminal auto-inbox |
 | Coordination | 7 | track, untrack, files, send, ask, answer, check_answer | Multi-session file coordination + messaging |
 | Reminders | 5 | list, create, update, complete, delete | User's tasks and deadlines |
 | Followups | 4 | create, update, complete, delete | System's autonomous verification tasks |
@@ -455,6 +468,7 @@ That's it. No need to run `claude` manually. Your operator will greet you immedi
 | Adaptive & Somatic | 4 | adaptive_weights, adaptive_override, somatic_check, somatic_stats | Learned signal weights + pain memory per file |
 | Knowledge Graph | 4 | kg_query, kg_path, kg_neighbors, kg_stats | Bi-temporal entity-relationship graph |
 | Context Continuity | 2 | checkpoint_save, checkpoint_read | Auto-compaction session preservation |
+| Claim Graph | — | (internal) | Atomic facts with provenance and contradiction detection |
 
 ### Plugin System
 
@@ -609,6 +623,15 @@ If NEXO Brain is useful to you, consider:
 [![Star History Chart](https://api.star-history.com/svg?repos=wazionapps/nexo&type=Date)](https://star-history.com/#wazionapps/nexo&Date)
 
 ## Changelog
+
+### v1.5.0 — Modular Core + Knowledge Graph Search (2026-03-29)
+- **Architecture**: `db.py` refactored into `db/` package (11 modules: core, schema, sessions, learnings, episodic, credentials, entities, evolution, fts, reminders, tasks)
+- **Architecture**: `cognitive.py` refactored into `cognitive/` package (6 modules: core, memory, ingest, search, decay, trust)
+- **KG Boost**: Knowledge Graph connection count now influences search result ranking — well-connected entities surface higher in retrieval
+- **HNSW Vector Index**: Optional approximate nearest neighbor acceleration (activates automatically above 10,000 memories, falls back to brute-force otherwise)
+- **Claim Graph**: Decomposes blob memories into atomic verifiable facts with provenance, confidence scores, and contradiction detection
+- **Inter-terminal Auto-inbox (D+)**: `nexo_startup` now accepts `claude_session_id` (Claude Code session UUID) — enables automatic inbox delivery between parallel terminals via PostToolUse hook + migration v13
+- **Tests**: 24 pytest tests across 3 suites (cognitive, knowledge graph, migrations)
 
 ### v1.4.1 — Multi-AI Code Review (2026-03-29)
 - **Fix**: 3 bugs found by GPT-5.4 (Codex CLI) + Gemini 2.5 (Gemini CLI) reviewing full codebase
