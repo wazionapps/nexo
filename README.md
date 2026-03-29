@@ -1,5 +1,7 @@
 # NEXO Brain — Your AI Gets a Brain
 
+[![SafeSkill 65/100](https://img.shields.io/badge/SafeSkill-65%2F100_Use%20with%20Caution-orange)](https://safeskill.dev/scan/wazionapps-nexo)
+
 [![npm](https://img.shields.io/npm/v/nexo-brain?label=npm&color=purple)](https://www.npmjs.com/package/nexo-brain)
 [![F1 0.588 on LoCoMo](https://img.shields.io/badge/LoCoMo_F1-0.588-brightgreen)](https://github.com/wazionapps/nexo/blob/main/benchmarks/locomo/results/)
 [![+55% vs GPT-4](https://img.shields.io/badge/vs_GPT--4-%2B55%25-blue)](https://github.com/snap-research/locomo/issues/33)
