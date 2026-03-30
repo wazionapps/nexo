@@ -398,18 +398,20 @@ def get_stats() -> dict:
     """Return statistics about the cognitive memory system."""
     db = _get_db()
 
-    stm_active = db.execute("SELECT COUNT(*) FROM stm_memories WHERE promoted_to_ltm = 0").fetchone()[0]
+    stm_active = db.execute("SELECT COUNT(*) FROM stm_memories WHERE lifecycle_state = 'active' AND promoted_to_ltm = 0").fetchone()[0]
+    stm_promoted = db.execute("SELECT COUNT(*) FROM stm_memories WHERE promoted_to_ltm = 1").fetchone()[0]
+    stm_total = db.execute("SELECT COUNT(*) FROM stm_memories WHERE lifecycle_state = 'active'").fetchone()[0]
     ltm_active = db.execute("SELECT COUNT(*) FROM ltm_memories WHERE is_dormant = 0").fetchone()[0]
     ltm_dormant = db.execute("SELECT COUNT(*) FROM ltm_memories WHERE is_dormant = 1").fetchone()[0]
 
-    avg_stm = db.execute("SELECT AVG(strength) FROM stm_memories WHERE promoted_to_ltm = 0").fetchone()[0] or 0.0
+    avg_stm = db.execute("SELECT AVG(strength) FROM stm_memories WHERE lifecycle_state = 'active' AND promoted_to_ltm = 0").fetchone()[0] or 0.0
     avg_ltm = db.execute("SELECT AVG(strength) FROM ltm_memories WHERE is_dormant = 0").fetchone()[0] or 0.0
 
     total_retrievals = db.execute("SELECT COUNT(*) FROM retrieval_log").fetchone()[0]
     avg_retrieval_score = db.execute("SELECT AVG(top_score) FROM retrieval_log").fetchone()[0] or 0.0
 
     top_domains_stm = db.execute(
-        "SELECT domain, COUNT(*) as cnt FROM stm_memories WHERE promoted_to_ltm = 0 AND domain != '' GROUP BY domain ORDER BY cnt DESC LIMIT 5"
+        "SELECT domain, COUNT(*) as cnt FROM stm_memories WHERE lifecycle_state = 'active' AND promoted_to_ltm = 0 AND domain != '' GROUP BY domain ORDER BY cnt DESC LIMIT 5"
     ).fetchall()
     top_domains_ltm = db.execute(
         "SELECT domain, COUNT(*) as cnt FROM ltm_memories WHERE is_dormant = 0 AND domain != '' GROUP BY domain ORDER BY cnt DESC LIMIT 5"
@@ -420,6 +422,8 @@ def get_stats() -> dict:
 
     return {
         "stm_active": stm_active,
+        "stm_promoted": stm_promoted,
+        "stm_total": stm_total,
         "ltm_active": ltm_active,
         "ltm_dormant": ltm_dormant,
         "avg_stm_strength": round(avg_stm, 3),

@@ -71,7 +71,7 @@ def handle_cognitive_stats() -> str:
 
     lines = [
         "COGNITIVE MEMORY STATS",
-        f"  STM active:          {stats['stm_active']}",
+        f"  STM active:          {stats['stm_active']} (+ {stats.get('stm_promoted', 0)} promoted to LTM, {stats.get('stm_total', 0)} total)",
         f"  LTM active:          {stats['ltm_active']}",
         f"  LTM dormant:         {stats['ltm_dormant']}",
         f"  Avg STM strength:    {stats['avg_stm_strength']:.3f}",
