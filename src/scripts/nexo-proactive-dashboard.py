@@ -19,7 +19,7 @@ import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
-NEXO_DB = Path.home() / "claude" / "nexo-mcp" / "nexo.db"
+NEXO_DB = Path.home() / "claude" / "nexo-mcp" / "db" / "nexo.db"
 
 
 def get_db():
