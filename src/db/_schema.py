@@ -256,6 +256,21 @@ def _m13_claude_session_id(conn):
     conn.commit()
 
 
+def _m14_learnings_priority_weight(conn):
+    """Add priority, weight, and guard usage tracking to learnings.
+
+    Enables weighted relevance in guard checks and nightly housekeeping:
+    - priority: critical/high/medium/low (affects minimum weight floor)
+    - weight: 0.0-1.0 (auto-adjusted by usage — guard hits boost, inactivity decays)
+    - guard_hits: counter of how many times guard_check surfaced this learning
+    - last_guard_hit_at: timestamp of last guard hit (for decay calculations)
+    """
+    _migrate_add_column(conn, "learnings", "priority", "TEXT DEFAULT 'medium'")
+    _migrate_add_column(conn, "learnings", "weight", "REAL DEFAULT 0.5")
+    _migrate_add_column(conn, "learnings", "guard_hits", "INTEGER DEFAULT 0")
+    _migrate_add_column(conn, "learnings", "last_guard_hit_at", "REAL")
+
+
 # Migration registry — APPEND ONLY, never reorder or delete
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
@@ -271,6 +286,7 @@ MIGRATIONS = [
     (11, "artifact_registry", _m11_artifact_registry),
     (12, "session_checkpoints", _m12_session_checkpoints),
     (13, "claude_session_id", _m13_claude_session_id),
+    (14, "learnings_priority_weight", _m14_learnings_priority_weight),
 ]
 
 
