@@ -17,6 +17,11 @@
     "knowledge-graph",
     "hnsw",
     "claim-graph",
+    "dashboard",
+    "launchagent",
+    "autonomous-agent",
+    "somatic-markers",
+    "nervous-system",
     "openclaw",
     "openclaw-plugin"
   ],
