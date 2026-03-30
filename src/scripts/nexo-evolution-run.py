@@ -568,8 +568,7 @@ def _update_catchup_state():
         import json as _json
         from pathlib import Path as _Path
 
-NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
-        _state_file = _NEXO_HOME / "operations" / ".catchup-state.json"
+        _state_file = NEXO_HOME / "operations" / ".catchup-state.json"
         _state = _json.loads(_state_file.read_text()) if _state_file.exists() else {}
         _state["evolution"] = datetime.now().isoformat()
         _state_file.write_text(_json.dumps(_state, indent=2))
