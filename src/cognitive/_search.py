@@ -112,11 +112,12 @@ def _rrf_fuse(vector_results: list[dict], bm25_results: list[dict],
 
         # If we have the original cosine score, blend it in to preserve semantic confidence
         if vec_result and "score" in vec_result:
-            # Weighted blend: RRF for ranking + cosine for confidence
-            result["score"] = 0.6 * vec_result["score"] + 0.4 * (rrf_score * k * 3)
+            # Weighted blend: cosine for confidence + RRF for ranking boost
+            rrf_normalized = min(1.0, rrf_score * k)  # normalize to 0-1 range
+            result["score"] = 0.7 * vec_result["score"] + 0.3 * rrf_normalized
         else:
-            # BM25-only result: use RRF score scaled to ~0.5-0.7 range
-            result["score"] = min(0.85, rrf_score * k * 3)
+            # BM25-only result: use RRF score scaled to ~0.3-0.7 range
+            result["score"] = min(0.75, rrf_score * k)
 
         result["bm25_boosted"] = key in bm25_lookup
         result["bm25_only"] = key not in vec_lookup
@@ -199,8 +200,8 @@ def _apply_temporal_boost(results: list[dict], query_text: str) -> list[dict]:
         # Bounded exponential decay boost
         boost = alpha * math.exp(-ln2 * age_days / half_life_days)
 
-        # Apply boost (capped at 1.0)
-        r["score"] = min(1.0, r["score"] + boost)
+        # Apply boost (capped at 0.95 — reserve 1.0 for exact matches only)
+        r["score"] = min(0.95, r["score"] + boost)
         if boost > 0.001:
             r["temporal_boost"] = round(boost, 4)
 
@@ -282,7 +283,7 @@ def _kg_boost_results(results: list[dict], max_boost: float = 0.08) -> list[dict
         for idx in ref_map.get(node_ref, []):
             r = results[idx]
             if r.get("score", 0) >= 0.45:  # Same relevance gate as temporal
-                r["score"] = min(1.0, r["score"] + boost)
+                r["score"] = min(0.95, r["score"] + boost)
                 r["kg_boost"] = round(boost, 4)
                 r["kg_connections"] = connections
 
@@ -613,7 +614,7 @@ def _rehearse_results(results: list[dict], skip_ids: set = None):
             continue
         table = "stm_memories" if r["store"] == "stm" else "ltm_memories"
         db.execute(
-            f"UPDATE {table} SET strength = 1.0, access_count = access_count + 1, last_accessed = ? WHERE id = ?",
+            f"UPDATE {table} SET strength = MIN(1.0, strength + 0.08), access_count = access_count + 1, last_accessed = ? WHERE id = ?",
             (now, r["id"])
         )
     db.commit()
@@ -834,7 +835,7 @@ def search(
     if is_temporal_query:
         for r in results:
             if r.get("temporal_date"):
-                r["score"] = min(1.0, r["score"] + 0.05)
+                r["score"] = min(0.95, r["score"] + 0.05)
 
     # Recency temporal boost: recent memories get additive bonus (query-adaptive)
     results = _apply_temporal_boost(results, query_text)
@@ -866,7 +867,7 @@ def search(
                 existing_hashes.add(co_hash)
                 if co_hash in neighbor_boosts:
                     boost = neighbor_boosts[co_hash]
-                    r["score"] = min(1.0, r["score"] + boost)
+                    r["score"] = min(0.95, r["score"] + boost)
                     r["co_activation_boost"] = boost
 
             # Add neighbor memories not already in results

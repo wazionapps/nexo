@@ -242,11 +242,11 @@ def handle_heartbeat(sid: str, task: str, context_hint: str = '') -> str:
             # Auto-prime: detect project/area keywords and fetch targeted learnings
             _PROJECT_KEYWORDS = {
                 'shopify': 'shopify', 'theme': 'shopify', 'dawn': 'shopify',
-                'my-project': 'my-project', 'chrome extension': 'my-project', 'vps': 'my-project',
+                'wazion': 'wazion', 'chrome extension': 'wazion', 'vps': 'wazion',
                 'meta': 'meta-ads', 'facebook': 'meta-ads', 'advantage': 'meta-ads',
                 'google ads': 'google-ads', 'pmax': 'google-ads', 'campaign': 'google-ads',
-                'project-b': 'project-b',
-                'shared-hosting': 'infrastructure', 'servidor': 'infrastructure', 'ssh': 'infrastructure',
+                'canarirural': 'canarirural', 'maría': 'canarirural', 'maria': 'canarirural',
+                'server': 'infrastructure', 'ssh': 'infrastructure',
                 'analytics': 'google-analytics', 'ga4': 'google-analytics',
                 'nexo brain': 'nexo', 'nexo-brain': 'nexo', 'cognitive': 'nexo',
                 'ecommerce': 'shopify',
@@ -353,7 +353,7 @@ def handle_context_packet(area: str, files: str = "") -> str:
     for the given area. Use this before delegating to a subagent.
 
     Args:
-        area: Project/area name (e.g., 'project-a', 'shopify', 'meta-ads', 'project-b', 'nexo')
+        area: Project/area name (e.g., 'wazion', 'shopify', 'meta-ads', 'canarirural', 'nexo')
         files: Optional comma-separated file paths for guard check
     """
     from db import get_db
@@ -432,10 +432,10 @@ def handle_context_packet(area: str, files: str = "") -> str:
     # 6. Data flow tracing requirement (mandatory for all subagents)
     parts.append("## REGLA OBLIGATORIA: DATA FLOW TRACING")
     parts.append("ANTES de modificar cualquier archivo o dato, responde estas 3 preguntas:")
-    parts.append("  1. WHO PRODUCES this data? (which function/cron/endpoint generates it)")
-    parts.append("  2. WHO CONSUMES this data? (which other files/functions read it)")
+    parts.append("  1. ¿QUIÉN PRODUCE este dato? (qué función/cron/endpoint lo genera)")
+    parts.append("  2. ¿QUIÉN CONSUME este dato? (qué otros archivos/funciones lo leen)")
     parts.append("  3. ¿QUÉ SE ROMPE si lo cambio? (efectos downstream)")
-    parts.append("If you can't answer all 3 → READ the code that produces and consumes BEFORE touching it.")
+    parts.append("Si no puedes responder las 3 → LEE el código que produce y consume ANTES de tocar.")
     parts.append("Si sigues sin poder → PARA y devuelve la pregunta. NO adivines.")
     parts.append("")
 
@@ -443,7 +443,7 @@ def handle_context_packet(area: str, files: str = "") -> str:
         return f"No context found for area '{area}'. The subagent will start with no project-specific knowledge."
 
     header = f"CONTEXT PACKET — {area.upper()}\n{'='*40}\n\n"
-    footer = f"\n{'='*40}\nINSTRUCTION: If you're not 100% sure about a data point, STOP and ask. DO NOT invent."
+    footer = f"\n{'='*40}\nINSTRUCCIÓN: Si no estás 100% seguro de un dato, PARA y devuelve la pregunta. NO inventes."
     return header + "\n".join(parts) + footer
 
 
@@ -464,7 +464,7 @@ def handle_smart_startup_query() -> str:
     for f in followups:
         query_parts.append(f['description'][:100])
 
-    # 2. Due reminders (what user needs to know)
+    # 2. Due reminders (what Francisco needs to know)
     reminders = conn.execute(
         "SELECT description FROM reminders WHERE status = 'PENDIENTE' AND date <= date('now', '+1 day') ORDER BY date ASC LIMIT 5"
     ).fetchall()
@@ -484,17 +484,27 @@ def handle_smart_startup_query() -> str:
     if not query_parts:
         return "No pending context to pre-load."
 
-    composite_query = " | ".join(query_parts[:8])  # Cap at 8 parts
-
+    # Search per-part to avoid diffuse centroid that matches everything
     try:
         import cognitive
-        results = cognitive.search(
-            query_text=composite_query,
-            top_k=10,
-            min_score=0.5,
-            stores="both",
-            rehearse=True,
-        )
+        all_results = []
+        seen_ids = set()
+        for part in query_parts[:6]:
+            part_results = cognitive.search(
+                query_text=part,
+                top_k=3,
+                min_score=0.6,
+                stores="both",
+                rehearse=False,  # Don't inflate strength on startup
+            )
+            for r in part_results:
+                key = (r["store"], r["id"])
+                if key not in seen_ids:
+                    seen_ids.add(key)
+                    all_results.append(r)
+        # Sort by score descending, take top 10
+        results = sorted(all_results, key=lambda x: x["score"], reverse=True)[:10]
+        composite_query = " | ".join(query_parts[:6])
         if not results:
             return "Smart startup query: no relevant memories found."
 
@@ -511,7 +521,7 @@ def handle_stop(sid: str) -> str:
     """Cleanly close a session, removing it from active sessions immediately."""
     _stop_keepalive(sid)
     complete_session(sid)
-    return f"Session closed."
+    return f"Sesión {sid} cerrada."
 
 
 def handle_status(keyword: str | None = None) -> str:
@@ -525,7 +535,7 @@ def handle_status(keyword: str | None = None) -> str:
         sessions = get_active_sessions()
 
     if not sessions:
-        return "No active sessions."
+        return "Sin sesiones activas."
 
     lines = ["SESIONES ACTIVAS:"]
     for s in sessions:
