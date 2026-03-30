@@ -355,7 +355,7 @@ def nexo_reminder_delete(id: str) -> str:
 # ── Followups CRUD (4 tools) ──────────────────────────────────────
 
 @mcp.tool
-def nexo_followup_create(id: str, description: str, date: str = "", verification: str = "", reasoning: str = "", recurrence: str = "") -> str:
+def nexo_followup_create(id: str, description: str, date: str = "", verification: str = "", reasoning: str = "", recurrence: str = "", priority: str = "medium") -> str:
     """Create a new NEXO followup (autonomous task).
 
     Args:
@@ -366,12 +366,18 @@ def nexo_followup_create(id: str, description: str, date: str = "", verification
         reasoning: WHY this followup exists — what decision/context led to it (optional).
         recurrence: Auto-regenerate pattern (optional). Formats: 'weekly:monday', 'monthly:1', 'monthly:15', 'quarterly'.
                     When completed, a new followup is auto-created with the next date. The completed one is archived with date suffix.
+        priority: critical, high, medium, low (default: medium).
     """
-    return handle_followup_create(id, description, date, verification, reasoning, recurrence)
+    result = handle_followup_create(id, description, date, verification, reasoning, recurrence)
+    if priority in ('critical', 'high', 'low') and 'creado' in result:
+        from db import get_db
+        get_db().execute("UPDATE followups SET priority = ? WHERE id = ?", (priority, id))
+        get_db().commit()
+    return result
 
 
 @mcp.tool
-def nexo_followup_update(id: str, description: str = "", date: str = "", verification: str = "", status: str = "") -> str:
+def nexo_followup_update(id: str, description: str = "", date: str = "", verification: str = "", status: str = "", priority: str = "") -> str:
     """Update fields of an existing followup. Only non-empty fields are changed.
 
     Args:
@@ -380,8 +386,14 @@ def nexo_followup_update(id: str, description: str = "", date: str = "", verific
         date: New date YYYY-MM-DD (optional).
         verification: New verification text (optional).
         status: New status (optional).
+        priority: critical, high, medium, low (optional).
     """
-    return handle_followup_update(id, description, date, verification, status)
+    result = handle_followup_update(id, description, date, verification, status)
+    if priority in ('critical', 'high', 'medium', 'low'):
+        from db import get_db
+        get_db().execute("UPDATE followups SET priority = ? WHERE id = ?", (priority, id))
+        get_db().commit()
+    return result
 
 
 @mcp.tool

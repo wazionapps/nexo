@@ -4,7 +4,7 @@
 import json
 import sys
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 
 sys.path.insert(0, str(Path.home() / "claude" / "nexo-mcp"))
 import cognitive
@@ -165,7 +165,7 @@ def main():
 
     # 8. Stats
     stats = cognitive.get_stats()
-    print(f"[{ts}] STM: {stats['stm_active']} | LTM: {stats['ltm_active']} active, {stats['ltm_dormant']} dormant")
+    print(f"[{ts}] STM: {stats['stm_active']} active (+{stats.get('stm_promoted', 0)} promoted, {stats.get('stm_total', 0)} total) | LTM: {stats['ltm_active']} active, {stats['ltm_dormant']} dormant")
     print(f"[{ts}] Done.")
 
     update_catchup_state()

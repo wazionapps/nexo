@@ -34,7 +34,7 @@ def handle_reminders(filter_type: str = "due") -> str:
             parts.append(f)
 
     result = "\n\n".join(parts)
-    return result if result else "No pending reminders."
+    return result if result else "Sin recordatorios pendientes."
 
 
 def _format_reminders(filter_type: str) -> str:
@@ -66,6 +66,9 @@ def _format_followups(filter_type: str) -> str:
         return ""
 
     lines = ["FOLLOWUPS NEXO:"]
+    # Sort by priority: critical first, then high, medium, low
+    pri_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+    rows = sorted(rows, key=lambda r: pri_order.get(r.get("priority") or "medium", 2))
     for r in rows:
         nfid = r.get("id", "?")
         fecha = r.get("date") or ""
@@ -75,6 +78,9 @@ def _format_followups(filter_type: str) -> str:
         fecha_display = f"({fecha})" if fecha else "(—)"
         rec = r.get("recurrence") or ""
         rec_tag = f" [♻️ {rec}]" if rec else ""
-        lines.append(f"  {nfid} {fecha_display}{due_marker}{rec_tag} — {desc[:120]}")
+        pri = r.get("priority") or "medium"
+        pri_icon = {"critical": "🔴", "high": "🟠", "medium": "", "low": "⚪"}.get(pri, "")
+        pri_tag = f" {pri_icon}" if pri_icon else ""
+        lines.append(f"  {nfid} {fecha_display}{due_marker}{pri_tag}{rec_tag} — {desc[:120]}")
 
     return "\n".join(lines)
