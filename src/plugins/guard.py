@@ -59,7 +59,7 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
 
     Args:
         files: Comma-separated file paths about to be edited
-        area: System area (project-a, shopify, infrastructure, nexo-ops, etc.)
+        area: System area (wazion, shopify, infrastructure, nexo-ops, etc.)
         include_schemas: Include DB table schemas if files touch database code (true/false)
     """
     conn = get_db()
@@ -77,6 +77,7 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
     seen_ids = set()
 
     # 1. By file path — learnings mentioning the file name or parent directory
+    hit_ids = []
     for filepath in file_list:
         from pathlib import Path
         p = Path(filepath)
@@ -84,24 +85,30 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
         parent_dir = p.parent.name
 
         rows = conn.execute(
-            "SELECT id, category, title, content FROM learnings WHERE INSTR(content, ?) > 0 OR INSTR(content, ?) > 0",
+            "SELECT id, category, title, content, priority, weight FROM learnings WHERE INSTR(content, ?) > 0 OR INSTR(content, ?) > 0",
             (filename, parent_dir)
         ).fetchall()
         for r in rows:
             if r["id"] not in seen_ids:
                 seen_ids.add(r["id"])
-                result["learnings"].append({"id": r["id"], "category": r["category"], "rule": r["title"]})
+                hit_ids.append(r["id"])
+                pri = r["priority"] or "medium"
+                w = r["weight"] or 0.5
+                result["learnings"].append({"id": r["id"], "category": r["category"], "rule": r["title"], "priority": pri, "weight": w})
 
     # 2. By area/category
     if area:
         rows = conn.execute(
-            "SELECT id, category, title, content FROM learnings WHERE category = ?",
+            "SELECT id, category, title, content, priority, weight FROM learnings WHERE category = ?",
             (area,)
         ).fetchall()
         for r in rows:
             if r["id"] not in seen_ids:
                 seen_ids.add(r["id"])
-                result["learnings"].append({"id": r["id"], "category": r["category"], "rule": r["title"]})
+                hit_ids.append(r["id"])
+                pri = r["priority"] or "medium"
+                w = r["weight"] or 0.5
+                result["learnings"].append({"id": r["id"], "category": r["category"], "rule": r["title"], "priority": pri, "weight": w})
 
     # 3. Universal rules (SIEMPRE, NUNCA, ANTES, always, never)
     rows = conn.execute(
@@ -256,6 +263,15 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
     except Exception:
         pass
 
+    # Record guard hits on learnings (for weight auto-adjustment)
+    import time
+    if hit_ids:
+        for lid in hit_ids:
+            conn.execute(
+                "UPDATE learnings SET guard_hits = COALESCE(guard_hits, 0) + 1, last_guard_hit_at = ? WHERE id = ?",
+                (time.time(), lid)
+            )
+
     # Log the guard check
     conn.execute(
         "INSERT INTO guard_checks (session_id, files, area, learnings_returned, blocking_rules_returned) "
@@ -264,6 +280,9 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
          len(result["blocking_rules"]))
     )
     conn.commit()
+
+    # Sort learnings by weight (highest first)
+    result["learnings"].sort(key=lambda x: x.get("weight", 0.5), reverse=True)
 
     # Format output
     lines = []
@@ -480,7 +499,7 @@ def handle_guard_cross_check(findings: list, area: str = "") -> str:
 
     Args:
         findings: List of audit finding strings to cross-check
-        area: System area to narrow the learning search (project-a, shopify, etc.)
+        area: System area to narrow the learning search (wazion, shopify, etc.)
     """
     # Common English/Spanish stopwords to skip during keyword extraction
     STOPWORDS = {

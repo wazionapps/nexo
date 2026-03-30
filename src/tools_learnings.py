@@ -5,12 +5,13 @@ from db import (create_learning, update_learning, delete_learning, search_learni
 
 VALID_CATEGORIES = {
     "nexo-ops", "google-ads", "meta-ads", "google-analytics",
-    "shopify", "my-project", "cloud-sql", "infrastructure", "security", "brain-engine"
+    "shopify", "wazion", "cloud-sql", "infrastructure", "security", "brain-engine"
 }
 
 
 def handle_learning_add(category: str, title: str, content: str, reasoning: str = '',
-                        prevention: str = '', applies_to: str = '', review_days: int = 30) -> str:
+                        prevention: str = '', applies_to: str = '', review_days: int = 30,
+                        priority: str = 'medium') -> str:
     """Add a new learning entry to the specified category.
 
     Args:
@@ -21,21 +22,26 @@ def handle_learning_add(category: str, title: str, content: str, reasoning: str 
         prevention: Concrete rule/check that prevents repeating this mistake
         applies_to: Files, systems, or areas this learning applies to
         review_days: Days until this learning should be reviewed again
+        priority: critical, high, medium, low (default: medium)
     """
+    if priority not in ('critical', 'high', 'medium', 'low'):
+        priority = 'medium'
     if category not in VALID_CATEGORIES:
         valid = ", ".join(sorted(VALID_CATEGORIES))
-        return f"ERROR: Category '{category}' invalid. Valid: {valid}"
+        return f"ERROR: Categoría '{category}' inválida. Válidas: {valid}"
     result = create_learning(
         category, title, content, reasoning=reasoning
     )
     if "error" in result:
         return f"ERROR: {result['error']}"
-    if prevention or applies_to or review_days > 0:
+    if prevention or applies_to or review_days > 0 or priority != 'medium':
+        initial_weight = {'critical': 0.9, 'high': 0.7, 'medium': 0.5, 'low': 0.3}[priority]
         conn = get_db()
         conn.execute(
             "UPDATE learnings SET prevention = ?, applies_to = ?, status = COALESCE(status, 'active'), "
-            "review_due_at = ?, updated_at = ? WHERE id = ?",
-            (prevention, applies_to, now_epoch() + (max(1, int(review_days)) * 86400), now_epoch(), result["id"])
+            "review_due_at = ?, updated_at = ?, priority = ?, weight = ? WHERE id = ?",
+            (prevention, applies_to, now_epoch() + (max(1, int(review_days)) * 86400), now_epoch(),
+             priority, initial_weight, result["id"])
         )
         conn.commit()
         result = conn.execute("SELECT * FROM learnings WHERE id = ?", (result["id"],)).fetchone()
@@ -100,24 +106,27 @@ def handle_learning_add(category: str, title: str, content: str, reasoning: str 
     if applies_to:
         meta.append(f"applies_to={applies_to}")
     meta_str = f" ({', '.join(meta)})" if meta else ""
-    return f"Learning #{result['id']} added to {category}: {title}{meta_str}{repetition_msg}"
+    return f"Learning #{result['id']} añadido en {category}: {title}{meta_str}{repetition_msg}"
 
 
 def handle_learning_search(query: str, category: str = '') -> str:
     """Search learnings by query string, optionally filtered by category."""
     results = search_learnings(query, category if category else None)
     if not results:
-        return f"No results for '{query}'."
+        return f"Sin resultados para '{query}'."
     lines = [f"RESULTADOS ({len(results)}):"]
     for r in results:
         snippet = r["content"][:100] + "..." if len(r["content"]) > 100 else r["content"]
         status = r.get("status", "active")
         review_due = r.get("review_due_at")
         review_note = f" | review_due={review_due:.0f}" if isinstance(review_due, (int, float)) and review_due else ""
-        lines.append(f"  #{r['id']} [{r['category']}] [{status}] {r['title']}{review_note}")
+        pri = r.get("priority", "medium") or "medium"
+        w = r.get("weight", 0.5) or 0.5
+        pri_icon = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "⚪"}.get(pri, "🟡")
+        lines.append(f"  #{r['id']} [{r['category']}] [{status}] {pri_icon}{pri} w={w:.2f} {r['title']}{review_note}")
         lines.append(f"    {snippet}")
         if r.get("prevention"):
-            lines.append(f"    Prevention: {r['prevention'][:100]}")
+            lines.append(f"    Prevención: {r['prevention'][:100]}")
 
     # v1.2: Passive rehearsal — strengthen matching cognitive memories
     try:
@@ -132,8 +141,8 @@ def handle_learning_search(query: str, category: str = '') -> str:
 
 def handle_learning_update(id: int, title: str = '', content: str = '', category: str = '',
                            reasoning: str = '', prevention: str = '', applies_to: str = '',
-                           status: str = '', review_days: int = 0) -> str:
-    """Update an existing learning, including review metadata."""
+                           status: str = '', review_days: int = 0, priority: str = '') -> str:
+    """Update an existing learning, including review metadata and priority."""
     kwargs = {}
     if title:
         kwargs["title"] = title
@@ -142,7 +151,7 @@ def handle_learning_update(id: int, title: str = '', content: str = '', category
     if category:
         if category not in VALID_CATEGORIES:
             valid = ", ".join(sorted(VALID_CATEGORIES))
-            return f"ERROR: Category '{category}' invalid. Valid: {valid}"
+            return f"ERROR: Categoría '{category}' inválida. Válidas: {valid}"
         kwargs["category"] = category
     if reasoning:
         kwargs["reasoning"] = reasoning
@@ -155,7 +164,7 @@ def handle_learning_update(id: int, title: str = '', content: str = '', category
     if review_days > 0:
         kwargs["review_days"] = review_days
     if not kwargs:
-        return "ERROR: Nothing to update. Provide new fields."
+        return "ERROR: Nada que actualizar. Proporciona campos nuevos."
     basic_kwargs = {k: v for k, v in kwargs.items() if k in {"title", "content", "category", "reasoning"}}
     result = update_learning(id, **basic_kwargs)
     if "error" in result:
@@ -167,6 +176,9 @@ def handle_learning_update(id: int, title: str = '', content: str = '', category
         extra_updates["applies_to"] = applies_to
     if status:
         extra_updates["status"] = status
+    if priority and priority in ('critical', 'high', 'medium', 'low'):
+        extra_updates["priority"] = priority
+        extra_updates["weight"] = {'critical': 0.9, 'high': 0.7, 'medium': 0.5, 'low': 0.3}[priority]
     if review_days > 0:
         extra_updates["review_due_at"] = now_epoch() + (max(1, int(review_days)) * 86400)
     if extra_updates:
@@ -176,15 +188,15 @@ def handle_learning_update(id: int, title: str = '', content: str = '', category
         conn = get_db()
         conn.execute(f"UPDATE learnings SET {set_clause} WHERE id = ?", values)
         conn.commit()
-    return f"Learning #{id} updated."
+    return f"Learning #{id} actualizado."
 
 
 def handle_learning_delete(id: int) -> str:
     """Delete a learning entry by ID."""
     deleted = delete_learning(id)
     if not deleted:
-        return f"ERROR: Learning #{id} not found."
-    return f"Learning #{id} deleted."
+        return f"ERROR: Learning #{id} no encontrado."
+    return f"Learning #{id} eliminado."
 
 
 def handle_learning_list(category: str = '') -> str:
@@ -192,13 +204,16 @@ def handle_learning_list(category: str = '') -> str:
     results = list_learnings(category if category else None)
     if not results:
         label = category if category else "TODOS"
-        return f"LEARNINGS {label} (0): No entries."
+        return f"LEARNINGS {label} (0): Sin entradas."
 
     if category:
         label = category.upper()
         lines = [f"LEARNINGS {label} ({len(results)}):"]
         for r in results:
-            lines.append(f"  #{r['id']} [{r.get('status','active')}] {r['title']}")
+            pri = r.get("priority", "medium") or "medium"
+            w = r.get("weight", 0.5) or 0.5
+            pri_icon = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "⚪"}.get(pri, "🟡")
+            lines.append(f"  #{r['id']} [{r.get('status','active')}] {pri_icon}{pri} w={w:.2f} {r['title']}")
     else:
         lines = [f"LEARNINGS TODOS ({len(results)}):"]
         current_cat = None
@@ -206,6 +221,9 @@ def handle_learning_list(category: str = '') -> str:
             if r["category"] != current_cat:
                 current_cat = r["category"]
                 lines.append(f"\n  [{current_cat.upper()}]")
-            lines.append(f"    #{r['id']} [{r.get('status','active')}] {r['title']}")
+            pri = r.get("priority", "medium") or "medium"
+            w = r.get("weight", 0.5) or 0.5
+            pri_icon = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "⚪"}.get(pri, "🟡")
+            lines.append(f"    #{r['id']} [{r.get('status','active')}] {pri_icon}{pri} w={w:.2f} {r['title']}")
 
     return "\n".join(lines)
