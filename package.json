@@ -31,11 +31,15 @@
     "type": "git",
     "url": "git+https://github.com/wazionapps/nexo.git"
   },
+  "scripts": {
+    "postinstall": "node bin/postinstall.js 2>/dev/null || true"
+  },
   "engines": {
     "node": ">=18"
   },
   "files": [
-    "bin/",
+    "bin/nexo-brain.js",
+    "bin/postinstall.js",
     "src/",
     "templates/",
     "scripts/",
