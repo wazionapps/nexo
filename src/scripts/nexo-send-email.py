@@ -10,7 +10,7 @@ def send(subject, body, to="userp@gmail.com", cc="user.example.com@gmail.com"):
     msg['To'] = to
     msg['Cc'] = cc
     msg['Subject'] = subject
-    smtp = smtplib.SMTP_SSL('cl105e.server.com', 465)
+    smtp = smtplib.SMTP_SSL(os.environ.get('NEXO_SMTP_HOST', 'smtp.example.com'), int(os.environ.get('NEXO_SMTP_PORT', '465')))
     smtp.login(FROM_EMAIL, os.environ.get('NEXO_SMTP_PASSWORD', ''))
     recipients = [to]
     if cc:

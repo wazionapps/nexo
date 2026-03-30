@@ -6,7 +6,7 @@
 #
 # Features:
 # - Catch-up: if yesterday was missed (Mac off/asleep), runs it first
-# - Logs to ~/claude/logs/deep-sleep.log
+# - Logs to $NEXO_HOME/logs/deep-sleep.log
 # - Marks completion in .last-run for watchdog monitoring
 
 set -euo pipefail

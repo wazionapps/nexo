@@ -22,6 +22,8 @@ import sys
 import time
 from datetime import datetime, date, timedelta
 from pathlib import Path
+
+NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
 
@@ -55,7 +57,7 @@ SSL_CTX = _make_ssl_context()
 
 # ─── Paths ────────────────────────────────────────────────────────────────────
 HOME = Path.home()
-CLAUDE_DIR = HOME / "claude"
+CLAUDE_DIR = NEXO_HOME
 COORD_DIR = CLAUDE_DIR / "coordination"
 BRAIN_DIR = CLAUDE_DIR / "brain"
 SCRIPTS_DIR = CLAUDE_DIR / "scripts"
@@ -345,8 +347,8 @@ def check_databases():
     results = []
 
     dbs = [
-        ("nexo.db", Path.home() / "claude" / "nexo-mcp" / "db" / "nexo.db"),
-        ("cognitive.db", Path.home() / "claude" / "nexo-mcp" / "cognitive.db"),
+        ("nexo.db", NEXO_HOME / "nexo-mcp" / "db" / "nexo.db"),
+        ("cognitive.db", NEXO_HOME / "nexo-mcp" / "cognitive.db"),
         ("claude-mem.db", CLAUDE_MEM_DB),
     ]
 

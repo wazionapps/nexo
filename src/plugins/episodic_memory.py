@@ -103,7 +103,7 @@ def handle_decision_search(query: str = '', domain: str = '', days: int = 30) ->
         scope = f"'{query}'" if query else domain or 'all'
         return f"No decisions found for {scope} in {days} days."
 
-    lines = [f"DECISIONES ({len(results)}):"]
+    lines = [f"DECISIONS ({len(results)}):"]
     for d in results:
         conf = d.get('confidence', '?')
         outcome_str = f" → {d['outcome'][:50]}" if d.get('outcome') else ""
@@ -393,16 +393,16 @@ def handle_recall(query: str, days: int = 30) -> str:
         pass
 
     SOURCE_LABELS = {
-        'change_log': '[CAMBIO]',
-        'change':     '[CAMBIO]',
-        'decision':   '[DECISIÓN]',
+        'change_log': '[CHANGE]',
+        'change':     '[CHANGE]',
+        'decision':   '[DECISION]',
         'learning':   '[LEARNING]',
         'followup':   '[FOLLOWUP]',
-        'diary':      '[DIARIO]',
-        'diary_archive': '[ARCHIVO]',
-        'entity':     '[ENTIDAD]',
-        'file':       '[ARCHIVO]',
-        'code':       '[CÓDIGO]',
+        'diary':      '[DIARY]',
+        'diary_archive': '[ARCHIVE]',
+        'entity':     '[ENTITY]',
+        'file':       '[FILE]',
+        'code':       '[CODE]',
     }
 
     lines = [f"RECALL '{query}' — {len(results)} result(s):"]
@@ -422,7 +422,7 @@ def handle_recall(query: str, days: int = 30) -> str:
     if archive_results:
         lines.append(f"\n--- SUBCONSCIOUS (diary archive) — {len(archive_results)} result(s) ---")
         for r in archive_results:
-            lines.append(f"\n  [ARCHIVO] #{r['id']} ({r['created_at'][:10]}) [{r.get('domain', '?')}]")
+            lines.append(f"\n  [ARCHIVE] #{r['id']} ({r['created_at'][:10]}) [{r.get('domain', '?')}]")
             lines.append(f"    {r['summary'][:200]}")
     elif len(results) < 5:
         lines.append(f"\n  💡 Only a few results. Diary archive is empty (populates automatically after 180 days).")

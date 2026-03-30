@@ -122,9 +122,9 @@ def consolidate_with_cli(data: dict) -> bool:
         diaries_json = diaries_json[:12000] + "\n... (truncated)"
 
     prompt = f"""You are NEXO's nightly consolidator. Your job is to review the self-critiques
-del día y decidir cuáles deserve to become permanent rules (feedback_postmortem_*.md).
+from today and decide which deserve to become permanent rules (feedback_postmortem_*.md).
 
-FECHA: {data['date']}
+DATE: {data['date']}
 SESSIONS TODAY: {len(data['diaries'])} total, {len(diaries_with_critique)} with self-critique
 
 DIARIES WITH SELF-CRITIQUE:
@@ -142,12 +142,12 @@ INSTRUCTIONS:
 
 2. PROMOTE to permanent feedback ONLY IF:
    - A pattern appears in 2+ different sessions of the day (by meaning, not literal text)
-   - O the user corrigió explícitamente (user_signals contiene corrección)
-   - Y the self-critique contains a CONCRETE ACTION que prevents a future error
-   - Y a similar feedback does NOT already exist en los existentes
+   - Or the user explicitly corrected (user_signals contains correction)
+   - And the self-critique contains a CONCRETE ACTION that prevents a future error
+   - And a similar feedback does NOT already exist in the existing ones
 
 3. DO NOT promote if:
-   - It's a negative response ("No pasó nada", "clean session")
+   - It's a negative response ("Nothing happened", "clean session")
    - It's generic without concrete action
    - A feedback covering the same topic already exists
 

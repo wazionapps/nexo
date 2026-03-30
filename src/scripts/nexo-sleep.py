@@ -29,6 +29,8 @@ import sys
 from datetime import datetime, date, timedelta
 from pathlib import Path
 
+NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+
 # ─── Paths ────────────────────────────────────────────────────────────────────
 CLAUDE_DIR = Path.home() / ".nexo"
 BRAIN_DIR = CLAUDE_DIR / "brain"

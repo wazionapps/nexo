@@ -1,3 +1,4 @@
+import os
 #!/usr/bin/env python3
 """
 Deep Sleep — Step 3: Apply findings.
@@ -9,8 +10,10 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-DEEP_SLEEP_DIR = Path.home() / "claude" / "operations" / "deep-sleep"
-NEXO_DB = Path.home() / "claude" / "nexo-mcp" / "db" / "nexo.db"
+NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+
+DEEP_SLEEP_DIR = NEXO_HOME / "operations" / "deep-sleep"
+NEXO_DB = NEXO_HOME / "nexo-mcp" / "db" / "nexo.db"
 
 
 def find_memory_dir() -> Path:
@@ -64,7 +67,7 @@ def update_memory_index(memory_dir: Path, new_entries: list[dict]):
 
 def adjust_trust(points: int, context: str):
     """Record trust adjustment in cognitive.db if available."""
-    cog_db = Path.home() / "claude" / "nexo-mcp" / "cognitive.db"
+    cog_db = NEXO_HOME / "nexo-mcp" / "cognitive.db"
     if not cog_db.exists():
         return
     try:
@@ -106,7 +109,7 @@ def add_followup(followup_id: str, description: str, date: str = None) -> bool:
         now = datetime.now().timestamp()
         conn = sqlite3.connect(str(NEXO_DB))
         conn.execute(
-            "INSERT OR IGNORE INTO followups (id, description, date, status, created_at, updated_at, reasoning) VALUES (?, ?, ?, 'PENDIENTE', ?, ?, ?)",
+            "INSERT OR IGNORE INTO followups (id, description, date, status, created_at, updated_at, reasoning) VALUES (?, ?, ?, 'PENDING', ?, ?, ?)",
             (followup_id, description, date or "", now, now, "Deep Sleep overnight analysis")
         )
         conn.commit()

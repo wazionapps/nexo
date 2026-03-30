@@ -447,10 +447,10 @@
     // --- Overdue Items ---
     if (remindersData || followupsData) {
       const reminders = (remindersData?.reminders || []).filter(r =>
-        r.status === 'PENDIENTE' && r.date && r.date < today
+        r.status === 'PENDING' && r.date && r.date < today
       );
       const followups = (followupsData?.followups || []).filter(f =>
-        f.status === 'PENDIENTE' && f.date && f.date < today
+        f.status === 'PENDING' && f.date && f.date < today
       );
       const total = reminders.length + followups.length;
       const el = document.getElementById('overdue-count');
@@ -530,12 +530,12 @@
     if (remindersData || followupsData) {
       const items = [];
       (remindersData?.reminders || []).forEach(r => {
-        if (r.status === 'PENDIENTE' && r.date && r.date <= today) {
+        if (r.status === 'PENDING' && r.date && r.date <= today) {
           items.push({ ...r, _type: 'R', _overdue: r.date < today });
         }
       });
       (followupsData?.followups || []).forEach(f => {
-        if (f.status === 'PENDIENTE' && f.date && f.date <= today) {
+        if (f.status === 'PENDING' && f.date && f.date <= today) {
           items.push({ ...f, _type: 'F', _overdue: f.date < today });
         }
       });

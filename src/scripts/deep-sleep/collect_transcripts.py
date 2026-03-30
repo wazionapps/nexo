@@ -9,6 +9,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+
 MIN_USER_MESSAGES = 3  # Skip trivial sessions
 
 
@@ -129,7 +131,7 @@ def main():
         "sessions": sessions
     }
 
-    output_dir = Path.home() / "claude" / "operations" / "deep-sleep"
+    output_dir = NEXO_HOME / "operations" / "deep-sleep"
     output_dir.mkdir(parents=True, exist_ok=True)
     output_file = output_dir / f"{output['date']}-transcripts.json"
     with open(output_file, "w") as f:

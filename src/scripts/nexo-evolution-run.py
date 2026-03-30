@@ -19,8 +19,10 @@ import sys
 from datetime import datetime, date, timedelta
 from pathlib import Path
 
+NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+
 # ── Paths ────────────────────────────────────────────────────────────────
-CLAUDE_DIR = Path.home() / "claude"
+CLAUDE_DIR = NEXO_HOME
 NEXO_DB = CLAUDE_DIR / "nexo-mcp" / "db" / "nexo.db"
 CORTEX_DIR = CLAUDE_DIR / "cortex"
 OBJECTIVE_FILE = CORTEX_DIR / "evolution-objective.json"
@@ -565,7 +567,9 @@ def _update_catchup_state():
     try:
         import json as _json
         from pathlib import Path as _Path
-        _state_file = _Path.home() / "claude" / "operations" / ".catchup-state.json"
+
+NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+        _state_file = _NEXO_HOME / "operations" / ".catchup-state.json"
         _state = _json.loads(_state_file.read_text()) if _state_file.exists() else {}
         _state["evolution"] = datetime.now().isoformat()
         _state_file.write_text(_json.dumps(_state, indent=2))

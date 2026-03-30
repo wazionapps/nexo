@@ -69,8 +69,73 @@ def search_changes(query: str = '', files: str = '', days: int = 30) -> list[dic
     return [dict(r) for r in rows]
 
 
+def auto_resolve_followups(change: dict) -> list[str]:
+    """Cross-reference a change_log entry with open followups. Auto-completes matches.
+
+    Matching logic:
+    1. File overlap: if change touched files mentioned in followup description
+    2. Keyword overlap: Jaccard similarity between change text and followup text
+    3. ID reference: if followup ID appears in the change's triggered_by/why fields
+
+    Returns list of followup IDs that were auto-resolved.
+    """
+    conn = get_db()
+    open_followups = conn.execute(
+        "SELECT * FROM followups WHERE status NOT LIKE 'COMPLETED%' "
+        "AND status != 'DELETED'"
+    ).fetchall()
+
+    if not open_followups:
+        return []
+
+    change_text = " ".join(str(change.get(f, "")) for f in
+                           ["files", "what_changed", "why", "triggered_by", "affects"])
+    change_files = set(change.get("files", "").replace(",", " ").split())
+    change_tokens = {w.lower() for w in change_text.split() if len(w) > 3}
+
+    resolved = []
+    for f in open_followups:
+        fid = f["id"]
+        fdesc = f"{fid} {f['description']} {f['verification'] or ''}"
+        ftokens = {w.lower() for w in fdesc.split() if len(w) > 3}
+
+        # Check 1: followup ID explicitly in change trigger/why
+        if fid.lower() in change_text.lower():
+            resolved.append(fid)
+            continue
+
+        # Check 2: file overlap (any changed file mentioned in followup)
+        if change_files:
+            for cf in change_files:
+                basename = cf.rsplit("/", 1)[-1] if "/" in cf else cf
+                if basename and len(basename) > 4 and basename.lower() in fdesc.lower():
+                    resolved.append(fid)
+                    break
+            if fid in resolved:
+                continue
+
+        # Check 3: keyword similarity (asymmetric overlap >= 0.35)
+        if ftokens and change_tokens:
+            intersection = ftokens & change_tokens
+            smaller = min(len(ftokens), len(change_tokens))
+            score = len(intersection) / smaller if smaller else 0
+            if score >= 0.35:
+                resolved.append(fid)
+
+    # Auto-complete matched followups
+    from db._reminders import complete_followup
+    commit_ref = change.get("commit_ref", "")
+    for fid in resolved:
+        complete_followup(fid, result=f"Auto-resolved by change #{change.get('id', '?')} (commit {commit_ref[:8] if commit_ref else 'N/A'})")
+
+    return resolved
+
+
 def update_change_commit(id: int, commit_ref: str) -> dict:
-    """Link a change log entry to its git commit after commit."""
+    """Link a change log entry to its git commit after commit.
+
+    After linking, auto-resolves any open followups that match the change.
+    """
     conn = get_db()
     row = conn.execute("SELECT * FROM change_log WHERE id = ?", (id,)).fetchone()
     if not row:
@@ -81,6 +146,11 @@ def update_change_commit(id: int, commit_ref: str) -> dict:
     r = dict(row)
     body = f"{r.get('what_changed','')} {r.get('why','')} {r.get('triggered_by','')} {r.get('affects','')} {r.get('risks','')}"
     fts_upsert("change", str(id), r.get("files",""), body, "change_log", commit=False)
+
+    # Auto-resolve followups that match this change
+    resolved = auto_resolve_followups(r)
+    if resolved:
+        r["auto_resolved_followups"] = resolved
     return r
 
 

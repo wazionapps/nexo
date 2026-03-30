@@ -168,7 +168,7 @@ def init_db():
             id TEXT PRIMARY KEY,
             date TEXT,
             description TEXT NOT NULL,
-            status TEXT NOT NULL DEFAULT 'PENDIENTE',
+            status TEXT NOT NULL DEFAULT 'PENDING',
             category TEXT DEFAULT 'general',
             created_at REAL NOT NULL,
             updated_at REAL NOT NULL
@@ -179,7 +179,7 @@ def init_db():
             date TEXT,
             description TEXT NOT NULL,
             verification TEXT DEFAULT '',
-            status TEXT NOT NULL DEFAULT 'PENDIENTE',
+            status TEXT NOT NULL DEFAULT 'PENDING',
             recurrence TEXT DEFAULT NULL,
             created_at REAL NOT NULL,
             updated_at REAL NOT NULL

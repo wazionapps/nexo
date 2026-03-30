@@ -3,7 +3,7 @@
 NEXO Proactive Dashboard — Surfaces issues and opportunities without the user asking.
 
 Scans: overdue followups, forgotten reminders, unresolved learnings,
-sistemas sin actividad, patrones de the user, y más.
+inactive systems, user patterns, and more.
 
 Usage:
     python3 nexo-proactive-dashboard.py           # Full scan, text output
@@ -19,7 +19,9 @@ import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
-NEXO_DB = Path.home() / "claude" / "nexo-mcp" / "db" / "nexo.db"
+NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+
+NEXO_DB = NEXO_HOME / "nexo-mcp" / "db" / "nexo.db"
 
 
 def get_db():
@@ -149,7 +151,7 @@ def check_session_gaps() -> list[dict]:
 def check_evolution_status() -> list[dict]:
     """Check if evolution system is healthy."""
     alerts = []
-    obj_file = Path.home() / "claude" / "cortex" / "evolution-objective.json"
+    obj_file = NEXO_HOME / "cortex" / "evolution-objective.json"
     if obj_file.exists():
         obj = json.loads(obj_file.read_text())
         if not obj.get("evolution_enabled", True):
@@ -229,7 +231,7 @@ def check_cron_health() -> list[dict]:
     alerts = []
 
     # Check backup cron
-    backup_dir = Path.home() / "claude" / "nexo-mcp" / "backups"
+    backup_dir = NEXO_HOME / "nexo-mcp" / "backups"
     if backup_dir.exists():
         backups = sorted(backup_dir.glob("nexo-*.db"), key=lambda p: p.stat().st_mtime, reverse=True)
         if backups:
@@ -242,7 +244,7 @@ def check_cron_health() -> list[dict]:
                 })
 
     # Check immune system
-    immune_status = Path.home() / "claude" / "coordination" / "immune-status.json"
+    immune_status = NEXO_HOME / "coordination" / "immune-status.json"
     if immune_status.exists():
         try:
             status = json.loads(immune_status.read_text())

@@ -72,11 +72,11 @@ def test_reminder_followup_crud():
     db_mod.create_reminder("R-TEST1", "Test reminder", date="2026-12-31")
     reminder = db_mod.get_reminder("R-TEST1")
     assert reminder is not None
-    assert reminder["status"] == "PENDIENTE"
+    assert reminder["status"] == "PENDING"
 
     db_mod.complete_reminder("R-TEST1")
     reminder2 = db_mod.get_reminder("R-TEST1")
-    assert reminder2["status"] == "COMPLETADO"
+    assert reminder2["status"] == "COMPLETED"
 
     db_mod.create_followup("NF-TEST1", "Test followup", date="2026-12-31")
     followup = db_mod.get_followup("NF-TEST1")
@@ -84,7 +84,7 @@ def test_reminder_followup_crud():
 
     db_mod.complete_followup("NF-TEST1", result="done")
     followup2 = db_mod.get_followup("NF-TEST1")
-    assert followup2["status"] == "COMPLETADO"
+    assert followup2["status"] == "COMPLETED"
 
 
 def test_credential_crud():

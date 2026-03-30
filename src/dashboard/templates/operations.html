@@ -154,9 +154,9 @@
           onchange="loadOpsData()"
           class="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-violet-500"
         >
-          <option value="PENDIENTE">Pending</option>
+          <option value="PENDING">Pending</option>
           <option value="all">All</option>
-          <option value="COMPLETADO">Completed</option>
+          <option value="COMPLETED">Completed</option>
         </select>
       </div>
     </header>
@@ -380,7 +380,7 @@
     const today = getToday();
     const weekEnd = getWeekEnd();
     return {
-      overdue:  items.filter(i => i.date && i.date < today && i.status !== 'COMPLETADO'),
+      overdue:  items.filter(i => i.date && i.date < today && i.status !== 'COMPLETED'),
       today:    items.filter(i => i.date === today),
       week:     items.filter(i => i.date && i.date > today && i.date <= weekEnd),
       upcoming: items.filter(i => i.date && i.date > weekEnd),
@@ -393,9 +393,9 @@
   // -----------------------------------------------------------------------
   function renderItem(item, type) {
     const today = getToday();
-    const isOverdue  = item.date && item.date < today && item.status !== 'COMPLETADO';
+    const isOverdue  = item.date && item.date < today && item.status !== 'COMPLETED';
     const isToday    = item.date === today;
-    const isCompleted = item.status === 'COMPLETADO';
+    const isCompleted = item.status === 'COMPLETED';
 
     const dotColor   = isCompleted ? 'bg-emerald-400' : isOverdue ? 'bg-red-400' : isToday ? 'bg-amber-400' : 'bg-slate-500';
     const dateLabel  = relativeDate(item.date);
@@ -542,7 +542,7 @@
     const res = await fetch(url, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'COMPLETADO' })
+      body: JSON.stringify({ status: 'COMPLETED' })
     });
     const data = await res.json();
     if (data.success) {

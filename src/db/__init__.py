@@ -39,6 +39,7 @@ from db._reminders import (
     get_reminders, get_reminder,
     create_followup, update_followup, complete_followup, delete_followup,
     get_followups, get_followup,
+    find_similar_followups,
 )
 
 # Learnings
@@ -69,7 +70,7 @@ from db._entities import (
 
 # Episodic memory
 from db._episodic import (
-    cleanup_old_changes, log_change, search_changes, update_change_commit,
+    cleanup_old_changes, log_change, search_changes, update_change_commit, auto_resolve_followups,
     cleanup_old_decisions, log_decision, update_decision_outcome,
     get_memory_review_queue, find_decisions_by_context_ref, search_decisions,
     cleanup_old_diaries, write_session_diary,

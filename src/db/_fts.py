@@ -18,13 +18,11 @@ _FTS_MD_DIRS = [
     os.path.join(NEXO_HOME, "skills"),
 ]
 # Code repos: index source files (skip vendor, node_modules, etc.)
-_FTS_CODE_DIRS = [
-    (os.path.expanduser("~/Documents/_PhpstormProjects"), ["*.php", "*.js", "*.json", "*.py", "*.ts", "*.tsx"]),
-]
+_FTS_CODE_DIRS = []  # Users can add project dirs via nexo_index_add_dir
 _FTS_CODE_SKIP = {
     "vendor", "node_modules", ".git", "cache", "tmp", "logs", "uploads",
     "assets/img", "assets/fonts", ".next", "dist", "build", ".prisma",
-    "PROYECTOS ANTIGUOS", "public/build", ".turbo", "__pycache__",
+    "public/build", ".turbo", "__pycache__",
     "coverage", ".nyc_output", "storage/framework", "bootstrap/cache",
 }
 _FTS_MAX_FILE_SIZE = 50_000  # skip .md files >50KB

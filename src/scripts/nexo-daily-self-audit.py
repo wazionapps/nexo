@@ -25,18 +25,20 @@ import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
-LOG_DIR = Path.home() / "claude" / "logs"
+NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+
+LOG_DIR = NEXO_HOME / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE = LOG_DIR / "self-audit.log"
-NEXO_DB = Path.home() / "claude" / "nexo-mcp" / "db" / "nexo.db"
+NEXO_DB = NEXO_HOME / "nexo-mcp" / "db" / "nexo.db"
 # Configure your main project repo to check for uncommitted changes (optional)
 PROJECT_REPO_DIR = None  # e.g., Path.home() / "projects" / "my-repo"
-HASH_REGISTRY = Path.home() / "claude" / "scripts" / ".watchdog-hashes"
-SNAPSHOT_GOLDEN = Path.home() / "claude" / "snapshots" / "golden" / "files" / "claude"
+HASH_REGISTRY = NEXO_HOME / "scripts" / ".watchdog-hashes"
+SNAPSHOT_GOLDEN = NEXO_HOME / "snapshots" / "golden" / "files" / "claude"
 RUNTIME_PREFLIGHT_SUMMARY = LOG_DIR / "runtime-preflight-summary.json"
 WATCHDOG_SMOKE_SUMMARY = LOG_DIR / "watchdog-smoke-summary.json"
 RESTORE_LOG = LOG_DIR / "snapshot-restores.log"
-CORTEX_LOG_DIR = Path.home() / "claude" / "cortex" / "logs"
+CORTEX_LOG_DIR = NEXO_HOME / "cortex" / "logs"
 CLAUDE_CLI = Path.home() / ".local" / "bin" / "claude"
 
 findings = []
@@ -114,7 +116,7 @@ def check_cron_errors():
 
 
 def check_evolution_health():
-    obj_file = Path.home() / "claude" / "cortex" / "evolution-objective.json"
+    obj_file = NEXO_HOME / "cortex" / "evolution-objective.json"
     if not obj_file.exists():
         return
     obj = json.loads(obj_file.read_text())
@@ -236,9 +238,9 @@ def check_watchdog_registry():
 
 def check_snapshot_sync():
     pairs = [
-        (Path.home() / "claude" / "nexo-mcp" / "db.py", SNAPSHOT_GOLDEN / "nexo-mcp" / "db.py"),
-        (Path.home() / "claude" / "cortex" / "cortex-wrapper.py", SNAPSHOT_GOLDEN / "cortex" / "cortex-wrapper.py"),
-        (Path.home() / "claude" / "cortex" / "evolution_cycle.py", SNAPSHOT_GOLDEN / "cortex" / "evolution_cycle.py"),
+        (NEXO_HOME / "nexo-mcp" / "db.py", SNAPSHOT_GOLDEN / "nexo-mcp" / "db.py"),
+        (NEXO_HOME / "cortex" / "cortex-wrapper.py", SNAPSHOT_GOLDEN / "cortex" / "cortex-wrapper.py"),
+        (NEXO_HOME / "cortex" / "evolution_cycle.py", SNAPSHOT_GOLDEN / "cortex" / "evolution_cycle.py"),
     ]
     drift = [live.name for live, snap in pairs
              if not live.exists() or not snap.exists() or _sha256(live) != _sha256(snap)]
@@ -311,7 +313,7 @@ def check_watchdog_smoke():
 
 
 def check_cognitive_health():
-    cognitive_db = Path.home() / "claude" / "nexo-mcp" / "cognitive.db"
+    cognitive_db = NEXO_HOME / "nexo-mcp" / "cognitive.db"
     if not cognitive_db.exists():
         finding("WARN", "cognitive", "cognitive.db not found")
         return
@@ -332,7 +334,7 @@ def check_cognitive_health():
 
     # Metrics
     try:
-        sys.path.insert(0, str(Path.home() / "claude" / "nexo-mcp"))
+        sys.path.insert(0, str(NEXO_HOME / "nexo-mcp"))
         import cognitive as cog
         metrics = cog.get_metrics(days=7)
         if metrics["total_retrievals"] > 0:
@@ -373,7 +375,7 @@ def check_cognitive_health():
     # Weekly GC on Sundays
     if datetime.now().weekday() == 6:
         try:
-            sys.path.insert(0, str(Path.home() / "claude" / "nexo-mcp"))
+            sys.path.insert(0, str(NEXO_HOME / "nexo-mcp"))
             import cognitive as cog
             gc_stm = cog.gc_stm()
             gc_sensory = cog.gc_sensory(max_age_hours=48)
@@ -506,7 +508,7 @@ def main():
 
     # Register for catch-up
     try:
-        state_file = Path.home() / "claude" / "operations" / ".catchup-state.json"
+        state_file = NEXO_HOME / "operations" / ".catchup-state.json"
         st = json.loads(state_file.read_text()) if state_file.exists() else {}
         st["self-audit"] = datetime.now().isoformat()
         state_file.write_text(json.dumps(st, indent=2))

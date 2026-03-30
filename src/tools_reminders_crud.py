@@ -131,7 +131,7 @@ def handle_followup_complete(id: str, result: str = '') -> str:
         return f"ERROR: Followup {id} not found."
 
     # Auto-link: find decisions whose context_ref matches this followup ID
-    msg = f"Followup {id} marcado COMPLETADO."
+    msg = f"Followup {id} marked COMPLETED."
     if has_recurrence:
         # The new one was auto-created by complete_followup
         new_row = conn.execute("SELECT date FROM followups WHERE id = ?", (id,)).fetchone()

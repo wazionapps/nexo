@@ -1,15 +1,18 @@
+import os
 #!/usr/bin/env python3
 """NEXO Cognitive Decay — Daily Ebbinghaus sweep + STM→LTM promotion."""
 
 import json
 import sys
 from pathlib import Path
+
+NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 from datetime import datetime, timedelta
 
-sys.path.insert(0, str(Path.home() / "claude" / "nexo-mcp"))
+sys.path.insert(0, str(NEXO_HOME / "nexo-mcp"))
 import cognitive
 
-STATE_FILE = Path.home() / "claude" / "operations" / ".catchup-state.json"
+STATE_FILE = NEXO_HOME / "operations" / ".catchup-state.json"
 
 
 def update_catchup_state():
@@ -118,7 +121,7 @@ def main():
 
     # 9. Adaptive weight learning — Ridge regression from feedback-annotated entries
     try:
-        sys.path.insert(0, str(Path.home() / "claude" / "nexo-mcp" / "plugins"))
+        sys.path.insert(0, str(NEXO_HOME / "nexo-mcp" / "plugins"))
         from adaptive_mode import learn_weights, prune_adaptive_log, check_weight_rollback
 
         rollback = check_weight_rollback()

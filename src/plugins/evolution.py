@@ -58,7 +58,8 @@ def handle_evolution_propose() -> str:
     """
     import json
     from pathlib import Path
-    obj_file = Path.home() / "claude" / "cortex" / "evolution-objective.json"
+    nexo_home = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+    obj_file = nexo_home / "cortex" / "evolution-objective.json"
     if not obj_file.exists():
         return "ERROR: evolution-objective.json not found"
     try:

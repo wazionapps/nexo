@@ -14,11 +14,13 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 
+NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+
 CLAUDE_CLI = Path.home() / ".local" / "bin" / "claude"
 
 class ContextChecker:
     def __init__(self):
-        self.state_dir = Path.home() / 'claude' / 'state'
+        self.state_dir = NEXO_HOME / 'state'
         self.state_dir.mkdir(exist_ok=True)
         
     def check_email_sent(self, to_addr, subject, since_hours=72):
@@ -53,7 +55,7 @@ class ContextChecker:
         if search_dirs is None:
             search_dirs = [
                 '/var/www/vhosts',
-                str(Path.home() / 'claude'),
+                str(NEXO_HOME),
                 '/opt'
             ]
             

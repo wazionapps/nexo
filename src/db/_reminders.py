@@ -7,7 +7,7 @@ from db._fts import fts_upsert
 # ── Reminders ──────────────────────────────────────────────────────
 
 def create_reminder(id: str, description: str, date: str = None,
-                    status: str = 'PENDIENTE', category: str = 'general') -> dict:
+                    status: str = 'PENDING', category: str = 'general') -> dict:
     """Create a new reminder."""
     conn = get_db()
     now = now_epoch()
@@ -46,7 +46,7 @@ def update_reminder(id: str, **kwargs) -> dict:
 def complete_reminder(id: str) -> dict:
     """Mark a reminder as completed with today's date."""
     today = datetime.date.today().isoformat()
-    return update_reminder(id, status="COMPLETADO")
+    return update_reminder(id, status="COMPLETED")
 
 
 def delete_reminder(id: str) -> bool:
@@ -64,19 +64,19 @@ def get_reminders(filter_type: str = 'all') -> list[dict]:
     today = datetime.date.today().isoformat()
     if filter_type == 'completed':
         rows = conn.execute(
-            "SELECT * FROM reminders WHERE status LIKE 'COMPLETADO%' ORDER BY updated_at DESC"
+            "SELECT * FROM reminders WHERE status LIKE 'COMPLETED%' ORDER BY updated_at DESC"
         ).fetchall()
     elif filter_type == 'due':
         rows = conn.execute(
-            "SELECT * FROM reminders WHERE status NOT LIKE 'COMPLETADO%' "
-            "AND status != 'ELIMINADO' AND date IS NOT NULL AND date <= ? "
+            "SELECT * FROM reminders WHERE status NOT LIKE 'COMPLETED%' "
+            "AND status != 'DELETED' AND date IS NOT NULL AND date <= ? "
             "ORDER BY date ASC",
             (today,)
         ).fetchall()
     else:  # 'all' — active only
         rows = conn.execute(
-            "SELECT * FROM reminders WHERE status NOT LIKE 'COMPLETADO%' "
-            "AND status != 'ELIMINADO' ORDER BY date ASC NULLS LAST"
+            "SELECT * FROM reminders WHERE status NOT LIKE 'COMPLETED%' "
+            "AND status != 'DELETED' ORDER BY date ASC NULLS LAST"
         ).fetchall()
     return [dict(r) for r in rows]
 
@@ -88,10 +88,49 @@ def get_reminder(id: str) -> dict | None:
     return dict(row) if row else None
 
 
+def find_similar_followups(description: str, threshold: float = 0.3) -> list[dict]:
+    """Find open followups similar to a description using keyword overlap.
+
+    Uses asymmetric scoring: what fraction of the SMALLER token set overlaps
+    with the larger. This handles different-length texts better than Jaccard.
+
+    Returns matches sorted by similarity score (highest first).
+    threshold: minimum overlap ratio (0.0-1.0) to consider a match.
+    """
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM followups WHERE status NOT LIKE 'COMPLETED%' "
+        "AND status != 'DELETED'"
+    ).fetchall()
+
+    def tokenize(text: str) -> set:
+        return {w.lower() for w in text.split() if len(w) > 3}
+
+    query_tokens = tokenize(description)
+    if not query_tokens:
+        return []
+
+    matches = []
+    for row in rows:
+        existing_tokens = tokenize(f"{row['id']} {row['description']} {row['verification'] or ''}")
+        if not existing_tokens:
+            continue
+        intersection = query_tokens & existing_tokens
+        if not intersection:
+            continue
+        smaller = min(len(query_tokens), len(existing_tokens))
+        score = len(intersection) / smaller if smaller else 0
+        if score >= threshold:
+            matches.append({**dict(row), "_similarity": round(score, 2)})
+
+    matches.sort(key=lambda x: x["_similarity"], reverse=True)
+    return matches[:5]
+
+
 # ── Followups ──────────────────────────────────────────────────────
 
 def create_followup(id: str, description: str, date: str = None,
-                    verification: str = '', status: str = 'PENDIENTE',
+                    verification: str = '', status: str = 'PENDING',
                     reasoning: str = '', recurrence: str = None) -> dict:
     """Create a new followup with optional reasoning and recurrence.
 
@@ -190,7 +229,7 @@ def complete_followup(id: str, result: str = '') -> dict:
         return {"error": f"Followup {id} not found"}
 
     today = datetime.date.today().isoformat()
-    kwargs = {"status": "COMPLETADO"}
+    kwargs = {"status": "COMPLETED"}
     if result:
         existing = row["verification"] or ''
         kwargs["verification"] = f"{existing}\n{result}".strip() if existing else result
@@ -234,19 +273,19 @@ def get_followups(filter_type: str = 'all') -> list[dict]:
     today = datetime.date.today().isoformat()
     if filter_type == 'completed':
         rows = conn.execute(
-            "SELECT * FROM followups WHERE status LIKE 'COMPLETADO%' ORDER BY updated_at DESC"
+            "SELECT * FROM followups WHERE status LIKE 'COMPLETED%' ORDER BY updated_at DESC"
         ).fetchall()
     elif filter_type == 'due':
         rows = conn.execute(
-            "SELECT * FROM followups WHERE status NOT LIKE 'COMPLETADO%' "
-            "AND status != 'ELIMINADO' AND date IS NOT NULL AND date <= ? "
+            "SELECT * FROM followups WHERE status NOT LIKE 'COMPLETED%' "
+            "AND status != 'DELETED' AND date IS NOT NULL AND date <= ? "
             "ORDER BY date ASC",
             (today,)
         ).fetchall()
     else:  # 'all' — active only
         rows = conn.execute(
-            "SELECT * FROM followups WHERE status NOT LIKE 'COMPLETADO%' "
-            "AND status != 'ELIMINADO' ORDER BY date ASC NULLS LAST"
+            "SELECT * FROM followups WHERE status NOT LIKE 'COMPLETED%' "
+            "AND status != 'DELETED' ORDER BY date ASC NULLS LAST"
         ).fetchall()
     return [dict(r) for r in rows]
 

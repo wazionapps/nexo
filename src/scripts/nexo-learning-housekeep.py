@@ -1,3 +1,4 @@
+import os
 #!/usr/bin/env python3
 """NEXO Learning Housekeeping — Nightly dedup, weight adjustment, and review.
 
@@ -12,10 +13,12 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
-sys.path.insert(0, str(Path.home() / "claude" / "nexo-mcp"))
+NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 
-DB_PATH = Path.home() / "claude" / "nexo-mcp" / "db" / "nexo.db"
-STATE_FILE = Path.home() / "claude" / "operations" / ".catchup-state.json"
+sys.path.insert(0, str(NEXO_HOME / "nexo-mcp"))
+
+DB_PATH = NEXO_HOME / "nexo-mcp" / "db" / "nexo.db"
+STATE_FILE = NEXO_HOME / "operations" / ".catchup-state.json"
 
 # Weight adjustment rates
 GUARD_HIT_BOOST = 0.02       # per guard hit since last run

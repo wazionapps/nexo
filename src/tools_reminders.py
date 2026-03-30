@@ -34,7 +34,7 @@ def handle_reminders(filter_type: str = "due") -> str:
             parts.append(f)
 
     result = "\n\n".join(parts)
-    return result if result else "Sin recordatorios pendientes."
+    return result if result else "No pending reminders."
 
 
 def _format_reminders(filter_type: str) -> str:
@@ -43,18 +43,18 @@ def _format_reminders(filter_type: str) -> str:
     if not rows:
         return ""
 
-    lines = ["RECORDATORIOS:"]
+    lines = ["REMINDERS:"]
     for r in rows:
         rid = r.get("id", "?")
         fecha = r.get("date") or ""
         desc = r.get("description", "")
         status = r.get("status", "")
         desc = desc.replace("**", "")
-        due_marker = " [VENCIDO]" if _is_due(fecha) else ""
+        due_marker = " [DUE]" if _is_due(fecha) else ""
         fecha_display = f"({fecha})" if fecha else "(—)"
         lines.append(f"  {rid} {fecha_display}{due_marker} — {desc[:120]}")
         if "RECURRENTE" in status.upper():
-            lines.append(f"    Estado: {status}")
+            lines.append(f"    Status: {status}")
 
     return "\n".join(lines)
 
@@ -74,7 +74,7 @@ def _format_followups(filter_type: str) -> str:
         fecha = r.get("date") or ""
         desc = r.get("description", "")
         desc = desc.replace("**", "")
-        due_marker = " [VENCIDO]" if _is_due(fecha) else ""
+        due_marker = " [DUE]" if _is_due(fecha) else ""
         fecha_display = f"({fecha})" if fecha else "(—)"
         rec = r.get("recurrence") or ""
         rec_tag = f" [♻️ {rec}]" if rec else ""

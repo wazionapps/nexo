@@ -115,7 +115,7 @@ def nexo_context_packet(area: str, files: str = "") -> str:
     MUST call before delegating ANY task to a subagent. Inject the result into the subagent's prompt.
 
     Args:
-        area: Project/area name (e.g., 'wazion', 'shopify', 'meta-ads', 'canarirural', 'nexo', 'infrastructure').
+        area: Project/area name (e.g., 'ecommerce', 'shopify', 'backend', 'mobile-app', 'nexo', 'infrastructure').
         files: Optional comma-separated file paths for additional context.
     """
     return handle_context_packet(area, files)
@@ -208,7 +208,7 @@ def nexo_checkpoint_read(sid: str = '') -> str:
 def nexo_track(sid: str, paths: list[str]) -> str:
     """Track files being edited. Detects conflicts with other sessions.
 
-    MUST call before editing any file outside ~/claude/.
+    MUST call before editing any shared file.
     Args:
         sid: Your session ID.
         paths: List of absolute file paths to track.
@@ -313,7 +313,7 @@ def nexo_reminder_create(id: str, description: str, date: str = "", category: st
         id: Unique ID starting with 'R' (e.g., R90).
         description: What needs to be done.
         date: Target date YYYY-MM-DD (optional).
-        category: One of: decisiones, tareas, esperando, ideas, general.
+        category: One of: decisions, tasks, waiting, ideas, general.
     """
     return handle_reminder_create(id, description, date, category)
 
@@ -334,7 +334,7 @@ def nexo_reminder_update(id: str, description: str = "", date: str = "", status:
 
 @mcp.tool
 def nexo_reminder_complete(id: str) -> str:
-    """Mark a reminder as COMPLETADO with today's date.
+    """Mark a reminder as completed with today's date.
 
     Args:
         id: Reminder ID (e.g., R87).
@@ -369,7 +369,7 @@ def nexo_followup_create(id: str, description: str, date: str = "", verification
         priority: critical, high, medium, low (default: medium).
     """
     result = handle_followup_create(id, description, date, verification, reasoning, recurrence)
-    if priority in ('critical', 'high', 'low') and 'creado' in result:
+    if priority in ('critical', 'high', 'low') and 'created' in result:
         from db import get_db
         get_db().execute("UPDATE followups SET priority = ? WHERE id = ?", (priority, id))
         get_db().commit()
@@ -398,7 +398,7 @@ def nexo_followup_update(id: str, description: str = "", date: str = "", verific
 
 @mcp.tool
 def nexo_followup_complete(id: str, result: str = "") -> str:
-    """Mark a followup as COMPLETADO. Appends result to verification field.
+    """Mark a followup as completed. Appends result to verification field.
 
     Args:
         id: Followup ID (e.g., NF45).
@@ -424,7 +424,7 @@ def nexo_learning_add(category: str, title: str, content: str, reasoning: str = 
     """Add a new learning (resolved error, pattern, gotcha).
 
     Args:
-        category: One of: nexo-ops, google-ads, meta-ads, google-analytics, shopify, wazion, cloud-sql, infrastructure, security, brain-engine.
+        category: Free-form category name (e.g., 'backend', 'frontend', 'devops', 'infrastructure', 'security'). Use consistent names across learnings.
         title: Short title for the learning.
         content: Full description with context and solution.
         reasoning: WHY this matters — what led to discovering this (optional).
@@ -508,7 +508,7 @@ def nexo_index_add_dir(path: str, dir_type: str = "code",
     result = fts_add_dir(path, dir_type, patterns, notes)
     if "error" in result:
         return f"ERROR: {result['error']}"
-    return f"Directorio registrado: {result['path']} ({result['dir_type']}, patterns: {result['patterns']})\nUsa nexo_reindex para indexar ahora."
+    return f"Directory registered: {result['path']} ({result['dir_type']}, patterns: {result['patterns']})\nUse nexo_reindex to index now."
 
 
 @mcp.tool
@@ -521,7 +521,7 @@ def nexo_index_remove_dir(path: str) -> str:
     result = fts_remove_dir(path)
     if "error" in result:
         return f"ERROR: {result['error']}"
-    return f"Directorio eliminado del índice: {result['removed']}"
+    return f"Directory removed from index: {result['removed']}"
 
 
 @mcp.tool
@@ -674,8 +674,8 @@ def nexo_plugin_remove(filename: str) -> str:
     try:
         removed = remove_plugin(mcp, filename)
         if removed:
-            return f"Plugin {filename} eliminado. Tools quitados: {', '.join(removed)}"
-        return f"Plugin {filename} eliminado (no tenía tools registrados)."
+            return f"Plugin {filename} removed. Tools unregistered: {', '.join(removed)}"
+        return f"Plugin {filename} removed (had no registered tools)."
     except Exception as e:
         return f"Error eliminando plugin {filename}: {e}"
 

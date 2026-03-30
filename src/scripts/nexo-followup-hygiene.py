@@ -1,3 +1,4 @@
+import os
 #!/usr/bin/env python3
 """
 NEXO Followup Hygiene — Weekly cleanup of followup/reminder statuses.
@@ -16,9 +17,11 @@ import sys
 from datetime import datetime, date, timedelta
 from pathlib import Path
 
-NEXO_DB = Path.home() / "claude" / "nexo-mcp" / "db" / "nexo.db"
-COORD_DIR = Path.home() / "claude" / "coordination"
-LOG_FILE = Path.home() / "claude" / "logs" / "followup-hygiene.log"
+NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+
+NEXO_DB = NEXO_HOME / "nexo-mcp" / "db" / "nexo.db"
+COORD_DIR = NEXO_HOME / "coordination"
+LOG_FILE = NEXO_HOME / "logs" / "followup-hygiene.log"
 
 TODAY = date.today().isoformat()
 

@@ -10,8 +10,10 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+
 PROMPT_FILE = Path(__file__).parent / "prompt.md"
-DEEP_SLEEP_DIR = Path.home() / "claude" / "operations" / "deep-sleep"
+DEEP_SLEEP_DIR = NEXO_HOME / "operations" / "deep-sleep"
 MAX_TRANSCRIPT_CHARS = 150_000
 
 

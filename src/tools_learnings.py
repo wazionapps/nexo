@@ -3,19 +3,13 @@
 from db import (create_learning, update_learning, delete_learning, search_learnings,
                 list_learnings, find_similar_learnings, get_db, now_epoch)
 
-VALID_CATEGORIES = {
-    "nexo-ops", "google-ads", "meta-ads", "google-analytics",
-    "shopify", "wazion", "cloud-sql", "infrastructure", "security", "brain-engine"
-}
-
-
 def handle_learning_add(category: str, title: str, content: str, reasoning: str = '',
                         prevention: str = '', applies_to: str = '', review_days: int = 30,
                         priority: str = 'medium') -> str:
     """Add a new learning entry to the specified category.
 
     Args:
-        category: One of the valid categories
+        category: Free-form category name (e.g., 'backend', 'frontend', 'devops', 'infrastructure', 'security', 'nexo-ops'). Use consistent names — learnings are grouped and searched by category.
         title: Short title for the learning
         content: Full description of what was learned
         reasoning: WHY this matters — what led to discovering this, what was the context
@@ -26,9 +20,9 @@ def handle_learning_add(category: str, title: str, content: str, reasoning: str 
     """
     if priority not in ('critical', 'high', 'medium', 'low'):
         priority = 'medium'
-    if category not in VALID_CATEGORIES:
-        valid = ", ".join(sorted(VALID_CATEGORIES))
-        return f"ERROR: Categoría '{category}' inválida. Válidas: {valid}"
+    category = category.lower().strip()
+    if not category:
+        return "ERROR: Category cannot be empty."
     result = create_learning(
         category, title, content, reasoning=reasoning
     )
@@ -106,7 +100,7 @@ def handle_learning_add(category: str, title: str, content: str, reasoning: str 
     if applies_to:
         meta.append(f"applies_to={applies_to}")
     meta_str = f" ({', '.join(meta)})" if meta else ""
-    return f"Learning #{result['id']} añadido en {category}: {title}{meta_str}{repetition_msg}"
+    return f"Learning #{result['id']} added in {category}: {title}{meta_str}{repetition_msg}"
 
 
 def handle_learning_search(query: str, category: str = '') -> str:
@@ -126,7 +120,7 @@ def handle_learning_search(query: str, category: str = '') -> str:
         lines.append(f"  #{r['id']} [{r['category']}] [{status}] {pri_icon}{pri} w={w:.2f} {r['title']}{review_note}")
         lines.append(f"    {snippet}")
         if r.get("prevention"):
-            lines.append(f"    Prevención: {r['prevention'][:100]}")
+            lines.append(f"    Prevention: {r['prevention'][:100]}")
 
     # v1.2: Passive rehearsal — strengthen matching cognitive memories
     try:
@@ -149,10 +143,7 @@ def handle_learning_update(id: int, title: str = '', content: str = '', category
     if content:
         kwargs["content"] = content
     if category:
-        if category not in VALID_CATEGORIES:
-            valid = ", ".join(sorted(VALID_CATEGORIES))
-            return f"ERROR: Categoría '{category}' inválida. Válidas: {valid}"
-        kwargs["category"] = category
+        kwargs["category"] = category.lower().strip()
     if reasoning:
         kwargs["reasoning"] = reasoning
     if prevention:
@@ -195,8 +186,8 @@ def handle_learning_delete(id: int) -> str:
     """Delete a learning entry by ID."""
     deleted = delete_learning(id)
     if not deleted:
-        return f"ERROR: Learning #{id} no encontrado."
-    return f"Learning #{id} eliminado."
+        return f"ERROR: Learning #{id} not found."
+    return f"Learning #{id} deleted."
 
 
 def handle_learning_list(category: str = '') -> str:
@@ -204,7 +195,7 @@ def handle_learning_list(category: str = '') -> str:
     results = list_learnings(category if category else None)
     if not results:
         label = category if category else "TODOS"
-        return f"LEARNINGS {label} (0): Sin entradas."
+        return f"LEARNINGS {label} (0): No entries."
 
     if category:
         label = category.upper()

@@ -14,9 +14,9 @@ def _get_date_str() -> str:
     """Get formatted date in Madrid timezone."""
     try:
         result = subprocess.run(
-            ["date", "+%A %d de %B de %Y, %H:%M"],
+            ["date", "+%A %d %B %Y, %H:%M"],
             capture_output=True, text=True,
-            env={"TZ": "Europe/Madrid", "PATH": "/usr/bin:/bin", "LANG": "es_ES.UTF-8"}
+            env={"PATH": "/usr/bin:/bin"}
         )
         return result.stdout.strip()
     except Exception:
@@ -64,7 +64,8 @@ MENU_ITEMS = [
 def _get_dashboard_alerts() -> list[dict]:
     """Run proactive dashboard and return alerts."""
     try:
-        script = Path.home() / "claude" / "scripts" / "nexo-proactive-dashboard.py"
+        nexo_home = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+        script = nexo_home / "scripts" / "nexo-proactive-dashboard.py"
         if not script.exists():
             return []
         result = subprocess.run(
@@ -162,16 +163,16 @@ def handle_menu() -> str:
         cutoff = (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d")
         # Reminders without date (backlog/ideas)
         no_date = conn.execute(
-            "SELECT id, description, category FROM reminders WHERE status LIKE 'PENDIENTE%' AND (date IS NULL OR date='') ORDER BY category, id"
+            "SELECT id, description, category FROM reminders WHERE status LIKE 'PENDING%' AND (date IS NULL OR date='') ORDER BY category, id"
         ).fetchall()
         # Reminders with date > 7 days ahead (future)
         future = conn.execute(
-            "SELECT id, description, date, category FROM reminders WHERE status LIKE 'PENDIENTE%' AND date > ? ORDER BY date",
+            "SELECT id, description, date, category FROM reminders WHERE status LIKE 'PENDING%' AND date > ? ORDER BY date",
             (cutoff,)
         ).fetchall()
         # Followups without date
         nf_no_date = conn.execute(
-            "SELECT id, description FROM followups WHERE status NOT LIKE 'COMPLETADO%' AND (date IS NULL OR date='') ORDER BY id"
+            "SELECT id, description FROM followups WHERE status NOT LIKE 'COMPLETED%' AND (date IS NULL OR date='') ORDER BY id"
         ).fetchall()
 
         if no_date or future or nf_no_date:
