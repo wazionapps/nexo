@@ -10,7 +10,7 @@
  * 3. Installs Python dependencies (fastembed, numpy, mcp)
  * 4. Creates ~/.nexo/ with DB, personality, and config
  * 5. Configures Claude Code MCP settings
- * 6. Creates LaunchAgents for macOS automated processes
+ * 6. Creates LaunchAgents (macOS) / systemd timers (Linux) / crontab (fallback) for automated processes
  * 7. Generates CLAUDE.md with the operator's instructions
  */
 
@@ -1388,9 +1388,88 @@ ${doScan ? `- Stack: ${Object.keys(profileData.code.languages || {}).slice(0, 5)
     } catch {}
     log("Caffeinate enabled — Mac will stay awake for cognitive processes.");
   }
+  } else if (platform === "linux") {
+    // Linux: use systemd user timers (preferred) or crontab as fallback
+    const systemdDir = path.join(require("os").homedir(), ".config", "systemd", "user");
+    const hasSystemd = run("which systemctl") && run("systemctl --user status 2>/dev/null");
+
+    if (hasSystemd) {
+      fs.mkdirSync(systemdDir, { recursive: true });
+
+      const linuxAgents = [
+        { name: "cognitive-decay", script: "nexo-cognitive-decay.py", calendar: "*-*-* 03:00:00" },
+        { name: "postmortem", script: "nexo-postmortem-consolidator.py", calendar: "*-*-* 23:30:00" },
+        { name: "sleep", script: "nexo-sleep.py", calendar: "*-*-* 04:00:00" },
+        { name: "self-audit", script: "nexo-daily-self-audit.py", calendar: "*-*-* 07:00:00" },
+      ];
+
+      linuxAgents.forEach((agent) => {
+        const serviceName = `nexo-${agent.name}`;
+        const serviceFile = path.join(systemdDir, `${serviceName}.service`);
+        const timerFile = path.join(systemdDir, `${serviceName}.timer`);
+
+        const service = `[Unit]
+Description=NEXO Brain — ${agent.name}
+
+[Service]
+Type=oneshot
+ExecStart=${venvPython} ${path.join(NEXO_HOME, "scripts", agent.script)}
+Environment=HOME=${require("os").homedir()}
+Environment=NEXO_HOME=${NEXO_HOME}
+StandardOutput=append:${path.join(NEXO_HOME, "logs", `${agent.name}-stdout.log`)}
+StandardError=append:${path.join(NEXO_HOME, "logs", `${agent.name}-stderr.log`)}
+`;
+
+        const timer = `[Unit]
+Description=NEXO Brain — ${agent.name} timer
+
+[Timer]
+OnCalendar=${agent.calendar}
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+`;
+
+        fs.writeFileSync(serviceFile, service);
+        fs.writeFileSync(timerFile, timer);
+        try {
+          execSync(`systemctl --user enable --now ${serviceName}.timer 2>/dev/null`, { stdio: "pipe" });
+        } catch {}
+      });
+
+      // Catchup runs at startup via MCP — no timer needed
+      log(`${linuxAgents.length} systemd user timers configured.`);
+    } else {
+      // Fallback: crontab
+      log("systemd not available, configuring crontab...");
+      const cronLines = [
+        `0 3 * * * ${venvPython} ${path.join(NEXO_HOME, "scripts", "nexo-cognitive-decay.py")} >> ${path.join(NEXO_HOME, "logs", "cognitive-decay-stdout.log")} 2>&1`,
+        `30 23 * * * ${venvPython} ${path.join(NEXO_HOME, "scripts", "nexo-postmortem-consolidator.py")} >> ${path.join(NEXO_HOME, "logs", "postmortem-stdout.log")} 2>&1`,
+        `0 4 * * * ${venvPython} ${path.join(NEXO_HOME, "scripts", "nexo-sleep.py")} >> ${path.join(NEXO_HOME, "logs", "sleep-stdout.log")} 2>&1`,
+        `0 7 * * * ${venvPython} ${path.join(NEXO_HOME, "scripts", "nexo-daily-self-audit.py")} >> ${path.join(NEXO_HOME, "logs", "self-audit-stdout.log")} 2>&1`,
+      ];
+
+      try {
+        const existingCron = run("crontab -l 2>/dev/null") || "";
+        const nexoCronMarker = "# NEXO Brain automated processes";
+        if (!existingCron.includes(nexoCronMarker)) {
+          const newCron = existingCron + "\n" + nexoCronMarker + "\n" + cronLines.join("\n") + "\n";
+          const tmpCron = path.join(NEXO_HOME, ".crontab-tmp");
+          fs.writeFileSync(tmpCron, newCron);
+          execSync(`crontab ${tmpCron}`, { stdio: "pipe" });
+          fs.unlinkSync(tmpCron);
+          log(`${cronLines.length} cron jobs configured.`);
+        } else {
+          log("NEXO cron jobs already configured.");
+        }
+      } catch (e) {
+        log(`Could not configure crontab: ${e.message}`);
+        log("Background tasks will run via catch-up on startup.");
+      }
+    }
   } else {
-    log("Non-macOS platform: background tasks will run via catch-up on startup.");
-    log("  No OS scheduler configured — NEXO runs maintenance when MCP starts.");
+    log("Unsupported platform for background tasks. Maintenance runs on MCP startup.");
   }
 
   // Step 8: Create shell alias so user can just type the operator's name
