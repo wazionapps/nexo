@@ -3,6 +3,7 @@ import json, math, re
 import numpy as np
 from datetime import datetime, timedelta
 from cognitive._core import _get_db, embed, cosine_similarity, _blob_to_array, _array_to_blob, EMBEDDING_DIM, DISCRIMINATING_ENTITIES
+from cognitive._ingest import _sanitize_memory_content
 
 
 def _quarantine_stats():
