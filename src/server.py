@@ -52,7 +52,7 @@ mcp = FastMCP(
     name="nexo",
     instructions=(
         "NEXO operational server. Provides session coordination, "
-        "reminders, followups, and menu for user's operations.\n\n"
+        "reminders, followups, and menu for user operations.\n\n"
         "When working with tool results, write down any important information "
         "you might need later in your response, as the original tool result "
         "may be cleared later."
@@ -115,7 +115,7 @@ def nexo_context_packet(area: str, files: str = "") -> str:
     MUST call before delegating ANY task to a subagent. Inject the result into the subagent's prompt.
 
     Args:
-        area: Project/area name (e.g., 'project-a', 'shopify', 'meta-ads', 'project-b', 'nexo', 'infrastructure').
+        area: Project/area name (e.g., 'wazion', 'shopify', 'meta-ads', 'canarirural', 'nexo', 'infrastructure').
         files: Optional comma-separated file paths for additional context.
     """
     return handle_context_packet(area, files)
@@ -307,7 +307,7 @@ def nexo_menu() -> str:
 
 @mcp.tool
 def nexo_reminder_create(id: str, description: str, date: str = "", category: str = "general") -> str:
-    """Create a new reminder for user.
+    """Create a new reminder for the user.
 
     Args:
         id: Unique ID starting with 'R' (e.g., R90).
@@ -334,7 +334,7 @@ def nexo_reminder_update(id: str, description: str = "", date: str = "", status:
 
 @mcp.tool
 def nexo_reminder_complete(id: str) -> str:
-    """Mark a reminder as COMPLETED with today's date.
+    """Mark a reminder as COMPLETADO with today's date.
 
     Args:
         id: Reminder ID (e.g., R87).
@@ -386,7 +386,7 @@ def nexo_followup_update(id: str, description: str = "", date: str = "", verific
 
 @mcp.tool
 def nexo_followup_complete(id: str, result: str = "") -> str:
-    """Mark a followup as COMPLETED. Appends result to verification field.
+    """Mark a followup as COMPLETADO. Appends result to verification field.
 
     Args:
         id: Followup ID (e.g., NF45).
@@ -408,16 +408,17 @@ def nexo_followup_delete(id: str) -> str:
 # ── Learnings CRUD (5 tools) ──────────────────────────────────────
 
 @mcp.tool
-def nexo_learning_add(category: str, title: str, content: str, reasoning: str = "") -> str:
+def nexo_learning_add(category: str, title: str, content: str, reasoning: str = "", priority: str = "medium") -> str:
     """Add a new learning (resolved error, pattern, gotcha).
 
     Args:
-        category: One of: nexo-ops, google-ads, meta-ads, google-analytics, shopify, my-project, cloud-sql, infrastructure, security, brain-engine.
+        category: One of: nexo-ops, google-ads, meta-ads, google-analytics, shopify, wazion, cloud-sql, infrastructure, security, brain-engine.
         title: Short title for the learning.
         content: Full description with context and solution.
         reasoning: WHY this matters — what led to discovering this (optional).
+        priority: critical, high, medium, low (default: medium). Critical/high never decay below floor.
     """
-    return handle_learning_add(category, title, content, reasoning)
+    return handle_learning_add(category, title, content, reasoning, priority=priority)
 
 
 @mcp.tool
@@ -432,7 +433,7 @@ def nexo_learning_search(query: str, category: str = "") -> str:
 
 
 @mcp.tool
-def nexo_learning_update(id: int, title: str = "", content: str = "", category: str = "") -> str:
+def nexo_learning_update(id: int, title: str = "", content: str = "", category: str = "", priority: str = "") -> str:
     """Update a learning entry. Only non-empty fields are changed.
 
     Args:
@@ -440,8 +441,9 @@ def nexo_learning_update(id: int, title: str = "", content: str = "", category: 
         title: New title (optional).
         content: New content (optional).
         category: New category (optional).
+        priority: critical, high, medium, low (optional).
     """
-    return handle_learning_update(id, title, content, category)
+    return handle_learning_update(id, title, content, category, priority=priority)
 
 
 @mcp.tool
@@ -507,7 +509,7 @@ def nexo_index_remove_dir(path: str) -> str:
     result = fts_remove_dir(path)
     if "error" in result:
         return f"ERROR: {result['error']}"
-    return f"Directory removed from index: {result['removed']}"
+    return f"Directorio eliminado del índice: {result['removed']}"
 
 
 @mcp.tool
@@ -660,8 +662,8 @@ def nexo_plugin_remove(filename: str) -> str:
     try:
         removed = remove_plugin(mcp, filename)
         if removed:
-            return f"Plugin {filename} removed. Tools unregistered: {', '.join(removed)}"
-        return f"Plugin {filename} removed (had no registered tools)."
+            return f"Plugin {filename} eliminado. Tools quitados: {', '.join(removed)}"
+        return f"Plugin {filename} eliminado (no tenía tools registrados)."
     except Exception as e:
         return f"Error eliminando plugin {filename}: {e}"
 
