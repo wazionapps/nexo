@@ -130,21 +130,9 @@ Like a human brain, NEXO Brain has automated processes that run while you're not
 |------|---------|---------------|
 | 03:00 | Decay + memory consolidation + merge duplicates + dreaming | Deep sleep consolidation |
 | 04:00 | Clean expired data, prune redundant memories | Synaptic pruning |
-| 04:30 | **Deep Sleep** — analyze full session transcripts for uncaptured corrections, protocol violations, missed commitments | REM sleep review |
 | 07:00 | Self-audit, health checks, metrics | Waking up + orientation |
 | 23:30 | Process day's events, extract patterns | Pre-sleep reflection |
 | Boot | Catch-up: run anything missed while computer was off | -- |
-
-#### Deep Sleep (v1.5.2)
-
-Deep Sleep reads your **complete session transcripts** (not just the diary summary) and finds what the agent missed during the day:
-
-- **Uncaptured corrections** — user corrections the agent didn't save as learnings
-- **Protocol violations** — guard_check skipped, trust not adjusted, change_log omitted
-- **Missed commitments** — things mentioned but never tracked as followups
-- **Quality issues** — agent declaring "done" when work wasn't complete
-
-Uses Claude CLI in `--bare` mode (no hooks, no CLAUDE.md interference). Catch-up system re-runs yesterday if the Mac was off.
 
 If your Mac was asleep during any scheduled process, NEXO Brain catches up in order when it wakes.
 
@@ -210,7 +198,7 @@ This means long sessions (8+ hours) feel like one continuous conversation instea
 
 ## Cognitive Features
 
-NEXO Brain provides **100+ MCP tools** implementing cognitive science concepts that go beyond basic memory:
+NEXO Brain provides 29 cognitive tools on top of the 78 base tools, totaling **115+ MCP tools**. These features implement cognitive science concepts that go beyond basic memory:
 
 ### Input Pipeline
 
@@ -238,13 +226,11 @@ NEXO Brain provides **100+ MCP tools** implementing cognitive science concepts t
 |---------|-------------|
 | **HyDE Query Expansion** | Generates hypothetical answer embeddings for richer semantic search. Instead of searching for "deploy error", it imagines what a helpful memory about deploy errors would look like, then searches for that. |
 | **Hybrid Search (FTS5+BM25+RRF)** | Combines dense vector search with BM25 keyword search via Reciprocal Rank Fusion. Outperforms pure semantic search on precise terminology and code identifiers. |
-| **KG Boost** | Knowledge Graph connection count influences retrieval ranking. Memories linked to well-connected entities (many edges) receive a logarithmic score bonus, surfacing contextually important facts higher. |
-| **HNSW Vector Index** | Optional approximate nearest neighbor index (hnswlib). Activates automatically when memory count exceeds 10,000. Falls back to exact brute-force below that threshold — no configuration needed. |
 | **Cross-Encoder Reranking** | After initial vector retrieval, a cross-encoder model rescores candidates for precision. The top-k results are reordered by true semantic relevance before being returned to the agent. |
 | **Multi-Query Decomposition** | Complex questions are automatically split into sub-queries. Each component is retrieved independently, then fused for a higher-quality answer — improves recall on multi-faceted prompts. |
 | **Temporal Indexing** | Memories are indexed by time in addition to semantics. Time-sensitive queries ("what did we decide last Tuesday?") use temporal proximity scoring alongside semantic similarity. |
 | **Spreading Activation** | Graph-based co-activation network. Memories retrieved together reinforce each other's connections, building an associative web that improves over time. |
-| **Recall Explanations** | Transparent score breakdown for every retrieval result. Shows exactly why a memory was returned: semantic similarity, recency, access frequency, KG boost, and co-activation bonuses. |
+| **Recall Explanations** | Transparent score breakdown for every retrieval result. Shows exactly why a memory was returned: semantic similarity, recency, access frequency, and co-activation bonuses. |
 
 ### Proactive
 
@@ -281,21 +267,62 @@ NEXO Brain was evaluated on [LoCoMo](https://github.com/snap-research/locomo) (A
 
 Full results in [`benchmarks/locomo/results/`](benchmarks/locomo/results/).
 
-## Full Orchestration System (v0.7.0)
+## Nervous System (v1.6.0)
+
+NEXO Brain doesn't just respond — it runs autonomous processes in the background, like a biological nervous system. 11 scripts handle maintenance, health monitoring, and self-improvement without any user interaction:
+
+| Script | Schedule | What It Does |
+|--------|----------|-------------|
+| **cognitive-decay** | 03:00 daily | Ebbinghaus decay + memory consolidation + duplicate merging + dreaming |
+| **deep-sleep** | 04:30 daily | Reads full session transcripts, finds uncaptured corrections and protocol violations |
+| **daily-self-audit** | 07:00 daily | Health checks, guard stats, trust score review, metrics |
+| **catchup** | On boot | Runs any missed scheduled processes (Mac was off/asleep) |
+| **evolution-run** | Weekly | Self-improvement proposals — NEXO suggests and applies enhancements |
+| **followup-hygiene** | Weekly | Normalizes statuses, flags stale followups, cleans orphans |
+| **immune** | 04:00 daily | Quarantine processing, memory promotion/rejection, synaptic pruning |
+| **watchdog** | Every 30 min | Monitors 15+ services, LaunchAgents, and infrastructure health |
+| **github-monitor** | 08:00 daily | Checks issues, PRs, and commits on public repos |
+| **learning-validator** | Nightly | Validates learnings for staleness, contradictions, and duplicates |
+| **cognitive-migrate** | On upgrade | Schema migrations for cognitive.db — safe, reversible evolution |
+
+All scripts run via macOS LaunchAgents (or catch-up on Linux). If your Mac was asleep during a scheduled process, the catch-up script re-runs everything in order when it wakes.
+
+### LaunchAgent Templates
+
+13 macOS automation templates are included for scheduling the nervous system. The installer configures them automatically. On Linux, equivalent cron entries are generated.
+
+## Dashboard (v1.6.0)
+
+A web interface at `localhost:6174` with 6 interactive pages for visual insight into your brain's state:
+
+| Page | What It Shows |
+|------|-------------|
+| **Overview** | System health at a glance — memory counts, trust score, active sessions, recent changes |
+| **Graph** | Interactive D3.js visualization of the knowledge graph (nodes, edges, clusters) |
+| **Memory** | Browse and search all memory stores (STM, LTM, sensory, archived) |
+| **Somatic** | Pain map per file/area — see which parts of your codebase cause the most errors |
+| **Adaptive** | Personality signals, learned weights, and current mode |
+| **Sessions** | Active and historical sessions with timeline and diary entries |
+
+Built with FastAPI backend and D3.js frontend. Runs as a LaunchAgent, auto-starts with the system.
+
+## Full Orchestration System
 
 Memory alone doesn't make a co-operator. What makes the difference is the **behavioral loop** — the automated discipline that ensures every session starts informed, runs with guardrails, and ends with self-reflection.
 
-### 6 Automated Hooks
+### Automated Hooks
 
-These fire automatically at key moments in every Claude Code session:
+8 hooks fire automatically at key moments in every Claude Code session:
 
 | Hook | When | What It Does |
 |------|------|-------------|
-| **SessionStart** | Session opens | Generates a briefing from SQLite: overdue reminders, today's tasks, pending followups, active sessions |
+| **SessionStart** | Session opens | Generates briefing from SQLite: overdue reminders, today's tasks, pending followups, active sessions. Cleans up post-mortem flags. |
 | **Stop** | Session ends | Mandatory post-mortem: self-critique (5 questions), session buffer entry, followup creation, proactive seeds for next session |
-| **PostToolUse** | After each tool call | Captures meaningful mutations to the Sensory Register |
+| **PostToolUse** | After each tool call | Captures meaningful mutations to the Sensory Register + inter-terminal inbox delivery |
 | **PreCompact** | Before context compression | Saves full session checkpoint to SQLite — task, files, decisions, errors, reasoning thread |
 | **PostCompact** | After context compression | Re-injects Core Memory Block so the session continues seamlessly from where it left off |
+| **PreToolUse** | Before tool execution | Validates tool parameters and injects guard context for destructive operations |
+| **Notification** | External events | Routes incoming notifications (GitHub, email, watchdog alerts) to the active session |
 | **Caffeinate** | Always (optional) | Keeps Mac awake for nocturnal cognitive processes |
 
 ### The Session Lifecycle
@@ -335,23 +362,25 @@ After 3+ sessions accumulate, the stop hook triggers `nexo-reflection.py`:
 
 ### Auto-Migration
 
-Existing users upgrading from v0.5.0:
+Existing users upgrading from any previous version:
 ```bash
-npx nexo-brain  # detects v0.5.0, migrates automatically
+npx nexo-brain  # detects current version, migrates automatically
 ```
-- Updates hooks, core files, plugins, scripts
+- Updates hooks, core files, plugins, scripts, and LaunchAgent templates
+- Runs `cognitive-migrate.py` for safe, reversible schema evolution
 - **Never touches your data** (memories, learnings, preferences)
 - Saves updated CLAUDE.md as reference (doesn't overwrite customizations)
 
-## Knowledge Graph & Dashboard (v0.8)
+For manual migration (e.g., from a custom setup):
+```bash
+python3 ~/.nexo/scripts/nexo-cognitive-migrate.py
+```
 
-### Knowledge Graph
+## Knowledge Graph (v0.8)
+
 A bi-temporal entity-relationship graph with 988 nodes and 896 edges. Entities and relationships carry both valid-time (when the fact was true) and system-time (when it was recorded), enabling temporal queries like "what did we know about X last Tuesday?". BFS traversal discovers multi-hop connections between concepts. Event-sourced edges with smart dedup (ADD/UPDATE/NOOP) prevent redundant writes while preserving full history.
 
-4 new MCP tools: `nexo_kg_query` (SPARQL-like queries), `nexo_kg_path` (shortest path between entities), `nexo_kg_neighbors` (direct connections), `nexo_kg_stats` (graph metrics).
-
-### Web Dashboard
-A visual interface at `localhost:6174` with 6 pages: Overview (system health at a glance), Graph (interactive D3.js visualization of the knowledge graph), Memory (browse and search all memory stores), Somatic (pain map per file/area), Adaptive (personality signals and weights), and Sessions (active and historical sessions). Built with FastAPI backend and D3.js frontend.
+4 MCP tools: `nexo_kg_query` (SPARQL-like queries), `nexo_kg_path` (shortest path between entities), `nexo_kg_neighbors` (direct connections), `nexo_kg_stats` (graph metrics).
 
 ### Cross-Platform Support
 Full Linux support and Windows via WSL. The installer detects the platform and configures the appropriate process manager (LaunchAgents on macOS, catch-up on startup for Linux). PEP 668 compliance (venv on Ubuntu 24.04+). Session keepalive prevents phantom sessions during long tasks. Opportunistic maintenance runs cognitive processes when resources are available.
@@ -395,8 +424,10 @@ The installer handles everything:
     - 3 git repositories
     - Node.js project detected
   Configuring MCP server...
-  Setting up automated processes...
-    6 automated processes configured.
+  Setting up nervous system...
+    11 autonomous scripts configured.
+    13 LaunchAgent templates installed.
+    Dashboard configured at localhost:6174.
   Caffeinate enabled.
   Generating operator instructions...
 
@@ -426,36 +457,26 @@ That's it. No need to run `claude` manually. Your operator will greet you immedi
 | Component | What | Where |
 |-----------|------|-------|
 | Cognitive engine | Python: fastembed, numpy, vector search | pip packages |
-| MCP server | 100+ tools for memory, cognition, learning, guard | ~/.nexo/ |
+| MCP server | 111+ tools for memory, cognition, learning, guard | ~/.nexo/ |
 | Plugins | Guard, episodic memory, cognitive memory, entities, preferences | ~/.nexo/plugins/ |
-| Hooks (6) | SessionStart briefing, Stop post-mortem, PostToolUse capture, PreCompact checkpoint, PostCompact recovery, Caffeinate | ~/.nexo/hooks/ |
-| Reflection engine | Processes session buffer, extracts patterns, updates user model | ~/.nexo/scripts/ |
+| Hooks (8) | SessionStart, Stop, PostToolUse, PreCompact, PostCompact, PreToolUse, Notification, Caffeinate | ~/.nexo/hooks/ |
+| Nervous system | 11 autonomous scripts (decay, sleep, audit, evolution, watchdog, etc.) | ~/.nexo/scripts/ |
+| Dashboard | Web UI at localhost:6174 (6 pages) | ~/.nexo/dashboard/ |
 | CLAUDE.md | Complete operator instructions (Codex, hooks, guard, trust, memory) | ~/.claude/CLAUDE.md |
-| LaunchAgents | Decay, sleep, audit, postmortem, catch-up | ~/Library/LaunchAgents/ |
+| LaunchAgents | 13 templates for macOS automation | ~/Library/LaunchAgents/ |
 | Auto-update | Checks for new versions at boot | Built into catch-up |
-| Claude Code config | MCP server + 6 hooks registered | ~/.claude/settings.json |
+| Claude Code config | MCP server + 8 hooks registered | ~/.claude/settings.json |
 
 ### Requirements
 
 - **macOS or Linux** (Windows via [WSL](https://learn.microsoft.com/en-us/windows/wsl/install))
 - **Node.js 18+** (for the installer)
-- **Claude Opus (latest version) strongly recommended.** NEXO Brain provides 100+ MCP tools across 20 categories. This cognitive load requires a top-tier model with large context window. Smaller models (Haiku, Sonnet) may struggle with tool selection and produce inconsistent results. Opus handles all 100+ tools without hesitation.
+- **Claude Opus (latest version) strongly recommended.** NEXO Brain provides 111+ MCP tools across 20 categories. This cognitive load requires a top-tier model with large context window. Smaller models (Haiku, Sonnet) may struggle with tool selection and produce inconsistent results. Opus handles all 111+ tools without hesitation.
 - Python 3, Homebrew, and Claude Code are installed automatically if missing.
 
 ## Architecture
 
-### Modular Package Structure (v1.5.0)
-
-The core is organized into two Python packages:
-
-| Package | Modules | Responsibility |
-|---------|---------|----------------|
-| `db/` | 11 modules (`_core`, `_schema`, `_sessions`, `_learnings`, `_episodic`, `_credentials`, `_entities`, `_evolution`, `_fts`, `_reminders`, `_tasks`) | All SQLite persistence: schema migrations, CRUD, FTS indexing |
-| `cognitive/` | 6 modules (`_core`, `_memory`, `_ingest`, `_search`, `_decay`, `_trust`) | Cognitive engine: embeddings, RAG, decay, trust scoring |
-
-The rest of the server (`server.py`, `tools_*.py`, `plugins/`) stays flat for clarity.
-
-### 100+ MCP Tools across 20 Categories
+### 111+ MCP Tools across 20 Categories
 
 | Category | Count | Tools | Purpose |
 |----------|-------|-------|---------|
@@ -480,7 +501,6 @@ The rest of the server (`server.py`, `tools_*.py`, `plugins/`) stays flat for cl
 | Adaptive & Somatic | 4 | adaptive_weights, adaptive_override, somatic_check, somatic_stats | Learned signal weights + pain memory per file |
 | Knowledge Graph | 4 | kg_query, kg_path, kg_neighbors, kg_stats | Bi-temporal entity-relationship graph |
 | Context Continuity | 2 | checkpoint_save, checkpoint_read | Auto-compaction session preservation |
-| Claim Graph | — | (internal) | Atomic facts with provenance and contradiction detection |
 
 ### Plugin System
 
@@ -538,7 +558,7 @@ NEXO Brain is designed as an MCP server. Claude Code is the primary supported cl
 npx nexo-brain
 ```
 
-All 100+ tools are available immediately after installation. The installer configures Claude Code's `~/.claude/settings.json` automatically.
+All 111+ tools are available immediately after installation. The installer configures Claude Code's `~/.claude/settings.json` automatically.
 
 ### OpenClaw
 
@@ -617,11 +637,11 @@ NEXO Brain builds on ideas from several open-source projects. We're grateful for
 
 | Project | Inspired Features |
 |---------|------------------|
-| Vestige | HyDE query expansion, spreading activation, prediction error gating, memory dreaming, prospective memory |
-| ShieldCortex | Security pipeline (4-layer memory poisoning defense) |
-| Bicameral | Quarantine queue (trust promotion policy for new facts) |
-| claude-mem | Hook auto-capture (extracting decisions and facts from conversations) |
-| ClawMem | Co-activation reinforcement (memories retrieved together strengthen connections) |
+| [Vestige](https://github.com/pchaganti/gx-vestige) | HyDE query expansion, spreading activation, prediction error gating, memory dreaming, prospective memory |
+| [ShieldCortex](https://github.com/PShieldCortex/ShieldCortex) | Security pipeline (4-layer memory poisoning defense) |
+| [Bicameral](https://github.com/nicobailey/Bicameral) | Quarantine queue (trust promotion policy for new facts) |
+| [claude-mem](https://github.com/nicobailey/claude-mem) | Hook auto-capture (extracting decisions and facts from conversations) |
+| [ClawMem](https://github.com/nicobailey/ClawMem) | Co-activation reinforcement (memories retrieved together strengthen connections) |
 
 ## Support the Project
 
@@ -636,38 +656,40 @@ If NEXO Brain is useful to you, consider:
 
 ## Changelog
 
+### v1.6.0 — Nervous System + Dashboard v2 (2026-03-30)
+- **Nervous System**: 11 autonomous scripts (decay, deep sleep, self-audit, catchup, evolution, followup hygiene, immune, watchdog, github monitor, learning validator, cognitive migrate)
+- **Dashboard v2**: 6 interactive pages at localhost:6174 (Overview, Graph, Memory, Somatic, Adaptive, Sessions)
+- **LaunchAgent Templates**: 13 macOS automation templates included in the package for scheduling the nervous system
+- **Migration Script**: `cognitive-migrate.py` for safe, reversible schema evolution on upgrades
+- **Hooks**: 8 total — added PreToolUse (parameter validation + guard injection) and Notification (external event routing)
+- **Installer**: Now configures dashboard LaunchAgent, nervous system scripts, and all 13 templates automatically
+
+### v1.5.2 — Deep Sleep (2026-03-29)
+- **Deep Sleep**: Reads full session transcripts (not just diary) — finds uncaptured corrections, protocol violations, missed commitments
+- Uses Claude CLI in `--bare` mode (no hooks, no CLAUDE.md interference)
+- Catch-up system re-runs yesterday if the Mac was off
+
 ### v1.5.0 — Modular Core + Knowledge Graph Search (2026-03-29)
-- **Architecture**: `db.py` refactored into `db/` package (11 modules: core, schema, sessions, learnings, episodic, credentials, entities, evolution, fts, reminders, tasks)
-- **Architecture**: `cognitive.py` refactored into `cognitive/` package (6 modules: core, memory, ingest, search, decay, trust)
-- **KG Boost**: Knowledge Graph connection count now influences search result ranking — well-connected entities surface higher in retrieval
-- **HNSW Vector Index**: Optional approximate nearest neighbor acceleration (activates automatically above 10,000 memories, falls back to brute-force otherwise)
-- **Claim Graph**: Decomposes blob memories into atomic verifiable facts with provenance, confidence scores, and contradiction detection
-- **Inter-terminal Auto-inbox (D+)**: `nexo_startup` now accepts `claude_session_id` (Claude Code session UUID) — enables automatic inbox delivery between parallel terminals via PostToolUse hook + migration v13
+- **Architecture**: `db.py` refactored into `db/` package (11 modules); `cognitive.py` into `cognitive/` package (6 modules)
+- **KG Boost**: Knowledge Graph connection count influences search result ranking
+- **HNSW Vector Index**: Optional approximate nearest neighbor acceleration (auto-activates above 10,000 memories)
+- **Claim Graph**: Decomposes blob memories into atomic verifiable facts with provenance and contradiction detection
+- **Inter-terminal Auto-inbox (D+)**: `nexo_startup` accepts `claude_session_id` for automatic inbox delivery between parallel terminals
 - **Tests**: 24 pytest tests across 3 suites (cognitive, knowledge graph, migrations)
 
 ### v1.4.1 — Multi-AI Code Review (2026-03-29)
 - **Fix**: 3 bugs found by GPT-5.4 (Codex CLI) + Gemini 2.5 (Gemini CLI) reviewing full codebase
-  - `session_diaries` → `session_diary` table name (smart startup silently failed)
-  - Quarantine contradiction logic distinguished confirmation from opposition
-  - Knowledge Graph timezone import crash
 - **Security**: Memory sanitization prevents prompt injection via stored content
-- **Migration #13**: Normalizes legacy status values (PENDIENTE→PENDING) on upgrade
+- **Migration #13**: Normalizes legacy status values on upgrade
 
 ### v1.4.0 — The Brain Dreams (2026-03-29)
 - **Major**: All 9 nightly scripts migrated from Python word-overlap to CLI wrapper pattern
-  - Postmortem consolidator: opus understands patterns by meaning, not word overlap
-  - Sleep system: detects real duplicates via semantic understanding
-  - Daily synthesis: opus prioritizes what matters for tomorrow
-  - Self-audit: interprets findings for root cause analysis
-  - Evolution: prompt reduced 95% (45K → 2.2K chars) — CLI investigates using tools
-- **Stop Hook v8**: Session-scoped tool counting (not day-wide), buffer fallback removed
+- **Stop Hook v8**: Session-scoped tool counting, buffer fallback removed
 - **Guard**: Behavioral rules section surfaces most-violated rules at session start
-- **Followup hygiene**: Weekly cleanup script normalizes statuses, flags stale items
-- 8 missing core scripts + 1 plugin added to repository
 
 ### v1.3.0 — Evolution System (2026-03-28)
 - **New**: Self-improvement cycle — NEXO proposes and applies improvements weekly
-- Dual-mode: auto (low-risk changes) and review (owner approval required)
+- Dual-mode: auto (low-risk) and review (owner approval required)
 - Circuit breaker, snapshot/rollback, immutable file protection
 
 ### v1.2.3 — AGPL-3.0 License (2026-03-27)
@@ -696,7 +718,7 @@ If NEXO Brain is useful to you, consider:
 - New tools: `nexo_checkpoint_save`, `nexo_checkpoint_read`
 - Heartbeat automatically maintains checkpoint every interaction
 - Core Memory Block re-injected post-compaction with task, files, decisions, reasoning thread
-- 115+ total tools, 20 categories, 6 hooks
+- 115+ total tools, 20 categories
 
 ### v1.0.0 — Cognitive Cortex + Stable Release (2026-03-26)
 - **Cognitive Cortex**: architectural inhibitory control (ASK/PROPOSE/ACT modes)
