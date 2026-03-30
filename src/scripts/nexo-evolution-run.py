@@ -21,7 +21,7 @@ from pathlib import Path
 
 # ── Paths ────────────────────────────────────────────────────────────────
 CLAUDE_DIR = Path.home() / "claude"
-NEXO_DB = CLAUDE_DIR / "nexo-mcp" / "nexo.db"
+NEXO_DB = CLAUDE_DIR / "nexo-mcp" / "db" / "nexo.db"
 CORTEX_DIR = CLAUDE_DIR / "cortex"
 OBJECTIVE_FILE = CORTEX_DIR / "evolution-objective.json"
 LOG_DIR = CLAUDE_DIR / "logs"

@@ -21,7 +21,7 @@ from pathlib import Path
 HOME = Path.home()
 CLAUDE_DIR = HOME / "claude"
 COORD_DIR = CLAUDE_DIR / "coordination"
-NEXO_DB = HOME / "claude" / "nexo-mcp" / "nexo.db"
+NEXO_DB = HOME / "claude" / "nexo-mcp" / "db" / "nexo.db"
 OUTPUT_FILE = COORD_DIR / "daily-synthesis.md"
 LAST_RUN_FILE = COORD_DIR / "synthesis-last-run"
 LOCK_FILE = COORD_DIR / "synthesis.lock"

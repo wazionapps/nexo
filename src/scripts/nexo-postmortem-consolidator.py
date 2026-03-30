@@ -30,7 +30,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path.home() / "claude" / "nexo-mcp"))
 
 HOME = Path.home()
-NEXO_DB = HOME / "claude" / "nexo-mcp" / "nexo.db"
+NEXO_DB = HOME / "claude" / "nexo-mcp" / "db" / "nexo.db"
 # Memory directory — adjust to match your project's memory location
 # Claude Code uses ~/.claude/projects/<project-hash>/memory/
 MEMORY_DIR = HOME / "claude" / "memory"

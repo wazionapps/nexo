@@ -14,7 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path.home() / "claude" / "nexo-mcp"))
 
-DB_PATH = Path.home() / "claude" / "nexo-mcp" / "nexo.db"
+DB_PATH = Path.home() / "claude" / "nexo-mcp" / "db" / "nexo.db"
 STATE_FILE = Path.home() / "claude" / "operations" / ".catchup-state.json"
 
 # Weight adjustment rates

@@ -345,7 +345,7 @@ def check_databases():
     results = []
 
     dbs = [
-        ("nexo.db", Path.home() / "claude" / "nexo-mcp" / "nexo.db"),
+        ("nexo.db", Path.home() / "claude" / "nexo-mcp" / "db" / "nexo.db"),
         ("cognitive.db", Path.home() / "claude" / "nexo-mcp" / "cognitive.db"),
         ("claude-mem.db", CLAUDE_MEM_DB),
     ]

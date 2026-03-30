@@ -28,7 +28,7 @@ from pathlib import Path
 LOG_DIR = Path.home() / "claude" / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE = LOG_DIR / "self-audit.log"
-NEXO_DB = Path.home() / "claude" / "nexo-mcp" / "nexo.db"
+NEXO_DB = Path.home() / "claude" / "nexo-mcp" / "db" / "nexo.db"
 # Configure your main project repo to check for uncommitted changes (optional)
 PROJECT_REPO_DIR = None  # e.g., Path.home() / "projects" / "my-repo"
 HASH_REGISTRY = Path.home() / "claude" / "scripts" / ".watchdog-hashes"

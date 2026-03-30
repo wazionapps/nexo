@@ -26,7 +26,7 @@ DIFF=$((NOW - LAST))
 echo "$NOW" > "$DEBOUNCE_FILE"
 
 # 4. Find NEXO SID mapped to this Claude session_id
-DB="$HOME/claude/nexo-mcp/nexo.db"
+DB="$HOME/claude/nexo-mcp/db/nexo.db"
 [ -f "$DB" ] || exit 0
 
 NEXO_SID=$(sqlite3 "$DB" "SELECT sid FROM sessions WHERE claude_session_id = '${CLAUDE_SID}' AND last_update_epoch > (strftime('%s','now') - 900) ORDER BY last_update_epoch DESC LIMIT 1;" 2>/dev/null)

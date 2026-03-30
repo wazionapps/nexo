@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 
 DEEP_SLEEP_DIR = Path.home() / "claude" / "operations" / "deep-sleep"
-NEXO_DB = Path.home() / "claude" / "nexo-mcp" / "nexo.db"
+NEXO_DB = Path.home() / "claude" / "nexo-mcp" / "db" / "nexo.db"
 
 
 def find_memory_dir() -> Path:

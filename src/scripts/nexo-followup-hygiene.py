@@ -16,7 +16,7 @@ import sys
 from datetime import datetime, date, timedelta
 from pathlib import Path
 
-NEXO_DB = Path.home() / "claude" / "nexo-mcp" / "nexo.db"
+NEXO_DB = Path.home() / "claude" / "nexo-mcp" / "db" / "nexo.db"
 COORD_DIR = Path.home() / "claude" / "coordination"
 LOG_FILE = Path.home() / "claude" / "logs" / "followup-hygiene.log"
 
