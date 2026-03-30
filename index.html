@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>NEXO Brain — Cognitive Memory for AI Agents</title>
-    <meta name="description" content="Open-source cognitive memory system for AI agents. 115+ MCP tools, knowledge graph-boosted search, HNSW vector indexing, trust scoring, claim graph, and metacognitive error prevention. Built for Claude Code.">
+    <meta name="description" content="Open-source cognitive memory system for AI agents. 115+ MCP tools, full nervous system, dashboard v2, LaunchAgent templates, knowledge graph-boosted search, HNSW vector indexing, trust scoring, and metacognitive error prevention. Built for Claude Code.">
     <meta name="keywords" content="AI memory, cognitive architecture, MCP, Claude Code, RAG, vector search, AI agents, Atkinson-Shiffrin, memory system, open source">
     <meta name="author" content="WAzion">
     <meta name="robots" content="index, follow">
@@ -14,7 +14,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com">
     <meta property="og:title" content="NEXO Brain — Cognitive Memory for AI Agents">
-    <meta property="og:description" content="Open-source cognitive memory for AI agents. 115+ MCP tools, knowledge graph search, HNSW indexing, trust scoring, and claim graph.">
+    <meta property="og:description" content="Open-source cognitive memory for AI agents. 115+ MCP tools, full nervous system, dashboard v2, LaunchAgent templates, and metacognitive error prevention.">
     <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
     <meta property="og:image:width" content="1536">
     <meta property="og:image:height" content="1024">
@@ -22,7 +22,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="NEXO Brain — Cognitive Memory for AI Agents">
-    <meta name="twitter:description" content="Open-source cognitive memory for AI agents. 115+ MCP tools, knowledge graph search, HNSW indexing, trust scoring, and claim graph.">
+    <meta name="twitter:description" content="Open-source cognitive memory for AI agents. 115+ MCP tools, full nervous system, dashboard v2, LaunchAgent templates, and metacognitive error prevention.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
 
     <!-- Google Analytics (GA4) -->
@@ -142,7 +142,7 @@
                 "name": "What is NEXO Brain?",
                 "acceptedAnswer": {
                     "@type": "Answer",
-                    "text": "NEXO Brain is an open-source cognitive memory system for AI agents. It gives your AI persistent memory across sessions using the Atkinson-Shiffrin memory model (Sensory Register, Short-Term Memory, Long-Term Memory), with 115+ MCP tools, knowledge graph search, and metacognitive error prevention."
+                    "text": "NEXO Brain is an open-source cognitive memory system for AI agents. It gives your AI persistent memory across sessions using the Atkinson-Shiffrin memory model (Sensory Register, Short-Term Memory, Long-Term Memory), with 115+ MCP tools, a full nervous system of 11 autonomous scripts, a visual dashboard v2, LaunchAgent templates, knowledge graph search, and metacognitive error prevention."
                 }
             },
             {
@@ -286,7 +286,39 @@
                 "name": "Can I use NEXO Brain in production?",
                 "acceptedAnswer": {
                     "@type": "Answer",
-                    "text": "Yes. NEXO Brain is designed for continuous, production-grade operation. It runs 24/7 with autonomous processes (nightly decay, deep sleep analysis, watchdog monitoring), handles concurrent sessions, and includes backup/restore capabilities. It has been battle-tested in real daily operations."
+                    "text": "Yes. NEXO Brain is designed for continuous, production-grade operation. It runs 24/7 with 11 autonomous processes (nightly decay, deep sleep analysis, watchdog monitoring, immune system, synthesis, and more), handles concurrent sessions, and includes backup/restore capabilities. It has been battle-tested in real daily operations."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "What are LaunchAgent templates?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "NEXO Brain v1.6.0 ships with 13 ready-to-install macOS LaunchAgent plist files that schedule all autonomous processes (watchdog, cognitive decay, deep sleep, evolution, etc.). On Linux, equivalent cron-based scheduling is supported. The templates include a README with installation instructions."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "What is Dashboard v2?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Dashboard v2 is a FastAPI-powered web interface at localhost:6174 with 6 pages: overview dashboard, operations, calendar, inbox, and CRUD interfaces for managing memories. It includes sidebar navigation, a trust score widget, and static assets for a polished visual experience."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "How do I migrate from v1.5 to v1.6?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Run 'npx nexo-brain init' and the migration script handles everything automatically: 13 nexo.db schema migrations, cognitive.db table updates, internationalization of legacy Spanish strings, and logo optimization. Your existing data is preserved."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "What is the nervous system?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "The nervous system is a collection of 11 autonomous scripts that run on schedule without user intervention: immune system, daily synthesis, self-audit, postmortem consolidator, proactive dashboard, followup hygiene, GitHub monitor, catch-up, plus the existing watchdog, evolution cycle, cognitive decay, and deep sleep analyzer."
                 }
             },
             {
@@ -337,7 +369,7 @@
     <div class="container">
         <div class="hero-badge fade-up">
             <span class="dot"></span>
-            <span id="version-badge">v1.5.2</span> &mdash; Modular Architecture + KG Search + HNSW
+            <span id="version-badge">v1.6.0</span> &mdash; Nervous System + Dashboard v2 + LaunchAgent Templates
         </div>
         <div class="fade-up" style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;">
             <img src="https://img.shields.io/npm/v/nexo-brain?color=7C3AED&label=npm" alt="npm version">
@@ -386,7 +418,7 @@
         </div>
         <div class="stat">
             <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg></div>
-            <div class="stat-value">19</div>
+            <div class="stat-value">22</div>
             <div class="stat-label">Categories</div>
         </div>
         <div class="stat">
@@ -396,7 +428,7 @@
         </div>
         <div class="stat">
             <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
-            <div class="stat-value">8</div>
+            <div class="stat-value">11</div>
             <div class="stat-label">Autonomous Processes</div>
         </div>
         <div class="stat">
@@ -585,10 +617,30 @@
     </div>
 </section>
 
-<!-- v1.5.2 Deep Sleep + Watchdog Auto-Repair -->
-<section id="v152" class="section-compact" style="background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
+<!-- v1.6.0 Nervous System + Dashboard v2 + LaunchAgent Templates -->
+<section id="v160" class="section-compact" style="background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
     <div class="container">
-        <div class="section-label">New in v1.5.2</div>
+        <div class="section-label">New in v1.6.0</div>
+        <h2 class="section-title">Nervous System + Dashboard v2 + LaunchAgent Templates</h2>
+        <p class="section-subtitle">
+            NEXO Brain now ships with a complete autonomous nervous system of 11 background scripts, a redesigned visual dashboard, 13 LaunchAgent templates for zero-config setup, and a full migration script from v1.5.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Nervous System</h4><p>11 autonomous scripts: immune system, daily synthesis, self-audit, postmortem consolidator, proactive dashboard, followup hygiene, GitHub monitor, catch-up, plus updated watchdog, evolution, cognitive decay, and deep sleep.</p></div>
+                <div class="cognitive-card"><h4>Dashboard v2</h4><p>FastAPI-powered visual interface with 6 pages: dashboard overview, operations, calendar, and inbox. CRUD UI for managing memories, sidebar navigation, trust widget, and static assets.</p></div>
+                <div class="cognitive-card"><h4>13 LaunchAgent Templates</h4><p>Ready-to-install macOS LaunchAgent plists for every autonomous process: watchdog, immune, synthesis, self-audit, cognitive decay, evolution, deep sleep, followup hygiene, auto-close, dashboard, catch-up, postmortem, and GitHub monitor.</p></div>
+                <div class="cognitive-card"><h4>Migration Script</h4><p>Automated v1.5 to v1.6 migration: 13 nexo.db schema migrations, cognitive.db table updates, full i18n (Spanish to English), and logo optimization from 1.4MB to 28KB.</p></div>
+                <div class="cognitive-card"><h4>5 Updated Hooks</h4><p>Session-stop v7 with post-mortem, session-start with semantic context, inter-terminal inbox hook, capture-tool-logs (JSONL), and daily-briefing-check.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v1.5.2 Deep Sleep + Watchdog Auto-Repair -->
+<section id="v152" class="section-compact" style="background:linear-gradient(135deg,#1a0f2e 0%,#0F0A1A 100%);">
+    <div class="container">
+        <div class="section-label">v1.5.2</div>
         <h2 class="section-title">Deep Sleep + Watchdog Auto-Repair</h2>
         <p class="section-subtitle">
             Overnight transcript analysis finds what the agent missed. Watchdog re-executes missed crons and verifies its own repairs.
@@ -684,7 +736,7 @@
                     <span>What is NEXO Brain?</span>
                     <svg class="faq-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                 </summary>
-                <div class="faq-answer">NEXO Brain is an open-source cognitive memory system for AI agents. It gives your AI persistent memory across sessions using the Atkinson-Shiffrin memory model (Sensory Register, Short-Term Memory, Long-Term Memory), with 115+ MCP tools, knowledge graph search, and metacognitive error prevention.</div>
+                <div class="faq-answer">NEXO Brain is an open-source cognitive memory system for AI agents. It gives your AI persistent memory across sessions using the Atkinson-Shiffrin memory model (Sensory Register, Short-Term Memory, Long-Term Memory), with 115+ MCP tools, a full nervous system of 11 autonomous scripts, a visual dashboard v2, LaunchAgent templates, knowledge graph search, and metacognitive error prevention.</div>
             </details>
 
             <details class="faq-item">
@@ -828,7 +880,39 @@
                     <span>Can I use NEXO Brain in production?</span>
                     <svg class="faq-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                 </summary>
-                <div class="faq-answer">Yes. NEXO Brain is designed for continuous, production-grade operation. It runs 24/7 with autonomous processes (nightly decay, deep sleep analysis, watchdog monitoring), handles concurrent sessions, and includes backup/restore capabilities.</div>
+                <div class="faq-answer">Yes. NEXO Brain is designed for continuous, production-grade operation. It runs 24/7 with 11 autonomous processes (nightly decay, deep sleep analysis, watchdog monitoring, immune system, synthesis, and more), handles concurrent sessions, and includes backup/restore capabilities.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary class="faq-question">
+                    <span>What are LaunchAgent templates?</span>
+                    <svg class="faq-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </summary>
+                <div class="faq-answer">NEXO Brain v1.6.0 ships with 13 ready-to-install macOS LaunchAgent plist files that schedule all autonomous processes (watchdog, cognitive decay, deep sleep, evolution, etc.). On Linux, equivalent cron-based scheduling is supported. The templates include a README with installation instructions.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary class="faq-question">
+                    <span>What is Dashboard v2?</span>
+                    <svg class="faq-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </summary>
+                <div class="faq-answer">Dashboard v2 is a FastAPI-powered web interface at localhost:6174 with 6 pages: overview dashboard, operations, calendar, inbox, and CRUD interfaces for managing memories. It includes sidebar navigation, a trust score widget, and static assets for a polished visual experience.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary class="faq-question">
+                    <span>How do I migrate from v1.5 to v1.6?</span>
+                    <svg class="faq-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </summary>
+                <div class="faq-answer">Run <code>npx nexo-brain init</code> and the migration script handles everything automatically: 13 nexo.db schema migrations, cognitive.db table updates, internationalization of legacy Spanish strings, and logo optimization. Your existing data is preserved -- the migration is non-destructive.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary class="faq-question">
+                    <span>What is the nervous system?</span>
+                    <svg class="faq-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </summary>
+                <div class="faq-answer">The nervous system is a collection of 11 autonomous scripts that run on schedule without user intervention: immune system (health + auto-repair), daily synthesis (morning intelligence brief), self-audit, postmortem consolidator, proactive dashboard, followup hygiene, GitHub monitor, catch-up, plus the existing watchdog, evolution cycle, cognitive decay, and deep sleep analyzer.</div>
             </details>
 
             <details class="faq-item">

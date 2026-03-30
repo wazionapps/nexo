@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive memory system. Every feature, fix, and improvement from v0.8.10 to v1.5.0.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive memory system. Every feature, fix, and improvement from v0.8.10 to v1.6.0.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive memory system. Every feature, fix, and improvement from v0.8.10 to v1.5.0.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive memory system. Every feature, fix, and improvement from v0.8.10 to v1.6.0.">
     <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
     <meta property="og:image:width" content="1536">
     <meta property="og:image:height" content="1024">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive memory system. Every feature, fix, and improvement from v0.8.10 to v1.5.0.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive memory system. Every feature, fix, and improvement from v0.8.10 to v1.6.0.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
 
     <!-- Google Analytics (GA4) -->
@@ -72,10 +72,30 @@
     </div>
 </section>
 
-<!-- v1.5.2 Deep Sleep + Watchdog Auto-Repair -->
-<section id="v152" class="section-compact" style="background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
+<!-- v1.6.0 Nervous System + Dashboard v2 + LaunchAgent Templates -->
+<section id="v160" class="section-compact" style="background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
     <div class="container">
-        <div class="section-label">New in v1.5.2</div>
+        <div class="section-label">New in v1.6.0</div>
+        <h2 class="section-title">Nervous System + Dashboard v2 + LaunchAgent Templates</h2>
+        <p class="section-subtitle">
+            NEXO Brain now ships with a complete autonomous nervous system of 11 background scripts, a redesigned visual dashboard, 13 LaunchAgent templates for zero-config setup, and a full migration script from v1.5.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Nervous System (11 scripts)</h4><p>Immune system, daily synthesis, self-audit, postmortem consolidator, proactive dashboard, followup hygiene, GitHub monitor, catch-up. Updated: watchdog, evolution, cognitive decay, deep sleep.</p></div>
+                <div class="cognitive-card"><h4>Dashboard v2</h4><p>FastAPI-powered visual interface with 6 pages: dashboard overview, operations, calendar, inbox. CRUD UI for managing memories. Sidebar navigation, trust widget, static assets.</p></div>
+                <div class="cognitive-card"><h4>13 LaunchAgent Templates</h4><p>Ready-to-install macOS plists: watchdog, immune, synthesis, self-audit, cognitive decay, evolution, deep sleep, followup hygiene, auto-close, dashboard, catch-up, postmortem, GitHub monitor. Includes README install guide.</p></div>
+                <div class="cognitive-card"><h4>5 Hooks Updated</h4><p>Session-stop v7 (post-mortem), session-start (semantic context), inter-terminal inbox hook, capture-tool-logs (JSONL), daily-briefing-check.</p></div>
+                <div class="cognitive-card"><h4>Migration Script</h4><p>Automated v1.5 to v1.6 migration: 13 nexo.db schema migrations, cognitive.db tables, full i18n (Spanish to English), logo optimized 1.4MB to 28KB.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v1.5.2 Deep Sleep + Watchdog Auto-Repair -->
+<section id="v152" class="section-compact" style="background:linear-gradient(135deg,#1a0f2e 0%,#0F0A1A 100%);">
+    <div class="container">
+        <div class="section-label">v1.5.2</div>
         <h2 class="section-title">Deep Sleep + Watchdog Auto-Repair</h2>
         <p class="section-subtitle">
             NEXO Brain now reads your complete session transcripts overnight, finding what the agent missed during the day. Plus: the watchdog can re-execute missed crons and verify its own repairs.
