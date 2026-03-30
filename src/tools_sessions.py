@@ -104,13 +104,18 @@ def handle_startup(task: str = "Startup", claude_session_id: str = "") -> str:
 
 
 def handle_heartbeat(sid: str, task: str, context_hint: str = '') -> str:
-    """Update session, check inbox + questions. Optionally detect context shift and retrieve fresh memories.
+    """Update session, check inbox + questions. Lightweight — no embeddings, no RAG.
+
+    For cognitive features (sentiment, trust, RAG), use dedicated tools on-demand:
+    - nexo_cognitive_sentiment (sentiment detection)
+    - nexo_cognitive_trust (trust adjustment)
+    - nexo_cognitive_retrieve / nexo_recall (memory retrieval)
+    - nexo_context_packet (area-specific learnings)
 
     Args:
         sid: Session ID
         task: Current task description
-        context_hint: Optional — last 2-3 sentences from the user or current topic. If provided AND
-                      it diverges from startup memories, returns fresh cognitive memories for the new context.
+        context_hint: Optional — stored for diary draft context, not processed.
     """
     from db import get_db
     update_session(sid, task)
@@ -131,151 +136,6 @@ def handle_heartbeat(sid: str, task: str, context_hint: str = '') -> str:
         for q in questions:
             age = _format_age(q["created_epoch"])
             parts.append(f"  {q['qid']} de {q['from_sid']} ({age}): {q['question']}")
-
-    # Sentiment detection: analyze context_hint for the user's mood
-    if context_hint and len(context_hint.strip()) >= 10:
-        try:
-            import cognitive
-            sentiment = cognitive.detect_sentiment(context_hint)
-            if sentiment["sentiment"] != "neutral":
-                parts.append("")
-                parts.append(f"VIBE: {sentiment['sentiment'].upper()} (intensity: {sentiment['intensity']})")
-                if sentiment["guidance"]:
-                    parts.append(f"  {sentiment['guidance']}")
-                cognitive.log_sentiment(context_hint)
-        except Exception:
-            pass
-
-    # Auto-detect trust events from context_hint
-    if context_hint and len(context_hint.strip()) >= 10:
-        try:
-            import cognitive
-            auto_events = cognitive.auto_detect_trust_events(context_hint)
-            for ae in auto_events:
-                result = cognitive.adjust_trust(ae["event"], ae["reason"], ae["delta"])
-                if result.get("delta", 0) != 0:
-                    parts.append("")
-                    parts.append(f"TRUST AUTO: {result['old_score']:.0f} → {result['new_score']:.0f} ({result['delta']:+.0f}) [{ae['event']}] {ae['reason']}")
-        except Exception:
-            pass  # Auto-trust is best-effort
-
-    # Adaptive personality mode: compute from multiple signals
-    if context_hint and len(context_hint.strip()) >= 5:
-        try:
-            from plugins.adaptive_mode import compute_mode
-            # Gather signals
-            _vibe = "neutral"
-            _vibe_intensity = 0.5
-            _corrections = 0
-            try:
-                import cognitive
-                _sent = cognitive.detect_sentiment(context_hint)
-                _vibe = _sent.get("sentiment", "neutral")
-                _vibe_intensity = _sent.get("intensity", 0.5)
-            except Exception:
-                pass
-            # Count recent trust corrections in this session
-            try:
-                _conn = get_db()
-                _corr_count = _conn.execute(
-                    "SELECT COUNT(*) FROM trust_score WHERE context LIKE '%correction%' "
-                    "AND timestamp > datetime('now', '-15 minutes')"
-                ).fetchone()[0]
-                _corrections = _corr_count
-            except Exception:
-                pass
-
-            adaptive = compute_mode(
-                vibe=_vibe,
-                vibe_intensity=_vibe_intensity,
-                recent_corrections=_corrections,
-                user_msg_length=len(context_hint),
-                context_hint=context_hint,
-            )
-            if adaptive.get("changed"):
-                parts.append("")
-                parts.append(f"ADAPTIVE MODE CHANGED: {adaptive['previous_mode']} → {adaptive['mode']} (score: {adaptive['score']})")
-                parts.append(f"  {adaptive['description']}")
-                if adaptive["overrides"]["communication"]:
-                    parts.append(f"  Override: communication={adaptive['overrides']['communication']}, proactivity={adaptive['overrides']['proactivity']}")
-            elif adaptive.get("mode") != "NORMAL":
-                parts.append("")
-                parts.append(f"ADAPTIVE MODE: {adaptive['mode']} (score: {adaptive['score']})")
-                parts.append(f"  MODE: {adaptive['description']}")
-        except Exception:
-            pass  # Adaptive mode is best-effort
-
-    # Mid-session RAG: if context_hint provided, check for context shift
-    # Enhanced: also detect project/area keywords for auto-priming
-    if context_hint and len(context_hint.strip()) >= 15:
-        try:
-            import cognitive
-            # Get the last retrieval query to compare
-            db_cog = cognitive._get_db()
-            last_query = db_cog.execute(
-                "SELECT query_text FROM retrieval_log ORDER BY id DESC LIMIT 1"
-            ).fetchone()
-
-            do_retrieve = True
-            if last_query:
-                # Compare current hint with last query — if similar (>0.7), skip
-                hint_vec = cognitive.embed(context_hint[:300])
-                last_vec = cognitive.embed(last_query[0][:300])
-                similarity = cognitive.cosine_similarity(hint_vec, last_vec)
-                if similarity > 0.7:
-                    do_retrieve = False  # Same context, no need for fresh memories
-
-            if do_retrieve:
-                results = cognitive.search(
-                    query_text=context_hint[:300],
-                    top_k=5,
-                    min_score=0.55,
-                    stores="both",
-                    exclude_dormant=False,  # Allow reactivating dormant memories
-                    rehearse=True,
-                )
-                if results:
-                    parts.append("")
-                    parts.append("COGNITIVE CONTEXT SHIFT — nuevas memorias relevantes:")
-                    parts.append(cognitive.format_results(results))
-
-            # Auto-prime: detect project/area keywords and fetch targeted learnings
-            _PROJECT_KEYWORDS = {
-                'shopify': 'shopify', 'theme': 'shopify', 'dawn': 'shopify',
-                'wazion': 'wazion', 'chrome extension': 'wazion', 'vps': 'wazion',
-                'meta': 'meta-ads', 'facebook': 'meta-ads', 'advantage': 'meta-ads',
-                'google ads': 'google-ads', 'pmax': 'google-ads', 'campaign': 'google-ads',
-                'canarirural': 'canarirural', 'maría': 'canarirural', 'maria': 'canarirural',
-                'server': 'infrastructure', 'ssh': 'infrastructure',
-                'analytics': 'google-analytics', 'ga4': 'google-analytics',
-                'nexo brain': 'nexo', 'nexo-brain': 'nexo', 'cognitive': 'nexo',
-                'ecommerce': 'shopify',
-            }
-            hint_lower = context_hint.lower()
-            detected_area = None
-            for keyword, area in _PROJECT_KEYWORDS.items():
-                if keyword in hint_lower:
-                    detected_area = area
-                    break
-
-            if detected_area:
-                # Fetch area-specific learnings from nexo.db
-                try:
-                    from db import get_db as _get_nexo_db
-                    _conn = _get_nexo_db()
-                    area_learnings = _conn.execute(
-                        "SELECT id, title FROM learnings WHERE category = ? ORDER BY id DESC LIMIT 5",
-                        (detected_area,)
-                    ).fetchall()
-                    if area_learnings:
-                        parts.append("")
-                        parts.append(f"AUTO-PRIME [{detected_area.upper()}] — learnings activos:")
-                        for al in area_learnings:
-                            parts.append(f"  L#{al['id']}: {al['title']}")
-                except Exception:
-                    pass
-        except Exception:
-            pass  # Mid-session RAG is best-effort
 
     # Incremental diary draft — accumulate every heartbeat, full UPSERT every 5
     try:

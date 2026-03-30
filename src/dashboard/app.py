@@ -728,7 +728,7 @@ async def api_calendar(
 @app.get("/api/watchdog")
 async def api_watchdog():
     """Read watchdog status from file."""
-    nexo_home = os.environ.get("NEXO_HOME", str(Path.home() / "claude"))
+    nexo_home = os.environ.get("NEXO_HOME", str(Path.home() / ".nexo"))
     watchdog_path = Path(nexo_home) / "operations" / "watchdog-status.json"
     if not watchdog_path.exists():
         return JSONResponse(

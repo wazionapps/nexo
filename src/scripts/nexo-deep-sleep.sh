@@ -12,8 +12,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-LOG_DIR="$HOME/claude/logs"
-DEEP_SLEEP_DIR="$HOME/claude/operations/deep-sleep"
+NEXO_HOME="${NEXO_HOME:-$HOME/.nexo}"
+LOG_DIR="$NEXO_HOME/logs"
+DEEP_SLEEP_DIR="$NEXO_HOME/operations/deep-sleep"
 LAST_RUN_FILE="$DEEP_SLEEP_DIR/.last-run"
 TODAY=$(date +%Y-%m-%d)
 

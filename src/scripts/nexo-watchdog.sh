@@ -11,16 +11,17 @@ set -uo pipefail
 
 # === PATHS ===
 HOME_DIR="$HOME"
-NEXO_DIR="$HOME_DIR/claude/nexo-mcp"
-CORTEX_DIR="$HOME_DIR/claude/cortex"
-OPS_DIR="$HOME_DIR/claude/operations"
-LOG_DIR="$HOME_DIR/claude/logs"
+NEXO_HOME="${NEXO_HOME:-$HOME/.nexo}"
+NEXO_DIR="$NEXO_HOME"
+CORTEX_DIR="$NEXO_HOME/cortex"
+OPS_DIR="$NEXO_HOME/operations"
+LOG_DIR="$NEXO_HOME/logs"
 LOG="$LOG_DIR/watchdog.log"
 STATUS_JSON="$OPS_DIR/watchdog-status.json"
 REPORT_TXT="$OPS_DIR/watchdog-report.txt"
 ALERT_FILE="$OPS_DIR/.watchdog-alert"
-HASH_REGISTRY="$HOME_DIR/claude/scripts/.watchdog-hashes"
-FAIL_COUNT_FILE="$HOME_DIR/claude/scripts/.watchdog-fails"
+HASH_REGISTRY="$NEXO_HOME/scripts/.watchdog-hashes"
+FAIL_COUNT_FILE="$NEXO_HOME/scripts/.watchdog-fails"
 MAX_FAILS=3
 
 mkdir -p "$LOG_DIR" "$OPS_DIR"
@@ -44,20 +45,20 @@ log() { echo "[$TS] $1" >> "$LOG"; }
 # Format: NAME|PLIST_ID|LOG_STDOUT|LOG_STDERR|MAX_STALE_SECS|PROCESS_GREP|SCHEDULE_DESC|TYPE
 # Add your own monitors below. Core NEXO services are listed as examples.
 MONITORS=(
-  "Catchup|com.nexo.catchup|$HOME_DIR/claude/logs/catchup-stdout.log|$HOME_DIR/claude/logs/catchup-stderr.log|0||RunAtLoad once|core"
-  "Cognitive Decay|com.nexo.cognitive-decay|$HOME_DIR/claude/logs/cognitive-decay-stdout.log|$HOME_DIR/claude/logs/cognitive-decay-stderr.log|90000||Daily 3:00 AM|core"
-  "Evolution|com.nexo.evolution|$HOME_DIR/claude/logs/evolution-stdout.log|$HOME_DIR/claude/logs/evolution-stderr.log|0||Weekly Sun 3:00 AM|core"
-  "GitHub Monitor|com.nexo.github-monitor|$HOME_DIR/claude/logs/github-monitor-stdout.log|$HOME_DIR/claude/logs/github-monitor-stderr.log|90000||Daily 8:00 AM|core"
-  "Immune|com.nexo.immune|$HOME_DIR/claude/coordination/immune-stdout.log|$HOME_DIR/claude/coordination/immune-stderr.log|3600||Every 30 min|core"
-  "Postmortem|com.nexo.postmortem|$HOME_DIR/claude/logs/postmortem-stdout.log|$HOME_DIR/claude/logs/postmortem-stderr.log|90000||Daily 23:30|core"
+  "Catchup|com.nexo.catchup|$NEXO_HOME/logs/catchup-stdout.log|$NEXO_HOME/logs/catchup-stderr.log|0||RunAtLoad once|core"
+  "Cognitive Decay|com.nexo.cognitive-decay|$NEXO_HOME/logs/cognitive-decay-stdout.log|$NEXO_HOME/logs/cognitive-decay-stderr.log|90000||Daily 3:00 AM|core"
+  "Evolution|com.nexo.evolution|$NEXO_HOME/logs/evolution-stdout.log|$NEXO_HOME/logs/evolution-stderr.log|0||Weekly Sun 3:00 AM|core"
+  "GitHub Monitor|com.nexo.github-monitor|$NEXO_HOME/logs/github-monitor-stdout.log|$NEXO_HOME/logs/github-monitor-stderr.log|90000||Daily 8:00 AM|core"
+  "Immune|com.nexo.immune|$NEXO_HOME/coordination/immune-stdout.log|$NEXO_HOME/coordination/immune-stderr.log|3600||Every 30 min|core"
+  "Postmortem|com.nexo.postmortem|$NEXO_HOME/logs/postmortem-stdout.log|$NEXO_HOME/logs/postmortem-stderr.log|90000||Daily 23:30|core"
   "Prevent Sleep|com.nexo.prevent-sleep|||0|caffeinate|KeepAlive|core"
-  "Self Audit|com.nexo.self-audit|$HOME_DIR/claude/logs/self-audit-stdout.log|$HOME_DIR/claude/logs/self-audit-stderr.log|90000||Daily 7:00 AM|core"
-  "Sleep|com.nexo.sleep|$HOME_DIR/claude/coordination/sleep-stdout.log|$HOME_DIR/claude/coordination/sleep-stderr.log|90000||Daily 4:00 AM|core"
-  "Synthesis|com.nexo.synthesis|$HOME_DIR/claude/coordination/synthesis-stdout.log|$HOME_DIR/claude/coordination/synthesis-stderr.log|10800||Every 2 hours|core"
-  "Deep Sleep|com.nexo.deep-sleep|$HOME_DIR/claude/logs/deep-sleep-stdout.log|$HOME_DIR/claude/logs/deep-sleep-stderr.log|90000||Daily 4:30 AM|core"
-  "Followup Hygiene|com.nexo.followup-hygiene|$HOME_DIR/claude/logs/followup-hygiene-stdout.log|$HOME_DIR/claude/logs/followup-hygiene-stderr.log|604800||Weekly Sun 5:00 AM|core"
+  "Self Audit|com.nexo.self-audit|$NEXO_HOME/logs/self-audit-stdout.log|$NEXO_HOME/logs/self-audit-stderr.log|90000||Daily 7:00 AM|core"
+  "Sleep|com.nexo.sleep|$NEXO_HOME/coordination/sleep-stdout.log|$NEXO_HOME/coordination/sleep-stderr.log|90000||Daily 4:00 AM|core"
+  "Synthesis|com.nexo.synthesis|$NEXO_HOME/coordination/synthesis-stdout.log|$NEXO_HOME/coordination/synthesis-stderr.log|10800||Every 2 hours|core"
+  "Deep Sleep|com.nexo.deep-sleep|$NEXO_HOME/logs/deep-sleep-stdout.log|$NEXO_HOME/logs/deep-sleep-stderr.log|90000||Daily 4:30 AM|core"
+  "Followup Hygiene|com.nexo.followup-hygiene|$NEXO_HOME/logs/followup-hygiene-stdout.log|$NEXO_HOME/logs/followup-hygiene-stderr.log|604800||Weekly Sun 5:00 AM|core"
   # Add your own personal monitors below (type "personal"):
-  # "My Service|com.nexo.my-service|$HOME_DIR/claude/logs/my-service.log||3600||Every 30 min|personal"
+  # "My Service|com.nexo.my-service|$NEXO_HOME/logs/my-service.log||3600||Every 30 min|personal"
 )
 
 # Cron jobs to check (NAME|SCRIPT|CHECK_PATH|MAX_STALE_SECS|SCHEDULE)
@@ -538,7 +539,7 @@ if [ -f "$HASH_REGISTRY" ]; then
       if [ "$ACTUAL" != "$expected_hash" ]; then
         TAMPERED=$((TAMPERED + 1))
         log "CRITICAL: Immutable file modified: $filepath"
-        LATEST_SNAP=$(ls -td "$HOME_DIR/claude/snapshots/"*/ 2>/dev/null | head -1)
+        LATEST_SNAP=$(ls -td "$NEXO_HOME/snapshots/"*/ 2>/dev/null | head -1)
         if [ -n "$LATEST_SNAP" ] && [ -f "${LATEST_SNAP}files/${filepath#$HOME_DIR/}" ]; then
           cp "${LATEST_SNAP}files/${filepath#$HOME_DIR/}" "$filepath"
           log "RESTORED immutable file from snapshot"
@@ -715,7 +716,7 @@ fi
 # ============================================================================
 # Only triggers if: (a) there are FAILs after mechanical repair, (b) no NEXO
 # repair is already running, (c) no interactive session is active (avoid conflict)
-REPAIR_LOCK="$HOME_DIR/claude/scripts/.watchdog-nexo-repair.lock"
+REPAIR_LOCK="$NEXO_HOME/scripts/.watchdog-nexo-repair.lock"
 REPAIR_COOLDOWN=1800  # 30 min between NEXO repair attempts
 
 if [ "$TOTAL_FAIL" -gt 0 ]; then
@@ -772,7 +773,7 @@ ${STDOUT_TAIL}
       if $HAS_CORE_FAILS && [ -n "$NEXO_PUBLIC_REPO" ] && [ -d "$NEXO_PUBLIC_REPO/.git" ]; then
         PROPAGATE_BLOCK="
 PROPAGATION (for [core] fixes ONLY):
-If your fix modifies a file under ~/claude/nexo-mcp/ (server.py, db.py, plugins/, scripts/):
+If your fix modifies a file under $NEXO_HOME/ (server.py, db.py, plugins/, scripts/):
 1. Commit the fix locally with a descriptive message
 2. Copy the changed files (sanitized — no personal data) to $NEXO_PUBLIC_REPO/src/
 3. Bump patch version in $NEXO_PUBLIC_REPO/package.json
@@ -801,14 +802,14 @@ STEPS:
 2. Check stderr/stdout logs for the actual error
 3. Fix the root cause (missing file, bad config, dependency issue, etc.)
 4. Reload the service and verify it is running
-5. Log what you did to ~/claude/logs/watchdog-repair-result.log
+5. Log what you did to $NEXO_HOME/logs/watchdog-repair-result.log
 ${PROPAGATE_BLOCK}
 
 CONSTRAINTS:
 - Do NOT modify CLAUDE.md or any protected file
 - Do NOT start interactive conversations
 - Keep it under 5 minutes
-- Log what you did to ~/claude/logs/watchdog-repair-result.log
+- Log what you did to $NEXO_HOME/logs/watchdog-repair-result.log
 NEXOPROMPT
 
       # Launch NEXO in background with repair task

@@ -26,19 +26,20 @@ import sys
 from datetime import datetime, date, timedelta
 from pathlib import Path
 
-# Add nexo-mcp to path for cognitive engine (Stage 3)
-sys.path.insert(0, str(Path.home() / "claude" / "nexo-mcp"))
-
 HOME = Path.home()
-NEXO_DB = HOME / "claude" / "nexo-mcp" / "db" / "nexo.db"
+NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(HOME / ".nexo")))
+
+# Add nexo-mcp to path for cognitive engine (Stage 3)
+sys.path.insert(0, str(NEXO_HOME))
+
+NEXO_DB = NEXO_HOME / "db" / "nexo.db"
 # Memory directory — adjust to match your project's memory location
-# Claude Code uses ~/.claude/projects/<project-hash>/memory/
-MEMORY_DIR = HOME / "claude" / "memory"
+MEMORY_DIR = NEXO_HOME / "memory"
 MEMORY_INDEX = MEMORY_DIR / "MEMORY.md"
-HISTORY_FILE = HOME / "claude" / "coordination" / "postmortem-history.json"
-CONSOLIDATION_LOG = HOME / "claude" / "logs" / "postmortem-consolidation.log"
+HISTORY_FILE = NEXO_HOME / "coordination" / "postmortem-history.json"
+CONSOLIDATION_LOG = NEXO_HOME / "logs" / "postmortem-consolidation.log"
 CLAUDE_CLI = HOME / ".local" / "bin" / "claude"
-SESSION_BUFFER = HOME / "claude" / "brain" / "session_buffer.jsonl"
+SESSION_BUFFER = NEXO_HOME / "brain" / "session_buffer.jsonl"
 
 TODAY = date.today()
 TODAY_STR = TODAY.isoformat()
@@ -164,7 +165,7 @@ INSTRUCTIONS:
    **Why:** [Why this matters — with evidence from sessions]
    **How to apply:** [When and how to apply this rule]
 
-5. Write the daily summary en ~/claude/coordination/postmortem-daily.md:
+5. Write the daily summary en $NEXO_HOME/coordination/postmortem-daily.md:
    # Post-Mortem Daily — {data['date']}
    Sessions: X | Self-critiques: Y | Promoted: Z
 
@@ -350,7 +351,7 @@ def analyze_force_events():
 
 def already_ran_today() -> bool:
     """Prevent running twice on the same day."""
-    marker = HOME / "claude" / "coordination" / "postmortem-last-run"
+    marker = NEXO_HOME / "coordination" / "postmortem-last-run"
     if marker.exists():
         try:
             return marker.read_text().strip() == TODAY_STR
@@ -360,7 +361,7 @@ def already_ran_today() -> bool:
 
 
 def mark_done():
-    marker = HOME / "claude" / "coordination" / "postmortem-last-run"
+    marker = NEXO_HOME / "coordination" / "postmortem-last-run"
     marker.parent.mkdir(parents=True, exist_ok=True)
     marker.write_text(TODAY_STR)
 
@@ -398,7 +399,7 @@ def main():
 
     # Register successful run
     try:
-        state_file = HOME / "claude" / "operations" / ".catchup-state.json"
+        state_file = NEXO_HOME / "operations" / ".catchup-state.json"
         state = json.loads(state_file.read_text()) if state_file.exists() else {}
         state["postmortem"] = datetime.now().isoformat()
         state_file.write_text(json.dumps(state, indent=2))

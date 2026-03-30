@@ -2,18 +2,20 @@
 import os, pathlib, sqlite3, threading, datetime
 from db._core import get_db, now_epoch, DB_PATH
 
+NEXO_HOME = os.environ.get("NEXO_HOME", os.path.expanduser("~/.nexo"))
+
 # ── FTS5 Unified Search ──────────────────────────────────────────
 
 # Directories to index for unified search
 _FTS_MD_DIRS = [
-    os.path.expanduser("~/claude/docs"),
-    os.path.expanduser("~/claude/projects"),
-    os.path.expanduser("~/claude/memory"),
-    os.path.expanduser("~/claude/operations"),
-    os.path.expanduser("~/claude/learnings"),
-    os.path.expanduser("~/claude/brain"),
-    os.path.expanduser("~/claude/agents"),
-    os.path.expanduser("~/claude/skills"),
+    os.path.join(NEXO_HOME, "docs"),
+    os.path.join(NEXO_HOME, "projects"),
+    os.path.join(NEXO_HOME, "memory"),
+    os.path.join(NEXO_HOME, "operations"),
+    os.path.join(NEXO_HOME, "learnings"),
+    os.path.join(NEXO_HOME, "brain"),
+    os.path.join(NEXO_HOME, "agents"),
+    os.path.join(NEXO_HOME, "skills"),
 ]
 # Code repos: index source files (skip vendor, node_modules, etc.)
 _FTS_CODE_DIRS = [

@@ -228,7 +228,7 @@ def handle_session_diary_write(decisions: str, summary: str,
 
 
 def handle_session_diary_read(session_id: str = '', last_n: int = 3, last_day: bool = False,
-                               domain: str = '') -> str:
+                               domain: str = '', brief: bool = False) -> str:
     """Read recent session diaries for context continuity.
 
     Args:
@@ -236,7 +236,25 @@ def handle_session_diary_read(session_id: str = '', last_n: int = 3, last_day: b
         last_n: Number of recent entries to return (default 3)
         last_day: If true, returns ALL entries from the most recent day (multi-terminal aware). Use this at startup.
         domain: Filter by project context: ecommerce, project-a, nexo, project-b, server, other
+        brief: If true, returns ONLY the last diary entry with summary + mental_state + context_next.
+               Use this at startup for fast context loading (~1K chars instead of full dump).
     """
+    if brief:
+        # Fast path: only the most recent diary entry, compact format
+        results = read_session_diary(session_id, 1, last_day=False, domain=domain)
+        if not results:
+            return "No session diary entries."
+        d = results[0]
+        lines = [f"LAST DIARY ({d['created_at']}):"]
+        lines.append(f"  {d['summary'][:300]}")
+        if d.get('pending'):
+            lines.append(f"  Pending: {d['pending'][:200]}")
+        if d.get('context_next'):
+            lines.append(f"  Context: {d['context_next'][:200]}")
+        if d.get('mental_state'):
+            lines.append(f"  Mental: {d['mental_state'][:300]}")
+        return "\n".join(lines)
+
     results = read_session_diary(session_id, last_n, last_day, domain)
     if not results:
         return "No session diary entries."

@@ -21,8 +21,9 @@ from db import (
     SESSION_STALE_SECONDS,
 )
 
-LOG_DIR = os.path.expanduser("~/claude/operations/tool-logs")
-AUTO_CLOSE_LOG = os.path.expanduser("~/claude/coordination/auto-close.log")
+NEXO_HOME = os.environ.get("NEXO_HOME", os.path.expanduser("~/.nexo"))
+LOG_DIR = os.path.join(NEXO_HOME, "operations", "tool-logs")
+AUTO_CLOSE_LOG = os.path.join(NEXO_HOME, "coordination", "auto-close.log")
 
 
 def get_tool_log_summary(sid: str) -> str:
