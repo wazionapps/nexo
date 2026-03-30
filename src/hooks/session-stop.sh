@@ -16,7 +16,7 @@
 #     3. User closes again → hook sees flag → APPROVE
 set -euo pipefail
 
-NEXO_HOME="${NEXO_HOME:-$HOME/claude}"
+NEXO_HOME="${NEXO_HOME:-$HOME/.nexo}"
 FLAG_FILE="$NEXO_HOME/operations/.postmortem-complete"
 TODAY=$(date +%Y-%m-%d)
 TOOL_LOG="$NEXO_HOME/operations/tool-logs/${TODAY}.jsonl"
@@ -24,7 +24,8 @@ TOOL_LOG="$NEXO_HOME/operations/tool-logs/${TODAY}.jsonl"
 # 0. Refresh diary draft with latest changes/decisions (best-effort)
 python3 -c "
 import sys, json, os
-sys.path.insert(0, os.path.expanduser('~/.nexo/nexo-mcp'))
+nexo_home = os.environ.get('NEXO_HOME', os.path.expanduser('~/.nexo'))
+sys.path.insert(0, os.path.join(nexo_home, 'nexo-mcp'))
 os.environ['NEXO_SKIP_FS_INDEX'] = '1'
 from db import init_db, get_db, get_active_sessions, upsert_diary_draft, get_diary_draft
 init_db()
@@ -48,10 +49,22 @@ for s in sessions:
     )
 " 2>/dev/null || true
 
-# 1. Detect trivial session — count meaningful tool calls from THIS SESSION only
+# 1. Detect trivial session — count meaningful tool calls from THIS session only
 # Uses .session-start-ts written by SessionStart hook
 # A session with <5 tool calls (excluding Read/Grep/Glob/Bash) is trivial
 SESSION_START_TS="$NEXO_HOME/operations/.session-start-ts"
+
+# 0.5. Detect non-interactive (claude -p) sessions — skip post-mortem entirely
+#      SessionStart hook writes .session-start-ts. If missing or stale (>30 min),
+#      this is likely a -p script session — approve immediately.
+if [ ! -f "$SESSION_START_TS" ] || [ "$(($(date +%s) - $(cat "$SESSION_START_TS" 2>/dev/null || echo 0)))" -gt 1800 ]; then
+    cat << 'HOOKEOF'
+{
+  "decision": "approve"
+}
+HOOKEOF
+    exit 0
+fi
 SESSION_START=0
 if [ -f "$SESSION_START_TS" ]; then
     SESSION_START=$(cat "$SESSION_START_TS" 2>/dev/null || echo "0")
@@ -115,34 +128,7 @@ else
     cat << 'HOOKEOF'
 {
   "decision": "block",
-  "reason": "STOP HOOK — MANDATORY POST-MORTEM before ending (do NOT ask permission, do NOT skip):
-
-## 1. SELF-CRITIQUE (MANDATORY — write to session diary)
-Answer these questions in the self_critique field of nexo_session_diary_write:
-- Did the user have to ask me for something I should have detected or done on my own?
-- Did I wait for the user to tell me something I could have verified proactively?
-- Are there systems/states I can check next session without being asked?
-- Did I repeat an error that already had a registered learning?
-- What would I do differently if I repeated this session?
-If any answer is YES — write the specific rule that would prevent repetition.
-If the session was flawless, write 'No self-critique — clean session.'
-
-## 2. SESSION BUFFER
-If the session was NOT trivial, append ONE JSON line to ~/.nexo/brain/session_buffer.jsonl:
-{"ts":"YYYY-MM-DDTHH:MM:SS","tasks":[...],"decisions":[...],"user_patterns":[...],"files_modified":[...],"errors_resolved":[...],"self_critique":"short summary","mood":"focused|impatient|exploratory|frustrated|satisfied|neutral","source":"claude"}
-
-## 3. FOLLOWUPS
-If there were deploys/cron changes/fixes — nexo_followup_create with verification date.
-
-## 4. PROACTIVE SEEDS
-What can I leave prepared so the next session starts doing useful work without the user asking?
-
-## 5. MARK COMPLETE
-When ALL of the above is done, run:
-bash -c 'mkdir -p ~/.nexo/operations && date +%s > ~/.nexo/operations/.postmortem-complete'
-The user will close again and the hook will approve.
-
-IMPORTANT: Do NOT say goodbye, do NOT say goodnight or any farewell. Just execute the steps and mark complete."
+  "reason": "STOP HOOK — MANDATORY POST-MORTEM before ending (do NOT ask permission, do NOT skip):\n\n## 1. SELF-CRITIQUE (MANDATORY — write to session diary)\nAnswer these questions in the self_critique field of nexo_session_diary_write:\n- Did the user have to ask me for something I should have detected or done on my own?\n- Did I wait for the user to tell me something I could have verified proactively?\n- Are there systems/states I can check next session without being asked?\n- Did I repeat an error that already had a registered learning?\n- What would I do differently if I repeated this session?\nIf any answer is YES — write the specific rule that would prevent repetition.\nIf the session was flawless, write 'No self-critique — clean session.'\n\n## 2. SESSION BUFFER\nIf the session was NOT trivial, append ONE JSON line to $NEXO_HOME/brain/session_buffer.jsonl:\n{\"ts\":\"YYYY-MM-DDTHH:MM:SS\",\"tasks\":[...],\"decisions\":[...],\"user_patterns\":[...],\"files_modified\":[...],\"errors_resolved\":[...],\"self_critique\":\"short summary\",\"mood\":\"focused|impatient|exploratory|frustrated|satisfied|neutral\",\"source\":\"claude\"}\n\n## 3. FOLLOWUPS\nIf there were deploys/cron changes/fixes — nexo_followup_create with verification date.\n\n## 4. PROACTIVE SEEDS\nWhat can I leave prepared so the next session starts doing useful work without the user asking?\n\n## 5. MARK COMPLETE\nWhen ALL of the above is done, run:\nbash -c 'mkdir -p $NEXO_HOME/operations && date +%s > $NEXO_HOME/operations/.postmortem-complete'\nThe user will close again and the hook will approve.\n\nIMPORTANT: Do NOT say goodbye, do NOT say goodnight or any farewell. Just execute the steps and mark complete."
 }
 HOOKEOF
 fi

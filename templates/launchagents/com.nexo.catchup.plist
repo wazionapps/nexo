@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- com.nexo.catchup
+     Runs nexo-catchup.py once at login (RunAtLoad, no recurring schedule)
+     to handle tasks that were missed while the computer was off or
+     sleeping. Processes any overdue followups, expired reminders, and
+     scheduled jobs that launchd could not fire during downtime. This
+     ensures NEXO's scheduled maintenance never falls through the cracks
+     after a reboot or prolonged sleep period.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.nexo.catchup</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>{{NEXO_HOME}}/scripts/nexo-catchup.py</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>{{NEXO_HOME}}/logs/catchup-stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>{{NEXO_HOME}}/logs/catchup-stderr.log</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>HOME</key>
+        <string>{{HOME}}</string>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+</dict>
+</plist>

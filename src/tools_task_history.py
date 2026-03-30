@@ -29,7 +29,7 @@ def handle_task_list(task_num: str = '', days: int = 30) -> str:
     results = list_task_history(task_num if task_num else None, days)
     if not results:
         scope = f"tarea {task_num}" if task_num else "ninguna tarea"
-        return f"HISTORIAL: Sin ejecuciones de {scope} en los últimos {days} días."
+        return f"HISTORY: No executions of {scope} in recent days."
     lines = [f"HISTORIAL ({len(results)} ejecuciones, {days}d):"]
     for r in results:
         date_str = _epoch_to_date(r["executed_at"])
@@ -42,16 +42,16 @@ def handle_task_frequency() -> str:
     """Report tasks that are overdue based on their configured frequency."""
     overdue = get_overdue_tasks()
     if not overdue:
-        return "Todas las tareas al día."
+        return "All tasks up to date."
     lines = ["TAREAS VENCIDAS:"]
     for t in overdue:
         days_since = t.get("days_since_last")
         if days_since is not None:
-            since_str = f"última hace {days_since:.1f} días"
+            since_str = f"last run {days_since:.1f} days ago"
         else:
             since_str = "nunca ejecutada"
         lines.append(
             f"  Tarea {t['task_num']} ({t['task_name']}): "
-            f"{since_str}, frecuencia cada {t['frequency_days']} días"
+            f"{since_str}, frequency every {t['frequency_days']} days ago"
         )
     return "\n".join(lines)

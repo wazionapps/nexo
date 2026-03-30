@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- com.nexo.github-monitor
+     Runs nexo-github-monitor.py every day at 08:00 to check the NEXO
+     public GitHub repository for new issues, pull requests, and pending
+     releases. Writes results to ~/.nexo/github-status.json. At the next
+     session startup, NEXO reads this file and responds to open issues,
+     reviews PRs, and proposes a release if enough commits have
+     accumulated since the last tag.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.nexo.github-monitor</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>{{NEXO_HOME}}/scripts/nexo-github-monitor.py</string>
+    </array>
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>8</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>{{NEXO_HOME}}/logs/github-monitor-stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>{{NEXO_HOME}}/logs/github-monitor-stderr.log</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>HOME</key>
+        <string>{{HOME}}</string>
+        <key>NEXO_HOME</key>
+        <string>{{HOME}}/.nexo</string>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>

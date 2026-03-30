@@ -1,8 +1,5 @@
 #!/bin/bash
-
-# Write session start timestamp for session-scoped tool counting
-date +%s > "${NEXO_HOME:-$HOME/.nexo}/operations/.session-start-ts"
-# NEXO SessionStart hook — generates a comprehensive briefing.
+# NEXO SessionStart hook — generates a comprehensive briefing
 # Reads SQLite directly for reminders, followups, active sessions.
 # Caches output for 1 hour to avoid regenerating on rapid successive sessions.
 set -euo pipefail
@@ -13,8 +10,20 @@ MAX_AGE_SECONDS=3600  # 1 hour cache
 
 mkdir -p "$NEXO_HOME/coordination" "$NEXO_HOME/operations"
 
+# Write session start timestamp for session-scoped tool counting
+date +%s > "$NEXO_HOME/operations/.session-start-ts"
+
 # Clean up post-mortem flag from previous session
 rm -f "$NEXO_HOME/operations/.postmortem-complete" 2>/dev/null
+
+# Capture Claude Code session_id for inter-terminal inbox hook
+HOOK_INPUT=$(cat)
+CLAUDE_SID=$(echo "$HOOK_INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('session_id',''))" 2>/dev/null)
+if [ -n "$CLAUDE_SID" ]; then
+    echo "$CLAUDE_SID" > "/tmp/nexo-claude-sid-${CLAUDE_SID}"
+    # Also write to a predictable location for the startup prompt
+    echo "$CLAUDE_SID" > "$NEXO_HOME/coordination/.claude-session-id"
+fi
 
 # If briefing exists and is less than 1 hour old, skip regeneration
 if [ -f "$BRIEFING_FILE" ]; then
@@ -108,7 +117,7 @@ for r in reminders_rows:
         except:
             delta = '?'
         desc = (r.get('description', '') or '')[:120]
-        lines.append(f'- [{r[\"id\"]}] {rdate} {desc} — {delta} day(s) overdue')
+        lines.append(f'- [{r[\"id\"]}] {rdate} {desc} -- {delta} day(s) overdue')
         found = True
 if not found:
     lines.append('NONE')
@@ -166,4 +175,87 @@ print('\n'.join(lines))
 # If generation failed, write minimal briefing
 if [ ! -s "$BRIEFING_FILE" ]; then
     echo "## Briefing unavailable — generation error. Use nexo_reminders MCP for fresh data." > "$BRIEFING_FILE"
+fi
+
+# ─── Semantic Context: recent work sessions ───
+# Append recent session summaries for immediate context
+CLAUDE_MEM_DB="$NEXO_HOME/claude-mem.db"
+
+if [ -f "$CLAUDE_MEM_DB" ]; then
+    RECENT_SESSIONS=$(python3 -c "
+import sqlite3, sys
+try:
+    db = sqlite3.connect('$CLAUDE_MEM_DB')
+    rows = db.execute('''
+        SELECT created_at, request, learned, completed
+        FROM session_summaries
+        ORDER BY id DESC LIMIT 5
+    ''').fetchall()
+    db.close()
+    if rows:
+        print()
+        print('## Last 5 Work Sessions')
+        for r in rows:
+            date = r[0][:16] if r[0] else '?'
+            req = (r[1] or '')[:120]
+            learned = (r[2] or '')[:100]
+            print(f'- [{date}] {req}')
+            if learned:
+                print(f'  -> {learned}')
+except Exception as e:
+    pass
+" 2>/dev/null)
+
+    if [ -n "$RECENT_SESSIONS" ]; then
+        echo "$RECENT_SESSIONS" >> "$BRIEFING_FILE"
+    fi
+fi
+
+# ─── Cortex Report: what happened while user was away ───
+CORTEX_BRIEFING="$NEXO_HOME/cortex/last-briefing.json"
+if [ -f "$CORTEX_BRIEFING" ]; then
+    CORTEX_SECTION=$(python3 -c "
+import json
+try:
+    data = json.load(open('$CORTEX_BRIEFING'))
+    ts = data.get('timestamp', '?')
+    actions = data.get('actions_taken', [])
+    signals = data.get('signals_active', [])
+    recommendations = data.get('recommendations', [])
+    pending_q = data.get('pending_questions_unanswered', [])
+    dmn_summary = data.get('dmn_summary', '')
+
+    print()
+    print('## Cortex Report (last update: ' + str(ts)[:16] + ')')
+    if actions:
+        print('### Actions Executed')
+        for a in actions[-10:]:
+            if isinstance(a, dict):
+                print(f'- [{a.get(\"type\",\"?\")}] {a.get(\"detail\",\"\")}')
+            else:
+                print(f'- {a}')
+    if signals:
+        print('### Active Signals')
+        for s in signals[:5]:
+            print(f'- {s}')
+    if recommendations:
+        print('### Recommendations')
+        for r in recommendations[:3]:
+            print(f'- {r}')
+    if pending_q:
+        print(f'### Unanswered Questions: {len(pending_q)}')
+        for q in pending_q[:3]:
+            if isinstance(q, dict):
+                print(f'- {q.get(\"question\",\"?\")}')
+            else:
+                print(f'- {q}')
+    if dmn_summary:
+        print(f'### Last DMN: {str(dmn_summary)[:200]}')
+except Exception as e:
+    print(f'## Cortex Report: error reading briefing ({e})')
+" 2>/dev/null)
+
+    if [ -n "$CORTEX_SECTION" ]; then
+        echo "$CORTEX_SECTION" >> "$BRIEFING_FILE"
+    fi
 fi

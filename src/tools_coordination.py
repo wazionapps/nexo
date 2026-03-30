@@ -99,4 +99,4 @@ def handle_check_answer(qid: str) -> str:
         return f"RESPUESTA de {qid}: {result['answer']}"
     elif result["status"] == "expired":
         return f"Pregunta {qid} expirada sin respuesta."
-    return f"Pregunta {qid} sigue pendiente. Reintentar en unos segundos."
+    return f"Question still pending. Retry in a few seconds."

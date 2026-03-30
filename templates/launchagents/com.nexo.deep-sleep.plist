@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- com.nexo.deep-sleep
+     Runs nexo-deep-sleep.sh every day at 04:30 to perform overnight
+     consolidation. Reads the full transcripts from the previous day's
+     sessions, extracts patterns and learnings that were not captured
+     during live sessions, and writes them into the NEXO knowledge base.
+     This is the "REM sleep" of NEXO — background processing that
+     improves future performance without interrupting active work.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.nexo.deep-sleep</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>{{NEXO_HOME}}/scripts/nexo-deep-sleep.sh</string>
+    </array>
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>4</integer>
+        <key>Minute</key>
+        <integer>30</integer>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>{{NEXO_HOME}}/logs/deep-sleep-stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>{{NEXO_HOME}}/logs/deep-sleep-stderr.log</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
+        <key>HOME</key>
+        <string>{{HOME}}</string>
+    </dict>
+</dict>
+</plist>

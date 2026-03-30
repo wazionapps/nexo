@@ -19,9 +19,9 @@ from datetime import datetime, date, timedelta
 from pathlib import Path
 
 HOME = Path.home()
-CLAUDE_DIR = HOME / ".nexo"
+CLAUDE_DIR = HOME / "claude"
 COORD_DIR = CLAUDE_DIR / "coordination"
-NEXO_DB = HOME / ".nexo" / "nexo.db"
+NEXO_DB = HOME / "claude" / "nexo-mcp" / "nexo.db"
 OUTPUT_FILE = COORD_DIR / "daily-synthesis.md"
 LAST_RUN_FILE = COORD_DIR / "synthesis-last-run"
 LOCK_FILE = COORD_DIR / "synthesis.lock"
@@ -234,7 +234,7 @@ def main():
 
         # Register for catch-up
         try:
-            state_file = HOME / ".nexo" / "operations" / ".catchup-state.json"
+            state_file = HOME / "claude" / "operations" / ".catchup-state.json"
             st = json.loads(state_file.read_text()) if state_file.exists() else {}
             st["synthesis"] = datetime.now().isoformat()
             state_file.write_text(json.dumps(st, indent=2))

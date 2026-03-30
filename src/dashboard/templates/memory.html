@@ -2,60 +2,197 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>NEXO Brain — Memory Search</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; background: #0a0a0f; color: #e0e0e0; }
-        nav { background: #111118; padding: 1rem 2rem; display: flex; gap: 2rem; align-items: center; border-bottom: 1px solid #2a2a3a; }
-        nav a { color: #8b8bff; text-decoration: none; font-size: 0.9rem; } nav a:hover { color: #fff; }
-        nav .brand { font-weight: 700; font-size: 1.2rem; color: #7c3aed; }
-        .controls { padding: 1rem 2rem; display: flex; gap: 1rem; align-items: center; }
-        input, select, button { background: #1a1a2a; color: #ddd; border: 1px solid #333; border-radius: 6px; padding: 0.5rem 1rem; font-size: 0.9rem; }
-        button { cursor: pointer; background: #7c3aed; border-color: #7c3aed; color: #fff; } button:hover { background: #6d28d9; }
-        .container { max-width: 1200px; margin: 0 auto; padding: 1rem 2rem; }
-        .memory-card { background: #15151f; border: 1px solid #2a2a3a; border-radius: 8px; padding: 1rem; margin-bottom: 0.75rem; }
-        .memory-card .meta { color: #888; font-size: 0.8rem; margin-bottom: 0.5rem; }
-        .memory-card .content { font-size: 0.9rem; line-height: 1.5; }
-        .score { color: #7c3aed; font-weight: 600; }
-        #count { color: #888; margin-left: 1rem; }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEXO Brain — Cognitive Memory</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>tailwind.config={theme:{extend:{fontFamily:{display:['Space Grotesk','system-ui','sans-serif'],mono:['JetBrains Mono','monospace']}}}}</script>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 </head>
-<body>
-    <nav>
-        <span class="brand">NEXO Brain</span>
-        <a href="/">Overview</a>
-        <a href="/graph">Knowledge Graph</a>
-        <a href="/memory">Memory</a>
-        <a href="/somatic">Somatic</a>
-        <a href="/adaptive">Adaptive</a>
-        <a href="/sessions">Sessions</a>
-    </nav>
-    <div class="controls">
-        <input type="text" id="query" placeholder="Search memories..." style="width:400px" onkeydown="if(event.key==='Enter')search()">
-        <select id="store"><option value="both">Both</option><option value="stm">STM</option><option value="ltm">LTM</option></select>
-        <button onclick="search()">Search</button>
-        <span id="count"></span>
-    </div>
-    <div class="container" id="results"></div>
+<body class="bg-gray-950 text-slate-200">
+
+    <!-- Sidebar: 56px icon-only fixed left -->
+    <aside class="fixed left-0 top-0 bottom-0 w-14 bg-slate-900 border-r border-slate-800 flex flex-col items-center py-4 z-50">
+        <!-- Logo -->
+        <a href="/" class="mb-6 flex items-center justify-center w-8 h-8">
+            <img src="/static/nexo-logo.png" alt="NEXO" class="w-7 h-7" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+            <div style="display:none" class="w-7 h-7 rounded-lg bg-violet-600 items-center justify-center text-white text-xs font-bold font-display">N</div>
+        </a>
+
+        <!-- Nav icons -->
+        <nav class="flex flex-col items-center gap-1 flex-1">
+            <!-- Dashboard -->
+            <a href="/" title="Dashboard" class="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            </a>
+            <!-- Operations -->
+            <a href="/ops" title="Operations" class="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+            </a>
+            <!-- Calendar -->
+            <a href="/calendar" title="Calendar" class="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            </a>
+            <!-- Inbox -->
+            <a href="/inbox" title="Inbox" class="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
+            </a>
+
+            <div class="w-6 h-px bg-slate-800 my-1"></div>
+
+            <!-- Memory — ACTIVE -->
+            <a href="/memory" title="Memory" class="w-9 h-9 flex items-center justify-center rounded-lg bg-violet-600/20 text-violet-400 transition-colors">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"/><path d="M9 21h6"/><path d="M10 21v1a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-1"/></svg>
+            </a>
+            <!-- Graph -->
+            <a href="/graph" title="Knowledge Graph" class="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+            </a>
+            <!-- Sessions -->
+            <a href="/sessions" title="Sessions" class="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            </a>
+            <!-- Somatic -->
+            <a href="/somatic" title="Somatic" class="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+            </a>
+            <!-- Adaptive -->
+            <a href="/adaptive" title="Adaptive" class="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+            </a>
+        </nav>
+
+        <!-- Trust score -->
+        <div class="flex flex-col items-center gap-0.5 mt-2">
+            <span class="text-xs font-display font-semibold text-slate-500 uppercase tracking-widest">Trust</span>
+            <span id="trust-score" class="text-sm font-mono font-bold text-violet-400">--</span>
+        </div>
+    </aside>
+
+    <!-- Main content -->
+    <main class="ml-14 min-h-screen bg-gray-950 text-slate-200">
+        <header class="h-12 border-b border-slate-800/50 flex items-center gap-4 px-6">
+            <h1 class="text-sm font-display font-semibold">Memory</h1>
+            <div class="flex-1 flex items-center gap-2 max-w-xl">
+                <input type="text" id="query" placeholder="Search cognitive memories..."
+                    class="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                    onkeydown="if(event.key==='Enter')search()">
+                <select id="store" class="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-violet-500">
+                    <option value="both">Both</option>
+                    <option value="stm">STM</option>
+                    <option value="ltm">LTM</option>
+                </select>
+                <button onclick="search()" class="px-3 py-1.5 text-xs bg-violet-600 text-white rounded-lg hover:bg-violet-500 transition-colors">Search</button>
+            </div>
+            <span id="count" class="text-xs text-slate-500 font-mono"></span>
+        </header>
+
+        <div id="results" class="p-6 space-y-2 max-w-4xl"></div>
+        <div id="empty" class="p-12 text-center text-slate-500 text-sm">Search your cognitive memories</div>
+    </main>
+
     <script>
+        function escapeHtml(text) {
+            const el = document.createElement('div');
+            el.textContent = text || '';
+            return el.innerHTML;
+        }
+
+        function scoreColor(score) {
+            if (score > 0.8) return 'text-emerald-400';
+            if (score > 0.6) return 'text-amber-400';
+            return 'text-red-400';
+        }
+
+        function storeBadge(store) {
+            if ((store || '').toLowerCase() === 'stm') return 'bg-cyan-500/10 text-cyan-400';
+            return 'bg-violet-500/10 text-violet-400';
+        }
+
+        function typeBadge(type) {
+            const map = {
+                learning: 'bg-blue-500/10 text-blue-400',
+                feedback: 'bg-pink-500/10 text-pink-400',
+                preference: 'bg-violet-500/10 text-violet-400',
+                diary: 'bg-cyan-500/10 text-cyan-400',
+                decision: 'bg-amber-500/10 text-amber-400',
+                change: 'bg-slate-700 text-slate-400'
+            };
+            return map[type] || 'bg-slate-700 text-slate-400';
+        }
+
+        function renderCard(m) {
+            const score = m.score || m.similarity || 0;
+            const store = (m.store || 'ltm').toUpperCase();
+            const source_type = m.source_type || 'unknown';
+            const content = m.content || '';
+            const domain = m.domain || '';
+            const created_at = m.created_at || '';
+            const strength = m.strength;
+
+            const strengthBar = strength !== undefined
+                ? `<div class="mt-2 flex items-center gap-2">
+                    <span class="text-xs text-slate-500">Strength</span>
+                    <div class="flex-1 h-1 bg-slate-800 rounded-full overflow-hidden">
+                        <div class="h-full bg-violet-500 rounded-full" style="width:${strength * 100}%"></div>
+                    </div>
+                    <span class="text-xs text-slate-500 font-mono">${strength.toFixed(2)}</span>
+                   </div>`
+                : '';
+
+            return `<div class="bg-slate-900/50 border border-slate-800/50 rounded-lg p-4">
+                <div class="flex items-center gap-2 mb-1.5 flex-wrap">
+                    <span class="text-xs font-mono ${scoreColor(score)}">${score.toFixed(3)}</span>
+                    <span class="text-xs px-1.5 py-0.5 rounded ${storeBadge(store)}">${store}</span>
+                    <span class="text-xs px-1.5 py-0.5 rounded ${typeBadge(source_type)}">${escapeHtml(source_type)}</span>
+                    ${domain ? `<span class="text-xs px-1.5 py-0.5 rounded bg-slate-800 text-slate-500">${escapeHtml(domain)}</span>` : ''}
+                    <span class="text-xs text-slate-600 ml-auto">${escapeHtml(created_at)}</span>
+                </div>
+                <p class="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap">${escapeHtml(content)}</p>
+                ${strengthBar}
+            </div>`;
+        }
+
         async function search() {
-            const q = document.getElementById('query').value;
+            const q = document.getElementById('query').value.trim();
             if (!q) return;
             const store = document.getElementById('store').value;
-            const data = await fetch(`/api/memories?q=${encodeURIComponent(q)}&store=${store}&limit=30`).then(r => r.json());
-            document.getElementById('count').textContent = `${data.count} results`;
-            document.getElementById('results').innerHTML = (data.results || []).map(m => `
-                <div class="memory-card">
-                    <div class="meta">
-                        <span class="score">${(m.score || m.similarity || 0).toFixed(3)}</span>
-                        &middot; ${m.store || 'unknown'} &middot; ID: ${m.id}
-                        ${m.source_type ? '&middot; ' + m.source_type : ''}
-                        ${m.created_at ? '&middot; ' + m.created_at : ''}
-                    </div>
-                    <div class="content">${(m.content || '').replace(/</g, '&lt;')}</div>
-                </div>
-            `).join('');
+            const countEl = document.getElementById('count');
+            const resultsEl = document.getElementById('results');
+            const emptyEl = document.getElementById('empty');
+
+            countEl.textContent = 'Searching...';
+            emptyEl.style.display = 'none';
+            resultsEl.innerHTML = '';
+
+            try {
+                const resp = await fetch(`/api/memories?q=${encodeURIComponent(q)}&store=${store}&limit=30`);
+                const data = await resp.json();
+                const results = data.results || [];
+
+                countEl.textContent = `${data.count || results.length} results`;
+
+                if (results.length === 0) {
+                    resultsEl.innerHTML = '';
+                    emptyEl.textContent = 'No memories found';
+                    emptyEl.style.display = 'block';
+                } else {
+                    resultsEl.innerHTML = results.map(renderCard).join('');
+                    emptyEl.style.display = 'none';
+                }
+            } catch (err) {
+                countEl.textContent = '';
+                resultsEl.innerHTML = `<div class="text-xs text-red-400 p-3 bg-red-500/10 rounded-lg border border-red-500/20">Error: ${escapeHtml(err.message)}</div>`;
+                emptyEl.style.display = 'none';
+            }
         }
+
+        // Load trust score
+        fetch('/api/stats').then(r => r.json()).then(data => {
+            if (data.trust_score != null) {
+                document.getElementById('trust-score').textContent = Math.round(data.trust_score);
+            }
+        }).catch(() => {});
     </script>
 </body>
 </html>

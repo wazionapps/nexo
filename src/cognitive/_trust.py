@@ -316,7 +316,7 @@ def detect_sentiment(text: str) -> dict:
         if intensity > 0.7:
             guidance = "MODE: Ultra-conciso. Cero explicaciones. Resolver y mostrar resultado."
         else:
-            guidance = "MODE: Conciso. Menos contexto, más acción directa."
+            guidance = "MODE: Concise. Less context, more direct action."
     elif pos_score > neg_score and pos_score >= 1:
         sentiment = "positive"
         intensity = min(1.0, 0.3 + pos_score * 0.15)
@@ -324,7 +324,7 @@ def detect_sentiment(text: str) -> dict:
     elif urgency_hits:
         sentiment = "urgent"
         intensity = 0.8
-        guidance = "MODE: Acción inmediata. Sin preámbulos."
+        guidance = "MODE: Immediate action. No preambles."
     else:
         sentiment = "neutral"
         intensity = 0.5

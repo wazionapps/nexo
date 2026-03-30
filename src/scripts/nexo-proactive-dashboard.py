@@ -2,8 +2,8 @@
 """
 NEXO Proactive Dashboard — Surfaces issues and opportunities without the user asking.
 
-Scans: followups vencidos, reminders olvidados, learnings sin resolver,
-inactive systems, user patterns, and more.
+Scans: overdue followups, forgotten reminders, unresolved learnings,
+sistemas sin actividad, patrones de the user, y más.
 
 Usage:
     python3 nexo-proactive-dashboard.py           # Full scan, text output
@@ -19,7 +19,7 @@ import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
-NEXO_DB = Path.home() / ".nexo" / "nexo-mcp" / "nexo.db"
+NEXO_DB = Path.home() / "claude" / "nexo-mcp" / "nexo.db"
 
 
 def get_db():
@@ -50,7 +50,7 @@ def check_overdue_followups() -> list[dict]:
                 alerts.append({
                     "type": "overdue_followup",
                     "severity": "high" if days_overdue > 3 else "medium",
-                    "title": f"Followup vencido hace {days_overdue}d: {r['description'][:80]}",
+                    "title": f"Followup overdue by {days_overdue}d: {r['description'][:80]}",
                     "id": r["id"],
                     "days_overdue": days_overdue,
                 })
@@ -65,7 +65,7 @@ def check_overdue_reminders() -> list[dict]:
     rows = conn.execute("""
         SELECT id, description, date, status
         FROM reminders
-        WHERE status NOT IN ('COMPLETED', 'CANCELADO')
+        WHERE status NOT IN ('COMPLETED', 'CANCELLED')
         AND date IS NOT NULL AND date != ''
         ORDER BY date ASC
     """).fetchall()
@@ -80,7 +80,7 @@ def check_overdue_reminders() -> list[dict]:
                 alerts.append({
                     "type": "overdue_reminder",
                     "severity": "high" if days_overdue > 7 else "medium",
-                    "title": f"Reminder vencido hace {days_overdue}d: {r['description'][:80]}",
+                    "title": f"Reminder overdue by {days_overdue}d: {r['description'][:80]}",
                     "id": r["id"],
                     "days_overdue": days_overdue,
                 })
@@ -95,7 +95,7 @@ def check_stale_ideas() -> list[dict]:
     rows = conn.execute("""
         SELECT id, description, created_at
         FROM reminders
-        WHERE status NOT IN ('COMPLETED', 'CANCELADO')
+        WHERE status NOT IN ('COMPLETED', 'CANCELLED')
         AND (date IS NULL OR date = '')
         ORDER BY created_at ASC
     """).fetchall()
@@ -116,7 +116,7 @@ def check_stale_ideas() -> list[dict]:
         alerts.append({
             "type": "stale_ideas",
             "severity": "low",
-            "title": f"{stale_count} ideas/reminders without date are >14 days old. Review or archive.",
+            "title": f"{stale_count} ideas/reminders without date have been sitting for >14 days. Review or archive.",
             "count": stale_count,
         })
     return alerts
@@ -138,7 +138,7 @@ def check_session_gaps() -> list[dict]:
                 alerts.append({
                     "type": "session_gap",
                     "severity": "low",
-                    "title": f"No sessions registered in {gap_hours:.0f}h ({gap_hours/24:.1f} days)",
+                    "title": f"No sessions recorded in {gap_hours:.0f}h ({gap_hours/24:.1f} days)",
                     "gap_hours": gap_hours,
                 })
         except (ValueError, TypeError):
@@ -149,20 +149,20 @@ def check_session_gaps() -> list[dict]:
 def check_evolution_status() -> list[dict]:
     """Check if evolution system is healthy."""
     alerts = []
-    obj_file = Path.home() / ".nexo" / "cortex" / "evolution-objective.json"
+    obj_file = Path.home() / "claude" / "cortex" / "evolution-objective.json"
     if obj_file.exists():
         obj = json.loads(obj_file.read_text())
         if not obj.get("evolution_enabled", True):
             alerts.append({
                 "type": "evolution_disabled",
                 "severity": "high",
-                "title": f"Evolution DESACTIVADO: {obj.get('disabled_reason', 'desconocido')}",
+                "title": f"Evolution DISABLED: {obj.get('disabled_reason', 'unknown')}",
             })
         if obj.get("consecutive_failures", 0) > 0:
             alerts.append({
                 "type": "evolution_failures",
                 "severity": "medium",
-                "title": f"Evolution: {obj['consecutive_failures']} fallos consecutivos",
+                "title": f"Evolution: {obj['consecutive_failures']} consecutive failures",
             })
 
         # Check dimension regression
@@ -193,7 +193,7 @@ def check_pending_proposals() -> list[dict]:
         return [{
             "type": "pending_proposals",
             "severity": "low",
-            "title": f"{len(rows)} pending evolution proposals awaiting review",
+            "title": f"{len(rows)} evolution proposals pending review",
             "count": len(rows),
             "proposals": [{"id": r["id"], "dim": r["dimension"], "text": r["proposal"][:80]} for r in rows],
         }]
@@ -217,7 +217,7 @@ def check_recurring_errors() -> list[dict]:
         alerts.append({
             "type": "recurring_errors",
             "severity": "medium",
-            "title": f"Categoria '{r['category']}' tiene {r['cnt']} learnings esta semana — posible problema sistémico",
+            "title": f"Categoria '{r['category']}' tiene {r['cnt']} learnings this week — possible systemic issue",
             "category": r["category"],
             "count": r["cnt"],
         })
@@ -229,7 +229,7 @@ def check_cron_health() -> list[dict]:
     alerts = []
 
     # Check backup cron
-    backup_dir = Path.home() / ".nexo" / "nexo-mcp" / "backups"
+    backup_dir = Path.home() / "claude" / "nexo-mcp" / "backups"
     if backup_dir.exists():
         backups = sorted(backup_dir.glob("nexo-*.db"), key=lambda p: p.stat().st_mtime, reverse=True)
         if backups:
@@ -238,11 +238,11 @@ def check_cron_health() -> list[dict]:
                 alerts.append({
                     "type": "backup_stale",
                     "severity": "high",
-                    "title": f"Ultimo backup de nexo.db hace {last_backup_age:.1f}h (deberia ser cada 1h)",
+                    "title": f"Last nexo.db backup {last_backup_age:.1f}h (should be hourly)",
                 })
 
     # Check immune system
-    immune_status = Path.home() / ".nexo" / "coordination" / "immune-status.json"
+    immune_status = Path.home() / "claude" / "coordination" / "immune-status.json"
     if immune_status.exists():
         try:
             status = json.loads(immune_status.read_text())
@@ -250,7 +250,7 @@ def check_cron_health() -> list[dict]:
                 alerts.append({
                     "type": "immune_degraded",
                     "severity": "high",
-                    "title": f"Sistema inmune degradado: {status.get('reason', '?')}",
+                    "title": f"Immune system degraded: {status.get('reason', '?')}",
                 })
         except (json.JSONDecodeError, KeyError):
             pass
@@ -292,10 +292,10 @@ def run_all_checks() -> list[dict]:
 def format_text(alerts: list[dict]) -> str:
     """Format alerts as readable text."""
     if not alerts:
-        return "No hay alertas proactivas. Todo en orden."
+        return "No proactive alerts. All clear."
 
     severity_icons = {"high": "!!!", "medium": " ! ", "low": " . "}
-    lines = [f"NEXO Proactive Dashboard — {len(alerts)} alertas\n"]
+    lines = [f"NEXO Proactive Dashboard — {len(alerts)} alerts\n"]
 
     current_severity = None
     for a in alerts:
@@ -316,8 +316,8 @@ def format_brief(alerts: list[dict]) -> str:
     med = sum(1 for a in alerts if a.get("severity") == "medium")
     low = sum(1 for a in alerts if a.get("severity") == "low")
     if not alerts:
-        return "Dashboard: limpio"
-    return f"Dashboard: {high} urgente, {med} atencion, {low} info"
+        return "Dashboard: clean"
+    return f"Dashboard: {high} urgent, {med} attention, {low} info"
 
 
 def main():

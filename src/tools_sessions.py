@@ -432,10 +432,10 @@ def handle_context_packet(area: str, files: str = "") -> str:
     # 6. Data flow tracing requirement (mandatory for all subagents)
     parts.append("## REGLA OBLIGATORIA: DATA FLOW TRACING")
     parts.append("ANTES de modificar cualquier archivo o dato, responde estas 3 preguntas:")
-    parts.append("  1. ¿QUIÉN PRODUCE este dato? (qué función/cron/endpoint lo genera)")
-    parts.append("  2. ¿QUIÉN CONSUME este dato? (qué otros archivos/funciones lo leen)")
+    parts.append("  1. WHO PRODUCES this data? (which function/cron/endpoint generates it)")
+    parts.append("  2. WHO CONSUMES this data? (which other files/functions read it)")
     parts.append("  3. ¿QUÉ SE ROMPE si lo cambio? (efectos downstream)")
-    parts.append("Si no puedes responder las 3 → LEE el código que produce y consume ANTES de tocar.")
+    parts.append("If you can't answer all 3 → READ the code that produces and consumes BEFORE touching it.")
     parts.append("Si sigues sin poder → PARA y devuelve la pregunta. NO adivines.")
     parts.append("")
 
@@ -443,7 +443,7 @@ def handle_context_packet(area: str, files: str = "") -> str:
         return f"No context found for area '{area}'. The subagent will start with no project-specific knowledge."
 
     header = f"CONTEXT PACKET — {area.upper()}\n{'='*40}\n\n"
-    footer = f"\n{'='*40}\nINSTRUCCIÓN: Si no estás 100% seguro de un dato, PARA y devuelve la pregunta. NO inventes."
+    footer = f"\n{'='*40}\nINSTRUCTION: If you're not 100% sure about a data point, STOP and ask. DO NOT invent."
     return header + "\n".join(parts) + footer
 
 
@@ -511,7 +511,7 @@ def handle_stop(sid: str) -> str:
     """Cleanly close a session, removing it from active sessions immediately."""
     _stop_keepalive(sid)
     complete_session(sid)
-    return f"Sesión {sid} cerrada."
+    return f"Session closed."
 
 
 def handle_status(keyword: str | None = None) -> str:
@@ -525,7 +525,7 @@ def handle_status(keyword: str | None = None) -> str:
         sessions = get_active_sessions()
 
     if not sessions:
-        return "Sin sesiones activas."
+        return "No active sessions."
 
     lines = ["SESIONES ACTIVAS:"]
     for s in sessions:

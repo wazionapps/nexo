@@ -20,8 +20,8 @@ from datetime import datetime, date, timedelta
 from pathlib import Path
 
 # ── Paths ────────────────────────────────────────────────────────────────
-CLAUDE_DIR = Path.home() / ".nexo"
-NEXO_DB = CLAUDE_DIR / "nexo.db"
+CLAUDE_DIR = Path.home() / "claude"
+NEXO_DB = CLAUDE_DIR / "nexo-mcp" / "nexo.db"
 CORTEX_DIR = CLAUDE_DIR / "cortex"
 OBJECTIVE_FILE = CORTEX_DIR / "evolution-objective.json"
 LOG_DIR = CLAUDE_DIR / "logs"
@@ -36,7 +36,7 @@ MAX_SNAPSHOTS = 8
 AUTO_SAFE_PREFIXES = [
     str(CLAUDE_DIR / "scripts") + "/",
     str(CLAUDE_DIR / "cortex") + "/",
-    str(CLAUDE_DIR / "plugins") + "/",
+    str(CLAUDE_DIR / "nexo-mcp" / "plugins") + "/",
     str(CLAUDE_DIR / "logs") + "/",
     str(CLAUDE_DIR / "coordination") + "/",
 ]
@@ -50,7 +50,7 @@ AUTO_SAFE_PREFIXES_PUBLIC = [
 IMMUTABLE_FILES = {
     "db.py", "server.py", "plugin_loader.py", "nexo-watchdog.sh",
     "cortex-wrapper.py", "CLAUDE.md", "personality.md",
-    "the user-profile.md", "evolution_cycle.py",
+    "user-profile.md", "evolution_cycle.py",
     # Core cognitive engine — never auto-modified
     "cognitive.py", "knowledge_graph.py", "storage_router.py",
     # Core tools — never auto-modified
@@ -107,7 +107,7 @@ def call_claude_cli(prompt: str) -> str:
 
     result = subprocess.run(
         [str(CLAUDE_CLI), "-p", prompt, "--model", "opus",
-         "--allowedTools", "Read,Write,Edit,Glob,Grep"],
+         "--allowedTools", "Read,Write,Edit,Glob,Grep,Bash"],
         capture_output=True,
         text=True,
         timeout=CLI_TIMEOUT,
@@ -320,18 +320,18 @@ def _create_review_followup(conn: sqlite3.Connection, cycle_num: int,
     local_items = [i for i in items if i.get("scope") != "public"]
 
     lines = [f"Evolution Cycle #{cycle_num} — {len(items)} proposals to review."]
-    lines.append(f"Análisis: {analysis[:200]}")
+    lines.append(f"Analysis: {analysis[:200]}")
     lines.append("")
 
     if public_items:
-        lines.append(f"PARA TODOS ({len(public_items)}):")
+        lines.append(f"FOR EVERYONE ({len(public_items)}):")
         for i, item in enumerate(public_items, 1):
             lines.append(f"  {i}. [{item['dimension']}] {item['action'][:120]}")
             lines.append(f"     Why: {item['reasoning'][:100]}")
         lines.append("")
 
     if local_items:
-        lines.append(f"SOLO PARA TI ({len(local_items)}):")
+        lines.append(f"FOR YOU ONLY ({len(local_items)}):")
         for i, item in enumerate(local_items, 1):
             lines.append(f"  {i}. [{item['dimension']}] {item['action'][:120]}")
             lines.append(f"     Why: {item['reasoning'][:100]}")
@@ -565,7 +565,7 @@ def _update_catchup_state():
     try:
         import json as _json
         from pathlib import Path as _Path
-        _state_file = _Path.home() / ".nexo" / "operations" / ".catchup-state.json"
+        _state_file = _Path.home() / "claude" / "operations" / ".catchup-state.json"
         _state = _json.loads(_state_file.read_text()) if _state_file.exists() else {}
         _state["evolution"] = datetime.now().isoformat()
         _state_file.write_text(_json.dumps(_state, indent=2))

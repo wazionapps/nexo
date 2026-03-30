@@ -334,7 +334,7 @@ def nexo_reminder_update(id: str, description: str = "", date: str = "", status:
 
 @mcp.tool
 def nexo_reminder_complete(id: str) -> str:
-    """Mark a reminder as COMPLETADO with today's date.
+    """Mark a reminder as COMPLETED with today's date.
 
     Args:
         id: Reminder ID (e.g., R87).
@@ -386,7 +386,7 @@ def nexo_followup_update(id: str, description: str = "", date: str = "", verific
 
 @mcp.tool
 def nexo_followup_complete(id: str, result: str = "") -> str:
-    """Mark a followup as COMPLETADO. Appends result to verification field.
+    """Mark a followup as COMPLETED. Appends result to verification field.
 
     Args:
         id: Followup ID (e.g., NF45).
@@ -507,7 +507,7 @@ def nexo_index_remove_dir(path: str) -> str:
     result = fts_remove_dir(path)
     if "error" in result:
         return f"ERROR: {result['error']}"
-    return f"Directorio eliminado del índice: {result['removed']}"
+    return f"Directory removed from index: {result['removed']}"
 
 
 @mcp.tool
@@ -660,8 +660,8 @@ def nexo_plugin_remove(filename: str) -> str:
     try:
         removed = remove_plugin(mcp, filename)
         if removed:
-            return f"Plugin {filename} eliminado. Tools quitados: {', '.join(removed)}"
-        return f"Plugin {filename} eliminado (no tenía tools registrados)."
+            return f"Plugin {filename} removed. Tools unregistered: {', '.join(removed)}"
+        return f"Plugin {filename} removed (had no registered tools)."
     except Exception as e:
         return f"Error eliminando plugin {filename}: {e}"
 

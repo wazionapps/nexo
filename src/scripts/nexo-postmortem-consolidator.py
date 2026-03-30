@@ -2,19 +2,19 @@
 """
 NEXO Post-Mortem Consolidator v2 — The brain consolidates memories.
 
-Before: 595 lines of word-overlap al 50% para detectar "patrones".
+Before: 595 lines of word-overlap at 50% to detect "patterns".
 Now: Collects data, passes them to CLI which UNDERSTANDS what it reads.
 
 Runs daily at 23:30 via LaunchAgent. Reads session diaries from today,
 passes them to Claude CLI (opus) which decides what deserves permanent memory.
 
-Stage 1 — Data collection (pure Python):
+Stage 1 — Data collection (Pure Python):
   Query session diaries, existing feedbacks, history.
 
 Stage 2 — Intelligence (Claude CLI opus):
   Read diaries, understand patterns, decide what to promote.
 
-Stage 3 — Sensory Register + Force analysis (pure Python):
+Stage 3 — Sensory Register + Force analysis (Pure Python):
   Process cognitive events. Kept from v1 — genuinely mechanical.
 """
 
@@ -26,17 +26,19 @@ import sys
 from datetime import datetime, date, timedelta
 from pathlib import Path
 
-# Add nexo to path for cognitive engine (Stage 3)
-sys.path.insert(0, str(Path.home() / ".nexo"))
+# Add nexo-mcp to path for cognitive engine (Stage 3)
+sys.path.insert(0, str(Path.home() / "claude" / "nexo-mcp"))
 
 HOME = Path.home()
-NEXO_DB = HOME / ".nexo" / "nexo.db"
-MEMORY_DIR = HOME / ".nexo" / "memory"
+NEXO_DB = HOME / "claude" / "nexo-mcp" / "nexo.db"
+# Memory directory — adjust to match your project's memory location
+# Claude Code uses ~/.claude/projects/<project-hash>/memory/
+MEMORY_DIR = HOME / "claude" / "memory"
 MEMORY_INDEX = MEMORY_DIR / "MEMORY.md"
-HISTORY_FILE = HOME / ".nexo" / "coordination" / "postmortem-history.json"
-CONSOLIDATION_LOG = HOME / ".nexo" / "logs" / "postmortem-consolidation.log"
+HISTORY_FILE = HOME / "claude" / "coordination" / "postmortem-history.json"
+CONSOLIDATION_LOG = HOME / "claude" / "logs" / "postmortem-consolidation.log"
 CLAUDE_CLI = HOME / ".local" / "bin" / "claude"
-SESSION_BUFFER = HOME / ".nexo" / "brain" / "session_buffer.jsonl"
+SESSION_BUFFER = HOME / "claude" / "brain" / "session_buffer.jsonl"
 
 TODAY = date.today()
 TODAY_STR = TODAY.isoformat()
@@ -51,10 +53,10 @@ def log(msg: str):
         f.write(line + "\n")
 
 
-# ─── Stage 1: Data Collection (pure Python) ─────────────────────────────────
+# ─── Stage 1: Data Collection (Pure Python) ─────────────────────────────────
 
 def collect_data() -> dict:
-    """Collect all data the CLI needs to make decisions."""
+    """Collects all data the CLI will need to decide."""
     data = {
         "date": TODAY_STR,
         "diaries": [],
@@ -68,7 +70,7 @@ def collect_data() -> dict:
     conn = sqlite3.connect(str(NEXO_DB))
     conn.row_factory = sqlite3.Row
 
-    # Today diaries with self-critique
+    # Today's diaries with self-critique
     rows = conn.execute(
         "SELECT id, session_id, summary, self_critique, user_signals, "
         "mental_state, domain, created_at "
@@ -79,12 +81,12 @@ def collect_data() -> dict:
 
     conn.close()
 
-    # Feedbacks postmortem existentes (nombres, para no duplicar)
+    # Existing postmortem feedbacks (nombres, para no duplicar)
     data["existing_feedbacks"] = [
         f.stem for f in MEMORY_DIR.glob("feedback_postmortem_*.md")
     ]
 
-    # Resumen del historial
+    # History summary
     if HISTORY_FILE.exists():
         try:
             history = json.loads(HISTORY_FILE.read_text())
@@ -102,7 +104,7 @@ def collect_data() -> dict:
 # ─── Stage 2: Intelligence (Claude CLI opus) ────────────────────────────────
 
 def consolidate_with_cli(data: dict) -> bool:
-    """El cerebro consolida — CLI decide qué promover."""
+    """The brain consolidates — CLI decides what to promote."""
 
     diaries_with_critique = [
         d for d in data["diaries"]
@@ -113,13 +115,13 @@ def consolidate_with_cli(data: dict) -> bool:
         log("All sessions clean or trivial. Nothing to consolidate.")
         return True
 
-    # Preparar datos para el CLI (truncar para no exceder contexto)
+    # Prepare data for CLI (truncate to avoid exceeding context)
     diaries_json = json.dumps(diaries_with_critique, ensure_ascii=False, indent=1)
     if len(diaries_json) > 12000:
-        diaries_json = diaries_json[:12000] + "\n... (truncado)"
+        diaries_json = diaries_json[:12000] + "\n... (truncated)"
 
-    prompt = f"""You are NEXO nightly consolidator. Your job is to review self-critiques
-from today and decide which deserve to become permanent rules (feedback_postmortem_*.md).
+    prompt = f"""You are NEXO's nightly consolidator. Your job is to review the self-critiques
+del día y decidir cuáles deserve to become permanent rules (feedback_postmortem_*.md).
 
 FECHA: {data['date']}
 SESSIONS TODAY: {len(data['diaries'])} total, {len(diaries_with_critique)} with self-critique
@@ -127,26 +129,26 @@ SESSIONS TODAY: {len(data['diaries'])} total, {len(diaries_with_critique)} with 
 DIARIES WITH SELF-CRITIQUE:
 {diaries_json}
 
-FEEDBACKS POSTMORTEM QUE YA EXISTEN ({len(data['existing_feedbacks'])}):
+EXISTING POSTMORTEM FEEDBACKS ({len(data['existing_feedbacks'])}):
 {json.dumps(data['existing_feedbacks'][:30], ensure_ascii=False)}
 
-REGLAS PERMANENTES RECIENTES:
+RECENT PERMANENT RULES:
 {json.dumps(data['history_summary'].get('recent_rules', []), ensure_ascii=False)}
 
-INSTRUCCIONES:
+INSTRUCTIONS:
 
-1. Lee cada self_critique y entiende su SIGNIFICADO (no cuentes palabras).
+1. Read each self_critique and understand its MEANING (don't count words).
 
-2. PROMOVER a feedback permanente SOLO SI:
-   - A pattern appears in 2+ different sessions today (by meaning, not literal text)
+2. PROMOTE to permanent feedback ONLY IF:
+   - A pattern appears in 2+ different sessions of the day (by meaning, not literal text)
    - O the user corrigió explícitamente (user_signals contiene corrección)
-   - Y the self-critique contains a CONCRETE ACTION that prevents a future error
-   - Y NO existe ya un feedback similar en los existentes
+   - Y the self-critique contains a CONCRETE ACTION que prevents a future error
+   - Y a similar feedback does NOT already exist en los existentes
 
-3. NO promover si:
-   - It is a negative response ("No pasó nada", "sesión limpia")
-   - It is generic without concrete action
-   - A feedback already exists covering the same topic
+3. DO NOT promote if:
+   - It's a negative response ("No pasó nada", "clean session")
+   - It's generic without concrete action
+   - A feedback covering the same topic already exists
 
 4. For each rule to promote, create the file with Write en {MEMORY_DIR}/:
    Nombre: feedback_postmortem_[slug_descriptivo].md
@@ -162,18 +164,18 @@ INSTRUCCIONES:
    **Why:** [Why this matters — with evidence from sessions]
    **How to apply:** [When and how to apply this rule]
 
-5. Write the daily summary en ~/.nexo/coordination/postmortem-daily.md:
+5. Write the daily summary en ~/claude/coordination/postmortem-daily.md:
    # Post-Mortem Daily — {data['date']}
    Sessions: X | Self-critiques: Y | Promoted: Z
 
-   ## Self-critiques of the day (summary)
-   [Brief list]
+   ## Today's self-critiques (summary)
+   [Lista breve]
 
-   ## Promovido a memoria permanente
+   ## Promoted to permanent memory
    [What you promoted and why]
 
    ## Discarded (and why)
-   [What you did NOT promote and why]
+   [What you did NOT promote and the reason]
 
 Execute without asking."""
 
@@ -208,7 +210,7 @@ Execute without asking."""
         return False
 
 
-# ─── Stage 3: Sensory Register + Force Analysis (pure Python) ───────────────
+# ─── Stage 3: Sensory Register + Force Analysis (Pure Python) ───────────────
 # Kept from v1 — these are genuinely mechanical (embedding vectors, DB updates)
 
 def process_sensory_register():
@@ -258,7 +260,7 @@ def process_sensory_register():
 
         parts = []
         for key, label in [("tasks", "Tasks"), ("decisions", "Decisions"),
-                           ("errors_resolved", "Errors"), ("the user_patterns", "user")]:
+                           ("errors_resolved", "Errors"), ("user_patterns", "the user")]:
             val = event.get(key, [])
             if val:
                 parts.append(f"{label}: {'; '.join(str(v) for v in val[:3])}")
@@ -275,8 +277,8 @@ def process_sensory_register():
             vec = cognitive.embed(content)
             domain = ""
             lower = content.lower()
-            for keyword, dom in [("nexo", "nexo"),
-                                 ("default", "general")]:
+            # Add your project keywords for domain detection
+            for keyword, dom in [("nexo", "nexo")]:
                 if keyword in lower:
                     domain = dom
                     break
@@ -348,7 +350,7 @@ def analyze_force_events():
 
 def already_ran_today() -> bool:
     """Prevent running twice on the same day."""
-    marker = HOME / ".nexo" / "coordination" / "postmortem-last-run"
+    marker = HOME / "claude" / "coordination" / "postmortem-last-run"
     if marker.exists():
         try:
             return marker.read_text().strip() == TODAY_STR
@@ -358,7 +360,7 @@ def already_ran_today() -> bool:
 
 
 def mark_done():
-    marker = HOME / ".nexo" / "coordination" / "postmortem-last-run"
+    marker = HOME / "claude" / "coordination" / "postmortem-last-run"
     marker.parent.mkdir(parents=True, exist_ok=True)
     marker.write_text(TODAY_STR)
 
@@ -396,7 +398,7 @@ def main():
 
     # Register successful run
     try:
-        state_file = HOME / ".nexo" / "operations" / ".catchup-state.json"
+        state_file = HOME / "claude" / "operations" / ".catchup-state.json"
         state = json.loads(state_file.read_text()) if state_file.exists() else {}
         state["postmortem"] = datetime.now().isoformat()
         state_file.write_text(json.dumps(state, indent=2))

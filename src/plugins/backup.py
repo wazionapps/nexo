@@ -27,7 +27,7 @@ def handle_backup_now() -> str:
 
     size_kb = os.path.getsize(dest) / 1024
     _cleanup_old()
-    return f"Backup creado: {os.path.basename(dest)} ({size_kb:.0f} KB)"
+    return f"Backup created: {os.path.basename(dest)} ({size_kb:.0f} KB)"
 
 
 def handle_backup_list() -> str:
@@ -56,7 +56,7 @@ def handle_backup_restore(filename: str) -> str:
     """
     src = os.path.join(BACKUP_DIR, filename)
     if not os.path.isfile(src):
-        return f"Backup no encontrado: {filename}"
+        return f"Backup not found: {filename}"
 
     # Create safety backup first
     safety = os.path.join(BACKUP_DIR, f"nexo-pre-restore-{time.strftime('%Y%m%d%H%M%S')}.db")

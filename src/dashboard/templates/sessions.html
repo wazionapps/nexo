@@ -2,51 +2,173 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NEXO Brain — Sessions</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; background: #0a0a0f; color: #e0e0e0; }
-        nav { background: #111118; padding: 1rem 2rem; display: flex; gap: 2rem; align-items: center; border-bottom: 1px solid #2a2a3a; }
-        nav a { color: #8b8bff; text-decoration: none; font-size: 0.9rem; } nav a:hover { color: #fff; }
-        nav .brand { font-weight: 700; font-size: 1.2rem; color: #7c3aed; }
-        .container { max-width: 1000px; margin: 2rem auto; padding: 0 2rem; }
-        .session { background: #15151f; border: 1px solid #2a2a3a; border-radius: 12px; padding: 1.5rem; margin-bottom: 1rem; }
-        .session-header { display: flex; justify-content: space-between; margin-bottom: 0.75rem; }
-        .session-id { color: #7c3aed; font-weight: 600; }
-        .session-time { color: #888; font-size: 0.85rem; }
-        .session-mental { background: #1a1a2a; border-radius: 8px; padding: 1rem; margin-top: 0.75rem; font-size: 0.9rem; line-height: 1.6; color: #bbb; white-space: pre-wrap; }
-        .session-summary { font-size: 0.9rem; line-height: 1.5; }
-        h3 { font-size: 0.85rem; color: #888; margin-bottom: 0.3rem; text-transform: uppercase; }
-    </style>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>tailwind.config={theme:{extend:{fontFamily:{display:['Space Grotesk','system-ui','sans-serif'],mono:['JetBrains Mono','monospace']}}}}</script>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 </head>
-<body>
-    <nav>
-        <span class="brand">NEXO Brain</span>
-        <a href="/">Overview</a>
-        <a href="/graph">Knowledge Graph</a>
-        <a href="/memory">Memory</a>
-        <a href="/somatic">Somatic</a>
-        <a href="/adaptive">Adaptive</a>
-        <a href="/sessions">Sessions</a>
-    </nav>
-    <div class="container">
-        <div id="sessions">Loading...</div>
-    </div>
+<body class="bg-gray-950 text-slate-200">
+
+    <!-- Sidebar: 56px icon-only fixed left -->
+    <aside class="fixed left-0 top-0 bottom-0 w-14 bg-slate-900 border-r border-slate-800 flex flex-col items-center py-4 z-50">
+        <!-- Logo -->
+        <a href="/" class="mb-6 flex items-center justify-center w-8 h-8">
+            <img src="/static/nexo-logo.png" alt="NEXO" class="w-7 h-7" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+            <div style="display:none" class="w-7 h-7 rounded-lg bg-violet-600 items-center justify-center text-white text-xs font-bold font-display">N</div>
+        </a>
+
+        <!-- Nav icons -->
+        <nav class="flex flex-col items-center gap-1 flex-1">
+            <!-- Dashboard -->
+            <a href="/" title="Dashboard" class="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            </a>
+            <!-- Operations -->
+            <a href="/ops" title="Operations" class="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+            </a>
+            <!-- Calendar -->
+            <a href="/calendar" title="Calendar" class="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            </a>
+            <!-- Inbox -->
+            <a href="/inbox" title="Inbox" class="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
+            </a>
+
+            <div class="w-6 h-px bg-slate-800 my-1"></div>
+
+            <!-- Memory -->
+            <a href="/memory" title="Memory" class="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"/><path d="M9 21h6"/><path d="M10 21v1a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-1"/></svg>
+            </a>
+            <!-- Graph -->
+            <a href="/graph" title="Knowledge Graph" class="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+            </a>
+            <!-- Sessions — ACTIVE -->
+            <a href="/sessions" title="Sessions" class="w-9 h-9 flex items-center justify-center rounded-lg bg-violet-600/20 text-violet-400 transition-colors">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            </a>
+            <!-- Somatic -->
+            <a href="/somatic" title="Somatic" class="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+            </a>
+            <!-- Adaptive -->
+            <a href="/adaptive" title="Adaptive" class="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+            </a>
+        </nav>
+
+        <!-- Trust score -->
+        <div class="flex flex-col items-center gap-0.5 mt-2">
+            <span class="text-xs font-display font-semibold text-slate-500 uppercase tracking-widest">Trust</span>
+            <span id="trust-score" class="text-sm font-mono font-bold text-violet-400">--</span>
+        </div>
+    </aside>
+
+    <!-- Main content -->
+    <main class="ml-14 min-h-screen bg-gray-950 text-slate-200">
+        <header class="h-12 border-b border-slate-800/50 flex items-center px-6">
+            <h1 class="text-sm font-display font-semibold">Sessions</h1>
+        </header>
+
+        <div class="p-6 max-w-3xl">
+            <div id="sessions" class="space-y-3"></div>
+            <button id="load-more" onclick="loadMore()" class="mt-4 w-full py-2 text-xs text-slate-400 bg-slate-900/50 border border-slate-800/50 rounded-lg hover:bg-slate-800 transition-colors" style="display:none">Load more</button>
+        </div>
+    </main>
+
     <script>
-        fetch('/api/sessions?limit=20').then(r => r.json()).then(data => {
-            const el = document.getElementById('sessions');
-            if (!data.sessions?.length) { el.textContent = 'No session diaries found.'; return; }
-            el.innerHTML = data.sessions.map(s => `
-                <div class="session">
-                    <div class="session-header">
-                        <span class="session-id">${s.session_id || s.id || ''}</span>
-                        <span class="session-time">${s.created_at || ''}</span>
-                    </div>
-                    <div class="session-summary">${(s.summary || '').replace(/</g, '&lt;')}</div>
-                    ${s.mental_state ? `<h3>Mental State</h3><div class="session-mental">${s.mental_state.replace(/</g, '&lt;')}</div>` : ''}
+        let offset = 0;
+        const PAGE_SIZE = 15;
+        let exhausted = false;
+
+        function escapeHtml(text) {
+            const el = document.createElement('div');
+            el.textContent = text || '';
+            return el.innerHTML;
+        }
+
+        function renderSession(s) {
+            const session_id = s.session_id || s.id || '';
+            const created_at = s.created_at || '';
+            const domain = s.domain || '';
+            const summary = s.summary || '';
+            const self_critique = s.self_critique || '';
+            const mental_state = s.mental_state || '';
+
+            return `<div class="bg-slate-900/50 border border-slate-800/50 rounded-lg p-4">
+                <div class="flex items-center gap-2 mb-2 flex-wrap">
+                    <span class="text-xs font-mono text-violet-400">${escapeHtml(String(session_id))}</span>
+                    <span class="text-xs text-slate-500">${escapeHtml(created_at)}</span>
+                    ${domain ? `<span class="text-xs px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">${escapeHtml(domain)}</span>` : ''}
                 </div>
-            `).join('');
-        });
+                ${summary ? `<p class="text-sm text-slate-200 leading-relaxed mb-3 whitespace-pre-wrap">${escapeHtml(summary)}</p>` : ''}
+                ${self_critique ? `<div class="border-l-2 border-amber-500/30 pl-3 mb-2"><p class="text-sm text-amber-300/80 leading-relaxed whitespace-pre-wrap">${escapeHtml(self_critique)}</p></div>` : ''}
+                ${mental_state ? `<div class="border-l-2 border-violet-500/30 pl-3"><p class="text-sm text-violet-300/80 italic leading-relaxed whitespace-pre-wrap">${escapeHtml(mental_state)}</p></div>` : ''}
+            </div>`;
+        }
+
+        async function loadMore() {
+            if (exhausted) return;
+            const btn = document.getElementById('load-more');
+            btn.textContent = 'Loading...';
+            btn.disabled = true;
+
+            try {
+                const resp = await fetch(`/api/sessions?limit=${PAGE_SIZE}&offset=${offset}`);
+                const data = await resp.json();
+                const sessions = data.sessions || [];
+
+                if (sessions.length > 0) {
+                    document.getElementById('sessions').insertAdjacentHTML('beforeend', sessions.map(renderSession).join(''));
+                    offset += sessions.length;
+                }
+
+                if (sessions.length < PAGE_SIZE) {
+                    exhausted = true;
+                    btn.style.display = 'none';
+                } else {
+                    btn.textContent = 'Load more';
+                    btn.disabled = false;
+                }
+            } catch (err) {
+                btn.textContent = 'Error — retry';
+                btn.disabled = false;
+            }
+        }
+
+        async function init() {
+            const resp = await fetch(`/api/sessions?limit=${PAGE_SIZE}&offset=0`);
+            const data = await resp.json();
+            const sessions = data.sessions || [];
+            const container = document.getElementById('sessions');
+            const btn = document.getElementById('load-more');
+
+            if (sessions.length === 0) {
+                container.innerHTML = '<p class="text-sm text-slate-500 text-center py-8">No session diaries found</p>';
+                return;
+            }
+
+            container.innerHTML = sessions.map(renderSession).join('');
+            offset = sessions.length;
+
+            if (sessions.length >= PAGE_SIZE) {
+                btn.style.display = 'block';
+            }
+        }
+
+        // Load trust score
+        fetch('/api/stats').then(r => r.json()).then(data => {
+            if (data.trust_score != null) {
+                document.getElementById('trust-score').textContent = Math.round(data.trust_score);
+            }
+        }).catch(() => {});
+
+        init();
     </script>
 </body>
 </html>

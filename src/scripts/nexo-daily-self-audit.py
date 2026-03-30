@@ -25,17 +25,18 @@ import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
-LOG_DIR = Path.home() / ".nexo" / "logs"
+LOG_DIR = Path.home() / "claude" / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE = LOG_DIR / "self-audit.log"
-NEXO_DB = Path.home() / ".nexo" / "nexo.db"
-project_DIR = Path.home() / "Documents" / "_PhpstormProjects" / "project"
-HASH_REGISTRY = Path.home() / ".nexo" / "scripts" / ".watchdog-hashes"
-SNAPSHOT_GOLDEN = Path.home() / ".nexo" / "snapshots" / "golden" / "files" / "claude"
+NEXO_DB = Path.home() / "claude" / "nexo-mcp" / "nexo.db"
+# Configure your main project repo to check for uncommitted changes (optional)
+PROJECT_REPO_DIR = None  # e.g., Path.home() / "projects" / "my-repo"
+HASH_REGISTRY = Path.home() / "claude" / "scripts" / ".watchdog-hashes"
+SNAPSHOT_GOLDEN = Path.home() / "claude" / "snapshots" / "golden" / "files" / "claude"
 RUNTIME_PREFLIGHT_SUMMARY = LOG_DIR / "runtime-preflight-summary.json"
 WATCHDOG_SMOKE_SUMMARY = LOG_DIR / "watchdog-smoke-summary.json"
 RESTORE_LOG = LOG_DIR / "snapshot-restores.log"
-CORTEX_LOG_DIR = Path.home() / ".nexo" / "cortex" / "logs"
+CORTEX_LOG_DIR = Path.home() / "claude" / "cortex" / "logs"
 CLAUDE_CLI = Path.home() / ".local" / "bin" / "claude"
 
 findings = []
@@ -87,11 +88,11 @@ def check_overdue_followups():
 
 
 def check_uncommitted_changes():
-    if not project_DIR.exists():
+    if not PROJECT_REPO_DIR or not PROJECT_REPO_DIR.exists():
         return
     result = subprocess.run(
         ["git", "status", "--porcelain"],
-        cwd=str(project_DIR), capture_output=True, text=True
+        cwd=str(PROJECT_REPO_DIR), capture_output=True, text=True
     )
     lines = [l for l in result.stdout.strip().split("\n") if l.strip()]
     if len(lines) > 10:
@@ -113,7 +114,7 @@ def check_cron_errors():
 
 
 def check_evolution_health():
-    obj_file = Path.home() / ".nexo" / "cortex" / "evolution-objective.json"
+    obj_file = Path.home() / "claude" / "cortex" / "evolution-objective.json"
     if not obj_file.exists():
         return
     obj = json.loads(obj_file.read_text())
@@ -235,9 +236,9 @@ def check_watchdog_registry():
 
 def check_snapshot_sync():
     pairs = [
-        (Path.home() / ".nexo" / "db.py", SNAPSHOT_GOLDEN / "db.py"),
-        (Path.home() / ".nexo" / "cortex" / "cortex-wrapper.py", SNAPSHOT_GOLDEN / "cortex" / "cortex-wrapper.py"),
-        (Path.home() / ".nexo" / "cortex" / "evolution_cycle.py", SNAPSHOT_GOLDEN / "cortex" / "evolution_cycle.py"),
+        (Path.home() / "claude" / "nexo-mcp" / "db.py", SNAPSHOT_GOLDEN / "nexo-mcp" / "db.py"),
+        (Path.home() / "claude" / "cortex" / "cortex-wrapper.py", SNAPSHOT_GOLDEN / "cortex" / "cortex-wrapper.py"),
+        (Path.home() / "claude" / "cortex" / "evolution_cycle.py", SNAPSHOT_GOLDEN / "cortex" / "evolution_cycle.py"),
     ]
     drift = [live.name for live, snap in pairs
              if not live.exists() or not snap.exists() or _sha256(live) != _sha256(snap)]
@@ -310,7 +311,7 @@ def check_watchdog_smoke():
 
 
 def check_cognitive_health():
-    cognitive_db = Path.home() / ".nexo" / "cognitive.db"
+    cognitive_db = Path.home() / "claude" / "nexo-mcp" / "cognitive.db"
     if not cognitive_db.exists():
         finding("WARN", "cognitive", "cognitive.db not found")
         return
@@ -331,7 +332,7 @@ def check_cognitive_health():
 
     # Metrics
     try:
-        sys.path.insert(0, str(Path.home() / ".nexo"))
+        sys.path.insert(0, str(Path.home() / "claude" / "nexo-mcp"))
         import cognitive as cog
         metrics = cog.get_metrics(days=7)
         if metrics["total_retrievals"] > 0:
@@ -372,7 +373,7 @@ def check_cognitive_health():
     # Weekly GC on Sundays
     if datetime.now().weekday() == 6:
         try:
-            sys.path.insert(0, str(Path.home() / ".nexo"))
+            sys.path.insert(0, str(Path.home() / "claude" / "nexo-mcp"))
             import cognitive as cog
             gc_stm = cog.gc_stm()
             gc_sensory = cog.gc_sensory(max_age_hours=48)
@@ -505,7 +506,7 @@ def main():
 
     # Register for catch-up
     try:
-        state_file = Path.home() / ".nexo" / "operations" / ".catchup-state.json"
+        state_file = Path.home() / "claude" / "operations" / ".catchup-state.json"
         st = json.loads(state_file.read_text()) if state_file.exists() else {}
         st["self-audit"] = datetime.now().isoformat()
         state_file.write_text(json.dumps(st, indent=2))

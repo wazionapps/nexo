@@ -3,8 +3,8 @@
 NEXO Immune System — Health monitor & auto-repair.
 
 Runs every 30 minutes via LaunchAgent. Checks tokens, LaunchAgents, DBs,
-scripts, logs, disk, and server crons. Auto-repairs what it can, alerts
-the user via notification only on NEW failures.
+scripts, logs, disk, and remote server crons. Auto-repairs what it can,
+alerts via notification on NEW failures.
 
 Zero external dependencies. Stdlib + sqlite3 + urllib only.
 """
@@ -55,7 +55,7 @@ SSL_CTX = _make_ssl_context()
 
 # ─── Paths ────────────────────────────────────────────────────────────────────
 HOME = Path.home()
-CLAUDE_DIR = HOME / ".nexo"
+CLAUDE_DIR = HOME / "claude"
 COORD_DIR = CLAUDE_DIR / "coordination"
 BRAIN_DIR = CLAUDE_DIR / "brain"
 SCRIPTS_DIR = CLAUDE_DIR / "scripts"
@@ -77,9 +77,9 @@ TODAY = date.today()
 
 # ─── Config ───────────────────────────────────────────────────────────────────
 
-# Token checks — NEXO core infrastructure only.
-# Add your own service tokens here if you want immune to monitor them.
-# Supported types: file_text (read file), json_field (read JSON), service_account (gcloud)
+# Token checks — configure for your services.
+# Supported types: file_text (read file, optional test_url), json_field (check for refresh_token),
+#                  service_account (check for private_key/client_email), hardcoded (direct URL test)
 TOKEN_CHECKS = [
     # Example: uncomment and configure for your services
     # {
@@ -87,6 +87,11 @@ TOKEN_CHECKS = [
     #     "path": "~/.nexo/my_api_token.txt",
     #     "type": "file_text",
     #     "test_url": "https://api.example.com/health?token={token}",
+    # },
+    # {
+    #     "name": "My Service Account",
+    #     "path": "~/.nexo/service-account.json",
+    #     "type": "service_account",
     # },
 ]
 
@@ -108,7 +113,7 @@ LOG_TRUNCATE_SIZE = 50 * 1024 * 1024  # 50 MB — auto-truncate threshold
 DISK_WARN_PCT = 85
 DISK_FAIL_PCT = 95
 
-# Quiet hours — no notification alerts
+# Quiet hours — no WhatsApp alerts
 QUIET_START = 23  # 23:00
 QUIET_END = 7     # 07:00
 
@@ -142,7 +147,7 @@ def save_json(path, data):
 
 
 def is_quiet_hours():
-    """Check if within quiet hours (23:00 - 07:00). No alerts sent."""
+    """Check if within WhatsApp quiet hours (23:00 - 07:00)."""
     h = NOW.hour
     if QUIET_START > QUIET_END:
         return h >= QUIET_START or h < QUIET_END
@@ -150,25 +155,22 @@ def is_quiet_hours():
 
 
 def is_skip_hours():
-    """Check if within skip hours (00:00 - 06:00). Full immune cycle skipped."""
+    """Check if within skip hours (00:00 - 06:00)."""
     return SKIP_START <= NOW.hour < SKIP_END
 
 
 def send_alert(title, message):
-    """Send alert for critical failures. Override this for your notification system.
+    """Send alert notification if not in quiet hours.
 
-    Default: prints to stdout (captured by LaunchAgent logs).
-    Customize: webhook, email, Slack, etc.
+    Configure ALERT_SCRIPT at the top of this file to enable.
+    Override this function for custom alerting (email, Slack, etc.).
     """
     if is_quiet_hours():
         print(f"  [QUIET] Suppressed alert: {title}")
         return False
-    try:
-        print(f"  [ALERT] {title}: {message}")
-        return True
-    except Exception as e:
-        print(f"  [WA] Failed to send: {e}")
-        return False
+    # Default: log only. Configure ALERT_SCRIPT for active notifications.
+    print(f"  [ALERT] {title}: {message}")
+    return True
 
 
 def http_get(url, headers=None, timeout=HTTP_TIMEOUT):
@@ -343,8 +345,8 @@ def check_databases():
     results = []
 
     dbs = [
-        ("nexo.db", Path.home() / ".nexo" / "nexo.db"),
-        ("cognitive.db", Path.home() / ".nexo" / "cognitive.db"),
+        ("nexo.db", Path.home() / "claude" / "nexo-mcp" / "nexo.db"),
+        ("cognitive.db", Path.home() / "claude" / "nexo-mcp" / "cognitive.db"),
         ("claude-mem.db", CLAUDE_MEM_DB),
     ]
 
@@ -523,16 +525,50 @@ def check_disk():
 
 
 def check_server_crons():
-    """Check external server health via SSH. Configure SSH_CHECKS for your servers.
+    """Check remote server crons via SSH. Only runs every 2 hours.
 
-    This is a stub — add your own SSH checks to SSH_CHECKS at the top of the file.
-    Example: SSH_CHECKS = [{"host": "myserver.com", "port": 22, "command": "uptime"}]
+    Configure SSH_SERVER_CMD below with your server details if you want
+    remote health checks. Leave empty to skip.
     """
     results = []
-    # No external server checks configured by default.
-    # NEXO immune focuses on local NEXO infrastructure health.
-    # Add SSH_CHECKS config at the top of the file if you have servers to monitor.
-    return results, False
+    result = {"name": "remote-server", "status": "OK", "detail": ""}
+
+    # Configure your SSH health check command here (empty = skip)
+    # Example: 'ssh -p 22 user@myserver.example.com "echo OK"'
+    SSH_SERVER_CMD = ""
+
+    if not SSH_SERVER_CMD:
+        result["detail"] = "No remote server configured (SSH_SERVER_CMD empty)"
+        results.append(result)
+        return results, False
+
+    # Check if we should run (every 2 hours based on last check)
+    status = load_json(IMMUNE_STATUS)
+    last_ssh_str = status.get("last_ssh_check", "")
+    should_run = True
+
+    if last_ssh_str:
+        try:
+            last_ssh = datetime.strptime(last_ssh_str, "%Y-%m-%d %H:%M")
+            hours_ago = (NOW - last_ssh).total_seconds() / 3600
+            if hours_ago < SSH_CHECK_INTERVAL_HOURS:
+                result["detail"] = f"Skipped (last check {hours_ago:.1f}h ago, interval {SSH_CHECK_INTERVAL_HOURS}h)"
+                should_run = False
+        except Exception:
+            pass
+
+    if should_run:
+        rc, stdout, stderr = run_cmd(SSH_SERVER_CMD, timeout=SSH_TIMEOUT)
+
+        if rc == 0:
+            result["detail"] = f"Server OK: {stdout[:100]}"
+        else:
+            result["status"] = "FAIL"
+            err_short = (stderr or "unknown error")[:150]
+            result["detail"] = f"SSH failed (rc={rc}): {err_short}"
+
+    results.append(result)
+    return results, should_run
 
 
 # ─── Alerting ─────────────────────────────────────────────────────────────────
@@ -606,11 +642,11 @@ def detect_new_failures(current_results, previous_status):
 
 
 def send_failure_alerts(new_failures):
-    """Send notification alerts for new failures. Max 1 alert per 30 min."""
+    """Send WhatsApp alerts for new failures. Max 1 alert per 30 min."""
     if not new_failures:
         return
 
-    # Global alert cooldown — max 1 notification alert per 30 minutes
+    # Global alert cooldown — max 1 WhatsApp alert per 30 minutes
     cooldown_file = COORD_DIR / "immune-last-alert.txt"
     if cooldown_file.exists():
         try:

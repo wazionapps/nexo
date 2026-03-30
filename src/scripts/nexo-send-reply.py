@@ -80,7 +80,7 @@ def build_message(args, config):
     if quote_text:
         quote_from = args.quote_from or args.to
         quote_date = args.quote_date or ""
-        attribution = f"El {quote_date}, {quote_from} escribió:" if quote_date else f"{quote_from} escribió:"
+        attribution = f"On {quote_date}, {quote_from} wrote:" if quote_date else f"{quote_from} wrote:"
 
         if args.html:
             quoted_html = quote_text.replace("\n", "<br>") if "<" not in quote_text else quote_text

@@ -1,24 +1,25 @@
 #!/bin/bash
 # ============================================================================
-# NEXO Watchdog — Health monitor with two-level auto-repair
+# NEXO Watchdog — Comprehensive health monitor for all NEXO services
+# Cron: */5 * * * * NEXO_HOME/scripts/nexo-watchdog.sh
 # ============================================================================
-# Monitors all NEXO core LaunchAgents, cron jobs, and infrastructure.
-# Level 1: Mechanical repair (launchctl bootstrap/kickstart, chmod)
-# Level 2: Launches NEXO CLI for intelligent diagnosis and fix
-#
-# Install: Add to LaunchAgents for periodic execution (every 5 min recommended)
+# Monitors ALL LaunchAgents, cron jobs, and background processes.
+# Outputs: watchdog-status.json (machine), watchdog-report.txt (human),
+#          .watchdog-alert (if any FAIL detected)
 # ============================================================================
 set -uo pipefail
 
 # === PATHS ===
 HOME_DIR="$HOME"
 NEXO_DIR="$HOME_DIR/claude/nexo-mcp"
+CORTEX_DIR="$HOME_DIR/claude/cortex"
 OPS_DIR="$HOME_DIR/claude/operations"
 LOG_DIR="$HOME_DIR/claude/logs"
 LOG="$LOG_DIR/watchdog.log"
 STATUS_JSON="$OPS_DIR/watchdog-status.json"
 REPORT_TXT="$OPS_DIR/watchdog-report.txt"
 ALERT_FILE="$OPS_DIR/.watchdog-alert"
+HASH_REGISTRY="$HOME_DIR/claude/scripts/.watchdog-hashes"
 FAIL_COUNT_FILE="$HOME_DIR/claude/scripts/.watchdog-fails"
 MAX_FAILS=3
 
@@ -28,6 +29,44 @@ TS=$(date "+%Y-%m-%d %H:%M:%S")
 TS_EPOCH=$(date +%s)
 
 log() { echo "[$TS] $1" >> "$LOG"; }
+
+# ============================================================================
+# MONITOR REGISTRY — Add new monitors here
+# ============================================================================
+# Format: NAME|PLIST_ID|LOG_STDOUT|LOG_STDERR|MAX_STALE_SECS|PROCESS_GREP|SCHEDULE_DESC
+#
+# MAX_STALE_SECS: how old stdout log can be before WARN.
+#   0 = skip staleness check (for one-shot or infrequent tasks)
+#   WARN at MAX_STALE_SECS, FAIL at 3x MAX_STALE_SECS
+# PROCESS_GREP: pattern to grep in ps (empty = skip process check)
+# ============================================================================
+# TYPE field: "core" = part of NEXO (goes to public repo), "personal" = user-specific
+# Format: NAME|PLIST_ID|LOG_STDOUT|LOG_STDERR|MAX_STALE_SECS|PROCESS_GREP|SCHEDULE_DESC|TYPE
+# Add your own monitors below. Core NEXO services are listed as examples.
+MONITORS=(
+  "Catchup|com.nexo.catchup|$HOME_DIR/claude/logs/catchup-stdout.log|$HOME_DIR/claude/logs/catchup-stderr.log|0||RunAtLoad once|core"
+  "Cognitive Decay|com.nexo.cognitive-decay|$HOME_DIR/claude/logs/cognitive-decay-stdout.log|$HOME_DIR/claude/logs/cognitive-decay-stderr.log|90000||Daily 3:00 AM|core"
+  "Evolution|com.nexo.evolution|$HOME_DIR/claude/logs/evolution-stdout.log|$HOME_DIR/claude/logs/evolution-stderr.log|0||Weekly Sun 3:00 AM|core"
+  "GitHub Monitor|com.nexo.github-monitor|$HOME_DIR/claude/logs/github-monitor-stdout.log|$HOME_DIR/claude/logs/github-monitor-stderr.log|90000||Daily 8:00 AM|core"
+  "Immune|com.nexo.immune|$HOME_DIR/claude/coordination/immune-stdout.log|$HOME_DIR/claude/coordination/immune-stderr.log|3600||Every 30 min|core"
+  "Postmortem|com.nexo.postmortem|$HOME_DIR/claude/logs/postmortem-stdout.log|$HOME_DIR/claude/logs/postmortem-stderr.log|90000||Daily 23:30|core"
+  "Prevent Sleep|com.nexo.prevent-sleep|||0|caffeinate|KeepAlive|core"
+  "Self Audit|com.nexo.self-audit|$HOME_DIR/claude/logs/self-audit-stdout.log|$HOME_DIR/claude/logs/self-audit-stderr.log|90000||Daily 7:00 AM|core"
+  "Sleep|com.nexo.sleep|$HOME_DIR/claude/coordination/sleep-stdout.log|$HOME_DIR/claude/coordination/sleep-stderr.log|90000||Daily 4:00 AM|core"
+  "Synthesis|com.nexo.synthesis|$HOME_DIR/claude/coordination/synthesis-stdout.log|$HOME_DIR/claude/coordination/synthesis-stderr.log|10800||Every 2 hours|core"
+  "Deep Sleep|com.nexo.deep-sleep|$HOME_DIR/claude/logs/deep-sleep-stdout.log|$HOME_DIR/claude/logs/deep-sleep-stderr.log|90000||Daily 4:30 AM|core"
+  "Followup Hygiene|com.nexo.followup-hygiene|$HOME_DIR/claude/logs/followup-hygiene-stdout.log|$HOME_DIR/claude/logs/followup-hygiene-stderr.log|604800||Weekly Sun 5:00 AM|core"
+  # Add your own personal monitors below (type "personal"):
+  # "My Service|com.nexo.my-service|$HOME_DIR/claude/logs/my-service.log||3600||Every 30 min|personal"
+)
+
+# Cron jobs to check (NAME|SCRIPT|CHECK_PATH|MAX_STALE_SECS|SCHEDULE)
+CRON_MONITORS=(
+  "Backup Cron|$NEXO_DIR/backup_cron.sh|$NEXO_DIR/backups/|7200|Hourly"
+)
+
+# Error patterns to search in stderr logs (last 50 lines)
+ERROR_PATTERNS="Traceback|Error:|CRITICAL|FATAL|ModuleNotFoundError|PermissionError|FileNotFoundError|ConnectionRefused|Errno"
 
 # ============================================================================
 # HELPER FUNCTIONS
@@ -41,53 +80,6 @@ log_repair() { echo "[$TS] REPAIR: $1" >> "$REPAIR_LOG"; log "REPAIR: $1"; }
 
 is_loaded() {
   launchctl list "$1" &>/dev/null
-}
-
-file_age() {
-  if [ -f "$1" ]; then
-    local mod_epoch
-    # macOS: stat -f %m, Linux: stat -c %Y
-    mod_epoch=$(stat -f %m "$1" 2>/dev/null || stat -c %Y "$1" 2>/dev/null || echo 0)
-    echo $(( TS_EPOCH - mod_epoch ))
-  else
-    echo 999999
-  fi
-}
-
-format_age() {
-  local secs=$1
-  if [ "$secs" -ge 999999 ]; then
-    echo "never"
-  elif [ "$secs" -ge 86400 ]; then
-    echo "$((secs / 86400))d $((secs % 86400 / 3600))h ago"
-  elif [ "$secs" -ge 3600 ]; then
-    echo "$((secs / 3600))h $((secs % 3600 / 60))m ago"
-  elif [ "$secs" -ge 60 ]; then
-    echo "$((secs / 60))m ago"
-  else
-    echo "${secs}s ago"
-  fi
-}
-
-check_errors() {
-  local logfile="$1"
-  if [ -f "$logfile" ] && [ -s "$logfile" ]; then
-    tail -50 "$logfile" 2>/dev/null | grep -cE "$ERROR_PATTERNS" 2>/dev/null || echo 0
-  else
-    echo 0
-  fi
-}
-
-process_running() {
-  if [ -n "$1" ]; then
-    pgrep -f "$1" > /dev/null 2>&1
-  else
-    return 1
-  fi
-}
-
-json_escape() {
-  echo "$1" | sed 's/\\/\\\\/g; s/"/\\"/g; s/	/ /g' | tr '\n' ' '
 }
 
 # ============================================================================
@@ -128,6 +120,7 @@ try_repair_launchagent() {
 try_repair_cron() {
   local script="$1"
 
+  # Repair: Script not executable — chmod it
   if [ -f "$script" ] && [ ! -x "$script" ]; then
     chmod +x "$script"
     if [ -x "$script" ]; then
@@ -141,24 +134,30 @@ try_repair_cron() {
 
 try_reexecute_missed_cron() {
   # Re-execute a cron that missed its scheduled run
+  # Extracts ProgramArguments from the plist and runs them
   local plist_id="$1"
   local plist_file="$HOME_DIR/Library/LaunchAgents/${plist_id}.plist"
 
   if [ ! -f "$plist_file" ]; then
+    log "Re-execute skipped: no plist for $plist_id"
     return 1
   fi
 
+  # Extract the full command from plist
   local cmd
   cmd=$(python3 -c "
 import plistlib, sys
 try:
     with open('$plist_file', 'rb') as f:
         d = plistlib.load(f)
+    args = d.get('ProgramArguments', [])
+    # Skip KeepAlive services (they should be running, not re-executed)
     if d.get('KeepAlive'):
         sys.exit(1)
+    # Skip services without a schedule (RunAtLoad only)
     if not d.get('StartCalendarInterval') and not d.get('StartInterval'):
         sys.exit(1)
-    print(' '.join(d.get('ProgramArguments', [])))
+    print(' '.join(args))
 except:
     sys.exit(1)
 " 2>/dev/null)
@@ -167,28 +166,38 @@ except:
     return 1
   fi
 
-  log "Re-executing missed cron: $plist_id"
+  log "Re-executing missed cron: $plist_id → $cmd"
+  # Run in background with timeout (5 min max)
   timeout 300 bash -c "$cmd" >> "$LOG_DIR/watchdog-reexec.log" 2>&1 &
   local pid=$!
+
+  # Wait briefly and check if it started ok
   sleep 2
   if kill -0 "$pid" 2>/dev/null || wait "$pid" 2>/dev/null; then
     log_repair "$plist_id: re-executed missed cron (PID $pid)"
     return 0
+  else
+    log "Re-execute failed for $plist_id"
+    return 1
   fi
-  return 1
 }
 
 try_verify_repair() {
-  # After Level 2 repair, verify the service is healthy
+  # After Level 2 repair, wait and verify the service is healthy
   local plist_id="$1"
   local log_stdout="$2"
   local proc_grep="$3"
   local max_wait=30
 
+  log "Verifying repair for $plist_id..."
+
+  # Check 1: Is it loaded?
   if ! is_loaded "$plist_id"; then
+    log "Verify FAILED: $plist_id still not loaded"
     return 1
   fi
 
+  # Check 2: Process running? (for KeepAlive services)
   if [ -n "$proc_grep" ]; then
     local waited=0
     while [ $waited -lt $max_wait ]; do
@@ -199,17 +208,22 @@ try_verify_repair() {
       sleep 5
       waited=$((waited + 5))
     done
+    log "Verify FAILED: $plist_id process not running after ${max_wait}s"
     return 1
   fi
 
+  # Check 3: For scheduled crons, check if log was updated recently
   if [ -n "$log_stdout" ] && [ -f "$log_stdout" ]; then
     local age
     age=$(file_age "$log_stdout")
     if [ "$age" -lt 300 ]; then
+      log "Verify OK: $plist_id log updated ${age}s ago"
       return 0
     fi
   fi
 
+  # If we get here for a scheduled service, it's loaded which is sufficient
+  log "Verify OK: $plist_id is loaded (scheduled service)"
   return 0
 }
 
@@ -221,8 +235,7 @@ try_repair_backup() {
     local newest
     newest=$(ls -t "$NEXO_DIR/backups/nexo-"*.db 2>/dev/null | head -1)
     if [ -n "$newest" ]; then
-      local age
-      age=$(file_age "$newest")
+      local age=$(( TS_EPOCH - $(stat -f %m "$newest") ))
       if [ "$age" -lt 60 ]; then
         log_repair "backup_cron.sh: ran successfully, fresh backup created"
         return 0
@@ -232,45 +245,54 @@ try_repair_backup() {
   return 1
 }
 
-# ============================================================================
-# MONITOR REGISTRY — NEXO Core Services
-# ============================================================================
-# Format: NAME|PLIST_ID|LOG_STDOUT|LOG_STDERR|MAX_STALE_SECS|PROCESS_GREP|SCHEDULE_DESC
-#
-# Users can add custom monitors in ~/claude/config/watchdog-monitors.conf
-# (same format, one per line, # for comments)
-# ============================================================================
-MONITORS=(
-  "Auto-Close Sessions|com.nexo.auto-close-sessions|$HOME_DIR/claude/coordination/auto-close-stdout.log|$HOME_DIR/claude/coordination/auto-close-stderr.log|900||Every 5 min"
-  "Catchup|com.nexo.catchup|$HOME_DIR/claude/logs/catchup-stdout.log|$HOME_DIR/claude/logs/catchup-stderr.log|0||RunAtLoad once"
-  "Cognitive Decay|com.nexo.cognitive-decay|$HOME_DIR/claude/logs/cognitive-decay-stdout.log|$HOME_DIR/claude/logs/cognitive-decay-stderr.log|90000||Daily 3:00 AM"
-  "Evolution|com.nexo.evolution|$HOME_DIR/claude/logs/evolution-stdout.log|$HOME_DIR/claude/logs/evolution-stderr.log|0||Weekly Sun 3:00 AM"
-  "GitHub Monitor|com.nexo.github-monitor|$HOME_DIR/claude/logs/github-monitor-stdout.log|$HOME_DIR/claude/logs/github-monitor-stderr.log|90000||Daily 8:00 AM"
-  "Immune|com.nexo.immune|$HOME_DIR/claude/coordination/immune-stdout.log|$HOME_DIR/claude/coordination/immune-stderr.log|3600||Every 30 min"
-  "Postmortem|com.nexo.postmortem|$HOME_DIR/claude/logs/postmortem-stdout.log|$HOME_DIR/claude/logs/postmortem-stderr.log|90000||Daily 23:30"
-  "Prevent Sleep|com.nexo.prevent-sleep|||0|caffeinate|KeepAlive"
-  "Self Audit|com.nexo.self-audit|$HOME_DIR/claude/logs/self-audit-stdout.log|$HOME_DIR/claude/logs/self-audit-stderr.log|90000||Daily 7:00 AM"
-  "Sleep|com.nexo.sleep|$HOME_DIR/claude/coordination/sleep-stdout.log|$HOME_DIR/claude/coordination/sleep-stderr.log|90000||Daily 4:00 AM"
-  "Synthesis|com.nexo.synthesis|$HOME_DIR/claude/coordination/synthesis-stdout.log|$HOME_DIR/claude/coordination/synthesis-stderr.log|10800||Every 2 hours"
-)
+file_age() {
+  if [ -f "$1" ]; then
+    local mod_epoch
+    mod_epoch=$(stat -f %m "$1" 2>/dev/null || echo 0)
+    echo $(( TS_EPOCH - mod_epoch ))
+  else
+    echo 999999
+  fi
+}
 
-# Load user-defined monitors if file exists
-USER_MONITORS_FILE="$HOME_DIR/claude/config/watchdog-monitors.conf"
-if [ -f "$USER_MONITORS_FILE" ]; then
-  while IFS= read -r line; do
-    [[ "$line" =~ ^[[:space:]]*# ]] && continue
-    [[ -z "$line" ]] && continue
-    MONITORS+=("$line")
-  done < "$USER_MONITORS_FILE"
-fi
+format_age() {
+  local secs=$1
+  if [ "$secs" -ge 999999 ]; then
+    echo "never"
+  elif [ "$secs" -ge 86400 ]; then
+    echo "$((secs / 86400))d $((secs % 86400 / 3600))h ago"
+  elif [ "$secs" -ge 3600 ]; then
+    echo "$((secs / 3600))h $((secs % 3600 / 60))m ago"
+  elif [ "$secs" -ge 60 ]; then
+    echo "$((secs / 60))m ago"
+  else
+    echo "${secs}s ago"
+  fi
+}
 
-# Cron jobs to check (NAME|SCRIPT|CHECK_PATH|MAX_STALE_SECS|SCHEDULE)
-CRON_MONITORS=(
-  "Backup Cron|$NEXO_DIR/backup_cron.sh|$NEXO_DIR/backups/|7200|Hourly"
-)
+check_errors() {
+  local logfile="$1"
+  if [ -f "$logfile" ] && [ -s "$logfile" ]; then
+    local count
+    count=$(tail -50 "$logfile" 2>/dev/null | grep -cE "$ERROR_PATTERNS" 2>/dev/null) || true
+    echo "${count:-0}"
+  else
+    echo 0
+  fi
+}
 
-# Error patterns to search in stderr logs (last 50 lines)
-ERROR_PATTERNS="Traceback|Error:|CRITICAL|FATAL|ModuleNotFoundError|PermissionError|FileNotFoundError|ConnectionRefused|Errno"
+process_running() {
+  if [ -n "$1" ]; then
+    pgrep -f "$1" > /dev/null 2>&1
+  else
+    return 0
+  fi
+}
+
+# Escape strings for JSON
+json_escape() {
+  echo "$1" | sed 's/\\/\\\\/g; s/"/\\"/g; s/	/ /g' | tr '\n' ' '
+}
 
 # ============================================================================
 # RUN CHECKS
@@ -284,8 +306,10 @@ REPORT_LINES=""
 FAILED_MONITORS=()  # Track failed monitors for Level 2 repair
 
 for monitor in "${MONITORS[@]}"; do
+  # Skip comment lines
   [[ "$monitor" =~ ^[[:space:]]*# ]] && continue
-  IFS='|' read -r name plist_id log_stdout log_stderr max_stale proc_grep schedule <<< "$monitor"
+  IFS='|' read -r name plist_id log_stdout log_stderr max_stale proc_grep schedule mon_type <<< "$monitor"
+  mon_type="${mon_type:-core}"
 
   status="PASS"
   details=""
@@ -299,6 +323,7 @@ for monitor in "${MONITORS[@]}"; do
     loaded="yes"
   else
     loaded="no"
+    # AUTO-REPAIR: try to bootstrap
     if try_repair_launchagent "$plist_id" "$proc_grep"; then
       loaded="yes"
       status="HEALED"
@@ -316,6 +341,7 @@ for monitor in "${MONITORS[@]}"; do
       proc_alive="yes"
     else
       proc_alive="no"
+      # AUTO-REPAIR: try to kickstart
       if [ "$status" != "FAIL" ] && [ "$status" != "HEALED" ]; then
         if try_repair_launchagent "$plist_id" "$proc_grep"; then
           proc_alive="yes"
@@ -327,6 +353,7 @@ for monitor in "${MONITORS[@]}"; do
           details="${details}Process '$proc_grep' not running (repair failed). "
         fi
       elif [ "$status" = "HEALED" ]; then
+        # Already healed by bootstrap, check if process came up
         sleep 1
         if process_running "$proc_grep"; then
           proc_alive="yes"
@@ -342,6 +369,7 @@ for monitor in "${MONITORS[@]}"; do
     age=$(file_age "$log_stdout")
     stale_age=$(format_age "$age")
     if [ "$age" -gt $(( max_stale * 3 )) ]; then
+      # Severely stale — try to re-execute the missed cron
       if try_reexecute_missed_cron "$plist_id"; then
         status="HEALED"
         details="${details}Self-healed: re-executed missed cron (was stale: $stale_age). "
@@ -374,24 +402,25 @@ for monitor in "${MONITORS[@]}"; do
 
   [ -z "$details" ] && details="All checks passed"
 
+  # HEALED counts as PASS for overall status
   case "$status" in
     PASS|HEALED) TOTAL_PASS=$((TOTAL_PASS + 1)) ;;
     WARN) TOTAL_WARN=$((TOTAL_WARN + 1)) ;;
     FAIL)
       TOTAL_FAIL=$((TOTAL_FAIL + 1))
-      FAILED_MONITORS+=("${name}|${plist_id}|${log_stdout}|${log_stderr}|${proc_grep}|${schedule}|${details}")
+      FAILED_MONITORS+=("${name}|${plist_id}|${log_stdout}|${log_stderr}|${proc_grep}|${schedule}|${mon_type}|${details}")
       ;;
   esac
 
   # JSON
   escaped_details=$(json_escape "$details")
-  json_item="    {\"name\":\"$name\",\"plist\":\"$plist_id\",\"status\":\"$status\",\"loaded\":\"$loaded\",\"process\":\"$proc_alive\",\"last_activity\":\"$stale_age\",\"stderr_errors\":$error_count,\"schedule\":\"$schedule\",\"details\":\"$escaped_details\"}"
+  json_item="    {\"name\":\"$name\",\"plist\":\"$plist_id\",\"status\":\"$status\",\"type\":\"$mon_type\",\"loaded\":\"$loaded\",\"process\":\"$proc_alive\",\"last_activity\":\"$stale_age\",\"stderr_errors\":$error_count,\"schedule\":\"$schedule\",\"details\":\"$escaped_details\"}"
   [ -n "$JSON_AGENTS" ] && JSON_AGENTS="${JSON_AGENTS},
 ${json_item}" || JSON_AGENTS="$json_item"
 
   # Report
   case "$status" in
-    PASS) icon="PASS" ;; HEALED) icon="HEAL" ;; WARN) icon="WARN" ;; FAIL) icon="FAIL" ;; *) icon="????" ;;
+    PASS) icon="PASS" ;; HEALED) icon="HEAL" ;; WARN) icon="WARN" ;; FAIL) icon="FAIL" ;;
   esac
   REPORT_LINES="${REPORT_LINES}  [${icon}] ${name} (${schedule})
          Loaded: ${loaded} | Process: ${proc_alive} | Last: ${stale_age} | Errors: ${error_count}
@@ -409,7 +438,9 @@ for cron_entry in "${CRON_MONITORS[@]}"; do
   c_details=""
   age_str="n/a"
 
+  # Check script exists and is executable
   if [ ! -x "$script" ]; then
+    # AUTO-REPAIR: try chmod
     if try_repair_cron "$script"; then
       c_status="HEALED"
       c_details="Self-healed: made executable. "
@@ -420,6 +451,7 @@ for cron_entry in "${CRON_MONITORS[@]}"; do
     fi
   fi
 
+  # Check output freshness
   if [ -d "$check_path" ]; then
     newest=$(ls -t "$check_path" 2>/dev/null | head -1)
     if [ -n "$newest" ]; then
@@ -463,7 +495,7 @@ for cron_entry in "${CRON_MONITORS[@]}"; do
 ${cron_item}" || CRON_JSON="$cron_item"
 
   case "$c_status" in
-    PASS) icon="PASS" ;; HEALED) icon="HEAL" ;; WARN) icon="WARN" ;; FAIL) icon="FAIL" ;; *) icon="????" ;;
+    PASS) icon="PASS" ;; HEALED) icon="HEAL" ;; WARN) icon="WARN" ;; FAIL) icon="FAIL" ;;
   esac
   CRON_REPORT="${CRON_REPORT}  [${icon}] ${name} (${schedule})
          Last output: ${age_str}
@@ -484,8 +516,6 @@ if [ "$INTEGRITY" != "ok" ]; then
   SQLITE_DETAIL="Integrity check: $INTEGRITY"
   log "CRITICAL: SQLite integrity check failed: $INTEGRITY"
   TOTAL_FAIL=$((TOTAL_FAIL + 1))
-  # Save corrupt copy before restoring
-  cp "$NEXO_DIR/nexo.db" "$NEXO_DIR/nexo.db.corrupt.$(date +%s)" 2>/dev/null
   LATEST_BACKUP=$(ls -t "$NEXO_DIR/backups/nexo-"*.db 2>/dev/null | head -1)
   if [ -n "$LATEST_BACKUP" ]; then
     cp "$LATEST_BACKUP" "$NEXO_DIR/nexo.db"
@@ -495,6 +525,78 @@ if [ "$INTEGRITY" != "ok" ]; then
 else
   SQLITE_DETAIL="Integrity OK"
   TOTAL_PASS=$((TOTAL_PASS + 1))
+fi
+
+# --- Immutable file integrity ---
+IMMUTABLE_STATUS="PASS"
+IMMUTABLE_DETAIL=""
+if [ -f "$HASH_REGISTRY" ]; then
+  TAMPERED=0
+  while IFS='|' read -r filepath expected_hash; do
+    if [ -f "$filepath" ]; then
+      ACTUAL=$(shasum -a 256 "$filepath" | cut -d' ' -f1)
+      if [ "$ACTUAL" != "$expected_hash" ]; then
+        TAMPERED=$((TAMPERED + 1))
+        log "CRITICAL: Immutable file modified: $filepath"
+        LATEST_SNAP=$(ls -td "$HOME_DIR/claude/snapshots/"*/ 2>/dev/null | head -1)
+        if [ -n "$LATEST_SNAP" ] && [ -f "${LATEST_SNAP}files/${filepath#$HOME_DIR/}" ]; then
+          cp "${LATEST_SNAP}files/${filepath#$HOME_DIR/}" "$filepath"
+          log "RESTORED immutable file from snapshot"
+        fi
+      fi
+    fi
+  done < "$HASH_REGISTRY"
+  if [ "$TAMPERED" -gt 0 ]; then
+    IMMUTABLE_STATUS="FAIL"
+    IMMUTABLE_DETAIL="$TAMPERED immutable files tampered"
+    TOTAL_FAIL=$((TOTAL_FAIL + 1))
+    OBJECTIVE="$CORTEX_DIR/evolution-objective.json"
+    if [ -f "$OBJECTIVE" ]; then
+      python3 -c "
+import json
+with open('$OBJECTIVE') as f: d = json.load(f)
+d['evolution_enabled'] = False
+d['disabled_reason'] = 'Immutable file tampered — watchdog disabled Evolution'
+with open('$OBJECTIVE', 'w') as f: json.dump(d, f, indent=2)
+" 2>/dev/null
+      log "DISABLED Evolution due to immutable file tampering"
+    fi
+  else
+    IMMUTABLE_DETAIL="All files intact"
+    TOTAL_PASS=$((TOTAL_PASS + 1))
+  fi
+else
+  IMMUTABLE_DETAIL="No hash registry (skipped)"
+  TOTAL_PASS=$((TOTAL_PASS + 1))
+fi
+
+# --- Backup freshness ---
+BACKUP_STATUS="PASS"
+BACKUP_DETAIL=""
+LATEST_BACKUP=$(ls -t "$NEXO_DIR/backups/nexo-"*.db 2>/dev/null | head -1)
+if [ -n "$LATEST_BACKUP" ]; then
+  BACKUP_AGE=$(( TS_EPOCH - $(stat -f %m "$LATEST_BACKUP") ))
+  BACKUP_AGE_STR=$(format_age "$BACKUP_AGE")
+  if [ "$BACKUP_AGE" -gt 7200 ]; then
+    # AUTO-REPAIR: run backup now
+    if try_repair_backup; then
+      BACKUP_STATUS="HEALED"
+      BACKUP_DETAIL="Self-healed: backup was stale ($BACKUP_AGE_STR), ran fresh backup"
+      TOTAL_HEALED=$((TOTAL_HEALED + 1))
+      TOTAL_PASS=$((TOTAL_PASS + 1))
+    else
+      BACKUP_STATUS="WARN"
+      BACKUP_DETAIL="Last backup: $BACKUP_AGE_STR (>2h, repair failed)"
+      TOTAL_WARN=$((TOTAL_WARN + 1))
+    fi
+  else
+    BACKUP_DETAIL="Last backup: $BACKUP_AGE_STR"
+    TOTAL_PASS=$((TOTAL_PASS + 1))
+  fi
+else
+  BACKUP_STATUS="FAIL"
+  BACKUP_DETAIL="No backups found"
+  TOTAL_FAIL=$((TOTAL_FAIL + 1))
 fi
 
 # --- Cognitive DB check ---
@@ -515,34 +617,6 @@ else
   COG_STATUS="WARN"
   COG_DETAIL="cognitive.db not found"
   TOTAL_WARN=$((TOTAL_WARN + 1))
-fi
-
-# --- Backup freshness ---
-BACKUP_STATUS="PASS"
-BACKUP_DETAIL=""
-LATEST_BACKUP=$(ls -t "$NEXO_DIR/backups/nexo-"*.db 2>/dev/null | head -1)
-if [ -n "$LATEST_BACKUP" ]; then
-  BACKUP_AGE=$(file_age "$LATEST_BACKUP")
-  BACKUP_AGE_STR=$(format_age "$BACKUP_AGE")
-  if [ "$BACKUP_AGE" -gt 7200 ]; then
-    if try_repair_backup; then
-      BACKUP_STATUS="HEALED"
-      BACKUP_DETAIL="Self-healed: backup was stale ($BACKUP_AGE_STR), ran fresh backup"
-      TOTAL_HEALED=$((TOTAL_HEALED + 1))
-      TOTAL_PASS=$((TOTAL_PASS + 1))
-    else
-      BACKUP_STATUS="WARN"
-      BACKUP_DETAIL="Last backup: $BACKUP_AGE_STR (>2h, repair failed)"
-      TOTAL_WARN=$((TOTAL_WARN + 1))
-    fi
-  else
-    BACKUP_DETAIL="Last backup: $BACKUP_AGE_STR"
-    TOTAL_PASS=$((TOTAL_PASS + 1))
-  fi
-else
-  BACKUP_STATUS="FAIL"
-  BACKUP_DETAIL="No backups found"
-  TOTAL_FAIL=$((TOTAL_FAIL + 1))
 fi
 
 # ============================================================================
@@ -573,6 +647,7 @@ $CRON_JSON
   "infrastructure": {
     "sqlite": {"status": "$SQLITE_STATUS", "detail": "$(json_escape "$SQLITE_DETAIL")"},
     "cognitive_db": {"status": "$COG_STATUS", "detail": "$(json_escape "$COG_DETAIL")"},
+    "immutable_files": {"status": "$IMMUTABLE_STATUS", "detail": "$(json_escape "$IMMUTABLE_DETAIL")"},
     "backups": {"status": "$BACKUP_STATUS", "detail": "$(json_escape "$BACKUP_DETAIL")"}
   }
 }
@@ -596,6 +671,7 @@ $CRON_REPORT
 -- Infrastructure -------------------------------------
   [$SQLITE_STATUS] SQLite nexo.db: $SQLITE_DETAIL
   [$COG_STATUS] Cognitive DB: $COG_DETAIL
+  [$IMMUTABLE_STATUS] Immutable Files: $IMMUTABLE_DETAIL
   [$BACKUP_STATUS] Backups: $BACKUP_DETAIL
 
 -- End of Report --------------------------------------
@@ -618,7 +694,7 @@ else
 fi
 
 # ============================================================================
-# CONSECUTIVE FAILURE TRACKING
+# CONSECUTIVE FAILURE TRACKING + NOTIFICATION
 # ============================================================================
 FAILS=$(cat "$FAIL_COUNT_FILE" 2>/dev/null || echo 0)
 if [ "$TOTAL_FAIL" -gt 0 ]; then
@@ -626,6 +702,9 @@ if [ "$TOTAL_FAIL" -gt 0 ]; then
   echo "$FAILS" > "$FAIL_COUNT_FILE"
   if [ "$FAILS" -ge "$MAX_FAILS" ]; then
     log "ALERT: $FAILS consecutive runs with failures"
+    # Configure your own notification method here (optional)
+    # Example: send email, Slack webhook, desktop notification, etc.
+    log "NOTIFICATION: $FAILS consecutive failures ($TOTAL_FAIL items FAIL)"
   fi
 else
   echo "0" > "$FAIL_COUNT_FILE"
@@ -634,14 +713,17 @@ fi
 # ============================================================================
 # LEVEL 2 AUTO-REPAIR: Launch NEXO for intelligent diagnosis
 # ============================================================================
+# Only triggers if: (a) there are FAILs after mechanical repair, (b) no NEXO
+# repair is already running, (c) no interactive session is active (avoid conflict)
 REPAIR_LOCK="$HOME_DIR/claude/scripts/.watchdog-nexo-repair.lock"
 REPAIR_COOLDOWN=1800  # 30 min between NEXO repair attempts
 
 if [ "$TOTAL_FAIL" -gt 0 ]; then
+  # Check cooldown — don't spam NEXO invocations
   LOCK_AGE=999999
   SKIP_REPAIR=false
   if [ -f "$REPAIR_LOCK" ]; then
-    LOCK_AGE=$(file_age "$REPAIR_LOCK")
+    LOCK_AGE=$(( TS_EPOCH - $(stat -f %m "$REPAIR_LOCK" 2>/dev/null || echo 0) ))
     if [ "$LOCK_AGE" -lt "$REPAIR_COOLDOWN" ]; then
       log "NEXO repair skipped: cooldown (${LOCK_AGE}s < ${REPAIR_COOLDOWN}s)"
       SKIP_REPAIR=true
@@ -651,8 +733,9 @@ if [ "$TOTAL_FAIL" -gt 0 ]; then
   if ! $SKIP_REPAIR; then
     # Collect failure details from tracked FAILED_MONITORS array
     FAIL_DETAILS=""
-    for failed in "${FAILED_MONITORS[@]}"; do
-      IFS='|' read -r m_name m_plist m_stdout m_stderr m_proc m_sched m_details <<< "$failed"
+    HAS_CORE_FAILS=false
+    for failed in ${FAILED_MONITORS[@]+"${FAILED_MONITORS[@]}"}; do
+      IFS='|' read -r m_name m_plist m_stdout m_stderr m_proc m_sched m_type m_details <<< "$failed"
       STDERR_TAIL=""
       if [ -n "$m_stderr" ] && [ -f "$m_stderr" ]; then
         STDERR_TAIL=$(tail -20 "$m_stderr" 2>/dev/null | head -20)
@@ -661,9 +744,11 @@ if [ "$TOTAL_FAIL" -gt 0 ]; then
       if [ -n "$m_stdout" ] && [ -f "$m_stdout" ]; then
         STDOUT_TAIL=$(tail -10 "$m_stdout" 2>/dev/null | head -10)
       fi
+      [ "$m_type" = "core" ] && HAS_CORE_FAILS=true
       FAIL_DETAILS="${FAIL_DETAILS}
---- ${m_name} (${m_plist}) ---
+--- ${m_name} (${m_plist}) [${m_type}] ---
 Schedule: ${m_sched}
+Type: ${m_type}
 Failure reason: ${m_details}
 Plist: ~/Library/LaunchAgents/${m_plist}.plist
 Process grep: ${m_proc}
@@ -674,16 +759,39 @@ ${STDOUT_TAIL}
 "
     done
 
+    # Only launch if we actually have fail details
     if [ -n "$FAIL_DETAILS" ]; then
       touch "$REPAIR_LOCK"
       log "Launching NEXO Level 2 repair..."
 
-      REPAIR_PROMPT_FILE=$(mktemp /tmp/nexo-repair-XXXXXX.txt)
+      # Build propagation instructions if core services failed
+      # Only the origin maintainer (user) propagates fixes to the public repo
+      PROPAGATE_BLOCK=""
+      # If you maintain a public NEXO repo, configure propagation here
+      NEXO_PUBLIC_REPO="${NEXO_PUBLIC_REPO:-}"
+      if $HAS_CORE_FAILS && [ -n "$NEXO_PUBLIC_REPO" ] && [ -d "$NEXO_PUBLIC_REPO/.git" ]; then
+        PROPAGATE_BLOCK="
+PROPAGATION (for [core] fixes ONLY):
+If your fix modifies a file under ~/claude/nexo-mcp/ (server.py, db.py, plugins/, scripts/):
+1. Commit the fix locally with a descriptive message
+2. Copy the changed files (sanitized — no personal data) to $NEXO_PUBLIC_REPO/src/
+3. Bump patch version in $NEXO_PUBLIC_REPO/package.json
+4. Commit + push
+5. Create a GitHub release with gh release create
+Do NOT propagate fixes for [personal] services — those stay local only."
+      fi
+
+      # Write prompt to temp file (avoids heredoc quoting issues in subshell)
+      REPAIR_PROMPT_FILE=$(mktemp /tmp/nexo-repair-XXXXXXXX)
       cat > "$REPAIR_PROMPT_FILE" <<NEXOPROMPT
 WATCHDOG LEVEL 2 REPAIR — Automated diagnostic session.
 
 The watchdog detected services that failed mechanical repair (launchctl bootstrap/kickstart).
 Your job: diagnose the root cause and fix it. Do NOT ask the user anything — resolve autonomously.
+
+Each failure is tagged [core] or [personal]:
+- [core] = part of NEXO public package — fix may need propagation to public repo
+- [personal] = user-specific service — fix stays local only
 
 FAILURES:
 ${FAIL_DETAILS}
@@ -694,6 +802,7 @@ STEPS:
 3. Fix the root cause (missing file, bad config, dependency issue, etc.)
 4. Reload the service and verify it is running
 5. Log what you did to ~/claude/logs/watchdog-repair-result.log
+${PROPAGATE_BLOCK}
 
 CONSTRAINTS:
 - Do NOT modify CLAUDE.md or any protected file
@@ -702,7 +811,8 @@ CONSTRAINTS:
 - Log what you did to ~/claude/logs/watchdog-repair-result.log
 NEXOPROMPT
 
-      # Find claude CLI (may not be in PATH for cron/LaunchAgent)
+      # Launch NEXO in background with repair task
+      # Ensure claude CLI is in PATH (cron/LaunchAgent may have minimal PATH)
       CLAUDE_BIN=$(command -v claude 2>/dev/null || echo "$HOME_DIR/.claude/local/bin/claude")
       if [ ! -x "$CLAUDE_BIN" ]; then
         CLAUDE_BIN=$(find /usr/local/bin /opt/homebrew/bin "$HOME_DIR/.local/bin" "$HOME_DIR/.npm-global/bin" -name claude -type f 2>/dev/null | head -1)
@@ -710,11 +820,44 @@ NEXOPROMPT
 
       if [ -n "$CLAUDE_BIN" ] && [ -x "$CLAUDE_BIN" ]; then
         nohup bash -c "\"$CLAUDE_BIN\" --print --dangerously-skip-permissions -p \"\$(cat '$REPAIR_PROMPT_FILE')\" >> '$LOG_DIR/watchdog-nexo-repair.log' 2>&1; rm -f '$REPAIR_PROMPT_FILE'" &
-        log "NEXO repair launched (PID: $!)"
       else
         log "NEXO repair ABORTED: claude CLI not found in PATH"
         rm -f "$REPAIR_PROMPT_FILE"
       fi
+
+      REPAIR_PID=$!
+      log "NEXO repair launched (PID: $REPAIR_PID)"
+
+      # Wait for repair to complete (max 5 min) then verify
+      (
+        wait_count=0
+        while kill -0 $REPAIR_PID 2>/dev/null && [ $wait_count -lt 60 ]; do
+          sleep 5
+          wait_count=$((wait_count + 1))
+        done
+
+        if [ $wait_count -ge 60 ]; then
+          log "NEXO repair timed out after 5 min"
+          kill $REPAIR_PID 2>/dev/null
+        else
+          log "NEXO repair completed. Verifying fixes..."
+          # Verify each failed monitor
+          VERIFY_PASS=0
+          VERIFY_FAIL=0
+          for failed in ${FAILED_MONITORS[@]+"${FAILED_MONITORS[@]}"}; do
+            IFS='|' read -r v_name v_plist v_stdout v_stderr v_proc v_sched v_type v_details <<< "$failed"
+            if try_verify_repair "$v_plist" "$v_stdout" "$v_proc"; then
+              VERIFY_PASS=$((VERIFY_PASS + 1))
+              log "VERIFY OK: $v_name"
+            else
+              VERIFY_FAIL=$((VERIFY_FAIL + 1))
+              log "VERIFY FAIL: $v_name — still broken after repair"
+            fi
+          done
+          log "Post-repair verification: $VERIFY_PASS passed, $VERIFY_FAIL failed"
+          echo "[$(date '+%Y-%m-%d %H:%M:%S')] Verification: $VERIFY_PASS OK, $VERIFY_FAIL FAIL" >> "$LOG_DIR/watchdog-nexo-repair.log"
+        fi
+      ) &
     fi
   fi
 fi

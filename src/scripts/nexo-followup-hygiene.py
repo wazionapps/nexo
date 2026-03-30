@@ -3,7 +3,7 @@
 NEXO Followup Hygiene — Weekly cleanup of followup/reminder statuses.
 
 Runs Sundays via LaunchAgent (or manually). Tasks:
-1. Normalize dirty statuses (COMPLETED YYYY-MM-DD → COMPLETED)
+1. Normalize dirty statuses (COMPLETED YYYY-MM-DD -> COMPLETED)
 2. Flag PENDING followups >14 days without updates as STALE
 3. Generate summary of orphaned/forgotten followups for synthesis
 
@@ -16,9 +16,9 @@ import sys
 from datetime import datetime, date, timedelta
 from pathlib import Path
 
-NEXO_DB = Path.home() / ".nexo" / "nexo-mcp" / "nexo.db"
-COORD_DIR = Path.home() / ".nexo" / "coordination"
-LOG_FILE = Path.home() / ".nexo" / "logs" / "followup-hygiene.log"
+NEXO_DB = Path.home() / "claude" / "nexo-mcp" / "nexo.db"
+COORD_DIR = Path.home() / "claude" / "coordination"
+LOG_FILE = Path.home() / "claude" / "logs" / "followup-hygiene.log"
 
 TODAY = date.today().isoformat()
 

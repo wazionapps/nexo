@@ -50,8 +50,8 @@ def handle_credential_delete(service: str, key: str = '') -> str:
         target = f"{service}/{key}" if key else service
         return f"ERROR: No se encontraron credenciales para '{target}'."
     if key:
-        return f"Credencial {service}/{key} eliminada."
-    return f"Todas las credenciales de {service} eliminadas."
+        return f"Credential deleted."
+    return f"All credentials for service deleted."
 
 
 def handle_credential_list(service: str = '') -> str:

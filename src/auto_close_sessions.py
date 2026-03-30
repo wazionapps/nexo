@@ -120,6 +120,7 @@ def main():
 
     orphans = get_orphan_sessions(SESSION_STALE_SECONDS)
     if not orphans:
+        print(f"[{datetime.datetime.now().isoformat(timespec='seconds')}] No stale sessions")
         return
 
     for session in orphans:

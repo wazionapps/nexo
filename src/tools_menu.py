@@ -24,39 +24,39 @@ def _get_date_str() -> str:
 
 
 MENU_ITEMS = [
-    ("Proyectos", [
-        ("1", "WAzion - Revisar estado del proyecto"),
-        ("9", "Claude Agent VPS - Revisar cambios autonomos"),
+    ("Projects", [
+        ("1", "Projects - Review project status"),
+        ("9", "Claude Agent VPS - Review autonomous changes"),
     ]),
-    ("Publicidad", [
-        ("7", "Google Ads - Administrar campanas (Recambios + WAzion)"),
-        ("7b", "Meta Ads - Administrar campanas Facebook/Instagram"),
-        ("7c", "Ads Tracking - Revision combinada Google+Meta"),
+    ("Advertising", [
+        ("7", "Google Ads - Manage campaigns"),
+        ("7b", "Meta Ads - Manage Facebook/Instagram campaigns"),
+        ("7c", "Ads Tracking - Combined Google+Meta review"),
     ]),
     ("Shopify", [
-        ("4", "Shopify Theme Sync - Sincronizar tema"),
-        ("5", "Shopify Scripts - Ejecutar scripts periodicos"),
-        ("6", "Cambiar Promocion Shopify"),
+        ("4", "Shopify Theme Sync - Sync theme"),
+        ("5", "Shopify Scripts - Run periodic scripts"),
+        ("6", "Change Shopify Promotion"),
     ]),
-    ("Servidor e Infraestructura", [
-        ("2", "Servidor - Chequeo your-server.example.com"),
-        ("3", "WhatsApp Logs - Revisar logs your-whatsapp-account"),
-        ("11", "File Tracker - Reporte archivos PHP"),
-        ("12", "Google Cloud - Gasto, consumo y estado GCP"),
+    ("Server & Infrastructure", [
+        ("2", "Server - Health check your-server.example.com"),
+        ("3", "WhatsApp Logs - Review logs your-whatsapp-account"),
+        ("11", "File Tracker - PHP file report"),
+        ("12", "Google Cloud - Spend, usage and GCP status"),
     ]),
-    ("Comunicacion y Monitorizacion", [
-        ("8", "Recovery Optimizer - Analisis IA semanal (LUNES)"),
-        ("10", "Recovery Monitor - Estado emails/WA recovery (24h)"),
-        ("13", "Review Monitor - Estado emails/WA resenas"),
-        ("14", "WhatsApp Analisis Completo - Estadisticas globales"),
-        ("15", "Google Analytics - Revisar analiticas web"),
-        ("16", "Email Review - Revisar bandejas y spam"),
+    ("Communication & Monitoring", [
+        ("8", "Recovery Optimizer - Weekly AI analysis (MONDAY)"),
+        ("10", "Recovery Monitor - Email/WA recovery status (24h)"),
+        ("13", "Review Monitor - Email/WA review status"),
+        ("14", "WhatsApp Full Analysis - Global statistics"),
+        ("15", "Google Analytics - Review web analytics"),
+        ("16", "Email Review - Check inboxes and spam"),
     ]),
-    ("Informes y SEO", [
-        ("17", "Auditoria Search Console (cada 2 semanas)"),
-        ("18", "Re-envio sitemaps (cada 30 dias)"),
-        ("19", "Verificacion SEO metas"),
-        ("20", "Informe Email Semanal (domingos)"),
+    ("Reports & SEO", [
+        ("17", "Search Console Audit (every 2 weeks)"),
+        ("18", "Sitemap resubmission (every 30 days)"),
+        ("19", "SEO meta verification"),
+        ("20", "Weekly Email Report (Sundays)"),
     ]),
 ]
 
@@ -108,7 +108,7 @@ def handle_menu() -> str:
 
     lines = []
     lines.append("╔" + "═" * W + "╗")
-    lines.append("║" + "NEXO — CENTRO DE OPERACIONES".center(W) + "║")
+    lines.append("║" + "NEXO — OPERATIONS CENTER".center(W) + "║")
     lines.append("║" + date_str.center(W) + "║")
     lines.append("╠" + "═" * W + "╣")
 
@@ -116,10 +116,10 @@ def handle_menu() -> str:
     dashboard_alerts = _get_dashboard_alerts()
     memory_reviews = _get_memory_review_summary()
     due = handle_reminders("due")
-    has_alerts = dashboard_alerts or memory_reviews["total"] > 0 or (due and "Sin recordatorios" not in due)
+    has_alerts = dashboard_alerts or memory_reviews["total"] > 0 or (due and "No reminders" not in due)
 
     if has_alerts:
-        lines.append("║" + "  ALERTAS PROACTIVAS".ljust(W) + "║")
+        lines.append("║" + "  PROACTIVE ALERTS".ljust(W) + "║")
         lines.append("╠" + "═" * W + "╣")
 
         if dashboard_alerts:
@@ -130,16 +130,16 @@ def handle_menu() -> str:
                 lines.append("║" + f"  {icon} {text}".ljust(W) + "║")
             if len(dashboard_alerts) > 10:
                 more = len(dashboard_alerts) - 10
-                lines.append("║" + f"  ... y {more} alertas mas".ljust(W) + "║")
+                lines.append("║" + f"  ... and {more} more alerts".ljust(W) + "║")
 
         if memory_reviews["total"] > 0:
             text = (
-                f"MEMORIA: {memory_reviews['total']} revisiones pendientes "
-                f"({memory_reviews['decisions']} decisiones, {memory_reviews['learnings']} learnings)"
+                f"MEMORY: {memory_reviews['total']} pending reviews "
+                f"({memory_reviews['decisions']} decisions, {memory_reviews['learnings']} learnings)"
             )[:W - 4]
             lines.append("║" + f"  !  {text}".ljust(W) + "║")
 
-        if due and "Sin recordatorios" not in due:
+        if due and "No reminders" not in due:
             for reminder_line in due.split("\n"):
                 if reminder_line.strip():
                     truncated = reminder_line[:W - 2]
@@ -156,26 +156,26 @@ def handle_menu() -> str:
             lines.append("║" + entry.ljust(W) + "║")
         lines.append("╠" + "═" * W + "╣")
 
-    # Backlog: ideas, proyectos futuros, tareas sin fecha o lejanas
+    # Backlog: ideas, future projects, undated or distant tasks
     try:
         conn = get_db()
         cutoff = (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d")
-        # Reminders sin fecha (backlog/ideas)
+        # Reminders without date (backlog/ideas)
         no_date = conn.execute(
             "SELECT id, description, category FROM reminders WHERE status LIKE 'PENDIENTE%' AND (date IS NULL OR date='') ORDER BY category, id"
         ).fetchall()
-        # Reminders con fecha > 7 días (futuro)
+        # Reminders with date > 7 days ahead (future)
         future = conn.execute(
             "SELECT id, description, date, category FROM reminders WHERE status LIKE 'PENDIENTE%' AND date > ? ORDER BY date",
             (cutoff,)
         ).fetchall()
-        # Followups sin fecha
+        # Followups without date
         nf_no_date = conn.execute(
             "SELECT id, description FROM followups WHERE status NOT LIKE 'COMPLETADO%' AND (date IS NULL OR date='') ORDER BY id"
         ).fetchall()
 
         if no_date or future or nf_no_date:
-            lines.append("║" + "  BACKLOG / IDEAS / FUTURO".ljust(W) + "║")
+            lines.append("║" + "  BACKLOG / IDEAS / FUTURE".ljust(W) + "║")
             lines.append("║" + "─" * W + "║")
 
             if no_date:
@@ -190,13 +190,13 @@ def handle_menu() -> str:
                         lines.append("║" + f"    {r['id']}: {short}".ljust(W) + "║")
 
             if future:
-                lines.append("║" + f"  [Programado]".ljust(W) + "║")
+                lines.append("║" + f"  [Scheduled]".ljust(W) + "║")
                 for r in future:
                     short = r["description"][:W - 18]
                     lines.append("║" + f"    {r['id']} ({r['date']}): {short}".ljust(W) + "║")
 
             if nf_no_date:
-                lines.append("║" + f"  [Followups pendientes]".ljust(W) + "║")
+                lines.append("║" + f"  [Pending followups]".ljust(W) + "║")
                 for r in nf_no_date:
                     short = r["description"][:W - 12]
                     lines.append("║" + f"    {r['id']}: {short}".ljust(W) + "║")
@@ -208,11 +208,11 @@ def handle_menu() -> str:
 
     # Active sessions
     sessions = handle_status()
-    if "Sin sesiones" not in sessions:
-        lines.append("║" + "  SESIONES ACTIVAS".ljust(W) + "║")
+    if "No sessions" not in sessions:
+        lines.append("║" + "  ACTIVE SESSIONS".ljust(W) + "║")
         lines.append("║" + "─" * W + "║")
         for s_line in sessions.split("\n"):
-            if s_line.strip() and "SESIONES ACTIVAS" not in s_line:
+            if s_line.strip() and "ACTIVE SESSIONS" not in s_line:
                 truncated = s_line[:W - 2]
                 lines.append("║" + f"  {truncated}".ljust(W) + "║")
         lines.append("╠" + "═" * W + "╣")
