@@ -347,8 +347,8 @@ def check_databases():
     results = []
 
     dbs = [
-        ("nexo.db", NEXO_HOME / "nexo-mcp" / "db" / "nexo.db"),
-        ("cognitive.db", NEXO_HOME / "nexo-mcp" / "cognitive.db"),
+        ("nexo.db", NEXO_HOME / "data" / "nexo.db"),
+        ("cognitive.db", NEXO_HOME / "data" / "cognitive.db"),
         ("claude-mem.db", CLAUDE_MEM_DB),
     ]
 
@@ -901,6 +901,20 @@ Raw findings:
 Write the report. Be concise — max 40 lines."""
 
     print("\n[TRIAGE] Running CLI interpretation...")
+
+    # Verify Claude CLI is authenticated before calling
+    try:
+        auth_check = subprocess.run(
+            [str(CLAUDE_CLI), "-p", "Reply with exactly: ok", "--bare", "--output-format", "text", "--model", "haiku"],
+            capture_output=True, text=True, timeout=15
+        )
+        if auth_check.returncode != 0:
+            print("[TRIAGE] Claude CLI not available or not authenticated. Skipping triage.")
+            return
+    except Exception:
+        print("[TRIAGE] Claude CLI check failed. Skipping triage.")
+        return
+
     env = os.environ.copy()
     env.pop("CLAUDECODE", None)
     env.pop("CLAUDE_CODE", None)
@@ -908,6 +922,7 @@ Write the report. Be concise — max 40 lines."""
     try:
         result = subprocess.run(
             [str(CLAUDE_CLI), "-p", prompt, "--model", "opus",
+             "--output-format", "text", "--bare",
              "--allowedTools", "Read,Write,Edit,Glob,Grep"],
             capture_output=True, text=True, timeout=120, env=env
         )

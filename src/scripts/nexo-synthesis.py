@@ -19,9 +19,10 @@ from datetime import datetime, date, timedelta
 from pathlib import Path
 
 HOME = Path.home()
+NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 CLAUDE_DIR = NEXO_HOME
 COORD_DIR = CLAUDE_DIR / "coordination"
-NEXO_DB = NEXO_HOME / "nexo-mcp" / "db" / "nexo.db"
+NEXO_DB = NEXO_HOME / "data" / "nexo.db"
 OUTPUT_FILE = COORD_DIR / "daily-synthesis.md"
 LAST_RUN_FILE = COORD_DIR / "synthesis-last-run"
 LOCK_FILE = COORD_DIR / "synthesis.lock"
@@ -181,7 +182,20 @@ not what merely happened. If a section has nothing, write "Nothing notable."
 
 Execute without asking."""
 
-    log("Invoking Claude CLI (sonnet) for synthesis...")
+    log("Invoking Claude CLI (opus) for synthesis...")
+
+    # Verify Claude CLI is authenticated before calling
+    try:
+        auth_check = subprocess.run(
+            [str(CLAUDE_CLI), "-p", "Reply with exactly: ok", "--bare", "--output-format", "text", "--model", "haiku"],
+            capture_output=True, text=True, timeout=15
+        )
+        if auth_check.returncode != 0:
+            log("Claude CLI not available or not authenticated. Skipping synthesis.")
+            return False
+    except Exception:
+        log("Claude CLI check failed. Skipping synthesis.")
+        return False
 
     env = os.environ.copy()
     env.pop("CLAUDECODE", None)
@@ -190,6 +204,7 @@ Execute without asking."""
     try:
         result = subprocess.run(
             [str(CLAUDE_CLI), "-p", prompt, "--model", "opus",
+             "--output-format", "text", "--bare",
              "--allowedTools", "Read,Write,Edit,Glob,Grep"],
             capture_output=True, text=True, timeout=180, env=env
         )

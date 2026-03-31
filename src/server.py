@@ -38,28 +38,75 @@ def _shutdown_handler(signum, frame):
     close_db()
     sys.exit(0)
 
-signal.signal(signal.SIGTERM, _shutdown_handler)
-signal.signal(signal.SIGINT, _shutdown_handler)
 
-# ── Write PID file for stale process detection ─────────────────────
-_pid_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "nexo.pid")
-with open(_pid_file, "w") as f:
-    f.write(str(os.getpid()))
+def _server_init():
+    """Run all side effects: signals, PID, DB, auto-update, plugins.
 
-init_db()
+    Called only when the server is actually started (not on import).
+    """
+    signal.signal(signal.SIGTERM, _shutdown_handler)
+    signal.signal(signal.SIGINT, _shutdown_handler)
+
+    # ── Write PID file for stale process detection ─────────────────
+    _data_dir = os.path.join(os.environ.get("NEXO_HOME", os.path.join(os.path.expanduser("~"), ".nexo")), "data")
+    os.makedirs(_data_dir, exist_ok=True)
+    _pid_file = os.path.join(_data_dir, "nexo.pid")
+    with open(_pid_file, "w") as f:
+        f.write(str(os.getpid()))
+
+    init_db()
+
+    # ── Auto-update check (non-blocking, max 5s) ──────────────────
+    try:
+        from auto_update import auto_update_check
+        import threading
+
+        def _bg_update():
+            try:
+                result = auto_update_check()
+                if result.get("git_update"):
+                    print(f"[NEXO] {result['git_update']}", file=sys.stderr)
+                if result.get("npm_notice"):
+                    print(f"[NEXO] {result['npm_notice']}", file=sys.stderr)
+                if result.get("claude_md_update"):
+                    print(f"[NEXO] {result['claude_md_update']}", file=sys.stderr)
+                for m in result.get("migrations", []):
+                    if m["status"] == "failed":
+                        print(f"[NEXO] Migration {m['file']} FAILED: {m['message']}", file=sys.stderr)
+            except Exception as e:
+                print(f"[NEXO auto-update] error: {e}", file=sys.stderr)
+
+        _update_thread = threading.Thread(target=_bg_update, daemon=True)
+        _update_thread.start()
+        _update_thread.join(timeout=5)  # Wait at most 5 seconds
+    except Exception:
+        pass  # Never break startup
+
+    # ── Load plugins ───────────────────────────────────────────────
+    load_all_plugins(mcp)
+
 
 mcp = FastMCP(
     name="nexo",
     instructions=(
-        "NEXO operational server. Provides session coordination, "
-        "reminders, followups, and menu for user operations.\n\n"
-        "When working with tool results, write down any important information "
-        "you might need later in your response, as the original tool result "
-        "may be cleared later."
+        "NEXO — cognitive co-operator. Save important info from tool results before they clear.\n\n"
+        "## Rules\n"
+        "- **Heartbeat:** `nexo_heartbeat(sid=SID, task='...', context_hint='...')` every user msg. "
+        "React: DIARY REMINDER→write diary, VIBE:NEGATIVE→ultra-concise, AUTO-PRIME→read learnings\n"
+        "- **Guard:** `nexo_guard_check(files='...', area='...')` BEFORE editing code. "
+        "Blocking rules→resolve first. `nexo_track(sid=SID, paths=[...])` before shared files\n"
+        "- **Followups:** NEXO tasks, execute silently. 'done'/'all set'→`nexo_followup_complete` NOW. "
+        "Reminders=user's, alert when due\n"
+        "- **Observe:** correction→learning+trust. 'tomorrow'→followup. person→entity. open topic→followup 3d\n"
+        "- **Delegate:** prefer direct. If needed: `nexo_context_packet(area)` + guard + 'if unsure STOP'\n"
+        "- **Memory:** `nexo_recall` searches all. Capture: errors→`nexo_learning_add`, prefs, entities, decisions\n"
+        "- **Change log:** `nexo_change_log(...)` after production edits. NOT for config dir\n"
+        "- **Diary:** `nexo_session_diary_write(...)` mandatory on close. Include self_critique\n"
+        "- **Cortex:** `nexo_cortex_check` before budget/campaign/architecture changes\n"
+        "- **Dissonance:** user contradicts memory→`nexo_cognitive_dissonance`. Frustrated→force=True\n"
+        "- **Trust:** <40=paranoid verify twice, >80=fluid. Check: `nexo_cognitive_trust`"
     ),
 )
-
-_plugins_loaded = load_all_plugins(mcp)
 
 
 # ── Session management (3 tools) ──────────────────────────────────
@@ -529,8 +576,8 @@ def nexo_index_dirs() -> str:
     """List all directories being indexed by FTS5 (builtin + dynamic)."""
     dirs = fts_list_dirs()
     if not dirs:
-        return "Sin directorios configurados."
-    lines = ["DIRECTORIOS INDEXADOS:"]
+        return "No directories configured."
+    lines = ["INDEXED DIRECTORIES:"]
     for d in dirs:
         source_tag = "⚙️" if d["source"] == "builtin" else "➕"
         notes = f" — {d['notes']}" if d.get("notes") else ""
@@ -639,34 +686,35 @@ def nexo_task_frequency() -> str:
 
 @mcp.tool
 def nexo_plugin_load(filename: str) -> str:
-    """Load or reload a plugin from the plugins/ directory.
+    """Load or reload a plugin. Searches repo plugins/ first, then NEXO_HOME/plugins/.
 
     Args:
         filename: Plugin filename (e.g., 'entities.py').
     """
     try:
         n = load_plugin(mcp, filename)
-        return f"Plugin {filename}: {n} tools registrados."
+        return f"Plugin {filename}: {n} tools registered."
     except Exception as e:
-        return f"Error cargando plugin {filename}: {e}"
+        return f"Error loading plugin {filename}: {e}"
 
 
 @mcp.tool
 def nexo_plugin_list() -> str:
-    """List all loaded plugins and their tools."""
+    """List all loaded plugins and their tools, showing source (repo/personal)."""
     plugins = list_plugins()
     if not plugins:
-        return "Sin plugins cargados."
-    lines = ["PLUGINS CARGADOS:"]
+        return "No plugins loaded."
+    lines = ["LOADED PLUGINS:"]
     for p in plugins:
-        names = p["tool_names"] or "(sin tools)"
-        lines.append(f"  {p['filename']} — {p['tools_count']} tools: {names}")
+        names = p["tool_names"] or "(no tools)"
+        source = p.get("source", "repo")
+        lines.append(f"  [{source}] {p['filename']} — {p['tools_count']} tools: {names}")
     return "\n".join(lines)
 
 
 @mcp.tool
 def nexo_plugin_remove(filename: str) -> str:
-    """Remove a plugin: unregister its tools and delete the file.
+    """Unregister a plugin's tools from MCP (does not delete files).
 
     Args:
         filename: Plugin filename (e.g., 'entities.py').
@@ -674,11 +722,12 @@ def nexo_plugin_remove(filename: str) -> str:
     try:
         removed = remove_plugin(mcp, filename)
         if removed:
-            return f"Plugin {filename} removed. Tools unregistered: {', '.join(removed)}"
-        return f"Plugin {filename} removed (had no registered tools)."
+            return f"Plugin {filename} unregistered. Tools removed: {', '.join(removed)}"
+        return f"Plugin {filename} unregistered (had no registered tools)."
     except Exception as e:
-        return f"Error eliminando plugin {filename}: {e}"
+        return f"Error removing plugin {filename}: {e}"
 
 
 if __name__ == "__main__":
+    _server_init()
     mcp.run(transport="stdio")

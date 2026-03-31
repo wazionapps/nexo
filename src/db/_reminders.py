@@ -134,11 +134,22 @@ def create_followup(id: str, description: str, date: str = None,
                     reasoning: str = '', recurrence: str = None) -> dict:
     """Create a new followup with optional reasoning and recurrence.
 
+    Checks for similar open followups before creating. If a match is found,
+    returns a warning with the existing followup ID (still creates the new one).
+
     recurrence format: 'weekly:monday', 'monthly:1', 'monthly:10', 'quarterly', etc.
     When a recurring followup is completed, a new one is auto-created with the next date.
     """
     conn = get_db()
     now = now_epoch()
+
+    # Anti-duplicate check
+    similar = find_similar_followups(description)
+    warning = ""
+    if similar:
+        ids = ", ".join(s["id"] for s in similar[:3])
+        warning = f" ⚠ SIMILAR FOLLOWUPS EXIST: {ids} (scores: {', '.join(str(s['_similarity']) for s in similar[:3])}). Consider updating instead."
+
     try:
         conn.execute(
             "INSERT INTO followups (id, date, description, verification, status, reasoning, recurrence, created_at, updated_at) "
@@ -150,7 +161,10 @@ def create_followup(id: str, description: str, date: str = None,
     except sqlite3.IntegrityError:
         return {"error": f"Followup {id} already exists. Use update instead."}
     row = conn.execute("SELECT * FROM followups WHERE id = ?", (id,)).fetchone()
-    return dict(row)
+    result = dict(row)
+    if warning:
+        result["warning"] = warning
+    return result
 
 
 def update_followup(id: str, **kwargs) -> dict:
@@ -245,6 +259,18 @@ def complete_followup(id: str, result: str = '') -> dict:
             archived_id = f"{id}-{today}"
             conn.execute("UPDATE followups SET id = ? WHERE id = ?", (archived_id, id))
             conn.commit()
+
+            # Fix FTS: remove old entry for original ID, add entry for archived ID
+            conn.execute("DELETE FROM unified_search WHERE source = 'followup' AND source_id = ?", (id,))
+            archived_row = conn.execute("SELECT * FROM followups WHERE id = ?", (archived_id,)).fetchone()
+            if archived_row:
+                fts_upsert(
+                    "followup", archived_id, archived_id,
+                    f"{archived_row['description']} {archived_row['verification'] or ''} {archived_row['reasoning'] or ''}",
+                    "followup", commit=False,
+                )
+
+            # create_followup handles its own FTS entry for the new recurring ID
             create_followup(
                 id=id,
                 description=row["description"],
@@ -253,6 +279,15 @@ def complete_followup(id: str, result: str = '') -> dict:
                 reasoning=row["reasoning"] or '',
                 recurrence=recurrence,
             )
+
+            # Return accurate result: the completed one is now archived_id, not id
+            return {
+                "id": archived_id,
+                "status": "COMPLETED",
+                "recurrence": recurrence,
+                "next_id": id,
+                "next_date": next_date,
+            }
 
     return update_result
 

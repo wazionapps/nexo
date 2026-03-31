@@ -5,8 +5,9 @@ import time
 import glob
 from db import get_db
 
-DB_PATH = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "nexo.db"))
-BACKUP_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "backups"))
+NEXO_HOME = os.environ.get("NEXO_HOME", os.path.expanduser("~/.nexo"))
+DB_PATH = os.path.join(NEXO_HOME, "data", "nexo.db")
+BACKUP_DIR = os.path.join(NEXO_HOME, "backups")
 
 RETENTION_DAYS = 7
 
@@ -33,10 +34,10 @@ def handle_backup_now() -> str:
 def handle_backup_list() -> str:
     """List available backups with dates and sizes."""
     if not os.path.isdir(BACKUP_DIR):
-        return "Sin backups."
+        return "No backups."
     files = sorted(glob.glob(os.path.join(BACKUP_DIR, "nexo-*.db")), reverse=True)
     if not files:
-        return "Sin backups."
+        return "No backups."
     lines = [f"BACKUPS ({len(files)}):"]
     total_size = 0
     for f in files:

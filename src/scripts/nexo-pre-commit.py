@@ -4,12 +4,14 @@ NEXO Pre-Commit Validator — Dynamic version
 Queries nexo.db learnings to surface relevant warnings/blockers before commit.
 Runs standalone (no MCP dependency, just sqlite3).
 """
+import os
 import sqlite3
 import subprocess
 import sys
 from pathlib import Path
 
-NEXO_DB = Path.home() / ".nexo" / "nexo-mcp" / "db" / "nexo.db"
+NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+NEXO_DB = NEXO_HOME / "data" / "nexo.db"
 
 
 def get_staged_files():

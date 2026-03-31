@@ -4,7 +4,7 @@ import smtplib, sys
 from email.mime.text import MIMEText
 from email.utils import formataddr
 
-def send(subject, body, to="userp@gmail.com", cc="user.example.com@gmail.com"):
+def send(subject, body, to="user@example.com", cc="user@example.com"):
     msg = MIMEText(body, 'plain', 'utf-8')
     msg['From'] = formataddr(('NEXO', 'nexo@example.com'))
     msg['To'] = to

@@ -283,7 +283,6 @@ NEXO Brain doesn't just respond — it runs autonomous processes in the backgrou
 | **watchdog** | Every 30 min | Monitors 15+ services, LaunchAgents, and infrastructure health |
 | **github-monitor** | 08:00 daily | Checks issues, PRs, and commits on public repos |
 | **learning-validator** | Nightly | Validates learnings for staleness, contradictions, and duplicates |
-| **cognitive-migrate** | On upgrade | Schema migrations for cognitive.db — safe, reversible evolution |
 
 All scripts run via macOS LaunchAgents (or catch-up on Linux). If your Mac was asleep during a scheduled process, the catch-up script re-runs everything in order when it wakes.
 
@@ -312,7 +311,7 @@ Memory alone doesn't make a co-operator. What makes the difference is the **beha
 
 ### Automated Hooks
 
-8 hooks fire automatically at key moments in every Claude Code session:
+7 hooks fire automatically at key moments in every Claude Code session:
 
 | Hook | When | What It Does |
 |------|------|-------------|
@@ -367,14 +366,9 @@ Existing users upgrading from any previous version:
 npx nexo-brain  # detects current version, migrates automatically
 ```
 - Updates hooks, core files, plugins, scripts, and LaunchAgent templates
-- Runs `cognitive-migrate.py` for safe, reversible schema evolution
+- Runs database schema migrations automatically
 - **Never touches your data** (memories, learnings, preferences)
 - Saves updated CLAUDE.md as reference (doesn't overwrite customizations)
-
-For manual migration (e.g., from a custom setup):
-```bash
-python3 ~/.nexo/scripts/nexo-cognitive-migrate.py
-```
 
 ## Knowledge Graph (v0.8)
 
@@ -459,13 +453,13 @@ That's it. No need to run `claude` manually. Your operator will greet you immedi
 | Cognitive engine | Python: fastembed, numpy, vector search | pip packages |
 | MCP server | 111+ tools for memory, cognition, learning, guard | ~/.nexo/ |
 | Plugins | Guard, episodic memory, cognitive memory, entities, preferences | ~/.nexo/plugins/ |
-| Hooks (8) | SessionStart, Stop, PostToolUse, PreCompact, PostCompact, PreToolUse, Notification, Caffeinate | ~/.nexo/hooks/ |
+| Hooks (7) | SessionStart, Stop, PostToolUse, PreCompact, PostCompact, PreToolUse, Notification | ~/.nexo/hooks/ |
 | Nervous system | 11 autonomous scripts (decay, sleep, audit, evolution, watchdog, etc.) | ~/.nexo/scripts/ |
 | Dashboard | Web UI at localhost:6174 (6 pages) | ~/.nexo/dashboard/ |
 | CLAUDE.md | Complete operator instructions (Codex, hooks, guard, trust, memory) | ~/.claude/CLAUDE.md |
 | LaunchAgents | 13 templates for macOS automation | ~/Library/LaunchAgents/ |
-| Auto-update | Checks for new versions at boot | Built into catch-up |
-| Claude Code config | MCP server + 8 hooks registered | ~/.claude/settings.json |
+| Auto-update | Checks for new versions on startup | Built into server startup |
+| Claude Code config | MCP server + 7 hooks registered | ~/.claude/settings.json |
 
 ### Requirements
 
@@ -490,7 +484,7 @@ That's it. No need to run `claude` manually. Your operator will greet you immedi
 | Reminders | 5 | list, create, update, complete, delete | User's tasks and deadlines |
 | Followups | 4 | create, update, complete, delete | System's autonomous verification tasks |
 | Learnings | 5 | add, search, update, delete, list | Error patterns and prevention rules |
-| Credentials | 5 | create, get, update, delete, list | Secure local credential storage |
+| Credentials | 5 | create, get, update, delete, list | Local credential storage (plaintext SQLite — protect with filesystem permissions) |
 | Task History | 3 | log, list, frequency | Execution tracking and overdue alerts |
 | Menu | 1 | menu | Operations center with box-drawing UI |
 | Entities | 5 | search, create, update, delete, list | People, services, URLs |
@@ -524,7 +518,7 @@ Reload without restarting: `nexo_plugin_load("my_plugin.py")`
 - **Everything stays local.** All data in `~/.nexo/`, never uploaded anywhere.
 - **No telemetry.** No analytics. No phone-home.
 - **No cloud dependencies.** Vector search runs on CPU (fastembed), not an API.
-- **Auto-update is opt-in.** Checks GitHub releases, never sends data.
+- **Auto-update is resilient.** NEXO checks for updates on startup. If an update fails, it continues with the current version and notifies you. Local migrations (database schema, configuration) always run. Network updates (git pull) can be disabled by setting `auto_update: false` in `NEXO_HOME/config/schedule.json`.
 - **Secret redaction.** API keys and tokens are stripped before they ever reach memory storage.
 
 ## The Psychology Behind NEXO Brain
@@ -574,7 +568,7 @@ Add NEXO Brain to your OpenClaw config at `~/.openclaw/openclaw.json`:
     "servers": {
       "nexo-brain": {
         "command": "python3",
-        "args": ["~/.nexo/src/server.py"],
+        "args": ["~/.nexo/server.py"],
         "env": {
           "NEXO_HOME": "~/.nexo"
         }
@@ -587,7 +581,7 @@ Add NEXO Brain to your OpenClaw config at `~/.openclaw/openclaw.json`:
 Or via CLI:
 
 ```bash
-openclaw mcp set nexo-brain '{"command":"python3","args":["~/.nexo/src/server.py"],"env":{"NEXO_HOME":"~/.nexo"}}'
+openclaw mcp set nexo-brain '{"command":"python3","args":["~/.nexo/server.py"],"env":{"NEXO_HOME":"~/.nexo"}}'
 openclaw gateway restart
 ```
 
@@ -617,7 +611,7 @@ This replaces OpenClaw's default memory system with NEXO Brain's full cognitive 
 
 ### Any MCP Client
 
-NEXO Brain works with any application that supports the MCP protocol. Configure it as an MCP server pointing to `~/.nexo/src/server.py`.
+NEXO Brain works with any application that supports the MCP protocol. Configure it as an MCP server pointing to `~/.nexo/server.py`.
 
 ## Listed On
 
@@ -657,7 +651,7 @@ If NEXO Brain is useful to you, consider:
 ## Changelog
 
 ### v1.7.0 — Full Internationalization + Linux Support (2026-03-31)
-- **Full i18n**: All UI strings, error messages, DB status values in English. Zero Spanish in the codebase.
+- **Full i18n**: All UI strings, error messages, DB status values in English. NLP detection patterns retain bilingual keywords (Spanish + English) for multilingual user support.
 - **Linux support**: systemd user timers (preferred) or crontab fallback for all automated cognitive processes.
 - **Auto-resolve followups**: Change log entries automatically cross-reference and complete matching open followups.
 - **Free-form learning categories**: No more hardcoded category validation — use any category name.
@@ -665,10 +659,9 @@ If NEXO Brain is useful to you, consider:
 - **Complete sanitization**: All hardcoded paths use `NEXO_HOME` env var. Zero personal data in the repo.
 
 ### v1.6.0 — Nervous System + Dashboard v2 (2026-03-30)
-- **Nervous System**: 11 autonomous scripts (decay, deep sleep, self-audit, catchup, evolution, followup hygiene, immune, watchdog, github monitor, learning validator, cognitive migrate)
+- **Nervous System**: 11 autonomous scripts (decay, deep sleep, self-audit, catchup, evolution, followup hygiene, immune, watchdog, github monitor, learning validator)
 - **Dashboard v2**: 6 interactive pages at localhost:6174 (Overview, Graph, Memory, Somatic, Adaptive, Sessions)
 - **LaunchAgent Templates**: 13 macOS automation templates included in the package for scheduling the nervous system
-- **Migration Script**: `cognitive-migrate.py` for safe, reversible schema evolution on upgrades
 - **Hooks**: 8 total — added PreToolUse (parameter validation + guard injection) and Notification (external event routing)
 - **Installer**: Now configures dashboard LaunchAgent, nervous system scripts, and all 13 templates automatically
 

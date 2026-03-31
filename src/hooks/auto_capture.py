@@ -17,7 +17,7 @@ import re
 import sys
 from pathlib import Path
 
-# Add nexo-mcp to path for cognitive imports
+# Add source dir to path for cognitive imports
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import cognitive
 

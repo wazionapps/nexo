@@ -11,12 +11,16 @@ class StorageRouter:
 
     def nexo_db_path(self) -> str:
         if self.tenant_id == "default":
-            return os.path.join(os.path.dirname(os.path.abspath(__file__)), "nexo.db")
+            data_dir = os.path.join(NEXO_HOME, "data")
+            os.makedirs(data_dir, exist_ok=True)
+            return os.path.join(data_dir, "nexo.db")
         return os.path.join(NEXO_HOME, "tenants", self.tenant_id, "nexo.db")
 
     def cognitive_db_path(self) -> str:
         if self.tenant_id == "default":
-            return os.path.join(os.path.dirname(os.path.abspath(__file__)), "cognitive.db")
+            data_dir = os.path.join(NEXO_HOME, "data")
+            os.makedirs(data_dir, exist_ok=True)
+            return os.path.join(data_dir, "cognitive.db")
         return os.path.join(NEXO_HOME, "tenants", self.tenant_id, "cognitive.db")
 
 

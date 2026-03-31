@@ -87,6 +87,32 @@ def test_reminder_followup_crud():
     assert followup2["status"] == "COMPLETED"
 
 
+def test_recurring_followup():
+    """Recurring followup: complete archives with date suffix, creates new pending, returns correct IDs."""
+    db_mod.create_followup("NF-REC1", "Recurring test", date="2026-03-31", recurrence="weekly:monday")
+    followup = db_mod.get_followup("NF-REC1")
+    assert followup is not None
+    assert followup["recurrence"] == "weekly:monday"
+
+    result = db_mod.complete_followup("NF-REC1", result="done weekly")
+
+    # Result should reference the archived ID, not the recycled NF-REC1
+    assert result["status"] == "COMPLETED"
+    assert result["id"].startswith("NF-REC1-")  # archived with date suffix
+    assert result["next_id"] == "NF-REC1"
+    assert result["next_date"] is not None
+
+    # The new NF-REC1 should be PENDING (not the completed one)
+    new_followup = db_mod.get_followup("NF-REC1")
+    assert new_followup is not None
+    assert new_followup["status"] == "PENDING"
+
+    # The archived one should exist with date suffix
+    archived = db_mod.get_followup(result["id"])
+    assert archived is not None
+    assert archived["status"] == "COMPLETED"
+
+
 def test_credential_crud():
     """Create, get, and delete credentials."""
     db_mod.create_credential("test-service", "api_key", "secret123", notes="test")

@@ -21,7 +21,7 @@
         <string>--no-browser</string>
     </array>
     <key>WorkingDirectory</key>
-    <string>{{NEXO_HOME}}/nexo-mcp</string>
+    <string>{{NEXO_HOME}}</string>
     <key>KeepAlive</key>
     <true/>
     <key>RunAtLoad</key>
@@ -34,6 +34,10 @@
     <dict>
         <key>PATH</key>
         <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <key>NEXO_HOME</key>
+        <string>{{NEXO_HOME}}</string>
+        <key>NEXO_CODE</key>
+        <string>{{NEXO_CODE}}</string>
     </dict>
 </dict>
 </plist>

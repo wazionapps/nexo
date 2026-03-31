@@ -14,14 +14,22 @@ import time
 from datetime import datetime, date, timedelta
 from pathlib import Path
 
-NEXO_DB = Path.home() / ".nexo" / "nexo-mcp" / "nexo.db"
-CORTEX_DIR = Path(__file__).parent
-CLAUDE_DIR = Path.home() / ".nexo"
-SANDBOX_DIR = CLAUDE_DIR / "sandbox" / "workspace"
-SNAPSHOTS_DIR = CLAUDE_DIR / "snapshots"
-OBJECTIVE_FILE = CORTEX_DIR / "evolution-objective.json"
-PROMPT_FILE = CORTEX_DIR / "evolution-prompt.md"
-RESTORE_LOG = CLAUDE_DIR / "logs" / "snapshot-restores.log"
+NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(NEXO_HOME)))
+NEXO_DB = NEXO_HOME / "data" / "nexo.db"
+SANDBOX_DIR = NEXO_HOME / "sandbox" / "workspace"
+SNAPSHOTS_DIR = NEXO_HOME / "snapshots"
+RESTORE_LOG = NEXO_HOME / "logs" / "snapshot-restores.log"
+
+# Evolution config: brain/ (canonical) > cortex/ (legacy) > NEXO_CODE (dev)
+def _resolve_evolution_file(name: str) -> Path:
+    for candidate in [NEXO_HOME / "brain" / name, NEXO_HOME / "cortex" / name, NEXO_CODE / name]:
+        if candidate.exists():
+            return candidate
+    return NEXO_HOME / "brain" / name  # default canonical path
+
+OBJECTIVE_FILE = _resolve_evolution_file("evolution-objective.json")
+PROMPT_FILE = _resolve_evolution_file("evolution-prompt.md")
 
 MAX_SNAPSHOTS = 8
 
@@ -105,6 +113,8 @@ def create_snapshot(files_to_backup: list) -> str:
             rel = str(fp).replace(str(Path.home()) + "/", "")
             dest = files_dir / rel
             dest.parent.mkdir(parents=True, exist_ok=True)
+            if os.path.abspath(str(fp)) == os.path.abspath(str(dest)):
+                continue  # Skip: source and destination are the same file
             shutil.copy2(fp, dest)
             manifest["files"].append(rel)
 
@@ -144,9 +154,21 @@ def dry_run_restore_test() -> bool:
 
     test_file.write_text("modified_content")
 
+    # Find restore script: NEXO_CODE/scripts/ first, then NEXO_HOME/scripts/
+    _nexo_code = Path(os.environ.get("NEXO_CODE", ""))
+    restore_script = None
+    for candidate in [_nexo_code / "scripts" / "nexo-snapshot-restore.sh",
+                      NEXO_HOME / "scripts" / "nexo-snapshot-restore.sh"]:
+        if candidate.exists():
+            restore_script = candidate
+            break
+    if not restore_script:
+        test_file.unlink(missing_ok=True)
+        return False  # No restore script available
+
     try:
         subprocess.run(
-            [str(CLAUDE_DIR / "scripts" / "nexo-snapshot-restore.sh"), snap_dir],
+            [str(restore_script), snap_dir],
             capture_output=True, timeout=10, check=True
         )
         content = test_file.read_text()
@@ -200,7 +222,7 @@ INVESTIGATE using these tools:
 4. Read ~/.nexo/coordination/postmortem-daily.md — self-critique patterns
 5. Read ~/.nexo/logs/self-audit-summary.json — system health
 6. Glob ~/.nexo/scripts/*.py — existing scripts
-7. Glob ~/.nexo/nexo-mcp/plugins/*.py — existing plugins
+7. Glob ~/.nexo/plugins/*.py — existing plugins
 
 LOOK FOR:
 - Repeated errors that guard isn't preventing
@@ -210,7 +232,7 @@ LOOK FOR:
 - Patterns in self-critique that suggest systemic issues
 
 SAFETY:
-- Safe zones for auto changes: ~/.nexo/scripts/, ~/.nexo/nexo-mcp/plugins/, ~/.nexo/cortex/
+- Safe zones for auto changes: ~/.nexo/scripts/, ~/.nexo/plugins/, ~/.nexo/brain/
 - IMMUTABLE files (never touch): db.py, server.py, plugin_loader.py, cognitive.py, CLAUDE.md
 - Every change needs: what file, what to change, why, risk, how to verify
 

@@ -27,6 +27,7 @@ Options:
 import argparse
 import imaplib
 import json
+import os
 import smtplib
 import sys
 import time
@@ -35,7 +36,8 @@ from email.utils import make_msgid, formatdate
 from pathlib import Path
 import mimetypes
 
-CONFIG_PATH = Path.home() / ".nexo" / "nexo-email" / "config.json"
+NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+CONFIG_PATH = NEXO_HOME / "nexo-email" / "config.json"
 
 
 def load_config():

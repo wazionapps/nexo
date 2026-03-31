@@ -1,6 +1,6 @@
 #!/bin/bash
 # Pre-commit hook: prevent private data from being committed to the public repo.
-# Installed by create-nexo or manually: cp scripts/pre-commit-check.sh .git/hooks/pre-commit
+# Installed by nexo-brain or manually: cp scripts/pre-commit-check.sh .git/hooks/pre-commit
 
 RED='\033[0;31m'
 NC='\033[0m'

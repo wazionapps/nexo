@@ -1,4 +1,3 @@
-import os
 #!/usr/bin/env python3
 """NEXO Learning Housekeeping — Nightly dedup, weight adjustment, and review.
 
@@ -7,6 +6,7 @@ detects duplicates via semantic similarity, and archives stale learnings.
 """
 
 import json
+import os
 import sqlite3
 import sys
 import time
@@ -14,10 +14,14 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+# Auto-detect: if running from repo (src/scripts/), use src/ as NEXO_CODE
+_script_dir = Path(__file__).resolve().parent
+_repo_src = _script_dir.parent  # src/scripts/ -> src/
+NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(_repo_src) if (_repo_src / "server.py").exists() else str(NEXO_HOME)))
 
-sys.path.insert(0, str(NEXO_HOME / "nexo-mcp"))
+sys.path.insert(0, str(NEXO_CODE))
 
-DB_PATH = NEXO_HOME / "nexo-mcp" / "db" / "nexo.db"
+DB_PATH = NEXO_HOME / "data" / "nexo.db"
 STATE_FILE = NEXO_HOME / "operations" / ".catchup-state.json"
 
 # Weight adjustment rates

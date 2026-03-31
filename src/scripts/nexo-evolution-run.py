@@ -20,12 +20,14 @@ from datetime import datetime, date, timedelta
 from pathlib import Path
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+# Auto-detect: if running from repo (src/scripts/), use src/ as NEXO_CODE
+_script_dir = Path(__file__).resolve().parent
+_repo_src = _script_dir.parent  # src/scripts/ -> src/
+NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(_repo_src) if (_repo_src / "server.py").exists() else str(NEXO_HOME)))
 
 # ── Paths ────────────────────────────────────────────────────────────────
 CLAUDE_DIR = NEXO_HOME
-NEXO_DB = CLAUDE_DIR / "nexo-mcp" / "db" / "nexo.db"
-CORTEX_DIR = CLAUDE_DIR / "cortex"
-OBJECTIVE_FILE = CORTEX_DIR / "evolution-objective.json"
+NEXO_DB = CLAUDE_DIR / "data" / "nexo.db"
 LOG_DIR = CLAUDE_DIR / "logs"
 SNAPSHOTS_DIR = CLAUDE_DIR / "snapshots"
 SANDBOX_DIR = CLAUDE_DIR / "sandbox" / "workspace"
@@ -37,8 +39,8 @@ MAX_SNAPSHOTS = 8
 # "auto" mode (public users): restricted to user scripts and plugins ONLY
 AUTO_SAFE_PREFIXES = [
     str(CLAUDE_DIR / "scripts") + "/",
-    str(CLAUDE_DIR / "cortex") + "/",
-    str(CLAUDE_DIR / "nexo-mcp" / "plugins") + "/",
+    str(CLAUDE_DIR / "brain") + "/",
+    str(NEXO_CODE / "plugins") + "/",
     str(CLAUDE_DIR / "logs") + "/",
     str(CLAUDE_DIR / "coordination") + "/",
 ]
@@ -77,8 +79,8 @@ def log(msg: str):
         f.write(line + "\n")
 
 
-# ── Import from evolution_cycle.py ───────────────────────────────────────
-sys.path.insert(0, str(CORTEX_DIR))
+# ── Import from evolution_cycle.py (lives in NEXO_CODE, i.e. src/) ──────
+sys.path.insert(0, str(NEXO_CODE))
 from evolution_cycle import (
     load_objective, save_objective, get_week_data, build_evolution_prompt,
     dry_run_restore_test, max_auto_changes, create_snapshot
@@ -101,6 +103,23 @@ def set_consecutive_failures(count: int):
 CLI_TIMEOUT = 600  # 10 minutes — Opus needs time for large prompts
 
 
+def verify_claude_cli() -> bool:
+    """Verify Claude CLI is available and authenticated with a real prompt test."""
+    try:
+        auth_check = subprocess.run(
+            [str(CLAUDE_CLI), "-p", "Reply with exactly: ok", "--bare", "--output-format", "text", "--model", "haiku"],
+            capture_output=True, text=True, timeout=15
+        )
+        if auth_check.returncode != 0:
+            stderr = auth_check.stderr[:200] if auth_check.stderr else ""
+            log(f"Claude CLI not authenticated or unavailable: {stderr}")
+            return False
+        return True
+    except Exception as e:
+        log(f"Claude CLI check failed: {e}")
+        return False
+
+
 def call_claude_cli(prompt: str) -> str:
     """Call claude -p prompt --model opus via subprocess. Returns stdout text."""
     env = os.environ.copy()
@@ -109,6 +128,7 @@ def call_claude_cli(prompt: str) -> str:
 
     result = subprocess.run(
         [str(CLAUDE_CLI), "-p", prompt, "--model", "opus",
+         "--output-format", "text", "--bare",
          "--allowedTools", "Read,Write,Edit,Glob,Grep,Bash"],
         capture_output=True,
         text=True,
@@ -364,7 +384,7 @@ def run():
     objective = load_objective()
     if not objective:
         log("ERROR: No evolution-objective.json found")
-        return
+        sys.exit(1)
     if not objective.get("evolution_enabled", True):
         log(f"Evolution DISABLED: {objective.get('disabled_reason', 'unknown')}")
         return
@@ -383,7 +403,7 @@ def run():
     if not dry_run_restore_test():
         log("CRITICAL: Restore test failed — aborting")
         set_consecutive_failures(failures + 1)
-        return
+        sys.exit(1)
     log("Restore test PASSED")
 
     # Gather data
@@ -398,8 +418,13 @@ def run():
     prompt = build_evolution_prompt(week_data, objective)
     log(f"Prompt built: {len(prompt)} chars")
 
+    # Verify Claude CLI is authenticated before calling
+    if not verify_claude_cli():
+        log("Claude CLI not available or not authenticated. Skipping evolution run.")
+        return
+
     # Call Opus via claude -p
-    log("Calling claude -p --model opus...")
+    log("Calling claude -p --model opus --bare...")
     try:
         raw_response = call_claude_cli(prompt)
     except Exception as e:

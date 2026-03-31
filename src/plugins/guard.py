@@ -110,16 +110,22 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
                 w = r["weight"] or 0.5
                 result["learnings"].append({"id": r["id"], "category": r["category"], "rule": r["title"], "priority": pri, "weight": w})
 
-    # 3. Universal rules (SIEMPRE, NUNCA, ANTES, always, never)
+    # 3. Universal rules — only from matching area or nexo-ops (not ALL learnings)
+    universal_categories = {"nexo-ops"}
+    if area:
+        universal_categories.add(area)
+    placeholders = ",".join("?" for _ in universal_categories)
     rows = conn.execute(
-        "SELECT id, category, title, content FROM learnings WHERE "
-        "content LIKE '%SIEMPRE%' OR content LIKE '%NUNCA%' OR content LIKE '%ANTES%' "
-        "OR content LIKE '%always%' OR content LIKE '%never%'"
+        f"SELECT id, category, title, content, priority FROM learnings WHERE "
+        f"category IN ({placeholders}) AND ("
+        f"content LIKE '%SIEMPRE%' OR content LIKE '%NUNCA%' OR content LIKE '%ANTES%' "
+        f"OR content LIKE '%always%' OR content LIKE '%never%')",
+        tuple(universal_categories)
     ).fetchall()
     for r in rows:
         if r["id"] not in seen_ids:
             seen_ids.add(r["id"])
-            result["universal_rules"].append({"id": r["id"], "rule": r["title"], "category": r["category"]})
+            result["universal_rules"].append({"id": r["id"], "rule": r["title"], "category": r["category"], "priority": r["priority"] or "medium"})
 
     # 4. DB schemas if files contain SQL keywords
     if include_schemas_bool and file_list:
@@ -173,8 +179,9 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
             })
             continue
 
-        # Path (b): Aggressive — learning TITLE contains prohibition keywords
-        if BLOCKING_KEYWORDS.search(learning["rule"]):
+        # Path (b): Only promote to blocking if high/critical priority AND title has prohibition keyword
+        pri = learning.get("priority", "medium")
+        if pri in ("critical", "high") and BLOCKING_KEYWORDS.search(learning["rule"]):
             blocking_seen.add(lid)
             result["blocking_rules"].append({
                 "id": lid, "rule": learning["rule"], "repetitions": rep_count,
@@ -297,8 +304,9 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
         lines.append("")
 
     if result["learnings"]:
-        lines.append(f"RELEVANT LEARNINGS ({len(result['learnings'])}):")
-        for l in result["learnings"][:15]:
+        shown = result["learnings"][:10]  # Cap at 10, not 15
+        lines.append(f"RELEVANT LEARNINGS ({len(result['learnings'])}, showing {len(shown)}):")
+        for l in shown:
             lines.append(f"  #{l['id']} [{l['category']}] {l['rule']}")
         lines.append("")
 
@@ -310,8 +318,9 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
         lines.append("")
 
     if result["universal_rules"]:
-        lines.append(f"UNIVERSAL RULES ({len(result['universal_rules'])}):")
-        for r in result["universal_rules"][:10]:
+        shown_u = result["universal_rules"][:5]  # Cap at 5
+        lines.append(f"UNIVERSAL RULES ({len(result['universal_rules'])}, showing {len(shown_u)}):")
+        for r in shown_u:
             lines.append(f"  #{r['id']} {r['rule']}")
         lines.append("")
 

@@ -1,15 +1,19 @@
-import os
 #!/usr/bin/env python3
 """NEXO Cognitive Decay — Daily Ebbinghaus sweep + STM→LTM promotion."""
 
 import json
+import os
 import sys
 from pathlib import Path
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+# Auto-detect: if running from repo (src/scripts/), use src/ as NEXO_CODE
+_script_dir = Path(__file__).resolve().parent
+_repo_src = _script_dir.parent  # src/scripts/ -> src/
+NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(_repo_src) if (_repo_src / "server.py").exists() else str(NEXO_HOME)))
 from datetime import datetime, timedelta
 
-sys.path.insert(0, str(NEXO_HOME / "nexo-mcp"))
+sys.path.insert(0, str(NEXO_CODE))
 import cognitive
 
 STATE_FILE = NEXO_HOME / "operations" / ".catchup-state.json"
@@ -121,7 +125,7 @@ def main():
 
     # 9. Adaptive weight learning — Ridge regression from feedback-annotated entries
     try:
-        sys.path.insert(0, str(NEXO_HOME / "nexo-mcp" / "plugins"))
+        sys.path.insert(0, str(NEXO_CODE / "plugins"))
         from adaptive_mode import learn_weights, prune_adaptive_log, check_weight_rollback
 
         rollback = check_weight_rollback()

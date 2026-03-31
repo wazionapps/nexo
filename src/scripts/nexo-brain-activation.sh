@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# nexo-brain-activation.sh — NF24: Activación Espontánea
-# Lee user_model.json, detecta shifts significativos y genera insights
-# para el arranque de NEXO. Si no hay nada relevante: exit 0 sin output.
+# nexo-brain-activation.sh — NF24: Spontaneous Activation
+# Reads user_model.json, detects significant shifts, and generates insights
+# for NEXO startup. If nothing relevant: exit 0 with no output.
 
 set -euo pipefail
 
@@ -9,12 +9,12 @@ BRAIN_DIR="~/.nexo/brain"
 MODEL_FILE="$BRAIN_DIR/user_model.json"
 SUMMARIES_DIR="$BRAIN_DIR/daily_summaries"
 
-# --- Guardia: archivo imprescindible ---
+# --- Guard: required file ---
 if [[ ! -f "$MODEL_FILE" ]]; then
     exit 0
 fi
 
-# --- Python inline para parsear JSON y analizar ---
+# --- Inline Python to parse JSON and analyze ---
 python3 - <<'PYEOF'
 import json
 import sys
@@ -26,7 +26,7 @@ BRAIN_DIR = os.path.expanduser("~/.nexo/brain")
 MODEL_FILE = os.path.join(BRAIN_DIR, "user_model.json")
 SUMMARIES_DIR = os.path.join(BRAIN_DIR, "daily_summaries")
 
-# ── Cargar modelo ──────────────────────────────────────────────────────────
+# ── Load model ──────────────────────────────────────────────────────────
 try:
     with open(MODEL_FILE) as f:
         model = json.load(f)
@@ -35,11 +35,11 @@ except Exception:
 
 insights = []
 
-# ── 1. Analizar evolution_log — últimas 3-5 entradas ─────────────────────
+# ── 1. Analyze evolution_log — last 3-5 entries ─────────────────────
 evolution = model.get("evolution_log", [])
 recent = evolution[-5:] if len(evolution) >= 5 else evolution
 
-# Detectar entradas de los últimos 3 días
+# Detect entries from the last 3 days
 today = datetime.now().date()
 cutoff = today - timedelta(days=3)
 
@@ -56,9 +56,9 @@ if recent_obs:
     for obs in recent_obs[-2:]:  # max 2 most recent
         insights.append(obs["observation"].strip())
 
-# ── 2. Detectar cambios de traits >0.1 entre entradas (si hay histórico) ──
-# El modelo actual solo tiene snapshot actual; si en el futuro hay histórico
-# en evolution_log con trait deltas, se puede ampliar aquí.
+# ── 2. Detect trait changes >0.1 between entries (if history exists) ──
+# The current model only has a snapshot; if in the future there is history
+# in evolution_log with trait deltas, this can be expanded here.
 # Detect the most extreme trait as the dominant identity signal.
 traits = model.get("traits", {})
 if traits:
@@ -66,13 +66,13 @@ if traits:
     dominant_val = traits[dominant]
     weakest = min(traits, key=lambda k: traits[k])
     weakest_val = traits[weakest]
-    # Solo reportar si es muy extremo (>0.9 o <0.2) para no saturar
+    # Only report if extreme (>0.9 or <0.2) to avoid noise
     if dominant_val >= 0.9:
-        insights.append(f"Trait dominante: {dominant}={dominant_val} (máximo registrado)")
+        insights.append(f"Dominant trait: {dominant}={dominant_val} (highest recorded)")
     if weakest_val <= 0.2:
-        insights.append(f"Trait en mínimo: {weakest}={weakest_val} (baja tolerancia activa)")
+        insights.append(f"Lowest trait: {weakest}={weakest_val} (low tolerance active)")
 
-# ── 3. Contradicciones recientes (últimos 3 días) ─────────────────────────
+# ── 3. Recent contradictions (last 3 days) ─────────────────────────
 contradictions = model.get("contradictions", [])
 recent_contradictions = []
 for c in contradictions:
@@ -84,24 +84,24 @@ for c in contradictions:
         pass
 
 for c in recent_contradictions:
-    insights.append(f"Contradicción detectada: {c['description'].strip()}")
+    insights.append(f"Contradiction detected: {c['description'].strip()}")
 
-# ── 4. Foco activo actual ─────────────────────────────────────────────────
+# ── 4. Current active focus ─────────────────────────────────────────────────
 current_focus = model.get("current_focus", [])
-# Solo incluir si hay focos (y no es el arranque inicial)
+# Only include if there are focus items (and it's not initial startup)
 if len(current_focus) > 0 and len(insights) == 0:
-    # Si no hay otros insights, reportar foco como contexto mínimo
+    # If no other insights, report focus as minimum context
     focus_str = ", ".join(current_focus)
-    insights.append(f"Foco actual: {focus_str}")
+    insights.append(f"Current focus: {focus_str}")
 
-# ── 5. Goals: cambios active/dormant ─────────────────────────────────────
+# ── 5. Goals: active/dormant changes ─────────────────────────────────────
 goals_active = model.get("goals_active", [])
 goals_dormant = model.get("goals_dormant", [])
-# Si hay goals dormant, mencionarlos (pueden necesitar reactivación)
+# If there are dormant goals, mention them (may need reactivation)
 if goals_dormant:
     insights.append(f"Goal dormant: {goals_dormant[0]}")
 
-# ── Leer último daily summary ─────────────────────────────────────────────
+# ── Read last daily summary ─────────────────────────────────────────────
 summary_text = ""
 try:
     files = sorted(glob.glob(os.path.join(SUMMARIES_DIR, "*.md")))
@@ -109,17 +109,17 @@ try:
         with open(files[-1]) as f:
             lines = [l.rstrip() for l in f.readlines() if l.strip()]
         # Take up to 3 lines of content (exclude header)
-        content_lines = [l for l in lines if not l.startswith("# Resumen")]
+        content_lines = [l for l in lines if not l.startswith("# Resumen") and not l.startswith("# Summary")]
         summary_text = " | ".join(content_lines[:3])
 except Exception:
     pass
 
 # ── Output ────────────────────────────────────────────────────────────────
-# Si no hay insights reales, salir sin output
+# If no real insights, exit without output
 if not insights and not summary_text:
     sys.exit(0)
 
-# Deduplicar y limitar
+# Deduplicate and limit
 seen = set()
 unique_insights = []
 for ins in insights:

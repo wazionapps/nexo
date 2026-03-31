@@ -175,13 +175,21 @@ Rules:
 - Similar but different scope (e.g., different recipients) = NOT redundant
 - When in doubt, say not redundant (false negatives are cheaper than false positives)"""
 
+    auth_check = subprocess.run(
+        [str(CLAUDE_CLI), "-p", "Reply with exactly: ok", "--bare", "--output-format", "text", "--model", "haiku"],
+        capture_output=True, text=True, timeout=15
+    )
+    if auth_check.returncode != 0:
+        # CLI not authenticated, skip gracefully
+        return {"redundant": False, "reason": "CLI not authenticated — skipped analysis", "suggestion": "N/A"}
+
     env = os.environ.copy()
     env.pop("CLAUDECODE", None)
     env.pop("CLAUDE_CODE", None)
 
     try:
         result = subprocess.run(
-            [str(CLAUDE_CLI), "-p", prompt, "--model", "opus",
+            [str(CLAUDE_CLI), "-p", prompt, "--model", "opus", "--output-format", "text", "--bare",
              "--allowedTools", "Read,Write,Edit,Glob,Grep"],
             capture_output=True, text=True, timeout=60, env=env
         )

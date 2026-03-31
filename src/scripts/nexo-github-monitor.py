@@ -18,7 +18,7 @@ from pathlib import Path
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", Path.home() / ".nexo"))
 STATUS_FILE = NEXO_HOME / "github-status.json"
 LOG_FILE = NEXO_HOME / "logs" / "github-monitor.log"
-REPO = "myprojectapps/nexo"
+REPO = "wazionapps/nexo"
 CLAUDE_CLI = Path.home() / ".local" / "bin" / "claude"
 
 
@@ -124,7 +124,7 @@ def analyze_via_cli(data):
     """Pass collected data to CLI for analysis and suggested responses."""
     data_json = json.dumps(data, ensure_ascii=False)
 
-    prompt = f"""Analyze this GitHub repository status for NEXO Brain (myprojectapps/nexo).
+    prompt = f"""Analyze this GitHub repository status for NEXO Brain (wazionapps/nexo).
 
 DATA:
 {data_json}
@@ -158,14 +158,21 @@ Return as JSON:
   "release_recommendation": "text or null"
 }}"""
 
+    auth_check = subprocess.run(
+        [str(CLAUDE_CLI), "-p", "Reply with exactly: ok", "--bare", "--output-format", "text", "--model", "haiku"],
+        capture_output=True, text=True, timeout=15
+    )
+    if auth_check.returncode != 0:
+        # CLI not authenticated, skip gracefully
+        return ""
+
     env = os.environ.copy()
     env.pop("CLAUDECODE", None)
     env.pop("CLAUDE_CODE", None)
 
     result = subprocess.run(
         [str(CLAUDE_CLI), "-p", prompt,
-         "--model", "opus",
-         "--output-format", "text",
+         "--model", "opus", "--output-format", "text", "--bare",
          "--allowedTools", "Read,Write,Edit,Glob,Grep"],
         capture_output=True, text=True, timeout=180, env=env
     )

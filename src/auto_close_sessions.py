@@ -11,7 +11,7 @@ import os
 import sys
 import datetime
 
-# Ensure we can import from nexo-mcp
+# Ensure we can import from the source directory
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 os.environ["NEXO_SKIP_FS_INDEX"] = "1"  # Skip FTS rebuild on import
 

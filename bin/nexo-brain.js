@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * create-nexo — Interactive installer for NEXO cognitive co-operator.
+ * nexo-brain — Interactive installer for NEXO cognitive co-operator.
  *
- * Usage: npx create-nexo
+ * Usage: npx nexo-brain
  *
  * What it does:
  * 1. Asks for the co-operator's name
@@ -19,7 +19,7 @@ const fs = require("fs");
 const path = require("path");
 const readline = require("readline");
 
-const NEXO_HOME = path.join(require("os").homedir(), ".nexo");
+let NEXO_HOME = path.join(require("os").homedir(), ".nexo");
 const CLAUDE_SETTINGS = path.join(
   require("os").homedir(),
   ".claude",
@@ -50,6 +50,456 @@ function run(cmd, opts = {}) {
 
 function log(msg) {
   console.log(`  ${msg}`);
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// CORE PROCESS & HOOK DEFINITIONS
+// All 13 nightly/periodic processes and all 7 core hooks that make NEXO functional.
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Complete definition of all 13 NEXO automated processes.
+ * Each entry specifies the script, its interpreter ("python" or "bash"),
+ * the schedule type, and default schedule values.
+ */
+const ALL_PROCESSES = [
+  // --- Every 5 minutes ---
+  { name: "auto-close-sessions", script: "auto_close_sessions.py", interpreter: "python", scriptDir: "root",
+    type: "interval", intervalMinutes: 5, purpose: "Clean stale sessions" },
+  { name: "watchdog", script: "nexo-watchdog.sh", interpreter: "bash", scriptDir: "scripts",
+    type: "interval", intervalMinutes: 5, purpose: "Health monitoring" },
+  // --- Every 30 minutes ---
+  { name: "immune", script: "nexo-immune.py", interpreter: "python", scriptDir: "scripts",
+    type: "interval", intervalMinutes: 30, purpose: "System immunity checks" },
+  // --- Every 2 hours ---
+  { name: "synthesis", script: "nexo-synthesis.py", interpreter: "python", scriptDir: "scripts",
+    type: "interval", intervalMinutes: 120, purpose: "Memory synthesis" },
+  // --- Every hour ---
+  { name: "backup", script: "nexo-backup.sh", interpreter: "bash", scriptDir: "scripts",
+    type: "interval", intervalMinutes: 60, purpose: "DB backups" },
+  // --- RunAtLoad (once on boot) ---
+  { name: "catchup", script: "nexo-catchup.py", interpreter: "python", scriptDir: "scripts",
+    type: "runAtLoad", purpose: "Session catchup" },
+  { name: "tcc-approve", script: "nexo-tcc-approve.sh", interpreter: "bash", scriptDir: "scripts",
+    type: "runAtLoad", macOnly: true, watchPaths: ["~/.local/share/claude/versions"],
+    purpose: "Auto-approve macOS permissions for Claude updates" },
+  // --- KeepAlive (persistent daemon) ---
+  { name: "prevent-sleep", script: "nexo-prevent-sleep.sh", interpreter: "bash", scriptDir: "scripts",
+    type: "keepAlive", purpose: "Keep machine awake for nocturnal processes" },
+  // --- Daily (times from schedule.json) ---
+  { name: "cognitive-decay", script: "nexo-cognitive-decay.py", interpreter: "python", scriptDir: "scripts",
+    type: "daily", defaultHour: 3, defaultMinute: 0, purpose: "Memory decay" },
+  { name: "postmortem", script: "nexo-postmortem-consolidator.py", interpreter: "python", scriptDir: "scripts",
+    type: "daily", defaultHour: 23, defaultMinute: 30, purpose: "Session consolidation" },
+  { name: "self-audit", script: "nexo-daily-self-audit.py", interpreter: "python", scriptDir: "scripts",
+    type: "daily", defaultHour: 7, defaultMinute: 0, purpose: "Self-diagnostic" },
+  { name: "sleep", script: "nexo-sleep.py", interpreter: "python", scriptDir: "scripts",
+    type: "daily", defaultHour: 4, defaultMinute: 0, purpose: "Sleep cycle" },
+  { name: "deep-sleep", script: "nexo-deep-sleep.sh", interpreter: "bash", scriptDir: "scripts",
+    type: "daily", defaultHour: 4, defaultMinute: 30, purpose: "Deep sleep analysis" },
+  // --- Weekly (day + time from schedule.json) ---
+  { name: "evolution", script: "nexo-evolution-run.py", interpreter: "python", scriptDir: "scripts",
+    type: "weekly", defaultDay: "sunday", defaultHour: 3, defaultMinute: 0, purpose: "Self-evolution" },
+  { name: "followup-hygiene", script: "nexo-followup-hygiene.py", interpreter: "python", scriptDir: "scripts",
+    type: "weekly", defaultDay: "sunday", defaultHour: 5, defaultMinute: 0, purpose: "Cleanup stale followups" },
+];
+
+/**
+ * Complete definition of all 7 core hooks.
+ * event: Claude Code hook event name
+ * matcher: glob matcher for the hook
+ * script: script filename inside NEXO_HOME/hooks/ (or a raw command template)
+ * key: unique identifier to detect if already registered (avoids duplicates)
+ */
+const ALL_CORE_HOOKS = [
+  { event: "SessionStart", key: "session-start-ts", commandTemplate: (nexoHome) =>
+      `date +%s > ${path.join(nexoHome, "operations", ".session-start-ts")}`,
+    purpose: "Session timing" },
+  { event: "SessionStart", key: "session-start.sh", script: "session-start.sh",
+    purpose: "Briefing + context" },
+  { event: "Stop", key: "session-stop.sh", script: "session-stop.sh",
+    purpose: "POSTMORTEM — the most important" },
+  { event: "PostToolUse", key: "capture-tool-logs.sh", script: "capture-tool-logs.sh",
+    purpose: "Operation capture" },
+  { event: "PostToolUse", key: "inbox-hook.sh", script: "inbox-hook.sh",
+    purpose: "Inter-session messaging" },
+  { event: "PreCompact", key: "pre-compact.sh", script: "pre-compact.sh",
+    purpose: "Memory preservation" },
+  { event: "PostCompact", key: "post-compact.sh", script: "post-compact.sh",
+    purpose: "Memory restoration" },
+];
+
+/**
+ * Register all 7 core hooks in settings.hooks.
+ * Additive: adds missing hooks, never removes user's custom ones.
+ */
+function registerAllCoreHooks(settings, hooksDir, nexoHome) {
+  if (!settings.hooks) settings.hooks = {};
+
+  // Ensure operations dir exists for timestamp file
+  const opsDir = path.join(nexoHome, "operations");
+  fs.mkdirSync(opsDir, { recursive: true });
+
+  for (const hook of ALL_CORE_HOOKS) {
+    if (!settings.hooks[hook.event]) settings.hooks[hook.event] = [];
+
+    // Check if this specific hook is already registered (by key)
+    const alreadyExists = settings.hooks[hook.event].some(
+      (h) => h.command && h.command.includes(hook.key)
+    );
+    if (alreadyExists) continue;
+
+    // Build the command
+    let command;
+    if (hook.commandTemplate) {
+      command = hook.commandTemplate(nexoHome);
+    } else {
+      command = `NEXO_HOME=${nexoHome} bash ${path.join(hooksDir, hook.script)}`;
+    }
+
+    settings.hooks[hook.event].push({
+      type: "command",
+      command: command,
+    });
+  }
+}
+
+/**
+ * Load schedule.json if it exists, or create it with defaults on fresh install.
+ * NEVER overwrites an existing schedule.json (user customization).
+ */
+function loadOrCreateSchedule(nexoHome) {
+  const configDir = path.join(nexoHome, "config");
+  fs.mkdirSync(configDir, { recursive: true });
+  const scheduleFile = path.join(configDir, "schedule.json");
+
+  if (fs.existsSync(scheduleFile)) {
+    try {
+      return JSON.parse(fs.readFileSync(scheduleFile, "utf8"));
+    } catch {
+      // Corrupt file — return defaults but don't overwrite
+      return getDefaultSchedule();
+    }
+  }
+
+  // Fresh install: detect timezone and create schedule.json
+  const detectedTz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  const schedule = getDefaultSchedule(detectedTz);
+  fs.writeFileSync(scheduleFile, JSON.stringify(schedule, null, 2));
+  return schedule;
+}
+
+function getDefaultSchedule(timezone) {
+  return {
+    timezone: timezone || "UTC",
+    auto_update: true,
+    processes: {
+      "cognitive-decay": { hour: 3, minute: 0 },
+      "postmortem": { hour: 23, minute: 30 },
+      "self-audit": { hour: 7, minute: 0 },
+      "sleep": { hour: 4, minute: 0 },
+      "deep-sleep": { hour: 4, minute: 30 },
+      "evolution": { day: "sunday", hour: 3, minute: 0 },
+      "followup-hygiene": { day: "sunday", hour: 5, minute: 0 },
+    },
+  };
+}
+
+/**
+ * Resolve the venv python path for an existing NEXO_HOME installation.
+ */
+function findVenvPython(nexoHome) {
+  const venvPy = path.join(nexoHome, ".venv", "bin", "python3");
+  if (fs.existsSync(venvPy)) return venvPy;
+  return null;
+}
+
+/**
+ * Map day name to systemd OnCalendar day abbreviation and crontab day number.
+ */
+const DAY_MAP = {
+  sunday: { systemd: "Sun", cron: 0 },
+  monday: { systemd: "Mon", cron: 1 },
+  tuesday: { systemd: "Tue", cron: 2 },
+  wednesday: { systemd: "Wed", cron: 3 },
+  thursday: { systemd: "Thu", cron: 4 },
+  friday: { systemd: "Fri", cron: 5 },
+  saturday: { systemd: "Sat", cron: 6 },
+};
+
+/**
+ * Install all 13 processes on the current platform.
+ * macOS: LaunchAgents (.plist)
+ * Linux+systemd: .service + .timer files
+ * Linux fallback: crontab entries
+ */
+function installAllProcesses(platform, pythonPath, nexoHome, schedule, launchAgentsDir) {
+  const home = require("os").homedir();
+  const nexoCode = path.join(__dirname, "..");
+  const logsDir = path.join(nexoHome, "logs");
+  fs.mkdirSync(logsDir, { recursive: true });
+
+  // Resolve script path: "root" means NEXO_HOME directly, "scripts" means NEXO_HOME/scripts/
+  function scriptPath(proc) {
+    const dir = proc.scriptDir === "root" ? nexoHome : path.join(nexoHome, "scripts");
+    return path.join(dir, proc.script);
+  }
+
+  // Resolve interpreter
+  function interpreterPath(proc) {
+    return proc.interpreter === "bash" ? "/bin/bash" : pythonPath;
+  }
+
+  // Get schedule overrides for daily/weekly processes
+  function getSchedule(proc) {
+    const sched = schedule.processes || {};
+    const override = sched[proc.name] || {};
+    return {
+      hour: override.hour !== undefined ? override.hour : (proc.defaultHour || 0),
+      minute: override.minute !== undefined ? override.minute : (proc.defaultMinute || 0),
+      day: override.day || proc.defaultDay || null,
+    };
+  }
+
+  if (platform === "darwin") {
+    // ──── macOS: LaunchAgents ────
+    fs.mkdirSync(launchAgentsDir, { recursive: true });
+    let count = 0;
+
+    for (const proc of ALL_PROCESSES) {
+      // Skip macOnly processes on Linux
+      if (proc.macOnly && platform !== "darwin") continue;
+
+      const plistName = `com.nexo.${proc.name}.plist`;
+      const plistPath = path.join(launchAgentsDir, plistName);
+      const sPath = scriptPath(proc);
+      const interp = interpreterPath(proc);
+      const s = getSchedule(proc);
+
+      let scheduleBlock = "";
+      if (proc.type === "keepAlive") {
+        scheduleBlock = `    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>`;
+      } else if (proc.type === "runAtLoad") {
+        let extra = "";
+        if (proc.watchPaths) {
+          const paths = proc.watchPaths.map(p => p.replace("~", home));
+          extra = `\n    <key>WatchPaths</key>\n    <array>\n${paths.map(p => `        <string>${p}</string>`).join("\n")}\n    </array>`;
+        }
+        scheduleBlock = `    <key>RunAtLoad</key>
+    <true/>${extra}`;
+      } else if (proc.type === "interval") {
+        scheduleBlock = `    <key>StartInterval</key>
+    <integer>${proc.intervalMinutes * 60}</integer>
+    <key>RunAtLoad</key>
+    <false/>`;
+      } else if (proc.type === "daily") {
+        scheduleBlock = `    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>${s.hour}</integer>
+        <key>Minute</key>
+        <integer>${s.minute}</integer>
+    </dict>
+    <key>RunAtLoad</key>
+    <false/>`;
+      } else if (proc.type === "weekly") {
+        // macOS uses Weekday 0=Sunday
+        const dayNum = s.day ? (DAY_MAP[s.day.toLowerCase()] || { cron: 0 }).cron : 0;
+        scheduleBlock = `    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Weekday</key>
+        <integer>${dayNum}</integer>
+        <key>Hour</key>
+        <integer>${s.hour}</integer>
+        <key>Minute</key>
+        <integer>${s.minute}</integer>
+    </dict>
+    <key>RunAtLoad</key>
+    <false/>`;
+      }
+
+      const plist = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.nexo.${proc.name}</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>${interp}</string>
+        <string>${sPath}</string>
+    </array>
+    ${scheduleBlock}
+    <key>StandardOutPath</key>
+    <string>${path.join(logsDir, `${proc.name}-stdout.log`)}</string>
+    <key>StandardErrorPath</key>
+    <string>${path.join(logsDir, `${proc.name}-stderr.log`)}</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>HOME</key>
+        <string>${home}</string>
+        <key>NEXO_HOME</key>
+        <string>${nexoHome}</string>
+        <key>NEXO_CODE</key>
+        <string>${nexoCode}</string>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+</dict>
+</plist>`;
+
+      fs.writeFileSync(plistPath, plist);
+      try {
+        execSync(
+          `launchctl bootout gui/$(id -u) "${plistPath}" 2>/dev/null; launchctl bootstrap gui/$(id -u) "${plistPath}"`,
+          { stdio: "pipe" }
+        );
+      } catch {
+        // May fail if not previously loaded, that's OK
+      }
+      count++;
+    }
+    log(`${count} automated processes configured (LaunchAgents).`);
+
+  } else if (platform === "linux") {
+    // ──── Linux: systemd user timers (preferred) or crontab fallback ────
+    const systemdDir = path.join(home, ".config", "systemd", "user");
+    const hasSystemd = run("which systemctl") && run("systemctl --user status 2>/dev/null");
+
+    if (hasSystemd) {
+      fs.mkdirSync(systemdDir, { recursive: true });
+      let count = 0;
+
+      for (const proc of ALL_PROCESSES) {
+        if (proc.macOnly) continue; // tcc-approve is macOS only
+        const serviceName = `nexo-${proc.name}`;
+        const serviceFile = path.join(systemdDir, `${serviceName}.service`);
+        const timerFile = path.join(systemdDir, `${serviceName}.timer`);
+        const sPath = scriptPath(proc);
+        const interp = interpreterPath(proc);
+        const s = getSchedule(proc);
+
+        const serviceType = proc.type === "keepAlive" ? "simple" : "oneshot";
+        const restartPolicy = proc.type === "keepAlive" ? "Restart=always\nRestartSec=5" : "";
+        const service = `[Unit]
+Description=NEXO Brain — ${proc.name} (${proc.purpose})
+
+[Service]
+Type=${serviceType}
+ExecStart=${interp} ${sPath}
+Environment=HOME=${home}
+Environment=NEXO_HOME=${nexoHome}
+Environment=NEXO_CODE=${nexoCode}
+StandardOutput=append:${path.join(logsDir, `${proc.name}-stdout.log`)}
+StandardError=append:${path.join(logsDir, `${proc.name}-stderr.log`)}
+${restartPolicy}
+`;
+
+        // Build calendar spec
+        let onCalendar = "";
+        let persistent = "true";
+        if (proc.type === "keepAlive") {
+          // KeepAlive = persistent service, no timer needed
+          fs.writeFileSync(serviceFile, service + `\n[Install]\nWantedBy=default.target\n`);
+          run(`systemctl --user enable ${serviceName}.service`);
+          run(`systemctl --user start ${serviceName}.service`);
+          count++;
+          continue;
+        } else if (proc.type === "runAtLoad") {
+          // No timer for runAtLoad — runs via MCP startup
+          fs.writeFileSync(serviceFile, service);
+          count++;
+          continue;
+        } else if (proc.type === "interval") {
+          onCalendar = `*:0/${proc.intervalMinutes}`;
+        } else if (proc.type === "daily") {
+          onCalendar = `*-*-* ${String(s.hour).padStart(2, "0")}:${String(s.minute).padStart(2, "0")}:00`;
+        } else if (proc.type === "weekly") {
+          const dayAbbr = s.day ? (DAY_MAP[s.day.toLowerCase()] || { systemd: "Sun" }).systemd : "Sun";
+          onCalendar = `${dayAbbr} *-*-* ${String(s.hour).padStart(2, "0")}:${String(s.minute).padStart(2, "0")}:00`;
+        }
+
+        const timer = `[Unit]
+Description=NEXO Brain — ${proc.name} timer
+
+[Timer]
+OnCalendar=${onCalendar}
+Persistent=${persistent}
+
+[Install]
+WantedBy=timers.target
+`;
+
+        fs.writeFileSync(serviceFile, service);
+        fs.writeFileSync(timerFile, timer);
+        try {
+          execSync(`systemctl --user enable --now ${serviceName}.timer 2>/dev/null`, { stdio: "pipe" });
+        } catch {}
+        count++;
+      }
+      log(`${count} systemd user timers configured.`);
+
+    } else {
+      // ──── Fallback: crontab ────
+      log("systemd not available, configuring crontab...");
+      const cronLines = [];
+      const envLine = `NEXO_HOME=${nexoHome}`;
+      const envLine2 = `NEXO_CODE=${nexoCode}`;
+
+      for (const proc of ALL_PROCESSES) {
+        if (proc.type === "runAtLoad") continue; // No cron for runAtLoad
+        const sPath = scriptPath(proc);
+        const interp = interpreterPath(proc);
+        const s = getSchedule(proc);
+        const logPath = path.join(logsDir, `${proc.name}-stdout.log`);
+
+        let cronSpec = "";
+        if (proc.type === "interval") {
+          cronSpec = `*/${proc.intervalMinutes} * * * *`;
+        } else if (proc.type === "daily") {
+          cronSpec = `${s.minute} ${s.hour} * * *`;
+        } else if (proc.type === "weekly") {
+          const dayNum = s.day ? (DAY_MAP[s.day.toLowerCase()] || { cron: 0 }).cron : 0;
+          cronSpec = `${s.minute} ${s.hour} * * ${dayNum}`;
+        }
+
+        cronLines.push(`${cronSpec} ${interp} ${sPath} >> ${logPath} 2>&1`);
+      }
+
+      try {
+        const existingCron = run("crontab -l 2>/dev/null") || "";
+        const nexoCronMarker = "# NEXO Brain automated processes";
+        const nexoCronEnd = "# END NEXO Brain";
+
+        // Remove old NEXO cron block if present, then add fresh one
+        let baseCron = existingCron;
+        if (existingCron.includes(nexoCronMarker)) {
+          const startIdx = existingCron.indexOf(nexoCronMarker);
+          const endIdx = existingCron.indexOf(nexoCronEnd);
+          if (endIdx > startIdx) {
+            baseCron = existingCron.substring(0, startIdx) + existingCron.substring(endIdx + nexoCronEnd.length);
+          } else {
+            baseCron = existingCron.substring(0, startIdx);
+          }
+        }
+
+        const newCron = baseCron.trimEnd() + "\n" + nexoCronMarker + "\n" + envLine + "\n" + envLine2 + "\n" + cronLines.join("\n") + "\n" + nexoCronEnd + "\n";
+        const tmpCron = path.join(nexoHome, ".crontab-tmp");
+        fs.writeFileSync(tmpCron, newCron);
+        execSync(`crontab ${tmpCron}`, { stdio: "pipe" });
+        fs.unlinkSync(tmpCron);
+        log(`${cronLines.length} cron jobs configured.`);
+      } catch (e) {
+        log(`Could not configure crontab: ${e.message}`);
+        log("Background tasks will run via catch-up on startup.");
+      }
+    }
+  } else {
+    log("Unsupported platform for background tasks. Maintenance runs on MCP startup.");
+  }
 }
 
 async function main() {
@@ -107,35 +557,60 @@ async function main() {
         log(`Existing installation detected: v${installedVersion} → v${currentVersion}`);
         log("Running auto-migration...");
 
-        // Update hooks
-        const hooksSrc = path.join(__dirname, "..", "src", "hooks");
+        // Recursive copy helper (skips __pycache__, .pyc, .db files)
+        const srcDir = path.join(__dirname, "..", "src");
+        const copyDirRec = (src, dest) => {
+          fs.mkdirSync(dest, { recursive: true });
+          fs.readdirSync(src).forEach(item => {
+            if (item === "__pycache__" || item.endsWith(".pyc") || item.endsWith(".db")) return;
+            const srcPath = path.join(src, item);
+            const destPath = path.join(dest, item);
+            if (fs.statSync(srcPath).isDirectory()) {
+              copyDirRec(srcPath, destPath);
+            } else {
+              fs.copyFileSync(srcPath, destPath);
+            }
+          });
+        };
+
+        // Update hooks (entire directory)
+        const hooksSrc = path.join(srcDir, "hooks");
         const hooksDest = path.join(NEXO_HOME, "hooks");
-        fs.mkdirSync(hooksDest, { recursive: true });
-        ["session-start.sh", "capture-session.sh", "session-stop.sh", "pre-compact.sh", "caffeinate-guard.sh"].forEach((h) => {
-          const src = path.join(hooksSrc, h);
-          const dest = path.join(hooksDest, h);
-          if (fs.existsSync(src)) {
-            fs.copyFileSync(src, dest);
-            fs.chmodSync(dest, "755");
-          }
-        });
+        if (fs.existsSync(hooksSrc)) {
+          copyDirRec(hooksSrc, hooksDest);
+          // Make .sh files executable
+          fs.readdirSync(hooksDest).filter(f => f.endsWith(".sh")).forEach(f => {
+            fs.chmodSync(path.join(hooksDest, f), "755");
+          });
+        }
         log("  Hooks updated.");
 
-        // Update core Python files
-        const srcDir = path.join(__dirname, "..", "src");
-        ["server.py", "db.py", "plugin_loader.py", "cognitive.py",
-         "knowledge_graph.py", "kg_populate.py", "maintenance.py", "storage_router.py",
-         "tools_sessions.py", "tools_coordination.py", "tools_reminders.py",
-         "tools_reminders_crud.py", "tools_learnings.py", "tools_credentials.py",
-         "tools_task_history.py", "tools_menu.py"].forEach((f) => {
+        // Update core Python files (flat .py files in src/)
+        const coreFlatFiles = [
+          "server.py", "plugin_loader.py",
+          "knowledge_graph.py", "kg_populate.py", "maintenance.py", "storage_router.py",
+          "claim_graph.py", "hnsw_index.py", "evolution_cycle.py", "migrate_embeddings.py",
+          "auto_close_sessions.py",
+          "tools_sessions.py", "tools_coordination.py", "tools_reminders.py",
+          "tools_reminders_crud.py", "tools_learnings.py", "tools_credentials.py",
+          "tools_task_history.py", "tools_menu.py",
+        ];
+        coreFlatFiles.forEach((f) => {
           const src = path.join(srcDir, f);
           if (fs.existsSync(src)) {
             fs.copyFileSync(src, path.join(NEXO_HOME, f));
           }
         });
+        // Update core packages (db/, cognitive/) — full directory copy
+        ["db", "cognitive"].forEach(pkg => {
+          const pkgSrc = path.join(srcDir, pkg);
+          if (fs.existsSync(pkgSrc)) {
+            copyDirRec(pkgSrc, path.join(NEXO_HOME, pkg));
+          }
+        });
         log("  Core files updated.");
 
-        // Update plugins
+        // Update plugins (all .py files in plugins/)
         const pluginsSrc = path.join(srcDir, "plugins");
         const pluginsDest = path.join(NEXO_HOME, "plugins");
         fs.mkdirSync(pluginsDest, { recursive: true });
@@ -146,57 +621,51 @@ async function main() {
         }
         log("  Plugins updated.");
 
-        // Update dashboard
+        // Update dashboard (recursive — includes static/, templates/)
         const dashSrc = path.join(srcDir, "dashboard");
         const dashDest = path.join(NEXO_HOME, "dashboard");
         if (fs.existsSync(dashSrc)) {
-          fs.mkdirSync(dashDest, { recursive: true });
-          const copyDir = (src, dest) => {
-            fs.readdirSync(src).forEach(item => {
-              const srcPath = path.join(src, item);
-              const destPath = path.join(dest, item);
-              if (fs.statSync(srcPath).isDirectory()) {
-                fs.mkdirSync(destPath, { recursive: true });
-                copyDir(srcPath, destPath);
-              } else {
-                fs.copyFileSync(srcPath, destPath);
-              }
-            });
-          };
-          copyDir(dashSrc, dashDest);
+          copyDirRec(dashSrc, dashDest);
           log("  Dashboard updated.");
         }
 
-        // Update scripts
+        // Update rules (directory with core-rules.json, __init__.py, migrate.py)
+        const rulesSrc = path.join(srcDir, "rules");
+        const rulesDest = path.join(NEXO_HOME, "rules");
+        if (fs.existsSync(rulesSrc)) {
+          copyDirRec(rulesSrc, rulesDest);
+          log("  Rules updated.");
+        }
+
+        // Update scripts (all .py, .sh files + subdirectories like deep-sleep/)
         const scriptsSrc = path.join(srcDir, "scripts");
         const scriptsDest = path.join(NEXO_HOME, "scripts");
-        fs.mkdirSync(scriptsDest, { recursive: true });
         if (fs.existsSync(scriptsSrc)) {
-          fs.readdirSync(scriptsSrc).filter(f => f.endsWith(".py") || f.endsWith(".sh")).forEach((f) => {
-            fs.copyFileSync(path.join(scriptsSrc, f), path.join(scriptsDest, f));
+          copyDirRec(scriptsSrc, scriptsDest);
+          // Make .sh files executable
+          fs.readdirSync(scriptsDest).filter(f => f.endsWith(".sh")).forEach(f => {
+            fs.chmodSync(path.join(scriptsDest, f), "755");
           });
         }
         log("  Scripts updated.");
 
-        // Add PreCompact hook to settings.json if missing
+        // Register ALL 7 core hooks in settings.json (additive — don't remove user's custom hooks)
         let settings = {};
         if (fs.existsSync(CLAUDE_SETTINGS)) {
           try { settings = JSON.parse(fs.readFileSync(CLAUDE_SETTINGS, "utf8")); } catch {}
         }
-        if (settings.hooks && !settings.hooks.PreCompact) {
-          settings.hooks.PreCompact = [];
-        }
-        if (settings.hooks && settings.hooks.PreCompact) {
-          const hookPath = path.join(hooksDest, "pre-compact.sh");
-          if (!settings.hooks.PreCompact.some((h) => h.command && h.command.includes("pre-compact.sh"))) {
-            settings.hooks.PreCompact.push({
-              type: "command",
-              command: `bash ${hookPath}`,
-            });
-            fs.writeFileSync(CLAUDE_SETTINGS, JSON.stringify(settings, null, 2));
-            log("  PreCompact hook added to Claude Code settings.");
-          }
-        }
+        if (!settings.hooks) settings.hooks = {};
+        const migHooksDest = path.join(NEXO_HOME, "hooks");
+        registerAllCoreHooks(settings, migHooksDest, NEXO_HOME);
+        fs.mkdirSync(path.dirname(CLAUDE_SETTINGS), { recursive: true });
+        fs.writeFileSync(CLAUDE_SETTINGS, JSON.stringify(settings, null, 2));
+        log("  All 7 core hooks registered in Claude Code settings.");
+
+        // Regenerate ALL 13 LaunchAgents / systemd timers
+        const migSchedule = loadOrCreateSchedule(NEXO_HOME);
+        const migPython = findVenvPython(NEXO_HOME) || "python3";
+        installAllProcesses(platform, migPython, NEXO_HOME, migSchedule, LAUNCH_AGENTS);
+        log("  All 13 automated processes updated.");
 
         // Update version file
         fs.writeFileSync(versionFile, JSON.stringify({
@@ -215,7 +684,20 @@ async function main() {
             .replace(/\{\{NEXO_HOME\}\}/g, NEXO_HOME);
           fs.writeFileSync(path.join(NEXO_HOME, "CLAUDE.md.updated"), claudeMd);
           log(`  Updated CLAUDE.md template saved to ~/.nexo/CLAUDE.md.updated`);
-          log(`  Review and merge changes into your ~/.claude/CLAUDE.md if desired.`);
+
+          // Update CLAUDE.md version tracker (auto_update.py will handle section migration on next server start)
+          const migClaudeMdVerMatch = claudeMd.match(/nexo-claude-md-version:\s*([\d.]+)/);
+          if (migClaudeMdVerMatch) {
+            const migDataDir = path.join(NEXO_HOME, "data");
+            fs.mkdirSync(migDataDir, { recursive: true });
+            // Don't write the version yet — let auto_update.py detect the diff and migrate sections
+            // Only write if no version file exists (first time with version tracking)
+            const migVerFile = path.join(migDataDir, "claude_md_version.txt");
+            if (!fs.existsSync(migVerFile)) {
+              fs.writeFileSync(migVerFile, "0.0.0");
+              log(`  CLAUDE.md version tracker initialized (will migrate on next server start)`);
+            }
+          }
         }
 
         console.log("");
@@ -298,6 +780,8 @@ async function main() {
   const i18n = {
     en: {
       langConfirm: "English it is.",
+      askDataDir: `  Where should I store my data? (databases, backups, personal plugins)\n  Default: ~/.nexo/\n  > `,
+      dataDirConfirm: (p) => `Data directory: ${p}`,
       askUserName: "  What's your name? > ",
       userGreet: (n) => `Nice to meet you, ${n}.`,
       askAgentName: "  What should I call myself? (default: NEXO) > ",
@@ -325,6 +809,8 @@ async function main() {
     },
     es: {
       langConfirm: "Español, perfecto.",
+      askDataDir: `  ¿Dónde quieres que guarde mis datos? (bases de datos, backups, plugins personales)\n  Por defecto: ~/.nexo/\n  > `,
+      dataDirConfirm: (p) => `Directorio de datos: ${p}`,
       askUserName: "  ¿Cómo te llamas? > ",
       userGreet: (n) => `Encantado, ${n}.`,
       askAgentName: "  ¿Cómo quieres que me llame? (default: NEXO) > ",
@@ -352,6 +838,8 @@ async function main() {
     },
     fr: {
       langConfirm: "Français, parfait.",
+      askDataDir: `  Où stocker mes données ? (bases de données, sauvegardes, plugins)\n  Par défaut : ~/.nexo/\n  > `,
+      dataDirConfirm: (p) => `Répertoire de données : ${p}`,
       askUserName: "  Comment tu t'appelles ? > ",
       userGreet: (n) => `Enchanté, ${n}.`,
       askAgentName: "  Comment veux-tu m'appeler ? (défaut: NEXO) > ",
@@ -379,6 +867,8 @@ async function main() {
     },
     de: {
       langConfirm: "Deutsch, perfekt.",
+      askDataDir: `  Wo sollen meine Daten gespeichert werden? (Datenbanken, Backups, Plugins)\n  Standard: ~/.nexo/\n  > `,
+      dataDirConfirm: (p) => `Datenverzeichnis: ${p}`,
       askUserName: "  Wie heißt du? > ",
       userGreet: (n) => `Freut mich, ${n}.`,
       askAgentName: "  Wie soll ich heißen? (Standard: NEXO) > ",
@@ -406,6 +896,8 @@ async function main() {
     },
     it: {
       langConfirm: "Italiano, perfetto.",
+      askDataDir: `  Dove salvare i miei dati? (database, backup, plugin)\n  Default: ~/.nexo/\n  > `,
+      dataDirConfirm: (p) => `Directory dati: ${p}`,
       askUserName: "  Come ti chiami? > ",
       userGreet: (n) => `Piacere, ${n}.`,
       askAgentName: "  Come vuoi chiamarmi? (default: NEXO) > ",
@@ -433,6 +925,8 @@ async function main() {
     },
     pt: {
       langConfirm: "Português, perfeito.",
+      askDataDir: `  Onde guardar os meus dados? (bases de dados, backups, plugins)\n  Padrão: ~/.nexo/\n  > `,
+      dataDirConfirm: (p) => `Diretório de dados: ${p}`,
       askUserName: "  Como te chamas? > ",
       userGreet: (n) => `Prazer, ${n}.`,
       askAgentName: "  Como queres que eu me chame? (padrão: NEXO) > ",
@@ -483,6 +977,20 @@ async function main() {
     }
     t = i18n[lang] || i18n.en;
     log(t.langConfirm);
+    console.log("");
+  }
+
+  // Step 1b: Data directory
+  if (!useDefaults) {
+    const dataDirInput = await ask(t.askDataDir);
+    const dataDirTrimmed = dataDirInput.trim();
+    if (dataDirTrimmed) {
+      // Expand ~ to home dir
+      NEXO_HOME = dataDirTrimmed.replace(/^~/, require("os").homedir());
+      // Resolve to absolute path
+      NEXO_HOME = path.resolve(NEXO_HOME);
+    }
+    log(t.dataDirConfirm(NEXO_HOME));
     console.log("");
   }
 
@@ -598,7 +1106,8 @@ async function main() {
 
   // Use venv python if available, otherwise fall back to system python with --break-system-packages
   const pipPython = fs.existsSync(venvPython) ? venvPython : python;
-  const pipArgs = ["-m", "pip", "install", "--quiet", "fastembed", "numpy", "mcp[cli]"];
+  const requirementsFile = path.join(__dirname, "..", "src", "requirements.txt");
+  const pipArgs = ["-m", "pip", "install", "--quiet", "-r", requirementsFile];
   if (!fs.existsSync(venvPython)) {
     pipArgs.push("--break-system-packages");  // Fallback for systems without venv
   }
@@ -606,7 +1115,7 @@ async function main() {
   const pipInstall = spawnSync(pipPython, pipArgs, { stdio: "inherit" });
   if (pipInstall.status !== 0) {
     log("Failed to install Python dependencies.");
-    log("Try manually: python3 -m venv ~/.nexo/.venv && ~/.nexo/.venv/bin/pip install fastembed numpy 'mcp[cli]'");
+    log("Try manually: python3 -m venv ~/.nexo/.venv && ~/.nexo/.venv/bin/pip install -r src/requirements.txt");
     process.exit(1);
   }
   // Update python reference to use venv python for the rest of setup
@@ -625,8 +1134,32 @@ async function main() {
     path.join(NEXO_HOME, "backups"),
     path.join(NEXO_HOME, "coordination"),
     path.join(NEXO_HOME, "brain"),
+    path.join(NEXO_HOME, "config"),
+    path.join(NEXO_HOME, "operations"),
   ];
   dirs.forEach((d) => fs.mkdirSync(d, { recursive: true }));
+
+  // Create default evolution-objective.json in brain/ if it doesn't exist
+  const evoObjectivePath = path.join(NEXO_HOME, "brain", "evolution-objective.json");
+  if (!fs.existsSync(evoObjectivePath)) {
+    fs.writeFileSync(evoObjectivePath, JSON.stringify({
+      objective: "Improve operational excellence and reduce repeated errors",
+      focus_areas: ["error_prevention", "proactivity", "memory_quality"],
+      evolution_enabled: true,
+      evolution_mode: "review",
+      dimensions: {
+        episodic_memory: { current: 0, target: 90 },
+        autonomy: { current: 0, target: 80 },
+        proactivity: { current: 0, target: 70 },
+        self_improvement: { current: 0, target: 60 },
+        agi: { current: 0, target: 20 },
+      },
+      total_evolutions: 0,
+      consecutive_failures: 0,
+      created_at: new Date().toISOString(),
+    }, null, 2));
+    log("  Created default evolution-objective.json in brain/");
+  }
 
   // Write version file for auto-update tracking
   const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf8"));
@@ -644,16 +1177,38 @@ async function main() {
 
   // Copy source files
   const srcDir = path.join(__dirname, "..", "src");
-  const scriptsSrcDir = path.join(__dirname, "..", "src", "scripts");
-  const pluginsSrcDir = path.join(__dirname, "..", "src", "plugins");
+  const pluginsSrcDir = path.join(srcDir, "plugins");
+  const scriptsSrcDir = path.join(srcDir, "scripts");
   const templateDir = path.join(__dirname, "..", "templates");
 
-  // Core files
+  // Recursive copy helper (skips __pycache__, .pyc, .db files)
+  const copyDirRecursive = (src, dest) => {
+    fs.mkdirSync(dest, { recursive: true });
+    fs.readdirSync(src).forEach(item => {
+      if (item === "__pycache__" || item.endsWith(".pyc") || item.endsWith(".db")) return;
+      const srcPath = path.join(src, item);
+      const destPath = path.join(dest, item);
+      if (fs.statSync(srcPath).isDirectory()) {
+        copyDirRecursive(srcPath, destPath);
+      } else {
+        fs.copyFileSync(srcPath, destPath);
+      }
+    });
+  };
+
+  // Core flat files (single .py files in src/)
   const coreFiles = [
     "server.py",
-    "db.py",
     "plugin_loader.py",
-    "cognitive.py",
+    "knowledge_graph.py",
+    "kg_populate.py",
+    "maintenance.py",
+    "storage_router.py",
+    "claim_graph.py",
+    "hnsw_index.py",
+    "evolution_cycle.py",
+    "migrate_embeddings.py",
+    "auto_close_sessions.py",
     "tools_sessions.py",
     "tools_coordination.py",
     "tools_reminders.py",
@@ -662,12 +1217,6 @@ async function main() {
     "tools_credentials.py",
     "tools_task_history.py",
     "tools_menu.py",
-    "knowledge_graph.py",
-    "kg_populate.py",
-    "maintenance.py",
-    "storage_router.py",
-    "migrate_embeddings.py",
-    "auto_close_sessions.py",
   ];
   coreFiles.forEach((f) => {
     const src = path.join(srcDir, f);
@@ -676,56 +1225,56 @@ async function main() {
     }
   });
 
-  // Plugins
-  const pluginFiles = [
-    "__init__.py",
-    "guard.py",
-    "episodic_memory.py",
-    "cognitive_memory.py",
-    "entities.py",
-    "preferences.py",
-    "agents.py",
-    "backup.py",
-    "evolution.py",
-    "adaptive_mode.py",
-    "knowledge_graph_tools.py",
-  ];
-  pluginFiles.forEach((f) => {
-    const src = path.join(pluginsSrcDir, f);
-    if (fs.existsSync(src)) {
-      fs.copyFileSync(src, path.join(NEXO_HOME, "plugins", f));
+  // Core packages (directories with __init__.py)
+  ["db", "cognitive"].forEach(pkg => {
+    const pkgSrc = path.join(srcDir, pkg);
+    if (fs.existsSync(pkgSrc)) {
+      copyDirRecursive(pkgSrc, path.join(NEXO_HOME, pkg));
     }
   });
 
-  // Scripts
-  const scriptFiles = fs.existsSync(scriptsSrcDir)
-    ? fs.readdirSync(scriptsSrcDir).filter((f) => f.endsWith(".py"))
-    : [];
-  scriptFiles.forEach((f) => {
-    const src = path.join(scriptsSrcDir, f);
-    if (fs.existsSync(src)) {
-      fs.copyFileSync(src, path.join(NEXO_HOME, "scripts", f));
-    }
-  });
+  // Plugins (all .py files in plugins/)
+  fs.mkdirSync(path.join(NEXO_HOME, "plugins"), { recursive: true });
+  if (fs.existsSync(pluginsSrcDir)) {
+    fs.readdirSync(pluginsSrcDir).filter(f => f.endsWith(".py")).forEach((f) => {
+      fs.copyFileSync(path.join(pluginsSrcDir, f), path.join(NEXO_HOME, "plugins", f));
+    });
+  }
 
-  // Dashboard
+  // Scripts (all files + subdirectories like deep-sleep/)
+  if (fs.existsSync(scriptsSrcDir)) {
+    copyDirRecursive(scriptsSrcDir, path.join(NEXO_HOME, "scripts"));
+    // Make .sh files executable
+    const scriptsDest = path.join(NEXO_HOME, "scripts");
+    fs.readdirSync(scriptsDest).filter(f => f.endsWith(".sh")).forEach(f => {
+      fs.chmodSync(path.join(scriptsDest, f), "755");
+    });
+  }
+
+  // Dashboard (recursive — includes static/, templates/)
   const dashSrcDir = path.join(srcDir, "dashboard");
-  const dashDestDir = path.join(NEXO_HOME, "dashboard");
   if (fs.existsSync(dashSrcDir)) {
-    const copyDirRecursive = (src, dest) => {
-      fs.mkdirSync(dest, { recursive: true });
-      fs.readdirSync(src).forEach(item => {
-        const srcPath = path.join(src, item);
-        const destPath = path.join(dest, item);
-        if (fs.statSync(srcPath).isDirectory()) {
-          copyDirRecursive(srcPath, destPath);
-        } else {
-          fs.copyFileSync(srcPath, destPath);
-        }
-      });
-    };
-    copyDirRecursive(dashSrcDir, dashDestDir);
+    copyDirRecursive(dashSrcDir, path.join(NEXO_HOME, "dashboard"));
     log("  Dashboard installed.");
+  }
+
+  // Rules directory
+  const rulesSrcDir = path.join(srcDir, "rules");
+  if (fs.existsSync(rulesSrcDir)) {
+    copyDirRecursive(rulesSrcDir, path.join(NEXO_HOME, "rules"));
+    log("  Rules installed.");
+  }
+
+  // Hooks directory
+  const hooksSrcDir = path.join(srcDir, "hooks");
+  if (fs.existsSync(hooksSrcDir)) {
+    const hooksDest = path.join(NEXO_HOME, "hooks");
+    copyDirRecursive(hooksSrcDir, hooksDest);
+    // Make .sh files executable
+    fs.readdirSync(hooksDest).filter(f => f.endsWith(".sh")).forEach(f => {
+      fs.chmodSync(path.join(hooksDest, f), "755");
+    });
+    log("  Hooks installed.");
   }
 
   // Generate personality
@@ -1192,285 +1741,26 @@ ${doScan ? `- Stack: ${Object.keys(profileData.code.languages || {}).slice(0, 5)
     },
   };
 
-  // Configure hooks for session capture (Sensory Register)
+  // Configure ALL 7 core hooks for session capture (Sensory Register)
   if (!settings.hooks) settings.hooks = {};
 
-  // Copy hook scripts to NEXO_HOME
-  const hooksSrcDir = path.join(__dirname, "..", "src", "hooks");
+  // Hook scripts already copied above — just reference the dest dir
   const hooksDestDir = path.join(NEXO_HOME, "hooks");
-  fs.mkdirSync(hooksDestDir, { recursive: true });
-  ["session-start.sh", "capture-session.sh", "session-stop.sh", "pre-compact.sh"].forEach((h) => {
-    const src = path.join(hooksSrcDir, h);
-    const dest = path.join(hooksDestDir, h);
-    if (fs.existsSync(src)) {
-      fs.copyFileSync(src, dest);
-      fs.chmodSync(dest, "755");
-    }
-  });
 
-  // SessionStart hook
-  if (!settings.hooks.SessionStart) settings.hooks.SessionStart = [];
-  const startHook = {
-    type: "command",
-    command: `bash ${path.join(hooksDestDir, "session-start.sh")}`,
-  };
-  if (!settings.hooks.SessionStart.some((h) => h.command && h.command.includes("session-start.sh"))) {
-    settings.hooks.SessionStart.push(startHook);
-  }
-
-  // PostToolUse hook (captures tool usage to session_buffer)
-  if (!settings.hooks.PostToolUse) settings.hooks.PostToolUse = [];
-  const captureHook = {
-    type: "command",
-    command: `bash ${path.join(hooksDestDir, "capture-session.sh")}`,
-  };
-  if (!settings.hooks.PostToolUse.some((h) => h.command && h.command.includes("capture-session.sh"))) {
-    settings.hooks.PostToolUse.push(captureHook);
-  }
-
-  // Stop hook (session end)
-  if (!settings.hooks.Stop) settings.hooks.Stop = [];
-  const stopHook = {
-    type: "command",
-    command: `bash ${path.join(hooksDestDir, "session-stop.sh")}`,
-  };
-  if (!settings.hooks.Stop.some((h) => h.command && h.command.includes("session-stop.sh"))) {
-    settings.hooks.Stop.push(stopHook);
-  }
-
-  // PreCompact hook (saves context before conversation compression)
-  if (!settings.hooks.PreCompact) settings.hooks.PreCompact = [];
-  const preCompactHook = {
-    type: "command",
-    command: `bash ${path.join(hooksDestDir, "pre-compact.sh")}`,
-  };
-  if (!settings.hooks.PreCompact.some((h) => h.command && h.command.includes("pre-compact.sh"))) {
-    settings.hooks.PreCompact.push(preCompactHook);
-  }
+  registerAllCoreHooks(settings, hooksDestDir, NEXO_HOME);
 
   const settingsDir = path.dirname(CLAUDE_SETTINGS);
   fs.mkdirSync(settingsDir, { recursive: true });
   fs.writeFileSync(CLAUDE_SETTINGS, JSON.stringify(settings, null, 2));
-  log("MCP server + hooks configured in Claude Code settings.");
+  log("MCP server + 7 core hooks configured in Claude Code settings.");
 
-  // Step 7: Install LaunchAgents (macOS only)
+  // Step 7: Create schedule.json (only on fresh install) and install ALL 13 processes
   log("Setting up automated processes...");
-  if (platform === "darwin") {
-  fs.mkdirSync(LAUNCH_AGENTS, { recursive: true });
+  const schedule = loadOrCreateSchedule(NEXO_HOME);
+  installAllProcesses(platform, python, NEXO_HOME, schedule, LAUNCH_AGENTS);
 
-  const agents = [
-    {
-      name: "cognitive-decay",
-      script: "nexo-cognitive-decay.py",
-      hour: 3,
-      minute: 0,
-    },
-    {
-      name: "postmortem",
-      script: "nexo-postmortem-consolidator.py",
-      hour: 23,
-      minute: 30,
-    },
-    {
-      name: "sleep",
-      script: "nexo-sleep.py",
-      hour: 4,
-      minute: 0,
-    },
-    {
-      name: "self-audit",
-      script: "nexo-daily-self-audit.py",
-      hour: 7,
-      minute: 0,
-    },
-    { name: "catchup", script: "nexo-catchup.py", runAtLoad: true },
-  ];
-
-  agents.forEach((agent) => {
-    const plistName = `com.nexo.${agent.name}.plist`;
-    const plistPath = path.join(LAUNCH_AGENTS, plistName);
-
-    let scheduleBlock = "";
-    if (agent.runAtLoad) {
-      scheduleBlock = `    <key>RunAtLoad</key>
-    <true/>`;
-    } else {
-      scheduleBlock = `    <key>StartCalendarInterval</key>
-    <dict>
-        <key>Hour</key>
-        <integer>${agent.hour}</integer>
-        <key>Minute</key>
-        <integer>${agent.minute}</integer>
-    </dict>
-    <key>RunAtLoad</key>
-    <false/>`;
-    }
-
-    const plist = `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.nexo.${agent.name}</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>${python}</string>
-        <string>${path.join(NEXO_HOME, "scripts", agent.script)}</string>
-    </array>
-    ${scheduleBlock}
-    <key>StandardOutPath</key>
-    <string>${path.join(NEXO_HOME, "logs", `${agent.name}-stdout.log`)}</string>
-    <key>StandardErrorPath</key>
-    <string>${path.join(NEXO_HOME, "logs", `${agent.name}-stderr.log`)}</string>
-    <key>EnvironmentVariables</key>
-    <dict>
-        <key>HOME</key>
-        <string>${require("os").homedir()}</string>
-        <key>NEXO_HOME</key>
-        <string>${NEXO_HOME}</string>
-        <key>PATH</key>
-        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
-    </dict>
-</dict>
-</plist>`;
-
-    fs.writeFileSync(plistPath, plist);
-    // Register the agent
-    try {
-      execSync(
-        `launchctl bootout gui/$(id -u) "${plistPath}" 2>/dev/null; launchctl bootstrap gui/$(id -u) "${plistPath}"`,
-        { stdio: "pipe" }
-      );
-    } catch {
-      // May fail if not previously loaded, that's OK
-    }
-  });
-  log(`${agents.length} automated processes configured.`);
-
-  // Caffeinate: keep Mac awake for nocturnal processes
-  if (doCaffeinate) {
-    const caffHookSrc = path.join(__dirname, "..", "src", "hooks", "caffeinate-guard.sh");
-    const caffHookDest = path.join(NEXO_HOME, "hooks", "caffeinate-guard.sh");
-    if (fs.existsSync(caffHookSrc)) {
-      fs.copyFileSync(caffHookSrc, caffHookDest);
-      fs.chmodSync(caffHookDest, "755");
-    }
-
-    const caffPlist = `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.nexo.caffeinate</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>/bin/bash</string>
-        <string>${caffHookDest}</string>
-    </array>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>KeepAlive</key>
-    <true/>
-    <key>StandardOutPath</key>
-    <string>${path.join(NEXO_HOME, "logs", "caffeinate-stdout.log")}</string>
-    <key>StandardErrorPath</key>
-    <string>${path.join(NEXO_HOME, "logs", "caffeinate-stderr.log")}</string>
-</dict>
-</plist>`;
-
-    const caffPlistPath = path.join(LAUNCH_AGENTS, "com.nexo.caffeinate.plist");
-    fs.writeFileSync(caffPlistPath, caffPlist);
-    try {
-      execSync(
-        `launchctl bootout gui/$(id -u) "${caffPlistPath}" 2>/dev/null; launchctl bootstrap gui/$(id -u) "${caffPlistPath}"`,
-        { stdio: "pipe" }
-      );
-    } catch {}
-    log("Caffeinate enabled — Mac will stay awake for cognitive processes.");
-  }
-  } else if (platform === "linux") {
-    // Linux: use systemd user timers (preferred) or crontab as fallback
-    const systemdDir = path.join(require("os").homedir(), ".config", "systemd", "user");
-    const hasSystemd = run("which systemctl") && run("systemctl --user status 2>/dev/null");
-
-    if (hasSystemd) {
-      fs.mkdirSync(systemdDir, { recursive: true });
-
-      const linuxAgents = [
-        { name: "cognitive-decay", script: "nexo-cognitive-decay.py", calendar: "*-*-* 03:00:00" },
-        { name: "postmortem", script: "nexo-postmortem-consolidator.py", calendar: "*-*-* 23:30:00" },
-        { name: "sleep", script: "nexo-sleep.py", calendar: "*-*-* 04:00:00" },
-        { name: "self-audit", script: "nexo-daily-self-audit.py", calendar: "*-*-* 07:00:00" },
-      ];
-
-      linuxAgents.forEach((agent) => {
-        const serviceName = `nexo-${agent.name}`;
-        const serviceFile = path.join(systemdDir, `${serviceName}.service`);
-        const timerFile = path.join(systemdDir, `${serviceName}.timer`);
-
-        const service = `[Unit]
-Description=NEXO Brain — ${agent.name}
-
-[Service]
-Type=oneshot
-ExecStart=${venvPython} ${path.join(NEXO_HOME, "scripts", agent.script)}
-Environment=HOME=${require("os").homedir()}
-Environment=NEXO_HOME=${NEXO_HOME}
-StandardOutput=append:${path.join(NEXO_HOME, "logs", `${agent.name}-stdout.log`)}
-StandardError=append:${path.join(NEXO_HOME, "logs", `${agent.name}-stderr.log`)}
-`;
-
-        const timer = `[Unit]
-Description=NEXO Brain — ${agent.name} timer
-
-[Timer]
-OnCalendar=${agent.calendar}
-Persistent=true
-
-[Install]
-WantedBy=timers.target
-`;
-
-        fs.writeFileSync(serviceFile, service);
-        fs.writeFileSync(timerFile, timer);
-        try {
-          execSync(`systemctl --user enable --now ${serviceName}.timer 2>/dev/null`, { stdio: "pipe" });
-        } catch {}
-      });
-
-      // Catchup runs at startup via MCP — no timer needed
-      log(`${linuxAgents.length} systemd user timers configured.`);
-    } else {
-      // Fallback: crontab
-      log("systemd not available, configuring crontab...");
-      const cronLines = [
-        `0 3 * * * ${venvPython} ${path.join(NEXO_HOME, "scripts", "nexo-cognitive-decay.py")} >> ${path.join(NEXO_HOME, "logs", "cognitive-decay-stdout.log")} 2>&1`,
-        `30 23 * * * ${venvPython} ${path.join(NEXO_HOME, "scripts", "nexo-postmortem-consolidator.py")} >> ${path.join(NEXO_HOME, "logs", "postmortem-stdout.log")} 2>&1`,
-        `0 4 * * * ${venvPython} ${path.join(NEXO_HOME, "scripts", "nexo-sleep.py")} >> ${path.join(NEXO_HOME, "logs", "sleep-stdout.log")} 2>&1`,
-        `0 7 * * * ${venvPython} ${path.join(NEXO_HOME, "scripts", "nexo-daily-self-audit.py")} >> ${path.join(NEXO_HOME, "logs", "self-audit-stdout.log")} 2>&1`,
-      ];
-
-      try {
-        const existingCron = run("crontab -l 2>/dev/null") || "";
-        const nexoCronMarker = "# NEXO Brain automated processes";
-        if (!existingCron.includes(nexoCronMarker)) {
-          const newCron = existingCron + "\n" + nexoCronMarker + "\n" + cronLines.join("\n") + "\n";
-          const tmpCron = path.join(NEXO_HOME, ".crontab-tmp");
-          fs.writeFileSync(tmpCron, newCron);
-          execSync(`crontab ${tmpCron}`, { stdio: "pipe" });
-          fs.unlinkSync(tmpCron);
-          log(`${cronLines.length} cron jobs configured.`);
-        } else {
-          log("NEXO cron jobs already configured.");
-        }
-      } catch (e) {
-        log(`Could not configure crontab: ${e.message}`);
-        log("Background tasks will run via catch-up on startup.");
-      }
-    }
-  } else {
-    log("Unsupported platform for background tasks. Maintenance runs on MCP startup.");
-  }
+  // Note: prevent-sleep and tcc-approve are now part of ALL_PROCESSES
+  // and installed by installAllProcesses() above. No separate caffeinate block needed.
 
   // Step 8: Create shell alias so user can just type the operator's name
   log("Creating shell alias...");
@@ -1526,6 +1816,15 @@ See ~/.nexo/ for configuration.
     log(
       "~/.claude/CLAUDE.md already exists. Generated template saved to ~/.nexo/CLAUDE.md.generated"
     );
+  }
+
+  // Write initial CLAUDE.md version tracker
+  const claudeMdVersionMatch = claudeMd.match(/nexo-claude-md-version:\s*([\d.]+)/);
+  if (claudeMdVersionMatch) {
+    const dataDir = path.join(NEXO_HOME, "data");
+    fs.mkdirSync(dataDir, { recursive: true });
+    fs.writeFileSync(path.join(dataDir, "claude_md_version.txt"), claudeMdVersionMatch[1]);
+    log(`CLAUDE.md version tracker initialized: v${claudeMdVersionMatch[1]}`);
   }
 
   console.log("");

@@ -10,6 +10,7 @@ Usage:
 import argparse
 import json
 import os
+import platform
 import subprocess
 import sys
 import time
@@ -22,7 +23,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-# Add parent dir to path so we can import nexo-mcp modules
+# Add parent dir to path so we can import NEXO modules
 _PARENT = str(Path(__file__).resolve().parent.parent)
 if _PARENT not in sys.path:
     sys.path.insert(0, _PARENT)
@@ -63,7 +64,7 @@ async def create_tables():
 
 
 # ---------------------------------------------------------------------------
-# Lazy imports — modules live in the parent nexo-mcp directory
+# Lazy imports — modules live in the parent source directory
 # ---------------------------------------------------------------------------
 
 def _cognitive():
@@ -602,6 +603,11 @@ async def api_ops_execute(fid: str):
         return JSONResponse({"error": f"Followup {fid} not found"}, status_code=404)
     item = dict(row)
     description = item["description"].replace('"', '\\"').replace("'", "\\'")
+    if platform.system() != "Darwin":
+        return JSONResponse(
+            {"error": "This operation requires macOS (uses osascript to open Terminal)"},
+            status_code=501,
+        )
     script = f'tell application "Terminal" to do script "claude \\"NEXO: execute followup #{fid} — {description}\\""'
     subprocess.Popen(["osascript", "-e", script])
     return {"success": True, "followup_id": fid}

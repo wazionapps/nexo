@@ -13,7 +13,7 @@ set -uo pipefail
 HOME_DIR="$HOME"
 NEXO_HOME="${NEXO_HOME:-$HOME/.nexo}"
 NEXO_DIR="$NEXO_HOME"
-CORTEX_DIR="$NEXO_HOME/cortex"
+CORTEX_DIR="$NEXO_HOME/brain"
 OPS_DIR="$NEXO_HOME/operations"
 LOG_DIR="$NEXO_HOME/logs"
 LOG="$LOG_DIR/watchdog.log"
@@ -49,12 +49,12 @@ MONITORS=(
   "Cognitive Decay|com.nexo.cognitive-decay|$NEXO_HOME/logs/cognitive-decay-stdout.log|$NEXO_HOME/logs/cognitive-decay-stderr.log|90000||Daily 3:00 AM|core"
   "Evolution|com.nexo.evolution|$NEXO_HOME/logs/evolution-stdout.log|$NEXO_HOME/logs/evolution-stderr.log|0||Weekly Sun 3:00 AM|core"
   "GitHub Monitor|com.nexo.github-monitor|$NEXO_HOME/logs/github-monitor-stdout.log|$NEXO_HOME/logs/github-monitor-stderr.log|90000||Daily 8:00 AM|core"
-  "Immune|com.nexo.immune|$NEXO_HOME/coordination/immune-stdout.log|$NEXO_HOME/coordination/immune-stderr.log|3600||Every 30 min|core"
+  "Immune|com.nexo.immune|$NEXO_HOME/logs/immune-stdout.log|$NEXO_HOME/logs/immune-stderr.log|3600||Every 30 min|core"
   "Postmortem|com.nexo.postmortem|$NEXO_HOME/logs/postmortem-stdout.log|$NEXO_HOME/logs/postmortem-stderr.log|90000||Daily 23:30|core"
   "Prevent Sleep|com.nexo.prevent-sleep|||0|caffeinate|KeepAlive|core"
   "Self Audit|com.nexo.self-audit|$NEXO_HOME/logs/self-audit-stdout.log|$NEXO_HOME/logs/self-audit-stderr.log|90000||Daily 7:00 AM|core"
-  "Sleep|com.nexo.sleep|$NEXO_HOME/coordination/sleep-stdout.log|$NEXO_HOME/coordination/sleep-stderr.log|90000||Daily 4:00 AM|core"
-  "Synthesis|com.nexo.synthesis|$NEXO_HOME/coordination/synthesis-stdout.log|$NEXO_HOME/coordination/synthesis-stderr.log|10800||Every 2 hours|core"
+  "Sleep|com.nexo.sleep|$NEXO_HOME/logs/sleep-stdout.log|$NEXO_HOME/logs/sleep-stderr.log|90000||Daily 4:00 AM|core"
+  "Synthesis|com.nexo.synthesis|$NEXO_HOME/logs/synthesis-stdout.log|$NEXO_HOME/logs/synthesis-stderr.log|10800||Every 2 hours|core"
   "Deep Sleep|com.nexo.deep-sleep|$NEXO_HOME/logs/deep-sleep-stdout.log|$NEXO_HOME/logs/deep-sleep-stderr.log|90000||Daily 4:30 AM|core"
   "Followup Hygiene|com.nexo.followup-hygiene|$NEXO_HOME/logs/followup-hygiene-stdout.log|$NEXO_HOME/logs/followup-hygiene-stderr.log|604800||Weekly Sun 5:00 AM|core"
   # Add your own personal monitors below (type "personal"):
@@ -76,11 +76,13 @@ ERROR_PATTERNS="Traceback|Error:|CRITICAL|FATAL|ModuleNotFoundError|PermissionEr
 UID_NUM=$(id -u)
 REPAIR_LOG="$LOG_DIR/watchdog-repairs.log"
 TOTAL_HEALED=0
+IS_MACOS=false
+[ "$(uname)" = "Darwin" ] && IS_MACOS=true
 
 log_repair() { echo "[$TS] REPAIR: $1" >> "$REPAIR_LOG"; log "REPAIR: $1"; }
 
 is_loaded() {
-  launchctl list "$1" &>/dev/null
+  $IS_MACOS && launchctl list "$1" &>/dev/null
 }
 
 # ============================================================================
@@ -88,6 +90,7 @@ is_loaded() {
 # ============================================================================
 
 try_repair_launchagent() {
+  $IS_MACOS || return 1
   local plist_id="$1"
   local proc_grep="$2"
   local plist_file="$HOME_DIR/Library/LaunchAgents/${plist_id}.plist"
@@ -134,6 +137,7 @@ try_repair_cron() {
 }
 
 try_reexecute_missed_cron() {
+  $IS_MACOS || return 1
   # Re-execute a cron that missed its scheduled run
   # Extracts ProgramArguments from the plist and runs them
   local plist_id="$1"
@@ -184,6 +188,7 @@ except:
 }
 
 try_verify_repair() {
+  $IS_MACOS || return 1
   # After Level 2 repair, wait and verify the service is healthy
   local plist_id="$1"
   local log_stdout="$2"
@@ -236,7 +241,7 @@ try_repair_backup() {
     local newest
     newest=$(ls -t "$NEXO_DIR/backups/nexo-"*.db 2>/dev/null | head -1)
     if [ -n "$newest" ]; then
-      local age=$(( TS_EPOCH - $(stat -f %m "$newest") ))
+      if $IS_MACOS; then local age=$(( TS_EPOCH - $(stat -f %m "$newest") )); else local age=$(( TS_EPOCH - $(stat -c %Y "$newest") )); fi
       if [ "$age" -lt 60 ]; then
         log_repair "backup_cron.sh: ran successfully, fresh backup created"
         return 0
@@ -249,7 +254,11 @@ try_repair_backup() {
 file_age() {
   if [ -f "$1" ]; then
     local mod_epoch
-    mod_epoch=$(stat -f %m "$1" 2>/dev/null || echo 0)
+    if $IS_MACOS; then
+      mod_epoch=$(stat -f %m "$1" 2>/dev/null || echo 0)
+    else
+      mod_epoch=$(stat -c %Y "$1" 2>/dev/null || echo 0)
+    fi
     echo $(( TS_EPOCH - mod_epoch ))
   else
     echo 999999
@@ -511,7 +520,7 @@ done
 # --- SQLite integrity ---
 SQLITE_STATUS="PASS"
 SQLITE_DETAIL=""
-INTEGRITY=$(sqlite3 "$NEXO_DIR/nexo.db" "PRAGMA integrity_check;" 2>/dev/null || echo "CORRUPT")
+INTEGRITY=$(sqlite3 "$NEXO_DIR/data/nexo.db" "PRAGMA integrity_check;" 2>/dev/null || echo "CORRUPT")
 if [ "$INTEGRITY" != "ok" ]; then
   SQLITE_STATUS="FAIL"
   SQLITE_DETAIL="Integrity check: $INTEGRITY"
@@ -519,7 +528,7 @@ if [ "$INTEGRITY" != "ok" ]; then
   TOTAL_FAIL=$((TOTAL_FAIL + 1))
   LATEST_BACKUP=$(ls -t "$NEXO_DIR/backups/nexo-"*.db 2>/dev/null | head -1)
   if [ -n "$LATEST_BACKUP" ]; then
-    cp "$LATEST_BACKUP" "$NEXO_DIR/nexo.db"
+    cp "$LATEST_BACKUP" "$NEXO_DIR/data/nexo.db"
     log "RESTORED from $LATEST_BACKUP"
     SQLITE_DETAIL="${SQLITE_DETAIL}. Restored from backup."
   fi
@@ -576,7 +585,7 @@ BACKUP_STATUS="PASS"
 BACKUP_DETAIL=""
 LATEST_BACKUP=$(ls -t "$NEXO_DIR/backups/nexo-"*.db 2>/dev/null | head -1)
 if [ -n "$LATEST_BACKUP" ]; then
-  BACKUP_AGE=$(( TS_EPOCH - $(stat -f %m "$LATEST_BACKUP") ))
+  if $IS_MACOS; then BACKUP_AGE=$(( TS_EPOCH - $(stat -f %m "$LATEST_BACKUP") )); else BACKUP_AGE=$(( TS_EPOCH - $(stat -c %Y "$LATEST_BACKUP") )); fi
   BACKUP_AGE_STR=$(format_age "$BACKUP_AGE")
   if [ "$BACKUP_AGE" -gt 7200 ]; then
     # AUTO-REPAIR: run backup now
@@ -603,7 +612,7 @@ fi
 # --- Cognitive DB check ---
 COG_STATUS="PASS"
 COG_DETAIL=""
-COG_DB="$NEXO_DIR/cognitive.db"
+COG_DB="$NEXO_DIR/data/cognitive.db"
 if [ -f "$COG_DB" ]; then
   COG_INT=$(sqlite3 "$COG_DB" "PRAGMA integrity_check;" 2>/dev/null || echo "CORRUPT")
   if [ "$COG_INT" != "ok" ]; then
@@ -724,7 +733,7 @@ if [ "$TOTAL_FAIL" -gt 0 ]; then
   LOCK_AGE=999999
   SKIP_REPAIR=false
   if [ -f "$REPAIR_LOCK" ]; then
-    LOCK_AGE=$(( TS_EPOCH - $(stat -f %m "$REPAIR_LOCK" 2>/dev/null || echo 0) ))
+    if $IS_MACOS; then LOCK_AGE=$(( TS_EPOCH - $(stat -f %m "$REPAIR_LOCK" 2>/dev/null || echo 0) )); else LOCK_AGE=$(( TS_EPOCH - $(stat -c %Y "$REPAIR_LOCK" 2>/dev/null || echo 0) )); fi
     if [ "$LOCK_AGE" -lt "$REPAIR_COOLDOWN" ]; then
       log "NEXO repair skipped: cooldown (${LOCK_AGE}s < ${REPAIR_COOLDOWN}s)"
       SKIP_REPAIR=true
@@ -773,7 +782,7 @@ ${STDOUT_TAIL}
       if $HAS_CORE_FAILS && [ -n "$NEXO_PUBLIC_REPO" ] && [ -d "$NEXO_PUBLIC_REPO/.git" ]; then
         PROPAGATE_BLOCK="
 PROPAGATION (for [core] fixes ONLY):
-If your fix modifies a file under $NEXO_HOME/ (server.py, db.py, plugins/, scripts/):
+If your fix modifies a file under $NEXO_HOME/ (server.py, db/, plugins/, scripts/):
 1. Commit the fix locally with a descriptive message
 2. Copy the changed files (sanitized — no personal data) to $NEXO_PUBLIC_REPO/src/
 3. Bump patch version in $NEXO_PUBLIC_REPO/package.json

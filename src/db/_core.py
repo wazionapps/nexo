@@ -9,11 +9,15 @@ import datetime
 import pathlib
 import threading
 
+NEXO_HOME = os.environ.get("NEXO_HOME", os.path.expanduser("~/.nexo"))
+_data_dir = os.path.join(NEXO_HOME, "data")
+os.makedirs(_data_dir, exist_ok=True)
+
 DB_PATH = os.environ.get(
     "NEXO_TEST_DB",
     os.environ.get(
         "NEXO_DB",
-        os.path.join(os.path.dirname(os.path.abspath(__file__)), "nexo.db"),
+        os.path.join(_data_dir, "nexo.db"),
     ),
 )
 

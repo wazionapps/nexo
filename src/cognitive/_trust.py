@@ -1,7 +1,7 @@
 """NEXO Cognitive — Trust scoring, sentiment, dissonance."""
 import re
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timedelta
 from cognitive._core import _get_db, embed, cosine_similarity, _blob_to_array
 from cognitive._core import POSITIVE_SIGNALS, NEGATIVE_SIGNALS, URGENCY_SIGNALS
 
@@ -314,13 +314,13 @@ def detect_sentiment(text: str) -> dict:
         sentiment = "negative"
         intensity = min(1.0, 0.3 + neg_score * 0.15)
         if intensity > 0.7:
-            guidance = "MODE: Ultra-conciso. Cero explicaciones. Resolver y mostrar resultado."
+            guidance = "MODE: Ultra-concise. Zero explanations. Solve and show result."
         else:
             guidance = "MODE: Concise. Less context, more direct action."
     elif pos_score > neg_score and pos_score >= 1:
         sentiment = "positive"
         intensity = min(1.0, 0.3 + pos_score * 0.15)
-        guidance = "MODE: Normal. Buen momento para proponer ideas de backlog o mejoras."
+        guidance = "MODE: Normal. Good time to suggest backlog ideas or improvements."
     elif urgency_hits:
         sentiment = "urgent"
         intensity = 0.8

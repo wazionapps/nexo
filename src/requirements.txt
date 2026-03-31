@@ -1,0 +1,12 @@
+# NEXO Brain — runtime dependencies
+# Core (required)
+fastmcp>=2.9.0
+numpy
+
+# Embedding model (optional but recommended for cognitive features)
+fastembed
+
+# Dashboard (optional, only needed for `python -m dashboard.app`)
+fastapi
+uvicorn
+pydantic

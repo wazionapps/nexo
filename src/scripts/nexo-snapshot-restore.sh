@@ -5,7 +5,8 @@ set -euo pipefail
 
 SNAP_DIR="${1:?Usage: nexo-snapshot-restore.sh <snapshot-dir>}"
 MANIFEST="$SNAP_DIR/manifest.json"
-RESTORE_LOG="$HOME/claude/logs/snapshot-restores.log"
+NEXO_HOME="${NEXO_HOME:-$HOME/.nexo}"
+RESTORE_LOG="$NEXO_HOME/logs/snapshot-restores.log"
 
 if [ ! -f "$MANIFEST" ]; then
     echo "ERROR: No manifest.json in $SNAP_DIR" >&2

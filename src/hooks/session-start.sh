@@ -48,7 +48,7 @@ from datetime import date
 today_str = '$TODAY'
 weekday = '$WEEKDAY'
 nexo_home = os.environ.get('NEXO_HOME', os.path.expanduser('~/.nexo'))
-db_path = os.path.join(nexo_home, 'nexo.db')
+db_path = os.path.join(nexo_home, 'data', 'nexo.db')
 
 lines = []
 lines.append(f'## Date: {today_str} ({weekday})')
@@ -212,7 +212,11 @@ except Exception as e:
 fi
 
 # ─── Cortex Report: what happened while user was away ───
-CORTEX_BRIEFING="$NEXO_HOME/cortex/last-briefing.json"
+# Check brain/ (canonical) first, fall back to cortex/ (legacy)
+CORTEX_BRIEFING="$NEXO_HOME/brain/last-briefing.json"
+if [ ! -f "$CORTEX_BRIEFING" ] && [ -f "$NEXO_HOME/cortex/last-briefing.json" ]; then
+    CORTEX_BRIEFING="$NEXO_HOME/cortex/last-briefing.json"
+fi
 if [ -f "$CORTEX_BRIEFING" ]; then
     CORTEX_SECTION=$(python3 -c "
 import json

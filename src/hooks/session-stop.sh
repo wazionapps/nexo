@@ -25,7 +25,8 @@ TOOL_LOG="$NEXO_HOME/operations/tool-logs/${TODAY}.jsonl"
 python3 -c "
 import sys, json, os
 nexo_home = os.environ.get('NEXO_HOME', os.path.expanduser('~/.nexo'))
-sys.path.insert(0, os.path.join(nexo_home, 'nexo-mcp'))
+nexo_code = os.environ.get('NEXO_CODE', nexo_home)
+sys.path.insert(0, nexo_code)
 os.environ['NEXO_SKIP_FS_INDEX'] = '1'
 from db import init_db, get_db, get_active_sessions, upsert_diary_draft, get_diary_draft
 init_db()

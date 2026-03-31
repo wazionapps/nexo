@@ -1,19 +1,11 @@
 #!/bin/bash
-# NEXO DB hourly backup
-# Install: crontab -e → 0 * * * * /path/to/nexo-backup.sh
-#
-# Keeps hourly backups for 48h and weekly backups for 90 days.
-
-NEXO_DIR="${NEXO_DIR:-$(dirname "$(dirname "$(realpath "$0")")")}"
-BACKUP_DIR="$NEXO_DIR/backups"
+# NEXO DB hourly backup — crontab: 0 * * * * $NEXO_HOME/scripts/nexo-backup.sh
+NEXO_HOME="${NEXO_HOME:-$HOME/.nexo}"
+NEXO_DIR="$NEXO_HOME"
+BACKUP_DIR="$NEXO_HOME/backups"
 WEEKLY_DIR="$BACKUP_DIR/weekly"
-DB="$NEXO_DIR/db/nexo.db"
+DB="$NEXO_HOME/data/nexo.db"
 RETENTION_HOURS=48
-
-if [ ! -f "$DB" ]; then
-    echo "ERROR: nexo.db not found at $DB" >&2
-    exit 1
-fi
 
 mkdir -p "$BACKUP_DIR" "$WEEKLY_DIR"
 

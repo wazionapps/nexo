@@ -165,16 +165,17 @@ def test_kg_boost_relevance_gate():
 
 
 def test_decay_formula():
-    """Ebbinghaus decay should reduce strength over time."""
+    """Ebbinghaus decay should reduce strength over time (lambda operates on HOURS)."""
     import cognitive
-    # STM decay: lambda=0.1, after 7 days strength should be ~0.5
+    # STM decay: lambda=0.004126, after 7 days (168h) strength should be ~0.5
     initial = 1.0
-    days = 7
-    decayed = initial * math.exp(-cognitive.LAMBDA_STM * days)
+    hours_7d = 7 * 24
+    decayed = initial * math.exp(-cognitive.LAMBDA_STM * hours_7d)
     assert 0.45 < decayed < 0.55
 
-    # LTM decay: lambda=0.012, after 60 days strength should be ~0.5
-    decayed_ltm = initial * math.exp(-cognitive.LAMBDA_LTM * 60)
+    # LTM decay: lambda=0.000481, after 60 days (1440h) strength should be ~0.5
+    hours_60d = 60 * 24
+    decayed_ltm = initial * math.exp(-cognitive.LAMBDA_LTM * hours_60d)
     assert 0.45 < decayed_ltm < 0.55
 
 

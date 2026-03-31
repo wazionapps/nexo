@@ -73,10 +73,16 @@ def backup_databases() -> str:
     backup_dir = NEXO_HOME / "backups" / f"pre-migrate-{ts}"
     backup_dir.mkdir(parents=True, exist_ok=True)
 
-    db_dir = NEXO_HOME / "db"
-    if db_dir.exists():
-        for db_file in db_dir.glob("*.db*"):
+    data_dir = NEXO_HOME / "data"
+    if data_dir.exists():
+        for db_file in data_dir.glob("*.db*"):
             shutil.copy2(db_file, backup_dir / db_file.name)
+    # Also check legacy db/ location
+    legacy_db_dir = NEXO_HOME / "db"
+    if legacy_db_dir.exists():
+        for db_file in legacy_db_dir.glob("*.db*"):
+            if not (backup_dir / db_file.name).exists():
+                shutil.copy2(db_file, backup_dir / db_file.name)
 
     # Also backup version.json
     vfile = NEXO_HOME / "version.json"

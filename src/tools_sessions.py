@@ -138,12 +138,14 @@ def handle_heartbeat(sid: str, task: str, context_hint: str = '') -> str:
             parts.append(f"  {q['qid']} de {q['from_sid']} ({age}): {q['question']}")
 
     # Incremental diary draft — accumulate every heartbeat, full UPSERT every 5
+    _hb_count = 0  # Hoisted for Layer 3 DIARY_OVERDUE signal
     try:
         import json as _json
         from db import get_diary_draft, upsert_diary_draft
 
         draft = get_diary_draft(sid)
         hb_count = (draft["heartbeat_count"] + 1) if draft else 1
+        _hb_count = hb_count  # Copy to outer scope for Layer 3
 
         existing_tasks = _json.loads(draft["tasks_seen"]) if draft else []
         if task and task not in existing_tasks:
@@ -194,14 +196,17 @@ def handle_heartbeat(sid: str, task: str, context_hint: str = '') -> str:
     except Exception:
         pass  # Checkpoint update is best-effort
 
-    # Diary reminder: after 30 min active with no diary entry
+    # ── Layer 3: DIARY_OVERDUE signal based on heartbeat count + time ──
     conn = get_db()
     row = conn.execute("SELECT started_epoch FROM sessions WHERE sid = ?", (sid,)).fetchone()
     if row:
         age_seconds = now_epoch() - row["started_epoch"]
-        if age_seconds >= 1800 and not check_session_has_diary(sid):
+        has_diary = check_session_has_diary(sid)
+
+        # DIARY_OVERDUE: >10 heartbeats OR >30 minutes, without a diary
+        if not has_diary and (_hb_count > 10 or age_seconds >= 1800):
             parts.append("")
-            parts.append("⚠ DIARY REMINDER: Session active 30+ min without diary. Write nexo_session_diary_write before closing.")
+            parts.append(f"⚠ DIARY_OVERDUE: {_hb_count} heartbeats, {int(age_seconds/60)}min active, no diary. Write nexo_session_diary_write NOW.")
 
     return "\n".join(parts)
 
@@ -324,7 +329,7 @@ def handle_smart_startup_query() -> str:
     for f in followups:
         query_parts.append(f['description'][:100])
 
-    # 2. Due reminders (what Francisco needs to know)
+    # 2. Due reminders (what the user needs to know)
     reminders = conn.execute(
         "SELECT description FROM reminders WHERE status = 'PENDING' AND date <= date('now', '+1 day') ORDER BY date ASC LIMIT 5"
     ).fetchall()

@@ -21,7 +21,7 @@ from pathlib import Path
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 
-NEXO_DB = NEXO_HOME / "nexo-mcp" / "db" / "nexo.db"
+NEXO_DB = NEXO_HOME / "data" / "nexo.db"
 
 
 def get_db():
@@ -151,7 +151,7 @@ def check_session_gaps() -> list[dict]:
 def check_evolution_status() -> list[dict]:
     """Check if evolution system is healthy."""
     alerts = []
-    obj_file = NEXO_HOME / "cortex" / "evolution-objective.json"
+    obj_file = NEXO_HOME / "brain" / "evolution-objective.json"
     if obj_file.exists():
         obj = json.loads(obj_file.read_text())
         if not obj.get("evolution_enabled", True):
@@ -219,7 +219,7 @@ def check_recurring_errors() -> list[dict]:
         alerts.append({
             "type": "recurring_errors",
             "severity": "medium",
-            "title": f"Categoria '{r['category']}' tiene {r['cnt']} learnings this week — possible systemic issue",
+            "title": f"Category '{r['category']}' has {r['cnt']} learnings this week — possible systemic issue",
             "category": r["category"],
             "count": r["cnt"],
         })
@@ -231,7 +231,7 @@ def check_cron_health() -> list[dict]:
     alerts = []
 
     # Check backup cron
-    backup_dir = NEXO_HOME / "nexo-mcp" / "backups"
+    backup_dir = NEXO_HOME / "backups"
     if backup_dir.exists():
         backups = sorted(backup_dir.glob("nexo-*.db"), key=lambda p: p.stat().st_mtime, reverse=True)
         if backups:

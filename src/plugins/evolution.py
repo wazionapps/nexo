@@ -1,5 +1,6 @@
 """Evolution plugin — NEXO self-improvement tools for interactive sessions."""
 
+import os
 from db import get_latest_metrics, get_evolution_history, update_evolution_log_status, get_db
 
 
@@ -59,9 +60,12 @@ def handle_evolution_propose() -> str:
     import json
     from pathlib import Path
     nexo_home = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
-    obj_file = nexo_home / "cortex" / "evolution-objective.json"
+    # Check brain/ (canonical) first, fall back to cortex/ (legacy)
+    obj_file = nexo_home / "brain" / "evolution-objective.json"
     if not obj_file.exists():
-        return "ERROR: evolution-objective.json not found"
+        obj_file = nexo_home / "cortex" / "evolution-objective.json"
+    if not obj_file.exists():
+        return "ERROR: evolution-objective.json not found. Run the installer or create one in ~/.nexo/brain/"
     try:
         obj = json.loads(obj_file.read_text())
         if not obj.get("evolution_enabled", True):

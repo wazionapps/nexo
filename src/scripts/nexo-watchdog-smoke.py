@@ -10,18 +10,19 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import sqlite3
 import subprocess
 from datetime import datetime
 from pathlib import Path
 
 HOME = Path.home()
-CLAUDE_DIR = HOME / ".nexo"
-NEXO_DIR = CLAUDE_DIR / "nexo-mcp"
-CORTEX_DIR = CLAUDE_DIR / "cortex"
-LOG_DIR = CLAUDE_DIR / "logs"
+NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(HOME / ".nexo")))
+NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(NEXO_HOME)))
+BRAIN_DIR = NEXO_HOME / "brain"
+LOG_DIR = NEXO_HOME / "logs"
 SUMMARY_FILE = LOG_DIR / "watchdog-smoke-summary.json"
-HASH_REGISTRY = CLAUDE_DIR / "scripts" / ".watchdog-hashes"
+HASH_REGISTRY = NEXO_HOME / "scripts" / ".watchdog-hashes"
 RESTORE_LOG = LOG_DIR / "snapshot-restores.log"
 
 
@@ -41,7 +42,7 @@ def main() -> int:
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     findings = []
 
-    db_path = NEXO_DIR / "nexo.db"
+    db_path = NEXO_HOME / "data" / "nexo.db"
     integrity = "missing"
     if db_path.exists():
         try:
@@ -53,15 +54,16 @@ def main() -> int:
     if integrity != "ok":
         findings.append({"severity": "ERROR", "area": "sqlite", "msg": f"integrity={integrity}"})
 
-    cortex_running = subprocess.run(
-        ["pgrep", "-f", "cortex-wrapper.py"],
+    # Check if the NEXO MCP server process is alive (replaces legacy cortex process check)
+    nexo_server_running = subprocess.run(
+        ["pgrep", "-f", "nexo-brain"],
         capture_output=True,
         text=True,
     ).returncode == 0
-    if not cortex_running:
-        findings.append({"severity": "WARN", "area": "cortex", "msg": "cortex-wrapper.py not running"})
+    if not nexo_server_running:
+        findings.append({"severity": "INFO", "area": "server", "msg": "nexo-brain not running (normal if no active session)"})
 
-    backups = sorted((NEXO_DIR / "backups").glob("nexo-*.db"), key=lambda p: p.stat().st_mtime, reverse=True)
+    backups = sorted((NEXO_HOME / "backups").glob("nexo-*.db"), key=lambda p: p.stat().st_mtime, reverse=True)
     if backups:
         age_seconds = int(datetime.now().timestamp() - backups[0].stat().st_mtime)
         if age_seconds > 7200:
@@ -84,7 +86,10 @@ def main() -> int:
     elif restore_count > 0:
         findings.append({"severity": "INFO", "area": "restore_activity", "msg": f"{restore_count} restores this hour"})
 
-    objective = CORTEX_DIR / "evolution-objective.json"
+    # Check brain/ (canonical) first, fall back to cortex/ (legacy)
+    objective = BRAIN_DIR / "evolution-objective.json"
+    if not objective.exists():
+        objective = NEXO_HOME / "cortex" / "evolution-objective.json"
     evolution_enabled = None
     if objective.exists():
         obj = json.loads(objective.read_text())
@@ -100,7 +105,7 @@ def main() -> int:
         "timestamp": datetime.now().isoformat(),
         "ok": not any(f["severity"] == "ERROR" for f in findings),
         "integrity": integrity,
-        "cortex_running": cortex_running,
+        "server_running": nexo_server_running,
         "evolution_enabled": evolution_enabled,
         "restore_count_current_hour": restore_count,
         "findings": findings,

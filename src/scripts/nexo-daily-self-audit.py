@@ -26,11 +26,15 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+# Auto-detect: if running from repo (src/scripts/), use src/ as NEXO_CODE
+_script_dir = Path(__file__).resolve().parent
+_repo_src = _script_dir.parent  # src/scripts/ -> src/
+NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(_repo_src) if (_repo_src / "server.py").exists() else str(NEXO_HOME)))
 
 LOG_DIR = NEXO_HOME / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE = LOG_DIR / "self-audit.log"
-NEXO_DB = NEXO_HOME / "nexo-mcp" / "db" / "nexo.db"
+NEXO_DB = NEXO_HOME / "data" / "nexo.db"
 # Configure your main project repo to check for uncommitted changes (optional)
 PROJECT_REPO_DIR = None  # e.g., Path.home() / "projects" / "my-repo"
 HASH_REGISTRY = NEXO_HOME / "scripts" / ".watchdog-hashes"
@@ -38,7 +42,7 @@ SNAPSHOT_GOLDEN = NEXO_HOME / "snapshots" / "golden" / "files" / "claude"
 RUNTIME_PREFLIGHT_SUMMARY = LOG_DIR / "runtime-preflight-summary.json"
 WATCHDOG_SMOKE_SUMMARY = LOG_DIR / "watchdog-smoke-summary.json"
 RESTORE_LOG = LOG_DIR / "snapshot-restores.log"
-CORTEX_LOG_DIR = NEXO_HOME / "cortex" / "logs"
+CORTEX_LOG_DIR = NEXO_HOME / "brain" / "logs"
 CLAUDE_CLI = Path.home() / ".local" / "bin" / "claude"
 
 findings = []
@@ -116,7 +120,10 @@ def check_cron_errors():
 
 
 def check_evolution_health():
-    obj_file = NEXO_HOME / "cortex" / "evolution-objective.json"
+    # Check brain/ (canonical) first, fall back to cortex/ (legacy)
+    obj_file = NEXO_HOME / "brain" / "evolution-objective.json"
+    if not obj_file.exists():
+        obj_file = NEXO_HOME / "cortex" / "evolution-objective.json"
     if not obj_file.exists():
         return
     obj = json.loads(obj_file.read_text())
@@ -230,7 +237,7 @@ def check_watchdog_registry():
     if not HASH_REGISTRY.exists():
         return
     text = HASH_REGISTRY.read_text(errors="ignore")
-    forbidden = ["CLAUDE.md", "db.py", "server.py", "plugin_loader.py", "cortex-wrapper.py"]
+    forbidden = ["CLAUDE.md", "server.py", "plugin_loader.py"]
     bad = [name for name in forbidden if name in text]
     if bad:
         finding("ERROR", "watchdog", f"mutable files still protected: {', '.join(bad)}")
@@ -238,9 +245,8 @@ def check_watchdog_registry():
 
 def check_snapshot_sync():
     pairs = [
-        (NEXO_HOME / "nexo-mcp" / "db.py", SNAPSHOT_GOLDEN / "nexo-mcp" / "db.py"),
-        (NEXO_HOME / "cortex" / "cortex-wrapper.py", SNAPSHOT_GOLDEN / "cortex" / "cortex-wrapper.py"),
-        (NEXO_HOME / "cortex" / "evolution_cycle.py", SNAPSHOT_GOLDEN / "cortex" / "evolution_cycle.py"),
+        (NEXO_CODE / "db" / "__init__.py", SNAPSHOT_GOLDEN / "db" / "__init__.py"),
+        (NEXO_CODE / "evolution_cycle.py", SNAPSHOT_GOLDEN / "evolution_cycle.py"),
     ]
     drift = [live.name for live, snap in pairs
              if not live.exists() or not snap.exists() or _sha256(live) != _sha256(snap)]
@@ -313,7 +319,7 @@ def check_watchdog_smoke():
 
 
 def check_cognitive_health():
-    cognitive_db = NEXO_HOME / "nexo-mcp" / "cognitive.db"
+    cognitive_db = NEXO_HOME / "data" / "cognitive.db"
     if not cognitive_db.exists():
         finding("WARN", "cognitive", "cognitive.db not found")
         return
@@ -334,7 +340,7 @@ def check_cognitive_health():
 
     # Metrics
     try:
-        sys.path.insert(0, str(NEXO_HOME / "nexo-mcp"))
+        sys.path.insert(0, str(NEXO_CODE))
         import cognitive as cog
         metrics = cog.get_metrics(days=7)
         if metrics["total_retrievals"] > 0:
@@ -375,7 +381,7 @@ def check_cognitive_health():
     # Weekly GC on Sundays
     if datetime.now().weekday() == 6:
         try:
-            sys.path.insert(0, str(NEXO_HOME / "nexo-mcp"))
+            sys.path.insert(0, str(NEXO_CODE))
             import cognitive as cog
             gc_stm = cog.gc_stm()
             gc_sensory = cog.gc_sensory(max_age_hours=48)
@@ -436,6 +442,19 @@ Execute without asking."""
 
     log("Stage B: Invoking Claude CLI (opus) for interpretation...")
 
+    # Verify Claude CLI is authenticated before calling
+    try:
+        auth_check = subprocess.run(
+            [str(CLAUDE_CLI), "-p", "Reply with exactly: ok", "--bare", "--output-format", "text", "--model", "haiku"],
+            capture_output=True, text=True, timeout=15
+        )
+        if auth_check.returncode != 0:
+            log("Stage B: Claude CLI not available or not authenticated. Skipping Stage B.")
+            return False
+    except Exception:
+        log("Stage B: Claude CLI check failed. Skipping Stage B.")
+        return False
+
     env = os.environ.copy()
     env.pop("CLAUDECODE", None)
     env.pop("CLAUDE_CODE", None)
@@ -443,6 +462,7 @@ Execute without asking."""
     try:
         result = subprocess.run(
             [str(CLAUDE_CLI), "-p", prompt, "--model", "opus",
+             "--output-format", "text", "--bare",
              "--allowedTools", "Read,Write,Edit,Glob,Grep"],
             capture_output=True, text=True, timeout=180, env=env
         )

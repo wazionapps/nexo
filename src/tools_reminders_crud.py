@@ -18,11 +18,11 @@ def handle_reminder_create(id: str, description: str, date: str = '', category: 
 
     result = create_reminder(id=id, description=description, date=date or None, category=category)
     if not result or "error" in result:
-        error_msg = result.get("error", "desconocido") if isinstance(result, dict) else "desconocido"
+        error_msg = result.get("error", "unknown") if isinstance(result, dict) else "unknown"
         return f"ERROR: {error_msg}"
 
-    fecha_str = date if date else 'sin fecha'
-    return f"Reminder created. Date: {fecha_str}. Category: {category}."
+    date_str = date if date else 'no date'
+    return f"Reminder created. Date: {date_str}. Category: {category}."
 
 
 def handle_reminder_update(id: str, description: str = '', date: str = '', status: str = '', category: str = '') -> str:
@@ -81,16 +81,18 @@ def handle_followup_create(id: str, description: str, date: str = '', verificati
                     When completed, auto-creates the next occurrence.
     """
     if not id.startswith('NF'):
-        return f"ERROR: El ID del followup debe empezar por 'NF' (recibido: '{id}')."
+        return f"ERROR: Followup ID must start with 'NF' (received: '{id}')."
 
     result = create_followup(id=id, description=description, date=date or None, verification=verification, reasoning=reasoning, recurrence=recurrence or None)
     if not result or "error" in result:
-        error_msg = result.get("error", "desconocido") if isinstance(result, dict) else "desconocido"
+        error_msg = result.get("error", "unknown") if isinstance(result, dict) else "unknown"
         return f"ERROR: {error_msg}"
 
-    fecha_str = date if date else 'sin fecha'
-    rec_str = f" Recurrencia: {recurrence}." if recurrence else ""
-    return f"Followup created. Date: {fecha_str}.{rec_str}"
+    date_str = date if date else 'no date'
+    rec_str = f" Recurrence: {recurrence}." if recurrence else ""
+    warning = result.get("warning", "")
+    warn_str = f"\n{warning}" if warning else ""
+    return f"Followup created. Date: {date_str}.{rec_str}{warn_str}"
 
 
 def handle_followup_update(id: str, description: str = '', date: str = '', verification: str = '', status: str = '') -> str:

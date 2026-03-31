@@ -1,5 +1,6 @@
 """NEXO Cognitive — Search, retrieval, ranking."""
 import math
+import sqlite3
 import numpy as np
 from datetime import datetime
 from cognitive._core import _get_db, embed, cosine_similarity, _blob_to_array, _array_to_blob, _get_model, _get_reranker, rerank_results, EMBEDDING_DIM

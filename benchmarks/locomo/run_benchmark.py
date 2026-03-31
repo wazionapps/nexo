@@ -29,7 +29,7 @@ from pathlib import Path
 
 # ── Isolation: override COGNITIVE_DB BEFORE importing cognitive ──────────
 BENCH_DIR = "/tmp/nexo-bench"
-NEXO_MCP_DIR = os.path.expanduser("~/claude/nexo-mcp")
+NEXO_MCP_DIR = os.environ.get("NEXO_HOME", os.path.expanduser("~/.nexo"))
 sys.path.insert(0, NEXO_MCP_DIR)
 
 LOCOMO_DATA = os.path.join(os.path.dirname(__file__), "..", "..", "benchmarks", "locomo", "locomo10.json")

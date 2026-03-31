@@ -11,10 +11,14 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
-COGNITIVE_DB = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "cognitive.db")
+NEXO_HOME = os.environ.get("NEXO_HOME", os.path.expanduser("~/.nexo"))
+_data_dir = os.path.join(NEXO_HOME, "data")
+os.makedirs(_data_dir, exist_ok=True)
+
+COGNITIVE_DB = os.path.join(_data_dir, "cognitive.db")
 EMBEDDING_DIM = 768
-LAMBDA_STM = 0.1      # half-life ~7 days
-LAMBDA_LTM = 0.012    # half-life ~60 days
+LAMBDA_STM = 0.004126   # half-life = ln(2) / (7 * 24) ≈ 7 days
+LAMBDA_LTM = 0.000481  # half-life = ln(2) / (60 * 24) ≈ 60 days
 
 # Prediction Error Gate thresholds
 PE_GATE_REJECT = 0.85     # similarity > this → reject (not novel enough)

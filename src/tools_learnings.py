@@ -107,8 +107,8 @@ def handle_learning_search(query: str, category: str = '') -> str:
     """Search learnings by query string, optionally filtered by category."""
     results = search_learnings(query, category if category else None)
     if not results:
-        return f"Sin resultados para '{query}'."
-    lines = [f"RESULTADOS ({len(results)}):"]
+        return f"No results for '{query}'."
+    lines = [f"RESULTS ({len(results)}):"]
     for r in results:
         snippet = r["content"][:100] + "..." if len(r["content"]) > 100 else r["content"]
         status = r.get("status", "active")
@@ -155,7 +155,7 @@ def handle_learning_update(id: int, title: str = '', content: str = '', category
     if review_days > 0:
         kwargs["review_days"] = review_days
     if not kwargs:
-        return "ERROR: Nada que actualizar. Proporciona campos nuevos."
+        return "ERROR: Nothing to update. Provide new fields."
     basic_kwargs = {k: v for k, v in kwargs.items() if k in {"title", "content", "category", "reasoning"}}
     result = update_learning(id, **basic_kwargs)
     if "error" in result:
@@ -179,7 +179,7 @@ def handle_learning_update(id: int, title: str = '', content: str = '', category
         conn = get_db()
         conn.execute(f"UPDATE learnings SET {set_clause} WHERE id = ?", values)
         conn.commit()
-    return f"Learning #{id} actualizado."
+    return f"Learning #{id} updated."
 
 
 def handle_learning_delete(id: int) -> str:
@@ -194,7 +194,7 @@ def handle_learning_list(category: str = '') -> str:
     """List all learnings, grouped by category if no filter given."""
     results = list_learnings(category if category else None)
     if not results:
-        label = category if category else "TODOS"
+        label = category if category else "ALL"
         return f"LEARNINGS {label} (0): No entries."
 
     if category:
@@ -206,7 +206,7 @@ def handle_learning_list(category: str = '') -> str:
             pri_icon = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "⚪"}.get(pri, "🟡")
             lines.append(f"  #{r['id']} [{r.get('status','active')}] {pri_icon}{pri} w={w:.2f} {r['title']}")
     else:
-        lines = [f"LEARNINGS TODOS ({len(results)}):"]
+        lines = [f"LEARNINGS ALL ({len(results)}):"]
         current_cat = None
         for r in results:
             if r["category"] != current_cat:

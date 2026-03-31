@@ -39,7 +39,7 @@ def handle_decision_log(domain: str, decision: str, alternatives: str = '',
     if domain not in valid_domains:
         return f"ERROR: domain must be one of: {', '.join(sorted(valid_domains))}"
     if confidence not in ('high', 'medium', 'low'):
-        return f"ERROR: confidence debe ser high, medium, o low"
+        return f"ERROR: confidence must be high, medium, or low"
 
     sid = session_id or 'unknown'
     result = log_decision(sid, domain, decision, alternatives, based_on, confidence, context_ref)
@@ -84,7 +84,7 @@ def handle_decision_outcome(id: int, outcome: str) -> str:
         (id,)
     )
     conn.commit()
-    return f"Decision #{id} outcome registrado: {outcome[:100]}"
+    return f"Decision #{id} outcome recorded: {outcome[:100]}"
 
 
 def handle_decision_search(query: str = '', domain: str = '', days: int = 30) -> str:
@@ -297,7 +297,7 @@ def handle_change_log(files: str, what_changed: str, why: str,
         session_id: Current session ID
     """
     if not files or not what_changed or not why:
-        return "ERROR: files, what_changed, y why son obligatorios"
+        return "ERROR: files, what_changed, and why are required"
     sid = session_id or 'unknown'
     result = log_change(sid, files, what_changed, why, triggered_by, affects, risks, verify, commit_ref)
     if "error" in result:
@@ -313,7 +313,7 @@ def handle_change_log(files: str, what_changed: str, why: str,
         on_change_log(change_id, files, "")
     except Exception:
         pass
-    msg = f"Change #{change_id} registrado: {files[:60]} — {what_changed[:60]}"
+    msg = f"Change #{change_id} recorded: {files[:60]} — {what_changed[:60]}"
     if not commit_ref:
         msg += f"\n⚠ NO COMMIT. Use nexo_change_commit({change_id}, 'hash') after push, or 'server-direct' if it was a direct server edit."
     return msg
@@ -351,6 +351,9 @@ def handle_change_search(query: str = '', files: str = '', days: int = 30) -> st
 def handle_change_commit(id: int, commit_ref: str) -> str:
     """Link a change log entry to its git commit hash after committing.
 
+    After linking, automatically resolves any open followups that match
+    the change (by file overlap, keyword similarity, or explicit ID reference).
+
     Args:
         id: Change log entry ID
         commit_ref: Git commit hash
@@ -358,7 +361,13 @@ def handle_change_commit(id: int, commit_ref: str) -> str:
     result = update_change_commit(id, commit_ref)
     if "error" in result:
         return f"ERROR: {result['error']}"
-    return f"Change #{id} vinculado a commit {commit_ref[:8]}"
+
+    msg = f"Change #{id} vinculado a commit {commit_ref[:8]}"
+    auto_resolved = result.get("_auto_resolved", [])
+    if auto_resolved:
+        ids = ", ".join(auto_resolved)
+        msg += f"\n✅ AUTO-RESOLVED followups: {ids}"
+    return msg
 
 
 def handle_recall(query: str, days: int = 30) -> str:

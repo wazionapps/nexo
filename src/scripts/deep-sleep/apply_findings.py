@@ -1,10 +1,10 @@
-import os
 #!/usr/bin/env python3
 """
 Deep Sleep — Step 3: Apply findings.
 Takes the analysis output and writes feedback memories + trust adjustments.
 """
 import json
+import os
 import sqlite3
 import sys
 from datetime import datetime
@@ -13,7 +13,7 @@ from pathlib import Path
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 
 DEEP_SLEEP_DIR = NEXO_HOME / "operations" / "deep-sleep"
-NEXO_DB = NEXO_HOME / "nexo-mcp" / "db" / "nexo.db"
+NEXO_DB = NEXO_HOME / "data" / "nexo.db"
 
 
 def find_memory_dir() -> Path:
@@ -67,7 +67,7 @@ def update_memory_index(memory_dir: Path, new_entries: list[dict]):
 
 def adjust_trust(points: int, context: str):
     """Record trust adjustment in cognitive.db if available."""
-    cog_db = NEXO_HOME / "nexo-mcp" / "cognitive.db"
+    cog_db = NEXO_HOME / "data" / "cognitive.db"
     if not cog_db.exists():
         return
     try:

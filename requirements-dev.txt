@@ -1,0 +1,3 @@
+# NEXO Brain — development / test dependencies
+-r src/requirements.txt
+pytest>=7.0

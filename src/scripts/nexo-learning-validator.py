@@ -30,7 +30,7 @@ from pathlib import Path
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 
-NEXO_DB = Path.home() / ".nexo" / "nexo.db"
+NEXO_DB = NEXO_HOME / "data" / "nexo.db"
 CLAUDE_CLI = Path.home() / ".local" / "bin" / "claude"
 
 
@@ -111,13 +111,21 @@ Rules:
 
     # Try CLI first, fall back to mechanical similarity
     if CLAUDE_CLI.exists():
+        auth_check = subprocess.run(
+            [str(CLAUDE_CLI), "-p", "Reply with exactly: ok", "--bare", "--output-format", "text", "--model", "haiku"],
+            capture_output=True, text=True, timeout=15
+        )
+        if auth_check.returncode != 0:
+            # CLI not authenticated, skip gracefully
+            return {"known": False, "confidence": 0, "recommendation": "CLI not authenticated — skipped validation", "matching_learnings": []}
+
         env = os.environ.copy()
         env.pop("CLAUDECODE", None)
         env.pop("CLAUDE_CODE", None)
 
         try:
             result = subprocess.run(
-                [str(CLAUDE_CLI), "-p", prompt, "--model", "opus",
+                [str(CLAUDE_CLI), "-p", prompt, "--model", "opus", "--output-format", "text", "--bare",
                  "--allowedTools", "Read,Write,Edit,Glob,Grep"],
                 capture_output=True, text=True, timeout=60, env=env
             )
