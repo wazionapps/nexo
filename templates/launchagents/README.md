@@ -40,7 +40,7 @@ Each plist calls `/usr/bin/python3`. If your Python 3 is elsewhere (e.g. Homebre
 The agents write logs to `{{NEXO_HOME}}/logs/` and `{{NEXO_HOME}}/coordination/`. Create them if they do not exist:
 
 ```bash
-mkdir -p ~/claude/logs ~/claude/coordination
+mkdir -p "$NEXO_HOME/logs" "$NEXO_HOME/coordination"
 ```
 
 ### 4. Copy and load
@@ -121,8 +121,8 @@ These agents power NEXO's learning and memory systems. Strongly recommended.
 All agents write stdout and stderr to files under `{{NEXO_HOME}}/logs/` (or `{{NEXO_HOME}}/coordination/` for the session-related ones). Check these first when debugging:
 
 ```bash
-tail -50 ~/claude/logs/watchdog-stdout.log
-tail -50 ~/claude/logs/deep-sleep-stderr.log
+tail -50 "$NEXO_HOME/logs/watchdog-stdout.log"
+tail -50 "$NEXO_HOME/logs/deep-sleep-stderr.log"
 ```
 
 ## Notes

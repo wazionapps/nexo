@@ -234,7 +234,7 @@ def check_watchdog_registry():
     if not HASH_REGISTRY.exists():
         return
     text = HASH_REGISTRY.read_text(errors="ignore")
-    forbidden = ["CLAUDE.md", "db.py", "server.py", "plugin_loader.py", "cortex-wrapper.py"]
+    forbidden = ["CLAUDE.md", "server.py", "plugin_loader.py"]
     bad = [name for name in forbidden if name in text]
     if bad:
         finding("ERROR", "watchdog", f"mutable files still protected: {', '.join(bad)}")
@@ -242,8 +242,7 @@ def check_watchdog_registry():
 
 def check_snapshot_sync():
     pairs = [
-        (NEXO_CODE / "db.py", SNAPSHOT_GOLDEN / "db.py"),
-        (NEXO_HOME / "cortex" / "cortex-wrapper.py", SNAPSHOT_GOLDEN / "cortex" / "cortex-wrapper.py"),
+        (NEXO_CODE / "db" / "__init__.py", SNAPSHOT_GOLDEN / "db" / "__init__.py"),
         (NEXO_HOME / "cortex" / "evolution_cycle.py", SNAPSHOT_GOLDEN / "cortex" / "evolution_cycle.py"),
     ]
     drift = [live.name for live, snap in pairs

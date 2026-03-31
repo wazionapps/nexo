@@ -17,12 +17,12 @@ from datetime import datetime
 from pathlib import Path
 
 HOME = Path.home()
-CLAUDE_DIR = Path(os.environ.get("NEXO_HOME", str(HOME / ".nexo")))
-NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(CLAUDE_DIR)))
-CORTEX_DIR = CLAUDE_DIR / "cortex"
-LOG_DIR = CLAUDE_DIR / "logs"
+NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(HOME / ".nexo")))
+NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(NEXO_HOME)))
+CORTEX_DIR = NEXO_HOME / "cortex"
+LOG_DIR = NEXO_HOME / "logs"
 SUMMARY_FILE = LOG_DIR / "watchdog-smoke-summary.json"
-HASH_REGISTRY = CLAUDE_DIR / "scripts" / ".watchdog-hashes"
+HASH_REGISTRY = NEXO_HOME / "scripts" / ".watchdog-hashes"
 RESTORE_LOG = LOG_DIR / "snapshot-restores.log"
 
 
@@ -42,7 +42,7 @@ def main() -> int:
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     findings = []
 
-    db_path = CLAUDE_DIR / "data" / "nexo.db"
+    db_path = NEXO_HOME / "data" / "nexo.db"
     integrity = "missing"
     if db_path.exists():
         try:
@@ -55,14 +55,14 @@ def main() -> int:
         findings.append({"severity": "ERROR", "area": "sqlite", "msg": f"integrity={integrity}"})
 
     cortex_running = subprocess.run(
-        ["pgrep", "-f", "cortex-wrapper.py"],
+        ["pgrep", "-f", "nexo-cortex"],
         capture_output=True,
         text=True,
     ).returncode == 0
     if not cortex_running:
-        findings.append({"severity": "WARN", "area": "cortex", "msg": "cortex-wrapper.py not running"})
+        findings.append({"severity": "WARN", "area": "cortex", "msg": "nexo-cortex not running"})
 
-    backups = sorted((CLAUDE_DIR / "backups").glob("nexo-*.db"), key=lambda p: p.stat().st_mtime, reverse=True)
+    backups = sorted((NEXO_HOME / "backups").glob("nexo-*.db"), key=lambda p: p.stat().st_mtime, reverse=True)
     if backups:
         age_seconds = int(datetime.now().timestamp() - backups[0].stat().st_mtime)
         if age_seconds > 7200:

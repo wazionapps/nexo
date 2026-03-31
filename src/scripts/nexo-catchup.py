@@ -33,9 +33,25 @@ LOG_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE = LOG_DIR / "catchup.log"
 STATE_FILE = NEXO_HOME / "operations" / ".catchup-state.json"
 
-PYTHON_BREW = "/opt/homebrew/bin/python3"
-PYTHON_SYS = "/Library/Frameworks/Python.framework/Versions/3.12/bin/python3"
 SCRIPTS = NEXO_HOME / "scripts"
+
+# Resolve Python: prefer NEXO's venv, then the same Python running this script
+def _resolve_python() -> str:
+    """Find the best Python to use for subprocess calls."""
+    # Check for NEXO_CODE env var pointing to the repo's src/
+    nexo_code = os.environ.get("NEXO_CODE", "")
+    if nexo_code:
+        venv_python = Path(nexo_code).parent / ".venv" / "bin" / "python"
+        if venv_python.exists():
+            return str(venv_python)
+    # Check for venv relative to NEXO_HOME
+    venv_python = NEXO_HOME / ".venv" / "bin" / "python"
+    if venv_python.exists():
+        return str(venv_python)
+    # Fall back to the same Python running this script
+    return sys.executable
+
+NEXO_PYTHON = _resolve_python()
 
 
 def log(msg: str):
@@ -134,27 +150,15 @@ def main():
     state = load_state()
 
     # Define tasks in execution order (matching their intended schedule order)
-    # Auto-update check FIRST
-    update_script = SCRIPTS / "nexo-auto-update.py"
-    if update_script.exists():
-        log("Checking for NEXO updates...")
-        try:
-            subprocess.run(
-                [PYTHON_BREW if os.path.exists(PYTHON_BREW) else PYTHON_SYS, str(update_script)],
-                capture_output=True, text=True, timeout=60,
-                env={**os.environ, "HOME": str(HOME), "NEXO_HOME": str(NEXO_HOME)}
-            )
-        except Exception as e:
-            log(f"  Update check failed: {e}")
-
+    # Note: auto-update is handled by the MCP server on startup, not by catchup.
     tasks = [
         # (name, hour, minute, python, script, weekday)
-        ("cognitive-decay", 3, 0, PYTHON_BREW, "nexo-cognitive-decay.py", None),
-        ("evolution", 3, 0, PYTHON_SYS, "nexo-evolution-run.py", 6),  # Sunday = 6
-        ("sleep", 4, 0, PYTHON_SYS, "nexo-sleep.py", None),
-        ("self-audit", 7, 0, PYTHON_SYS, "nexo-daily-self-audit.py", None),
-        ("github-monitor", 8, 0, PYTHON_BREW, "nexo-github-monitor.py", None),
-        ("postmortem", 23, 30, PYTHON_BREW, "nexo-postmortem-consolidator.py", None),
+        ("cognitive-decay", 3, 0, NEXO_PYTHON, "nexo-cognitive-decay.py", None),
+        ("evolution", 3, 0, NEXO_PYTHON, "nexo-evolution-run.py", 6),  # Sunday = 6
+        ("sleep", 4, 0, NEXO_PYTHON, "nexo-sleep.py", None),
+        ("self-audit", 7, 0, NEXO_PYTHON, "nexo-daily-self-audit.py", None),
+        ("github-monitor", 8, 0, NEXO_PYTHON, "nexo-github-monitor.py", None),
+        ("postmortem", 23, 30, NEXO_PYTHON, "nexo-postmortem-consolidator.py", None),
     ]
 
     ran = 0

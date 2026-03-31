@@ -480,12 +480,26 @@ def _migrate_claude_md() -> str | None:
 def auto_update_check() -> dict:
     """Run the full auto-update check at server startup.
 
+    NEVER raises an exception — always returns a dict.
+
+    Phase 1 (local, safe, no network):
+        - DB schema migrations
+        - File-based migrations
+        - CLAUDE.md version migration
+
+    Phase 2 (network, wrapped in try/except):
+        - git fetch/pull (if git repo)
+        - npm version check (if non-git install)
+
     Returns a dict with:
-        - checked: bool — whether a check was actually performed
+        - checked: bool — whether a network check was actually performed
         - git_update: str|None — git update status message
         - npm_notice: str|None — npm upgrade notice for non-git installs
+        - claude_md_update: str|None — CLAUDE.md migration status
         - migrations: list — file-based migration results
-        - skipped_reason: str|None — why the check was skipped (cooldown, etc.)
+        - db_migrations: int — number of DB schema migrations applied
+        - skipped_reason: str|None — why the network check was skipped (cooldown, etc.)
+        - error: str|None — error message if something failed (informational only)
     """
     result = {
         "checked": False,
@@ -493,55 +507,67 @@ def auto_update_check() -> dict:
         "npm_notice": None,
         "claude_md_update": None,
         "migrations": [],
+        "db_migrations": 0,
         "skipped_reason": None,
+        "error": None,
     }
 
-    # Always run pending file-based migrations regardless of cooldown
+    # ── Phase 1: Local migrations (safe, no network) ────────────────
+    # These ALWAYS run, regardless of cooldown or network state.
+
+    # DB schema migrations
+    try:
+        _run_db_migrations()
+    except Exception as e:
+        _log(f"DB migration error (continuing): {e}")
+
+    # File-based migrations
     try:
         result["migrations"] = run_file_migrations()
     except Exception as e:
         _log(f"File migration runner error: {e}")
 
-    # Always check CLAUDE.md version regardless of cooldown
+    # CLAUDE.md version migration
     try:
         result["claude_md_update"] = _migrate_claude_md()
     except Exception as e:
         _log(f"CLAUDE.md migration error: {e}")
 
+    # ── Phase 2: Network operations (wrapped, never fatal) ──────────
     # Check cooldown for git/npm checks
-    last_check = _read_last_check()
-    last_ts = last_check.get("timestamp", 0)
-    now = time.time()
+    try:
+        last_check = _read_last_check()
+        last_ts = last_check.get("timestamp", 0)
+        now = time.time()
 
-    if now - last_ts < CHECK_COOLDOWN_SECONDS:
-        result["skipped_reason"] = "cooldown"
-        return result
+        if now - last_ts < CHECK_COOLDOWN_SECONDS:
+            result["skipped_reason"] = "cooldown"
+            return result
 
-    result["checked"] = True
+        result["checked"] = True
 
-    is_git = _is_git_repo()
+        is_git = _is_git_repo()
 
-    if is_git:
-        try:
+        if is_git:
             result["git_update"] = _check_git_updates()
-        except Exception as e:
-            _log(f"Git update check error: {e}")
-    else:
-        # Non-git install — check npm for newer version
-        version_json = REPO_DIR / "version.json"
-        pkg_json = REPO_DIR / "package.json"
-        if version_json.exists() or pkg_json.exists():
-            try:
+        else:
+            # Non-git install — check npm for newer version
+            version_json = REPO_DIR / "version.json"
+            pkg_json = REPO_DIR / "package.json"
+            if version_json.exists() or pkg_json.exists():
                 result["npm_notice"] = _check_npm_version()
-            except Exception as e:
-                _log(f"npm version check error: {e}")
 
-    # Save timestamp
-    _write_last_check({
-        "timestamp": now,
-        "is_git": is_git,
-        "git_update": result["git_update"],
-        "npm_notice": result["npm_notice"],
-    })
+        # Save timestamp
+        _write_last_check({
+            "timestamp": now,
+            "is_git": is_git,
+            "git_update": result["git_update"],
+            "npm_notice": result["npm_notice"],
+        })
+
+    except Exception as e:
+        error_msg = f"Update check failed: {e}. Running current version."
+        _log(error_msg)
+        result["error"] = error_msg
 
     return result

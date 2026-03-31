@@ -179,7 +179,7 @@ def handle_learning_update(id: int, title: str = '', content: str = '', category
         conn = get_db()
         conn.execute(f"UPDATE learnings SET {set_clause} WHERE id = ?", values)
         conn.commit()
-    return f"Learning #{id} actualizado."
+    return f"Learning #{id} updated."
 
 
 def handle_learning_delete(id: int) -> str:
@@ -194,7 +194,7 @@ def handle_learning_list(category: str = '') -> str:
     """List all learnings, grouped by category if no filter given."""
     results = list_learnings(category if category else None)
     if not results:
-        label = category if category else "TODOS"
+        label = category if category else "ALL"
         return f"LEARNINGS {label} (0): No entries."
 
     if category:
@@ -206,7 +206,7 @@ def handle_learning_list(category: str = '') -> str:
             pri_icon = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "⚪"}.get(pri, "🟡")
             lines.append(f"  #{r['id']} [{r.get('status','active')}] {pri_icon}{pri} w={w:.2f} {r['title']}")
     else:
-        lines = [f"LEARNINGS TODOS ({len(results)}):"]
+        lines = [f"LEARNINGS ALL ({len(results)}):"]
         current_cat = None
         for r in results:
             if r["category"] != current_cat:

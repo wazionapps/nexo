@@ -4,13 +4,14 @@ NEXO Runtime Preflight
 
 Runs safe end-to-end smoke tests for Cortex and Evolution using a temporary
 workspace and a copied SQLite database. No external API calls are performed.
-Results are written to ~/.nexo/logs/runtime-preflight-summary.json.
+Results are written to NEXO_HOME/logs/runtime-preflight-summary.json.
 """
 
 from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import shutil
 import sqlite3
 import sys
@@ -20,13 +21,18 @@ from datetime import datetime
 from pathlib import Path
 
 HOME = Path.home()
-CLAUDE_DIR = HOME / ".nexo"
-LOG_DIR = CLAUDE_DIR / "logs"
+NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(HOME / ".nexo")))
+# Auto-detect: if running from repo (src/scripts/), use src/ as NEXO_CODE
+_script_dir = Path(__file__).resolve().parent
+_repo_src = _script_dir.parent  # src/scripts/ -> src/
+NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(_repo_src) if (_repo_src / "server.py").exists() else str(NEXO_HOME)))
+
+LOG_DIR = NEXO_HOME / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 SUMMARY_FILE = LOG_DIR / "runtime-preflight-summary.json"
-DB_FILE = CLAUDE_DIR / "data" / "nexo.db"
-CORTEX_OBJECTIVE = CLAUDE_DIR / "cortex" / "evolution-objective.json"
-CORTEX_PROMPT = CLAUDE_DIR / "cortex" / "evolution-prompt.md"
+DB_FILE = NEXO_HOME / "data" / "nexo.db"
+CORTEX_OBJECTIVE = NEXO_HOME / "cortex" / "evolution-objective.json"
+CORTEX_PROMPT = NEXO_HOME / "cortex" / "evolution-prompt.md"
 
 
 def _load_module(name: str, path: Path):
@@ -162,14 +168,16 @@ def main() -> int:
         shutil.copy2(CORTEX_OBJECTIVE, temp_objective)
         if CORTEX_PROMPT.exists():
             shutil.copy2(CORTEX_PROMPT, temp_prompt)
-        shutil.copy2(CLAUDE_DIR / "scripts" / "nexo-snapshot-restore.sh", temp_scripts_dir / "nexo-snapshot-restore.sh")
+        snapshot_restore = NEXO_CODE / "scripts" / "nexo-snapshot-restore.sh"
+        if snapshot_restore.exists():
+            shutil.copy2(snapshot_restore, temp_scripts_dir / "nexo-snapshot-restore.sh")
 
         temp_api_key = temp_root / "anthropic-api-key.txt"
         temp_api_key.write_text("smoke-test-key")
 
-        evolution_cycle = _load_module("evolution_cycle", CLAUDE_DIR / "cortex" / "evolution_cycle.py")
+        evolution_cycle = _load_module("evolution_cycle", NEXO_CODE / "evolution_cycle.py")
         evolution_cycle.NEXO_DB = temp_db
-        evolution_cycle.CLAUDE_DIR = temp_root
+        evolution_cycle.NEXO_HOME = temp_root
         evolution_cycle.CORTEX_DIR = temp_cortex_dir
         evolution_cycle.SANDBOX_DIR = temp_sandbox_dir
         evolution_cycle.SNAPSHOTS_DIR = temp_snapshots_dir
@@ -189,7 +197,7 @@ def main() -> int:
             "restore_ok": restore_ok,
         }
 
-        cortex = _load_module("cortex_wrapper", CLAUDE_DIR / "cortex" / "cortex-wrapper.py")
+        cortex = _load_module("cortex_plugin", NEXO_CODE / "plugins" / "cortex.py")
         cortex.NEXO_DB = temp_db
         cortex.DRY_RUN = True
         cortex.BRIEFING_FILE = temp_cortex_dir / "briefing.json"
@@ -219,15 +227,15 @@ def main() -> int:
         after_logs = sqlite3.connect(str(temp_db)).execute("SELECT COUNT(*) FROM evolution_log").fetchone()[0]
         if after_logs <= before_logs:
             raise RuntimeError("cortex evolution smoke did not log proposals")
-        summary["checks"]["cortex_wrapper"] = {
+        summary["checks"]["cortex_plugin"] = {
             "state_status": state.get("status"),
             "briefing_written": cortex.BRIEFING_FILE.exists(),
             "health_written": cortex.HEALTH_FILE.exists(),
             "evolution_logs_added": after_logs - before_logs,
         }
 
-        runner = _load_module("nexo_evolution_run", CLAUDE_DIR / "scripts" / "nexo-evolution-run.py")
-        runner.CLAUDE_DIR = temp_root
+        runner = _load_module("nexo_evolution_run", NEXO_CODE / "scripts" / "nexo-evolution-run.py")
+        runner.NEXO_HOME = temp_root
         runner.NEXO_DB = temp_db
         runner.CORTEX_DIR = temp_cortex_dir
         runner.OBJECTIVE_FILE = temp_objective
