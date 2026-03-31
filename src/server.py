@@ -48,6 +48,30 @@ with open(_pid_file, "w") as f:
 
 init_db()
 
+# ── Auto-update check (non-blocking, max 5s) ─────────────────────
+try:
+    from auto_update import auto_update_check
+    import threading
+
+    def _bg_update():
+        try:
+            result = auto_update_check()
+            if result.get("git_update"):
+                print(f"[NEXO] {result['git_update']}", file=__import__('sys').stderr)
+            if result.get("npm_notice"):
+                print(f"[NEXO] {result['npm_notice']}", file=__import__('sys').stderr)
+            for m in result.get("migrations", []):
+                if m["status"] == "failed":
+                    print(f"[NEXO] Migration {m['file']} FAILED: {m['message']}", file=__import__('sys').stderr)
+        except Exception as e:
+            print(f"[NEXO auto-update] error: {e}", file=__import__('sys').stderr)
+
+    _update_thread = threading.Thread(target=_bg_update, daemon=True)
+    _update_thread.start()
+    _update_thread.join(timeout=5)  # Wait at most 5 seconds
+except Exception:
+    pass  # Never break startup
+
 mcp = FastMCP(
     name="nexo",
     instructions=(

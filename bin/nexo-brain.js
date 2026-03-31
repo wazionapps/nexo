@@ -107,35 +107,60 @@ async function main() {
         log(`Existing installation detected: v${installedVersion} → v${currentVersion}`);
         log("Running auto-migration...");
 
-        // Update hooks
-        const hooksSrc = path.join(__dirname, "..", "src", "hooks");
+        // Recursive copy helper (skips __pycache__, .pyc, .db files)
+        const srcDir = path.join(__dirname, "..", "src");
+        const copyDirRec = (src, dest) => {
+          fs.mkdirSync(dest, { recursive: true });
+          fs.readdirSync(src).forEach(item => {
+            if (item === "__pycache__" || item.endsWith(".pyc") || item.endsWith(".db")) return;
+            const srcPath = path.join(src, item);
+            const destPath = path.join(dest, item);
+            if (fs.statSync(srcPath).isDirectory()) {
+              copyDirRec(srcPath, destPath);
+            } else {
+              fs.copyFileSync(srcPath, destPath);
+            }
+          });
+        };
+
+        // Update hooks (entire directory)
+        const hooksSrc = path.join(srcDir, "hooks");
         const hooksDest = path.join(NEXO_HOME, "hooks");
-        fs.mkdirSync(hooksDest, { recursive: true });
-        ["session-start.sh", "capture-session.sh", "session-stop.sh", "pre-compact.sh", "caffeinate-guard.sh"].forEach((h) => {
-          const src = path.join(hooksSrc, h);
-          const dest = path.join(hooksDest, h);
-          if (fs.existsSync(src)) {
-            fs.copyFileSync(src, dest);
-            fs.chmodSync(dest, "755");
-          }
-        });
+        if (fs.existsSync(hooksSrc)) {
+          copyDirRec(hooksSrc, hooksDest);
+          // Make .sh files executable
+          fs.readdirSync(hooksDest).filter(f => f.endsWith(".sh")).forEach(f => {
+            fs.chmodSync(path.join(hooksDest, f), "755");
+          });
+        }
         log("  Hooks updated.");
 
-        // Update core Python files
-        const srcDir = path.join(__dirname, "..", "src");
-        ["server.py", "db.py", "plugin_loader.py", "cognitive.py",
-         "knowledge_graph.py", "kg_populate.py", "maintenance.py", "storage_router.py",
-         "tools_sessions.py", "tools_coordination.py", "tools_reminders.py",
-         "tools_reminders_crud.py", "tools_learnings.py", "tools_credentials.py",
-         "tools_task_history.py", "tools_menu.py"].forEach((f) => {
+        // Update core Python files (flat .py files in src/)
+        const coreFlatFiles = [
+          "server.py", "plugin_loader.py",
+          "knowledge_graph.py", "kg_populate.py", "maintenance.py", "storage_router.py",
+          "claim_graph.py", "hnsw_index.py", "evolution_cycle.py", "migrate_embeddings.py",
+          "auto_close_sessions.py",
+          "tools_sessions.py", "tools_coordination.py", "tools_reminders.py",
+          "tools_reminders_crud.py", "tools_learnings.py", "tools_credentials.py",
+          "tools_task_history.py", "tools_menu.py",
+        ];
+        coreFlatFiles.forEach((f) => {
           const src = path.join(srcDir, f);
           if (fs.existsSync(src)) {
             fs.copyFileSync(src, path.join(NEXO_HOME, f));
           }
         });
+        // Update core packages (db/, cognitive/) — full directory copy
+        ["db", "cognitive"].forEach(pkg => {
+          const pkgSrc = path.join(srcDir, pkg);
+          if (fs.existsSync(pkgSrc)) {
+            copyDirRec(pkgSrc, path.join(NEXO_HOME, pkg));
+          }
+        });
         log("  Core files updated.");
 
-        // Update plugins
+        // Update plugins (all .py files in plugins/)
         const pluginsSrc = path.join(srcDir, "plugins");
         const pluginsDest = path.join(NEXO_HOME, "plugins");
         fs.mkdirSync(pluginsDest, { recursive: true });
@@ -146,34 +171,30 @@ async function main() {
         }
         log("  Plugins updated.");
 
-        // Update dashboard
+        // Update dashboard (recursive — includes static/, templates/)
         const dashSrc = path.join(srcDir, "dashboard");
         const dashDest = path.join(NEXO_HOME, "dashboard");
         if (fs.existsSync(dashSrc)) {
-          fs.mkdirSync(dashDest, { recursive: true });
-          const copyDir = (src, dest) => {
-            fs.readdirSync(src).forEach(item => {
-              const srcPath = path.join(src, item);
-              const destPath = path.join(dest, item);
-              if (fs.statSync(srcPath).isDirectory()) {
-                fs.mkdirSync(destPath, { recursive: true });
-                copyDir(srcPath, destPath);
-              } else {
-                fs.copyFileSync(srcPath, destPath);
-              }
-            });
-          };
-          copyDir(dashSrc, dashDest);
+          copyDirRec(dashSrc, dashDest);
           log("  Dashboard updated.");
         }
 
-        // Update scripts
+        // Update rules (directory with core-rules.json, __init__.py, migrate.py)
+        const rulesSrc = path.join(srcDir, "rules");
+        const rulesDest = path.join(NEXO_HOME, "rules");
+        if (fs.existsSync(rulesSrc)) {
+          copyDirRec(rulesSrc, rulesDest);
+          log("  Rules updated.");
+        }
+
+        // Update scripts (all .py, .sh files + subdirectories like deep-sleep/)
         const scriptsSrc = path.join(srcDir, "scripts");
         const scriptsDest = path.join(NEXO_HOME, "scripts");
-        fs.mkdirSync(scriptsDest, { recursive: true });
         if (fs.existsSync(scriptsSrc)) {
-          fs.readdirSync(scriptsSrc).filter(f => f.endsWith(".py") || f.endsWith(".sh")).forEach((f) => {
-            fs.copyFileSync(path.join(scriptsSrc, f), path.join(scriptsDest, f));
+          copyDirRec(scriptsSrc, scriptsDest);
+          // Make .sh files executable
+          fs.readdirSync(scriptsDest).filter(f => f.endsWith(".sh")).forEach(f => {
+            fs.chmodSync(path.join(scriptsDest, f), "755");
           });
         }
         log("  Scripts updated.");
@@ -644,16 +665,38 @@ async function main() {
 
   // Copy source files
   const srcDir = path.join(__dirname, "..", "src");
-  const scriptsSrcDir = path.join(__dirname, "..", "src", "scripts");
-  const pluginsSrcDir = path.join(__dirname, "..", "src", "plugins");
+  const pluginsSrcDir = path.join(srcDir, "plugins");
+  const scriptsSrcDir = path.join(srcDir, "scripts");
   const templateDir = path.join(__dirname, "..", "templates");
 
-  // Core files
+  // Recursive copy helper (skips __pycache__, .pyc, .db files)
+  const copyDirRecursive = (src, dest) => {
+    fs.mkdirSync(dest, { recursive: true });
+    fs.readdirSync(src).forEach(item => {
+      if (item === "__pycache__" || item.endsWith(".pyc") || item.endsWith(".db")) return;
+      const srcPath = path.join(src, item);
+      const destPath = path.join(dest, item);
+      if (fs.statSync(srcPath).isDirectory()) {
+        copyDirRecursive(srcPath, destPath);
+      } else {
+        fs.copyFileSync(srcPath, destPath);
+      }
+    });
+  };
+
+  // Core flat files (single .py files in src/)
   const coreFiles = [
     "server.py",
-    "db.py",
     "plugin_loader.py",
-    "cognitive.py",
+    "knowledge_graph.py",
+    "kg_populate.py",
+    "maintenance.py",
+    "storage_router.py",
+    "claim_graph.py",
+    "hnsw_index.py",
+    "evolution_cycle.py",
+    "migrate_embeddings.py",
+    "auto_close_sessions.py",
     "tools_sessions.py",
     "tools_coordination.py",
     "tools_reminders.py",
@@ -662,12 +705,6 @@ async function main() {
     "tools_credentials.py",
     "tools_task_history.py",
     "tools_menu.py",
-    "knowledge_graph.py",
-    "kg_populate.py",
-    "maintenance.py",
-    "storage_router.py",
-    "migrate_embeddings.py",
-    "auto_close_sessions.py",
   ];
   coreFiles.forEach((f) => {
     const src = path.join(srcDir, f);
@@ -676,56 +713,56 @@ async function main() {
     }
   });
 
-  // Plugins
-  const pluginFiles = [
-    "__init__.py",
-    "guard.py",
-    "episodic_memory.py",
-    "cognitive_memory.py",
-    "entities.py",
-    "preferences.py",
-    "agents.py",
-    "backup.py",
-    "evolution.py",
-    "adaptive_mode.py",
-    "knowledge_graph_tools.py",
-  ];
-  pluginFiles.forEach((f) => {
-    const src = path.join(pluginsSrcDir, f);
-    if (fs.existsSync(src)) {
-      fs.copyFileSync(src, path.join(NEXO_HOME, "plugins", f));
+  // Core packages (directories with __init__.py)
+  ["db", "cognitive"].forEach(pkg => {
+    const pkgSrc = path.join(srcDir, pkg);
+    if (fs.existsSync(pkgSrc)) {
+      copyDirRecursive(pkgSrc, path.join(NEXO_HOME, pkg));
     }
   });
 
-  // Scripts
-  const scriptFiles = fs.existsSync(scriptsSrcDir)
-    ? fs.readdirSync(scriptsSrcDir).filter((f) => f.endsWith(".py"))
-    : [];
-  scriptFiles.forEach((f) => {
-    const src = path.join(scriptsSrcDir, f);
-    if (fs.existsSync(src)) {
-      fs.copyFileSync(src, path.join(NEXO_HOME, "scripts", f));
-    }
-  });
+  // Plugins (all .py files in plugins/)
+  fs.mkdirSync(path.join(NEXO_HOME, "plugins"), { recursive: true });
+  if (fs.existsSync(pluginsSrcDir)) {
+    fs.readdirSync(pluginsSrcDir).filter(f => f.endsWith(".py")).forEach((f) => {
+      fs.copyFileSync(path.join(pluginsSrcDir, f), path.join(NEXO_HOME, "plugins", f));
+    });
+  }
 
-  // Dashboard
+  // Scripts (all files + subdirectories like deep-sleep/)
+  if (fs.existsSync(scriptsSrcDir)) {
+    copyDirRecursive(scriptsSrcDir, path.join(NEXO_HOME, "scripts"));
+    // Make .sh files executable
+    const scriptsDest = path.join(NEXO_HOME, "scripts");
+    fs.readdirSync(scriptsDest).filter(f => f.endsWith(".sh")).forEach(f => {
+      fs.chmodSync(path.join(scriptsDest, f), "755");
+    });
+  }
+
+  // Dashboard (recursive — includes static/, templates/)
   const dashSrcDir = path.join(srcDir, "dashboard");
-  const dashDestDir = path.join(NEXO_HOME, "dashboard");
   if (fs.existsSync(dashSrcDir)) {
-    const copyDirRecursive = (src, dest) => {
-      fs.mkdirSync(dest, { recursive: true });
-      fs.readdirSync(src).forEach(item => {
-        const srcPath = path.join(src, item);
-        const destPath = path.join(dest, item);
-        if (fs.statSync(srcPath).isDirectory()) {
-          copyDirRecursive(srcPath, destPath);
-        } else {
-          fs.copyFileSync(srcPath, destPath);
-        }
-      });
-    };
-    copyDirRecursive(dashSrcDir, dashDestDir);
+    copyDirRecursive(dashSrcDir, path.join(NEXO_HOME, "dashboard"));
     log("  Dashboard installed.");
+  }
+
+  // Rules directory
+  const rulesSrcDir = path.join(srcDir, "rules");
+  if (fs.existsSync(rulesSrcDir)) {
+    copyDirRecursive(rulesSrcDir, path.join(NEXO_HOME, "rules"));
+    log("  Rules installed.");
+  }
+
+  // Hooks directory
+  const hooksSrcDir = path.join(srcDir, "hooks");
+  if (fs.existsSync(hooksSrcDir)) {
+    const hooksDest = path.join(NEXO_HOME, "hooks");
+    copyDirRecursive(hooksSrcDir, hooksDest);
+    // Make .sh files executable
+    fs.readdirSync(hooksDest).filter(f => f.endsWith(".sh")).forEach(f => {
+      fs.chmodSync(path.join(hooksDest, f), "755");
+    });
+    log("  Hooks installed.");
   }
 
   // Generate personality
@@ -1195,18 +1232,8 @@ ${doScan ? `- Stack: ${Object.keys(profileData.code.languages || {}).slice(0, 5)
   // Configure hooks for session capture (Sensory Register)
   if (!settings.hooks) settings.hooks = {};
 
-  // Copy hook scripts to NEXO_HOME
-  const hooksSrcDir = path.join(__dirname, "..", "src", "hooks");
+  // Hook scripts already copied above — just reference the dest dir
   const hooksDestDir = path.join(NEXO_HOME, "hooks");
-  fs.mkdirSync(hooksDestDir, { recursive: true });
-  ["session-start.sh", "capture-session.sh", "session-stop.sh", "pre-compact.sh"].forEach((h) => {
-    const src = path.join(hooksSrcDir, h);
-    const dest = path.join(hooksDestDir, h);
-    if (fs.existsSync(src)) {
-      fs.copyFileSync(src, dest);
-      fs.chmodSync(dest, "755");
-    }
-  });
 
   // SessionStart hook
   if (!settings.hooks.SessionStart) settings.hooks.SessionStart = [];
