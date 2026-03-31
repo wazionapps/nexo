@@ -1,0 +1,168 @@
+#!/usr/bin/env python3
+"""
+Deep Sleep v2 -- Phase 3: Synthesize extractions into actionable findings.
+
+One Claude call that reads all per-session extractions and produces a
+unified synthesis with cross-session patterns, morning agenda, context
+packets, and deduplicated actions.
+
+Environment variables:
+  NEXO_HOME  -- root of the NEXO installation (default: ~/.nexo)
+"""
+import json
+import os
+import shutil
+import subprocess
+import sys
+from datetime import datetime
+from pathlib import Path
+
+NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+DEEP_SLEEP_DIR = NEXO_HOME / "operations" / "deep-sleep"
+PROMPT_FILE = Path(__file__).parent / "synthesize-prompt.md"
+
+CLAUDE_TIMEOUT = 600  # 10 minutes
+
+
+def find_claude_cli() -> str:
+    """Find the Claude CLI binary."""
+    candidates = [
+        Path.home() / ".local" / "bin" / "claude",
+        Path("/usr/local/bin/claude"),
+    ]
+    for c in candidates:
+        if c.exists():
+            return str(c)
+    which = shutil.which("claude")
+    if which:
+        return which
+    return "claude"
+
+
+def extract_json_from_response(text: str) -> dict | None:
+    """Parse JSON from Claude's response, handling markdown fences."""
+    text = text.strip()
+
+    if text.startswith("```"):
+        lines = text.split("\n")
+        end = len(lines)
+        for i in range(len(lines) - 1, 0, -1):
+            if lines[i].strip() == "```":
+                end = i
+                break
+        text = "\n".join(lines[1:end]).strip()
+
+    brace_start = text.find("{")
+    if brace_start < 0:
+        return None
+
+    depth = 0
+    for i in range(brace_start, len(text)):
+        if text[i] == "{":
+            depth += 1
+        elif text[i] == "}":
+            depth -= 1
+            if depth == 0:
+                try:
+                    return json.loads(text[brace_start:i + 1])
+                except json.JSONDecodeError:
+                    break
+    return None
+
+
+def main():
+    target_date = sys.argv[1] if len(sys.argv) > 1 else datetime.now().strftime("%Y-%m-%d")
+
+    extractions_file = DEEP_SLEEP_DIR / f"{target_date}-extractions.json"
+    context_file = DEEP_SLEEP_DIR / f"{target_date}-context.txt"
+
+    if not extractions_file.exists():
+        print(f"[synthesize] No extractions file for {target_date}. Run extract.py first.")
+        sys.exit(1)
+
+    # Check if there are any findings worth synthesizing
+    with open(extractions_file) as f:
+        extractions = json.load(f)
+
+    total_findings = extractions.get("total_findings", 0)
+    if total_findings == 0:
+        print(f"[synthesize] No findings to synthesize for {target_date}.")
+        # Write minimal synthesis
+        output = {
+            "date": target_date,
+            "sessions_analyzed": extractions.get("sessions_analyzed", 0),
+            "cross_session_patterns": [],
+            "morning_agenda": [],
+            "context_packets": [],
+            "actions": [],
+            "summary": f"No significant findings for {target_date}."
+        }
+        output_file = DEEP_SLEEP_DIR / f"{target_date}-synthesis.json"
+        with open(output_file, "w") as f:
+            json.dump(output, f, indent=2, ensure_ascii=False)
+        print(f"[synthesize] Output: {output_file}")
+        return
+
+    # Build prompt
+    prompt_template = PROMPT_FILE.read_text()
+    prompt = prompt_template.replace("{{EXTRACTIONS_FILE}}", str(extractions_file))
+    prompt = prompt.replace("{{CONTEXT_FILE}}", str(context_file))
+
+    claude_bin = find_claude_cli()
+    print(f"[synthesize] Phase 3: Synthesizing {total_findings} findings from {target_date}")
+    print(f"[synthesize] Claude CLI: {claude_bin}")
+
+    try:
+        result = subprocess.run(
+            [
+                claude_bin,
+                "-p", prompt,
+                "--model", "opus",
+                "--output-format", "text",
+                "--allowedTools",
+                "Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__nexo_startup,mcp__nexo__nexo_learning_search,mcp__nexo__nexo_recall,mcp__nexo__nexo_reminders"
+            ],
+            capture_output=True,
+            text=True,
+            timeout=CLAUDE_TIMEOUT,
+            env=os.environ.copy()
+        )
+
+        if result.returncode != 0:
+            print(f"[synthesize] Claude CLI error (exit {result.returncode}): {result.stderr[:300]}", file=sys.stderr)
+            sys.exit(1)
+
+        parsed = extract_json_from_response(result.stdout)
+        if not parsed:
+            debug_file = DEEP_SLEEP_DIR / f"debug-synthesize-{target_date}.txt"
+            debug_file.write_text(result.stdout[:10000])
+            print(f"[synthesize] Failed to parse JSON. Raw output saved to {debug_file}", file=sys.stderr)
+            sys.exit(1)
+
+        # Write synthesis output
+        output_file = DEEP_SLEEP_DIR / f"{target_date}-synthesis.json"
+        with open(output_file, "w") as f:
+            json.dump(parsed, f, indent=2, ensure_ascii=False)
+
+        n_actions = len(parsed.get("actions", []))
+        n_patterns = len(parsed.get("cross_session_patterns", []))
+        n_agenda = len(parsed.get("morning_agenda", []))
+        n_packets = len(parsed.get("context_packets", []))
+
+        print(f"[synthesize] Done.")
+        print(f"  Actions: {n_actions}")
+        print(f"  Cross-session patterns: {n_patterns}")
+        print(f"  Morning agenda items: {n_agenda}")
+        print(f"  Context packets: {n_packets}")
+        print(f"[synthesize] Output: {output_file}")
+
+    except subprocess.TimeoutExpired:
+        print(f"[synthesize] Claude CLI timeout ({CLAUDE_TIMEOUT}s)", file=sys.stderr)
+        sys.exit(1)
+    except FileNotFoundError:
+        print(f"[synthesize] Claude CLI not found at: {claude_bin}", file=sys.stderr)
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

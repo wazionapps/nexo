@@ -1,219 +1,352 @@
 #!/usr/bin/env python3
 """
-Deep Sleep — Step 3: Apply findings.
-Takes the analysis output and writes feedback memories + trust adjustments.
+Deep Sleep v2 -- Phase 4: Apply synthesized findings.
+
+Reads $DATE-synthesis.json and executes actions:
+- learning_add: inserts learnings into nexo.db
+- followup_create: inserts followups into nexo.db
+- morning_briefing_item: writes to morning briefing file
+
+All actions are idempotent (dedupe_key checked against last 7 days),
+backed up before mutation, and logged to $DATE-applied.json.
+
+Environment variables:
+  NEXO_HOME  -- root of the NEXO installation (default: ~/.nexo)
 """
+import hashlib
 import json
 import os
 import sqlite3
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
-
 DEEP_SLEEP_DIR = NEXO_HOME / "operations" / "deep-sleep"
 NEXO_DB = NEXO_HOME / "data" / "nexo.db"
+COGNITIVE_DB = NEXO_HOME / "data" / "cognitive.db"
+OPERATIONS_DIR = NEXO_HOME / "operations"
+BACKUP_DIR = DEEP_SLEEP_DIR  # backups stored alongside outputs
 
 
-def find_memory_dir() -> Path:
-    """Find the Claude Code auto-memory directory."""
-    claude_dir = Path.home() / ".claude" / "projects"
-    for d in claude_dir.iterdir():
-        if d.is_dir():
-            mem_dir = d / "memory"
-            if mem_dir.exists():
-                return mem_dir
-    # Fallback: create under first project dir
-    for d in claude_dir.iterdir():
-        if d.is_dir():
-            mem_dir = d / "memory"
-            mem_dir.mkdir(exist_ok=True)
-            return mem_dir
-    return claude_dir / "memory"
+def generate_run_id(target_date: str) -> str:
+    """Generate a unique run ID for this execution."""
+    ts = datetime.now().strftime("%H%M%S")
+    return f"{target_date}-{ts}"
 
 
-def write_feedback_memory(memory_dir: Path, filename: str, name: str, description: str, content: str):
-    """Write a feedback memory file."""
-    filepath = memory_dir / filename
-    feedback = f"""---
-name: {name}
-description: {description}
-type: feedback
----
-
-{content}
-"""
-    filepath.write_text(feedback)
-
-
-def update_memory_index(memory_dir: Path, new_entries: list[dict]):
-    """Append new entries to MEMORY.md index."""
-    index_file = memory_dir / "MEMORY.md"
-    if not index_file.exists() or not new_entries:
-        return
-
-    current = index_file.read_text()
-    lines_to_add = []
-    for entry in new_entries:
-        line = f"- **{entry['title']}:** `{entry['filename']}` --- {entry['summary']}"
-        if line not in current:
-            lines_to_add.append(line)
-
-    if lines_to_add:
-        current += "\n" + "\n".join(lines_to_add) + "\n"
-        index_file.write_text(current)
+def load_recent_dedupe_keys(target_date: str, days: int = 7) -> set[str]:
+    """Load dedupe_keys from applied files in the last N days."""
+    keys = set()
+    base_date = datetime.strptime(target_date, "%Y-%m-%d")
+    for i in range(days):
+        d = (base_date - timedelta(days=i)).strftime("%Y-%m-%d")
+        applied_file = DEEP_SLEEP_DIR / f"{d}-applied.json"
+        if applied_file.exists():
+            try:
+                with open(applied_file) as f:
+                    data = json.load(f)
+                for action in data.get("applied_actions", []):
+                    dk = action.get("dedupe_key", "")
+                    if dk:
+                        keys.add(dk)
+            except (json.JSONDecodeError, KeyError):
+                continue
+    return keys
 
 
-def adjust_trust(points: int, context: str):
-    """Record trust adjustment in cognitive.db if available."""
-    cog_db = NEXO_HOME / "data" / "cognitive.db"
-    if not cog_db.exists():
-        return
+def backup_db(db_path: Path, run_id: str) -> Path | None:
+    """Create a backup of a database before mutations."""
+    if not db_path.exists():
+        return None
+    backup_path = BACKUP_DIR / f"{run_id}-backup-{db_path.name}"
     try:
-        conn = sqlite3.connect(str(cog_db))
-        conn.execute(
-            "INSERT INTO trust_events (event, context, points, created_at) VALUES (?, ?, ?, ?)",
-            ("deep_sleep_violations", context, points, datetime.now().isoformat())
-        )
-        conn.commit()
-        conn.close()
-    except Exception:
-        pass
+        import shutil
+        shutil.copy2(str(db_path), str(backup_path))
+        return backup_path
+    except Exception as e:
+        print(f"  [apply] Warning: backup failed for {db_path.name}: {e}", file=sys.stderr)
+        return None
 
 
-def add_learning(category: str, title: str, content: str) -> bool:
-    """Add a learning to nexo.db using real schema."""
+def add_learning(category: str, title: str, content: str) -> dict:
+    """Add a learning to nexo.db. Returns result dict."""
     if not NEXO_DB.exists():
-        return False
+        return {"success": False, "error": "nexo.db not found"}
     try:
         now = datetime.now().timestamp()
         conn = sqlite3.connect(str(NEXO_DB))
-        conn.execute(
+        cursor = conn.execute(
             "INSERT INTO learnings (category, title, content, created_at, updated_at, reasoning) VALUES (?, ?, ?, ?, ?, ?)",
-            (category, title, content, now, now, "Deep Sleep overnight analysis")
+            (category, title, content, now, now, "Deep Sleep v2 overnight analysis")
         )
+        learning_id = cursor.lastrowid
         conn.commit()
         conn.close()
-        return True
+        return {"success": True, "id": learning_id}
     except Exception as e:
-        print(f"  Error adding learning: {e}", file=sys.stderr)
-        return False
+        return {"success": False, "error": str(e)}
 
 
-def add_followup(followup_id: str, description: str, date: str = None) -> bool:
-    """Add a followup to nexo.db using real schema."""
+def create_followup(description: str, date: str = "") -> dict:
+    """Create a followup in nexo.db. Returns result dict."""
     if not NEXO_DB.exists():
-        return False
+        return {"success": False, "error": "nexo.db not found"}
     try:
         now = datetime.now().timestamp()
+        # Generate a deterministic ID
+        fid = "NF-DS-" + hashlib.md5(description.encode()).hexdigest()[:8].upper()
         conn = sqlite3.connect(str(NEXO_DB))
         conn.execute(
             "INSERT OR IGNORE INTO followups (id, description, date, status, created_at, updated_at, reasoning) VALUES (?, ?, ?, 'PENDING', ?, ?, ?)",
-            (followup_id, description, date or "", now, now, "Deep Sleep overnight analysis")
+            (fid, description, date, now, now, "Deep Sleep v2 overnight analysis")
         )
         conn.commit()
         conn.close()
-        return True
+        return {"success": True, "id": fid}
     except Exception as e:
-        print(f"  Error adding followup: {e}", file=sys.stderr)
-        return False
+        return {"success": False, "error": str(e)}
 
 
-def apply(analysis: dict):
-    """Apply all findings from deep sleep analysis."""
-    memory_dir = find_memory_dir()
-    actions_taken = []
-    memory_entries = []
-    date = analysis["date"]
+def write_morning_briefing(target_date: str, synthesis: dict) -> Path:
+    """Write the morning briefing file from synthesis data."""
+    briefing_dir = OPERATIONS_DIR
+    briefing_dir.mkdir(parents=True, exist_ok=True)
+    briefing_file = briefing_dir / "morning-briefing.md"
 
-    print(f"\nApplying findings for {date}...")
+    lines = [
+        f"# Morning Briefing -- {target_date}",
+        f"_Generated by Deep Sleep at {datetime.now().strftime('%H:%M')}_",
+        ""
+    ]
 
-    # 1. Uncaptured corrections → learnings + feedback memories
-    for i, correction in enumerate(analysis.get("uncaptured_corrections", [])):
-        severity = correction.get("severity", "medium")
-        category = correction.get("category", "process")
-        content = correction.get("what_nexo_should_have_saved", "")
-        quote = correction.get("quote", "")
+    # Summary
+    summary = synthesis.get("summary", "")
+    if summary:
+        lines.append(f"> {summary}")
+        lines.append("")
 
-        # All corrections → learnings
-        learning_title = f"[Deep Sleep] {content[:80]}"
-        learning_content = f"User said: \"{quote}\"\nContext: {correction.get('context', '')}\nRepeated: {correction.get('times_repeated', 1)} times"
-        if add_learning(category, learning_title, learning_content):
-            actions_taken.append(f"learning_add: {learning_title[:50]}")
+    # Morning agenda
+    agenda = synthesis.get("morning_agenda", [])
+    if agenda:
+        lines.append("## Agenda")
+        lines.append("")
+        for item in agenda:
+            priority = item.get("priority", "?")
+            title = item.get("title", "")
+            desc = item.get("description", "")
+            item_type = item.get("type", "")
+            lines.append(f"### {priority}. {title}")
+            if item_type:
+                lines.append(f"_Type: {item_type}_")
+            lines.append(desc)
+            if item.get("context"):
+                lines.append(f"\n> {item['context']}")
+            lines.append("")
 
-        # High/critical → also feedback memories
-        if severity in ("high", "critical"):
-            safe_name = category.replace(" ", "_").lower()
-            filename = f"ds_{date}_{safe_name}_{i}.md"
-            write_feedback_memory(
-                memory_dir, filename,
-                name=content[:60],
-                description=f"Deep sleep detected uncaptured correction ({severity})",
-                content=f"{content}\n\n**Why:** User said: \"{quote}\"\nContext: {correction.get('context', '')}\n\n**How to apply:** {content}"
-            )
-            memory_entries.append({
-                "title": content[:40],
-                "filename": filename,
-                "summary": f"Deep sleep {date}, severity {severity}"
-            })
-            actions_taken.append(f"feedback_write: {filename}")
+    # Cross-session patterns
+    patterns = synthesis.get("cross_session_patterns", [])
+    if patterns:
+        lines.append("## Patterns Detected")
+        lines.append("")
+        for p in patterns:
+            severity = p.get("severity", "")
+            lines.append(f"- **[{severity}]** {p.get('pattern', '')}")
+            sessions = p.get("sessions", [])
+            if sessions:
+                lines.append(f"  Sessions: {', '.join(sessions)}")
+        lines.append("")
 
-    # 2. Missed commitments → followups
-    for i, commitment in enumerate(analysis.get("missed_commitments", [])):
-        fid = f"NF-DS-{date}-{i}"
-        desc = f"[Deep Sleep] {commitment.get('commitment', '')[:100]}"
-        if add_followup(fid, desc, commitment.get("due_date")):
-            actions_taken.append(f"followup: {desc[:50]}")
+    # Draft actions (things that need user decision)
+    draft_actions = [
+        a for a in synthesis.get("actions", [])
+        if a.get("action_class") == "draft_for_morning"
+    ]
+    if draft_actions:
+        lines.append("## Items for Review")
+        lines.append("")
+        for a in draft_actions:
+            confidence = a.get("confidence", 0)
+            lines.append(f"- **{a.get('action_type', '')}** (confidence: {confidence:.0%})")
+            content = a.get("content", {})
+            if isinstance(content, dict):
+                title = content.get("title", content.get("description", ""))
+                lines.append(f"  {title}")
+            evidence = a.get("evidence", [])
+            if evidence and isinstance(evidence, list):
+                for ev in evidence[:2]:
+                    quote = ev.get("quote", "")
+                    if quote:
+                        lines.append(f'  > "{quote}"')
+        lines.append("")
 
-    # 3. Trust adjustments for critical violations
-    critical_violations = [v for v in analysis.get("protocol_violations", []) if v.get("severity") == "critical"]
-    if critical_violations:
-        points = -3 * len(critical_violations)
-        adjust_trust(points, f"{len(critical_violations)} critical violations on {date}")
-        actions_taken.append(f"trust: {points} points ({len(critical_violations)} critical violations)")
+    # Context packets
+    packets = synthesis.get("context_packets", [])
+    if packets:
+        lines.append("## Context for Today's Work")
+        lines.append("")
+        for p in packets:
+            lines.append(f"### {p.get('topic', 'Unknown')}")
+            lines.append(f"**Last state:** {p.get('last_state', 'N/A')}")
+            files = p.get("key_files", [])
+            if files:
+                lines.append(f"**Files:** {', '.join(files)}")
+            questions = p.get("open_questions", [])
+            if questions:
+                lines.append("**Open questions:**")
+                for q in questions:
+                    lines.append(f"  - {q}")
+            lines.append("")
 
-    # 3. Update MEMORY.md index
-    update_memory_index(memory_dir, memory_entries)
-    if memory_entries:
-        actions_taken.append(f"memory_index: {len(memory_entries)} entries added")
+    briefing_file.write_text("\n".join(lines), encoding="utf-8")
+    return briefing_file
 
-    # 4. Save applied actions log
-    applied_log = {
-        "date": date,
-        "applied_at": datetime.now().isoformat(),
-        "actions_taken": actions_taken,
-        "corrections_processed": len(analysis.get("uncaptured_corrections", [])),
-        "compliance": analysis.get("protocol_compliance", {}).get("overall_compliance", 0)
+
+def apply_action(action: dict, run_id: str) -> dict:
+    """Apply a single action and return the result log."""
+    action_type = action.get("action_type", "")
+    action_class = action.get("action_class", "")
+    content = action.get("content", {})
+    dedupe_key = action.get("dedupe_key", "")
+
+    applied_id = f"{run_id}-{hashlib.md5(dedupe_key.encode()).hexdigest()[:8]}"
+
+    log_entry = {
+        "applied_action_id": applied_id,
+        "action_type": action_type,
+        "action_class": action_class,
+        "dedupe_key": dedupe_key,
+        "timestamp": datetime.now().isoformat(),
+        "status": "skipped",
+        "details": {}
     }
 
-    applied_file = DEEP_SLEEP_DIR / f"{date}-applied.json"
-    with open(applied_file, "w") as f:
-        json.dump(applied_log, f, indent=2, ensure_ascii=False)
+    # Only auto_apply actions get executed
+    if action_class != "auto_apply":
+        log_entry["status"] = "deferred_to_morning"
+        log_entry["details"] = {"reason": "action_class is not auto_apply"}
+        return log_entry
 
-    print(f"Applied {len(actions_taken)} actions:")
-    for a in actions_taken:
-        print(f"  ✓ {a}")
+    if not isinstance(content, dict):
+        log_entry["status"] = "error"
+        log_entry["details"] = {"error": "content is not a dict"}
+        return log_entry
 
-    return applied_log
+    if action_type == "learning_add":
+        result = add_learning(
+            category=content.get("category", "process"),
+            title=content.get("title", "Deep Sleep finding"),
+            content=content.get("content", content.get("description", ""))
+        )
+        log_entry["status"] = "applied" if result.get("success") else "error"
+        log_entry["details"] = result
+
+    elif action_type == "followup_create":
+        result = create_followup(
+            description=content.get("description", content.get("title", "")),
+            date=content.get("date", "")
+        )
+        log_entry["status"] = "applied" if result.get("success") else "error"
+        log_entry["details"] = result
+
+    elif action_type == "morning_briefing_item":
+        # These are included in the briefing file, not applied separately
+        log_entry["status"] = "included_in_briefing"
+
+    else:
+        log_entry["status"] = "unknown_type"
+        log_entry["details"] = {"error": f"Unknown action_type: {action_type}"}
+
+    return log_entry
 
 
 def main():
-    date = sys.argv[1] if len(sys.argv) > 1 else datetime.now().strftime("%Y-%m-%d")
+    target_date = sys.argv[1] if len(sys.argv) > 1 else datetime.now().strftime("%Y-%m-%d")
 
-    analysis_file = DEEP_SLEEP_DIR / f"{date}-analysis.json"
-    if not analysis_file.exists():
-        print(f"No analysis found for {date}. Run analyze_session.py first.")
+    synthesis_file = DEEP_SLEEP_DIR / f"{target_date}-synthesis.json"
+    if not synthesis_file.exists():
+        print(f"[apply] No synthesis file for {target_date}. Run synthesize.py first.")
         sys.exit(1)
 
-    with open(analysis_file) as f:
-        analysis = json.load(f)
+    with open(synthesis_file) as f:
+        synthesis = json.load(f)
 
-    result = apply(analysis)
+    run_id = generate_run_id(target_date)
+    actions = synthesis.get("actions", [])
+    print(f"[apply] Phase 4: Applying findings for {target_date} (run: {run_id})")
+    print(f"[apply] Actions to process: {len(actions)}")
 
-    compliance = analysis.get("protocol_compliance", {}).get("overall_compliance", 0)
-    print(f"\nDeep Sleep {date} — {result['corrections_processed']} corrections, "
-          f"{compliance:.0%} compliance, {len(result['actions_taken'])} actions applied")
+    # Load recent dedupe keys for idempotency
+    existing_keys = load_recent_dedupe_keys(target_date)
+    print(f"[apply] Existing dedupe keys (7d): {len(existing_keys)}")
+
+    # Backup databases before mutations
+    auto_apply_count = sum(1 for a in actions if a.get("action_class") == "auto_apply")
+    if auto_apply_count > 0:
+        print("[apply] Creating database backups...")
+        nexo_backup = backup_db(NEXO_DB, run_id)
+        cog_backup = backup_db(COGNITIVE_DB, run_id)
+        if nexo_backup:
+            print(f"  Backup: {nexo_backup}")
+        if cog_backup:
+            print(f"  Backup: {cog_backup}")
+
+    # Process actions
+    applied_actions = []
+    stats = {"applied": 0, "deferred": 0, "skipped_dedupe": 0, "errors": 0}
+
+    for action in actions:
+        dedupe_key = action.get("dedupe_key", "")
+
+        # Idempotency check
+        if dedupe_key and dedupe_key in existing_keys:
+            applied_actions.append({
+                "applied_action_id": f"{run_id}-deduped",
+                "action_type": action.get("action_type"),
+                "dedupe_key": dedupe_key,
+                "status": "skipped_dedupe",
+                "timestamp": datetime.now().isoformat()
+            })
+            stats["skipped_dedupe"] += 1
+            continue
+
+        result = apply_action(action, run_id)
+        applied_actions.append(result)
+
+        if result["status"] == "applied":
+            stats["applied"] += 1
+            print(f"  Applied: {action.get('action_type')} -- {action.get('content', {}).get('title', '')[:50]}")
+        elif result["status"] == "deferred_to_morning":
+            stats["deferred"] += 1
+        elif result["status"] == "error":
+            stats["errors"] += 1
+            print(f"  Error: {result.get('details', {}).get('error', 'unknown')}", file=sys.stderr)
+
+    # Write morning briefing
+    print("[apply] Writing morning briefing...")
+    briefing_path = write_morning_briefing(target_date, synthesis)
+    print(f"  Briefing: {briefing_path}")
+
+    # Write applied log
+    applied_log = {
+        "date": target_date,
+        "run_id": run_id,
+        "applied_at": datetime.now().isoformat(),
+        "stats": stats,
+        "applied_actions": applied_actions,
+        "summary": synthesis.get("summary", ""),
+    }
+
+    applied_file = DEEP_SLEEP_DIR / f"{target_date}-applied.json"
+    with open(applied_file, "w") as f:
+        json.dump(applied_log, f, indent=2, ensure_ascii=False)
+
+    print(f"\n[apply] Done.")
+    print(f"  Applied: {stats['applied']}")
+    print(f"  Deferred to morning: {stats['deferred']}")
+    print(f"  Skipped (dedupe): {stats['skipped_dedupe']}")
+    print(f"  Errors: {stats['errors']}")
+    print(f"[apply] Log: {applied_file}")
 
 
 if __name__ == "__main__":

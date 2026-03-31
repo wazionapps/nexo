@@ -24,38 +24,51 @@ log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_DIR/deep-sleep.l
 
 run_analysis() {
     local DATE="$1"
-    log "=== Deep Sleep starting for $DATE ==="
+    log "=== Deep Sleep v2 starting for $DATE ==="
 
-    # Step 1: Collect transcripts
-    log "Step 1: Collecting transcripts for $DATE..."
-    python3 "$SCRIPT_DIR/deep-sleep/collect_transcripts.py" "$DATE" 2>&1 | tee -a "$LOG_DIR/deep-sleep.log"
+    # Phase 1: Collect all context (Python, no LLM)
+    log "Phase 1: Collecting context for $DATE..."
+    python3 "$SCRIPT_DIR/deep-sleep/collect.py" "$DATE" 2>&1 | tee -a "$LOG_DIR/deep-sleep.log"
 
-    # Check if transcripts were found
-    if [ ! -f "$DEEP_SLEEP_DIR/$DATE-transcripts.json" ]; then
-        log "No transcripts file generated for $DATE. Skipping."
+    if [ ! -f "$DEEP_SLEEP_DIR/$DATE-context.txt" ]; then
+        log "No context file generated for $DATE. Skipping."
         return 0
     fi
 
-    SESSIONS=$(python3 -c "import json; print(json.load(open('$DEEP_SLEEP_DIR/$DATE-transcripts.json'))['sessions_found'])")
+    # Check index for session count
+    SESSIONS=0
+    if [ -f "$DEEP_SLEEP_DIR/$DATE-index.json" ]; then
+        SESSIONS=$(python3 -c "import json; print(json.load(open('$DEEP_SLEEP_DIR/$DATE-index.json'))['sessions_found'])")
+    fi
     if [ "$SESSIONS" -eq 0 ]; then
         log "No sessions found for $DATE. Skipping."
         return 0
     fi
 
-    # Step 2: Analyze with Claude CLI
-    log "Step 2: Analyzing $SESSIONS sessions with Claude CLI..."
-    python3 "$SCRIPT_DIR/deep-sleep/analyze_session.py" "$DATE" 2>&1 | tee -a "$LOG_DIR/deep-sleep.log"
+    # Phase 2: Extract findings per session (Claude Opus)
+    log "Phase 2: Extracting findings from $SESSIONS sessions..."
+    python3 "$SCRIPT_DIR/deep-sleep/extract.py" "$DATE" 2>&1 | tee -a "$LOG_DIR/deep-sleep.log"
 
-    if [ ! -f "$DEEP_SLEEP_DIR/$DATE-analysis.json" ]; then
-        log "Analysis failed for $DATE. No output generated."
+    if [ ! -f "$DEEP_SLEEP_DIR/$DATE-extractions.json" ]; then
+        log "Extraction failed for $DATE. No output."
         return 1
     fi
 
-    # Step 3: Apply findings
-    log "Step 3: Applying findings for $DATE..."
+    # Phase 3: Cross-session synthesis (Claude Opus, one call)
+    log "Phase 3: Synthesizing cross-session findings..."
+    python3 "$SCRIPT_DIR/deep-sleep/synthesize.py" "$DATE" 2>&1 | tee -a "$LOG_DIR/deep-sleep.log"
+
+    if [ ! -f "$DEEP_SLEEP_DIR/$DATE-synthesis.json" ]; then
+        log "Synthesis failed for $DATE. Falling back to extractions only."
+        # Fall back: apply extractions directly
+        cp "$DEEP_SLEEP_DIR/$DATE-extractions.json" "$DEEP_SLEEP_DIR/$DATE-synthesis.json"
+    fi
+
+    # Phase 4: Apply findings
+    log "Phase 4: Applying findings..."
     python3 "$SCRIPT_DIR/deep-sleep/apply_findings.py" "$DATE" 2>&1 | tee -a "$LOG_DIR/deep-sleep.log"
 
-    log "=== Deep Sleep complete for $DATE ==="
+    log "=== Deep Sleep v2 complete for $DATE ==="
     return 0
 }
 
