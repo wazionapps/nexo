@@ -80,6 +80,12 @@ const ALL_PROCESSES = [
   // --- RunAtLoad (once on boot) ---
   { name: "catchup", script: "nexo-catchup.py", interpreter: "python", scriptDir: "scripts",
     type: "runAtLoad", purpose: "Session catchup" },
+  { name: "tcc-approve", script: "nexo-tcc-approve.sh", interpreter: "bash", scriptDir: "scripts",
+    type: "runAtLoad", macOnly: true, watchPaths: ["~/.local/share/claude/versions"],
+    purpose: "Auto-approve macOS permissions for Claude updates" },
+  // --- KeepAlive (persistent daemon) ---
+  { name: "prevent-sleep", script: "nexo-prevent-sleep.sh", interpreter: "bash", scriptDir: "scripts",
+    type: "keepAlive", purpose: "Keep machine awake for nocturnal processes" },
   // --- Daily (times from schedule.json) ---
   { name: "cognitive-decay", script: "nexo-cognitive-decay.py", interpreter: "python", scriptDir: "scripts",
     type: "daily", defaultHour: 3, defaultMinute: 0, purpose: "Memory decay" },
@@ -260,6 +266,9 @@ function installAllProcesses(platform, pythonPath, nexoHome, schedule, launchAge
     let count = 0;
 
     for (const proc of ALL_PROCESSES) {
+      // Skip macOnly processes on Linux
+      if (proc.macOnly && platform !== "darwin") continue;
+
       const plistName = `com.nexo.${proc.name}.plist`;
       const plistPath = path.join(launchAgentsDir, plistName);
       const sPath = scriptPath(proc);
@@ -267,9 +276,19 @@ function installAllProcesses(platform, pythonPath, nexoHome, schedule, launchAge
       const s = getSchedule(proc);
 
       let scheduleBlock = "";
-      if (proc.type === "runAtLoad") {
+      if (proc.type === "keepAlive") {
         scheduleBlock = `    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
     <true/>`;
+      } else if (proc.type === "runAtLoad") {
+        let extra = "";
+        if (proc.watchPaths) {
+          const paths = proc.watchPaths.map(p => p.replace("~", home));
+          extra = `\n    <key>WatchPaths</key>\n    <array>\n${paths.map(p => `        <string>${p}</string>`).join("\n")}\n    </array>`;
+        }
+        scheduleBlock = `    <key>RunAtLoad</key>
+    <true/>${extra}`;
       } else if (proc.type === "interval") {
         scheduleBlock = `    <key>StartInterval</key>
     <integer>${proc.intervalMinutes * 60}</integer>
@@ -354,6 +373,7 @@ function installAllProcesses(platform, pythonPath, nexoHome, schedule, launchAge
       let count = 0;
 
       for (const proc of ALL_PROCESSES) {
+        if (proc.macOnly) continue; // tcc-approve is macOS only
         const serviceName = `nexo-${proc.name}`;
         const serviceFile = path.join(systemdDir, `${serviceName}.service`);
         const timerFile = path.join(systemdDir, `${serviceName}.timer`);
@@ -361,23 +381,33 @@ function installAllProcesses(platform, pythonPath, nexoHome, schedule, launchAge
         const interp = interpreterPath(proc);
         const s = getSchedule(proc);
 
+        const serviceType = proc.type === "keepAlive" ? "simple" : "oneshot";
+        const restartPolicy = proc.type === "keepAlive" ? "Restart=always\nRestartSec=5" : "";
         const service = `[Unit]
 Description=NEXO Brain — ${proc.name} (${proc.purpose})
 
 [Service]
-Type=oneshot
+Type=${serviceType}
 ExecStart=${interp} ${sPath}
 Environment=HOME=${home}
 Environment=NEXO_HOME=${nexoHome}
 Environment=NEXO_CODE=${nexoCode}
 StandardOutput=append:${path.join(logsDir, `${proc.name}-stdout.log`)}
 StandardError=append:${path.join(logsDir, `${proc.name}-stderr.log`)}
+${restartPolicy}
 `;
 
         // Build calendar spec
         let onCalendar = "";
         let persistent = "true";
-        if (proc.type === "runAtLoad") {
+        if (proc.type === "keepAlive") {
+          // KeepAlive = persistent service, no timer needed
+          fs.writeFileSync(serviceFile, service + `\n[Install]\nWantedBy=default.target\n`);
+          run(`systemctl --user enable ${serviceName}.service`);
+          run(`systemctl --user start ${serviceName}.service`);
+          count++;
+          continue;
+        } else if (proc.type === "runAtLoad") {
           // No timer for runAtLoad — runs via MCP startup
           fs.writeFileSync(serviceFile, service);
           count++;
@@ -1666,47 +1696,8 @@ ${doScan ? `- Stack: ${Object.keys(profileData.code.languages || {}).slice(0, 5)
   const schedule = loadOrCreateSchedule(NEXO_HOME);
   installAllProcesses(platform, python, NEXO_HOME, schedule, LAUNCH_AGENTS);
 
-  // Caffeinate: keep Mac awake for nocturnal processes (macOS only)
-  if (platform === "darwin" && doCaffeinate) {
-    const caffHookSrc = path.join(__dirname, "..", "src", "hooks", "caffeinate-guard.sh");
-    const caffHookDest = path.join(NEXO_HOME, "hooks", "caffeinate-guard.sh");
-    if (fs.existsSync(caffHookSrc)) {
-      fs.copyFileSync(caffHookSrc, caffHookDest);
-      fs.chmodSync(caffHookDest, "755");
-    }
-
-    const caffPlist = `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.nexo.caffeinate</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>/bin/bash</string>
-        <string>${caffHookDest}</string>
-    </array>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>KeepAlive</key>
-    <true/>
-    <key>StandardOutPath</key>
-    <string>${path.join(NEXO_HOME, "logs", "caffeinate-stdout.log")}</string>
-    <key>StandardErrorPath</key>
-    <string>${path.join(NEXO_HOME, "logs", "caffeinate-stderr.log")}</string>
-</dict>
-</plist>`;
-
-    const caffPlistPath = path.join(LAUNCH_AGENTS, "com.nexo.caffeinate.plist");
-    fs.writeFileSync(caffPlistPath, caffPlist);
-    try {
-      execSync(
-        `launchctl bootout gui/$(id -u) "${caffPlistPath}" 2>/dev/null; launchctl bootstrap gui/$(id -u) "${caffPlistPath}"`,
-        { stdio: "pipe" }
-      );
-    } catch {}
-    log("Caffeinate enabled — Mac will stay awake for cognitive processes.");
-  }
+  // Note: prevent-sleep and tcc-approve are now part of ALL_PROCESSES
+  // and installed by installAllProcesses() above. No separate caffeinate block needed.
 
   // Step 8: Create shell alias so user can just type the operator's name
   log("Creating shell alias...");
