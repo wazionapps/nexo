@@ -15,7 +15,7 @@ def handle_agent_create(id: str, name: str, specialization: str, model: str = "s
                         tools: str = "", context_files: str = "", rules: str = "") -> str:
     """Register a new agent in the registry."""
     create_agent(id, name, specialization, model, tools, context_files, rules)
-    return f"Agente '{id}' ({name}) registered. Model: {model}"
+    return f"Agent '{id}' ({name}) registered. Model: {model}"
 
 def handle_agent_update(id: str, name: str = "", specialization: str = "", model: str = "",
                         tools: str = "", context_files: str = "", rules: str = "") -> str:

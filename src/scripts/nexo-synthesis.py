@@ -19,6 +19,7 @@ from datetime import datetime, date, timedelta
 from pathlib import Path
 
 HOME = Path.home()
+NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 CLAUDE_DIR = NEXO_HOME
 COORD_DIR = CLAUDE_DIR / "coordination"
 NEXO_DB = NEXO_HOME / "data" / "nexo.db"

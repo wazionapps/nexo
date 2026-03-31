@@ -1,5 +1,5 @@
-import os
 #!/usr/bin/env python3
+import os
 """NEXO Cognitive Decay — Daily Ebbinghaus sweep + STM→LTM promotion."""
 
 import json

@@ -28,6 +28,10 @@
     <dict>
         <key>PATH</key>
         <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>NEXO_HOME</key>
+        <string>{{NEXO_HOME}}</string>
+        <key>NEXO_CODE</key>
+        <string>{{NEXO_CODE}}</string>
     </dict>
 </dict>
 </plist>

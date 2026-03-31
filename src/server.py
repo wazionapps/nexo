@@ -564,8 +564,8 @@ def nexo_index_dirs() -> str:
     """List all directories being indexed by FTS5 (builtin + dynamic)."""
     dirs = fts_list_dirs()
     if not dirs:
-        return "Sin directorios configurados."
-    lines = ["DIRECTORIOS INDEXADOS:"]
+        return "No directories configured."
+    lines = ["INDEXED DIRECTORIES:"]
     for d in dirs:
         source_tag = "⚙️" if d["source"] == "builtin" else "➕"
         notes = f" — {d['notes']}" if d.get("notes") else ""
@@ -691,10 +691,10 @@ def nexo_plugin_list() -> str:
     """List all loaded plugins and their tools."""
     plugins = list_plugins()
     if not plugins:
-        return "Sin plugins cargados."
-    lines = ["PLUGINS CARGADOS:"]
+        return "No plugins loaded."
+    lines = ["LOADED PLUGINS:"]
     for p in plugins:
-        names = p["tool_names"] or "(sin tools)"
+        names = p["tool_names"] or "(no tools)"
         lines.append(f"  {p['filename']} — {p['tools_count']} tools: {names}")
     return "\n".join(lines)
 

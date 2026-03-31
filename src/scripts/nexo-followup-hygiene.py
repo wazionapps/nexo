@@ -1,5 +1,5 @@
-import os
 #!/usr/bin/env python3
+import os
 """
 NEXO Followup Hygiene — Weekly cleanup of followup/reminder statuses.
 

@@ -219,7 +219,7 @@ def check_recurring_errors() -> list[dict]:
         alerts.append({
             "type": "recurring_errors",
             "severity": "medium",
-            "title": f"Categoria '{r['category']}' tiene {r['cnt']} learnings this week — possible systemic issue",
+            "title": f"Category '{r['category']}' has {r['cnt']} learnings this week — possible systemic issue",
             "category": r["category"],
             "count": r["cnt"],
         })

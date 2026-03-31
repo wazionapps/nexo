@@ -107,8 +107,8 @@ def handle_learning_search(query: str, category: str = '') -> str:
     """Search learnings by query string, optionally filtered by category."""
     results = search_learnings(query, category if category else None)
     if not results:
-        return f"Sin resultados para '{query}'."
-    lines = [f"RESULTADOS ({len(results)}):"]
+        return f"No results for '{query}'."
+    lines = [f"RESULTS ({len(results)}):"]
     for r in results:
         snippet = r["content"][:100] + "..." if len(r["content"]) > 100 else r["content"]
         status = r.get("status", "active")
@@ -155,7 +155,7 @@ def handle_learning_update(id: int, title: str = '', content: str = '', category
     if review_days > 0:
         kwargs["review_days"] = review_days
     if not kwargs:
-        return "ERROR: Nada que actualizar. Proporciona campos nuevos."
+        return "ERROR: Nothing to update. Provide new fields."
     basic_kwargs = {k: v for k, v in kwargs.items() if k in {"title", "content", "category", "reasoning"}}
     result = update_learning(id, **basic_kwargs)
     if "error" in result:

@@ -39,7 +39,7 @@ def handle_decision_log(domain: str, decision: str, alternatives: str = '',
     if domain not in valid_domains:
         return f"ERROR: domain must be one of: {', '.join(sorted(valid_domains))}"
     if confidence not in ('high', 'medium', 'low'):
-        return f"ERROR: confidence debe ser high, medium, o low"
+        return f"ERROR: confidence must be high, medium, or low"
 
     sid = session_id or 'unknown'
     result = log_decision(sid, domain, decision, alternatives, based_on, confidence, context_ref)
@@ -297,7 +297,7 @@ def handle_change_log(files: str, what_changed: str, why: str,
         session_id: Current session ID
     """
     if not files or not what_changed or not why:
-        return "ERROR: files, what_changed, y why son obligatorios"
+        return "ERROR: files, what_changed, and why are required"
     sid = session_id or 'unknown'
     result = log_change(sid, files, what_changed, why, triggered_by, affects, risks, verify, commit_ref)
     if "error" in result:

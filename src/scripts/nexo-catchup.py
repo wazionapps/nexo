@@ -27,6 +27,7 @@ from pathlib import Path
 CLAUDE_CLI = Path.home() / ".local" / "bin" / "claude"
 
 HOME = Path.home()
+NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 LOG_DIR = NEXO_HOME / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE = LOG_DIR / "catchup.log"
@@ -141,7 +142,7 @@ def main():
             subprocess.run(
                 [PYTHON_BREW if os.path.exists(PYTHON_BREW) else PYTHON_SYS, str(update_script)],
                 capture_output=True, text=True, timeout=60,
-                env={**os.environ, "HOME": str(HOME), "NEXO_HOME": str(NEXO_HOME / "nexo-mcp")}
+                env={**os.environ, "HOME": str(HOME), "NEXO_HOME": str(NEXO_HOME)}
             )
         except Exception as e:
             log(f"  Update check failed: {e}")

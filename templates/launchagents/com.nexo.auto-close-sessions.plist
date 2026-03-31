@@ -30,6 +30,10 @@
         <string>/usr/bin:/usr/local/bin:/bin:/opt/homebrew/bin</string>
         <key>NEXO_SKIP_FS_INDEX</key>
         <string>1</string>
+        <key>NEXO_HOME</key>
+        <string>{{NEXO_HOME}}</string>
+        <key>NEXO_CODE</key>
+        <string>{{NEXO_CODE}}</string>
     </dict>
 </dict>
 </plist>

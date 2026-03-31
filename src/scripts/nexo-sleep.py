@@ -32,7 +32,7 @@ from pathlib import Path
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 
 # ─── Paths ────────────────────────────────────────────────────────────────────
-CLAUDE_DIR = Path.home() / ".nexo"
+CLAUDE_DIR = NEXO_HOME
 BRAIN_DIR = CLAUDE_DIR / "brain"
 COORD_DIR = CLAUDE_DIR / "coordination"
 MEMORY_DIR = CLAUDE_DIR / "memory"
@@ -46,7 +46,7 @@ HEARTBEAT_LOG = COORD_DIR / "heartbeat-log.json"
 REFLECTION_LOG = COORD_DIR / "reflection-log.json"
 SLEEP_LOG = COORD_DIR / "sleep-log.json"
 
-MEMORY_MD = Path.home() / ".nexo" / "memory" / "MEMORY.md"
+MEMORY_MD = NEXO_HOME / "memory" / "MEMORY.md"
 NEXO_DB = NEXO_HOME / "data" / "nexo.db"
 CLAUDE_MEM_DB = Path.home() / ".claude-mem" / "claude-mem.db"
 CLAUDE_CLI = Path.home() / ".local" / "bin" / "claude"
@@ -252,7 +252,7 @@ def stage_a_cleanup() -> dict:
 
     # A8: Delete cortex/logs/*.log >7 days, truncate launchd >5MB
     cutoff_7 = TODAY - timedelta(days=7)
-    cortex_logs = Path.home() / ".nexo" / "cortex" / "logs"
+    cortex_logs = NEXO_HOME / "cortex" / "logs"
     if cortex_logs.exists():
         for f in cortex_logs.glob("*.log"):
             if f.name.startswith("launchd-"):
@@ -568,7 +568,7 @@ def main():
 
         # Register for catch-up
         try:
-            state_file = Path.home() / ".nexo" / "operations" / ".catchup-state.json"
+            state_file = NEXO_HOME / "operations" / ".catchup-state.json"
             st = json.loads(state_file.read_text()) if state_file.exists() else {}
             st["sleep"] = datetime.now().isoformat()
             state_file.write_text(json.dumps(st, indent=2))

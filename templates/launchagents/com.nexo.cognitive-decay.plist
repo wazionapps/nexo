@@ -29,5 +29,12 @@
     <string>{{NEXO_HOME}}/logs/cognitive-decay-stderr.log</string>
     <key>RunAtLoad</key>
     <false/>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>NEXO_HOME</key>
+        <string>{{NEXO_HOME}}</string>
+        <key>NEXO_CODE</key>
+        <string>{{NEXO_CODE}}</string>
+    </dict>
 </dict>
 </plist>

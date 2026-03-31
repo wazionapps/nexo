@@ -77,10 +77,10 @@ Every change requires: edit local → manually copy/sanitize → push to repo. T
 {
   "mcpServers": {
     "nexo": {
-      "command": "/Users/franciscoc/Documents/_PhpstormProjects/nexo/src/.venv/bin/python",
-      "args": ["/Users/franciscoc/Documents/_PhpstormProjects/nexo/src/server.py"],
+      "command": "~/Documents/_PhpstormProjects/nexo/src/.venv/bin/python",
+      "args": ["~/Documents/_PhpstormProjects/nexo/src/server.py"],
       "env": {
-        "NEXO_HOME": "/Users/franciscoc/claude"
+        "NEXO_HOME": "$NEXO_HOME"
       }
     }
   }

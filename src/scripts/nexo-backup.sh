@@ -1,5 +1,5 @@
 #!/bin/bash
-# NEXO DB hourly backup — crontab: 0 * * * * /Users/franciscoc/claude/nexo-mcp/backup_cron.sh
+# NEXO DB hourly backup — crontab: 0 * * * * $NEXO_HOME/scripts/nexo-backup.sh
 NEXO_HOME="${NEXO_HOME:-$HOME/.nexo}"
 NEXO_DIR="$NEXO_HOME"
 BACKUP_DIR="$NEXO_HOME/backups"
