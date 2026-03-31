@@ -280,6 +280,15 @@ def complete_followup(id: str, result: str = '') -> dict:
                 recurrence=recurrence,
             )
 
+            # Return accurate result: the completed one is now archived_id, not id
+            return {
+                "id": archived_id,
+                "status": "COMPLETED",
+                "recurrence": recurrence,
+                "next_id": id,
+                "next_date": next_date,
+            }
+
     return update_result
 
 
