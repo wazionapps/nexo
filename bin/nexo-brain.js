@@ -19,7 +19,7 @@ const fs = require("fs");
 const path = require("path");
 const readline = require("readline");
 
-const NEXO_HOME = path.join(require("os").homedir(), ".nexo");
+let NEXO_HOME = path.join(require("os").homedir(), ".nexo");
 const CLAUDE_SETTINGS = path.join(
   require("os").homedir(),
   ".claude",
@@ -766,6 +766,8 @@ async function main() {
   const i18n = {
     en: {
       langConfirm: "English it is.",
+      askDataDir: `  Where should I store my data? (databases, backups, personal plugins)\n  Default: ~/.nexo/\n  > `,
+      dataDirConfirm: (p) => `Data directory: ${p}`,
       askUserName: "  What's your name? > ",
       userGreet: (n) => `Nice to meet you, ${n}.`,
       askAgentName: "  What should I call myself? (default: NEXO) > ",
@@ -793,6 +795,8 @@ async function main() {
     },
     es: {
       langConfirm: "Español, perfecto.",
+      askDataDir: `  ¿Dónde quieres que guarde mis datos? (bases de datos, backups, plugins personales)\n  Por defecto: ~/.nexo/\n  > `,
+      dataDirConfirm: (p) => `Directorio de datos: ${p}`,
       askUserName: "  ¿Cómo te llamas? > ",
       userGreet: (n) => `Encantado, ${n}.`,
       askAgentName: "  ¿Cómo quieres que me llame? (default: NEXO) > ",
@@ -820,6 +824,8 @@ async function main() {
     },
     fr: {
       langConfirm: "Français, parfait.",
+      askDataDir: `  Où stocker mes données ? (bases de données, sauvegardes, plugins)\n  Par défaut : ~/.nexo/\n  > `,
+      dataDirConfirm: (p) => `Répertoire de données : ${p}`,
       askUserName: "  Comment tu t'appelles ? > ",
       userGreet: (n) => `Enchanté, ${n}.`,
       askAgentName: "  Comment veux-tu m'appeler ? (défaut: NEXO) > ",
@@ -847,6 +853,8 @@ async function main() {
     },
     de: {
       langConfirm: "Deutsch, perfekt.",
+      askDataDir: `  Wo sollen meine Daten gespeichert werden? (Datenbanken, Backups, Plugins)\n  Standard: ~/.nexo/\n  > `,
+      dataDirConfirm: (p) => `Datenverzeichnis: ${p}`,
       askUserName: "  Wie heißt du? > ",
       userGreet: (n) => `Freut mich, ${n}.`,
       askAgentName: "  Wie soll ich heißen? (Standard: NEXO) > ",
@@ -874,6 +882,8 @@ async function main() {
     },
     it: {
       langConfirm: "Italiano, perfetto.",
+      askDataDir: `  Dove salvare i miei dati? (database, backup, plugin)\n  Default: ~/.nexo/\n  > `,
+      dataDirConfirm: (p) => `Directory dati: ${p}`,
       askUserName: "  Come ti chiami? > ",
       userGreet: (n) => `Piacere, ${n}.`,
       askAgentName: "  Come vuoi chiamarmi? (default: NEXO) > ",
@@ -901,6 +911,8 @@ async function main() {
     },
     pt: {
       langConfirm: "Português, perfeito.",
+      askDataDir: `  Onde guardar os meus dados? (bases de dados, backups, plugins)\n  Padrão: ~/.nexo/\n  > `,
+      dataDirConfirm: (p) => `Diretório de dados: ${p}`,
       askUserName: "  Como te chamas? > ",
       userGreet: (n) => `Prazer, ${n}.`,
       askAgentName: "  Como queres que eu me chame? (padrão: NEXO) > ",
@@ -951,6 +963,20 @@ async function main() {
     }
     t = i18n[lang] || i18n.en;
     log(t.langConfirm);
+    console.log("");
+  }
+
+  // Step 1b: Data directory
+  if (!useDefaults) {
+    const dataDirInput = await ask(t.askDataDir);
+    const dataDirTrimmed = dataDirInput.trim();
+    if (dataDirTrimmed) {
+      // Expand ~ to home dir
+      NEXO_HOME = dataDirTrimmed.replace(/^~/, require("os").homedir());
+      // Resolve to absolute path
+      NEXO_HOME = path.resolve(NEXO_HOME);
+    }
+    log(t.dataDirConfirm(NEXO_HOME));
     console.log("");
   }
 
