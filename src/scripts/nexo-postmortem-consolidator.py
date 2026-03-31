@@ -32,7 +32,7 @@ NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(HOME / ".nexo")))
 # Add nexo-mcp to path for cognitive engine (Stage 3)
 sys.path.insert(0, str(NEXO_HOME))
 
-NEXO_DB = NEXO_HOME / "db" / "nexo.db"
+NEXO_DB = NEXO_HOME / "data" / "nexo.db"
 # Memory directory — adjust to match your project's memory location
 MEMORY_DIR = NEXO_HOME / "memory"
 MEMORY_INDEX = MEMORY_DIR / "MEMORY.md"

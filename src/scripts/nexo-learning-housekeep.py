@@ -17,7 +17,7 @@ NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 
 sys.path.insert(0, str(NEXO_HOME / "nexo-mcp"))
 
-DB_PATH = NEXO_HOME / "nexo-mcp" / "db" / "nexo.db"
+DB_PATH = NEXO_HOME / "data" / "nexo.db"
 STATE_FILE = NEXO_HOME / "operations" / ".catchup-state.json"
 
 # Weight adjustment rates

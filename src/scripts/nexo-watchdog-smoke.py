@@ -41,7 +41,7 @@ def main() -> int:
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     findings = []
 
-    db_path = NEXO_DIR / "nexo.db"
+    db_path = NEXO_DIR / "data" / "nexo.db"
     integrity = "missing"
     if db_path.exists():
         try:

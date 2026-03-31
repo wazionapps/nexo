@@ -23,7 +23,7 @@ NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 
 # ── Paths ────────────────────────────────────────────────────────────────
 CLAUDE_DIR = NEXO_HOME
-NEXO_DB = CLAUDE_DIR / "nexo-mcp" / "db" / "nexo.db"
+NEXO_DB = CLAUDE_DIR / "data" / "nexo.db"
 CORTEX_DIR = CLAUDE_DIR / "cortex"
 OBJECTIVE_FILE = CORTEX_DIR / "evolution-objective.json"
 LOG_DIR = CLAUDE_DIR / "logs"

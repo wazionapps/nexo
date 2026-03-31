@@ -5,8 +5,9 @@ import time
 import glob
 from db import get_db
 
-DB_PATH = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "nexo.db"))
-BACKUP_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "backups"))
+NEXO_HOME = os.environ.get("NEXO_HOME", os.path.expanduser("~/.nexo"))
+DB_PATH = os.path.join(NEXO_HOME, "data", "nexo.db")
+BACKUP_DIR = os.path.join(NEXO_HOME, "backups")
 
 RETENTION_DAYS = 7
 

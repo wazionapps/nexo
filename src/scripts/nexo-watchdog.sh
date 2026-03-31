@@ -511,7 +511,7 @@ done
 # --- SQLite integrity ---
 SQLITE_STATUS="PASS"
 SQLITE_DETAIL=""
-INTEGRITY=$(sqlite3 "$NEXO_DIR/nexo.db" "PRAGMA integrity_check;" 2>/dev/null || echo "CORRUPT")
+INTEGRITY=$(sqlite3 "$NEXO_DIR/data/nexo.db" "PRAGMA integrity_check;" 2>/dev/null || echo "CORRUPT")
 if [ "$INTEGRITY" != "ok" ]; then
   SQLITE_STATUS="FAIL"
   SQLITE_DETAIL="Integrity check: $INTEGRITY"
@@ -519,7 +519,7 @@ if [ "$INTEGRITY" != "ok" ]; then
   TOTAL_FAIL=$((TOTAL_FAIL + 1))
   LATEST_BACKUP=$(ls -t "$NEXO_DIR/backups/nexo-"*.db 2>/dev/null | head -1)
   if [ -n "$LATEST_BACKUP" ]; then
-    cp "$LATEST_BACKUP" "$NEXO_DIR/nexo.db"
+    cp "$LATEST_BACKUP" "$NEXO_DIR/data/nexo.db"
     log "RESTORED from $LATEST_BACKUP"
     SQLITE_DETAIL="${SQLITE_DETAIL}. Restored from backup."
   fi
@@ -603,7 +603,7 @@ fi
 # --- Cognitive DB check ---
 COG_STATUS="PASS"
 COG_DETAIL=""
-COG_DB="$NEXO_DIR/cognitive.db"
+COG_DB="$NEXO_DIR/data/cognitive.db"
 if [ -f "$COG_DB" ]; then
   COG_INT=$(sqlite3 "$COG_DB" "PRAGMA integrity_check;" 2>/dev/null || echo "CORRUPT")
   if [ "$COG_INT" != "ok" ]; then

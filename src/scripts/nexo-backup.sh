@@ -7,7 +7,7 @@
 NEXO_DIR="${NEXO_DIR:-$(dirname "$(dirname "$(realpath "$0")")")}"
 BACKUP_DIR="$NEXO_DIR/backups"
 WEEKLY_DIR="$BACKUP_DIR/weekly"
-DB="$NEXO_DIR/db/nexo.db"
+DB="$NEXO_DIR/data/nexo.db"
 RETENTION_HOURS=48
 
 if [ ! -f "$DB" ]; then

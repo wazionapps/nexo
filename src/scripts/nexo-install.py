@@ -27,6 +27,7 @@ NEXO_DIRS = [
     "db",
     "brain",
     "logs",
+    "data",
     "operations",
     "coordination",
     "scripts",

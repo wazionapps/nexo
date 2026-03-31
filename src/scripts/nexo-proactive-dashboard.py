@@ -21,7 +21,7 @@ from pathlib import Path
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 
-NEXO_DB = NEXO_HOME / "nexo-mcp" / "db" / "nexo.db"
+NEXO_DB = NEXO_HOME / "data" / "nexo.db"
 
 
 def get_db():
@@ -231,7 +231,7 @@ def check_cron_health() -> list[dict]:
     alerts = []
 
     # Check backup cron
-    backup_dir = NEXO_HOME / "nexo-mcp" / "backups"
+    backup_dir = NEXO_HOME / "backups"
     if backup_dir.exists():
         backups = sorted(backup_dir.glob("nexo-*.db"), key=lambda p: p.stat().st_mtime, reverse=True)
         if backups:

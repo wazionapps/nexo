@@ -5,7 +5,8 @@
 set -euo pipefail
 
 NEXO_HOME="${NEXO_HOME:-$HOME/.nexo}"
-NEXO_DB="$NEXO_HOME/nexo.db"
+NEXO_DB="$NEXO_HOME/data/nexo.db"
+mkdir -p "$NEXO_HOME/data"
 TODAY=$(date +%Y-%m-%d)
 LOG_FILE="$NEXO_HOME/operations/tool-logs/${TODAY}.jsonl"
 LOG_LINES=0

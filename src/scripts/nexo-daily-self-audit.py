@@ -30,7 +30,7 @@ NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 LOG_DIR = NEXO_HOME / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE = LOG_DIR / "self-audit.log"
-NEXO_DB = NEXO_HOME / "nexo-mcp" / "db" / "nexo.db"
+NEXO_DB = NEXO_HOME / "data" / "nexo.db"
 # Configure your main project repo to check for uncommitted changes (optional)
 PROJECT_REPO_DIR = None  # e.g., Path.home() / "projects" / "my-repo"
 HASH_REGISTRY = NEXO_HOME / "scripts" / ".watchdog-hashes"
@@ -313,7 +313,7 @@ def check_watchdog_smoke():
 
 
 def check_cognitive_health():
-    cognitive_db = NEXO_HOME / "nexo-mcp" / "cognitive.db"
+    cognitive_db = NEXO_HOME / "data" / "cognitive.db"
     if not cognitive_db.exists():
         finding("WARN", "cognitive", "cognitive.db not found")
         return

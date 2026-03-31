@@ -48,7 +48,7 @@ from datetime import date
 today_str = '$TODAY'
 weekday = '$WEEKDAY'
 nexo_home = os.environ.get('NEXO_HOME', os.path.expanduser('~/.nexo'))
-db_path = os.path.join(nexo_home, 'nexo.db')
+db_path = os.path.join(nexo_home, 'data', 'nexo.db')
 
 lines = []
 lines.append(f'## Date: {today_str} ({weekday})')

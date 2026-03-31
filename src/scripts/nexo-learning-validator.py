@@ -30,7 +30,7 @@ from pathlib import Path
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 
-NEXO_DB = Path.home() / ".nexo" / "nexo.db"
+NEXO_DB = NEXO_HOME / "data" / "nexo.db"
 CLAUDE_CLI = Path.home() / ".local" / "bin" / "claude"
 
 

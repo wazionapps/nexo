@@ -24,7 +24,7 @@ CLAUDE_DIR = HOME / ".nexo"
 LOG_DIR = CLAUDE_DIR / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 SUMMARY_FILE = LOG_DIR / "runtime-preflight-summary.json"
-DB_FILE = CLAUDE_DIR / "nexo-mcp" / "db" / "nexo.db"
+DB_FILE = CLAUDE_DIR / "data" / "nexo.db"
 CORTEX_OBJECTIVE = CLAUDE_DIR / "cortex" / "evolution-objective.json"
 CORTEX_PROMPT = CLAUDE_DIR / "cortex" / "evolution-prompt.md"
 

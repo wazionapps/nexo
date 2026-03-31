@@ -47,7 +47,7 @@ REFLECTION_LOG = COORD_DIR / "reflection-log.json"
 SLEEP_LOG = COORD_DIR / "sleep-log.json"
 
 MEMORY_MD = Path.home() / ".nexo" / "memory" / "MEMORY.md"
-NEXO_DB = Path.home() / ".nexo" / "nexo.db"
+NEXO_DB = NEXO_HOME / "data" / "nexo.db"
 CLAUDE_MEM_DB = Path.home() / ".claude-mem" / "claude-mem.db"
 CLAUDE_CLI = Path.home() / ".local" / "bin" / "claude"
 

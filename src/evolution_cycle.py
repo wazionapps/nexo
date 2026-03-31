@@ -14,7 +14,8 @@ import time
 from datetime import datetime, date, timedelta
 from pathlib import Path
 
-NEXO_DB = Path.home() / ".nexo" / "nexo-mcp" / "nexo.db"
+NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+NEXO_DB = NEXO_HOME / "data" / "nexo.db"
 CORTEX_DIR = Path(__file__).parent
 CLAUDE_DIR = Path.home() / ".nexo"
 SANDBOX_DIR = CLAUDE_DIR / "sandbox" / "workspace"
