@@ -125,7 +125,7 @@ Rules:
 
         try:
             result = subprocess.run(
-                [str(CLAUDE_CLI), "-p", prompt, "--model", "opus", "--output-format", "text", "--bare",
+                [str(CLAUDE_CLI), "-p", prompt, "--model", "opus", "--output-format", "text",
                  "--allowedTools", "Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__*"],
                 capture_output=True, text=True, timeout=60, env=env
             )
