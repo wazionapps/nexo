@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive memory system. Every feature, fix, and improvement from v0.8.10 to v1.7.0.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive memory system. Every feature, fix, and improvement from v0.8.10 to v2.0.0.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive memory system. Every feature, fix, and improvement from v0.8.10 to v1.7.0.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive memory system. Every feature, fix, and improvement from v0.8.10 to v2.0.0.">
     <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
     <meta property="og:image:width" content="1536">
     <meta property="og:image:height" content="1024">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive memory system. Every feature, fix, and improvement from v0.8.10 to v1.7.0.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive memory system. Every feature, fix, and improvement from v0.8.10 to v2.0.0.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
 
     <!-- Google Analytics (GA4) -->
@@ -72,11 +72,35 @@
     </div>
 </section>
 
-<!-- v1.7.0 Full Internationalization + Linux Support -->
-<section id="v170" class="section-compact" style="background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
+<!-- v2.0.0 Unified Architecture -->
+<section id="v200" class="section-compact" style="background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
     <div class="container">
-        <div class="section-label">New in v1.7.0</div>
+        <div class="section-label">New in v2.0.0</div>
+        <h2 class="section-title">Unified Architecture</h2>
+        <p class="section-subtitle">
+            Code and data fully separated. 15 autonomous processes auto-installed. Auto-update on startup. Auto-diary captures everything. 147+ MCP tools. 12 rounds of external audit with ~60 findings resolved.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Unified Architecture</h4><p>Code lives in the repo, personal data in NEXO_HOME (~/.nexo/). Clean separation means updates never touch your data and multiple agents can share the same codebase.</p></div>
+                <div class="cognitive-card"><h4>15 Autonomous Processes</h4><p>All processes auto-installed: watchdog, immune, synthesis, backup, catchup, cognitive-decay, postmortem, self-audit, sleep, deep-sleep, evolution, followup-hygiene, prevent-sleep, tcc-approve, auto-close-sessions. Plus 7 hooks.</p></div>
+                <div class="cognitive-card"><h4>Auto-Update on Startup</h4><p>Non-blocking update check (5s max) on every server start. Resilient to network failures. Opt-out via schedule.json. No more manual npm updates.</p></div>
+                <div class="cognitive-card"><h4>Auto-Diary</h4><p>3-layer diary system: PostToolUse writes every 10 calls, PreCompact catches emergencies before context eviction, heartbeat triggers on DIARY_OVERDUE. Never lose session context again.</p></div>
+                <div class="cognitive-card"><h4>schedule.json</h4><p>Customizable process schedules with timezone support. Control when each autonomous process runs. Override defaults without editing plist/timer files.</p></div>
+                <div class="cognitive-card"><h4>Lambda Decay Fix</h4><p>Memory decay was 24x too aggressive. STM half-life corrected from 7 hours to 7 days, LTM from 2.4 days to 60 days. Memories now persist as intended.</p></div>
+                <div class="cognitive-card"><h4>CLAUDE.md Version Tracker</h4><p>Section markers for safe core updates without losing user customizations. The installer updates its own sections and preserves everything else.</p></div>
+                <div class="cognitive-card"><h4>External Audit</h4><p>12 rounds of audit by GPT-5.4, Gemini 2.5, and Claude Opus. ~60 findings resolved: guard noise, MCP truncation, decay values, import errors, legacy paths, and more.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v1.7.0 Full Internationalization + Linux Support -->
+<section id="v170" class="section-compact" style="background:linear-gradient(135deg,#1a0f2e 0%,#0F0A1A 100%);">
+    <div class="container">
+        <div class="section-label">v1.7.0</div>
         <h2 class="section-title">Full Internationalization + Linux Support</h2>
+
         <p class="section-subtitle">
             NEXO Brain is now fully English, fully cross-platform, and ready for any user. All UI strings, DB status values, and paths are internationalized. Linux gets first-class automated processes via systemd or crontab.
         </p>
