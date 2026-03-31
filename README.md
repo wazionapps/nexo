@@ -657,7 +657,7 @@ If NEXO Brain is useful to you, consider:
 ## Changelog
 
 ### v1.7.0 — Full Internationalization + Linux Support (2026-03-31)
-- **Full i18n**: All UI strings, error messages, DB status values in English. Zero Spanish in the codebase.
+- **Full i18n**: All UI strings, error messages, DB status values in English. NLP detection patterns retain bilingual keywords (Spanish + English) for multilingual user support.
 - **Linux support**: systemd user timers (preferred) or crontab fallback for all automated cognitive processes.
 - **Auto-resolve followups**: Change log entries automatically cross-reference and complete matching open followups.
 - **Free-form learning categories**: No more hardcoded category validation — use any category name.

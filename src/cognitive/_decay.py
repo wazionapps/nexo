@@ -254,7 +254,7 @@ def dream_cycle(max_insights: int = 50) -> dict:
         })
 
     if len(recent_memories) < 2:
-        return {"insights_created": 0, "insights": [], "memories_scanned": len(recent_memories)}
+        return {"insights_created": 0, "insights": [], "memories_scanned": len(recent_memories), "candidates_found": 0}
 
     # 2. Get already-dreamed pairs to skip
     dreamed = set()

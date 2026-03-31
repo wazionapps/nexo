@@ -1,7 +1,7 @@
 """NEXO Cognitive — Trust scoring, sentiment, dissonance."""
 import re
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timedelta
 from cognitive._core import _get_db, embed, cosine_similarity, _blob_to_array
 from cognitive._core import POSITIVE_SIGNALS, NEGATIVE_SIGNALS, URGENCY_SIGNALS
 
