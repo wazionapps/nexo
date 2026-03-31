@@ -40,6 +40,82 @@ record = {
 print(json.dumps(record))
 " >> "$LOG_FILE" 2>/dev/null
 
+# ── Layer 1: Auto-diary every 10 tool calls ─────────────────────────
+COUNTER_FILE="$NEXO_HOME/operations/.tool-call-count"
+NEXO_DB="$NEXO_HOME/data/nexo.db"
+
+# Increment counter (atomic: read+write in one step)
+COUNT=1
+if [ -f "$COUNTER_FILE" ]; then
+    COUNT=$(( $(cat "$COUNTER_FILE" 2>/dev/null || echo 0) + 1 ))
+fi
+echo "$COUNT" > "$COUNTER_FILE"
+
+# Every 10 tool calls, write a mechanical diary draft to SQLite
+if [ $(( COUNT % 10 )) -eq 0 ] && [ -f "$NEXO_DB" ]; then
+    python3 -c "
+import json, sqlite3, os, sys
+from datetime import datetime
+
+db_path = '$NEXO_DB'
+log_file = '$LOG_FILE'
+count = $COUNT
+
+# Read last 10 tool calls from today's log
+entries = []
+if os.path.isfile(log_file):
+    with open(log_file, 'r') as f:
+        lines = f.readlines()
+        for line in lines[-10:]:
+            try:
+                e = json.loads(line.strip())
+                name = e.get('tool_name', '?')
+                inp = e.get('tool_input', {})
+                # Brief args: first key's value, truncated
+                brief = ''
+                if isinstance(inp, dict):
+                    for k, v in list(inp.items())[:1]:
+                        brief = str(v)[:60]
+                entries.append(f'{name}({brief})')
+            except Exception:
+                pass
+
+if not entries:
+    sys.exit(0)
+
+tools_summary = ', '.join(entries[-10:])
+
+# Get current session and task from sessions table
+conn = sqlite3.connect(db_path, timeout=2)
+conn.row_factory = sqlite3.Row
+row = conn.execute(
+    'SELECT sid, task FROM sessions ORDER BY last_update_epoch DESC LIMIT 1'
+).fetchone()
+if not row:
+    conn.close()
+    sys.exit(0)
+
+sid = row['sid']
+task = row['task'] or 'unknown'
+
+summary = f'[AUTO-{count}] {len(entries)} tool calls: {tools_summary[:250]}. Task: {task[:100]}'
+
+# Write to session_diary_draft (UPSERT)
+conn.execute('''
+    INSERT INTO session_diary_draft (sid, summary_draft, tasks_seen, change_ids, decision_ids, last_context_hint, heartbeat_count, updated_at)
+    VALUES (?, ?, '[]', '[]', '[]', ?, 0, datetime('now'))
+    ON CONFLICT(sid) DO UPDATE SET
+        summary_draft = excluded.summary_draft,
+        last_context_hint = excluded.last_context_hint,
+        updated_at = datetime('now')
+''', (sid, summary, f'auto-diary at {count} tool calls'))
+conn.commit()
+conn.close()
+" 2>/dev/null &
+    # Reset counter after writing
+    echo "0" > "$COUNTER_FILE"
+fi
+
 # Cleanup: delete logs >= 30 days old (once daily, uses marker file)
 CLEANUP_MARKER="$LOG_DIR/.last-cleanup"
 if [ ! -f "$CLEANUP_MARKER" ] || [ "$(cat "$CLEANUP_MARKER" 2>/dev/null)" != "$TODAY" ]; then
