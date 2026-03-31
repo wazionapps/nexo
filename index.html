@@ -307,10 +307,10 @@
             },
             {
                 "@type": "Question",
-                "name": "How do I migrate from v1.5 to v1.6?",
+                "name": "How do I migrate to v2.0?",
                 "acceptedAnswer": {
                     "@type": "Answer",
-                    "text": "Run 'npx nexo-brain init' and the migration script handles everything automatically: 13 nexo.db schema migrations, cognitive.db table updates, internationalization of legacy Spanish strings, and logo optimization. Your existing data is preserved."
+                    "text": "Run 'npx nexo-brain init' and the installer handles everything automatically. For v2.0, code and data are cleanly separated: code stays in the repo, personal data in NEXO_HOME (~/.nexo/). All 15 autonomous processes are auto-installed, and existing data is preserved. The migration is non-destructive."
                 }
             },
             {
@@ -403,7 +403,7 @@
             </button>
         </div>
         <div class="fade-up" style="margin-top: 32px;">
-            <iframe width="560" height="315" src="https://www.youtube.com/embed/J0hCWnYU4UY" title="NEXO Brain v0.8 Overview" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen style="max-width:100%; border-radius:12px;"></iframe>
+            <iframe width="560" height="315" src="https://www.youtube.com/embed/J0hCWnYU4UY" title="NEXO Brain v2.0 Overview" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen style="max-width:100%; border-radius:12px;"></iframe>
         </div>
     </div>
 </section>
@@ -644,14 +644,14 @@
         <div class="section-label">v1.6.0</div>
         <h2 class="section-title">Nervous System + Dashboard v2 + LaunchAgent Templates</h2>
         <p class="section-subtitle">
-            NEXO Brain now ships with a complete autonomous nervous system of 11 background scripts, a redesigned visual dashboard, 13 LaunchAgent templates for zero-config setup, and a full migration script from v1.5.
+            NEXO Brain now ships with a complete autonomous nervous system of 15 background processes, a redesigned visual dashboard, auto-installed LaunchAgents/systemd timers, and automated migration.
         </p>
         <div class="cognitive-group">
             <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
-                <div class="cognitive-card"><h4>Nervous System</h4><p>11 autonomous scripts: immune system, daily synthesis, self-audit, postmortem consolidator, proactive dashboard, followup hygiene, GitHub monitor, catch-up, plus updated watchdog, evolution, cognitive decay, and deep sleep.</p></div>
+                <div class="cognitive-card"><h4>Nervous System</h4><p>15 autonomous processes: watchdog, immune, synthesis, backup, catchup, cognitive-decay, postmortem, self-audit, sleep, deep-sleep, evolution, followup-hygiene, prevent-sleep, tcc-approve, and auto-close-sessions.</p></div>
                 <div class="cognitive-card"><h4>Dashboard v2</h4><p>FastAPI-powered visual interface with 6 pages: dashboard overview, operations, calendar, and inbox. CRUD UI for managing memories, sidebar navigation, trust widget, and static assets.</p></div>
-                <div class="cognitive-card"><h4>13 LaunchAgent Templates</h4><p>Ready-to-install macOS LaunchAgent plists for every autonomous process: watchdog, immune, synthesis, self-audit, cognitive decay, evolution, deep sleep, followup hygiene, auto-close, dashboard, catch-up, postmortem, and GitHub monitor.</p></div>
-                <div class="cognitive-card"><h4>Migration Script</h4><p>Automated v1.5 to v1.6 migration: 13 nexo.db schema migrations, cognitive.db table updates, full i18n (Spanish to English), and logo optimization from 1.4MB to 28KB.</p></div>
+                <div class="cognitive-card"><h4>Auto-Installed Processes</h4><p>All 15 processes auto-installed during setup: LaunchAgent plists on macOS, systemd timers on Linux, crontab fallback. Customizable schedules via schedule.json with timezone support.</p></div>
+                <div class="cognitive-card"><h4>Migration Script</h4><p>Automated migration from any previous version: schema migrations, cognitive.db updates, i18n normalization, and data preservation. Non-destructive — your existing data is always safe.</p></div>
                 <div class="cognitive-card"><h4>5 Updated Hooks</h4><p>Session-stop v7 with post-mortem, session-start with semantic context, inter-terminal inbox hook, capture-tool-logs (JSONL), and daily-briefing-check.</p></div>
             </div>
         </div>
@@ -704,7 +704,7 @@
                 <span class="cmd">$</span> claude <span class="flag">-p</span> <span class="str">"call nexo_status"</span><br><br>
                 <span class="comment"># Or run with Docker:</span><br>
                 <span class="cmd">$</span> docker build <span class="flag">-t</span> <span class="str">nexo-brain</span> .<br>
-                <span class="cmd">$</span> docker run <span class="flag">-v</span> <span class="str">~/.nexo:/app</span> nexo-brain<br><br>
+                <span class="cmd">$</span> docker run <span class="flag">-v</span> <span class="str">~/.nexo:/data</span> nexo-brain<br><br>
                 <span class="comment"># Optional: Start with a personality template</span><br>
                 <span class="cmd">$</span> npx nexo-brain init <span class="flag">--template</span> <span class="str">operator</span>
             </div>
@@ -922,10 +922,10 @@
 
             <details class="faq-item">
                 <summary class="faq-question">
-                    <span>How do I migrate from v1.5 to v1.6?</span>
+                    <span>How do I migrate to v2.0?</span>
                     <svg class="faq-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                 </summary>
-                <div class="faq-answer">Run <code>npx nexo-brain init</code> and the migration script handles everything automatically: 13 nexo.db schema migrations, cognitive.db table updates, internationalization of legacy Spanish strings, and logo optimization. Your existing data is preserved -- the migration is non-destructive.</div>
+                <div class="faq-answer">Run <code>npx nexo-brain init</code> and the installer handles everything automatically. For v2.0, your code and data are cleanly separated: code stays in the repo, personal data in NEXO_HOME (~/.nexo/). All 15 autonomous processes are auto-installed, and existing data is preserved. The migration is non-destructive.</div>
             </details>
 
             <details class="faq-item">
