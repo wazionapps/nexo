@@ -14,7 +14,10 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
-NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(NEXO_HOME)))
+# Auto-detect: if running from repo (src/scripts/), use src/ as NEXO_CODE
+_script_dir = Path(__file__).resolve().parent
+_repo_src = _script_dir.parent  # src/scripts/ -> src/
+NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(_repo_src) if (_repo_src / "server.py").exists() else str(NEXO_HOME)))
 
 sys.path.insert(0, str(NEXO_CODE))
 
