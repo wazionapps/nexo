@@ -24,7 +24,7 @@ NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cogniti
 - Auto-Diary: 3-layer system (PostToolUse every 10 calls, PreCompact emergency, heartbeat DIARY_OVERDUE)
 - schedule.json: customizable process schedules with timezone support
 - Nervous System: 15 autonomous processes (watchdog, immune, synthesis, backup, catchup, cognitive-decay, postmortem, self-audit, sleep, deep-sleep, evolution, followup-hygiene, prevent-sleep, tcc-approve, auto-close-sessions)
-- 13 LaunchAgent templates (macOS) + systemd user timers (Linux) + crontab fallback
+- 15 auto-installed processes: LaunchAgent plists (macOS) + systemd user timers (Linux) + crontab fallback
 - Cross-Platform: macOS (LaunchAgents), Linux (systemd/crontab), Windows (WSL) with full automated processes
 - Modular architecture: db/ package (11 modules), cognitive/ package (6 modules)
 - Adaptive Learned Weights: signal weights learn from real feedback via Ridge regression
