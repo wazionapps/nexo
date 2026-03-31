@@ -10,6 +10,7 @@ Usage:
 import argparse
 import json
 import os
+import platform
 import subprocess
 import sys
 import time
@@ -602,6 +603,11 @@ async def api_ops_execute(fid: str):
         return JSONResponse({"error": f"Followup {fid} not found"}, status_code=404)
     item = dict(row)
     description = item["description"].replace('"', '\\"').replace("'", "\\'")
+    if platform.system() != "Darwin":
+        return JSONResponse(
+            {"error": "This operation requires macOS (uses osascript to open Terminal)"},
+            status_code=501,
+        )
     script = f'tell application "Terminal" to do script "claude \\"NEXO: execute followup #{fid} — {description}\\""'
     subprocess.Popen(["osascript", "-e", script])
     return {"success": True, "followup_id": fid}

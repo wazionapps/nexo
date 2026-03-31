@@ -79,18 +79,31 @@ def load_plugin(mcp, filename: str, plugins_dir: str | None = None) -> int:
     """Load or reload a single plugin. Returns number of tools registered.
 
     Args:
-        plugins_dir: Directory to load from. Defaults to repo PLUGINS_DIR.
-                     Personal plugins are loaded via importlib.util.spec_from_file_location.
+        plugins_dir: Directory to load from. If None, searches repo PLUGINS_DIR first,
+                     then PERSONAL_PLUGINS_DIR. Personal plugins are loaded via
+                     importlib.util.spec_from_file_location.
     """
     if not filename.endswith(".py"):
         filename += ".py"
 
-    if plugins_dir is None:
-        plugins_dir = PLUGINS_DIR
-
-    filepath = os.path.join(plugins_dir, filename)
-    if not os.path.isfile(filepath):
-        raise FileNotFoundError(f"Plugin not found: {filepath}")
+    if plugins_dir is not None:
+        filepath = os.path.join(plugins_dir, filename)
+        if not os.path.isfile(filepath):
+            raise FileNotFoundError(f"Plugin not found: {filepath}")
+    else:
+        # Search repo first, then personal
+        repo_path = os.path.join(PLUGINS_DIR, filename)
+        personal_path = os.path.join(PERSONAL_PLUGINS_DIR, filename)
+        if os.path.isfile(repo_path):
+            plugins_dir = PLUGINS_DIR
+            filepath = repo_path
+        elif os.path.isfile(personal_path):
+            plugins_dir = PERSONAL_PLUGINS_DIR
+            filepath = personal_path
+        else:
+            raise FileNotFoundError(
+                f"Plugin not found in repo ({PLUGINS_DIR}) or personal ({PERSONAL_PLUGINS_DIR}): {filename}"
+            )
 
     module_name = f"plugins.{filename[:-3]}"
 
@@ -120,13 +133,18 @@ def load_plugin(mcp, filename: str, plugins_dir: str | None = None) -> int:
         mcp.add_tool(t)
         tool_names.append(name)
 
-    _update_registry(filename, len(tool_names), ",".join(tool_names), "manual")
+    source_label = "personal" if plugins_dir != PLUGINS_DIR else "repo"
+    _update_registry(filename, len(tool_names), ",".join(tool_names), source_label)
 
     return len(tool_names)
 
 
 def remove_plugin(mcp, filename: str) -> list[str]:
-    """Remove a plugin: unregister its tools, delete file, clean registry."""
+    """Unregister a plugin's tools from MCP and clean the registry.
+
+    Does NOT delete plugin files — only unregisters tools to avoid
+    accidental deletion of code from repo or personal directories.
+    """
     if not filename.endswith(".py"):
         filename += ".py"
 
@@ -147,10 +165,6 @@ def remove_plugin(mcp, filename: str) -> list[str]:
     module_name = f"plugins.{filename[:-3]}"
     sys.modules.pop(module_name, None)
 
-    filepath = os.path.join(PLUGINS_DIR, filename)
-    if os.path.isfile(filepath):
-        os.remove(filepath)
-
     conn = get_db()
     conn.execute("DELETE FROM plugins WHERE filename = ?", (filename,))
     conn.commit()
@@ -159,12 +173,17 @@ def remove_plugin(mcp, filename: str) -> list[str]:
 
 
 def list_plugins() -> list[dict]:
-    """List all registered plugins."""
+    """List all registered plugins with source info (repo/personal)."""
     conn = get_db()
     rows = conn.execute(
         "SELECT filename, tools_count, tool_names, loaded_at, created_by FROM plugins ORDER BY filename"
     ).fetchall()
-    return [dict(r) for r in rows]
+    result = []
+    for r in rows:
+        d = dict(r)
+        d["source"] = d.get("created_by", "repo")
+        result.append(d)
+    return result
 
 
 def _update_registry(filename: str, tools_count: int, tool_names: str, created_by: str):
@@ -175,8 +194,8 @@ def _update_registry(filename: str, tools_count: int, tool_names: str, created_b
         conn.execute(
             "INSERT INTO plugins (filename, tools_count, tool_names, loaded_at, created_by) "
             "VALUES (?, ?, ?, ?, ?) "
-            "ON CONFLICT(filename) DO UPDATE SET tools_count=?, tool_names=?, loaded_at=?",
-            (filename, tools_count, tool_names, now, created_by, tools_count, tool_names, now),
+            "ON CONFLICT(filename) DO UPDATE SET tools_count=?, tool_names=?, loaded_at=?, created_by=?",
+            (filename, tools_count, tool_names, now, created_by, tools_count, tool_names, now, created_by),
         )
         conn.commit()
     except Exception as e:

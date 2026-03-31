@@ -27,7 +27,7 @@ NEXO Brain includes built-in security:
 - **Secret redaction** — auto-detects and redacts API keys, tokens, passwords before storage
 - **Quarantine queue** — new facts must earn trust before becoming knowledge
 - **Local-only processing** — all vectors computed on CPU, no cloud dependencies
-- **SQLite encryption support** — optional at-rest encryption
+- **Filesystem-protected SQLite** — credentials are stored in local SQLite; protect the database with filesystem permissions (`chmod 600`). For production secrets, use environment variables or a dedicated secret manager
 
 ## Scope
 

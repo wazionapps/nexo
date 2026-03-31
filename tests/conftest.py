@@ -9,8 +9,8 @@ import sqlite3
 
 import pytest
 
-# Add parent dir to path so we can import nexo modules
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+# Add src/ to path so we can import nexo modules
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 
 @pytest.fixture(autouse=True)

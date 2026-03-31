@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * create-nexo — Interactive installer for NEXO cognitive co-operator.
+ * nexo-brain — Interactive installer for NEXO cognitive co-operator.
  *
- * Usage: npx create-nexo
+ * Usage: npx nexo-brain
  *
  * What it does:
  * 1. Asks for the co-operator's name
@@ -1105,7 +1105,8 @@ async function main() {
 
   // Use venv python if available, otherwise fall back to system python with --break-system-packages
   const pipPython = fs.existsSync(venvPython) ? venvPython : python;
-  const pipArgs = ["-m", "pip", "install", "--quiet", "fastembed", "numpy", "mcp[cli]"];
+  const requirementsFile = path.join(__dirname, "..", "src", "requirements.txt");
+  const pipArgs = ["-m", "pip", "install", "--quiet", "-r", requirementsFile];
   if (!fs.existsSync(venvPython)) {
     pipArgs.push("--break-system-packages");  // Fallback for systems without venv
   }
@@ -1113,7 +1114,7 @@ async function main() {
   const pipInstall = spawnSync(pipPython, pipArgs, { stdio: "inherit" });
   if (pipInstall.status !== 0) {
     log("Failed to install Python dependencies.");
-    log("Try manually: python3 -m venv ~/.nexo/.venv && ~/.nexo/.venv/bin/pip install fastembed numpy 'mcp[cli]'");
+    log("Try manually: python3 -m venv ~/.nexo/.venv && ~/.nexo/.venv/bin/pip install -r src/requirements.txt");
     process.exit(1);
   }
   // Update python reference to use venv python for the rest of setup

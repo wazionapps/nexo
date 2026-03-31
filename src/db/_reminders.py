@@ -259,6 +259,18 @@ def complete_followup(id: str, result: str = '') -> dict:
             archived_id = f"{id}-{today}"
             conn.execute("UPDATE followups SET id = ? WHERE id = ?", (archived_id, id))
             conn.commit()
+
+            # Fix FTS: remove old entry for original ID, add entry for archived ID
+            conn.execute("DELETE FROM unified_search WHERE source = 'followup' AND source_id = ?", (id,))
+            archived_row = conn.execute("SELECT * FROM followups WHERE id = ?", (archived_id,)).fetchone()
+            if archived_row:
+                fts_upsert(
+                    "followup", archived_id, archived_id,
+                    f"{archived_row['description']} {archived_row['verification'] or ''} {archived_row['reasoning'] or ''}",
+                    "followup", commit=False,
+                )
+
+            # create_followup handles its own FTS entry for the new recurring ID
             create_followup(
                 id=id,
                 description=row["description"],

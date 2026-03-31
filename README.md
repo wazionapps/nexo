@@ -490,7 +490,7 @@ That's it. No need to run `claude` manually. Your operator will greet you immedi
 | Reminders | 5 | list, create, update, complete, delete | User's tasks and deadlines |
 | Followups | 4 | create, update, complete, delete | System's autonomous verification tasks |
 | Learnings | 5 | add, search, update, delete, list | Error patterns and prevention rules |
-| Credentials | 5 | create, get, update, delete, list | Secure local credential storage |
+| Credentials | 5 | create, get, update, delete, list | Local credential storage (plaintext SQLite — protect with filesystem permissions) |
 | Task History | 3 | log, list, frequency | Execution tracking and overdue alerts |
 | Menu | 1 | menu | Operations center with box-drawing UI |
 | Entities | 5 | search, create, update, delete, list | People, services, URLs |
