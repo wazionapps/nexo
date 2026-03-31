@@ -1,6 +1,6 @@
 # NEXO Brain
 
-> Open-source cognitive memory system for AI agents (v1.6.0)
+> Open-source cognitive memory system for AI agents (v1.7.0)
 
 NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It provides 115+ MCP tools across 22 categories including semantic RAG, knowledge graph-boosted search, HNSW vector indexing, trust scoring, episodic memory, claim graph, metacognitive error prevention, inter-terminal coordination, web dashboard v2, natural memory decay, a full nervous system of 11 autonomous scripts, and 13 LaunchAgent templates.
 
@@ -20,8 +20,8 @@ NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cogniti
 - Inter-terminal coordination: auto-inbox via PostToolUse hook, claude_session_id tracking
 - Web Dashboard v2: FastAPI with 6 pages (Overview, Operations, Calendar, Inbox), CRUD UI, sidebar nav, trust widget
 - Nervous System: 11 autonomous scripts (immune, synthesis, self-audit, postmortem, dashboard, followup hygiene, GitHub monitor, catch-up, watchdog, evolution, cognitive decay, deep sleep)
-- 13 LaunchAgent templates: ready-to-install macOS plists for all autonomous processes
-- Cross-Platform: macOS, Linux, and Windows support with platform-appropriate process managers
+- 13 LaunchAgent templates (macOS) + systemd user timers (Linux) + crontab fallback
+- Cross-Platform: macOS (LaunchAgents), Linux (systemd/crontab), Windows (WSL) with full automated processes
 - Modular architecture: db/ package (11 modules), cognitive/ package (6 modules)
 - Adaptive Learned Weights: signal weights learn from real feedback via Ridge regression
 - Somatic Markers: pain memory per file/area with risk scoring and validated recovery
@@ -37,7 +37,7 @@ NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cogniti
 ## Installation
 
 ```
-npx nexo-brain@1.6.0
+npx nexo-brain@1.7.0
 ```
 
 ## Documentation
