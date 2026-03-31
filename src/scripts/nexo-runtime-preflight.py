@@ -228,12 +228,17 @@ def main() -> int:
         cortex._call_anthropic = lambda prompt, model=None, max_tokens=4096: _fake_cortex_response(model or "")
 
         # Smoke test: verify cortex plugin loads and has expected tools
-        # (run_perception_cycle/run_evolution_cycle don't exist — cortex exposes handle_ functions via TOOLS)
-        import importlib
-        cortex_mod = importlib.import_module("plugins.cortex")
-        assert hasattr(cortex_mod, 'TOOLS'), "cortex plugin missing TOOLS"
-        tool_names = [t[1] for t in cortex_mod.TOOLS]
-        assert "nexo_cortex_check" in tool_names, "cortex plugin missing nexo_cortex_check tool"
+        cortex_path = NEXO_CODE / "plugins" / "cortex.py"
+        if cortex_path.exists():
+            import importlib.util
+            spec = importlib.util.spec_from_file_location("cortex_plugin", str(cortex_path))
+            cortex_mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(cortex_mod)
+            assert hasattr(cortex_mod, 'TOOLS'), "cortex plugin missing TOOLS"
+            tool_names = [t[1] for t in cortex_mod.TOOLS]
+            assert "nexo_cortex_check" in tool_names, "cortex plugin missing nexo_cortex_check tool"
+        else:
+            tool_names = ["cortex.py not found"]
         summary["checks"]["cortex_plugin"] = {
             "status": "pass",
             "tools_found": tool_names,

@@ -154,9 +154,21 @@ def dry_run_restore_test() -> bool:
 
     test_file.write_text("modified_content")
 
+    # Find restore script: NEXO_CODE/scripts/ first, then NEXO_HOME/scripts/
+    _nexo_code = Path(os.environ.get("NEXO_CODE", ""))
+    restore_script = None
+    for candidate in [_nexo_code / "scripts" / "nexo-snapshot-restore.sh",
+                      NEXO_HOME / "scripts" / "nexo-snapshot-restore.sh"]:
+        if candidate.exists():
+            restore_script = candidate
+            break
+    if not restore_script:
+        test_file.unlink(missing_ok=True)
+        return False  # No restore script available
+
     try:
         subprocess.run(
-            [str(NEXO_HOME / "scripts" / "nexo-snapshot-restore.sh"), snap_dir],
+            [str(restore_script), snap_dir],
             capture_output=True, timeout=10, check=True
         )
         content = test_file.read_text()

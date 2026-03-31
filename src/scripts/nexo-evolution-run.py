@@ -385,7 +385,7 @@ def run():
     if not dry_run_restore_test():
         log("CRITICAL: Restore test failed — aborting")
         set_consecutive_failures(failures + 1)
-        return
+        sys.exit(1)
     log("Restore test PASSED")
 
     # Gather data

@@ -563,6 +563,24 @@ def auto_update_check() -> dict:
     except Exception as e:
         _log(f"evolution-objective.json backfill error: {e}")
 
+    # Backfill NEXO_HOME/scripts/ for existing installs (copy core scripts from NEXO_CODE)
+    try:
+        scripts_dest = NEXO_HOME / "scripts"
+        nexo_code = Path(os.environ.get("NEXO_CODE", ""))
+        scripts_src = nexo_code / "scripts" if nexo_code.exists() else None
+        if scripts_src and scripts_src.is_dir() and not scripts_dest.is_dir():
+            import shutil
+            scripts_dest.mkdir(parents=True, exist_ok=True)
+            for f in scripts_src.iterdir():
+                if f.name.startswith('.') or f.name == '__pycache__':
+                    continue
+                dest = scripts_dest / f.name
+                if f.is_file() and not dest.exists():
+                    shutil.copy2(str(f), str(dest))
+            _log("Backfilled NEXO_HOME/scripts/ from NEXO_CODE for existing install")
+    except Exception as e:
+        _log(f"scripts backfill error: {e}")
+
     # CLAUDE.md version migration
     try:
         result["claude_md_update"] = _migrate_claude_md()
