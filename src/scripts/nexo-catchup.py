@@ -228,7 +228,7 @@ Format:
     try:
         result = subprocess.run(
             [str(CLAUDE_CLI), "-p", prompt, "--model", "opus", "--output-format", "text", "--bare",
-             "--allowedTools", "Read,Write,Edit,Glob,Grep"],
+             "--allowedTools", "Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__*"],
             capture_output=True, text=True, timeout=90, env=env
         )
         if result.returncode == 0:

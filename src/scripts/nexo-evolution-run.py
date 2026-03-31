@@ -128,8 +128,8 @@ def call_claude_cli(prompt: str) -> str:
 
     result = subprocess.run(
         [str(CLAUDE_CLI), "-p", prompt, "--model", "opus",
-         "--output-format", "text", "--bare",
-         "--allowedTools", "Read,Write,Edit,Glob,Grep,Bash"],
+         "--output-format", "text",
+         "--allowedTools", "Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__*"],
         capture_output=True,
         text=True,
         timeout=CLI_TIMEOUT,
@@ -424,7 +424,7 @@ def run():
         return
 
     # Call Opus via claude -p
-    log("Calling claude -p --model opus --bare...")
+    log("Calling claude -p --model opus...")
     try:
         raw_response = call_claude_cli(prompt)
     except Exception as e:

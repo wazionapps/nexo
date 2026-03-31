@@ -143,9 +143,11 @@ def synthesize(data: dict) -> bool:
     if len(data_json) > 15000:
         data_json = data_json[:15000] + "\n... (truncated)"
 
-    prompt = f"""You are NEXO's synthesis engine. Write the daily intelligence brief for tomorrow's
+    prompt = f"""FIRST: Call nexo_startup(task='daily synthesis') to register this session.
+
+You are NEXO's synthesis engine. Write the daily intelligence brief for tomorrow's
 startup. This file is read by NEXO at the beginning of each session to understand
-what happened today and what to focus on tomorrow.
+what happened today and what to focus on tomorrow. Use nexo_learning_add and nexo_followup_create if you discover actionable items.
 
 TODAY'S RAW DATA:
 {data_json}
@@ -205,7 +207,7 @@ Execute without asking."""
         result = subprocess.run(
             [str(CLAUDE_CLI), "-p", prompt, "--model", "opus",
              "--output-format", "text", "--bare",
-             "--allowedTools", "Read,Write,Edit,Glob,Grep"],
+             "--allowedTools", "Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__*"],
             capture_output=True, text=True, timeout=180, env=env
         )
 

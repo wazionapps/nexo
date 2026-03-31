@@ -11,35 +11,52 @@ def _get_db():
 
 def _seed_if_empty():
     """Seed rules from JSON if table is empty (first run after migration)."""
+    import sys
     conn = _get_db()
     try:
         count = conn.execute("SELECT COUNT(*) FROM core_rules WHERE is_active = 1").fetchone()[0]
     except Exception:
-        # Table doesn't exist yet — migrations haven't run. Bail gracefully.
-        return
+        # Table doesn't exist yet — create it
+        conn.execute("""CREATE TABLE IF NOT EXISTS core_rules (
+            id TEXT PRIMARY KEY, category TEXT NOT NULL, rule TEXT NOT NULL,
+            why TEXT NOT NULL, importance INTEGER NOT NULL DEFAULT 3,
+            type TEXT NOT NULL DEFAULT 'advisory', added_in TEXT DEFAULT '',
+            removed_in TEXT DEFAULT NULL, is_active INTEGER NOT NULL DEFAULT 1)""")
+        conn.execute("""CREATE TABLE IF NOT EXISTS core_rules_version (
+            id INTEGER PRIMARY KEY, version TEXT NOT NULL, updated_at TEXT NOT NULL)""")
+        conn.execute("INSERT OR IGNORE INTO core_rules_version (id, version, updated_at) VALUES (1, '0.0.0', datetime('now'))")
+        conn.commit()
+        count = 0
     if count > 0:
         return
 
     rules_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                               "rules", "core-rules.json")
     if not os.path.exists(rules_file):
+        print(f"[core_rules] WARNING: {rules_file} not found, skipping seed", file=sys.stderr)
         return
 
-    with open(rules_file) as f:
-        data = json.load(f)
+    try:
+        with open(rules_file) as f:
+            data = json.load(f)
 
-    version = data["_meta"]["version"]
-    for cat_key, cat in data["categories"].items():
-        for rule in cat["rules"]:
-            conn.execute(
-                """INSERT OR REPLACE INTO core_rules (id, category, rule, why, importance, type, added_in)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                (rule["id"], cat_key, rule["rule"], rule["why"],
-                 rule["importance"], rule["type"], rule.get("added_in", version))
-            )
+        version = data["_meta"]["version"]
+        loaded = 0
+        for cat_key, cat in data["categories"].items():
+            for rule in cat["rules"]:
+                conn.execute(
+                    """INSERT OR REPLACE INTO core_rules (id, category, rule, why, importance, type, added_in)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (rule["id"], cat_key, rule["rule"], rule["why"],
+                     rule["importance"], rule["type"], rule.get("added_in", version))
+                )
+                loaded += 1
 
-    conn.execute("UPDATE core_rules_version SET version = ?, updated_at = datetime('now') WHERE id = 1", (version,))
-    conn.commit()
+        conn.execute("UPDATE core_rules_version SET version = ?, updated_at = datetime('now') WHERE id = 1", (version,))
+        conn.commit()
+        print(f"[core_rules] Seeded {loaded} rules (v{version})", file=sys.stderr)
+    except Exception as e:
+        print(f"[core_rules] ERROR seeding rules: {e}", file=sys.stderr)
 
 
 def handle_rules_check(area: str = "", importance_min: int = 0) -> str:

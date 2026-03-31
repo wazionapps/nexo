@@ -125,8 +125,10 @@ def consolidate_with_cli(data: dict) -> bool:
     if len(diaries_json) > 12000:
         diaries_json = diaries_json[:12000] + "\n... (truncated)"
 
-    prompt = f"""You are NEXO's nightly consolidator. Your job is to review the self-critiques
-from today and decide which deserve to become permanent rules (feedback_postmortem_*.md).
+    prompt = f"""FIRST: Call nexo_startup(task='nightly postmortem consolidation') to register this session.
+
+You are NEXO's nightly consolidator. Your job is to review the self-critiques
+from today and decide which deserve to become permanent rules. Use nexo_learning_add for permanent rules and nexo_followup_create for action items.
 
 DATE: {data['date']}
 SESSIONS TODAY: {len(data['diaries'])} total, {len(diaries_with_critique)} with self-critique
@@ -207,7 +209,7 @@ Execute without asking."""
         result = subprocess.run(
             [str(CLAUDE_CLI), "-p", prompt, "--model", "opus",
              "--output-format", "text", "--bare",
-             "--allowedTools", "Read,Write,Edit,Glob,Grep"],
+             "--allowedTools", "Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__*"],
             capture_output=True, text=True, timeout=300, env=env
         )
 

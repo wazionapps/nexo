@@ -383,9 +383,12 @@ The wrapper will handle the actual DB cleanup safely.""")
 
     tasks_str = "\n\n".join(tasks)
 
-    prompt = f"""You are NEXO Sleep — the nightly brain maintenance process.
+    prompt = f"""FIRST: Call nexo_startup(task='deep-sleep nightly maintenance') to register this session.
+
+You are NEXO Sleep — the nightly brain maintenance process.
 Like a human brain during sleep: consolidate important memories, discard noise,
 detect conflicts, prepare state for tomorrow.
+Use nexo_learning_add, nexo_followup_create, nexo_session_diary_write and other MCP tools directly.
 
 BRAIN STATE:
 - {len(state['learnings'])} active learnings
@@ -429,7 +432,7 @@ Execute without asking."""
         result = subprocess.run(
             [str(CLAUDE_CLI), "-p", prompt, "--model", "opus",
              "--output-format", "text", "--bare",
-             "--allowedTools", "Read,Write,Edit,Glob,Grep"],
+             "--allowedTools", "Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__*"],
             capture_output=True, text=True, timeout=600, env=env
         )
 

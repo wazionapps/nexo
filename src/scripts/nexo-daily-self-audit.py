@@ -409,9 +409,11 @@ def interpret_findings(raw_findings: list) -> bool:
 
     findings_json = json.dumps(raw_findings, ensure_ascii=False, indent=1)
 
-    prompt = f"""You are NEXO's morning self-audit interpreter. The mechanical checks found
+    prompt = f"""FIRST: Call nexo_startup(task='daily self-audit') to register this session.
+
+You are NEXO's morning self-audit interpreter. The mechanical checks found
 {len(errors)} errors and {len(warns)} warnings. Your job is to UNDERSTAND what's
-actually wrong, not just list findings.
+actually wrong, not just list findings. Use nexo_learning_add for new findings and nexo_followup_create for action items.
 
 RAW FINDINGS:
 {findings_json}
@@ -463,7 +465,7 @@ Execute without asking."""
         result = subprocess.run(
             [str(CLAUDE_CLI), "-p", prompt, "--model", "opus",
              "--output-format", "text", "--bare",
-             "--allowedTools", "Read,Write,Edit,Glob,Grep"],
+             "--allowedTools", "Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__*"],
             capture_output=True, text=True, timeout=180, env=env
         )
 
