@@ -38,6 +38,7 @@ def check_overdue_followups() -> list[dict]:
         SELECT id, description, date, created_at, reasoning
         FROM followups
         WHERE status NOT LIKE 'COMPLETED%'
+        AND status NOT IN ('DELETED','archived','blocked','waiting')
         AND date IS NOT NULL AND date != ''
         ORDER BY date ASC
     """).fetchall()

@@ -82,7 +82,7 @@ def auto_resolve_followups(change: dict) -> list[str]:
     conn = get_db()
     open_followups = conn.execute(
         "SELECT * FROM followups WHERE status NOT LIKE 'COMPLETED%' "
-        "AND status != 'DELETED'"
+        "AND status NOT IN ('DELETED','archived','blocked','waiting')"
     ).fetchall()
 
     if not open_followups:

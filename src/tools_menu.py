@@ -172,7 +172,7 @@ def handle_menu() -> str:
         ).fetchall()
         # Followups without date
         nf_no_date = conn.execute(
-            "SELECT id, description FROM followups WHERE status NOT LIKE 'COMPLETED%' AND (date IS NULL OR date='') ORDER BY id"
+            "SELECT id, description FROM followups WHERE status NOT LIKE 'COMPLETED%' AND status NOT IN ('DELETED','archived','blocked','waiting') AND (date IS NULL OR date='') ORDER BY id"
         ).fetchall()
 
         if no_date or future or nf_no_date:

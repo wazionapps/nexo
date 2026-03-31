@@ -61,7 +61,8 @@ def main():
     cutoff = (date.today() - timedelta(days=14)).isoformat()
     stale = conn.execute(
         "SELECT id, description, date, updated_at FROM followups "
-        "WHERE status NOT LIKE 'COMPLETED%' AND status NOT LIKE 'COMPLETED%' "
+        "WHERE status NOT LIKE 'COMPLETED%' "
+        "AND status NOT IN ('DELETED','archived','blocked','waiting') "
         "AND date != '' AND date < ? "
         "ORDER BY date",
         (cutoff,)
@@ -75,7 +76,8 @@ def main():
     # 3. Orphaned followups (no date, no recent update)
     orphans = conn.execute(
         "SELECT id, description FROM followups "
-        "WHERE status NOT LIKE 'COMPLETED%' AND status NOT LIKE 'COMPLETED%' "
+        "WHERE status NOT LIKE 'COMPLETED%' "
+        "AND status NOT IN ('DELETED','archived','blocked','waiting') "
         "AND (date IS NULL OR date = '') "
         "ORDER BY id"
     ).fetchall()

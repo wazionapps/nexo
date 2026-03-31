@@ -69,14 +69,16 @@ def get_reminders(filter_type: str = 'all') -> list[dict]:
     elif filter_type == 'due':
         rows = conn.execute(
             "SELECT * FROM reminders WHERE status NOT LIKE 'COMPLETED%' "
-            "AND status != 'DELETED' AND date IS NOT NULL AND date <= ? "
+            "AND status NOT IN ('DELETED','archived','blocked','waiting') "
+            "AND date IS NOT NULL AND date <= ? "
             "ORDER BY date ASC",
             (today,)
         ).fetchall()
     else:  # 'all' — active only
         rows = conn.execute(
             "SELECT * FROM reminders WHERE status NOT LIKE 'COMPLETED%' "
-            "AND status != 'DELETED' ORDER BY date ASC NULLS LAST"
+            "AND status NOT IN ('DELETED','archived','blocked','waiting') "
+            "ORDER BY date ASC NULLS LAST"
         ).fetchall()
     return [dict(r) for r in rows]
 
@@ -100,7 +102,7 @@ def find_similar_followups(description: str, threshold: float = 0.3) -> list[dic
     conn = get_db()
     rows = conn.execute(
         "SELECT * FROM followups WHERE status NOT LIKE 'COMPLETED%' "
-        "AND status != 'DELETED'"
+        "AND status NOT IN ('DELETED','archived','blocked','waiting')"
     ).fetchall()
 
     def tokenize(text: str) -> set:
@@ -313,14 +315,16 @@ def get_followups(filter_type: str = 'all') -> list[dict]:
     elif filter_type == 'due':
         rows = conn.execute(
             "SELECT * FROM followups WHERE status NOT LIKE 'COMPLETED%' "
-            "AND status != 'DELETED' AND date IS NOT NULL AND date <= ? "
+            "AND status NOT IN ('DELETED','archived','blocked','waiting') "
+            "AND date IS NOT NULL AND date <= ? "
             "ORDER BY date ASC",
             (today,)
         ).fetchall()
     else:  # 'all' — active only
         rows = conn.execute(
             "SELECT * FROM followups WHERE status NOT LIKE 'COMPLETED%' "
-            "AND status != 'DELETED' ORDER BY date ASC NULLS LAST"
+            "AND status NOT IN ('DELETED','archived','blocked','waiting') "
+            "ORDER BY date ASC NULLS LAST"
         ).fetchall()
     return [dict(r) for r in rows]
 
