@@ -88,9 +88,11 @@ def handle_followup_create(id: str, description: str, date: str = '', verificati
         error_msg = result.get("error", "desconocido") if isinstance(result, dict) else "desconocido"
         return f"ERROR: {error_msg}"
 
-    fecha_str = date if date else 'sin fecha'
-    rec_str = f" Recurrencia: {recurrence}." if recurrence else ""
-    return f"Followup created. Date: {fecha_str}.{rec_str}"
+    fecha_str = date if date else 'no date'
+    rec_str = f" Recurrence: {recurrence}." if recurrence else ""
+    warning = result.get("warning", "")
+    warn_str = f"\n{warning}" if warning else ""
+    return f"Followup created. Date: {fecha_str}.{rec_str}{warn_str}"
 
 
 def handle_followup_update(id: str, description: str = '', date: str = '', verification: str = '', status: str = '') -> str:

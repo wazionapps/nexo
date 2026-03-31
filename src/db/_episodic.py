@@ -148,9 +148,7 @@ def update_change_commit(id: int, commit_ref: str) -> dict:
     fts_upsert("change", str(id), r.get("files",""), body, "change_log", commit=False)
 
     # Auto-resolve followups that match this change
-    resolved = auto_resolve_followups(r)
-    if resolved:
-        r["auto_resolved_followups"] = resolved
+    r["_auto_resolved"] = auto_resolve_followups(r)
     return r
 
 
