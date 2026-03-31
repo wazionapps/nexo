@@ -26,7 +26,12 @@
     "nervous-system",
     "i18n",
     "openclaw",
-    "openclaw-plugin"
+    "openclaw-plugin",
+    "auto-update",
+    "auto-diary",
+    "plugin-system",
+    "schedule-json",
+    "nexo-home"
   ],
   "author": "NEXO Brain <info@nexo-brain.com>",
   "license": "AGPL-3.0",

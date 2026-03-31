@@ -1,5 +1,55 @@
 # Changelog
 
+## [2.0.0] - 2026-03-31
+
+### Breaking Changes
+- Code and data separated: code in repo/NEXO_CODE, data in NEXO_HOME
+- NEXO_HOME env var required (default ~/.nexo/)
+- DB location: NEXO_HOME/data/nexo.db and cognitive.db
+- Evolution config moved from cortex/ to brain/
+- nexo-install.py deprecated (use npx nexo-brain)
+- nexo-auto-update.py deprecated (auto-update built into server startup)
+
+### Added
+- Unified architecture: single source of code, personal data in NEXO_HOME
+- Plugin loader: scans repo plugins/ then NEXO_HOME/plugins/ (personal override)
+- Auto-update on startup: non-blocking (5s max), resilient, opt-out via schedule.json
+- Auto-diary: 3-layer system (PostToolUse every 10 calls, PreCompact emergency, heartbeat DIARY_OVERDUE)
+- CLAUDE.md version tracker: section markers for safe core updates without losing customizations
+- schedule.json: customizable process schedules with timezone support
+- All 15 processes auto-installed: watchdog, immune, synthesis, backup, catchup, cognitive-decay, postmortem, self-audit, sleep, deep-sleep, evolution, followup-hygiene, prevent-sleep, tcc-approve, auto-close-sessions
+- All 7 hooks auto-installed: session-start, session-stop (postmortem), capture-tool-logs, inbox-hook, pre-compact, post-compact, session-timestamp
+- prevent-sleep: cross-platform (caffeinate on macOS, systemd-inhibit on Linux)
+- tcc-approve: auto-approve macOS permissions for Claude Code updates
+- nexo_update MCP tool + nexo-update.sh standalone script
+- Installer asks for data directory (NEXO_HOME) in 6 languages
+- evolution-objective.json backfill for existing installs
+- scripts/ backfill for existing installs
+- Claude CLI calls hardened with --bare + real auth pre-check
+
+### Fixed
+- Lambda decay values were 24x too aggressive (STM: 7h→7d, LTM: 2.4d→60d)
+- MCP instructions truncated (3458→1302 chars)
+- Guard returned 35+ irrelevant blocking rules (now scoped to area, gated to high/critical)
+- Recurring followup returned wrong ID and left FTS index inconsistent
+- Server.py had side effects on import (now wrapped in _server_init + __main__)
+- sqlite3 import missing in cognitive/_search.py
+- Runtime-preflight, watchdog-smoke, self-audit referenced legacy cortex/ layout
+- 12 rounds of external audit, ~60 findings resolved
+
+### Changed
+- All scripts use NEXO_HOME/NEXO_CODE env vars (auto-detect from repo location)
+- All UI strings in English (NLP patterns retain bilingual keywords)
+- README: honest credential storage description (was "secure")
+- Single installer (nexo-brain.js), single update engine (auto_update.py)
+- Dashboard: platform guard for osascript (returns 501 on Linux)
+
+### Known Issues
+- Credentials stored in plaintext SQLite (P0 for v2.1.0)
+- Shell hooks use SQL interpolation (P0 for v2.1.0)
+- Dashboard has no auth (localhost only, P0 for v2.1.0)
+- Migrations are fail-open (P0 for v2.1.0)
+
 ## [1.8.0-beta.3] - 2026-03-31
 
 ### Fixed
