@@ -35,9 +35,11 @@ run_analysis() {
         return 0
     fi
 
-    # Check index for session count
+    # Check meta for session count
     SESSIONS=0
-    if [ -f "$DEEP_SLEEP_DIR/$DATE-index.json" ]; then
+    if [ -f "$DEEP_SLEEP_DIR/$DATE-meta.json" ]; then
+        SESSIONS=$(python3 -c "import json; print(json.load(open('$DEEP_SLEEP_DIR/$DATE-meta.json'))['sessions_found'])")
+    elif [ -f "$DEEP_SLEEP_DIR/$DATE-index.json" ]; then
         SESSIONS=$(python3 -c "import json; print(json.load(open('$DEEP_SLEEP_DIR/$DATE-index.json'))['sessions_found'])")
     fi
     if [ "$SESSIONS" -eq 0 ]; then
