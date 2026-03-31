@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.7.0] - 2026-03-31
+
+### Added
+- **Linux support**: systemd user timers (preferred) or crontab fallback for automated cognitive processes. Same 4 scheduled tasks as macOS LaunchAgents.
+- **Auto-resolve followups**: Change log entries automatically cross-reference and complete matching open followups via file overlap, keyword similarity, and ID reference.
+- **Find similar followups**: Duplicate detection before creating new followups using asymmetric keyword overlap scoring.
+- **Free-form learning categories**: Removed hardcoded category validation. Users can now use any category name (e.g., 'backend', 'frontend', 'devops').
+
+### Changed
+- **Full internationalization**: All UI strings, error messages, labels, and DB status values translated to English. Status values: `PENDING`, `COMPLETED`, `DELETED` (previously Spanish).
+- **CLAUDE.md template rewrite**: 494→127 lines. Compact, procedural format. Same capabilities, zero prose.
+- **Complete sanitization**: Removed all personal data, hardcoded paths, and project-specific references from the entire codebase. Every file uses `NEXO_HOME` env var.
+- **Deleted 48 macOS Finder duplicate files** ("file 2.ext" pattern).
+
+### Fixed
+- Syntax error in `nexo-evolution-run.py` from automated NEXO_HOME insertion.
+- Hardcoded locale (Europe/Madrid, es_ES) in menu date formatting.
+- Personal directory path in FTS code indexing configuration.
+
 ## [1.7.0-beta.1] - 2026-03-30
 
 ### Added
