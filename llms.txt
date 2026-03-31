@@ -1,34 +1,74 @@
 # NEXO Brain
 
-> Cognitive co-operator for Claude Code. Atkinson-Shiffrin memory model with 111+ MCP tools, knowledge graph, web dashboard, and auto-compaction context continuity.
+> Open-source cognitive memory system for AI agents (v2.0.0)
 
-NEXO Brain is an MCP server that gives AI coding agents persistent, psychologically-grounded memory. It implements the Atkinson-Shiffrin memory model (Sensory Register, Short-Term Memory, Long-Term Memory) with vector embeddings, semantic RAG retrieval, automatic memory lifecycle management, and a bi-temporal knowledge graph.
+NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It provides 147+ MCP tools across 23 categories including semantic RAG, knowledge graph-boosted search, HNSW vector indexing, trust scoring, episodic memory, claim graph, metacognitive error prevention, inter-terminal coordination, web dashboard v2, natural memory decay, a full nervous system of 15 autonomous processes, unified code/data architecture, auto-update on startup, and auto-diary.
 
-## Key Features (v1.7.0)
+## Key Features
 
-- **Knowledge Graph**: Bi-temporal entity-relationship graph (988 nodes, 896 edges) with BFS traversal, temporal queries, D3 visualization, and event-sourced smart dedup
-- **Web Dashboard**: 6 pages (Overview, Graph, Memory, Somatic, Adaptive, Sessions) at localhost:6174, built with FastAPI + D3.js
-- **Cross-Platform**: Full Linux and Windows support with opportunistic maintenance
-- **Cognitive Memory**: STM/LTM stores with Ebbinghaus decay, semantic consolidation, sibling detection, prediction error gating
-- **Adaptive Personality**: 3 modes (FLOW/NORMAL/TENSION) driven by 6 weighted signals. Weights learn from real feedback via Ridge regression (shadow mode, momentum, auto-rollback)
-- **Somatic Markers**: Pain memory per file/area. Files that cause repeated errors accumulate risk scores. Guard warns on HIGH RISK (>0.5) and CRITICAL (>0.8)
-- **Trust Score**: Alignment index (0-100) that modulates guard rigor. Auto-adjusts on corrections, thanks, delegations
-- **Guard System**: Pre-edit checks with learnings, blocking rules, cognitive semantic matches, somatic risk scores
-- **Session Coordination**: Multi-terminal support with heartbeat, file tracking, inter-session messaging
-- **Episodic Memory**: Change log, decisions with outcomes, session diaries with mental state continuity
-- **Context Continuity**: PreCompact saves full session checkpoint; PostCompact re-injects Core Memory Block. Long sessions (8+ hours) feel like one continuous conversation
-- **Full Orchestration**: 6 automated hooks, post-mortem with self-critique, auto-compaction context preservation, reflection engine
-- **Storage Router**: Multi-tenant ready abstraction layer
+- Three-store memory: Sensory Register, Short-Term Memory, Long-Term Memory
+- Semantic vector search with fastembed (BAAI/bge-base-en-v1.5, 768 dimensions)
+- Knowledge Graph-boosted search: structurally important memories rank higher
+- HNSW vector indexing: optional hnswlib acceleration, auto-activates at 10,000+ memories
+- Claim Graph: atomic verifiable claims with provenance, contradiction detection, verification status
+- Ebbinghaus forgetting curve for natural memory pruning
+- Discriminative sister memory fusion
+- Cognitive dissonance detection
+- Trust score (0-100) for internal rigor calibration
+- Metacognitive Guard: pre-edit checks with learnings and blocking rules
+- Episodic memory: change logs, decisions, session diaries with mental state continuity
+- Inter-terminal coordination: auto-inbox via PostToolUse hook, claude_session_id tracking
+- Web Dashboard v2: FastAPI with 6 pages (Overview, Operations, Calendar, Inbox), CRUD UI, sidebar nav, trust widget
+- Unified Architecture: code in repo, personal data in NEXO_HOME (~/.nexo/). Clean separation.
+- Auto-Update: non-blocking update check on startup (5s max), opt-out via schedule.json
+- Auto-Diary: 3-layer system (PostToolUse every 10 calls, PreCompact emergency, heartbeat DIARY_OVERDUE)
+- schedule.json: customizable process schedules with timezone support
+- Nervous System: 15 autonomous processes (watchdog, immune, synthesis, backup, catchup, cognitive-decay, postmortem, self-audit, sleep, deep-sleep, evolution, followup-hygiene, prevent-sleep, tcc-approve, auto-close-sessions)
+- 15 auto-installed processes: LaunchAgent plists (macOS) + systemd user timers (Linux) + crontab fallback
+- Cross-Platform: macOS (LaunchAgents), Linux (systemd/crontab), Windows (WSL) with full automated processes
+- Modular architecture: db/ package (11 modules), cognitive/ package (6 modules)
+- Adaptive Learned Weights: signal weights learn from real feedback via Ridge regression
+- Somatic Markers: pain memory per file/area with risk scoring and validated recovery
+- Adaptive Personality: 6 weighted signals (vibe, corrections, brevity, topic, tool errors, git diff)
+- Evolution System: weekly self-improvement cycle with snapshot/rollback and circuit breakers
+- Deep Sleep: overnight transcript analysis finds uncaptured corrections, protocol violations, missed commitments
+- Watchdog Level 3: auto-reexecutes missed crons, verifies repairs with post-fix checks
+- CLAUDE.md version tracker: section markers for safe core updates without losing customizations
+- Lambda decay fix: STM 7h to 7d, LTM 2.4d to 60d (was 24x too aggressive)
+- 24 pytest tests with isolated databases
+- Plugin system with hot-reload
+- 100% local: SQLite + ONNX Runtime, zero cloud dependencies
 
 ## Installation
 
-```bash
-npx nexo-brain
+```
+npx nexo-brain@2.0.0
 ```
 
-## Links
+## Documentation
 
-- GitHub: https://github.com/wazionapps/nexo
-- npm: https://www.npmjs.com/package/nexo-brain
 - Website: https://nexo-brain.com
-- Article: https://dev.to/wazionapps/how-i-applied-cognitive-psychology-to-give-ai-agents-real-memory-2oce
+- Changelog: https://nexo-brain.com/changelog/
+- Docs: https://nexo-brain.com/docs/
+- GitHub: https://github.com/wazionapps/nexo
+- Wiki: https://github.com/wazionapps/nexo/wiki
+- npm: https://www.npmjs.com/package/nexo-brain
+
+## Architecture
+
+Based on the Atkinson-Shiffrin model from cognitive psychology:
+1. Sensory Register captures raw input (30s TTL, attention filter)
+2. Short-Term Memory holds working context (rehearsal resets decay)
+3. Long-Term Memory consolidates via semantic similarity (permanent)
+
+Modular code: db/ package (11 modules: core, fts, schema, sessions, reminders, learnings, credentials, tasks, entities, episodic, evolution) and cognitive/ package (6 modules: core, search, ingest, decay, trust, memory).
+
+## API
+
+NEXO Brain exposes all functionality as MCP (Model Context Protocol) tools. Compatible with Claude Code, OpenClaw, and any MCP client.
+
+Tool categories: Cognitive (8), Cognitive Input (5), Cognitive Advanced (8), Guard (6), Episodic (12), Sessions (5), Coordination (7), Reminders (5), Followups (4), Learnings (5), Credentials (5), Task History (3), Menu (1), Entities (5), Preferences (4), Agents (5), Backup (3), Evolution (5), Adaptive & Somatic (4), Knowledge Graph (4), Claim Graph (6), Artifacts (6), Context Continuity (2), Cognitive Triggers (6), Index Management (3), Files (1), Update (1), and more via plugins.
+
+## License
+
+AGPL-3.0 License. Built by WAzion (https://www.wazion.com).
