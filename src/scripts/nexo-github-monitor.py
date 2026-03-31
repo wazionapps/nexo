@@ -158,6 +158,14 @@ Return as JSON:
   "release_recommendation": "text or null"
 }}"""
 
+    auth_check = subprocess.run(
+        [str(CLAUDE_CLI), "-p", "Reply with exactly: ok", "--bare", "--output-format", "text", "--model", "haiku"],
+        capture_output=True, text=True, timeout=15
+    )
+    if auth_check.returncode != 0:
+        # CLI not authenticated, skip gracefully
+        return ""
+
     env = os.environ.copy()
     env.pop("CLAUDECODE", None)
     env.pop("CLAUDE_CODE", None)

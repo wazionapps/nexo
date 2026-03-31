@@ -188,6 +188,15 @@ def _cli_post_catchup_assessment(ran: int, skipped: int, state: dict):
         log(f"Caught up {ran} tasks, {skipped} already current. (CLI unavailable for assessment)")
         return
 
+    auth_check = subprocess.run(
+        [str(CLAUDE_CLI), "-p", "Reply with exactly: ok", "--bare", "--output-format", "text", "--model", "haiku"],
+        capture_output=True, text=True, timeout=15
+    )
+    if auth_check.returncode != 0:
+        # CLI not authenticated, skip gracefully
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] Claude CLI not authenticated. Skipping CLI analysis.")
+        return
+
     assessment_file = LOG_DIR / "catchup-assessment.md"
     state_summary = json.dumps(state, indent=2, default=str)
 
