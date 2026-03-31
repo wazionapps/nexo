@@ -39,7 +39,8 @@ MCP_OWNED_SECTIONS = [
     "Dissonance",
     "Disonancia",
     "Observe the User",
-    "Observar a Francisco",
+    "Observar a Francisco",  # legacy personal CLAUDE.md files
+    "Observar al Usuario",
     "Change Log",
     "Session Diary",
     "Cortex",
@@ -50,7 +51,7 @@ MCP_OWNED_SECTIONS = [
 BOOTSTRAP_SECTIONS = [
     "Startup",
     "User Profile",
-    "Francisco",
+    "Francisco",  # legacy personal CLAUDE.md files
     "Formato",
     "Format",
     "Autonomy",

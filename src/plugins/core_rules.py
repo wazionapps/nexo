@@ -12,7 +12,11 @@ def _get_db():
 def _seed_if_empty():
     """Seed rules from JSON if table is empty (first run after migration)."""
     conn = _get_db()
-    count = conn.execute("SELECT COUNT(*) FROM core_rules WHERE is_active = 1").fetchone()[0]
+    try:
+        count = conn.execute("SELECT COUNT(*) FROM core_rules WHERE is_active = 1").fetchone()[0]
+    except Exception:
+        # Table doesn't exist yet — migrations haven't run. Bail gracefully.
+        return
     if count > 0:
         return
 

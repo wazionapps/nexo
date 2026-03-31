@@ -351,6 +351,9 @@ def handle_change_search(query: str = '', files: str = '', days: int = 30) -> st
 def handle_change_commit(id: int, commit_ref: str) -> str:
     """Link a change log entry to its git commit hash after committing.
 
+    After linking, automatically resolves any open followups that match
+    the change (by file overlap, keyword similarity, or explicit ID reference).
+
     Args:
         id: Change log entry ID
         commit_ref: Git commit hash
@@ -358,7 +361,13 @@ def handle_change_commit(id: int, commit_ref: str) -> str:
     result = update_change_commit(id, commit_ref)
     if "error" in result:
         return f"ERROR: {result['error']}"
-    return f"Change #{id} vinculado a commit {commit_ref[:8]}"
+
+    msg = f"Change #{id} vinculado a commit {commit_ref[:8]}"
+    auto_resolved = result.get("_auto_resolved", [])
+    if auto_resolved:
+        ids = ", ".join(auto_resolved)
+        msg += f"\n✅ AUTO-RESOLVED followups: {ids}"
+    return msg
 
 
 def handle_recall(query: str, days: int = 30) -> str:

@@ -265,6 +265,36 @@ def _m14_learnings_priority_weight(conn):
     _migrate_add_column(conn, "followups", "priority", "TEXT DEFAULT 'medium'")
 
 
+def _m15_core_rules_tables(conn):
+    """Core rules and version tracking tables for the core_rules plugin."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS core_rules (
+            id TEXT PRIMARY KEY,
+            category TEXT NOT NULL,
+            rule TEXT NOT NULL,
+            why TEXT NOT NULL,
+            importance INTEGER NOT NULL DEFAULT 3,
+            type TEXT NOT NULL DEFAULT 'advisory',
+            added_in TEXT DEFAULT '',
+            removed_in TEXT DEFAULT NULL,
+            is_active INTEGER NOT NULL DEFAULT 1
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS core_rules_version (
+            id INTEGER PRIMARY KEY,
+            version TEXT NOT NULL DEFAULT '0.0.0',
+            updated_at TEXT DEFAULT (datetime('now'))
+        )
+    """)
+    # Seed the version row so UPDATE statements in the plugin always find it
+    conn.execute(
+        "INSERT OR IGNORE INTO core_rules_version (id, version) VALUES (1, '0.0.0')"
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_core_rules_category ON core_rules(category)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_core_rules_active ON core_rules(is_active)")
+
+
 # Migration registry — APPEND ONLY, never reorder or delete
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
@@ -281,6 +311,7 @@ MIGRATIONS = [
     (12, "session_checkpoints", _m12_session_checkpoints),
     (13, "claude_session_id", _m13_claude_session_id),
     (14, "learnings_priority_weight", _m14_learnings_priority_weight),
+    (15, "core_rules_tables", _m15_core_rules_tables),
 ]
 
 

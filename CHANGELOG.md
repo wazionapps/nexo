@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.8.0-beta.3] - 2026-03-31
+
+### Fixed
+- **core_rules table missing**: Added migration M15 creating `core_rules` and `core_rules_version` tables. Plugin crashed on fresh install because tables were never created. Seeds version row for update tracking.
+- **core_rules plugin hardened**: `_seed_if_empty()` now handles missing table gracefully instead of crashing.
+- **Personal data sanitized**: Removed "Francisco" reference in `tools_sessions.py` comment. Migration script patterns marked as legacy with generic alternatives added.
+- **Anti-duplicate followup restored**: `create_followup()` now calls `find_similar_followups()` before inserting and warns on potential duplicates (non-blocking).
+- **Auto-resolve reporting restored**: `handle_change_commit()` now reports which followup IDs were auto-resolved in its return message.
+
 ## [1.8.0-beta.2] - 2026-03-31
 
 ### Fixed

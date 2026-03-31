@@ -324,7 +324,7 @@ def handle_smart_startup_query() -> str:
     for f in followups:
         query_parts.append(f['description'][:100])
 
-    # 2. Due reminders (what Francisco needs to know)
+    # 2. Due reminders (what the user needs to know)
     reminders = conn.execute(
         "SELECT description FROM reminders WHERE status = 'PENDING' AND date <= date('now', '+1 day') ORDER BY date ASC LIMIT 5"
     ).fetchall()
