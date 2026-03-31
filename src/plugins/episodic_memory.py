@@ -84,7 +84,7 @@ def handle_decision_outcome(id: int, outcome: str) -> str:
         (id,)
     )
     conn.commit()
-    return f"Decision #{id} outcome registrado: {outcome[:100]}"
+    return f"Decision #{id} outcome recorded: {outcome[:100]}"
 
 
 def handle_decision_search(query: str = '', domain: str = '', days: int = 30) -> str:
@@ -313,7 +313,7 @@ def handle_change_log(files: str, what_changed: str, why: str,
         on_change_log(change_id, files, "")
     except Exception:
         pass
-    msg = f"Change #{change_id} registrado: {files[:60]} — {what_changed[:60]}"
+    msg = f"Change #{change_id} recorded: {files[:60]} — {what_changed[:60]}"
     if not commit_ref:
         msg += f"\n⚠ NO COMMIT. Use nexo_change_commit({change_id}, 'hash') after push, or 'server-direct' if it was a direct server edit."
     return msg

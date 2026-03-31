@@ -48,7 +48,9 @@ def _server_init():
     signal.signal(signal.SIGINT, _shutdown_handler)
 
     # ── Write PID file for stale process detection ─────────────────
-    _pid_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "nexo.pid")
+    _data_dir = os.path.join(os.environ.get("NEXO_HOME", os.path.join(os.path.expanduser("~"), ".nexo")), "data")
+    os.makedirs(_data_dir, exist_ok=True)
+    _pid_file = os.path.join(_data_dir, "nexo.pid")
     with open(_pid_file, "w") as f:
         f.write(str(os.getpid()))
 
@@ -93,9 +95,9 @@ mcp = FastMCP(
         "React: DIARY REMINDER→write diary, VIBE:NEGATIVE→ultra-concise, AUTO-PRIME→read learnings\n"
         "- **Guard:** `nexo_guard_check(files='...', area='...')` BEFORE editing code. "
         "Blocking rules→resolve first. `nexo_track(sid=SID, paths=[...])` before shared files\n"
-        "- **Followups:** NEXO tasks, execute silently. 'hecho'/'ya está'→`nexo_followup_complete` NOW. "
+        "- **Followups:** NEXO tasks, execute silently. 'done'/'all set'→`nexo_followup_complete` NOW. "
         "Reminders=user's, alert when due\n"
-        "- **Observe:** correction→learning+trust. 'mañana'→followup. person→entity. open topic→followup 3d\n"
+        "- **Observe:** correction→learning+trust. 'tomorrow'→followup. person→entity. open topic→followup 3d\n"
         "- **Delegate:** prefer direct. If needed: `nexo_context_packet(area)` + guard + 'if unsure STOP'\n"
         "- **Memory:** `nexo_recall` searches all. Capture: errors→`nexo_learning_add`, prefs, entities, decisions\n"
         "- **Change log:** `nexo_change_log(...)` after production edits. NOT for config dir\n"
@@ -691,9 +693,9 @@ def nexo_plugin_load(filename: str) -> str:
     """
     try:
         n = load_plugin(mcp, filename)
-        return f"Plugin {filename}: {n} tools registrados."
+        return f"Plugin {filename}: {n} tools registered."
     except Exception as e:
-        return f"Error cargando plugin {filename}: {e}"
+        return f"Error loading plugin {filename}: {e}"
 
 
 @mcp.tool
@@ -723,7 +725,7 @@ def nexo_plugin_remove(filename: str) -> str:
             return f"Plugin {filename} unregistered. Tools removed: {', '.join(removed)}"
         return f"Plugin {filename} unregistered (had no registered tools)."
     except Exception as e:
-        return f"Error eliminando plugin {filename}: {e}"
+        return f"Error removing plugin {filename}: {e}"
 
 
 if __name__ == "__main__":

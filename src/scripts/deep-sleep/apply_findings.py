@@ -1,10 +1,10 @@
-import os
 #!/usr/bin/env python3
 """
 Deep Sleep — Step 3: Apply findings.
 Takes the analysis output and writes feedback memories + trust adjustments.
 """
 import json
+import os
 import sqlite3
 import sys
 from datetime import datetime

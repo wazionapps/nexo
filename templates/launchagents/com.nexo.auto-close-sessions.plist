@@ -14,7 +14,7 @@
     <key>ProgramArguments</key>
     <array>
         <string>/usr/bin/python3</string>
-        <string>{{NEXO_HOME}}/nexo-mcp/auto_close_sessions.py</string>
+        <string>{{NEXO_HOME}}/auto_close_sessions.py</string>
     </array>
     <key>StartInterval</key>
     <integer>300</integer>

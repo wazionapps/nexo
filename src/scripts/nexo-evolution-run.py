@@ -20,6 +20,7 @@ from datetime import datetime, date, timedelta
 from pathlib import Path
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(NEXO_HOME)))
 
 # ── Paths ────────────────────────────────────────────────────────────────
 CLAUDE_DIR = NEXO_HOME
@@ -38,7 +39,7 @@ MAX_SNAPSHOTS = 8
 AUTO_SAFE_PREFIXES = [
     str(CLAUDE_DIR / "scripts") + "/",
     str(CLAUDE_DIR / "cortex") + "/",
-    str(CLAUDE_DIR / "nexo-mcp" / "plugins") + "/",
+    str(NEXO_CODE / "plugins") + "/",
     str(CLAUDE_DIR / "logs") + "/",
     str(CLAUDE_DIR / "coordination") + "/",
 ]

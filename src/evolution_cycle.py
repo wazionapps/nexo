@@ -15,14 +15,14 @@ from datetime import datetime, date, timedelta
 from pathlib import Path
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(NEXO_HOME)))
 NEXO_DB = NEXO_HOME / "data" / "nexo.db"
 CORTEX_DIR = Path(__file__).parent
-CLAUDE_DIR = Path.home() / ".nexo"
-SANDBOX_DIR = CLAUDE_DIR / "sandbox" / "workspace"
-SNAPSHOTS_DIR = CLAUDE_DIR / "snapshots"
+SANDBOX_DIR = NEXO_HOME / "sandbox" / "workspace"
+SNAPSHOTS_DIR = NEXO_HOME / "snapshots"
 OBJECTIVE_FILE = CORTEX_DIR / "evolution-objective.json"
 PROMPT_FILE = CORTEX_DIR / "evolution-prompt.md"
-RESTORE_LOG = CLAUDE_DIR / "logs" / "snapshot-restores.log"
+RESTORE_LOG = NEXO_HOME / "logs" / "snapshot-restores.log"
 
 MAX_SNAPSHOTS = 8
 
@@ -147,7 +147,7 @@ def dry_run_restore_test() -> bool:
 
     try:
         subprocess.run(
-            [str(CLAUDE_DIR / "scripts" / "nexo-snapshot-restore.sh"), snap_dir],
+            [str(NEXO_HOME / "scripts" / "nexo-snapshot-restore.sh"), snap_dir],
             capture_output=True, timeout=10, check=True
         )
         content = test_file.read_text()
@@ -201,7 +201,7 @@ INVESTIGATE using these tools:
 4. Read ~/.nexo/coordination/postmortem-daily.md — self-critique patterns
 5. Read ~/.nexo/logs/self-audit-summary.json — system health
 6. Glob ~/.nexo/scripts/*.py — existing scripts
-7. Glob ~/.nexo/nexo-mcp/plugins/*.py — existing plugins
+7. Glob ~/.nexo/plugins/*.py — existing plugins
 
 LOOK FOR:
 - Repeated errors that guard isn't preventing
@@ -211,7 +211,7 @@ LOOK FOR:
 - Patterns in self-critique that suggest systemic issues
 
 SAFETY:
-- Safe zones for auto changes: ~/.nexo/scripts/, ~/.nexo/nexo-mcp/plugins/, ~/.nexo/cortex/
+- Safe zones for auto changes: ~/.nexo/scripts/, ~/.nexo/plugins/, ~/.nexo/cortex/
 - IMMUTABLE files (never touch): db.py, server.py, plugin_loader.py, cognitive.py, CLAUDE.md
 - Every change needs: what file, what to change, why, risk, how to verify
 

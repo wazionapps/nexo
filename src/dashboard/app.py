@@ -23,7 +23,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-# Add parent dir to path so we can import nexo-mcp modules
+# Add parent dir to path so we can import NEXO modules
 _PARENT = str(Path(__file__).resolve().parent.parent)
 if _PARENT not in sys.path:
     sys.path.insert(0, _PARENT)
@@ -64,7 +64,7 @@ async def create_tables():
 
 
 # ---------------------------------------------------------------------------
-# Lazy imports — modules live in the parent nexo-mcp directory
+# Lazy imports — modules live in the parent source directory
 # ---------------------------------------------------------------------------
 
 def _cognitive():

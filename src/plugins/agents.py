@@ -32,7 +32,7 @@ def handle_agent_list() -> str:
     """List all registered agents."""
     agents = list_agents()
     if not agents: return "No agents registered."
-    lines = ["AGENTES REGISTRADOS:"]
+    lines = ["REGISTERED AGENTS:"]
     for a in agents:
         lines.append(f"  {a['id']} — {a['name']} ({a['model']}) — {a['specialization'][:60]}")
     return "\n".join(lines)

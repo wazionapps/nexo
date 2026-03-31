@@ -29,8 +29,9 @@ from pathlib import Path
 HOME = Path.home()
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(HOME / ".nexo")))
 
-# Add nexo-mcp to path for cognitive engine (Stage 3)
-sys.path.insert(0, str(NEXO_HOME))
+# Add NEXO_HOME to path for cognitive engine (Stage 3)
+NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(NEXO_HOME)))
+sys.path.insert(0, str(NEXO_CODE))
 
 NEXO_DB = NEXO_HOME / "data" / "nexo.db"
 # Memory directory — adjust to match your project's memory location

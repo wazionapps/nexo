@@ -18,7 +18,7 @@ from pathlib import Path
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", Path.home() / ".nexo"))
 STATUS_FILE = NEXO_HOME / "github-status.json"
 LOG_FILE = NEXO_HOME / "logs" / "github-monitor.log"
-REPO = "myprojectapps/nexo"
+REPO = "wazionapps/nexo"
 CLAUDE_CLI = Path.home() / ".local" / "bin" / "claude"
 
 
@@ -124,7 +124,7 @@ def analyze_via_cli(data):
     """Pass collected data to CLI for analysis and suggested responses."""
     data_json = json.dumps(data, ensure_ascii=False)
 
-    prompt = f"""Analyze this GitHub repository status for NEXO Brain (myprojectapps/nexo).
+    prompt = f"""Analyze this GitHub repository status for NEXO Brain (wazionapps/nexo).
 
 DATA:
 {data_json}

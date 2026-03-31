@@ -32,7 +32,7 @@ Then add the MCP server to your OpenClaw config (`~/.openclaw/openclaw.json`):
     "servers": {
       "nexo-brain": {
         "command": "python3",
-        "args": ["~/.nexo/src/server.py"],
+        "args": ["~/.nexo/server.py"],
         "env": {
           "NEXO_HOME": "~/.nexo"
         }

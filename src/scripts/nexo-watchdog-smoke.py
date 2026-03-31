@@ -10,14 +10,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import sqlite3
 import subprocess
 from datetime import datetime
 from pathlib import Path
 
 HOME = Path.home()
-CLAUDE_DIR = HOME / ".nexo"
-NEXO_DIR = CLAUDE_DIR / "nexo-mcp"
+CLAUDE_DIR = Path(os.environ.get("NEXO_HOME", str(HOME / ".nexo")))
+NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(CLAUDE_DIR)))
 CORTEX_DIR = CLAUDE_DIR / "cortex"
 LOG_DIR = CLAUDE_DIR / "logs"
 SUMMARY_FILE = LOG_DIR / "watchdog-smoke-summary.json"
@@ -41,7 +42,7 @@ def main() -> int:
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     findings = []
 
-    db_path = NEXO_DIR / "data" / "nexo.db"
+    db_path = CLAUDE_DIR / "data" / "nexo.db"
     integrity = "missing"
     if db_path.exists():
         try:
@@ -61,7 +62,7 @@ def main() -> int:
     if not cortex_running:
         findings.append({"severity": "WARN", "area": "cortex", "msg": "cortex-wrapper.py not running"})
 
-    backups = sorted((NEXO_DIR / "backups").glob("nexo-*.db"), key=lambda p: p.stat().st_mtime, reverse=True)
+    backups = sorted((CLAUDE_DIR / "backups").glob("nexo-*.db"), key=lambda p: p.stat().st_mtime, reverse=True)
     if backups:
         age_seconds = int(datetime.now().timestamp() - backups[0].stat().st_mtime)
         if age_seconds > 7200:

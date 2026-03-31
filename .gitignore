@@ -17,6 +17,7 @@ package-lock.json
 *.db-shm
 session_buffer.jsonl
 *.log
+*.pid
 
 # OS
 .DS_Store

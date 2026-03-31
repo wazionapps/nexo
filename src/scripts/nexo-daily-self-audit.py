@@ -26,6 +26,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(NEXO_HOME)))
 
 LOG_DIR = NEXO_HOME / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -238,7 +239,7 @@ def check_watchdog_registry():
 
 def check_snapshot_sync():
     pairs = [
-        (NEXO_HOME / "nexo-mcp" / "db.py", SNAPSHOT_GOLDEN / "nexo-mcp" / "db.py"),
+        (NEXO_CODE / "db.py", SNAPSHOT_GOLDEN / "db.py"),
         (NEXO_HOME / "cortex" / "cortex-wrapper.py", SNAPSHOT_GOLDEN / "cortex" / "cortex-wrapper.py"),
         (NEXO_HOME / "cortex" / "evolution_cycle.py", SNAPSHOT_GOLDEN / "cortex" / "evolution_cycle.py"),
     ]
@@ -334,7 +335,7 @@ def check_cognitive_health():
 
     # Metrics
     try:
-        sys.path.insert(0, str(NEXO_HOME / "nexo-mcp"))
+        sys.path.insert(0, str(NEXO_CODE))
         import cognitive as cog
         metrics = cog.get_metrics(days=7)
         if metrics["total_retrievals"] > 0:
@@ -375,7 +376,7 @@ def check_cognitive_health():
     # Weekly GC on Sundays
     if datetime.now().weekday() == 6:
         try:
-            sys.path.insert(0, str(NEXO_HOME / "nexo-mcp"))
+            sys.path.insert(0, str(NEXO_CODE))
             import cognitive as cog
             gc_stm = cog.gc_stm()
             gc_sensory = cog.gc_sensory(max_age_hours=48)

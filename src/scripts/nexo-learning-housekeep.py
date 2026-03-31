@@ -1,4 +1,3 @@
-import os
 #!/usr/bin/env python3
 """NEXO Learning Housekeeping — Nightly dedup, weight adjustment, and review.
 
@@ -7,6 +6,7 @@ detects duplicates via semantic similarity, and archives stale learnings.
 """
 
 import json
+import os
 import sqlite3
 import sys
 import time
@@ -14,8 +14,9 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(NEXO_HOME)))
 
-sys.path.insert(0, str(NEXO_HOME / "nexo-mcp"))
+sys.path.insert(0, str(NEXO_CODE))
 
 DB_PATH = NEXO_HOME / "data" / "nexo.db"
 STATE_FILE = NEXO_HOME / "operations" / ".catchup-state.json"

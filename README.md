@@ -574,7 +574,7 @@ Add NEXO Brain to your OpenClaw config at `~/.openclaw/openclaw.json`:
     "servers": {
       "nexo-brain": {
         "command": "python3",
-        "args": ["~/.nexo/src/server.py"],
+        "args": ["~/.nexo/server.py"],
         "env": {
           "NEXO_HOME": "~/.nexo"
         }
@@ -587,7 +587,7 @@ Add NEXO Brain to your OpenClaw config at `~/.openclaw/openclaw.json`:
 Or via CLI:
 
 ```bash
-openclaw mcp set nexo-brain '{"command":"python3","args":["~/.nexo/src/server.py"],"env":{"NEXO_HOME":"~/.nexo"}}'
+openclaw mcp set nexo-brain '{"command":"python3","args":["~/.nexo/server.py"],"env":{"NEXO_HOME":"~/.nexo"}}'
 openclaw gateway restart
 ```
 
@@ -617,7 +617,7 @@ This replaces OpenClaw's default memory system with NEXO Brain's full cognitive 
 
 ### Any MCP Client
 
-NEXO Brain works with any application that supports the MCP protocol. Configure it as an MCP server pointing to `~/.nexo/src/server.py`.
+NEXO Brain works with any application that supports the MCP protocol. Configure it as an MCP server pointing to `~/.nexo/server.py`.
 
 ## Listed On
 
