@@ -537,6 +537,32 @@ def auto_update_check() -> dict:
     except Exception as e:
         _log(f"File migration runner error: {e}")
 
+    # Backfill evolution-objective.json for existing installs
+    try:
+        evo_obj_path = NEXO_HOME / "brain" / "evolution-objective.json"
+        if not evo_obj_path.exists():
+            (NEXO_HOME / "brain").mkdir(parents=True, exist_ok=True)
+            default_objective = {
+                "objective": "Improve operational excellence and reduce repeated errors",
+                "focus_areas": ["error_prevention", "proactivity", "memory_quality"],
+                "evolution_enabled": True,
+                "evolution_mode": "review",
+                "dimensions": {
+                    "episodic_memory": {"current": 0, "target": 90},
+                    "autonomy": {"current": 0, "target": 80},
+                    "proactivity": {"current": 0, "target": 70},
+                    "self_improvement": {"current": 0, "target": 60},
+                    "agi": {"current": 0, "target": 20},
+                },
+                "total_evolutions": 0,
+                "consecutive_failures": 0,
+                "created_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            }
+            evo_obj_path.write_text(json.dumps(default_objective, indent=2))
+            _log("Backfilled evolution-objective.json for existing install")
+    except Exception as e:
+        _log(f"evolution-objective.json backfill error: {e}")
+
     # CLAUDE.md version migration
     try:
         result["claude_md_update"] = _migrate_claude_md()

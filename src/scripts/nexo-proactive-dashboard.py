@@ -151,7 +151,7 @@ def check_session_gaps() -> list[dict]:
 def check_evolution_status() -> list[dict]:
     """Check if evolution system is healthy."""
     alerts = []
-    obj_file = NEXO_HOME / "cortex" / "evolution-objective.json"
+    obj_file = NEXO_HOME / "brain" / "evolution-objective.json"
     if obj_file.exists():
         obj = json.loads(obj_file.read_text())
         if not obj.get("evolution_enabled", True):

@@ -113,6 +113,8 @@ def create_snapshot(files_to_backup: list) -> str:
             rel = str(fp).replace(str(Path.home()) + "/", "")
             dest = files_dir / rel
             dest.parent.mkdir(parents=True, exist_ok=True)
+            if os.path.abspath(str(fp)) == os.path.abspath(str(dest)):
+                continue  # Skip: source and destination are the same file
             shutil.copy2(fp, dest)
             manifest["files"].append(rel)
 

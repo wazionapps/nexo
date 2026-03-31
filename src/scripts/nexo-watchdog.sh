@@ -13,7 +13,7 @@ set -uo pipefail
 HOME_DIR="$HOME"
 NEXO_HOME="${NEXO_HOME:-$HOME/.nexo}"
 NEXO_DIR="$NEXO_HOME"
-CORTEX_DIR="$NEXO_HOME/cortex"
+CORTEX_DIR="$NEXO_HOME/brain"
 OPS_DIR="$NEXO_HOME/operations"
 LOG_DIR="$NEXO_HOME/logs"
 LOG="$LOG_DIR/watchdog.log"
