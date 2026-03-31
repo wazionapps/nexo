@@ -182,7 +182,20 @@ not what merely happened. If a section has nothing, write "Nothing notable."
 
 Execute without asking."""
 
-    log("Invoking Claude CLI (sonnet) for synthesis...")
+    log("Invoking Claude CLI (opus) for synthesis...")
+
+    # Verify Claude CLI is authenticated before calling
+    try:
+        auth_check = subprocess.run(
+            [str(CLAUDE_CLI), "--version"],
+            capture_output=True, timeout=5
+        )
+        if auth_check.returncode != 0:
+            log("Claude CLI not available or not authenticated. Skipping synthesis.")
+            return False
+    except Exception:
+        log("Claude CLI check failed. Skipping synthesis.")
+        return False
 
     env = os.environ.copy()
     env.pop("CLAUDECODE", None)
@@ -191,6 +204,7 @@ Execute without asking."""
     try:
         result = subprocess.run(
             [str(CLAUDE_CLI), "-p", prompt, "--model", "opus",
+             "--output-format", "text", "--bare",
              "--allowedTools", "Read,Write,Edit,Glob,Grep"],
             capture_output=True, text=True, timeout=180, env=env
         )

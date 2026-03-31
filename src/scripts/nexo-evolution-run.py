@@ -103,6 +103,22 @@ def set_consecutive_failures(count: int):
 CLI_TIMEOUT = 600  # 10 minutes — Opus needs time for large prompts
 
 
+def verify_claude_cli() -> bool:
+    """Verify Claude CLI is available and authenticated."""
+    try:
+        auth_check = subprocess.run(
+            [str(CLAUDE_CLI), "--version"],
+            capture_output=True, timeout=5
+        )
+        if auth_check.returncode != 0:
+            log("Claude CLI not available or not authenticated.")
+            return False
+        return True
+    except Exception as e:
+        log(f"Claude CLI check failed: {e}")
+        return False
+
+
 def call_claude_cli(prompt: str) -> str:
     """Call claude -p prompt --model opus via subprocess. Returns stdout text."""
     env = os.environ.copy()
@@ -111,6 +127,7 @@ def call_claude_cli(prompt: str) -> str:
 
     result = subprocess.run(
         [str(CLAUDE_CLI), "-p", prompt, "--model", "opus",
+         "--output-format", "text", "--bare",
          "--allowedTools", "Read,Write,Edit,Glob,Grep,Bash"],
         capture_output=True,
         text=True,
@@ -400,8 +417,13 @@ def run():
     prompt = build_evolution_prompt(week_data, objective)
     log(f"Prompt built: {len(prompt)} chars")
 
+    # Verify Claude CLI is authenticated before calling
+    if not verify_claude_cli():
+        log("Claude CLI not available or not authenticated. Skipping evolution run.")
+        return
+
     # Call Opus via claude -p
-    log("Calling claude -p --model opus...")
+    log("Calling claude -p --model opus --bare...")
     try:
         raw_response = call_claude_cli(prompt)
     except Exception as e:

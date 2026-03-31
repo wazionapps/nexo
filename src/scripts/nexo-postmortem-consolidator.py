@@ -186,6 +186,19 @@ Execute without asking."""
 
     log(f"Stage 2: Invoking Claude CLI (opus) with {len(diaries_with_critique)} critiques...")
 
+    # Verify Claude CLI is authenticated before calling
+    try:
+        auth_check = subprocess.run(
+            [str(CLAUDE_CLI), "--version"],
+            capture_output=True, timeout=5
+        )
+        if auth_check.returncode != 0:
+            log("Stage 2: Claude CLI not available or not authenticated. Skipping Stage 2.")
+            return False
+    except Exception:
+        log("Stage 2: Claude CLI check failed. Skipping Stage 2.")
+        return False
+
     env = os.environ.copy()
     env.pop("CLAUDECODE", None)
     env.pop("CLAUDE_CODE", None)
@@ -193,6 +206,7 @@ Execute without asking."""
     try:
         result = subprocess.run(
             [str(CLAUDE_CLI), "-p", prompt, "--model", "opus",
+             "--output-format", "text", "--bare",
              "--allowedTools", "Read,Write,Edit,Glob,Grep"],
             capture_output=True, text=True, timeout=300, env=env
         )
