@@ -283,7 +283,6 @@ NEXO Brain doesn't just respond — it runs autonomous processes in the backgrou
 | **watchdog** | Every 30 min | Monitors 15+ services, LaunchAgents, and infrastructure health |
 | **github-monitor** | 08:00 daily | Checks issues, PRs, and commits on public repos |
 | **learning-validator** | Nightly | Validates learnings for staleness, contradictions, and duplicates |
-| **cognitive-migrate** | On upgrade | Schema migrations for cognitive.db — safe, reversible evolution |
 
 All scripts run via macOS LaunchAgents (or catch-up on Linux). If your Mac was asleep during a scheduled process, the catch-up script re-runs everything in order when it wakes.
 
@@ -660,10 +659,9 @@ If NEXO Brain is useful to you, consider:
 - **Complete sanitization**: All hardcoded paths use `NEXO_HOME` env var. Zero personal data in the repo.
 
 ### v1.6.0 — Nervous System + Dashboard v2 (2026-03-30)
-- **Nervous System**: 11 autonomous scripts (decay, deep sleep, self-audit, catchup, evolution, followup hygiene, immune, watchdog, github monitor, learning validator, cognitive migrate)
+- **Nervous System**: 11 autonomous scripts (decay, deep sleep, self-audit, catchup, evolution, followup hygiene, immune, watchdog, github monitor, learning validator)
 - **Dashboard v2**: 6 interactive pages at localhost:6174 (Overview, Graph, Memory, Somatic, Adaptive, Sessions)
 - **LaunchAgent Templates**: 13 macOS automation templates included in the package for scheduling the nervous system
-- **Migration Script**: `cognitive-migrate.py` for safe, reversible schema evolution on upgrades
 - **Hooks**: 8 total — added PreToolUse (parameter validation + guard injection) and Notification (external event routing)
 - **Installer**: Now configures dashboard LaunchAgent, nervous system scripts, and all 13 templates automatically
 

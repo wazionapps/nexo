@@ -192,6 +192,7 @@ function loadOrCreateSchedule(nexoHome) {
 function getDefaultSchedule(timezone) {
   return {
     timezone: timezone || "UTC",
+    auto_update: true,
     processes: {
       "cognitive-decay": { hour: 3, minute: 0 },
       "postmortem": { hour: 23, minute: 30 },

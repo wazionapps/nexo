@@ -81,8 +81,8 @@ def log(msg: str):
         f.write(line + "\n")
 
 
-# ── Import from evolution_cycle.py ───────────────────────────────────────
-sys.path.insert(0, str(CORTEX_DIR))
+# ── Import from evolution_cycle.py (lives in NEXO_CODE, i.e. src/) ──────
+sys.path.insert(0, str(NEXO_CODE))
 from evolution_cycle import (
     load_objective, save_objective, get_week_data, build_evolution_prompt,
     dry_run_restore_test, max_auto_changes, create_snapshot

@@ -31,8 +31,9 @@ LOG_DIR = NEXO_HOME / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 SUMMARY_FILE = LOG_DIR / "runtime-preflight-summary.json"
 DB_FILE = NEXO_HOME / "data" / "nexo.db"
-CORTEX_OBJECTIVE = NEXO_HOME / "cortex" / "evolution-objective.json"
-CORTEX_PROMPT = NEXO_HOME / "cortex" / "evolution-prompt.md"
+# Evolution config lives in NEXO_CODE (src/) — look there first, fall back to NEXO_HOME/cortex/
+CORTEX_OBJECTIVE = NEXO_CODE / "evolution-objective.json" if (NEXO_CODE / "evolution-objective.json").exists() else NEXO_HOME / "cortex" / "evolution-objective.json"
+CORTEX_PROMPT = NEXO_CODE / "evolution-prompt.md" if (NEXO_CODE / "evolution-prompt.md").exists() else NEXO_HOME / "cortex" / "evolution-prompt.md"
 
 
 def _load_module(name: str, path: Path):
@@ -165,7 +166,11 @@ def main() -> int:
 
         temp_objective = temp_cortex_dir / "evolution-objective.json"
         temp_prompt = temp_cortex_dir / "evolution-prompt.md"
-        shutil.copy2(CORTEX_OBJECTIVE, temp_objective)
+        if CORTEX_OBJECTIVE.exists():
+            shutil.copy2(CORTEX_OBJECTIVE, temp_objective)
+        else:
+            # Create a minimal objective so evolution smoke tests can proceed
+            temp_objective.write_text(json.dumps({"evolution_enabled": True, "dimensions": {}}, indent=2))
         if CORTEX_PROMPT.exists():
             shutil.copy2(CORTEX_PROMPT, temp_prompt)
         snapshot_restore = NEXO_CODE / "scripts" / "nexo-snapshot-restore.sh"

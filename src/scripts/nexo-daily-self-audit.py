@@ -243,7 +243,7 @@ def check_watchdog_registry():
 def check_snapshot_sync():
     pairs = [
         (NEXO_CODE / "db" / "__init__.py", SNAPSHOT_GOLDEN / "db" / "__init__.py"),
-        (NEXO_HOME / "cortex" / "evolution_cycle.py", SNAPSHOT_GOLDEN / "cortex" / "evolution_cycle.py"),
+        (NEXO_CODE / "evolution_cycle.py", SNAPSHOT_GOLDEN / "evolution_cycle.py"),
     ]
     drift = [live.name for live, snap in pairs
              if not live.exists() or not snap.exists() or _sha256(live) != _sha256(snap)]

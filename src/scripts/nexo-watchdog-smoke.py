@@ -54,13 +54,14 @@ def main() -> int:
     if integrity != "ok":
         findings.append({"severity": "ERROR", "area": "sqlite", "msg": f"integrity={integrity}"})
 
-    cortex_running = subprocess.run(
-        ["pgrep", "-f", "nexo-cortex"],
+    # Check if the NEXO MCP server process is alive (replaces legacy cortex process check)
+    nexo_server_running = subprocess.run(
+        ["pgrep", "-f", "nexo-brain"],
         capture_output=True,
         text=True,
     ).returncode == 0
-    if not cortex_running:
-        findings.append({"severity": "WARN", "area": "cortex", "msg": "nexo-cortex not running"})
+    if not nexo_server_running:
+        findings.append({"severity": "INFO", "area": "server", "msg": "nexo-brain not running (normal if no active session)"})
 
     backups = sorted((NEXO_HOME / "backups").glob("nexo-*.db"), key=lambda p: p.stat().st_mtime, reverse=True)
     if backups:
@@ -101,7 +102,7 @@ def main() -> int:
         "timestamp": datetime.now().isoformat(),
         "ok": not any(f["severity"] == "ERROR" for f in findings),
         "integrity": integrity,
-        "cortex_running": cortex_running,
+        "server_running": nexo_server_running,
         "evolution_enabled": evolution_enabled,
         "restore_count_current_hour": restore_count,
         "findings": findings,

@@ -14,15 +14,15 @@ All templates use two placeholders that you must replace before installing:
 
 | Placeholder | Replace with |
 |------------|-------------|
-| `{{NEXO_HOME}}` | Absolute path to your NEXO knowledge base directory (e.g. `/Users/yourname/claude`) |
-| `{{HOME}}` | Your home directory (e.g. `/Users/yourname`) |
+| `{{NEXO_HOME}}` | Absolute path to your NEXO knowledge base directory (default: `~/.nexo` or `$NEXO_HOME`) |
+| `{{HOME}}` | Your home directory (e.g. `/Users/yourname` or `$HOME`) |
 
 Replace them in every file you want to install:
 
 ```bash
 # Example — replace both placeholders in all files at once
-NEXO_HOME="/Users/yourname/claude"
-HOME_DIR="/Users/yourname"
+NEXO_HOME="$HOME/.nexo"
+HOME_DIR="$HOME"
 
 for f in *.plist; do
   sed -i '' \

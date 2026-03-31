@@ -17,7 +17,7 @@ from pathlib import Path
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(NEXO_HOME)))
 NEXO_DB = NEXO_HOME / "data" / "nexo.db"
-CORTEX_DIR = Path(__file__).parent
+CORTEX_DIR = NEXO_HOME / "cortex"
 SANDBOX_DIR = NEXO_HOME / "sandbox" / "workspace"
 SNAPSHOTS_DIR = NEXO_HOME / "snapshots"
 OBJECTIVE_FILE = CORTEX_DIR / "evolution-objective.json"

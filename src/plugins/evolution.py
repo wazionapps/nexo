@@ -1,5 +1,6 @@
 """Evolution plugin — NEXO self-improvement tools for interactive sessions."""
 
+import os
 from db import get_latest_metrics, get_evolution_history, update_evolution_log_status, get_db
 
 

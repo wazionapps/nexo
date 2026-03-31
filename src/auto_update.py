@@ -512,8 +512,18 @@ def auto_update_check() -> dict:
         "error": None,
     }
 
+    # ── Read auto_update flag from schedule.json ────────────────────
+    auto_update_enabled = True
+    try:
+        schedule_file = NEXO_HOME / "config" / "schedule.json"
+        if schedule_file.exists():
+            schedule_data = json.loads(schedule_file.read_text())
+            auto_update_enabled = schedule_data.get("auto_update", True)
+    except Exception:
+        pass  # Default to enabled on any read error
+
     # ── Phase 1: Local migrations (safe, no network) ────────────────
-    # These ALWAYS run, regardless of cooldown or network state.
+    # These ALWAYS run, regardless of cooldown, network state, or auto_update flag.
 
     # DB schema migrations
     try:
@@ -534,6 +544,12 @@ def auto_update_check() -> dict:
         _log(f"CLAUDE.md migration error: {e}")
 
     # ── Phase 2: Network operations (wrapped, never fatal) ──────────
+    # Skip entirely if auto_update is disabled in schedule.json
+    if not auto_update_enabled:
+        result["skipped_reason"] = "auto_update disabled in schedule.json"
+        _log("Network updates disabled (auto_update: false in schedule.json)")
+        return result
+
     # Check cooldown for git/npm checks
     try:
         last_check = _read_last_check()
