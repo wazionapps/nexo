@@ -905,8 +905,8 @@ Write the report. Be concise — max 40 lines."""
     # Verify Claude CLI is authenticated before calling
     try:
         auth_check = subprocess.run(
-            [str(CLAUDE_CLI), "--version"],
-            capture_output=True, timeout=5
+            [str(CLAUDE_CLI), "-p", "Reply with exactly: ok", "--bare", "--output-format", "text", "--model", "haiku"],
+            capture_output=True, text=True, timeout=15
         )
         if auth_check.returncode != 0:
             print("[TRIAGE] Claude CLI not available or not authenticated. Skipping triage.")
