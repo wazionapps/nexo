@@ -8,6 +8,7 @@ This is separate from plugins/update.py which handles MANUAL updates with rollba
 
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -23,7 +24,9 @@ REPO_DIR = SRC_DIR.parent
 
 LAST_CHECK_FILE = DATA_DIR / "auto_update_last_check.json"
 MIGRATION_VERSION_FILE = DATA_DIR / "migration_version"
+CLAUDE_MD_VERSION_FILE = DATA_DIR / "claude_md_version.txt"
 MIGRATIONS_DIR = REPO_DIR / "migrations"
+TEMPLATE_FILE = REPO_DIR / "templates" / "CLAUDE.md.template"
 
 CHECK_COOLDOWN_SECONDS = 3600  # 1 hour
 GIT_TIMEOUT_SECONDS = 4  # stay well under the 5s total budget
@@ -316,6 +319,162 @@ def run_file_migrations() -> list[dict]:
     return results
 
 
+# ── CLAUDE.md version-tracked migration ─────────────────────────────
+
+
+def _read_template_version() -> str | None:
+    """Extract version from the <!-- nexo-claude-md-version: X.Y.Z --> comment in the template."""
+    if not TEMPLATE_FILE.exists():
+        return None
+    first_line = TEMPLATE_FILE.read_text().split("\n", 1)[0]
+    m = re.search(r"nexo-claude-md-version:\s*([\d.]+)", first_line)
+    return m.group(1) if m else None
+
+
+def _read_installed_claude_md_version() -> str | None:
+    """Read the CLAUDE.md version currently installed for this user."""
+    try:
+        if CLAUDE_MD_VERSION_FILE.exists():
+            return CLAUDE_MD_VERSION_FILE.read_text().strip()
+    except OSError:
+        pass
+    return None
+
+
+def _write_installed_claude_md_version(version: str):
+    """Persist the installed CLAUDE.md version."""
+    try:
+        CLAUDE_MD_VERSION_FILE.write_text(version)
+    except Exception as e:
+        _log(f"Failed to write CLAUDE.md version file: {e}")
+
+
+def _find_user_claude_md() -> Path | None:
+    """Locate the user's CLAUDE.md (typically ~/.claude/CLAUDE.md)."""
+    candidate = Path.home() / ".claude" / "CLAUDE.md"
+    if candidate.exists():
+        return candidate
+    # Fallback: check NEXO_HOME
+    candidate2 = NEXO_HOME / "CLAUDE.md"
+    if candidate2.exists():
+        return candidate2
+    return None
+
+
+def _resolve_placeholders(template_text: str) -> str:
+    """Fill {{NAME}} and {{NEXO_HOME}} from the user's existing CLAUDE.md or config."""
+    # Try to read operator name from version.json
+    name = "NEXO"
+    try:
+        vf = NEXO_HOME / "version.json"
+        if vf.exists():
+            data = json.loads(vf.read_text())
+            name = data.get("operator_name", name)
+    except Exception:
+        pass
+
+    return (
+        template_text
+        .replace("{{NAME}}", name)
+        .replace("{{NEXO_HOME}}", str(NEXO_HOME))
+    )
+
+
+def _extract_section(text: str, section_id: str) -> str | None:
+    """Extract content between <!-- nexo:start:ID --> and <!-- nexo:end:ID --> markers (inclusive)."""
+    pattern = re.compile(
+        rf"(<!-- nexo:start:{re.escape(section_id)} -->.*?<!-- nexo:end:{re.escape(section_id)} -->)",
+        re.DOTALL,
+    )
+    m = pattern.search(text)
+    return m.group(1) if m else None
+
+
+def _list_section_ids(text: str) -> list[str]:
+    """Return all section IDs found in the text, in order."""
+    return re.findall(r"<!-- nexo:start:(\w+) -->", text)
+
+
+def _migrate_claude_md() -> str | None:
+    """Compare template version vs installed version. If newer, update core sections in user's CLAUDE.md.
+
+    Returns a status message or None if no migration was needed.
+    """
+    template_version = _read_template_version()
+    if not template_version:
+        return None
+
+    installed_version = _read_installed_claude_md_version()
+    if installed_version == template_version:
+        return None  # Already up to date
+
+    user_md_path = _find_user_claude_md()
+    if not user_md_path:
+        _log("CLAUDE.md migration: no user CLAUDE.md found, skipping")
+        return None
+
+    # Read both files
+    user_md = user_md_path.read_text()
+    template_raw = TEMPLATE_FILE.read_text()
+    template_resolved = _resolve_placeholders(template_raw)
+
+    # Get all section IDs from the template
+    section_ids = _list_section_ids(template_resolved)
+    if not section_ids:
+        _log("CLAUDE.md migration: no section markers in template, skipping")
+        _write_installed_claude_md_version(template_version)
+        return None
+
+    updated = user_md
+    sections_replaced = 0
+    sections_added = 0
+
+    for sid in section_ids:
+        new_section = _extract_section(template_resolved, sid)
+        if not new_section:
+            continue
+
+        old_section = _extract_section(updated, sid)
+        if old_section:
+            if old_section != new_section:
+                updated = updated.replace(old_section, new_section)
+                sections_replaced += 1
+        else:
+            # Section doesn't exist in user's file — append before the end
+            # (new sections added by template updates)
+            updated = updated.rstrip() + "\n\n" + new_section + "\n"
+            sections_added += 1
+
+    # Update the version comment if present in user's file
+    updated = re.sub(
+        r"<!-- nexo-claude-md-version: [\d.]+ -->",
+        f"<!-- nexo-claude-md-version: {template_version} -->",
+        updated,
+    )
+    # If no version comment existed, add one at the top
+    if "nexo-claude-md-version:" not in updated:
+        updated = f"<!-- nexo-claude-md-version: {template_version} -->\n" + updated
+
+    if sections_replaced > 0 or sections_added > 0:
+        # Backup before writing
+        backup_path = user_md_path.with_suffix(".md.bak")
+        try:
+            backup_path.write_text(user_md)
+        except Exception:
+            pass  # Non-critical
+
+        user_md_path.write_text(updated)
+
+    _write_installed_claude_md_version(template_version)
+
+    if sections_replaced == 0 and sections_added == 0:
+        return f"CLAUDE.md v{template_version}: already current (version file updated)"
+
+    msg = f"CLAUDE.md migrated to v{template_version}: {sections_replaced} section(s) updated, {sections_added} new section(s) added"
+    _log(msg)
+    return msg
+
+
 # ── Main entry point ─────────────────────────────────────────────────
 
 def auto_update_check() -> dict:
@@ -332,6 +491,7 @@ def auto_update_check() -> dict:
         "checked": False,
         "git_update": None,
         "npm_notice": None,
+        "claude_md_update": None,
         "migrations": [],
         "skipped_reason": None,
     }
@@ -341,6 +501,12 @@ def auto_update_check() -> dict:
         result["migrations"] = run_file_migrations()
     except Exception as e:
         _log(f"File migration runner error: {e}")
+
+    # Always check CLAUDE.md version regardless of cooldown
+    try:
+        result["claude_md_update"] = _migrate_claude_md()
+    except Exception as e:
+        _log(f"CLAUDE.md migration error: {e}")
 
     # Check cooldown for git/npm checks
     last_check = _read_last_check()

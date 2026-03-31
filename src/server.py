@@ -60,6 +60,8 @@ try:
                 print(f"[NEXO] {result['git_update']}", file=__import__('sys').stderr)
             if result.get("npm_notice"):
                 print(f"[NEXO] {result['npm_notice']}", file=__import__('sys').stderr)
+            if result.get("claude_md_update"):
+                print(f"[NEXO] {result['claude_md_update']}", file=__import__('sys').stderr)
             for m in result.get("migrations", []):
                 if m["status"] == "failed":
                     print(f"[NEXO] Migration {m['file']} FAILED: {m['message']}", file=__import__('sys').stderr)

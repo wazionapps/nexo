@@ -683,7 +683,20 @@ async function main() {
             .replace(/\{\{NEXO_HOME\}\}/g, NEXO_HOME);
           fs.writeFileSync(path.join(NEXO_HOME, "CLAUDE.md.updated"), claudeMd);
           log(`  Updated CLAUDE.md template saved to ~/.nexo/CLAUDE.md.updated`);
-          log(`  Review and merge changes into your ~/.claude/CLAUDE.md if desired.`);
+
+          // Update CLAUDE.md version tracker (auto_update.py will handle section migration on next server start)
+          const migClaudeMdVerMatch = claudeMd.match(/nexo-claude-md-version:\s*([\d.]+)/);
+          if (migClaudeMdVerMatch) {
+            const migDataDir = path.join(NEXO_HOME, "data");
+            fs.mkdirSync(migDataDir, { recursive: true });
+            // Don't write the version yet — let auto_update.py detect the diff and migrate sections
+            // Only write if no version file exists (first time with version tracking)
+            const migVerFile = path.join(migDataDir, "claude_md_version.txt");
+            if (!fs.existsSync(migVerFile)) {
+              fs.writeFileSync(migVerFile, "0.0.0");
+              log(`  CLAUDE.md version tracker initialized (will migrate on next server start)`);
+            }
+          }
         }
 
         console.log("");
@@ -1779,6 +1792,15 @@ See ~/.nexo/ for configuration.
     log(
       "~/.claude/CLAUDE.md already exists. Generated template saved to ~/.nexo/CLAUDE.md.generated"
     );
+  }
+
+  // Write initial CLAUDE.md version tracker
+  const claudeMdVersionMatch = claudeMd.match(/nexo-claude-md-version:\s*([\d.]+)/);
+  if (claudeMdVersionMatch) {
+    const dataDir = path.join(NEXO_HOME, "data");
+    fs.mkdirSync(dataDir, { recursive: true });
+    fs.writeFileSync(path.join(dataDir, "claude_md_version.txt"), claudeMdVersionMatch[1]);
+    log(`CLAUDE.md version tracker initialized: v${claudeMdVersionMatch[1]}`);
   }
 
   console.log("");
