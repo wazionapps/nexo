@@ -104,22 +104,6 @@ CLI_TIMEOUT = 600  # 10 minutes — Opus needs time for large prompts
 
 
 def verify_claude_cli() -> bool:
-    """Verify Claude CLI is available and authenticated with a real prompt test."""
-    try:
-        auth_check = subprocess.run(
-            [str(CLAUDE_CLI), "-p", "Reply with exactly: ok", "--bare", "--output-format", "text", "--model", "haiku"],
-            capture_output=True, text=True, timeout=15
-        )
-        if auth_check.returncode != 0:
-            stderr = auth_check.stderr[:200] if auth_check.stderr else ""
-            log(f"Claude CLI not authenticated or unavailable: {stderr}")
-            return False
-        return True
-    except Exception as e:
-        log(f"Claude CLI check failed: {e}")
-        return False
-
-
 def call_claude_cli(prompt: str) -> str:
     """Call claude -p prompt --model opus via subprocess. Returns stdout text."""
     env = os.environ.copy()

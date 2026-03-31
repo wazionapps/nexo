@@ -443,20 +443,6 @@ Also write the machine-readable summary to {LOG_DIR}/self-audit-summary.json.
 Execute without asking."""
 
     log("Stage B: Invoking Claude CLI (opus) for interpretation...")
-
-    # Verify Claude CLI is authenticated before calling
-    try:
-        auth_check = subprocess.run(
-            [str(CLAUDE_CLI), "-p", "Reply with exactly: ok", "--bare", "--output-format", "text", "--model", "haiku"],
-            capture_output=True, text=True, timeout=15
-        )
-        if auth_check.returncode != 0:
-            log("Stage B: Claude CLI not available or not authenticated. Skipping Stage B.")
-            return False
-    except Exception:
-        log("Stage B: Claude CLI check failed. Skipping Stage B.")
-        return False
-
     env = os.environ.copy()
     env.pop("CLAUDECODE", None)
     env.pop("CLAUDE_CODE", None)

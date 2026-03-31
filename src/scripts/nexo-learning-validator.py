@@ -111,35 +111,6 @@ Rules:
 
     # Try CLI first, fall back to mechanical similarity
     if CLAUDE_CLI.exists():
-        auth_check = subprocess.run(
-            [str(CLAUDE_CLI), "-p", "Reply with exactly: ok", "--bare", "--output-format", "text", "--model", "haiku"],
-            capture_output=True, text=True, timeout=15
-        )
-        if auth_check.returncode != 0:
-            # CLI not authenticated, skip gracefully
-            return {"known": False, "confidence": 0, "recommendation": "CLI not authenticated — skipped validation", "matching_learnings": []}
-
-        env = os.environ.copy()
-        env.pop("CLAUDECODE", None)
-        env.pop("CLAUDE_CODE", None)
-
-        try:
-            result = subprocess.run(
-                [str(CLAUDE_CLI), "-p", prompt, "--model", "opus", "--output-format", "text",
-                 "--allowedTools", "Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__*"],
-                capture_output=True, text=True, timeout=60, env=env
-            )
-            if result.returncode == 0:
-                text = result.stdout.strip()
-                # Strip markdown fences if present
-                if "```json" in text:
-                    text = text.split("```json")[1].split("```")[0]
-                elif "```" in text:
-                    text = text.split("```")[1].split("```")[0]
-                return json.loads(text.strip())
-        except (subprocess.TimeoutExpired, json.JSONDecodeError, Exception):
-            pass  # Fall through to mechanical fallback
-
     # Fallback: mechanical SequenceMatcher (original logic)
     return _mechanical_validate(finding, learnings)
 

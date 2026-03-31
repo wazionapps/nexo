@@ -187,10 +187,6 @@ def _cli_post_catchup_assessment(ran: int, skipped: int, state: dict):
     if not CLAUDE_CLI.exists():
         log(f"Caught up {ran} tasks, {skipped} already current. (CLI unavailable for assessment)")
         return
-
-    auth_check = subprocess.run(
-        [str(CLAUDE_CLI), "-p", "Reply with exactly: ok", "--bare", "--output-format", "text", "--model", "haiku"],
-        capture_output=True, text=True, timeout=15
     )
     if auth_check.returncode != 0:
         # CLI not authenticated, skip gracefully

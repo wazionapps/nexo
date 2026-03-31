@@ -901,20 +901,6 @@ Raw findings:
 Write the report. Be concise — max 40 lines."""
 
     print("\n[TRIAGE] Running CLI interpretation...")
-
-    # Verify Claude CLI is authenticated before calling
-    try:
-        auth_check = subprocess.run(
-            [str(CLAUDE_CLI), "-p", "Reply with exactly: ok", "--bare", "--output-format", "text", "--model", "haiku"],
-            capture_output=True, text=True, timeout=15
-        )
-        if auth_check.returncode != 0:
-            print("[TRIAGE] Claude CLI not available or not authenticated. Skipping triage.")
-            return
-    except Exception:
-        print("[TRIAGE] Claude CLI check failed. Skipping triage.")
-        return
-
     env = os.environ.copy()
     env.pop("CLAUDECODE", None)
     env.pop("CLAUDE_CODE", None)
