@@ -21,8 +21,8 @@ NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 DEEP_SLEEP_DIR = NEXO_HOME / "operations" / "deep-sleep"
 PROMPT_FILE = Path(__file__).parent / "extract-prompt.md"
 
-# Claude CLI timeout per session (10 minutes -- sessions can be long)
-CLAUDE_TIMEOUT = 600
+# No timeout -- user pays unlimited Claude Code, sessions can take as long as needed
+CLAUDE_TIMEOUT = 7200  # 2h safety net only (prevents zombie processes)
 
 
 def find_claude_cli() -> str:
