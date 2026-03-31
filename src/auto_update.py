@@ -563,12 +563,13 @@ def auto_update_check() -> dict:
     except Exception as e:
         _log(f"evolution-objective.json backfill error: {e}")
 
-    # Backfill NEXO_HOME/scripts/ for existing installs (copy core scripts from NEXO_CODE)
+    # Backfill NEXO_HOME/scripts/ for existing installs
     try:
         scripts_dest = NEXO_HOME / "scripts"
-        nexo_code = Path(os.environ.get("NEXO_CODE", ""))
-        scripts_src = nexo_code / "scripts" if nexo_code.exists() else None
-        if scripts_src and scripts_src.is_dir() and not scripts_dest.is_dir():
+        # Deduce NEXO_CODE: env var first, then from __file__ (auto_update.py is in src/)
+        nexo_code = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parent)))
+        scripts_src = nexo_code / "scripts" if (nexo_code / "scripts").is_dir() else None
+        if scripts_src and not scripts_dest.is_dir():
             import shutil
             scripts_dest.mkdir(parents=True, exist_ok=True)
             for f in scripts_src.iterdir():
