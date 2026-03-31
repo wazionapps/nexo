@@ -17,12 +17,19 @@ from pathlib import Path
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(NEXO_HOME)))
 NEXO_DB = NEXO_HOME / "data" / "nexo.db"
-CORTEX_DIR = NEXO_HOME / "cortex"
 SANDBOX_DIR = NEXO_HOME / "sandbox" / "workspace"
 SNAPSHOTS_DIR = NEXO_HOME / "snapshots"
-OBJECTIVE_FILE = CORTEX_DIR / "evolution-objective.json"
-PROMPT_FILE = CORTEX_DIR / "evolution-prompt.md"
 RESTORE_LOG = NEXO_HOME / "logs" / "snapshot-restores.log"
+
+# Evolution config: brain/ (canonical) > cortex/ (legacy) > NEXO_CODE (dev)
+def _resolve_evolution_file(name: str) -> Path:
+    for candidate in [NEXO_HOME / "brain" / name, NEXO_HOME / "cortex" / name, NEXO_CODE / name]:
+        if candidate.exists():
+            return candidate
+    return NEXO_HOME / "brain" / name  # default canonical path
+
+OBJECTIVE_FILE = _resolve_evolution_file("evolution-objective.json")
+PROMPT_FILE = _resolve_evolution_file("evolution-prompt.md")
 
 MAX_SNAPSHOTS = 8
 
@@ -211,7 +218,7 @@ LOOK FOR:
 - Patterns in self-critique that suggest systemic issues
 
 SAFETY:
-- Safe zones for auto changes: ~/.nexo/scripts/, ~/.nexo/plugins/, ~/.nexo/cortex/
+- Safe zones for auto changes: ~/.nexo/scripts/, ~/.nexo/plugins/, ~/.nexo/brain/
 - IMMUTABLE files (never touch): db.py, server.py, plugin_loader.py, cognitive.py, CLAUDE.md
 - Every change needs: what file, what to change, why, risk, how to verify
 

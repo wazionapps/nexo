@@ -1139,6 +1139,28 @@ async function main() {
   ];
   dirs.forEach((d) => fs.mkdirSync(d, { recursive: true }));
 
+  // Create default evolution-objective.json in brain/ if it doesn't exist
+  const evoObjectivePath = path.join(NEXO_HOME, "brain", "evolution-objective.json");
+  if (!fs.existsSync(evoObjectivePath)) {
+    fs.writeFileSync(evoObjectivePath, JSON.stringify({
+      objective: "Improve operational excellence and reduce repeated errors",
+      focus_areas: ["error_prevention", "proactivity", "memory_quality"],
+      evolution_enabled: true,
+      evolution_mode: "review",
+      dimensions: {
+        episodic_memory: { current: 0, target: 90 },
+        autonomy: { current: 0, target: 80 },
+        proactivity: { current: 0, target: 70 },
+        self_improvement: { current: 0, target: 60 },
+        agi: { current: 0, target: 20 },
+      },
+      total_evolutions: 0,
+      consecutive_failures: 0,
+      created_at: new Date().toISOString(),
+    }, null, 2));
+    log("  Created default evolution-objective.json in brain/");
+  }
+
   // Write version file for auto-update tracking
   const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf8"));
   fs.writeFileSync(

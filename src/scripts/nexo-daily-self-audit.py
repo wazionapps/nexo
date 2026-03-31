@@ -42,7 +42,7 @@ SNAPSHOT_GOLDEN = NEXO_HOME / "snapshots" / "golden" / "files" / "claude"
 RUNTIME_PREFLIGHT_SUMMARY = LOG_DIR / "runtime-preflight-summary.json"
 WATCHDOG_SMOKE_SUMMARY = LOG_DIR / "watchdog-smoke-summary.json"
 RESTORE_LOG = LOG_DIR / "snapshot-restores.log"
-CORTEX_LOG_DIR = NEXO_HOME / "cortex" / "logs"
+CORTEX_LOG_DIR = NEXO_HOME / "brain" / "logs"
 CLAUDE_CLI = Path.home() / ".local" / "bin" / "claude"
 
 findings = []
@@ -120,7 +120,10 @@ def check_cron_errors():
 
 
 def check_evolution_health():
-    obj_file = NEXO_HOME / "cortex" / "evolution-objective.json"
+    # Check brain/ (canonical) first, fall back to cortex/ (legacy)
+    obj_file = NEXO_HOME / "brain" / "evolution-objective.json"
+    if not obj_file.exists():
+        obj_file = NEXO_HOME / "cortex" / "evolution-objective.json"
     if not obj_file.exists():
         return
     obj = json.loads(obj_file.read_text())

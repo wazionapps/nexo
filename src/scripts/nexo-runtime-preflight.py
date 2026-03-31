@@ -31,9 +31,15 @@ LOG_DIR = NEXO_HOME / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 SUMMARY_FILE = LOG_DIR / "runtime-preflight-summary.json"
 DB_FILE = NEXO_HOME / "data" / "nexo.db"
-# Evolution config lives in NEXO_CODE (src/) — look there first, fall back to NEXO_HOME/cortex/
-CORTEX_OBJECTIVE = NEXO_CODE / "evolution-objective.json" if (NEXO_CODE / "evolution-objective.json").exists() else NEXO_HOME / "cortex" / "evolution-objective.json"
-CORTEX_PROMPT = NEXO_CODE / "evolution-prompt.md" if (NEXO_CODE / "evolution-prompt.md").exists() else NEXO_HOME / "cortex" / "evolution-prompt.md"
+# Evolution config: NEXO_HOME/brain/ (canonical), NEXO_HOME/cortex/ (legacy fallback), NEXO_CODE (dev fallback)
+def _find_evolution_file(name: str) -> Path:
+    for candidate in [NEXO_HOME / "brain" / name, NEXO_HOME / "cortex" / name, NEXO_CODE / name]:
+        if candidate.exists():
+            return candidate
+    return NEXO_HOME / "brain" / name  # default canonical path
+
+CORTEX_OBJECTIVE = _find_evolution_file("evolution-objective.json")
+CORTEX_PROMPT = _find_evolution_file("evolution-prompt.md")
 
 
 def _load_module(name: str, path: Path):
@@ -150,7 +156,7 @@ def main() -> int:
         temp_db = temp_root / "nexo.db"
         shutil.copy2(DB_FILE, temp_db)
 
-        temp_cortex_dir = temp_root / "cortex"
+        temp_cortex_dir = temp_root / "brain"
         temp_logs_dir = temp_root / "logs"
         temp_coord_dir = temp_root / "coordination"
         temp_daily_dir = temp_root / "daily_summaries"
@@ -183,7 +189,6 @@ def main() -> int:
         evolution_cycle = _load_module("evolution_cycle", NEXO_CODE / "evolution_cycle.py")
         evolution_cycle.NEXO_DB = temp_db
         evolution_cycle.NEXO_HOME = temp_root
-        evolution_cycle.CORTEX_DIR = temp_cortex_dir
         evolution_cycle.SANDBOX_DIR = temp_sandbox_dir
         evolution_cycle.SNAPSHOTS_DIR = temp_snapshots_dir
         evolution_cycle.OBJECTIVE_FILE = temp_objective
@@ -222,7 +227,7 @@ def main() -> int:
         cortex._check_health_endpoints = lambda: []
         cortex._call_anthropic = lambda prompt, model=None, max_tokens=4096: _fake_cortex_response(model or "")
 
-        state = cortex.load_state()
+        state = {"status": "smoke-test", "cycle": 0}
         state = cortex.run_perception_cycle(state)
         if not cortex.BRIEFING_FILE.exists() or not cortex.HEALTH_FILE.exists():
             raise RuntimeError("cortex perception did not write briefing/health")
@@ -242,7 +247,6 @@ def main() -> int:
         runner = _load_module("nexo_evolution_run", NEXO_CODE / "scripts" / "nexo-evolution-run.py")
         runner.NEXO_HOME = temp_root
         runner.NEXO_DB = temp_db
-        runner.CORTEX_DIR = temp_cortex_dir
         runner.OBJECTIVE_FILE = temp_objective
         runner.LOG_DIR = temp_logs_dir
         runner.LOG_FILE = temp_logs_dir / "evolution.log"

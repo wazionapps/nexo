@@ -28,8 +28,6 @@ NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(_repo_src) if (_repo_src / "ser
 # ── Paths ────────────────────────────────────────────────────────────────
 CLAUDE_DIR = NEXO_HOME
 NEXO_DB = CLAUDE_DIR / "data" / "nexo.db"
-CORTEX_DIR = CLAUDE_DIR / "cortex"
-OBJECTIVE_FILE = CORTEX_DIR / "evolution-objective.json"
 LOG_DIR = CLAUDE_DIR / "logs"
 SNAPSHOTS_DIR = CLAUDE_DIR / "snapshots"
 SANDBOX_DIR = CLAUDE_DIR / "sandbox" / "workspace"
@@ -41,7 +39,7 @@ MAX_SNAPSHOTS = 8
 # "auto" mode (public users): restricted to user scripts and plugins ONLY
 AUTO_SAFE_PREFIXES = [
     str(CLAUDE_DIR / "scripts") + "/",
-    str(CLAUDE_DIR / "cortex") + "/",
+    str(CLAUDE_DIR / "brain") + "/",
     str(NEXO_CODE / "plugins") + "/",
     str(CLAUDE_DIR / "logs") + "/",
     str(CLAUDE_DIR / "coordination") + "/",
@@ -368,7 +366,7 @@ def run():
     objective = load_objective()
     if not objective:
         log("ERROR: No evolution-objective.json found")
-        return
+        sys.exit(1)
     if not objective.get("evolution_enabled", True):
         log(f"Evolution DISABLED: {objective.get('disabled_reason', 'unknown')}")
         return

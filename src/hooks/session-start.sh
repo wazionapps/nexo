@@ -212,7 +212,11 @@ except Exception as e:
 fi
 
 # ─── Cortex Report: what happened while user was away ───
-CORTEX_BRIEFING="$NEXO_HOME/cortex/last-briefing.json"
+# Check brain/ (canonical) first, fall back to cortex/ (legacy)
+CORTEX_BRIEFING="$NEXO_HOME/brain/last-briefing.json"
+if [ ! -f "$CORTEX_BRIEFING" ] && [ -f "$NEXO_HOME/cortex/last-briefing.json" ]; then
+    CORTEX_BRIEFING="$NEXO_HOME/cortex/last-briefing.json"
+fi
 if [ -f "$CORTEX_BRIEFING" ]; then
     CORTEX_SECTION=$(python3 -c "
 import json

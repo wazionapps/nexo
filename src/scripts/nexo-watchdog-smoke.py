@@ -19,7 +19,7 @@ from pathlib import Path
 HOME = Path.home()
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(HOME / ".nexo")))
 NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(NEXO_HOME)))
-CORTEX_DIR = NEXO_HOME / "cortex"
+BRAIN_DIR = NEXO_HOME / "brain"
 LOG_DIR = NEXO_HOME / "logs"
 SUMMARY_FILE = LOG_DIR / "watchdog-smoke-summary.json"
 HASH_REGISTRY = NEXO_HOME / "scripts" / ".watchdog-hashes"
@@ -86,7 +86,10 @@ def main() -> int:
     elif restore_count > 0:
         findings.append({"severity": "INFO", "area": "restore_activity", "msg": f"{restore_count} restores this hour"})
 
-    objective = CORTEX_DIR / "evolution-objective.json"
+    # Check brain/ (canonical) first, fall back to cortex/ (legacy)
+    objective = BRAIN_DIR / "evolution-objective.json"
+    if not objective.exists():
+        objective = NEXO_HOME / "cortex" / "evolution-objective.json"
     evolution_enabled = None
     if objective.exists():
         obj = json.loads(objective.read_text())
