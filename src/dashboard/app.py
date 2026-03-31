@@ -308,15 +308,29 @@ async def api_adaptive():
 
 @app.get("/api/sessions")
 async def api_sessions(limit: int = Query(10, ge=1, le=50)):
-    """Recent session diaries."""
+    """Recent session diaries + active sessions from sessions table."""
     db = _db()
     conn = db.get_db()
+    # Active sessions (from sessions table, not diaries)
+    active_rows = conn.execute(
+        "SELECT sid as session_id, task, last_update_epoch, claude_session_id "
+        "FROM sessions WHERE last_update_epoch > (strftime('%s','now') - 900) "
+        "ORDER BY last_update_epoch DESC"
+    ).fetchall()
+    active = [dict(r) for r in active_rows]
+    # Add last_heartbeat as ISO string for frontend
+    for a in active:
+        epoch = a.get("last_update_epoch", 0)
+        if epoch:
+            import datetime
+            a["last_heartbeat"] = datetime.datetime.fromtimestamp(epoch).isoformat()
+    # Recent diaries
     rows = conn.execute(
         "SELECT * FROM session_diary ORDER BY created_at DESC LIMIT ?",
         (limit,),
     ).fetchall()
     diaries = [dict(r) for r in rows]
-    return {"count": len(diaries), "sessions": diaries}
+    return {"count": len(diaries), "sessions": active, "diaries": diaries}
 
 
 @app.get("/api/kg/nodes")

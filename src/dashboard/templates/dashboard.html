@@ -446,11 +446,12 @@
 
     // --- Overdue Items ---
     if (remindersData || followupsData) {
+      const excludeStatus = ['completed', 'COMPLETED', 'archived', 'deleted', 'DELETED', 'blocked', 'waiting'];
       const reminders = (remindersData?.reminders || []).filter(r =>
-        r.status === 'PENDING' && r.date && r.date < today
+        !excludeStatus.includes(r.status) && r.date && r.date <= today
       );
       const followups = (followupsData?.followups || []).filter(f =>
-        f.status === 'PENDING' && f.date && f.date < today
+        !excludeStatus.includes(f.status) && f.date && f.date <= today
       );
       const total = reminders.length + followups.length;
       const el = document.getElementById('overdue-count');
