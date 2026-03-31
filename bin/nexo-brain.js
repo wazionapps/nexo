@@ -154,7 +154,7 @@ function registerAllCoreHooks(settings, hooksDir, nexoHome) {
     if (hook.commandTemplate) {
       command = hook.commandTemplate(nexoHome);
     } else {
-      command = `bash ${path.join(hooksDir, hook.script)}`;
+      command = `NEXO_HOME=${nexoHome} bash ${path.join(hooksDir, hook.script)}`;
     }
 
     settings.hooks[hook.event].push({
