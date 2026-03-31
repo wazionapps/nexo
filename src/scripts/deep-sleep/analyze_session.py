@@ -74,7 +74,8 @@ def analyze_with_claude(transcript: str, prompt: str) -> dict | None:
 
     try:
         result = subprocess.run(
-            ["claude", "-p", full_prompt, "--model", "opus", "--output-format", "text", "--bare"],
+            ["claude", "-p", full_prompt, "--model", "opus", "--output-format", "text",
+             "--allowedTools", "Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__*"],
             capture_output=True, text=True, timeout=300, env=env
         )
 
