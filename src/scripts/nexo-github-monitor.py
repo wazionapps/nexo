@@ -173,7 +173,6 @@ Return as JSON:
     result = subprocess.run(
         [str(CLAUDE_CLI), "-p", prompt,
          "--model", "opus", "--output-format", "text", "--bare",
-         "--output-format", "text",
          "--allowedTools", "Read,Write,Edit,Glob,Grep"],
         capture_output=True, text=True, timeout=180, env=env
     )

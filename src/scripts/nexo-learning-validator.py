@@ -117,7 +117,7 @@ Rules:
         )
         if auth_check.returncode != 0:
             # CLI not authenticated, skip gracefully
-            return []
+            return {"known": False, "confidence": 0, "recommendation": "CLI not authenticated — skipped validation", "matching_learnings": []}
 
         env = os.environ.copy()
         env.pop("CLAUDECODE", None)
