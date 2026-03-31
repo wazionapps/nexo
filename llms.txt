@@ -4,7 +4,7 @@
 
 NEXO Brain is an MCP server that gives AI coding agents persistent, psychologically-grounded memory. It implements the Atkinson-Shiffrin memory model (Sensory Register, Short-Term Memory, Long-Term Memory) with vector embeddings, semantic RAG retrieval, automatic memory lifecycle management, and a bi-temporal knowledge graph.
 
-## Key Features (v1.1.1)
+## Key Features (v1.7.0)
 
 - **Knowledge Graph**: Bi-temporal entity-relationship graph (988 nodes, 896 edges) with BFS traversal, temporal queries, D3 visualization, and event-sourced smart dedup
 - **Web Dashboard**: 6 pages (Overview, Graph, Memory, Somatic, Adaptive, Sessions) at localhost:6174, built with FastAPI + D3.js

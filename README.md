@@ -656,6 +656,14 @@ If NEXO Brain is useful to you, consider:
 
 ## Changelog
 
+### v1.7.0 — Full Internationalization + Linux Support (2026-03-31)
+- **Full i18n**: All UI strings, error messages, DB status values in English. Zero Spanish in the codebase.
+- **Linux support**: systemd user timers (preferred) or crontab fallback for all automated cognitive processes.
+- **Auto-resolve followups**: Change log entries automatically cross-reference and complete matching open followups.
+- **Free-form learning categories**: No more hardcoded category validation — use any category name.
+- **CLAUDE.md template rewrite**: 494→127 lines, compact procedural format with full heartbeat signal reactions.
+- **Complete sanitization**: All hardcoded paths use `NEXO_HOME` env var. Zero personal data in the repo.
+
 ### v1.6.0 — Nervous System + Dashboard v2 (2026-03-30)
 - **Nervous System**: 11 autonomous scripts (decay, deep sleep, self-audit, catchup, evolution, followup hygiene, immune, watchdog, github monitor, learning validator, cognitive migrate)
 - **Dashboard v2**: 6 interactive pages at localhost:6174 (Overview, Graph, Memory, Somatic, Adaptive, Sessions)
@@ -735,7 +743,7 @@ If NEXO Brain is useful to you, consider:
 
 ### v0.9.0 — Cognitive Memory (2026-03-15)
 - Atkinson-Shiffrin memory model (STM → LTM promotion)
-- Semantic RAG with fastembed (BAAI/bge-small-en-v1.5, 384 dims)
+- Semantic RAG with fastembed (BAAI/bge-base-en-v1.5, 768 dims)
 - Trust scoring, sentiment detection, adaptive personality modes
 - Ebbinghaus decay, sister detection, quarantine system
 

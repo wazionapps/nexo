@@ -19,9 +19,12 @@
     "claim-graph",
     "dashboard",
     "launchagent",
+    "systemd",
+    "linux",
     "autonomous-agent",
     "somatic-markers",
     "nervous-system",
+    "i18n",
     "openclaw",
     "openclaw-plugin"
   ],
