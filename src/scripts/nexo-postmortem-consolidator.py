@@ -113,7 +113,7 @@ def consolidate_with_cli(data: dict) -> bool:
 
     diaries_with_critique = [
         d for d in data["diaries"]
-        if d.get("self_critique") and not (d["self_critique"] or "").strip().lower().startswith("no self-critique")
+        if d.get("self_critique") and not str(d["self_critique"]).strip().lower().startswith("no self-critique")
     ]
 
     if not diaries_with_critique:
@@ -196,7 +196,7 @@ Execute without asking."""
             [str(CLAUDE_CLI), "-p", prompt, "--model", "opus",
              "--output-format", "text",
              "--allowedTools", "Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__*"],
-            capture_output=True, text=True, timeout=300, env=env
+            capture_output=True, text=True, timeout=10800, env=env
         )
 
         if result.returncode != 0:
