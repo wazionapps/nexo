@@ -1,0 +1,106 @@
+{
+  "$schema": "NEXO cron manifest — synced by nexo_update to LaunchAgents (macOS) or systemd timers (Linux)",
+  "version": 2,
+  "crons": [
+    {
+      "id": "deep-sleep",
+      "script": "scripts/nexo-deep-sleep.sh",
+      "type": "shell",
+      "schedule": {"hour": 4, "minute": 30},
+      "description": "Overnight session analysis — 4 phases: collect, extract, synthesize, apply",
+      "core": true
+    },
+    {
+      "id": "sleep",
+      "script": "scripts/nexo-sleep.py",
+      "schedule": {"hour": 4, "minute": 0},
+      "description": "Nightly memory consolidation and dream cycle",
+      "core": true
+    },
+    {
+      "id": "cognitive-decay",
+      "script": "scripts/nexo-cognitive-decay.py",
+      "schedule": {"hour": 3, "minute": 0},
+      "description": "Memory decay — reduce strength of unaccessed memories",
+      "core": true
+    },
+    {
+      "id": "learning-housekeep",
+      "script": "scripts/nexo-learning-housekeep.py",
+      "schedule": {"hour": 3, "minute": 15},
+      "description": "Archive stale learnings, deduplicate, validate",
+      "core": true
+    },
+    {
+      "id": "immune",
+      "script": "scripts/nexo-immune.py",
+      "interval_seconds": 1800,
+      "description": "Health monitor — checks MCP, DB, services, auto-repairs",
+      "core": true
+    },
+    {
+      "id": "watchdog",
+      "script": "scripts/nexo-watchdog.sh",
+      "type": "shell",
+      "interval_seconds": 1800,
+      "description": "System health checks — snapshots, logs, alerts",
+      "core": true
+    },
+    {
+      "id": "self-audit",
+      "script": "scripts/nexo-daily-self-audit.py",
+      "schedule": {"hour": 7, "minute": 0},
+      "description": "Daily self-audit — validates learnings, protocols, drift",
+      "core": true
+    },
+    {
+      "id": "postmortem",
+      "script": "scripts/nexo-postmortem-consolidator.py",
+      "schedule": {"hour": 23, "minute": 30},
+      "description": "Consolidate session post-mortems into patterns",
+      "core": true
+    },
+    {
+      "id": "evolution",
+      "script": "scripts/nexo-evolution-run.py",
+      "schedule": {"hour": 5, "minute": 0, "weekday": 0},
+      "description": "Weekly self-improvement cycle — propose and evaluate changes",
+      "core": true
+    },
+    {
+      "id": "followup-hygiene",
+      "script": "scripts/nexo-followup-hygiene.py",
+      "schedule": {"hour": 5, "minute": 0},
+      "description": "Clean stale followups, archive completed, validate dates",
+      "core": true
+    },
+    {
+      "id": "synthesis",
+      "script": "scripts/nexo-synthesis.py",
+      "interval_seconds": 7200,
+      "description": "Periodic synthesis — cross-reference learnings, decisions, changes",
+      "core": true
+    },
+    {
+      "id": "auto-close-sessions",
+      "script": "scripts/nexo-auto-close-sessions.py",
+      "interval_seconds": 300,
+      "description": "Close stale sessions that lost their parent process",
+      "core": true
+    },
+    {
+      "id": "github-monitor",
+      "script": "scripts/nexo-github-monitor.py",
+      "schedule": {"hour": 8, "minute": 0},
+      "description": "Monitor GitHub repo — issues, PRs, stars, auto-respond",
+      "core": true
+    },
+    {
+      "id": "catchup",
+      "script": "scripts/nexo-catchup.py",
+      "schedule": {"hour": 8, "minute": 30},
+      "description": "Morning catchup briefing for the user",
+      "core": true
+    }
+  ]
+}
