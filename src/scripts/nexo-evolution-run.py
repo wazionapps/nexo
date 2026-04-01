@@ -100,7 +100,7 @@ def set_consecutive_failures(count: int):
 
 
 # ── Claude CLI call ──────────────────────────────────────────────────────
-CLI_TIMEOUT = 600  # 10 minutes — Opus needs time for large prompts
+CLI_TIMEOUT = 10800  # 3h safety net (prevents zombie processes)
 
 
 def verify_claude_cli() -> bool:

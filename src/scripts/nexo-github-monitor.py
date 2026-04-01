@@ -36,7 +36,7 @@ def gh_api(endpoint: str) -> dict | list | None:
     try:
         result = subprocess.run(
             ["gh", "api", endpoint],
-            capture_output=True, text=True, timeout=30
+            capture_output=True, text=True, timeout=10800
         )
         if result.returncode == 0:
             return json.loads(result.stdout)
@@ -109,7 +109,7 @@ def collect_data():
             try:
                 result = subprocess.run(
                     ["gh", "api", f"repos/{REPO}/compare/{tag}...main"],
-                    capture_output=True, text=True, timeout=30
+                    capture_output=True, text=True, timeout=10800
                 )
                 if result.returncode == 0:
                     compare = json.loads(result.stdout)
@@ -170,7 +170,7 @@ Return as JSON:
         [str(CLAUDE_CLI), "-p", prompt,
          "--model", "opus", "--output-format", "text",
          "--allowedTools", "Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__*"],
-        capture_output=True, text=True, timeout=180, env=env
+        capture_output=True, text=True, timeout=10800, env=env
     )
 
     if result.returncode != 0:
