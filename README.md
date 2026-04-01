@@ -275,7 +275,7 @@ NEXO Brain doesn't just respond — it runs 15 autonomous processes in the backg
 |--------|----------|-------------|
 | **cognitive-decay** | 03:00 daily | Ebbinghaus decay + memory consolidation + duplicate merging + dreaming |
 | **sleep** | 04:00 daily | Synaptic pruning, expired data cleanup |
-| **deep-sleep** | 04:30 daily | Reads full session transcripts, finds uncaptured corrections and protocol violations |
+| **deep-sleep** | 04:30 daily | 4-phase overnight pipeline: Collect→Extract→Synthesize→Apply. Analyzes all sessions, detects emotional patterns, abandoned projects, productivity issues, and auto-creates learnings |
 | **self-audit** | 07:00 daily | Health checks, guard stats, trust score review, metrics |
 | **postmortem** | 23:30 daily | Session consolidation, extract patterns from day's events |
 | **catchup** | On boot | Runs any missed scheduled processes (Mac was off/asleep) |
@@ -289,7 +289,67 @@ NEXO Brain doesn't just respond — it runs 15 autonomous processes in the backg
 | **watchdog** | Every 5 min | Monitors services, LaunchAgents, and infrastructure health |
 | **auto-close-sessions** | Every 5 min | Cleans stale sessions |
 
-All 15 processes are auto-installed by the installer. On macOS they run via LaunchAgents; on Linux via systemd user timers (or crontab fallback). If your Mac was asleep during a scheduled process, the catch-up script re-runs everything in order when it wakes.
+All processes are defined in `src/crons/manifest.json` and auto-synced to your system by `nexo_update`. On macOS they run via LaunchAgents; on Linux via systemd user timers (or crontab fallback). Personal crons (your own scripts) are never touched by the sync. If your Mac was asleep during a scheduled process, the catch-up script re-runs everything in order when it wakes.
+
+## Deep Sleep v2 — Overnight Learning (v2.1.0)
+
+Deep Sleep is a 4-phase pipeline that runs at 4:30 AM and makes NEXO smarter while you sleep:
+
+```
+Phase 1: COLLECT (Python)
+├── Reads all session transcripts from the day
+├── Splits each session into individual .txt files
+└── Gathers DB state (followups, learnings, trust)
+
+Phase 2: EXTRACT (Opus, one call per session)
+├── 8 types of findings per session:
+│   ├── Uncaptured corrections (user corrected agent, no learning saved)
+│   ├── Self-corrected errors (knowledge gaps to fix)
+│   ├── Unformalised ideas (mentioned but never tracked)
+│   ├── Missed commitments (promised but no followup)
+│   ├── Protocol violations (guard_check, heartbeat, change_log)
+│   ├── Emotional signals (frustration, flow, satisfaction)
+│   ├── Abandoned projects (started but not finished)
+│   └── Productivity patterns (corrections, proactivity, tool efficiency)
+└── Outputs per-session JSON with findings + emotional timeline
+
+Phase 3: SYNTHESIZE (Opus, one call)
+├── Cross-session patterns (same error in 5 sessions = systemic)
+├── Daily mood arc with score (0.0 = terrible day, 1.0 = great day)
+├── Recurring triggers (what causes frustration vs flow)
+├── Productivity analysis (corrections, tool efficiency)
+├── Abandoned project detection
+├── Morning agenda (prioritized)
+└── Calibration recommendations
+
+Phase 4: APPLY (Python)
+├── Auto-creates learnings from high-confidence findings
+├── Creates followups for unfinished work
+├── Updates mood_history in calibration.json (30-day rolling)
+├── Generates session-tone.json (emotional guidance for next session)
+└── Writes morning-briefing.md
+```
+
+### Session Tone — Emotional Intelligence
+
+Deep Sleep generates a `session-tone.json` that tells NEXO how to behave next morning:
+
+- **Agent made many mistakes yesterday** → Acknowledge them, show what was learned, demonstrate improvement
+- **User had a bad day (mood < 40%)** → Supportive approach, lighter start, avoid known frustration triggers
+- **User had a great day (mood > 70%)** → Reinforce momentum, reference wins, push ambitious goals
+- **Agent was too reactive** → Be proactive today, don't wait for instructions
+
+This is read by `nexo_smart_startup` and injected into every session's context. NEXO adapts its personality based on real behavioral data, not just configuration.
+
+## Cron Manifest (v2.1.0)
+
+All core crons are defined in `src/crons/manifest.json`. When you run `nexo_update`, the sync script:
+- **Installs** new crons from the manifest
+- **Updates** changed schedules/intervals
+- **Removes** crons no longer in the manifest (only core ones)
+- **Never touches** personal crons you created yourself
+
+Run `python3 src/crons/sync.py --dry-run` to preview changes without applying.
 
 ## Dashboard (v1.6.0)
 

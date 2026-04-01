@@ -1,5 +1,39 @@
 # Changelog
 
+## [2.1.0] - 2026-04-01
+
+### Deep Sleep v2 — Overnight Learning Pipeline
+- 4-phase pipeline: Collect → Extract → Synthesize → Apply
+- Collect: splits sessions into individual .txt files (one per session)
+- Extract: Opus analyzes each session for 8 types of findings
+- Synthesize: cross-session patterns, morning agenda, context packets
+- Apply: auto-creates learnings, followups, morning briefing
+- NEXO_HEADLESS env var: skips stop hook in CLI subprocesses
+
+### Emotional Intelligence (Deep Sleep Increment 2)
+- Emotional signal detection: frustration, flow, satisfaction, disengagement
+- Daily mood arc with score (0.0-1.0) and recurring triggers
+- Abandoned project detection (cross-referenced with existing followups)
+- Productivity patterns: corrections, proactivity, tool efficiency
+- Session tone generator: adapts next-day greeting based on mood + mistakes
+- Calibration recommendations: auto-suggests personality adjustments
+- mood_history saved in calibration.json (last 30 days)
+
+### Cron Manifest System
+- manifest.json defines 14 core crons with schedule/interval
+- sync.py reconciles manifest with system LaunchAgents (macOS)
+- nexo_update auto-syncs crons after pulling code
+- Personal crons never touched by sync
+- PYTHONUNBUFFERED=1 in all generated plists
+
+### Fixes
+- Stop hook stdout contamination: root cause of all Deep Sleep Phase 2 failures
+- All CLI timeouts unified to 6h (21600s) across 25 scripts
+- Synthesize fallback when Opus writes file directly via Write tool
+- Removed --bare from health checks that blocked background scripts
+- Dashboard shows correct session and followup counts
+- Followup queries filter archived/blocked/waiting status
+
 ## [2.0.0] - 2026-03-31
 
 ### Breaking Changes

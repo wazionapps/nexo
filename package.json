@@ -1,8 +1,8 @@
 {
   "name": "nexo-brain",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "mcpName": "io.github.wazionapps/nexo",
-  "description": "NEXO — Cognitive co-operator for Claude Code. Atkinson-Shiffrin memory, semantic RAG, knowledge graph, HNSW vector indexing, trust scoring, and metacognitive error prevention.",
+  "description": "NEXO — Cognitive co-operator for Claude Code. Memory, emotional intelligence, overnight learning (Deep Sleep), cron management, trust scoring, and adaptive calibration.",
   "bin": {
     "nexo-brain": "./bin/nexo-brain.js"
   },
@@ -31,7 +31,14 @@
     "auto-diary",
     "plugin-system",
     "schedule-json",
-    "nexo-home"
+    "nexo-home",
+    "deep-sleep",
+    "emotional-intelligence",
+    "overnight-analysis",
+    "cron-manifest",
+    "session-tone",
+    "mood-tracking",
+    "productivity-analysis"
   ],
   "author": "NEXO Brain <info@nexo-brain.com>",
   "license": "AGPL-3.0",
