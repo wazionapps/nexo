@@ -196,6 +196,22 @@ def handle_update(remote: str = "origin", branch: str = "main") -> str:
             raise RuntimeError(f"Verification failed: {verify_err}")
         steps_done.append("verify")
 
+        # Step 7: Sync crons with manifest
+        cron_sync_result = ""
+        try:
+            cron_sync_path = NEXO_CODE / "crons" / "sync.py"
+            if cron_sync_path.exists():
+                import subprocess as _sp
+                r = _sp.run(
+                    [sys.executable, str(cron_sync_path)],
+                    capture_output=True, text=True, timeout=30,
+                    env={**os.environ, "NEXO_HOME": str(NEXO_HOME), "NEXO_CODE": str(NEXO_CODE)},
+                )
+                cron_sync_result = r.stdout.strip()
+                steps_done.append("cron-sync")
+        except Exception as e:
+            cron_sync_result = f"Cron sync warning: {e}"
+
         # Build result
         if pull_out == "Already up to date.":
             return f"Already up to date (v{old_version}). No changes pulled."
@@ -209,6 +225,8 @@ def handle_update(remote: str = "origin", branch: str = "main") -> str:
         lines.append(f"  Backup: {backup_dir}")
         if version_changed:
             lines.append("  Migrations: applied")
+        if "cron-sync" in steps_done:
+            lines.append("  Crons: synced with manifest")
         lines.append("")
         lines.append("MCP server restart needed to load new code.")
         return "\n".join(lines)
