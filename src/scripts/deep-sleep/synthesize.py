@@ -135,7 +135,27 @@ def main():
             print(f"[synthesize] Claude CLI error (exit {result.returncode}): {result.stderr[:300]}", file=sys.stderr)
             sys.exit(1)
 
-        parsed = extract_json_from_response(result.stdout)
+        # Filter hook contamination
+        output_text = "\n".join(
+            l for l in result.stdout.strip().splitlines()
+            if not l.strip().startswith("Post-mortem")
+        )
+        parsed = extract_json_from_response(output_text)
+
+        # Fallback: Opus might have written the file directly via Write tool
+        if not parsed:
+            for candidate in [
+                DEEP_SLEEP_DIR / f"{target_date}-analysis.json",
+                DEEP_SLEEP_DIR / f"{target_date}-synthesis.json",
+            ]:
+                if candidate.exists() and candidate.stat().st_size > 100:
+                    try:
+                        parsed = json.load(open(candidate))
+                        print(f"[synthesize] Opus wrote file directly: {candidate}")
+                        break
+                    except Exception:
+                        continue
+
         if not parsed:
             debug_file = DEEP_SLEEP_DIR / f"debug-synthesize-{target_date}.txt"
             debug_file.write_text(result.stdout[:10000])
