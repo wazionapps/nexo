@@ -93,6 +93,27 @@ def _read_package_version() -> str:
     return "unknown"
 
 
+# ── Hook sync ────────────────────────────────────────────────────────
+
+def _sync_hooks():
+    """Copy hook scripts from src/hooks/ to NEXO_HOME/hooks/ after a git pull."""
+    import shutil
+    hooks_src = SRC_DIR / "hooks"
+    hooks_dest = NEXO_HOME / "hooks"
+    if not hooks_src.is_dir():
+        return
+    hooks_dest.mkdir(parents=True, exist_ok=True)
+    synced = 0
+    for f in hooks_src.iterdir():
+        if f.is_file() and f.suffix == ".sh":
+            dest = hooks_dest / f.name
+            shutil.copy2(str(f), str(dest))
+            os.chmod(str(dest), 0o755)
+            synced += 1
+    if synced:
+        _log(f"Synced {synced} hook(s) to {hooks_dest}")
+
+
 # ── Git-based auto-update ────────────────────────────────────────────
 
 def _check_git_updates() -> str | None:
@@ -139,6 +160,10 @@ def _check_git_updates() -> str | None:
 
     # Run DB migrations after pull
     _run_db_migrations()
+
+    # Sync hooks to NEXO_HOME (nexo-brain.js copies them on install,
+    # but auto-update via git pull bypasses nexo-brain.js)
+    _sync_hooks()
 
     msg = f"Auto-updated: {old_version} -> {new_version}" if old_version != new_version else f"Auto-updated (v{new_version}, new commits)"
     _log(msg)
