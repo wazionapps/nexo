@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive memory system. Every feature, fix, and improvement from v0.8.10 to v2.0.0.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive memory system. Every feature, fix, and improvement from v0.8.10 to v2.1.0.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive memory system. Every feature, fix, and improvement from v0.8.10 to v2.0.0.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive memory system. Every feature, fix, and improvement from v0.8.10 to v2.1.0.">
     <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
     <meta property="og:image:width" content="1536">
     <meta property="og:image:height" content="1024">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive memory system. Every feature, fix, and improvement from v0.8.10 to v2.0.0.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive memory system. Every feature, fix, and improvement from v0.8.10 to v2.1.0.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
 
     <!-- Google Analytics (GA4) -->
@@ -72,10 +72,31 @@
     </div>
 </section>
 
-<!-- v2.0.0 Unified Architecture -->
-<section id="v200" class="section-compact" style="background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
+<!-- v2.1.0 Deep Sleep v2 & Emotional Intelligence -->
+<section id="v210" class="section-compact" style="background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
     <div class="container">
-        <div class="section-label">New in v2.0.0</div>
+        <div class="section-label">New in v2.1.0</div>
+        <h2 class="section-title">Deep Sleep v2 &amp; Emotional Intelligence</h2>
+        <p class="section-subtitle">
+            A 4-phase overnight pipeline with emotional analysis, abandoned project detection, and declarative cron management. The agent now adapts its personality based on yesterday's emotional signals.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Deep Sleep v2: 4-Phase Pipeline</h4><p>Complete rewrite of the overnight analysis system. Collect splits transcripts into individual session files. Extract runs Claude per session to find uncaptured findings. Synthesize merges cross-session patterns. Brief generates a structured morning briefing with priorities.</p></div>
+                <div class="cognitive-card"><h4>Session Tone (Emotional Intelligence)</h4><p>Each session's emotional profile (frustration, flow, urgency, satisfaction) is analyzed and stored in <code>session-tone.json</code>. On startup, <code>smart_startup</code> reads tone data and adapts the agent's next-day behavior automatically.</p></div>
+                <div class="cognitive-card"><h4>8 Finding Types</h4><p>Deep Sleep extracts: uncaptured corrections, protocol violations, missed commitments, user preferences, recurring patterns, emotional signals, abandoned projects, and productivity insights. Each with severity scoring and recommended actions.</p></div>
+                <div class="cognitive-card"><h4>Cron Manifest</h4><p>All autonomous processes declared in <code>cron-manifest.json</code> with schedules, descriptions, and platform configs. <code>nexo_update</code> automatically syncs LaunchAgents/systemd timers after code updates. No manual plist editing.</p></div>
+                <div class="cognitive-card"><h4>Abandoned Project Detection</h4><p>Deep Sleep identifies projects mentioned in sessions that have gone silent &mdash; no commits, no mentions, no followups. Surfaces them in the morning briefing with context.</p></div>
+                <div class="cognitive-card"><h4>Unified CLI Timeouts</h4><p>All Claude CLI calls unified to 6h (21600s) safety net. Fixes premature termination of long-running processes like deep-sleep, immune, and synthesis. Added <code>NEXO_HEADLESS=1</code> to all background scripts.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v2.0.0 Unified Architecture -->
+<section id="v200" class="section-compact" style="background:linear-gradient(135deg,#1a0f2e 0%,#0F0A1A 100%);">
+    <div class="container">
+        <div class="section-label">v2.0.0</div>
         <h2 class="section-title">Unified Architecture</h2>
         <p class="section-subtitle">
             Code and data fully separated. 15 autonomous processes auto-installed. Auto-update on startup. Auto-diary captures everything. 147+ MCP tools. 12 rounds of external audit with ~60 findings resolved.

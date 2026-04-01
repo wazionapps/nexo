@@ -1,6 +1,6 @@
 # NEXO Brain
 
-> Open-source cognitive memory system for AI agents (v2.0.0)
+> Open-source cognitive memory system for AI agents (v2.1.0)
 
 NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It provides 147+ MCP tools across 23 categories including semantic RAG, knowledge graph-boosted search, HNSW vector indexing, trust scoring, episodic memory, claim graph, metacognitive error prevention, inter-terminal coordination, web dashboard v2, natural memory decay, a full nervous system of 15 autonomous processes, unified code/data architecture, auto-update on startup, and auto-diary.
 
@@ -24,24 +24,34 @@ NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cogniti
 - Auto-Diary: 3-layer system (PostToolUse every 10 calls, PreCompact emergency, heartbeat DIARY_OVERDUE)
 - schedule.json: customizable process schedules with timezone support
 - Nervous System: 15 autonomous processes (watchdog, immune, synthesis, backup, catchup, cognitive-decay, postmortem, self-audit, sleep, deep-sleep, evolution, followup-hygiene, prevent-sleep, tcc-approve, auto-close-sessions)
-- CLAUDE.md version tracker: section markers for safe core updates without losing customizations
+- 15 auto-installed processes: LaunchAgent plists (macOS) + systemd user timers (Linux) + crontab fallback
 - Cross-Platform: macOS (LaunchAgents), Linux (systemd/crontab), Windows (WSL) with full automated processes
 - Modular architecture: db/ package (11 modules), cognitive/ package (6 modules)
 - Adaptive Learned Weights: signal weights learn from real feedback via Ridge regression
 - Somatic Markers: pain memory per file/area with risk scoring and validated recovery
+- Adaptive Personality: 6 weighted signals (vibe, corrections, brevity, topic, tool errors, git diff)
+- Evolution System: weekly self-improvement cycle with snapshot/rollback and circuit breakers
+- Deep Sleep v2: 4-phase overnight pipeline (Collect→Extract→Synthesize→Apply) with 8 finding types including emotional signals, abandoned projects, and productivity patterns
+- Session Tone: emotional intelligence layer — adapts next-day behavior based on mood, mistakes, and productivity
+- Cron Manifest: declarative cron management (manifest.json + sync.py), auto-synced by nexo_update
+- Watchdog Level 3: auto-reexecutes missed crons, verifies repairs with post-fix checks
+- CLAUDE.md version tracker: section markers for safe core updates without losing customizations
+- Lambda decay fix: STM 7h to 7d, LTM 2.4d to 60d (was 24x too aggressive)
+- 24 pytest tests with isolated databases
 - Plugin system with hot-reload
 - 100% local: SQLite + ONNX Runtime, zero cloud dependencies
 
 ## Installation
 
 ```
-npx nexo-brain init
+npx nexo-brain@2.1.0
 ```
 
 ## Documentation
 
 - Website: https://nexo-brain.com
 - Changelog: https://nexo-brain.com/changelog/
+- Docs: https://nexo-brain.com/docs/
 - GitHub: https://github.com/wazionapps/nexo
 - Wiki: https://github.com/wazionapps/nexo/wiki
 - npm: https://www.npmjs.com/package/nexo-brain
@@ -52,6 +62,8 @@ Based on the Atkinson-Shiffrin model from cognitive psychology:
 1. Sensory Register captures raw input (30s TTL, attention filter)
 2. Short-Term Memory holds working context (rehearsal resets decay)
 3. Long-Term Memory consolidates via semantic similarity (permanent)
+
+Modular code: db/ package (11 modules: core, fts, schema, sessions, reminders, learnings, credentials, tasks, entities, episodic, evolution) and cognitive/ package (6 modules: core, search, ingest, decay, trust, memory).
 
 ## API
 
