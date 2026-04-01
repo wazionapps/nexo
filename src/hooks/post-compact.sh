@@ -2,7 +2,7 @@
 # NEXO PostCompact Hook — Re-inject Core Memory Block after compaction
 # Reads the latest session checkpoint from SQLite and generates a structured
 # context block that preserves session continuity.
-set -euo pipefail
+set -uo pipefail
 
 NEXO_HOME="${NEXO_HOME:-$HOME/.nexo}"
 NEXO_DB="$NEXO_HOME/data/nexo.db"

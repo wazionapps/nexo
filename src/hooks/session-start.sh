@@ -2,7 +2,7 @@
 # NEXO SessionStart hook — generates a comprehensive briefing
 # Reads SQLite directly for reminders, followups, active sessions.
 # Caches output for 1 hour to avoid regenerating on rapid successive sessions.
-set -euo pipefail
+set -uo pipefail
 
 NEXO_HOME="${NEXO_HOME:-$HOME/.nexo}"
 BRIEFING_FILE="$NEXO_HOME/coordination/session-briefing.txt"
@@ -17,8 +17,11 @@ date +%s > "$NEXO_HOME/operations/.session-start-ts"
 rm -f "$NEXO_HOME/operations/.postmortem-complete" 2>/dev/null
 
 # Capture Claude Code session_id for inter-terminal inbox hook
-HOOK_INPUT=$(cat)
-CLAUDE_SID=$(echo "$HOOK_INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('session_id',''))" 2>/dev/null)
+HOOK_INPUT=$(cat || true)
+CLAUDE_SID=""
+if [ -n "$HOOK_INPUT" ]; then
+    CLAUDE_SID=$(echo "$HOOK_INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('session_id',''))" 2>/dev/null || true)
+fi
 if [ -n "$CLAUDE_SID" ]; then
     echo "$CLAUDE_SID" > "/tmp/nexo-claude-sid-${CLAUDE_SID}"
     # Also write to a predictable location for the startup prompt

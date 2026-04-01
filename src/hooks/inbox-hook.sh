@@ -5,10 +5,11 @@
 # Reads SQLite directly (no MCP overhead). Write-only: INSERT OR IGNORE for mark-as-read.
 # Debounce: skips if last check was <2 seconds ago.
 
-INPUT=$(cat)
+INPUT=$(cat || true)
+[ -z "$INPUT" ] && exit 0
 
 # 1. Skip read-only tools (same logic as capture-tool-logs.sh)
-TOOL_NAME=$(echo "$INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('tool_name',''))" 2>/dev/null)
+TOOL_NAME=$(echo "$INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('tool_name',''))" 2>/dev/null || true)
 case "$TOOL_NAME" in
     Read|Grep|Glob|LS|Skill|ToolSearch|Agent) exit 0 ;;
 esac

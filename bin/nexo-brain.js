@@ -54,7 +54,7 @@ function log(msg) {
 
 // ══════════════════════════════════════════════════════════════════════════════
 // CORE PROCESS & HOOK DEFINITIONS
-// All 13 nightly/periodic processes and all 7 core hooks that make NEXO functional.
+// All 13 nightly/periodic processes and all 8 core hooks that make NEXO functional.
 // ══════════════════════════════════════════════════════════════════════════════
 
 /**
@@ -105,33 +105,36 @@ const ALL_PROCESSES = [
 ];
 
 /**
- * Complete definition of all 7 core hooks.
+ * Complete definition of all 8 core hooks.
  * event: Claude Code hook event name
  * matcher: glob matcher for the hook
  * script: script filename inside NEXO_HOME/hooks/ (or a raw command template)
  * key: unique identifier to detect if already registered (avoids duplicates)
+ * timeout: seconds before Claude Code kills the hook (prevents hangs)
  */
 const ALL_CORE_HOOKS = [
   { event: "SessionStart", key: "session-start-ts", commandTemplate: (nexoHome) =>
       `date +%s > ${path.join(nexoHome, "operations", ".session-start-ts")}`,
-    purpose: "Session timing" },
+    timeout: 2, purpose: "Session timing" },
+  { event: "SessionStart", key: "daily-briefing-check.sh", script: "daily-briefing-check.sh",
+    timeout: 5, purpose: "Briefing schedule check" },
   { event: "SessionStart", key: "session-start.sh", script: "session-start.sh",
-    purpose: "Briefing + context" },
+    timeout: 35, purpose: "Briefing + context" },
   { event: "Stop", key: "session-stop.sh", script: "session-stop.sh",
-    purpose: "POSTMORTEM — the most important" },
+    timeout: 10, purpose: "POSTMORTEM — the most important" },
   { event: "PostToolUse", key: "capture-tool-logs.sh", script: "capture-tool-logs.sh",
-    purpose: "Operation capture" },
+    timeout: 5, purpose: "Operation capture" },
   { event: "PostToolUse", key: "inbox-hook.sh", script: "inbox-hook.sh",
-    purpose: "Inter-session messaging" },
+    timeout: 5, purpose: "Inter-session messaging" },
   { event: "PreCompact", key: "pre-compact.sh", script: "pre-compact.sh",
-    purpose: "Memory preservation" },
+    timeout: 10, purpose: "Memory preservation" },
   { event: "PostCompact", key: "post-compact.sh", script: "post-compact.sh",
-    purpose: "Memory restoration" },
+    timeout: 10, purpose: "Memory restoration" },
 ];
 
 /**
- * Register all 7 core hooks in settings.hooks.
- * Additive: adds missing hooks, never removes user's custom ones.
+ * Register all 8 core hooks in settings.hooks.
+ * Additive + auto-migrate: adds missing hooks, updates stale paths, never removes user's custom ones.
  */
 function registerAllCoreHooks(settings, hooksDir, nexoHome) {
   if (!settings.hooks) settings.hooks = {};
@@ -143,13 +146,7 @@ function registerAllCoreHooks(settings, hooksDir, nexoHome) {
   for (const hook of ALL_CORE_HOOKS) {
     if (!settings.hooks[hook.event]) settings.hooks[hook.event] = [];
 
-    // Check if this specific hook is already registered (by key)
-    const alreadyExists = settings.hooks[hook.event].some(
-      (h) => h.command && h.command.includes(hook.key)
-    );
-    if (alreadyExists) continue;
-
-    // Build the command
+    // Build the canonical command for this hook
     let command;
     if (hook.commandTemplate) {
       command = hook.commandTemplate(nexoHome);
@@ -157,10 +154,40 @@ function registerAllCoreHooks(settings, hooksDir, nexoHome) {
       command = `NEXO_HOME=${nexoHome} bash ${path.join(hooksDir, hook.script)}`;
     }
 
-    settings.hooks[hook.event].push({
-      type: "command",
-      command: command,
-    });
+    // Claude Code settings.hooks supports two formats:
+    //   Flat:   [{type:"command", command:"..."}]
+    //   Nested: [{matcher:"*", hooks:[{type:"command", command:"..."}]}]
+    // We need to search and update in both formats.
+    let found = false;
+
+    for (const entry of settings.hooks[hook.event]) {
+      if (entry.hooks && Array.isArray(entry.hooks)) {
+        // Nested format: {matcher, hooks: [...]}
+        const subIdx = entry.hooks.findIndex(
+          (h) => h.command && h.command.includes(hook.key)
+        );
+        if (subIdx !== -1) {
+          const existing = entry.hooks[subIdx];
+          if (existing.command !== command) existing.command = command;
+          if (hook.timeout && !existing.timeout) existing.timeout = hook.timeout;
+          found = true;
+          break;
+        }
+      } else if (entry.command && entry.command.includes(hook.key)) {
+        // Flat format: {type:"command", command:"..."}
+        if (entry.command !== command) entry.command = command;
+        if (hook.timeout && !entry.timeout) entry.timeout = hook.timeout;
+        found = true;
+        break;
+      }
+    }
+
+    if (!found) {
+      // Hook missing — add it in flat format (Claude Code accepts both)
+      const newEntry = { type: "command", command };
+      if (hook.timeout) newEntry.timeout = hook.timeout;
+      settings.hooks[hook.event].push(newEntry);
+    }
   }
 }
 
@@ -649,7 +676,7 @@ async function main() {
         }
         log("  Scripts updated.");
 
-        // Register ALL 7 core hooks in settings.json (additive — don't remove user's custom hooks)
+        // Register ALL 8 core hooks in settings.json (additive — don't remove user's custom hooks)
         let settings = {};
         if (fs.existsSync(CLAUDE_SETTINGS)) {
           try { settings = JSON.parse(fs.readFileSync(CLAUDE_SETTINGS, "utf8")); } catch {}
@@ -659,7 +686,7 @@ async function main() {
         registerAllCoreHooks(settings, migHooksDest, NEXO_HOME);
         fs.mkdirSync(path.dirname(CLAUDE_SETTINGS), { recursive: true });
         fs.writeFileSync(CLAUDE_SETTINGS, JSON.stringify(settings, null, 2));
-        log("  All 7 core hooks registered in Claude Code settings.");
+        log("  All 8 core hooks registered in Claude Code settings.");
 
         // Regenerate ALL 13 LaunchAgents / systemd timers
         const migSchedule = loadOrCreateSchedule(NEXO_HOME);
@@ -1741,7 +1768,7 @@ ${doScan ? `- Stack: ${Object.keys(profileData.code.languages || {}).slice(0, 5)
     },
   };
 
-  // Configure ALL 7 core hooks for session capture (Sensory Register)
+  // Configure ALL 8 core hooks for session capture (Sensory Register)
   if (!settings.hooks) settings.hooks = {};
 
   // Hook scripts already copied above — just reference the dest dir
@@ -1752,7 +1779,7 @@ ${doScan ? `- Stack: ${Object.keys(profileData.code.languages || {}).slice(0, 5)
   const settingsDir = path.dirname(CLAUDE_SETTINGS);
   fs.mkdirSync(settingsDir, { recursive: true });
   fs.writeFileSync(CLAUDE_SETTINGS, JSON.stringify(settings, null, 2));
-  log("MCP server + 7 core hooks configured in Claude Code settings.");
+  log("MCP server + 8 core hooks configured in Claude Code settings.");
 
   // Step 7: Create schedule.json (only on fresh install) and install ALL 13 processes
   log("Setting up automated processes...");

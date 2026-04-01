@@ -3,7 +3,7 @@
 # This runs BEFORE Claude Code compacts. It:
 # 1. Enriches the session checkpoint in SQLite with latest diary draft data
 # 2. Injects a systemMessage telling the operator to save any WIP via MCP tools
-set -euo pipefail
+set -uo pipefail
 
 NEXO_HOME="${NEXO_HOME:-$HOME/.nexo}"
 NEXO_DB="$NEXO_HOME/data/nexo.db"

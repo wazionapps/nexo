@@ -8,6 +8,8 @@ BUFFER="$NEXO_HOME/brain/session_buffer.jsonl"
 mkdir -p "$NEXO_HOME/brain"
 
 # Capture basic event: timestamp + tool name
+# Read stdin (Claude Code passes JSON via stdin for PostToolUse hooks)
+INPUT=$(cat 2>/dev/null || true)
 TOOL_NAME="${CLAUDE_TOOL_NAME:-unknown}"
 TS=$(date -u +"%Y-%m-%dT%H:%M:%S")
 

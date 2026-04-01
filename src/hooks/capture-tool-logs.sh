@@ -6,10 +6,11 @@
 # Optimized: skips read-only tools (Read, Grep, Glob, LS, Skill, ToolSearch).
 
 # Read full JSON from stdin first
-INPUT=$(cat)
+INPUT=$(cat || true)
+[ -z "$INPUT" ] && exit 0
 
 # Extract tool_name early and exit if read-only (avoids overhead on 90%+ of calls)
-TOOL_NAME=$(echo "$INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('tool_name',''))" 2>/dev/null)
+TOOL_NAME=$(echo "$INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('tool_name',''))" 2>/dev/null || true)
 
 case "$TOOL_NAME" in
     Read|Grep|Glob|LS|Skill|ToolSearch) exit 0 ;;

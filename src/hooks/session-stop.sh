@@ -14,7 +14,7 @@
 #     1. User closes → hook checks flag → not found → BLOCK
 #     2. AI executes post-mortem → creates flag
 #     3. User closes again → hook sees flag → APPROVE
-set -euo pipefail
+set -uo pipefail
 
 NEXO_HOME="${NEXO_HOME:-$HOME/.nexo}"
 FLAG_FILE="$NEXO_HOME/operations/.postmortem-complete"
