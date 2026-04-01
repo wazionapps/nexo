@@ -22,7 +22,7 @@ DEEP_SLEEP_DIR = NEXO_HOME / "operations" / "deep-sleep"
 PROMPT_FILE = Path(__file__).parent / "extract-prompt.md"
 
 # No timeout -- user pays unlimited Claude Code, sessions can take as long as needed
-CLAUDE_TIMEOUT = 10800  # 3h safety net (prevents zombie processes)
+CLAUDE_TIMEOUT = 21600  # 3h safety net (prevents zombie processes)
 
 
 def find_claude_cli() -> str:

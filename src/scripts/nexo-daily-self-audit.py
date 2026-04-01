@@ -452,7 +452,7 @@ Execute without asking."""
             [str(CLAUDE_CLI), "-p", prompt, "--model", "opus",
              "--output-format", "text",
              "--allowedTools", "Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__*"],
-            capture_output=True, text=True, timeout=10800, env=env
+            capture_output=True, text=True, timeout=21600, env=env
         )
 
         if result.returncode != 0:

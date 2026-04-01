@@ -21,7 +21,7 @@ NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 DEEP_SLEEP_DIR = NEXO_HOME / "operations" / "deep-sleep"
 PROMPT_FILE = Path(__file__).parent / "synthesize-prompt.md"
 
-CLAUDE_TIMEOUT = 10800  # 3h safety net (prevents zombie processes)
+CLAUDE_TIMEOUT = 21600  # 3h safety net (prevents zombie processes)
 
 
 def find_claude_cli() -> str:

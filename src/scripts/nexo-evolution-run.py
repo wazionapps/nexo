@@ -100,7 +100,7 @@ def set_consecutive_failures(count: int):
 
 
 # ── Claude CLI call ──────────────────────────────────────────────────────
-CLI_TIMEOUT = 10800  # 3h safety net (prevents zombie processes)
+CLI_TIMEOUT = 21600  # 3h safety net (prevents zombie processes)
 
 
 def verify_claude_cli() -> bool:
