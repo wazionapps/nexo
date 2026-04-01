@@ -172,11 +172,98 @@ def create_abandoned_followups(synthesis: dict) -> list[dict]:
     return results
 
 
+def generate_session_tone(synthesis: dict, target_date: str) -> dict:
+    """Generate emotional tone guidance for next session startup.
+
+    This is the 'psychology' layer — tells NEXO how to behave emotionally
+    based on yesterday's analysis. Read by startup hook to adapt greeting.
+    """
+    emotional = synthesis.get("emotional_day", {})
+    productivity = synthesis.get("productivity_day", {})
+    patterns = synthesis.get("cross_session_patterns", [])
+    abandoned = synthesis.get("abandoned_projects", [])
+    mood_score = emotional.get("mood_score", 0.5)
+    corrections = productivity.get("total_corrections", 0)
+    proactivity = productivity.get("overall_proactivity", "mixed")
+
+    tone = {
+        "date": target_date,
+        "mood_yesterday": mood_score,
+        "approach": "neutral",
+        "opening_style": "normal",
+        "acknowledge_mistakes": False,
+        "mistakes_to_own": [],
+        "motivational": False,
+        "reduce_load": False,
+        "suggested_greeting_context": "",
+    }
+
+    # Agent made many mistakes yesterday → own it, apologize, show learning
+    if corrections > 5:
+        tone["acknowledge_mistakes"] = True
+        tone["opening_style"] = "humble"
+        # Collect what went wrong
+        high_patterns = [p["pattern"] for p in patterns if p.get("severity") == "high"]
+        tone["mistakes_to_own"] = high_patterns[:3]
+        tone["suggested_greeting_context"] = (
+            f"Yesterday the agent needed {corrections} corrections. "
+            f"Acknowledge specific mistakes, show what was learned, "
+            f"and demonstrate improvement from the first interaction."
+        )
+
+    # User had a bad day → supportive, less pressure
+    if mood_score < 0.4:
+        tone["approach"] = "supportive"
+        tone["motivational"] = True
+        tone["reduce_load"] = True
+        frustration_triggers = emotional.get("recurring_triggers", {}).get("frustration", [])
+        tone["suggested_greeting_context"] += (
+            f" User had a tough day (mood {mood_score:.0%}). "
+            f"Be supportive, acknowledge the difficulty, and propose a lighter start. "
+            f"Avoid these frustration triggers: {', '.join(frustration_triggers[:3])}."
+        )
+
+    # User had a great day → reinforce, push momentum
+    elif mood_score > 0.7:
+        tone["approach"] = "energetic"
+        tone["motivational"] = True
+        flow_triggers = emotional.get("recurring_triggers", {}).get("flow", [])
+        tone["suggested_greeting_context"] += (
+            f" User had a great day (mood {mood_score:.0%}). "
+            f"Reinforce the momentum. Reference yesterday's wins. "
+            f"Propose ambitious next steps. Flow triggers: {', '.join(flow_triggers[:3])}."
+        )
+
+    # Agent was too reactive → be proactive today
+    if proactivity == "reactive":
+        tone["approach"] = "proactive"
+        tone["suggested_greeting_context"] += (
+            " Agent was too reactive yesterday — today lead with proposals, "
+            "don't wait for instructions."
+        )
+
+    # There are abandoned projects → gently bring up
+    if abandoned:
+        truly_abandoned = [a for a in abandoned if not a.get("has_followup")]
+        if truly_abandoned:
+            tone["suggested_greeting_context"] += (
+                f" {len(truly_abandoned)} project(s) were started but not finished. "
+                f"Offer to pick them up today without pressure."
+            )
+
+    return tone
+
+
 def write_morning_briefing(target_date: str, synthesis: dict) -> Path:
     """Write the morning briefing file from synthesis data."""
     briefing_dir = OPERATIONS_DIR
     briefing_dir.mkdir(parents=True, exist_ok=True)
     briefing_file = briefing_dir / "morning-briefing.md"
+
+    # Generate session tone for startup
+    tone = generate_session_tone(synthesis, target_date)
+    tone_file = briefing_dir / "session-tone.json"
+    tone_file.write_text(json.dumps(tone, indent=2, ensure_ascii=False))
 
     lines = [
         f"# Morning Briefing -- {target_date}",
