@@ -77,13 +77,38 @@ def extract_json_from_response(text: str) -> dict | None:
     return None
 
 
-def analyze_session(session_id: str, context_file: Path, claude_bin: str) -> dict | None:
-    """Send a session to Claude CLI for extraction analysis."""
+def find_session_file(session_id: str, date_dir: Path) -> Path | None:
+    """Find the individual .txt file for a session."""
+    if date_dir and date_dir.exists():
+        sid_short = session_id.replace(".jsonl", "")[:20]
+        for f in sorted(date_dir.glob("session-*.txt")):
+            if sid_short in f.name:
+                return f
+    return None
 
-    # Build the prompt with template variables filled in
+
+def analyze_session(session_id: str, date_dir: Path, shared_context_file: Path | None, claude_bin: str) -> dict | None:
+    """Send a session to Claude CLI for extraction analysis.
+
+    Claude CLI reads the small per-session file + shared context file.
+    Prompt is short — the heavy lifting is in the Read tool calls.
+    """
+    session_file = find_session_file(session_id, date_dir)
+    if not session_file:
+        print(f"    No session file found for {session_id}", file=sys.stderr)
+        return None
+
+    print(f"    File: {session_file.name} ({session_file.stat().st_size / 1024:.0f} KB)")
+
+    # Build a short prompt — Claude reads the files itself
+    shared_ctx_instruction = ""
+    if shared_context_file and shared_context_file.exists():
+        shared_ctx_instruction = f"\n\nAlso read the shared context (followups, learnings, DB state) at: {shared_context_file}"
+
     prompt_template = PROMPT_FILE.read_text()
-    prompt = prompt_template.replace("{{CONTEXT_FILE}}", str(context_file))
+    prompt = prompt_template.replace("{{CONTEXT_FILE}}", str(session_file))
     prompt = prompt.replace("{{SESSION_ID}}", session_id)
+    prompt += shared_ctx_instruction
 
     try:
         result = subprocess.run(
@@ -93,7 +118,7 @@ def analyze_session(session_id: str, context_file: Path, claude_bin: str) -> dic
                 "--model", "opus",
                 "--output-format", "text",
                 "--allowedTools",
-                "Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__nexo_startup,mcp__nexo__nexo_learning_search,mcp__nexo__nexo_recall"
+                "Read,Grep,Bash,mcp__nexo__nexo_startup,mcp__nexo__nexo_learning_search,mcp__nexo__nexo_recall"
             ],
             capture_output=True,
             text=True,
@@ -129,9 +154,10 @@ def main():
 
     context_file = DEEP_SLEEP_DIR / f"{target_date}-context.txt"
     meta_file = DEEP_SLEEP_DIR / f"{target_date}-meta.json"
+    date_dir = DEEP_SLEEP_DIR / target_date
 
-    if not context_file.exists():
-        print(f"[extract] No context file for {target_date}. Run collect.py first.")
+    if not context_file.exists() and not date_dir.exists():
+        print(f"[extract] No context for {target_date}. Run collect.py first.")
         sys.exit(1)
 
     # Read metadata to get session list
@@ -143,24 +169,31 @@ def main():
         # Fallback: parse context file for session IDs
         print("[extract] No meta file found, scanning context for sessions...")
         session_files = []
-        for line in context_file.read_text().splitlines():
-            if line.startswith("SESSION ") and ":" in line:
-                # Lines like "SESSION 1: abc123.jsonl"
-                parts = line.split(":", 1)
-                if len(parts) == 2:
-                    sid = parts[1].strip()
-                    if sid.endswith(".jsonl"):
-                        session_files.append(sid)
+        if context_file.exists():
+            for line in context_file.read_text().splitlines():
+                if line.startswith("SESSION ") and ":" in line:
+                    parts = line.split(":", 1)
+                    if len(parts) == 2:
+                        sid = parts[1].strip()
+                        if sid.endswith(".jsonl"):
+                            session_files.append(sid)
 
     if not session_files:
         print(f"[extract] No sessions to analyze for {target_date}.")
-        # Write empty extractions
         output = {"date": target_date, "sessions_analyzed": 0, "extractions": []}
         output_file = DEEP_SLEEP_DIR / f"{target_date}-extractions.json"
         with open(output_file, "w") as f:
             json.dump(output, f, indent=2, ensure_ascii=False)
         print(f"[extract] Output: {output_file}")
         return
+
+    # Shared context file (followups, learnings, DB state)
+    shared_context_file = date_dir / "shared-context.txt" if date_dir.exists() else None
+    if shared_context_file and shared_context_file.exists():
+        print(f"[extract] Shared context: {shared_context_file} ({shared_context_file.stat().st_size / 1024:.0f} KB)")
+    else:
+        shared_context_file = None
+        print("[extract] No shared context file")
 
     claude_bin = find_claude_cli()
     print(f"[extract] Phase 2: Analyzing {len(session_files)} sessions for {target_date}")
@@ -172,7 +205,7 @@ def main():
     for i, session_id in enumerate(session_files):
         print(f"[extract] Session {i + 1}/{len(session_files)}: {session_id}")
 
-        result = analyze_session(session_id, context_file, claude_bin)
+        result = analyze_session(session_id, date_dir, shared_context_file, claude_bin)
 
         if result:
             findings_count = len(result.get("findings", []))

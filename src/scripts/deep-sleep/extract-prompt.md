@@ -175,8 +175,8 @@ Return ONLY valid JSON. No markdown code fences. No explanation text before or a
 - Do NOT invent problems. Empty findings are perfectly fine.
 - Respond in the user's language (check calibration.json if available). The JSON keys stay in English, but `description`, `title`, `content` fields should be in the user's language.
 
-## Context File
+## Context
 
-Read the file at this path: {{CONTEXT_FILE}}
+Read the session transcript at this path: {{CONTEXT_FILE}}
 
 Analyze session: {{SESSION_ID}}

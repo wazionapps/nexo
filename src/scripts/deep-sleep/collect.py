@@ -382,49 +382,97 @@ def main():
     error_logs = collect_error_logs(target_date)
     print(f"  Log files with errors: {len(error_logs)}")
 
-    # 5. Build context file
-    print("[collect] Writing context file...")
+    # 5. Build per-session files + shared context
+    date_dir = DEEP_SLEEP_DIR / target_date
+    date_dir.mkdir(parents=True, exist_ok=True)
+    print(f"[collect] Writing session files to {date_dir}/")
 
-    parts = [
+    # Shared context (followups, learnings, diaries, etc.) — one file
+    shared_parts = [
+        f"Deep Sleep Shared Context -- {target_date}",
+        f"Generated at: {datetime.now().isoformat()}",
+        f"NEXO_HOME: {NEXO_HOME}",
+        f"Sessions: {len(sessions)}",
+    ]
+    shared_parts.append(format_section("ACTIVE FOLLOWUPS", followups))
+    shared_parts.append(format_section("LEARNINGS (recent 200)", learnings))
+    shared_parts.append(format_section("SESSION DIARIES TODAY", diaries))
+    shared_parts.append(format_section("TRUST SCORE HISTORY (7d)", trust_history))
+    shared_parts.append(format_section("DISCOVERED NON-CORE CONTENT", extras))
+    shared_parts.append(format_section("ERROR LOGS", error_logs))
+
+    shared_text = "\n".join(shared_parts)
+    shared_file = date_dir / "shared-context.txt"
+    shared_file.write_text(shared_text, encoding="utf-8")
+    print(f"  Shared context: {len(shared_text) / 1024:.0f} KB")
+
+    # Individual session files
+    session_files_written = []
+    total_size = len(shared_text.encode("utf-8"))
+    for i, session in enumerate(sessions):
+        sid_short = session["session_file"].replace(".jsonl", "")[:20]
+        filename = f"session-{i+1:02d}-{sid_short}.txt"
+        session_path = date_dir / filename
+
+        lines = [
+            f"Session: {session['session_file']}",
+            f"Modified: {session['modified']}",
+            f"Messages: {session['message_count']}, Tool uses: {session['tool_use_count']}",
+            f"{'─' * 60}",
+        ]
+        for msg in session["messages"]:
+            role = "USER" if msg["role"] == "user" else "AGENT"
+            idx = msg.get("index", "?")
+            lines.append(f"\n[{role} @{idx}]")
+            lines.append(msg["text"])
+
+        if session["tool_uses"]:
+            lines.append(f"\n  -- Tool usage log --")
+            for tu in session["tool_uses"]:
+                file_info = f" [{tu['file'][:80]}]" if tu.get("file") else ""
+                lines.append(f"  - {tu['tool']}{file_info}")
+
+        session_text = "\n".join(lines)
+        session_path.write_text(session_text, encoding="utf-8")
+        session_files_written.append(filename)
+        total_size += len(session_text.encode("utf-8"))
+        print(f"  {filename}: {len(session_text) / 1024:.0f} KB")
+
+    # Also keep legacy single context file for backwards compat
+    legacy_parts = [
         f"Deep Sleep Context -- {target_date}",
         f"Generated at: {datetime.now().isoformat()}",
         f"NEXO_HOME: {NEXO_HOME}",
         f"Sessions: {len(sessions)}",
     ]
+    legacy_parts.append(format_transcripts(sessions))
+    legacy_parts.append(shared_text)
+    legacy_file = DEEP_SLEEP_DIR / f"{target_date}-context.txt"
+    legacy_file.write_text("\n".join(legacy_parts), encoding="utf-8")
 
-    parts.append(format_transcripts(sessions))
-    parts.append(format_section("ACTIVE FOLLOWUPS", followups))
-    parts.append(format_section("LEARNINGS (recent 200)", learnings))
-    parts.append(format_section("SESSION DIARIES TODAY", diaries))
-    parts.append(format_section("TRUST SCORE HISTORY (7d)", trust_history))
-    parts.append(format_section("DISCOVERED NON-CORE CONTENT", extras))
-    parts.append(format_section("ERROR LOGS", error_logs))
-
-    context_text = "\n".join(parts)
-
-    output_file = DEEP_SLEEP_DIR / f"{target_date}-context.txt"
-    output_file.write_text(context_text, encoding="utf-8")
-
-    # Also write a small metadata JSON for other scripts to reference
+    # Metadata JSON
     meta = {
         "date": target_date,
         "sessions_found": len(sessions),
         "session_files": [s["session_file"] for s in sessions],
+        "session_txt_files": session_files_written,
         "total_messages": sum(s["message_count"] for s in sessions),
         "total_tool_uses": sum(s["tool_use_count"] for s in sessions),
         "followups_active": len(followups),
         "learnings_count": len(learnings),
         "diaries_today": len(diaries),
         "error_log_files": len(error_logs),
-        "context_file": str(output_file),
-        "context_size_bytes": len(context_text.encode("utf-8")),
+        "date_dir": str(date_dir),
+        "shared_context_file": str(shared_file),
+        "context_file": str(legacy_file),
+        "total_size_bytes": total_size,
     }
     meta_file = DEEP_SLEEP_DIR / f"{target_date}-meta.json"
     with open(meta_file, "w") as f:
         json.dump(meta, f, indent=2, ensure_ascii=False)
 
-    size_kb = len(context_text.encode("utf-8")) / 1024
-    print(f"[collect] Done. Context: {output_file} ({size_kb:.0f} KB)")
+    print(f"\n[collect] Done. {len(session_files_written)} session files + shared context ({total_size / 1024:.0f} KB total)")
+    print(f"[collect] Dir: {date_dir}")
     print(f"[collect] Meta: {meta_file}")
 
 
