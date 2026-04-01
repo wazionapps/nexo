@@ -303,6 +303,25 @@ def check_runtime_preflight():
         finding("ERROR", "preflight", "runtime preflight failing")
 
 
+def run_watchdog_smoke():
+    """Run the watchdog smoke test so its summary is fresh before we check it."""
+    smoke_script = Path(__file__).resolve().parent / "nexo-watchdog-smoke.py"
+    if not smoke_script.exists():
+        finding("WARN", "watchdog", f"smoke script not found at {smoke_script}")
+        return
+    try:
+        result = subprocess.run(
+            [sys.executable, str(smoke_script)],
+            capture_output=True, text=True, timeout=60
+        )
+        if result.returncode != 0:
+            finding("WARN", "watchdog", f"smoke test exited {result.returncode}")
+    except subprocess.TimeoutExpired:
+        finding("ERROR", "watchdog", "smoke test timed out (60s)")
+    except Exception as e:
+        finding("WARN", "watchdog", f"smoke test failed: {e}")
+
+
 def check_watchdog_smoke():
     if not WATCHDOG_SMOKE_SUMMARY.exists():
         return
@@ -444,6 +463,7 @@ Execute without asking."""
 
     log("Stage B: Invoking Claude CLI (opus) for interpretation...")
     env = os.environ.copy()
+    env["NEXO_HEADLESS"] = "1"  # Skip stop hook post-mortem
     env.pop("CLAUDECODE", None)
     env.pop("CLAUDE_CODE", None)
 
@@ -495,6 +515,7 @@ def main():
     check_restore_activity()
     check_bad_responses()
     check_runtime_preflight()
+    run_watchdog_smoke()
     check_watchdog_smoke()
     check_cognitive_health()
 

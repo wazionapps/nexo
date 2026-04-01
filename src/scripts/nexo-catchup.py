@@ -218,6 +218,7 @@ Format:
 
     log(f"Caught up {ran} tasks — running CLI assessment...")
     env = os.environ.copy()
+    env["NEXO_HEADLESS"] = "1"  # Skip stop hook post-mortem
     env.pop("CLAUDECODE", None)
     env.pop("CLAUDE_CODE", None)
 

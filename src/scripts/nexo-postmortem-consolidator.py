@@ -188,6 +188,7 @@ Execute without asking."""
 
     log(f"Stage 2: Invoking Claude CLI (opus) with {len(diaries_with_critique)} critiques...")
     env = os.environ.copy()
+    env["NEXO_HEADLESS"] = "1"  # Skip stop hook post-mortem
     env.pop("CLAUDECODE", None)
     env.pop("CLAUDE_CODE", None)
 

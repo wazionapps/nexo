@@ -113,6 +113,9 @@ def main():
     print(f"[synthesize] Claude CLI: {claude_bin}")
 
     try:
+        env = os.environ.copy()
+        env["NEXO_HEADLESS"] = "1"  # Skip stop hook post-mortem
+
         result = subprocess.run(
             [
                 claude_bin,
@@ -125,7 +128,7 @@ def main():
             capture_output=True,
             text=True,
             timeout=CLAUDE_TIMEOUT,
-            env=os.environ.copy()
+            env=env
         )
 
         if result.returncode != 0:

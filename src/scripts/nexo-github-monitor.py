@@ -163,6 +163,7 @@ Return as JSON:
         return ""
 
     env = os.environ.copy()
+    env["NEXO_HEADLESS"] = "1"  # Skip stop hook post-mortem
     env.pop("CLAUDECODE", None)
     env.pop("CLAUDE_CODE", None)
 
