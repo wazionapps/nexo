@@ -154,6 +154,55 @@ def update_calibration_mood(synthesis: dict) -> dict:
         return {"success": False, "error": str(e)}
 
 
+def calibrate_trust_score(synthesis: dict, target_date: str) -> dict:
+    """Set the daily trust score from Deep Sleep analysis.
+
+    This is the authoritative score for the day — replaces incremental
+    adjustments with a holistic evaluation of the entire day.
+    """
+    trust_cal = synthesis.get("trust_calibration")
+    if not trust_cal or "score" not in trust_cal:
+        return {"success": False, "error": "no trust_calibration in synthesis"}
+
+    score = max(0, min(100, trust_cal["score"]))
+    reasoning = trust_cal.get("reasoning", "Deep Sleep calibration")
+    trend = trust_cal.get("trend", "stable")
+    highlights = trust_cal.get("highlights", [])
+    lowlights = trust_cal.get("lowlights", [])
+
+    context = (
+        f"Deep Sleep {target_date} | trend: {trend} | "
+        f"highlights: {', '.join(highlights[:3])} | "
+        f"lowlights: {', '.join(lowlights[:3])}"
+    )
+
+    try:
+        # Get current score for delta calculation
+        db = sqlite3.connect(str(COGNITIVE_DB))
+        row = db.execute(
+            "SELECT score FROM trust_score ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        old_score = row[0] if row else 50.0
+        delta = score - old_score
+
+        db.execute(
+            "INSERT INTO trust_score (score, event, delta, context) VALUES (?, ?, ?, ?)",
+            (score, f"deep_sleep_calibration: {reasoning[:200]}", delta, context[:500])
+        )
+        db.commit()
+        db.close()
+
+        return {
+            "success": True,
+            "old_score": old_score,
+            "new_score": score,
+            "delta": delta,
+            "trend": trend,
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 def create_abandoned_followups(synthesis: dict) -> list[dict]:
     """Create followups for truly abandoned projects."""
     results = []
@@ -526,6 +575,15 @@ def main():
         print(f"  Mood score: {mood_result.get('mood_score', '?')}")
     else:
         print(f"  Mood skip: {mood_result.get('error', '?')}")
+
+    # Calibrate trust score (authoritative daily score from Deep Sleep)
+    print("[apply] Calibrating trust score...")
+    trust_result = calibrate_trust_score(synthesis, target_date)
+    if trust_result.get("success"):
+        stats["applied"] += 1
+        print(f"  Trust: {trust_result['old_score']:.0f} → {trust_result['new_score']:.0f} (Δ{trust_result['delta']:+.0f}, {trust_result['trend']})")
+    else:
+        print(f"  Trust skip: {trust_result.get('error', '?')}")
 
     # Create followups for abandoned projects
     abandoned_results = create_abandoned_followups(synthesis)

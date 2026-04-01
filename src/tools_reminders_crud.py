@@ -132,6 +132,13 @@ def handle_followup_complete(id: str, result: str = '') -> str:
     if not db_result or "error" in db_result:
         return f"ERROR: Followup {id} not found."
 
+    # Emit trust event: task completed successfully
+    try:
+        from cognitive._trust import adjust_trust
+        adjust_trust("task_completed", f"Followup {id} completed")
+    except Exception:
+        pass
+
     # Auto-link: find decisions whose context_ref matches this followup ID
     msg = f"Followup {id} marked COMPLETED."
     if has_recurrence:

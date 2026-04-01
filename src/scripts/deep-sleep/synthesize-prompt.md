@@ -52,7 +52,28 @@ Consolidate `abandoned_projects` from all sessions:
 - Cross-reference across sessions — was the abandoned work picked up later in another session?
 - Only flag projects that are truly abandoned (no followup AND not resumed)
 
-### 7. Consolidated Actions
+### 7. Trust Calibration (CRITICAL)
+Score the agent's performance for the day on a scale of 0-100. This score becomes the agent's trust score and directly affects its autonomy level the next day. Be fair but honest.
+
+Scoring guide:
+- **90-100**: Flawless day. Zero corrections needed. Proactive. Anticipated user needs. Deployed code without issues.
+- **70-89**: Good day. Minor corrections, quickly resolved. Mostly proactive. User satisfied.
+- **50-69**: Average day. Some corrections, some reactive behavior. Mixed results.
+- **30-49**: Below average. Multiple corrections. Repeated mistakes. User had to push.
+- **0-29**: Bad day. Many corrections, repeated errors, user frustrated. Broke things.
+
+Consider ALL of these:
+- Number and severity of corrections (most important signal)
+- Tasks completed successfully vs failed
+- Did the agent act autonomously or wait to be told?
+- Did the agent catch its own mistakes or did the user?
+- Did the agent repeat known errors (worst offense)?
+- User emotional signals throughout the day
+- Code deployed: did it work first try?
+
+The score should feel fair. A day with 2 minor corrections and 10 tasks completed is still a good day (75+). A day with 1 catastrophic error might be a 40 even if everything else was fine.
+
+### 8. Consolidated Actions
 Merge and deduplicate all findings into a final action list. Each action should have:
 - `action_type`: `learning_add`, `followup_create`, `morning_briefing_item`
 - `action_class`: `auto_apply` (confidence >= 0.8, reversible) or `draft_for_morning` (confidence < 0.8 or high impact)
@@ -146,6 +167,14 @@ Return ONLY valid JSON. No markdown code fences. No explanation text.
       "recommendation": "Create followup, or ignore, or already handled"
     }
   ],
+
+  "trust_calibration": {
+    "score": 72,
+    "reasoning": "Why this score -- based on corrections, completions, autonomy, proactivity, and user satisfaction signals across ALL sessions",
+    "highlights": ["What went well"],
+    "lowlights": ["What went poorly"],
+    "trend": "improving|stable|declining"
+  },
 
   "summary": "2-3 sentence overall assessment of the day"
 }

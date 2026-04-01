@@ -9,11 +9,14 @@ from cognitive._core import POSITIVE_SIGNALS, NEGATIVE_SIGNALS, URGENCY_SIGNALS
 # Trust score events — default deltas (overridable via trust_event_config table)
 _DEFAULT_TRUST_EVENTS = {
     # Positive
-    "explicit_thanks": +3,
+    "explicit_thanks": +5,
     "delegation": +2,        # user delegates new task without micromanaging
     "paradigm_shift": +2,    # user teaches, NEXO learns
     "sibling_detected": +3,  # NEXO avoided context error on its own
     "proactive_action": +2,  # NEXO did something useful without being asked
+    "task_completed": +1,    # followup/task completed successfully
+    "session_productive": +2, # session with real work done, no corrections
+    "clean_deploy": +1,      # code deployed without lint errors or rollbacks
     # Negative
     "correction": -3,        # user corrects NEXO
     "repeated_error": -7,    # Error on something NEXO already had a learning for
@@ -61,41 +64,12 @@ TRUST_EVENTS = _DEFAULT_TRUST_EVENTS
 
 # Auto-detection patterns for trust events from user text
 # Each pattern: (event_name, keywords/phrases that trigger it, min_matches)
-TRUST_AUTO_PATTERNS = {
-    "explicit_thanks": {
-        "patterns": [
-            "gracias", "buen trabajo", "bien hecho", "perfecto", "genial",
-            "excelente", "fenomenal", "great job", "nice work", "thank",
-            "thanks", "awesome", "amazing", "love it", "me encanta",
-        ],
-        "min_matches": 1,
-    },
-    "correction": {
-        "patterns": [
-            "ya te dije", "ya te lo dije", "otra vez", "te he dicho",
-            "no es así", "eso no", "mal", "incorrecto", "equivocado",
-            "no no no", "that's wrong", "te aviso", "te avisé",
-            "2ª vez", "segunda vez", "te lo repito",
-        ],
-        "min_matches": 1,
-    },
-    "repeated_error": {
-        "patterns": [
-            "otra vez lo mismo", "siempre igual", "ya te lo dije antes",
-            "cuántas veces", "no aprendes", "same mistake", "again the same",
-            "ya van", "es la 2", "es la 3", "ya te avisé",
-        ],
-        "min_matches": 1,
-    },
-    "delegation": {
-        "patterns": [
-            "encárgate", "hazlo tú", "dale tú", "te lo dejo",
-            "manéjalo", "resuélvelo", "handle it", "take care of",
-            "you decide", "tú decides", "lo que veas", "como veas",
-        ],
-        "min_matches": 1,
-    },
-}
+TRUST_AUTO_PATTERNS = {}
+# NOTE: Auto-detection via keyword patterns has been REMOVED.
+# Trust events are now detected in two ways:
+# 1. The LLM emits them during sessions (language-agnostic, via MCP instructions)
+# 2. Deep Sleep calibrates the daily score holistically (Phase 7 in synthesis)
+# The old keyword patterns only worked in Spanish/English and missed most signals.
 
 
 def auto_detect_trust_events(text: str) -> list[dict]:

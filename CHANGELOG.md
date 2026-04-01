@@ -1,5 +1,24 @@
 # Changelog
 
+## [2.2.0] - 2026-04-01
+
+### Trust Score v2 — Fair Scoring System
+- **Deep Sleep Trust Calibration (Phase 7)**: overnight analysis scores the entire day 0-100, replacing volatile incremental adjustments with a holistic evaluation
+- **Language-agnostic detection**: removed hardcoded Spanish/English keyword patterns — trust events are now emitted by the LLM via semantic instructions (works in ALL languages)
+- **New positive events**: `task_completed` (+1 per followup completed), `session_productive` (+2), `clean_deploy` (+1) — fixes the downward spiral where the score could only decrease
+- **Auto patterns for `proactive_action` and `paradigm_shift`**: previously defined but never detected
+- **`explicit_thanks` default boosted to +5** (was +3)
+- **Scoring guide in synthesis prompt**: 90-100 flawless, 70-89 good, 50-69 average, 30-49 below average, 0-29 bad day
+
+### Fixes
+- `nexo_followup_complete` emits `task_completed` trust event automatically
+- Trust MCP instructions tell the LLM to detect intent, not keywords — a Chinese or Arabic user now gets the same trust tracking as a Spanish user
+
+## [2.1.1] - 2026-04-01
+
+### Fixes
+- Harden all hooks against empty stdin and set -e failures
+
 ## [2.1.0] - 2026-04-01
 
 ### Deep Sleep v2 — Overnight Learning Pipeline
