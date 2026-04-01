@@ -111,6 +111,9 @@ def analyze_session(session_id: str, date_dir: Path, shared_context_file: Path |
     prompt += shared_ctx_instruction
 
     try:
+        env = os.environ.copy()
+        env["NEXO_HEADLESS"] = "1"  # Skip stop hook post-mortem
+
         result = subprocess.run(
             [
                 claude_bin,
@@ -123,14 +126,19 @@ def analyze_session(session_id: str, date_dir: Path, shared_context_file: Path |
             capture_output=True,
             text=True,
             timeout=CLAUDE_TIMEOUT,
-            env=os.environ.copy()
+            env=env
         )
 
         if result.returncode != 0:
             print(f"    Claude CLI error (exit {result.returncode}): {result.stderr[:300]}", file=sys.stderr)
             return None
 
-        parsed = extract_json_from_response(result.stdout)
+        # Filter out stop hook contamination (e.g. "Post-mortem completo.")
+        output = "\n".join(
+            line for line in result.stdout.splitlines()
+            if not line.strip().startswith("Post-mortem") and line.strip()
+        )
+        parsed = extract_json_from_response(output)
         if not parsed:
             # Save raw output for debugging
             debug_file = DEEP_SLEEP_DIR / f"debug-extract-{session_id[:20]}.txt"

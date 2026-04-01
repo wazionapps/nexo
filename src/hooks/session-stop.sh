@@ -58,7 +58,8 @@ SESSION_START_TS="$NEXO_HOME/operations/.session-start-ts"
 # 0.5. Detect non-interactive (claude -p) sessions — skip post-mortem entirely
 #      SessionStart hook writes .session-start-ts. If missing or stale (>30 min),
 #      this is likely a -p script session — approve immediately.
-if [ ! -f "$SESSION_START_TS" ] || [ "$(($(date +%s) - $(cat "$SESSION_START_TS" 2>/dev/null || echo 0)))" -gt 1800 ]; then
+#      Also skip if NEXO_HEADLESS=1 is set (explicit headless mode for scripts).
+if [ "${NEXO_HEADLESS:-}" = "1" ] || [ ! -f "$SESSION_START_TS" ] || [ "$(($(date +%s) - $(cat "$SESSION_START_TS" 2>/dev/null || echo 0)))" -gt 1800 ]; then
     cat << 'HOOKEOF'
 {
   "decision": "approve"
