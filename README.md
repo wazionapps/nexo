@@ -16,7 +16,7 @@
   </a>
 </p>
 
-[Watch the 1-minute overview on YouTube](https://www.youtube.com/watch?v=IBs7zh7ZMG0) · [Watch the full deep-dive](https://www.youtube.com/watch?v=bKAfowyyy5M)
+[Watch the overview on YouTube](https://www.youtube.com/watch?v=IBs7zh7ZMG0) · [Watch the full deep-dive](https://www.youtube.com/watch?v=bKAfowyyy5M)
 
 Every time you close a session, everything is lost. Your agent doesn't remember yesterday's decisions, repeats the same mistakes, and starts from zero. NEXO Brain fixes this with a cognitive architecture modeled after how human memory actually works.
 
