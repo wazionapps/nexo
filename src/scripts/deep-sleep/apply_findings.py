@@ -108,6 +108,70 @@ def create_followup(description: str, date: str = "") -> dict:
         return {"success": False, "error": str(e)}
 
 
+def update_calibration_mood(synthesis: dict) -> dict:
+    """Update mood in calibration.json based on emotional analysis."""
+    calibration_file = NEXO_HOME / "brain" / "calibration.json"
+    if not calibration_file.exists():
+        return {"success": False, "error": "calibration.json not found"}
+
+    emotional_day = synthesis.get("emotional_day", {})
+    if not emotional_day:
+        return {"success": False, "error": "no emotional_day data"}
+
+    try:
+        cal = json.loads(calibration_file.read_text())
+
+        # Add/update mood history
+        if "mood_history" not in cal:
+            cal["mood_history"] = []
+
+        cal["mood_history"].append({
+            "date": synthesis.get("date", ""),
+            "score": emotional_day.get("mood_score", 0.5),
+            "arc": emotional_day.get("mood_arc", ""),
+            "triggers": emotional_day.get("recurring_triggers", {}),
+        })
+
+        # Keep last 30 days
+        cal["mood_history"] = cal["mood_history"][-30:]
+
+        # Apply calibration recommendation if any
+        rec = emotional_day.get("calibration_recommendation")
+        if rec and rec != "null":
+            if "calibration_notes" not in cal:
+                cal["calibration_notes"] = []
+            cal["calibration_notes"].append({
+                "date": synthesis.get("date", ""),
+                "recommendation": rec,
+                "applied": False,
+            })
+            # Keep last 10
+            cal["calibration_notes"] = cal["calibration_notes"][-10:]
+
+        calibration_file.write_text(json.dumps(cal, indent=2, ensure_ascii=False))
+        return {"success": True, "mood_score": emotional_day.get("mood_score")}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+def create_abandoned_followups(synthesis: dict) -> list[dict]:
+    """Create followups for truly abandoned projects."""
+    results = []
+    abandoned = synthesis.get("abandoned_projects", [])
+    for proj in abandoned:
+        if proj.get("has_followup"):
+            continue
+        rec = proj.get("recommendation", "")
+        if "ignore" in rec.lower():
+            continue
+        result = create_followup(
+            description=f"[Abandoned] {proj.get('description', '')}",
+            date=""  # No date — it's a discovered gap
+        )
+        results.append(result)
+    return results
+
+
 def write_morning_briefing(target_date: str, synthesis: dict) -> Path:
     """Write the morning briefing file from synthesis data."""
     briefing_dir = OPERATIONS_DIR
@@ -142,6 +206,51 @@ def write_morning_briefing(target_date: str, synthesis: dict) -> Path:
             lines.append(desc)
             if item.get("context"):
                 lines.append(f"\n> {item['context']}")
+            lines.append("")
+
+    # Emotional day
+    emotional = synthesis.get("emotional_day", {})
+    if emotional:
+        mood_score = emotional.get("mood_score", 0.5)
+        mood_bar = "🟢" if mood_score >= 0.7 else "🟡" if mood_score >= 0.4 else "🔴"
+        lines.append(f"## Mood {mood_bar} {mood_score:.0%}")
+        lines.append("")
+        if emotional.get("mood_arc"):
+            lines.append(emotional["mood_arc"])
+        triggers = emotional.get("recurring_triggers", {})
+        if triggers.get("frustration"):
+            lines.append(f"**Frustration triggers:** {', '.join(triggers['frustration'])}")
+        if triggers.get("flow"):
+            lines.append(f"**Flow triggers:** {', '.join(triggers['flow'])}")
+        if emotional.get("calibration_recommendation"):
+            lines.append(f"\n💡 **Recommendation:** {emotional['calibration_recommendation']}")
+        lines.append("")
+
+    # Productivity
+    productivity = synthesis.get("productivity_day", {})
+    if productivity:
+        lines.append("## Productivity")
+        lines.append("")
+        lines.append(f"- Corrections needed: {productivity.get('total_corrections', '?')}")
+        lines.append(f"- Proactivity: {productivity.get('overall_proactivity', '?')}")
+        if productivity.get("tool_insights"):
+            lines.append(f"- Tools: {productivity['tool_insights']}")
+        inefficiencies = productivity.get("systemic_inefficiencies", [])
+        if inefficiencies:
+            lines.append(f"- Issues: {', '.join(inefficiencies)}")
+        lines.append("")
+
+    # Abandoned projects
+    abandoned = synthesis.get("abandoned_projects", [])
+    if abandoned:
+        truly_abandoned = [a for a in abandoned if not a.get("has_followup")]
+        if truly_abandoned:
+            lines.append("## Abandoned Projects")
+            lines.append("")
+            for a in truly_abandoned:
+                lines.append(f"- {a.get('description', '?')}")
+                if a.get("recommendation"):
+                    lines.append(f"  → {a['recommendation']}")
             lines.append("")
 
     # Cross-session patterns
@@ -321,6 +430,22 @@ def main():
         elif result["status"] == "error":
             stats["errors"] += 1
             print(f"  Error: {result.get('details', {}).get('error', 'unknown')}", file=sys.stderr)
+
+    # Update mood in calibration.json
+    print("[apply] Updating mood/calibration...")
+    mood_result = update_calibration_mood(synthesis)
+    if mood_result.get("success"):
+        stats["applied"] += 1
+        print(f"  Mood score: {mood_result.get('mood_score', '?')}")
+    else:
+        print(f"  Mood skip: {mood_result.get('error', '?')}")
+
+    # Create followups for abandoned projects
+    abandoned_results = create_abandoned_followups(synthesis)
+    for r in abandoned_results:
+        if r.get("success"):
+            stats["applied"] += 1
+            print(f"  Abandoned project followup: {r.get('id')}")
 
     # Write morning briefing
     print("[apply] Writing morning briefing...")

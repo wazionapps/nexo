@@ -41,6 +41,31 @@ Check whether the agent followed standard protocols:
 - `followup_complete` called when user confirmed a task was done?
 - `feedback` captured after corrections?
 
+### 6. Emotional Signals
+Detect the user's emotional state throughout the session. Look for:
+- Frustration: short replies, cursing, "no", "otra vez", repeated corrections, tone shifts
+- Flow state: long productive stretches, "perfecto", "sí", rapid-fire instructions
+- Satisfaction: praise, "bien", "genial", accepting work without pushback
+- Disengagement: shorter messages over time, "ok", "vale", stopping mid-task
+- Stress: urgency words, deadlines, multiple tasks at once
+For each signal, note the approximate point in the session (early/mid/late) and what triggered it.
+
+### 7. Abandoned Projects
+Detect work that was started but not finished in this session:
+- Tasks the user mentioned wanting to do but never got to
+- Work that was interrupted by something else and never resumed
+- Features partially implemented then dropped
+- Investigations started but conclusions never reached
+Only flag if the work was NOT captured in a followup or reminder.
+
+### 8. Productivity Patterns
+Analyze how the session went in terms of efficiency:
+- How many times did the agent need correction before getting it right?
+- Did the agent anticipate needs or always wait for instructions?
+- Were there unnecessary back-and-forths that a better approach would have avoided?
+- Did the agent propose solutions or just ask questions?
+- Tool usage: which tools were used most? Any tools used unnecessarily or not used when they should have been?
+
 ## Output Format
 
 Return ONLY valid JSON. No markdown code fences. No explanation text before or after.
@@ -153,6 +178,32 @@ Return ONLY valid JSON. No markdown code fences. No explanation text before or a
       }
     }
   ],
+  "emotional_timeline": [
+    {
+      "phase": "early|mid|late",
+      "emotion": "frustrated|flow|satisfied|disengaged|stressed|neutral",
+      "trigger": "What caused this emotional state (max 100 chars)",
+      "intensity": 0.8
+    }
+  ],
+
+  "abandoned_projects": [
+    {
+      "description": "What was started but not finished",
+      "reason": "interrupted|dropped|forgotten|deferred",
+      "has_followup": false
+    }
+  ],
+
+  "productivity_score": {
+    "corrections_needed": 0,
+    "proactivity": "reactive|mixed|proactive",
+    "unnecessary_roundtrips": 0,
+    "tool_efficiency": "efficient|mixed|wasteful",
+    "notable_tools": ["tool1", "tool2"],
+    "summary": "One sentence assessment of session productivity"
+  },
+
   "protocol_summary": {
     "guard_check": {"required": 0, "executed": 0},
     "heartbeat": {"total": 0, "with_context": 0},

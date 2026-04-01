@@ -31,7 +31,28 @@ For each likely task tomorrow (based on unfinished work and due followups), prep
 - Open questions or blockers
 - Relevant learnings
 
-### 4. Consolidated Actions
+### 4. Emotional Timeline
+Build a timeline of the user's emotional state across all sessions of the day:
+- Merge `emotional_timeline` from each session extraction
+- Identify overall mood arc (started frustrated, ended satisfied, etc.)
+- Detect recurring triggers (what consistently causes frustration or flow)
+- Calculate a day-level mood score (0.0 = terrible day, 1.0 = great day)
+- Recommend calibration adjustments if patterns emerge (e.g., user is consistently frustrated when agent asks too many questions → increase autonomy)
+
+### 5. Productivity Analysis
+Aggregate `productivity_score` from all sessions:
+- Total corrections across all sessions
+- Overall proactivity assessment
+- Most and least efficient tool usage patterns
+- Identify systemic inefficiencies (e.g., agent always searches wrong location first)
+
+### 6. Abandoned Projects
+Consolidate `abandoned_projects` from all sessions:
+- Cross-reference with active followups — is there already a followup for this?
+- Cross-reference across sessions — was the abandoned work picked up later in another session?
+- Only flag projects that are truly abandoned (no followup AND not resumed)
+
+### 7. Consolidated Actions
 Merge and deduplicate all findings into a final action list. Each action should have:
 - `action_type`: `learning_add`, `followup_create`, `morning_briefing_item`
 - `action_class`: `auto_apply` (confidence >= 0.8, reversible) or `draft_for_morning` (confidence < 0.8 or high impact)
@@ -97,6 +118,32 @@ Return ONLY valid JSON. No markdown code fences. No explanation text.
         "description": "...",
         "date": "..."
       }
+    }
+  ],
+
+  "emotional_day": {
+    "mood_arc": "Description of how the user's mood evolved through the day",
+    "mood_score": 0.7,
+    "recurring_triggers": {
+      "frustration": ["trigger1", "trigger2"],
+      "flow": ["trigger1"]
+    },
+    "calibration_recommendation": "Specific recommendation for calibration.json adjustment, or null if no change needed"
+  },
+
+  "productivity_day": {
+    "total_corrections": 0,
+    "overall_proactivity": "reactive|mixed|proactive",
+    "tool_insights": "Key insight about tool usage patterns",
+    "systemic_inefficiencies": ["inefficiency1"]
+  },
+
+  "abandoned_projects": [
+    {
+      "description": "What was abandoned",
+      "sessions": ["session1.jsonl"],
+      "has_followup": false,
+      "recommendation": "Create followup, or ignore, or already handled"
     }
   ],
 
