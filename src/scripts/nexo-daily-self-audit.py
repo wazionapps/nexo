@@ -532,8 +532,10 @@ def main():
         "counts": {"error": errors, "warn": warns, "info": infos}
     }, indent=2))
 
-    # Stage B: CLI interpretation
-    interpret_findings(findings)
+    # Stage B: CLI interpretation (graceful fallback if CLI unavailable)
+    cli_ok = interpret_findings(findings)
+    if not cli_ok:
+        log("Stage B: CLI unavailable or failed. Stage A results saved to self-audit-summary.json.")
 
     # Register for catch-up
     try:

@@ -550,18 +550,23 @@ def main():
             log(f"Brain state: {len(state['learnings'])} learnings, "
                 f"{state['memory_md_lines']} MEMORY lines, "
                 f"{state['claude_mem_old']} old observations")
-            run_log["stage_b"] = dream(state)
+            dream_result = dream(state)
+            run_log["stage_b"] = dream_result
 
-            # Stage B2: Execute actions from CLI output
-            actions_file = COORD_DIR / "sleep-actions.json"
-            if actions_file.exists():
-                try:
-                    actions = json.loads(actions_file.read_text())
-                    execute_dream_actions(actions, state)
-                except Exception as e:
-                    log(f"Stage B2: Error executing actions: {e}")
+            if "error" in dream_result:
+                log(f"Stage B: Dreaming failed ({dream_result['error']}). "
+                    "Stage A cleanup completed successfully. Marking done to avoid retry loop.")
+            else:
+                # Stage B2: Execute actions from CLI output
+                actions_file = COORD_DIR / "sleep-actions.json"
+                if actions_file.exists():
+                    try:
+                        actions = json.loads(actions_file.read_text())
+                        execute_dream_actions(actions, state)
+                    except Exception as e:
+                        log(f"Stage B2: Error executing actions: {e}")
         else:
-            log("Brain is clean — no dreaming needed.")
+            log("Brain is clean -- no dreaming needed.")
             run_log["stage_b"] = {"skipped": True}
 
         # Done

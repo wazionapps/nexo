@@ -31,6 +31,7 @@ MIN_WEIGHT = 0.05
 MAX_WEIGHT = 1.0
 DEDUP_THRESHOLD = 0.85        # cosine similarity for duplicate detection
 ARCHIVE_AFTER_DAYS = 90       # archive if weight < 0.1 and no hits in this many days
+REVIEW_EXTEND_DAYS = 30       # extend review_due by this many days when confirming
 
 
 def get_db():
@@ -195,6 +196,96 @@ def archive_stale(conn):
     return len(stale)
 
 
+def process_overdue_reviews(conn):
+    """Process learnings and decisions whose review_due_at has passed.
+
+    Learnings:
+      - guard_hits > 5 since last review -> confirm (extend review_due by 30 days)
+      - guard_hits = 0 and weight < 0.3 -> archive
+      - otherwise -> extend review_due by 30 days (still useful, just not urgent)
+
+    Decisions:
+      - status = 'pending_review' and review_due_at < now -> archive if >30 days old
+    """
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now = time.time()
+    now_iso = datetime.now().isoformat(timespec="seconds")
+
+    # --- Overdue learnings ---
+    try:
+        overdue_learnings = conn.execute(
+            "SELECT id, title, weight, guard_hits, review_due_at, last_reviewed_at "
+            "FROM learnings "
+            "WHERE review_due_at IS NOT NULL AND review_due_at <= ? AND status = 'active'",
+            (now,)
+        ).fetchall()
+    except Exception as e:
+        print(f"[{ts}] Overdue reviews: error querying learnings: {e}")
+        return 0
+
+    confirmed = 0
+    archived = 0
+    for l in overdue_learnings:
+        lid = l["id"]
+        hits = l["guard_hits"] or 0
+        weight = l["weight"] or 0.5
+        last_reviewed = l["last_reviewed_at"] or 0
+
+        if hits > 5:
+            # Active and useful -- confirm: extend review date
+            new_due = now + (REVIEW_EXTEND_DAYS * 86400)
+            conn.execute(
+                "UPDATE learnings SET review_due_at = ?, last_reviewed_at = ? WHERE id = ?",
+                (new_due, now, lid)
+            )
+            confirmed += 1
+        elif hits == 0 and weight < 0.3:
+            # Unused and low weight -- archive
+            conn.execute(
+                "UPDATE learnings SET status = 'archived' WHERE id = ?",
+                (lid,)
+            )
+            archived += 1
+            print(f"[{ts}]   Archived overdue learning #{lid} '{l['title'][:50]}' (hits=0, weight={weight:.2f})")
+        else:
+            # Middle ground -- extend review date, keep active
+            new_due = now + (REVIEW_EXTEND_DAYS * 86400)
+            conn.execute(
+                "UPDATE learnings SET review_due_at = ?, last_reviewed_at = ? WHERE id = ?",
+                (new_due, now, lid)
+            )
+            confirmed += 1
+
+    # --- Overdue decisions ---
+    decision_archived = 0
+    try:
+        cutoff_30d = (datetime.now() - timedelta(days=30)).isoformat(timespec="seconds")
+        overdue_decisions = conn.execute(
+            "SELECT id, decision, created_at FROM decisions "
+            "WHERE status = 'pending_review' AND review_due_at IS NOT NULL AND review_due_at <= ?",
+            (now_iso,)
+        ).fetchall()
+
+        for d in overdue_decisions:
+            created = d["created_at"] or ""
+            if created < cutoff_30d:
+                conn.execute(
+                    "UPDATE decisions SET status = 'archived' WHERE id = ?",
+                    (d["id"],)
+                )
+                decision_archived += 1
+                print(f"[{ts}]   Archived overdue decision #{d['id']} '{d['decision'][:50]}' (>30d without outcome)")
+    except Exception as e:
+        print(f"[{ts}] Overdue reviews: error processing decisions: {e}")
+
+    conn.commit()
+    total_learnings = len(overdue_learnings) if 'overdue_learnings' in dir() else 0
+    total_decisions = len(overdue_decisions) if 'overdue_decisions' in dir() else 0
+    print(f"[{ts}] Overdue reviews: {total_learnings} learnings ({confirmed} confirmed, {archived} archived), "
+          f"{total_decisions} decisions ({decision_archived} archived)")
+    return confirmed + archived + decision_archived
+
+
 def print_summary(conn):
     """Print summary stats."""
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -233,7 +324,10 @@ def main():
     # 4. Archive stale learnings
     archive_stale(conn)
 
-    # 5. Summary
+    # 5. Process overdue reviews (review_due_at < now)
+    process_overdue_reviews(conn)
+
+    # 6. Summary
     print_summary(conn)
 
     conn.close()

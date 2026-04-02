@@ -387,10 +387,11 @@ def main():
     if not data["diaries"]:
         log("No session diaries today. Nothing to consolidate.")
     else:
-        # Stage 2: CLI intelligence
+        # Stage 2: CLI intelligence (graceful fallback: Stage 3 still runs)
         success = consolidate_with_cli(data)
         if not success:
-            log("Stage 2 failed — falling back to skip (no v1 fallback)")
+            log("Stage 2 failed (CLI unavailable or error). "
+                "Skipping intelligent consolidation. Stage 3 (sensory + force) will still run.")
 
     # Stage 3: Sensory Register (mechanical, kept from v1)
     try:
