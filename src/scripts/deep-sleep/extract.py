@@ -116,12 +116,19 @@ def analyze_session(session_id: str, date_dir: Path, shared_context_file: Path |
         env.pop("CLAUDECODE", None)
         env.pop("CLAUDE_CODE", None)
 
+        JSON_SYSTEM_PROMPT = (
+            "You are a JSON-only analyst. Your ENTIRE response must be a single valid JSON object. "
+            "No text before it. No text after it. No markdown fences. No explanations. "
+            "If you want to summarize, put it inside the JSON fields. Start with { and end with }."
+        )
+
         result = subprocess.run(
             [
                 claude_bin,
                 "-p", prompt,
                 "--model", "opus",
                 "--output-format", "text",
+                "--append-system-prompt", JSON_SYSTEM_PROMPT,
                 "--allowedTools",
                 "Read,Grep,Bash"
             ],
@@ -141,6 +148,28 @@ def analyze_session(session_id: str, date_dir: Path, shared_context_file: Path |
             if not line.strip().startswith("Post-mortem") and line.strip()
         )
         parsed = extract_json_from_response(output)
+
+        # Fallback: if Claude returned text instead of JSON, ask a short conversion call
+        if not parsed and len(output.strip()) > 50:
+            print(f"    Got text instead of JSON ({len(output)} chars). Converting...")
+            convert_prompt = (
+                f"Convert the following analysis into the exact JSON schema required. "
+                f"Return ONLY the JSON object, nothing else.\n\n"
+                f"Analysis:\n{output[:8000]}\n\n"
+                f"Required schema: session_id, findings[], emotional_timeline[], "
+                f"abandoned_projects[], skill_candidates[], productivity_score, protocol_summary"
+            )
+            convert_result = subprocess.run(
+                [claude_bin, "-p", convert_prompt, "--model", "sonnet",
+                 "--output-format", "text",
+                 "--append-system-prompt", JSON_SYSTEM_PROMPT],
+                capture_output=True, text=True, timeout=120, env=env
+            )
+            if convert_result.returncode == 0:
+                parsed = extract_json_from_response(convert_result.stdout)
+                if parsed:
+                    print(f"    Conversion succeeded")
+
         if not parsed:
             # Save raw output for debugging
             debug_file = DEEP_SLEEP_DIR / f"debug-extract-{session_id[:20]}.txt"
