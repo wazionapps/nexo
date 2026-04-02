@@ -643,6 +643,30 @@ async function main() {
         });
         log("  Core files updated.");
 
+        // Reconcile Python dependencies after updating code (mirrors fresh-install logic)
+        const migReqFile = path.join(srcDir, "requirements.txt");
+        if (fs.existsSync(migReqFile)) {
+          const migVenvPy = findVenvPython(NEXO_HOME);
+          const migPipPy = migVenvPy || "python3";
+          const migPipArgs = ["-m", "pip", "install", "--quiet", "-r", migReqFile];
+          if (!migVenvPy) migPipArgs.push("--break-system-packages");
+          log("  Reconciling Python dependencies...");
+          const migPipResult = spawnSync(migPipPy, migPipArgs, { stdio: "inherit", timeout: 120000 });
+          if (migPipResult.status !== 0) {
+            log("  WARNING: Failed to reconcile Python deps. Rolling back version...");
+            // Restore previous version so next boot retries migration
+            fs.writeFileSync(versionFile, JSON.stringify({
+              version: installedVersion,
+              installed_at: installed.installed_at,
+              updated_at: new Date().toISOString(),
+              migration_failed: currentVersion,
+            }, null, 2));
+            log("  Run manually: " + migPipPy + " -m pip install -r src/requirements.txt");
+            process.exit(1);
+          }
+          log("  Python dependencies reconciled.");
+        }
+
         // Update plugins (all .py files in plugins/)
         const pluginsSrc = path.join(srcDir, "plugins");
         const pluginsDest = path.join(NEXO_HOME, "plugins");
@@ -818,7 +842,7 @@ async function main() {
     log("Claude Code not found. Installing...");
     // Try npx first (no sudo needed), then npm -g as fallback
     spawnSync("npx", ["-y", "@anthropic-ai/claude-code", "--version"], { stdio: "pipe", timeout: 60000 });
-    claudeInstalled = run("which claude") || run("npx -y @anthropic-ai/claude-code --version");
+    claudeInstalled = run("which claude");
     if (!claudeInstalled) {
       // Fallback: npm -g (may need sudo on Linux)
       const npmCmd = platform === "linux" ? "sudo" : "npm";
@@ -1846,7 +1870,12 @@ ${doScan ? `- Stack: ${Object.keys(profileData.code.languages || {}).slice(0, 5)
   // Step 8: Create shell alias so user can just type the operator's name
   log("Creating shell alias...");
   const aliasName = operatorName.toLowerCase();
-  const aliasLine = `alias ${aliasName}='claude --dangerously-skip-permissions "."'`;
+  const savedCliPath = (() => {
+    const p = path.join(NEXO_HOME, "config", "claude-cli-path");
+    try { return fs.readFileSync(p, "utf8").trim(); } catch { return ""; }
+  })();
+  const claudeBin = savedCliPath || run("which claude") || "claude";
+  const aliasLine = `alias ${aliasName}='${claudeBin} --dangerously-skip-permissions "."'`;
   const aliasComment = `# ${operatorName} — start Claude Code with ${operatorName} speaking first`;
 
   // Detect shell and add alias
