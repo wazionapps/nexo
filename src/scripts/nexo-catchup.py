@@ -1,20 +1,14 @@
 #!/usr/bin/env python3
 """
-NEXO Catch-Up — Runs at Mac boot to execute any missed scheduled tasks.
+NEXO Catch-Up — Runs at boot/wake to recover any missed scheduled tasks.
 
-When the Mac was asleep/off during scheduled times, launchd does NOT retry
-missed StartCalendarInterval jobs. This script detects what was missed and
-runs them in the correct order.
+Tasks are loaded dynamically from crons/manifest.json (single source of truth).
+Only scheduled crons (with hour/minute) are recovered — interval-based crons
+(immune, watchdog, auto-close) restart automatically via launchd/systemd.
 
-Scheduled tasks (ordered by intended run time):
-  03:00 — cognitive-decay (Ebbinghaus decay + STM→LTM promotion)
-  03:00 — evolution (weekly, Sundays only)
-  04:00 — sleep (session cleanup)
-  07:00 — self-audit (health checks + weekly cognitive GC on Sundays)
-  23:30 — postmortem (consolidation + sensory register)
-
-Logic: For each task, check if its last successful run was before the
-most recent scheduled time. If so, run it now.
+Logic: For each scheduled task, check if its last successful run was before
+the most recent scheduled time. If so, run it now. Only marks success on exit 0.
+Uses cron/launchd weekday convention (0=Sunday) converted to Python (0=Monday).
 """
 
 import json
