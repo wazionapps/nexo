@@ -88,14 +88,7 @@
       "description": "Close stale sessions that lost their parent process",
       "core": true
     },
-    {
-      "id": "github-monitor",
-      "script": "scripts/nexo-github-monitor.py",
-      "schedule": {"hour": 8, "minute": 0},
-      "description": "Monitor GitHub repo — issues, PRs, stars, auto-respond",
-      "core": true
-    },
-    {
+{
       "id": "catchup",
       "script": "scripts/nexo-catchup.py",
       "schedule": {"hour": 8, "minute": 30},

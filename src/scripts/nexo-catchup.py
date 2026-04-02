@@ -157,8 +157,7 @@ def main():
         ("evolution", 3, 0, NEXO_PYTHON, "nexo-evolution-run.py", 6),  # Sunday = 6
         ("sleep", 4, 0, NEXO_PYTHON, "nexo-sleep.py", None),
         ("self-audit", 7, 0, NEXO_PYTHON, "nexo-daily-self-audit.py", None),
-        ("github-monitor", 8, 0, NEXO_PYTHON, "nexo-github-monitor.py", None),
-        ("postmortem", 23, 30, NEXO_PYTHON, "nexo-postmortem-consolidator.py", None),
+("postmortem", 23, 30, NEXO_PYTHON, "nexo-postmortem-consolidator.py", None),
     ]
 
     ran = 0
