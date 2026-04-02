@@ -32,33 +32,87 @@ TS_EPOCH=$(date +%s)
 log() { echo "[$TS] $1" >> "$LOG"; }
 
 # ============================================================================
-# MONITOR REGISTRY — Add new monitors here
+# MONITOR REGISTRY — generated dynamically from manifest.json
 # ============================================================================
-# Format: NAME|PLIST_ID|LOG_STDOUT|LOG_STDERR|MAX_STALE_SECS|PROCESS_GREP|SCHEDULE_DESC
+# Format: NAME|PLIST_ID|LOG_STDOUT|LOG_STDERR|MAX_STALE_SECS|PROCESS_GREP|SCHEDULE_DESC|TYPE
 #
 # MAX_STALE_SECS: how old stdout log can be before WARN.
 #   0 = skip staleness check (for one-shot or infrequent tasks)
 #   WARN at MAX_STALE_SECS, FAIL at 3x MAX_STALE_SECS
 # PROCESS_GREP: pattern to grep in ps (empty = skip process check)
 # ============================================================================
-# TYPE field: "core" = part of NEXO (goes to public repo), "personal" = user-specific
-# Format: NAME|PLIST_ID|LOG_STDOUT|LOG_STDERR|MAX_STALE_SECS|PROCESS_GREP|SCHEDULE_DESC|TYPE
-# Add your own monitors below. Core NEXO services are listed as examples.
-MONITORS=(
-  "Catchup|com.nexo.catchup|$NEXO_HOME/logs/catchup-stdout.log|$NEXO_HOME/logs/catchup-stderr.log|0||RunAtLoad once|core"
-  "Cognitive Decay|com.nexo.cognitive-decay|$NEXO_HOME/logs/cognitive-decay-stdout.log|$NEXO_HOME/logs/cognitive-decay-stderr.log|90000||Daily 3:00 AM|core"
-  "Evolution|com.nexo.evolution|$NEXO_HOME/logs/evolution-stdout.log|$NEXO_HOME/logs/evolution-stderr.log|0||Weekly Sun 3:00 AM|core"
-"Immune|com.nexo.immune|$NEXO_HOME/logs/immune-stdout.log|$NEXO_HOME/logs/immune-stderr.log|3600||Every 30 min|core"
-  "Postmortem|com.nexo.postmortem|$NEXO_HOME/logs/postmortem-stdout.log|$NEXO_HOME/logs/postmortem-stderr.log|90000||Daily 23:30|core"
-  "Prevent Sleep|com.nexo.prevent-sleep|||0|caffeinate|KeepAlive|core"
-  "Self Audit|com.nexo.self-audit|$NEXO_HOME/logs/self-audit-stdout.log|$NEXO_HOME/logs/self-audit-stderr.log|90000||Daily 7:00 AM|core"
-  "Sleep|com.nexo.sleep|$NEXO_HOME/logs/sleep-stdout.log|$NEXO_HOME/logs/sleep-stderr.log|90000||Daily 4:00 AM|core"
-  "Synthesis|com.nexo.synthesis|$NEXO_HOME/logs/synthesis-stdout.log|$NEXO_HOME/logs/synthesis-stderr.log|10800||Every 2 hours|core"
-  "Deep Sleep|com.nexo.deep-sleep|$NEXO_HOME/logs/deep-sleep-stdout.log|$NEXO_HOME/logs/deep-sleep-stderr.log|90000||Daily 4:30 AM|core"
-  "Followup Hygiene|com.nexo.followup-hygiene|$NEXO_HOME/logs/followup-hygiene-stdout.log|$NEXO_HOME/logs/followup-hygiene-stderr.log|604800||Weekly Sun 5:00 AM|core"
-  # Add your own personal monitors below (type "personal"):
+# Core monitors are built from crons/manifest.json (single source of truth).
+# The NEXO_CODE env var must point to the repo src/ directory.
+# Add personal (non-manifest) monitors to PERSONAL_MONITORS below.
+NEXO_CODE="${NEXO_CODE:-$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)}"
+MANIFEST_FILE="$NEXO_CODE/crons/manifest.json"
+
+_build_monitors_from_manifest() {
+  if [ ! -f "$MANIFEST_FILE" ]; then
+    log "WARNING: manifest.json not found at $MANIFEST_FILE — no core monitors loaded"
+    return
+  fi
+  python3 -c "
+import json, sys
+
+nexo_home = '$NEXO_HOME'
+
+with open('$MANIFEST_FILE') as f:
+    data = json.load(f)
+
+for c in data.get('crons', []):
+    cid = c['id']
+    # Derive human-readable name from id
+    name = cid.replace('-', ' ').title()
+    plist_id = 'com.nexo.' + cid
+    stdout_log = nexo_home + '/logs/' + cid + '-stdout.log'
+    stderr_log = nexo_home + '/logs/' + cid + '-stderr.log'
+
+    # Derive max_stale_secs and schedule_desc from schedule config
+    if c.get('run_at_load'):
+        max_stale = 0
+        schedule_desc = 'RunAtLoad once'
+    elif 'interval_seconds' in c:
+        iv = c['interval_seconds']
+        # Allow 2x the interval before WARN
+        max_stale = iv * 2
+        if iv >= 3600:
+            schedule_desc = f'Every {iv // 3600}h'
+        else:
+            schedule_desc = f'Every {iv // 60} min'
+    elif 'schedule' in c:
+        s = c['schedule']
+        h = s.get('hour', 0)
+        m = s.get('minute', 0)
+        if 'weekday' in s:
+            days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+            schedule_desc = f'Weekly {days[s[\"weekday\"]]} {h}:{m:02d}'
+            max_stale = 0  # weekly tasks: skip staleness
+        else:
+            schedule_desc = f'Daily {h}:{m:02d}'
+            max_stale = 90000  # ~25h
+    else:
+        max_stale = 0
+        schedule_desc = 'unknown'
+
+    mon_type = 'core' if c.get('core') else 'personal'
+    proc_grep = ''  # manifest crons are one-shot, no persistent process
+
+    print(f'{name}|{plist_id}|{stdout_log}|{stderr_log}|{max_stale}|{proc_grep}|{schedule_desc}|{mon_type}')
+" 2>/dev/null
+}
+
+MONITORS=()
+while IFS= read -r line; do
+  [ -n "$line" ] && MONITORS+=("$line")
+done < <(_build_monitors_from_manifest)
+
+# Personal (non-manifest) monitors — add yours below.
+# These are NOT in manifest.json and won't be synced by cron-sync.
+PERSONAL_MONITORS=(
   # "My Service|com.nexo.my-service|$NEXO_HOME/logs/my-service.log||3600||Every 30 min|personal"
 )
+MONITORS+=("${PERSONAL_MONITORS[@]+"${PERSONAL_MONITORS[@]}"}")
 
 # Cron jobs to check (NAME|SCRIPT|CHECK_PATH|MAX_STALE_SECS|SCHEDULE)
 CRON_MONITORS=(

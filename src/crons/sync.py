@@ -125,7 +125,9 @@ def build_plist(cron: dict) -> dict:
     }
 
     # Schedule
-    if "interval_seconds" in cron:
+    if cron.get("run_at_load"):
+        plist["RunAtLoad"] = True
+    elif "interval_seconds" in cron:
         plist["StartInterval"] = cron["interval_seconds"]
     elif "schedule" in cron:
         cal = {}
@@ -166,6 +168,8 @@ def plist_needs_update(existing_path: Path, new_plist: dict) -> bool:
     if existing.get("StartInterval") != new_plist.get("StartInterval"):
         return True
     if existing.get("StartCalendarInterval") != new_plist.get("StartCalendarInterval"):
+        return True
+    if existing.get("RunAtLoad") != new_plist.get("RunAtLoad"):
         return True
     return False
 
@@ -304,7 +308,9 @@ Environment=NEXO_CODE={NEXO_CODE}
 Environment=HOME={Path.home()}
 """
 
-        if "interval_seconds" in cron:
+        if cron.get("run_at_load"):
+            timer_spec = "OnBootSec=0"
+        elif "interval_seconds" in cron:
             timer_spec = f"OnUnitActiveSec={cron['interval_seconds']}s\nOnBootSec=60s"
         elif "schedule" in cron:
             s = cron["schedule"]

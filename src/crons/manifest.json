@@ -70,15 +70,15 @@
     {
       "id": "followup-hygiene",
       "script": "scripts/nexo-followup-hygiene.py",
-      "schedule": {"hour": 5, "minute": 0},
+      "schedule": {"hour": 5, "minute": 0, "weekday": 0},
       "description": "Clean stale followups, archive completed, validate dates",
       "core": true
     },
     {
       "id": "synthesis",
       "script": "scripts/nexo-synthesis.py",
-      "interval_seconds": 7200,
-      "description": "Periodic synthesis — cross-reference learnings, decisions, changes",
+      "schedule": {"hour": 6, "minute": 0},
+      "description": "Daily synthesis — cross-reference learnings, decisions, changes",
       "core": true
     },
     {
@@ -91,7 +91,7 @@
 {
       "id": "catchup",
       "script": "scripts/nexo-catchup.py",
-      "schedule": {"hour": 8, "minute": 30},
+      "run_at_load": true,
       "description": "Morning catchup briefing for the user",
       "core": true
     }
