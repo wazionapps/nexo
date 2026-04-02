@@ -225,11 +225,26 @@ fi
 echo ""
 echo "--- Check 8: npm pack dry-run (no personal files in artifact) ---"
 PACK_LIST=$(cd "$REPO_ROOT" && npm pack --dry-run 2>&1)
+PACK_CLEAN=true
+
 if echo "$PACK_LIST" | grep -qE "scripts/migrate|scripts/nexo-send|scripts/pre-commit|tests/"; then
     fail "npm artifact includes non-product files (scripts/ or tests/)"
     echo "$PACK_LIST" | grep -E "scripts/migrate|scripts/nexo-send|scripts/pre-commit|tests/" | head -5
+    PACK_CLEAN=false
 else
     pass "npm artifact excludes scripts/ and tests/"
+fi
+
+if echo "$PACK_LIST" | grep -qE "__pycache__|\.pyc|\.pyo"; then
+    fail "npm artifact includes compiled Python caches (__pycache__/.pyc)"
+    echo "$PACK_LIST" | grep -E "__pycache__|\.pyc|\.pyo" | head -5
+    PACK_CLEAN=false
+else
+    pass "npm artifact excludes __pycache__ and .pyc/.pyo"
+fi
+
+if $PACK_CLEAN; then
+    pass "npm artifact is clean"
 fi
 
 # ── 9. Forbidden markers in distributed code ────────────────────────────

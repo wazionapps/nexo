@@ -56,6 +56,9 @@
     "bin/nexo-brain.js",
     "bin/postinstall.js",
     "src/",
+    "!src/**/__pycache__",
+    "!src/**/*.pyc",
+    "!src/**/*.pyo",
     "templates/",
     "README.md",
     "LICENSE"
