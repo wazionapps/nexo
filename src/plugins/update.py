@@ -78,6 +78,19 @@ def _git(*args, cwd=None) -> tuple[int, str, str]:
     return result.returncode, result.stdout.strip(), result.stderr.strip()
 
 
+def _requirements_hash() -> str:
+    """Return a content hash of requirements.txt, or empty string if missing."""
+    import hashlib
+    req_file = SRC_DIR / "requirements.txt"
+    if not req_file.exists() and _PACKAGED_INSTALL:
+        npm_src = _find_npm_pkg_src()
+        if npm_src:
+            req_file = npm_src / "requirements.txt"
+    if req_file.exists():
+        return hashlib.sha256(req_file.read_bytes()).hexdigest()
+    return ""
+
+
 def _check_dirty() -> str | None:
     """Return error message if worktree has uncommitted changes, else None."""
     if not _is_git_repo():
@@ -434,6 +447,7 @@ def handle_update(remote: str = "origin", branch: str = "main") -> str:
 
         # Record current state
         old_version = _read_version()
+        old_req_hash = _requirements_hash()
         rc, old_commit, _ = _git("rev-parse", "HEAD")
         if rc != 0:
             return "ABORTED: Not a git repository or git not available."
@@ -450,12 +464,14 @@ def handle_update(remote: str = "origin", branch: str = "main") -> str:
             return f"ABORTED at git pull: {pull_err or pull_out}"
         steps_done.append("git-pull")
 
-        # Step 4: Check version change
+        # Step 4: Check version and dependency changes
         new_version = _read_version()
         version_changed = old_version != new_version
+        new_req_hash = _requirements_hash()
+        deps_changed = old_req_hash != new_req_hash
 
-        # Step 5: Reinstall pip dependencies if version changed
-        if version_changed:
+        # Step 5: Reinstall pip dependencies if requirements.txt changed
+        if deps_changed or version_changed:
             pip_err = _reinstall_pip_deps()
             if pip_err:
                 raise RuntimeError(f"Pip install failed: {pip_err}")

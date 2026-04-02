@@ -96,28 +96,42 @@ def _read_package_version() -> str:
 
 # ── Hook sync ────────────────────────────────────────────────────────
 
-def _reinstall_pip_deps():
-    """Reinstall Python deps from requirements.txt after a version-changing pull."""
+def _requirements_hash() -> str:
+    """Return a content hash of requirements.txt, or empty string if missing."""
+    import hashlib
+    req_file = SRC_DIR / "requirements.txt"
+    if req_file.exists():
+        return hashlib.sha256(req_file.read_bytes()).hexdigest()
+    return ""
+
+
+def _reinstall_pip_deps() -> bool:
+    """Reinstall Python deps from requirements.txt. Returns True on success."""
     req_file = SRC_DIR / "requirements.txt"
     if not req_file.exists():
-        return
+        return True
     venv_pip = NEXO_HOME / ".venv" / "bin" / "pip"
     if not venv_pip.exists():
         venv_pip = NEXO_HOME / ".venv" / "bin" / "pip3"
     try:
         if venv_pip.exists():
-            subprocess.run(
+            result = subprocess.run(
                 [str(venv_pip), "install", "--quiet", "-r", str(req_file)],
                 capture_output=True, text=True, timeout=120,
             )
         else:
-            subprocess.run(
+            result = subprocess.run(
                 [sys.executable, "-m", "pip", "install", "--quiet", "-r", str(req_file), "--break-system-packages"],
                 capture_output=True, text=True, timeout=120,
             )
+        if result.returncode != 0:
+            _log(f"pip install failed (exit {result.returncode}): {result.stderr or result.stdout}")
+            return False
         _log("Reinstalled Python dependencies after update")
+        return True
     except Exception as e:
-        _log(f"pip reinstall warning: {e}")
+        _log(f"pip reinstall failed: {e}")
+        return False
 
 
 def _sync_crons():
@@ -191,16 +205,29 @@ def _check_git_updates() -> str | None:
 
     # We're behind — safe to fast-forward pull
     old_version = _read_package_version()
+    old_req_hash = _requirements_hash()
+
+    # Save old HEAD for rollback
+    rc, old_head, _ = _git("rev-parse", "HEAD")
+    if rc != 0:
+        return None
+
     rc, pull_out, pull_err = _git("pull", "--ff-only")
     if rc != 0:
         _log(f"git pull --ff-only failed: {pull_err}")
         return None  # Don't break anything
 
     new_version = _read_package_version()
+    new_req_hash = _requirements_hash()
 
-    # Reinstall pip deps if version changed
-    if old_version != new_version:
-        _reinstall_pip_deps()
+    # Reinstall pip deps if requirements.txt content changed (not just version)
+    if old_req_hash != new_req_hash:
+        if not _reinstall_pip_deps():
+            # pip failed — rollback git to old HEAD
+            _log("pip install failed after pull, rolling back git...")
+            _git("checkout", old_head, "--", ".")
+            _reinstall_pip_deps()  # restore old deps (best-effort)
+            return None
 
     # Run DB migrations after pull
     _run_db_migrations()
