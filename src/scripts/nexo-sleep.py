@@ -49,7 +49,26 @@ SLEEP_LOG = COORD_DIR / "sleep-log.json"
 MEMORY_MD = NEXO_HOME / "memory" / "MEMORY.md"
 NEXO_DB = NEXO_HOME / "data" / "nexo.db"
 CLAUDE_MEM_DB = Path.home() / ".claude-mem" / "claude-mem.db"
-CLAUDE_CLI = Path.home() / ".local" / "bin" / "claude"
+def _resolve_claude_cli() -> Path:
+    """Find claude CLI: saved path > PATH > common locations."""
+    saved = NEXO_HOME / "config" / "claude-cli-path"
+    if saved.exists():
+        p = Path(saved.read_text().strip())
+        if p.exists():
+            return p
+    found = shutil.which("claude")
+    if found:
+        return Path(found)
+    for candidate in [
+        Path.home() / ".local" / "bin" / "claude",
+        Path.home() / ".npm-global" / "bin" / "claude",
+        Path("/usr/local/bin/claude"),
+    ]:
+        if candidate.exists():
+            return candidate
+    return Path.home() / ".local" / "bin" / "claude"
+
+CLAUDE_CLI = _resolve_claude_cli()
 
 LAST_RUN_FILE = COORD_DIR / "sleep-last-run"
 LOCK_FILE = COORD_DIR / "sleep.lock"

@@ -34,13 +34,20 @@ read_version() {
     python3 -c "import json; print(json.load(open('$PACKAGE_JSON')).get('version','unknown'))" 2>/dev/null || echo "unknown"
 }
 
-# --- Step 1: Check for uncommitted changes in src/ ---
-log "Checking for uncommitted changes in src/..."
+# --- Check if this is a git repo ---
+if [ ! -d "$REPO_DIR/.git" ] && [ ! -f "$REPO_DIR/.git" ]; then
+    err "ABORTED: Not a git repository at $REPO_DIR"
+    err "For packaged installs, use: npm update -g @anthropic-ai/nexo"
+    exit 1
+fi
+
+# --- Step 1: Check for uncommitted changes in entire worktree ---
+log "Checking for uncommitted changes..."
 cd "$REPO_DIR"
 
-if [ -n "$(git status --porcelain -- src/ 2>/dev/null)" ]; then
-    err "ABORTED: Uncommitted changes in src/"
-    git status --short -- src/
+if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+    err "ABORTED: Uncommitted changes in worktree"
+    git status --short
     exit 1
 fi
 log "Working tree clean."
@@ -94,13 +101,28 @@ fi
 NEW_VERSION="$(read_version)"
 log "New version: v${NEW_VERSION}"
 
+# --- Step 4b: Reinstall Python dependencies if version changed ---
+if [ "$OLD_VERSION" != "$NEW_VERSION" ]; then
+    log "Reinstalling Python dependencies..."
+    VENV_PIP="$NEXO_HOME/.venv/bin/pip"
+    REQ_FILE="$SRC_DIR/requirements.txt"
+    if [ -f "$REQ_FILE" ]; then
+        if [ -x "$VENV_PIP" ]; then
+            "$VENV_PIP" install --quiet -r "$REQ_FILE" || warn "pip install had warnings"
+        else
+            python3 -m pip install --quiet -r "$REQ_FILE" --break-system-packages 2>/dev/null || warn "pip install had warnings"
+        fi
+        log "Python dependencies updated."
+    fi
+fi
+
 # --- Step 5: Run migrations if version changed ---
 if [ "$OLD_VERSION" != "$NEW_VERSION" ]; then
     log "Version changed: ${OLD_VERSION} -> ${NEW_VERSION}"
     log "Running migrations..."
     if ! (cd "$SRC_DIR" && python3 -c "import db; db.init_db()" 2>&1); then
         err "Migration failed! Rolling back..."
-        git reset --hard "$OLD_COMMIT"
+        git checkout "$OLD_COMMIT" -- .
         # Restore DB backups
         if [ -d "$BACKUP_DIR" ]; then
             for db in "$BACKUP_DIR"/*.db; do

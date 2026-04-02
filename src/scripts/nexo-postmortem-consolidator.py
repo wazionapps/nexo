@@ -42,7 +42,27 @@ MEMORY_DIR = NEXO_HOME / "memory"
 MEMORY_INDEX = MEMORY_DIR / "MEMORY.md"
 HISTORY_FILE = NEXO_HOME / "coordination" / "postmortem-history.json"
 CONSOLIDATION_LOG = NEXO_HOME / "logs" / "postmortem-consolidation.log"
-CLAUDE_CLI = HOME / ".local" / "bin" / "claude"
+def _resolve_claude_cli() -> Path:
+    """Find claude CLI: saved path > PATH > common locations."""
+    import shutil as _shutil
+    saved = NEXO_HOME / "config" / "claude-cli-path"
+    if saved.exists():
+        p = Path(saved.read_text().strip())
+        if p.exists():
+            return p
+    found = _shutil.which("claude")
+    if found:
+        return Path(found)
+    for candidate in [
+        HOME / ".local" / "bin" / "claude",
+        HOME / ".npm-global" / "bin" / "claude",
+        Path("/usr/local/bin/claude"),
+    ]:
+        if candidate.exists():
+            return candidate
+    return HOME / ".local" / "bin" / "claude"
+
+CLAUDE_CLI = _resolve_claude_cli()
 SESSION_BUFFER = NEXO_HOME / "brain" / "session_buffer.jsonl"
 
 TODAY = date.today()

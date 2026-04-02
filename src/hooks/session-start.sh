@@ -92,10 +92,11 @@ try:
 
         try:
             rows = db.execute(
-                'SELECT sid, task, started FROM sessions '
-                'WHERE completed=0 AND (strftime(\"%s\",\"now\") - last_update) < 900'
+                'SELECT sid, task, started_epoch FROM sessions '
+                'WHERE (strftime(\"%s\",\"now\") - last_update_epoch) < 900'
             ).fetchall()
-            sessions = [{'sid': r['sid'], 'task': r['task'], 'started': r['started'][:16]} for r in rows]
+            from datetime import datetime as _dt
+            sessions = [{'sid': r['sid'], 'task': r['task'], 'started': _dt.fromtimestamp(r['started_epoch']).strftime('%Y-%m-%d %H:%M') if r['started_epoch'] else '?'} for r in rows]
         except Exception:
             pass
 

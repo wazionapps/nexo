@@ -124,6 +124,8 @@ const ALL_CORE_HOOKS = [
     timeout: 10, purpose: "POSTMORTEM — the most important" },
   { event: "PostToolUse", key: "capture-tool-logs.sh", script: "capture-tool-logs.sh",
     timeout: 5, purpose: "Operation capture" },
+  { event: "PostToolUse", key: "capture-session.sh", script: "capture-session.sh",
+    timeout: 3, purpose: "Sensory register (session_buffer.jsonl)" },
   { event: "PostToolUse", key: "inbox-hook.sh", script: "inbox-hook.sh",
     timeout: 5, purpose: "Inter-session messaging" },
   { event: "PreCompact", key: "pre-compact.sh", script: "pre-compact.sh",
@@ -436,8 +438,10 @@ ${restartPolicy}
           count++;
           continue;
         } else if (proc.type === "runAtLoad") {
-          // No timer for runAtLoad — runs via MCP startup
-          fs.writeFileSync(serviceFile, service);
+          // runAtLoad: enable as a boot-time oneshot service (like macOS RunAtLoad)
+          fs.writeFileSync(serviceFile, service + `\n[Install]\nWantedBy=default.target\n`);
+          run(`systemctl --user enable ${serviceName}.service`);
+          run(`systemctl --user start ${serviceName}.service`);
           count++;
           continue;
         } else if (proc.type === "interval") {
@@ -477,14 +481,15 @@ WantedBy=timers.target
       const envLine2 = `NEXO_CODE=${nexoCode}`;
 
       for (const proc of ALL_PROCESSES) {
-        if (proc.type === "runAtLoad") continue; // No cron for runAtLoad
         const sPath = scriptPath(proc);
         const interp = interpreterPath(proc);
         const s = getSchedule(proc);
         const logPath = path.join(logsDir, `${proc.name}-stdout.log`);
 
         let cronSpec = "";
-        if (proc.type === "interval") {
+        if (proc.type === "runAtLoad") {
+          cronSpec = "@reboot";
+        } else if (proc.type === "interval") {
           cronSpec = `*/${proc.intervalMinutes} * * * *`;
         } else if (proc.type === "daily") {
           cronSpec = `${s.minute} ${s.hour} * * *`;
@@ -664,6 +669,14 @@ async function main() {
           log("  Rules updated.");
         }
 
+        // Update crons (manifest.json + sync.py — needed by catchup & watchdog)
+        const cronsMigSrc = path.join(srcDir, "crons");
+        const cronsMigDest = path.join(NEXO_HOME, "crons");
+        if (fs.existsSync(cronsMigSrc)) {
+          copyDirRec(cronsMigSrc, cronsMigDest);
+          log("  Crons updated.");
+        }
+
         // Update scripts (all .py, .sh files + subdirectories like deep-sleep/)
         const scriptsSrc = path.join(srcDir, "scripts");
         const scriptsDest = path.join(NEXO_HOME, "scripts");
@@ -734,6 +747,28 @@ async function main() {
         rl.close();
         return;
       }
+
+      // Same version — backfill crons/ if missing (for installs before crons was shipped)
+      const cronsDest = path.join(NEXO_HOME, "crons");
+      const cronsSrc = path.join(__dirname, "..", "src", "crons");
+      if (!fs.existsSync(path.join(cronsDest, "manifest.json")) && fs.existsSync(cronsSrc)) {
+        const copyDirRec2 = (src, dest) => {
+          fs.mkdirSync(dest, { recursive: true });
+          fs.readdirSync(src).forEach(item => {
+            if (item === "__pycache__" || item.endsWith(".pyc") || item.endsWith(".db")) return;
+            const srcP = path.join(src, item);
+            const destP = path.join(dest, item);
+            if (fs.statSync(srcP).isDirectory()) copyDirRec2(srcP, destP);
+            else fs.copyFileSync(srcP, destP);
+          });
+        };
+        copyDirRec2(cronsSrc, cronsDest);
+        log("Backfilled crons/ directory (catchup & watchdog need it).");
+      }
+
+      log(`Already at v${currentVersion}. No migration needed.`);
+      rl.close();
+      return;
     } catch (e) {
       // Version file corrupt — proceed with fresh install
     }
@@ -799,6 +834,15 @@ async function main() {
     log("Claude Code installed successfully.");
   } else {
     log("Claude Code detected.");
+  }
+
+  // Persist the discovered claude CLI path for scheduled scripts
+  const claudeCliPath = run("which claude") || "";
+  if (claudeCliPath) {
+    const cliPathFile = path.join(NEXO_HOME, "config", "claude-cli-path");
+    fs.mkdirSync(path.join(NEXO_HOME, "config"), { recursive: true });
+    fs.writeFileSync(cliPathFile, claudeCliPath.trim());
+    log(`Claude CLI path saved: ${claudeCliPath.trim()}`);
   }
   console.log("");
 
@@ -1290,6 +1334,13 @@ async function main() {
   if (fs.existsSync(rulesSrcDir)) {
     copyDirRecursive(rulesSrcDir, path.join(NEXO_HOME, "rules"));
     log("  Rules installed.");
+  }
+
+  // Crons directory (manifest.json + sync.py — needed by catchup & watchdog)
+  const cronsSrcDir = path.join(srcDir, "crons");
+  if (fs.existsSync(cronsSrcDir)) {
+    copyDirRecursive(cronsSrcDir, path.join(NEXO_HOME, "crons"));
+    log("  Crons installed.");
   }
 
   // Hooks directory

@@ -41,8 +41,12 @@ record = {
 print(json.dumps(record))
 " >> "$LOG_FILE" 2>/dev/null
 
-# ── Layer 1: Auto-diary every 10 tool calls ─────────────────────────
-COUNTER_FILE="$NEXO_HOME/operations/.tool-call-count"
+# ── Layer 1: Auto-diary every 10 tool calls (session-scoped) ─────────
+# Extract session_id for per-session counters (prevents cross-terminal contamination)
+SESSION_ID=$(echo "$INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('session_id','global'))" 2>/dev/null || echo "global")
+COUNTER_DIR="$NEXO_HOME/operations/counters"
+mkdir -p "$COUNTER_DIR"
+COUNTER_FILE="$COUNTER_DIR/.tool-call-count-${SESSION_ID}"
 NEXO_DB="$NEXO_HOME/data/nexo.db"
 
 # Increment counter (atomic: read+write in one step)
@@ -86,12 +90,25 @@ if not entries:
 
 tools_summary = ', '.join(entries[-10:])
 
-# Get current session and task from sessions table
+# Get session by claude session_id (scoped), fallback to most recent
+session_id = '$SESSION_ID'
 conn = sqlite3.connect(db_path, timeout=2)
 conn.row_factory = sqlite3.Row
-row = conn.execute(
-    'SELECT sid, task FROM sessions ORDER BY last_update_epoch DESC LIMIT 1'
-).fetchone()
+
+# Try to find NEXO SID mapped to this claude session_id
+row = None
+if session_id and session_id != 'global':
+    row = conn.execute(
+        'SELECT sid, task FROM sessions WHERE claude_session_id = ? LIMIT 1',
+        (session_id,)
+    ).fetchone()
+
+# Fallback: most recent active session
+if not row:
+    row = conn.execute(
+        'SELECT sid, task FROM sessions ORDER BY last_update_epoch DESC LIMIT 1'
+    ).fetchone()
+
 if not row:
     conn.close()
     sys.exit(0)

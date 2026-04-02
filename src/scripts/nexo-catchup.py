@@ -18,7 +18,27 @@ import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
-CLAUDE_CLI = Path.home() / ".local" / "bin" / "claude"
+def _resolve_claude_cli() -> Path:
+    """Find claude CLI: saved path > PATH > common locations."""
+    saved = NEXO_HOME / "config" / "claude-cli-path"
+    if saved.exists():
+        p = Path(saved.read_text().strip())
+        if p.exists():
+            return p
+    import shutil
+    found = shutil.which("claude")
+    if found:
+        return Path(found)
+    for candidate in [
+        Path.home() / ".local" / "bin" / "claude",
+        Path.home() / ".npm-global" / "bin" / "claude",
+        Path("/usr/local/bin/claude"),
+    ]:
+        if candidate.exists():
+            return candidate
+    return Path.home() / ".local" / "bin" / "claude"  # last resort
+
+CLAUDE_CLI = _resolve_claude_cli()
 
 HOME = Path.home()
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
@@ -47,7 +67,10 @@ def _resolve_python() -> str:
 
 NEXO_PYTHON = _resolve_python()
 NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parent.parent)))
-MANIFEST = NEXO_CODE / "crons" / "manifest.json"
+# Look for manifest in NEXO_HOME first (packaged install), then NEXO_CODE (dev/repo)
+_manifest_home = NEXO_HOME / "crons" / "manifest.json"
+_manifest_code = NEXO_CODE / "crons" / "manifest.json"
+MANIFEST = _manifest_home if _manifest_home.exists() else _manifest_code
 
 
 def _load_tasks_from_manifest() -> list[tuple]:

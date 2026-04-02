@@ -64,7 +64,27 @@ IMMUTABLE_FILES = {
 }
 
 # ── Claude CLI path ──────────────────────────────────────────────────────
-CLAUDE_CLI = Path.home() / ".local" / "bin" / "claude"
+def _resolve_claude_cli() -> Path:
+    """Find claude CLI: saved path > PATH > common locations."""
+    import shutil as _shutil
+    saved = NEXO_HOME / "config" / "claude-cli-path"
+    if saved.exists():
+        p = Path(saved.read_text().strip())
+        if p.exists():
+            return p
+    found = _shutil.which("claude")
+    if found:
+        return Path(found)
+    for candidate in [
+        Path.home() / ".local" / "bin" / "claude",
+        Path.home() / ".npm-global" / "bin" / "claude",
+        Path("/usr/local/bin/claude"),
+    ]:
+        if candidate.exists():
+            return candidate
+    return Path.home() / ".local" / "bin" / "claude"
+
+CLAUDE_CLI = _resolve_claude_cli()
 
 # ── Logging ──────────────────────────────────────────────────────────────
 LOG_DIR.mkdir(parents=True, exist_ok=True)

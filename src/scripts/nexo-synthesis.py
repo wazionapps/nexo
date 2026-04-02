@@ -26,7 +26,27 @@ NEXO_DB = NEXO_HOME / "data" / "nexo.db"
 OUTPUT_FILE = COORD_DIR / "daily-synthesis.md"
 LAST_RUN_FILE = COORD_DIR / "synthesis-last-run"
 LOCK_FILE = COORD_DIR / "synthesis.lock"
-CLAUDE_CLI = HOME / ".local" / "bin" / "claude"
+def _resolve_claude_cli() -> Path:
+    """Find claude CLI: saved path > PATH > common locations."""
+    import shutil as _shutil
+    saved = NEXO_HOME / "config" / "claude-cli-path"
+    if saved.exists():
+        p = Path(saved.read_text().strip())
+        if p.exists():
+            return p
+    found = _shutil.which("claude")
+    if found:
+        return Path(found)
+    for candidate in [
+        HOME / ".local" / "bin" / "claude",
+        HOME / ".npm-global" / "bin" / "claude",
+        Path("/usr/local/bin/claude"),
+    ]:
+        if candidate.exists():
+            return candidate
+    return HOME / ".local" / "bin" / "claude"
+
+CLAUDE_CLI = _resolve_claude_cli()
 
 TODAY = date.today()
 TODAY_STR = TODAY.isoformat()
@@ -109,17 +129,17 @@ def collect_data() -> dict:
         (TODAY_STR,)
     )
 
-    # Overdue reminders
+    # Overdue reminders (schema: description, date, status uppercase)
     data["overdue_reminders"] = safe_query(
-        "SELECT id, title, due_date FROM reminders "
-        "WHERE status='PENDING' AND due_date <= ? ORDER BY due_date",
+        "SELECT id, description, date FROM reminders "
+        "WHERE status='PENDING' AND date <= ? ORDER BY date",
         (TODAY_STR,)
     )
 
-    # Pending followups
+    # Pending followups (schema: description, date, status uppercase)
     data["pending_followups"] = safe_query(
-        "SELECT id, title, description, due_date FROM followups "
-        "WHERE status='pending' ORDER BY due_date"
+        "SELECT id, description, date FROM followups "
+        "WHERE status='PENDING' ORDER BY date"
     )
 
     # Guard stats
