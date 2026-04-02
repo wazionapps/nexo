@@ -568,17 +568,24 @@ def get_orphan_sessions(ttl_seconds: int = 900) -> list[dict]:
 
 
 def read_session_diary(session_id: str = '', last_n: int = 3, last_day: bool = False,
-                       domain: str = '') -> list[dict]:
+                       domain: str = '', include_automated: bool = False) -> list[dict]:
     """Read session diary entries.
 
     - session_id: returns entries for that specific session
     - last_day: returns ALL entries from the most recent day (multi-terminal aware)
     - last_n: returns last N entries (default)
     - domain: filter by project context (nexo, other)
+    - include_automated: if False (default), excludes automated sessions (auto-close,
+      cron diaries, etc.). Only returns human-interactive sessions.
+      Email sessions (user sends email, NEXO responds) ARE included — they're real interactions.
     """
     conn = get_db()
     domain_clause = " AND domain = ?" if domain else ""
     domain_params = (domain,) if domain else ()
+    # By default, filter out automated sessions so startup shows human sessions only.
+    # Keeps: interactive sessions (source='claude') that aren't auto-generated summaries.
+    # Excludes: auto-close, cron, evolution, and [AUTO-*] summaries from CLI crons.
+    source_clause = "" if include_automated else " AND source NOT IN ('auto-close', 'cron', 'evolution', 'pre-compact-hook') AND summary NOT LIKE '[AUTO-%'"
 
     if session_id:
         rows = conn.execute(
@@ -586,25 +593,25 @@ def read_session_diary(session_id: str = '', last_n: int = 3, last_day: bool = F
             (session_id,) + domain_params
         ).fetchall()
     elif last_day:
-        # Get all entries from the most recent calendar day
+        # Get all entries from the most recent calendar day (human sessions only)
         if domain:
             latest = conn.execute(
-                "SELECT date(created_at) as day FROM session_diary WHERE domain = ? ORDER BY created_at DESC LIMIT 1",
+                f"SELECT date(created_at) as day FROM session_diary WHERE domain = ?{source_clause} ORDER BY created_at DESC LIMIT 1",
                 (domain,)
             ).fetchone()
         else:
             latest = conn.execute(
-                "SELECT date(created_at) as day FROM session_diary ORDER BY created_at DESC LIMIT 1"
+                f"SELECT date(created_at) as day FROM session_diary WHERE 1=1{source_clause} ORDER BY created_at DESC LIMIT 1"
             ).fetchone()
         if not latest:
             return []
         rows = conn.execute(
-            f"SELECT * FROM session_diary WHERE date(created_at) = ?{domain_clause} ORDER BY created_at DESC",
+            f"SELECT * FROM session_diary WHERE date(created_at) = ?{domain_clause}{source_clause} ORDER BY created_at DESC",
             (latest['day'],) + domain_params
         ).fetchall()
     else:
         rows = conn.execute(
-            f"SELECT * FROM session_diary WHERE 1=1{domain_clause} ORDER BY created_at DESC LIMIT ?",
+            f"SELECT * FROM session_diary WHERE 1=1{domain_clause}{source_clause} ORDER BY created_at DESC LIMIT ?",
             domain_params + (last_n,)
         ).fetchall()
     return [dict(r) for r in rows]

@@ -166,7 +166,8 @@ def handle_session_diary_write(decisions: str, summary: str,
                                 user_signals: str = '',
                                 domain: str = '',
                                 session_id: str = '',
-                                self_critique: str = '') -> str:
+                                self_critique: str = '',
+                                source: str = 'claude') -> str:
     """Write session diary entry at end of session. OBLIGATORIO antes de cerrar.
 
     Args:
@@ -179,13 +180,14 @@ def handle_session_diary_write(decisions: str, summary: str,
         user_signals: Observable signals from user during session — response speed (fast='s' vs detailed explanations), tone (direct, frustrated, exploratory, excited), corrections given, topics he initiated vs topics NEXO initiated. Factual observations only, not interpretations.
         domain: Project context: ecommerce, project-a, nexo, project-b, server, other
         session_id: Current session ID
-        self_critique: REQUIRED. Honest post-mortem: What should I have done proactively? Did user have to ask me something I should have detected? Did I repeat known errors? What concrete rule would prevent repetition? If clean session: 'No self-critique — clean session.'
+        self_critique: REQUIRED. Honest post-mortem.
+        source: Session type. 'claude' for human-interactive sessions (default), 'cron' for automated cron jobs. Affects visibility at startup.
     """
     sid = session_id or 'unknown'
     # Clean up draft — manual diary supersedes it
     from db import delete_diary_draft
     delete_diary_draft(sid)
-    result = write_session_diary(sid, decisions, summary, discarded, pending, context_next, mental_state, domain=domain, user_signals=user_signals, self_critique=self_critique)
+    result = write_session_diary(sid, decisions, summary, discarded, pending, context_next, mental_state, domain=domain, user_signals=user_signals, self_critique=self_critique, source=source)
     if "error" in result:
         return f"ERROR: {result['error']}"
     _cognitive_ingest_safe(summary, "diary", f"diary#{result.get('id','')}", f"Session {sid} summary", domain)
