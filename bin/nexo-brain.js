@@ -622,10 +622,11 @@ async function main() {
           "server.py", "plugin_loader.py",
           "knowledge_graph.py", "kg_populate.py", "maintenance.py", "storage_router.py",
           "claim_graph.py", "hnsw_index.py", "evolution_cycle.py", "migrate_embeddings.py",
-          "auto_close_sessions.py",
+          "auto_close_sessions.py", "auto_update.py",
           "tools_sessions.py", "tools_coordination.py", "tools_reminders.py",
           "tools_reminders_crud.py", "tools_learnings.py", "tools_credentials.py",
           "tools_task_history.py", "tools_menu.py",
+          "requirements.txt",
         ];
         coreFlatFiles.forEach((f) => {
           const src = path.join(srcDir, f);
@@ -1280,6 +1281,7 @@ async function main() {
     "evolution_cycle.py",
     "migrate_embeddings.py",
     "auto_close_sessions.py",
+    "auto_update.py",
     "tools_sessions.py",
     "tools_coordination.py",
     "tools_reminders.py",
@@ -1288,6 +1290,7 @@ async function main() {
     "tools_credentials.py",
     "tools_task_history.py",
     "tools_menu.py",
+    "requirements.txt",
   ];
   coreFiles.forEach((f) => {
     const src = path.join(srcDir, f);

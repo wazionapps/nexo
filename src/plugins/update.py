@@ -13,11 +13,36 @@ from pathlib import Path
 _THIS_DIR = Path(__file__).resolve().parent
 REPO_DIR = _THIS_DIR.parent.parent
 PACKAGE_JSON = REPO_DIR / "package.json"
-SRC_DIR = REPO_DIR / "src"
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 DATA_DIR = NEXO_HOME / "data"
 BACKUP_BASE = NEXO_HOME / "backups"
+
+# In packaged installs, update.py lives at ~/.nexo/plugins/update.py
+# so REPO_DIR would be ~/ (wrong). Detect this and fix paths.
+_PACKAGED_INSTALL = not (REPO_DIR / ".git").exists() and not (REPO_DIR / ".git").is_file()
+
+if _PACKAGED_INSTALL:
+    # In packaged mode, core .py files live directly in NEXO_HOME
+    SRC_DIR = NEXO_HOME
+else:
+    SRC_DIR = REPO_DIR / "src"
+
+
+def _find_npm_pkg_src() -> Path | None:
+    """Locate the nexo-brain npm package's src/ directory for requirements.txt."""
+    try:
+        result = subprocess.run(
+            ["npm", "root", "-g"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode == 0:
+            npm_src = Path(result.stdout.strip()) / "nexo-brain" / "src"
+            if npm_src.is_dir():
+                return npm_src
+    except Exception:
+        pass
+    return None
 
 def _is_git_repo() -> bool:
     """Check if REPO_DIR is a valid git repository."""
@@ -120,6 +145,11 @@ def _restore_databases(backup_dir: str):
 def _reinstall_pip_deps() -> str | None:
     """Reinstall Python dependencies from requirements.txt into the managed venv."""
     req_file = SRC_DIR / "requirements.txt"
+    if not req_file.exists() and _PACKAGED_INSTALL:
+        # In packaged mode, requirements.txt lives in the npm package's src/ dir
+        npm_src = _find_npm_pkg_src()
+        if npm_src:
+            req_file = npm_src / "requirements.txt"
     if not req_file.exists():
         return None  # No requirements file, skip
     venv_pip = NEXO_HOME / ".venv" / "bin" / "pip"
@@ -151,10 +181,12 @@ def _reinstall_pip_deps() -> str | None:
 
 def _run_migrations() -> str | None:
     """Run init_db() to apply pending migrations. Returns error or None."""
+    # In packaged mode, db/ lives in NEXO_HOME; in dev mode, in SRC_DIR
+    cwd = str(NEXO_HOME) if _PACKAGED_INSTALL else str(SRC_DIR)
     try:
         result = subprocess.run(
             [sys.executable, "-c", "import db; db.init_db()"],
-            cwd=str(SRC_DIR),
+            cwd=cwd,
             capture_output=True,
             text=True,
             timeout=30,
@@ -168,10 +200,12 @@ def _run_migrations() -> str | None:
 
 def _verify_import() -> str | None:
     """Verify server.py can be imported successfully."""
+    # In packaged mode, server.py lives in NEXO_HOME; in dev mode, in SRC_DIR
+    cwd = str(NEXO_HOME) if _PACKAGED_INSTALL else str(SRC_DIR)
     try:
         result = subprocess.run(
             [sys.executable, "-c", "import server"],
-            cwd=str(SRC_DIR),
+            cwd=cwd,
             capture_output=True,
             text=True,
             timeout=15,
@@ -204,18 +238,43 @@ def _handle_packaged_update() -> str:
     if old_version == new_version:
         return f"Already up to date (v{old_version}). No changes."
 
+    # Backup databases before applying changes
+    backup_dir, backup_err = _backup_databases()
+    if backup_err:
+        return f"ABORTED at backup: {backup_err}"
+
+    errors = []
+
     # Reinstall pip deps for new version
     pip_err = _reinstall_pip_deps()
+    if pip_err:
+        errors.append(f"pip deps: {pip_err}")
 
     # Run migrations
     mig_err = _run_migrations()
+    if mig_err:
+        errors.append(f"migrations: {mig_err}")
+
+    # Verify server can still import
+    verify_err = _verify_import()
+    if verify_err:
+        errors.append(f"verification: {verify_err}")
+
+    if errors:
+        # Restore databases on failure
+        if backup_dir:
+            _restore_databases(backup_dir)
+        lines = [f"UPDATE FAILED (packaged install, v{old_version} -> v{new_version})"]
+        for err in errors:
+            lines.append(f"  ERROR: {err}")
+        lines.append(f"  Databases restored from: {backup_dir}")
+        lines.append("")
+        lines.append("Fix the errors above, then run nexo_update again.")
+        return "\n".join(lines)
 
     lines = ["UPDATE SUCCESSFUL (packaged install)"]
     lines.append(f"  Version: {old_version} -> {new_version}")
-    if pip_err:
-        lines.append(f"  WARNING: pip deps: {pip_err}")
-    if mig_err:
-        lines.append(f"  WARNING: migrations: {mig_err}")
+    lines.append(f"  Backup: {backup_dir}")
     lines.append("")
     lines.append("MCP server restart needed to load new code.")
     return "\n".join(lines)
