@@ -184,11 +184,11 @@ This means long sessions (8+ hours) feel like one continuous conversation instea
   "hooks": {
     "PreCompact": [{
       "matcher": "*",
-      "hooks": [{"type": "command", "command": "bash path/to/nexo/src/hooks/pre-compact.sh", "timeout": 10}]
+      "hooks": [{"type": "command", "command": "bash $NEXO_HOME/hooks/pre-compact.sh", "timeout": 10}]
     }],
     "PostCompact": [{
       "matcher": "*",
-      "hooks": [{"type": "command", "command": "bash path/to/nexo/src/hooks/post-compact.sh", "timeout": 10}]
+      "hooks": [{"type": "command", "command": "bash $NEXO_HOME/hooks/post-compact.sh", "timeout": 10}]
     }]
   }
 }

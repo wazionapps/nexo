@@ -628,7 +628,7 @@ async def api_ops_execute(fid: str):
     tmp.write(fid)
     tmp.close()
     # The claude command reads the followup ID from the temp file — no shell interpolation of description
-    claude_cmd = f'claude "NEXO: execute followup from file $(cat {tmp.name})"'
+    claude_cmd = f'claude \\"NEXO: execute followup from file $(cat {tmp.name})\\"'
     script = f'tell application "Terminal" to do script "{claude_cmd}"'
     subprocess.Popen(["osascript", "-e", script])
     return {"success": True, "followup_id": fid}

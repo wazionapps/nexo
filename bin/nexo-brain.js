@@ -1888,11 +1888,9 @@ ${doScan ? `- Stack: ${Object.keys(profileData.code.languages || {}).slice(0, 5)
   } else {
     // Bash: always write to .bash_profile (macOS login shells)
     rcFiles.push(path.join(homeDir, ".bash_profile"));
-    // Also write to .bashrc if it exists (Linux interactive shells)
+    // Also write to .bashrc (Linux interactive shells) — create if needed
     const bashrc = path.join(homeDir, ".bashrc");
-    if (fs.existsSync(bashrc)) {
-      rcFiles.push(bashrc);
-    }
+    rcFiles.push(bashrc);
   }
 
   for (const rcFile of rcFiles) {

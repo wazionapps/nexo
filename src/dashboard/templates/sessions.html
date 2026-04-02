@@ -120,6 +120,11 @@
 
             try {
                 const resp = await fetch(`/api/sessions?limit=${PAGE_SIZE}&offset=${offset}`);
+                if (!resp.ok) {
+                    let detail = `HTTP ${resp.status}`;
+                    try { const b = await resp.json(); detail = b.error || b.detail || detail; } catch {}
+                    throw new Error(detail);
+                }
                 const data = await resp.json();
                 const sessions = data.sessions || [];
 
@@ -136,13 +141,19 @@
                     btn.disabled = false;
                 }
             } catch (err) {
-                btn.textContent = 'Error — retry';
+                btn.textContent = 'Error: ' + err.message + ' — retry';
                 btn.disabled = false;
             }
         }
 
         async function init() {
             const resp = await fetch(`/api/sessions?limit=${PAGE_SIZE}&offset=0`);
+            if (!resp.ok) {
+                let detail = `HTTP ${resp.status}`;
+                try { const b = await resp.json(); detail = b.error || b.detail || detail; } catch {}
+                document.getElementById('sessions').innerHTML = `<p class="text-sm text-red-400 text-center py-8">Error loading sessions: ${detail}</p>`;
+                return;
+            }
             const data = await resp.json();
             const sessions = data.sessions || [];
             const container = document.getElementById('sessions');

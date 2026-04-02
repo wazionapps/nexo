@@ -87,6 +87,10 @@ def load_plugin(mcp, filename: str, plugins_dir: str | None = None) -> int:
     if not filename.endswith(".py"):
         filename += ".py"
 
+    # Reject path separators and traversal sequences before joining
+    if "/" in filename or "\\" in filename or ".." in filename:
+        raise ValueError(f"Invalid plugin filename (path separators or '..' not allowed): {filename}")
+
     if plugins_dir is not None:
         filepath = os.path.join(plugins_dir, filename)
         if not os.path.isfile(filepath):

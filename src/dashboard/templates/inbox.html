@@ -245,6 +245,11 @@
         async function loadMessages() {
             try {
                 const res = await fetch('/api/inbox?limit=200');
+                if (!res.ok) {
+                    let detail = `HTTP ${res.status}`;
+                    try { const b = await res.json(); detail = b.error || b.detail || detail; } catch {}
+                    throw new Error(detail);
+                }
                 const data = await res.json();
                 messages = data.notes || [];
                 messages.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
@@ -281,6 +286,11 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(body)
                 });
+                if (!res.ok) {
+                    let detail = `HTTP ${res.status}`;
+                    try { const b = await res.json(); detail = b.error || b.detail || detail; } catch {}
+                    throw new Error(detail);
+                }
                 const data = await res.json();
                 textarea.value = '';
                 cancelReply();

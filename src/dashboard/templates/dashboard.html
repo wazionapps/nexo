@@ -310,9 +310,16 @@
   async function fetchJSON(url) {
     try {
       const res = await fetch(url);
-      if (!res.ok) return null;
+      if (!res.ok) {
+        let detail = `HTTP ${res.status}`;
+        try { const b = await res.json(); detail = b.error || b.detail || detail; } catch {}
+        throw new Error(detail);
+      }
       return await res.json();
-    } catch { return null; }
+    } catch (err) {
+      console.error(`fetchJSON(${url}):`, err);
+      return null;
+    }
   }
 
   function getToday() {

@@ -94,7 +94,7 @@ def extract_session(jsonl_path: Path) -> dict | None:
                         messages.append({
                             "role": "user",
                             "index": line_no,
-                            "text": content[:5000],
+                            "text": _redact_sensitive(content[:5000]),
                             "uuid": d.get("uuid", "")
                         })
                         user_msg_count += 1
@@ -110,13 +110,14 @@ def extract_session(jsonl_path: Path) -> dict | None:
                                 text_parts.append(block.get("text", ""))
                             elif block.get("type") == "tool_use":
                                 tool_input = block.get("input", {})
+                                raw_file = (
+                                    tool_input.get("file_path", "")
+                                    or str(tool_input.get("command", ""))[:100]
+                                ) if isinstance(tool_input, dict) else ""
                                 tool_uses.append({
                                     "tool": block.get("name", ""),
                                     "input_keys": list(tool_input.keys()) if isinstance(tool_input, dict) else [],
-                                    "file": (
-                                        tool_input.get("file_path", "")
-                                        or str(tool_input.get("command", ""))[:100]
-                                    ) if isinstance(tool_input, dict) else ""
+                                    "file": _redact_sensitive(raw_file)
                                 })
                     if text_parts:
                         combined = "\n".join(text_parts)[:5000]
@@ -360,12 +361,12 @@ def format_transcripts(sessions: list[dict]) -> str:
             role = "USER" if msg["role"] == "user" else "AGENT"
             idx = msg.get("index", "?")
             lines.append(f"\n[{role} @{idx}]")
-            lines.append(msg["text"])
+            lines.append(_redact_sensitive(msg["text"]))
 
         if session["tool_uses"]:
             lines.append(f"\n  -- Tool usage log --")
             for tu in session["tool_uses"]:
-                file_info = f" [{tu['file'][:80]}]" if tu.get("file") else ""
+                file_info = f" [{_redact_sensitive(tu['file'][:80])}]" if tu.get("file") else ""
                 lines.append(f"  - {tu['tool']}{file_info}")
 
     return "\n".join(lines)
@@ -475,12 +476,12 @@ def main():
             role = "USER" if msg["role"] == "user" else "AGENT"
             idx = msg.get("index", "?")
             lines.append(f"\n[{role} @{idx}]")
-            lines.append(msg["text"])
+            lines.append(_redact_sensitive(msg["text"]))
 
         if session["tool_uses"]:
             lines.append(f"\n  -- Tool usage log --")
             for tu in session["tool_uses"]:
-                file_info = f" [{tu['file'][:80]}]" if tu.get("file") else ""
+                file_info = f" [{_redact_sensitive(tu['file'][:80])}]" if tu.get("file") else ""
                 lines.append(f"  - {tu['tool']}{file_info}")
 
         session_text = "\n".join(lines)
