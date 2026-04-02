@@ -341,7 +341,7 @@ Deep Sleep generates a `session-tone.json` that tells NEXO how to behave next mo
 
 This is read by `nexo_smart_startup` and injected into every session's context. NEXO adapts its personality based on real behavioral data, not just configuration.
 
-## Cron Manifest (v2.1.0)
+## Cron Manifest & Scheduler (v2.4.0)
 
 All core crons are defined in `src/crons/manifest.json`. When you run `nexo_update`, the sync script:
 - **Installs** new crons from the manifest
@@ -349,7 +349,23 @@ All core crons are defined in `src/crons/manifest.json`. When you run `nexo_upda
 - **Removes** crons no longer in the manifest (only core ones)
 - **Never touches** personal crons you created yourself
 
-Run `python3 src/crons/sync.py --dry-run` to preview changes without applying.
+Every cron execution is tracked in the `cron_runs` table via a universal wrapper. Use `nexo_schedule_status` to see what ran overnight:
+
+```
+✅ deep-sleep: 1/1 OK, 4523s avg — 37 sessions, 259 findings
+✅ immune: 48/48 OK, 2s avg
+❌ evolution: 0/1 OK — CLI timeout
+```
+
+Add personal crons from conversation with `nexo_schedule_add` — generates LaunchAgent (macOS) or systemd timer (Linux) automatically.
+
+## Skill Auto-Creation (v2.4.0)
+
+Deep Sleep automatically extracts reusable procedures from successful multi-step tasks and stores them as skills with full procedural content (steps, gotchas, markdown).
+
+Pipeline: `trace → draft → published → archived`. Trust rises with successful use, decays without it. No human approval gates.
+
+7 MCP tools: `nexo_skill_create`, `nexo_skill_match`, `nexo_skill_get`, `nexo_skill_result`, `nexo_skill_list`, `nexo_skill_merge`, `nexo_skill_stats`.
 
 ## Dashboard (v1.6.0)
 
@@ -740,6 +756,21 @@ If NEXO Brain is useful to you, consider:
 | P0 | Database migrations are fail-open (errors logged but not blocking) | v2.1.0 |
 
 ## Changelog
+
+### v2.4.0 — Skills, Cron Scheduler, Security, Full Audit (2026-04-03)
+- **Skill Auto-Creation**: Deep Sleep extracts reusable procedures from sessions. Content stored as markdown with steps and gotchas. Trust pipeline with autonomous quality control.
+- **Cron Scheduler**: execution tracking (`cron_runs` table), `nexo_schedule_status` and `nexo_schedule_add` MCP tools, universal cron wrapper for all processes.
+- **Deep Sleep v2.4**: watermark-based collection (late-night sessions included), per-session checkpointing (crash-safe), retry x3, JSON parsing fix, auto-calibration of personality settings.
+- **Security**: credential redaction in tool logs, transcript sanitization, command injection fix in dashboard, path traversal protection in plugin loader.
+- **Diary filter**: startup only shows human sessions, auto-closed cron sessions filtered out. Email sessions preserved as real interactions.
+- **Preflight CI**: 66 automated checks (py_compile, bash -n, manifest consistency, npm artifact, forbidden markers).
+- **Python 3.9 compat**: `from __future__ import annotations` across 18 files.
+- **Linux**: full systemd timer support, .bashrc alias for interactive shells.
+- Passed 5-phase automated audit: Product, Failure, Security, Packaging, UX.
+
+### v2.2.0 — Trust Score v2 (2026-04-01)
+- **Trust Score**: fair daily calibration from Deep Sleep analysis. Score 0-100 based on corrections, autonomy, proactivity.
+- **Cognitive Quarantine**: new memories go through quarantine before promotion to LTM.
 
 ### v2.0.0 — Unified Architecture (2026-03-31)
 - **Code/data separation**: Code in repo (`src/`), personal data in `NEXO_HOME` (default `~/.nexo/`). `NEXO_HOME` env var required.
