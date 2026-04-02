@@ -616,13 +616,20 @@ async def api_ops_execute(fid: str):
     if not row:
         return JSONResponse({"error": f"Followup {fid} not found"}, status_code=404)
     item = dict(row)
-    description = item["description"].replace('"', '\\"').replace("'", "\\'")
     if platform.system() != "Darwin":
         return JSONResponse(
             {"error": "This operation requires macOS (uses osascript to open Terminal)"},
             status_code=501,
         )
-    script = f'tell application "Terminal" to do script "claude \\"NEXO: execute followup #{fid} — {description}\\""'
+    # Security: avoid interpolating user-controlled data into shell commands.
+    # Write the followup ID to a temp file and pass a safe, fixed command to osascript.
+    import tempfile
+    tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", prefix="nexo-followup-", delete=False)
+    tmp.write(fid)
+    tmp.close()
+    # The claude command reads the followup ID from the temp file — no shell interpolation of description
+    claude_cmd = f'claude "NEXO: execute followup from file $(cat {tmp.name})"'
+    script = f'tell application "Terminal" to do script "{claude_cmd}"'
     subprocess.Popen(["osascript", "-e", script])
     return {"success": True, "followup_id": fid}
 

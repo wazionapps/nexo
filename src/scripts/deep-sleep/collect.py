@@ -12,6 +12,7 @@ Environment variables:
 """
 import json
 import os
+import re
 import sqlite3
 import sys
 from datetime import datetime, timedelta
@@ -24,6 +25,32 @@ NEXO_DB = NEXO_HOME / "data" / "nexo.db"
 COGNITIVE_DB = NEXO_HOME / "data" / "cognitive.db"
 
 MIN_USER_MESSAGES = 3  # Skip trivial sessions
+
+# Patterns that indicate sensitive data (passwords, tokens, API keys, etc.)
+_SENSITIVE_PATTERNS = re.compile(
+    r'(?:'
+    r'sk-ant-[A-Za-z0-9_-]+'           # Anthropic API keys
+    r'|shpat_[A-Fa-f0-9]+'             # Shopify admin tokens
+    r'|shpss_[A-Fa-f0-9]+'             # Shopify shared secret
+    r'|sk-[A-Za-z0-9]{20,}'            # OpenAI-style keys
+    r'|ghp_[A-Za-z0-9]{36,}'           # GitHub PATs
+    r'|gho_[A-Za-z0-9]{36,}'           # GitHub OAuth tokens
+    r'|AIza[A-Za-z0-9_-]{35}'          # Google API keys
+    r'|ya29\.[A-Za-z0-9_-]+'           # Google OAuth tokens
+    r'|xox[bpsa]-[A-Za-z0-9-]+'        # Slack tokens
+    r'|EAAG[A-Za-z0-9]+'              # Meta/Facebook tokens
+    r'|[Pp]assword\s*[:=]\s*\S+'       # password: value or password=value
+    r'|[Ss]ecret\s*[:=]\s*\S+'         # secret: value
+    r'|[Tt]oken\s*[:=]\s*\S+'          # token: value
+    r'|[Aa]pi[_-]?[Kk]ey\s*[:=]\s*\S+'  # api_key: value
+    r')'
+)
+
+
+def _redact_sensitive(text: str) -> str:
+    """Replace sensitive patterns in text with [REDACTED]."""
+    return _SENSITIVE_PATTERNS.sub('[REDACTED]', text)
+
 
 # ── Transcript collection (kept from collect_transcripts.py) ──────────────
 
@@ -93,6 +120,7 @@ def extract_session(jsonl_path: Path) -> dict | None:
                                 })
                     if text_parts:
                         combined = "\n".join(text_parts)[:5000]
+                        combined = _redact_sensitive(combined)
                         messages.append({
                             "role": "assistant",
                             "index": line_no,

@@ -24,18 +24,32 @@ TODAY=$(date +%Y-%m-%d)
 LOG_FILE="$LOG_DIR/${TODAY}.jsonl"
 
 # Build and write record with python3 (faster than jq on macOS when cached)
+# Security: redact output of credential-related tools to avoid plaintext secrets in logs
 echo "$INPUT" | python3 -c "
-import json, sys
+import json, sys, re
 from datetime import datetime
 d = json.load(sys.stdin)
+tool_name = d.get('tool_name', 'unknown')
+
+tool_input = d.get('tool_input')
+tool_response = d.get('tool_response')
+
+# Redact tools that handle credentials/secrets
+SENSITIVE_TOOLS = ('credential', 'secret', 'token', 'password', 'apikey', 'api_key')
+if any(kw in tool_name.lower() for kw in SENSITIVE_TOOLS):
+    tool_response = '[REDACTED]'
+    # Also redact input values (keep keys for debuggability)
+    if isinstance(tool_input, dict):
+        tool_input = {k: '[REDACTED]' if k not in ('servicio', 'service', 'name', 'key') else v for k, v in tool_input.items()}
+
 record = {
     'timestamp': datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'),
     'session_id': d.get('session_id', 'unknown'),
-    'tool_name': d.get('tool_name', 'unknown'),
+    'tool_name': tool_name,
     'hook_event': d.get('hook_event_name', 'unknown'),
     'tool_use_id': d.get('tool_use_id'),
-    'tool_input': d.get('tool_input'),
-    'tool_response': d.get('tool_response'),
+    'tool_input': tool_input,
+    'tool_response': tool_response,
     'error': d.get('error')
 }
 print(json.dumps(record))

@@ -106,6 +106,16 @@ def load_plugin(mcp, filename: str, plugins_dir: str | None = None) -> int:
                 f"Plugin not found in repo ({PLUGINS_DIR}) or personal ({PERSONAL_PLUGINS_DIR}): {filename}"
             )
 
+    # Security: reject path traversal — resolved path must stay inside allowed directories
+    real_path = os.path.realpath(filepath)
+    real_plugins = os.path.realpath(PLUGINS_DIR)
+    real_personal = os.path.realpath(PERSONAL_PLUGINS_DIR)
+    if not (real_path.startswith(real_plugins + os.sep) or real_path.startswith(real_personal + os.sep)):
+        raise ValueError(
+            f"Path traversal blocked: {filename!r} resolves to {real_path}, "
+            f"which is outside {real_plugins} and {real_personal}"
+        )
+
     module_name = f"plugins.{filename[:-3]}"
 
     # For personal plugins (outside repo), use spec_from_file_location
