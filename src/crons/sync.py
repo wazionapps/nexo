@@ -42,15 +42,53 @@ def load_manifest() -> list[dict]:
     return data.get("crons", [])
 
 
+def _copy_script_to_nexo_home(src: Path) -> Path:
+    """Copy a script from NEXO_CODE to NEXO_HOME/scripts/ for Sandbox compatibility.
+
+    macOS Sandbox blocks LaunchAgents from executing scripts in ~/Documents/.
+    We copy scripts to NEXO_HOME/scripts/ which is typically ~/claude/scripts/
+    or ~/.nexo/scripts/ — both outside the Sandbox restricted paths.
+    """
+    dest_dir = NEXO_HOME / "scripts"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+
+    if src.is_dir():
+        import shutil
+        dest = dest_dir / src.name
+        if dest.exists():
+            shutil.rmtree(dest)
+        shutil.copytree(src, dest)
+        return dest
+    else:
+        dest = dest_dir / src.name
+        import shutil
+        shutil.copy2(src, dest)
+        dest.chmod(0o755)
+        return dest
+
+
 def build_plist(cron: dict) -> dict:
     """Build a macOS LaunchAgent plist dict from a manifest entry."""
     cron_id = cron["id"]
     label = f"{LABEL_PREFIX}{cron_id}"
-    script_path = str(NEXO_CODE / cron["script"])
+    script_src = NEXO_CODE / cron["script"]
     script_type = cron.get("type", "python")
 
-    # Wrap all crons with nexo-cron-wrapper.sh for automatic execution tracking
-    wrapper_path = str(NEXO_CODE / "scripts" / "nexo-cron-wrapper.sh")
+    # Copy scripts to NEXO_HOME/scripts/ to avoid macOS Sandbox restrictions
+    script_dest = _copy_script_to_nexo_home(script_src)
+    script_path = str(script_dest)
+
+    # Also copy the wrapper and any subdirectories (e.g., deep-sleep/)
+    wrapper_src = NEXO_CODE / "scripts" / "nexo-cron-wrapper.sh"
+    wrapper_dest = _copy_script_to_nexo_home(wrapper_src)
+    wrapper_path = str(wrapper_dest)
+
+    # Copy script subdirectories if they exist (e.g., deep-sleep/ for nexo-deep-sleep.sh)
+    script_name = script_src.stem  # e.g., "nexo-deep-sleep"
+    subdir_name = script_name.replace("nexo-", "")  # e.g., "deep-sleep"
+    subdir_src = NEXO_CODE / "scripts" / subdir_name
+    if subdir_src.is_dir():
+        _copy_script_to_nexo_home(subdir_src)
 
     if script_type == "shell":
         program_args = ["/bin/bash", wrapper_path, cron_id, "/bin/bash", script_path]

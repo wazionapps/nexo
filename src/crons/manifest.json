@@ -83,7 +83,7 @@
     },
     {
       "id": "auto-close-sessions",
-      "script": "scripts/nexo-auto-close-sessions.py",
+      "script": "auto_close_sessions.py",
       "interval_seconds": 300,
       "description": "Close stale sessions that lost their parent process",
       "core": true
