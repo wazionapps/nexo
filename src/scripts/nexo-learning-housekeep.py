@@ -196,6 +196,54 @@ def archive_stale(conn):
     return len(stale)
 
 
+def _reconcile_decision_outcome(conn, decision_id: int, decision_text: str) -> str | None:
+    """Try to find evidence of a decision's outcome in diaries, followups, and change_log.
+
+    Returns outcome text if found, None otherwise.
+    """
+    # Extract keywords from the decision for matching
+    keywords = [w for w in decision_text.lower().split() if len(w) > 4][:5]
+    if not keywords:
+        return None
+
+    like_clauses = " OR ".join(f"summary LIKE ?" for _ in keywords)
+    like_params = [f"%{kw}%" for kw in keywords]
+
+    # Check session diaries for evidence
+    diary_match = conn.execute(
+        f"SELECT summary FROM session_diary WHERE ({like_clauses}) "
+        "AND created_at > (SELECT created_at FROM decisions WHERE id = ?) "
+        "ORDER BY created_at DESC LIMIT 1",
+        like_params + [decision_id]
+    ).fetchone()
+    if diary_match:
+        return f"[auto-reconciled from diary] {diary_match['summary'][:200]}"
+
+    # Check completed followups
+    like_clauses_f = " OR ".join(f"description LIKE ?" for _ in keywords)
+    followup_match = conn.execute(
+        f"SELECT description, verification FROM followups WHERE status = 'COMPLETED' "
+        f"AND ({like_clauses_f}) ORDER BY date DESC LIMIT 1",
+        like_params
+    ).fetchone()
+    if followup_match:
+        result = followup_match['verification'] or followup_match['description']
+        return f"[auto-reconciled from followup] {result[:200]}"
+
+    # Check change_log
+    like_clauses_c = " OR ".join(f"description LIKE ?" for _ in keywords)
+    change_match = conn.execute(
+        f"SELECT description, commit_ref FROM change_log WHERE ({like_clauses_c}) "
+        "ORDER BY created_at DESC LIMIT 1",
+        like_params
+    ).fetchone()
+    if change_match:
+        ref = change_match['commit_ref'] or ''
+        return f"[auto-reconciled from change_log] {change_match['description'][:150]} {ref}"
+
+    return None
+
+
 def process_overdue_reviews(conn):
     """Process learnings and decisions whose review_due_at has passed.
 
@@ -267,14 +315,26 @@ def process_overdue_reviews(conn):
         ).fetchall()
 
         for d in overdue_decisions:
+            did = d["id"]
             created = d["created_at"] or ""
-            if created < cutoff_30d:
+            decision_text = d["decision"] or ""
+
+            # Try to reconcile outcome from diaries, followups, change_log
+            outcome = _reconcile_decision_outcome(conn, did, decision_text)
+            if outcome:
                 conn.execute(
-                    "UPDATE decisions SET status = 'archived' WHERE id = ?",
-                    (d["id"],)
+                    "UPDATE decisions SET status = 'resolved', outcome = ? WHERE id = ?",
+                    (outcome, did)
                 )
                 decision_archived += 1
-                print(f"[{ts}]   Archived overdue decision #{d['id']} '{d['decision'][:50]}' (>30d without outcome)")
+                print(f"[{ts}]   Resolved decision #{did} '{decision_text[:50]}' — outcome found in logs")
+            elif created < cutoff_30d:
+                conn.execute(
+                    "UPDATE decisions SET status = 'archived' WHERE id = ?",
+                    (did,)
+                )
+                decision_archived += 1
+                print(f"[{ts}]   Archived decision #{did} '{decision_text[:50]}' (>30d, no outcome found)")
     except Exception as e:
         print(f"[{ts}] Overdue reviews: error processing decisions: {e}")
 

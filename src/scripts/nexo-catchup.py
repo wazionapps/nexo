@@ -52,6 +52,49 @@ def _resolve_python() -> str:
     return sys.executable
 
 NEXO_PYTHON = _resolve_python()
+NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parent.parent)))
+MANIFEST = NEXO_CODE / "crons" / "manifest.json"
+
+
+def _load_tasks_from_manifest() -> list[tuple]:
+    """Read scheduled tasks from manifest.json — single source of truth.
+
+    Only includes crons with a schedule (hour/minute). Excludes interval-based
+    crons (immune, watchdog, auto-close) and run_at_load (catchup itself).
+    Returns: list of (name, hour, minute, python_or_bash, script, weekday)
+    """
+    if not MANIFEST.exists():
+        log(f"WARNING: manifest not found at {MANIFEST}, using empty task list")
+        return []
+
+    with open(MANIFEST) as f:
+        data = json.load(f)
+
+    tasks = []
+    for cron in data.get("crons", []):
+        schedule = cron.get("schedule")
+        if not schedule or "hour" not in schedule:
+            continue  # Skip interval-based and run_at_load crons
+        if cron["id"] == "catchup":
+            continue  # Don't catch up ourselves
+
+        script = cron["script"]
+        script_type = cron.get("type", "python")
+        interpreter = NEXO_PYTHON if script_type == "python" else "/bin/bash"
+        weekday = schedule.get("weekday")
+
+        tasks.append((
+            cron["id"],
+            schedule["hour"],
+            schedule["minute"],
+            interpreter,
+            Path(script).name,
+            weekday,
+        ))
+
+    # Sort by hour, minute for correct execution order
+    tasks.sort(key=lambda t: (t[1], t[2]))
+    return tasks
 
 
 def log(msg: str):
@@ -130,13 +173,14 @@ def run_task(name: str, python: str, script: str, state: dict) -> bool:
         )
         if result.returncode == 0:
             log(f"  OK {name} (exit 0)")
+            state[name] = datetime.now().isoformat()
+            save_state(state)
+            return True
         else:
-            log(f"  WARN {name} (exit {result.returncode})")
+            log(f"  FAIL {name} (exit {result.returncode})")
             if result.stderr:
                 log(f"    stderr: {result.stderr[:300]}")
-        state[name] = datetime.now().isoformat()
-        save_state(state)
-        return True
+            return False
     except subprocess.TimeoutExpired:
         log(f"  TIMEOUT {name} (300s)")
         return False
@@ -149,16 +193,8 @@ def main():
     log("=== NEXO Catch-Up starting (boot/wake) ===")
     state = load_state()
 
-    # Define tasks in execution order (matching their intended schedule order)
-    # Note: auto-update is handled by the MCP server on startup, not by catchup.
-    tasks = [
-        # (name, hour, minute, python, script, weekday)
-        ("cognitive-decay", 3, 0, NEXO_PYTHON, "nexo-cognitive-decay.py", None),
-        ("evolution", 3, 0, NEXO_PYTHON, "nexo-evolution-run.py", 6),  # Sunday = 6
-        ("sleep", 4, 0, NEXO_PYTHON, "nexo-sleep.py", None),
-        ("self-audit", 7, 0, NEXO_PYTHON, "nexo-daily-self-audit.py", None),
-        ("postmortem", 23, 30, NEXO_PYTHON, "nexo-postmortem-consolidator.py", None),
-    ]
+    # Read tasks from manifest — single source of truth
+    tasks = _load_tasks_from_manifest()
 
     ran = 0
     skipped = 0

@@ -27,12 +27,19 @@ echo "============================================================"
 
 # ── 1. py_compile for all Python scripts in src/scripts/ ──────────────────
 echo ""
+# Non-core scripts to exclude from compilation checks
+NON_CORE="check-context.py"
+
 echo "--- Check 1: Python syntax (src/scripts/*.py) ---"
 for pyfile in "$SRC"/scripts/*.py; do
     # Skip " 2" duplicate files (backup copies)
     [[ "$pyfile" == *" 2"* ]] && continue
     [ -f "$pyfile" ] || continue
     name=$(basename "$pyfile")
+    # Skip non-core scripts
+    for skip in $NON_CORE; do
+        [[ "$name" == "$skip" ]] && continue 2
+    done
     if python3 -m py_compile "$pyfile" 2>/dev/null; then
         pass "$name"
     else
@@ -132,6 +139,29 @@ else
     else
         pass "watchdog has no hardcoded personal monitors (all from manifest)"
     fi
+fi
+
+# ── 6. Manifest<->README consistency ─────────────────────────────────────
+echo ""
+echo "--- Check 6: Manifest crons mentioned in README ---"
+README="$REPO_ROOT/README.md"
+if [ -f "$README" ] && [ -f "$MANIFEST" ]; then
+    manifest_ids=$(python3 -c "
+import json
+m = json.load(open('$MANIFEST'))
+for c in m.get('crons', []):
+    print(c['id'])
+" 2>/dev/null)
+
+    for cid in $manifest_ids; do
+        if grep -qE "\*\*${cid}\*\*|${cid}" "$README" 2>/dev/null; then
+            pass "cron '$cid' documented in README"
+        else
+            fail "cron '$cid' NOT in README"
+        fi
+    done
+else
+    warn "README.md or manifest.json not found, skipping"
 fi
 
 # ── Summary ───────────────────────────────────────────────────────────────

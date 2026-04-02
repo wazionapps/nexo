@@ -283,13 +283,13 @@ NEXO Brain doesn't just respond — it runs 15 autonomous processes in the backg
 | **prevent-sleep** | Always (daemon) | Keeps machine awake for nocturnal processes (caffeinate/systemd-inhibit) |
 | **evolution** | Weekly (Sun) | Self-improvement proposals — NEXO suggests and applies enhancements |
 | **followup-hygiene** | Weekly (Sun) | Normalizes statuses, flags stale followups, cleans orphans |
+| **learning-housekeep** | 03:15 daily | Dedup learnings, adjust weights by usage, process overdue reviews, reconcile decision outcomes |
 | **immune** | Every 30 min | Quarantine processing, memory promotion/rejection, synaptic pruning |
-| **synthesis** | Every 2 hours | Memory synthesis — discovers cross-memory patterns |
-| **backup** | Every hour | SQLite database backups |
-| **watchdog** | Every 5 min | Monitors services, LaunchAgents, and infrastructure health |
+| **synthesis** | 06:00 daily | Memory synthesis — discovers cross-memory patterns |
+| **watchdog** | Every 30 min | Monitors services, LaunchAgents, and infrastructure health |
 | **auto-close-sessions** | Every 5 min | Cleans stale sessions |
 
-All processes are defined in `src/crons/manifest.json` and auto-synced to your system by `nexo_update`. On macOS they run via LaunchAgents; on Linux via systemd user timers (or crontab fallback). Personal crons (your own scripts) are never touched by the sync. If your Mac was asleep during a scheduled process, the catch-up script re-runs everything in order when it wakes.
+Core processes are defined in `src/crons/manifest.json` and auto-synced to your system by `nexo_update`. On macOS they run via LaunchAgents; on Linux via systemd user timers. `tcc-approve`, `prevent-sleep`, and `backup` are platform/personal helpers — not in the manifest but listed above for completeness. Personal crons (your own scripts) are never touched by the sync. If your Mac was asleep during a scheduled process, the catch-up script re-runs everything in order when it wakes.
 
 ## Deep Sleep v2 — Overnight Learning (v2.1.0)
 

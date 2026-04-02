@@ -6,7 +6,7 @@ Before: ~400 lines of Python concatenating SQL results into markdown sections.
 Now: Collects raw data, passes to Claude CLI (sonnet) which synthesizes
 with real understanding of what matters for tomorrow.
 
-Runs every 2 hours via LaunchAgent. Executes ONCE per day (internal gate).
+Runs daily at 06:00 via LaunchAgent.
 """
 
 import fcntl
