@@ -73,6 +73,19 @@ Consider ALL of these:
 
 The score should feel fair. A day with 2 minor corrections and 10 tasks completed is still a good day (75+). A day with 1 catastrophic error might be a 40 even if everything else was fine.
 
+### 9. Skill Extraction
+Consolidate `skill_candidates` from all session extractions into publishable skills:
+- Merge similar procedures from different sessions into a single skill
+- Generalize: replace session-specific IDs, paths, or names with placeholders or descriptions
+- Only include skills with confidence >= 0.7
+- Check if a similar skill already exists (use `nexo_skill_match` if available) — if so, note it for merging instead of creating new
+
+For each skill, generate:
+- A unique ID starting with `SK-` (e.g., `SK-DEPLOY-CHROME-EXT`)
+- Name, description, tags, trigger_patterns
+- The full step-by-step procedure as the skill content
+- Source session IDs for traceability
+
 ### 8. Consolidated Actions
 Merge and deduplicate all findings into a final action list. Each action should have:
 - `action_type`: `learning_add`, `followup_create`, `morning_briefing_item`
@@ -122,9 +135,24 @@ Return ONLY valid JSON. No markdown code fences. No explanation text.
     }
   ],
 
+  "skills": [
+    {
+      "id": "SK-SHORT-ID",
+      "name": "Human readable name",
+      "description": "What this procedure does (1-2 sentences)",
+      "steps": ["Step 1", "Step 2", "Step 3"],
+      "tags": ["tag1", "tag2"],
+      "trigger_patterns": ["trigger phrase 1", "trigger phrase 2"],
+      "gotchas": ["Warning or caveat"],
+      "source_sessions": ["session1.jsonl"],
+      "confidence": 0.85,
+      "merge_with": null
+    }
+  ],
+
   "actions": [
     {
-      "action_type": "learning_add|followup_create|morning_briefing_item",
+      "action_type": "learning_add|followup_create|skill_create|morning_briefing_item",
       "action_class": "auto_apply|draft_for_morning",
       "confidence": 0.9,
       "impact": "low|medium|high",

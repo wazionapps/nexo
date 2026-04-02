@@ -58,6 +58,22 @@ Detect work that was started but not finished in this session:
 - Investigations started but conclusions never reached
 Only flag if the work was NOT captured in a followup or reminder.
 
+### 9. Skill Candidates (Reusable Procedures)
+Detect multi-step tasks that were completed successfully and could be reused:
+- Tasks that required 3+ distinct steps to complete
+- Tasks where the agent followed a clear sequence of actions
+- Procedures that are likely to be repeated in the future
+- Examples: deploying code, configuring a service, running an audit, setting up infrastructure
+
+For each candidate, extract:
+- The full step-by-step procedure (what was actually done, in order)
+- Tags describing the domain (e.g., "shopify", "chrome", "deploy")
+- Trigger phrases that would indicate this procedure is needed (e.g., "deploy extension", "push theme")
+- Any gotchas or warnings discovered during execution
+
+Only flag if the procedure was SUCCESSFUL (the task was completed without major failures).
+Do NOT flag trivial tasks (single-step actions, simple file edits, quick lookups).
+
 ### 8. Productivity Patterns
 Analyze how the session went in terms of efficiency:
 - How many times did the agent need correction before getting it right?
@@ -192,6 +208,28 @@ Return ONLY valid JSON. No markdown code fences. No explanation text before or a
       "description": "What was started but not finished",
       "reason": "interrupted|dropped|forgotten|deferred",
       "has_followup": false
+    }
+  ],
+
+  "skill_candidates": [
+    {
+      "name": "Short name for the procedure (e.g., Deploy Chrome Extension)",
+      "description": "What this procedure accomplishes (1-2 sentences)",
+      "steps": [
+        "Step 1: What was done first",
+        "Step 2: What was done next",
+        "Step 3: etc."
+      ],
+      "tags": ["domain1", "domain2"],
+      "trigger_phrases": ["phrase that would trigger this", "another trigger"],
+      "gotchas": ["Warning or caveat discovered during execution"],
+      "evidence": {
+        "type": "transcript",
+        "session_id": "filename.jsonl",
+        "message_index": 10,
+        "quote": "Start of the multi-step task"
+      },
+      "confidence": 0.85
     }
   ],
 

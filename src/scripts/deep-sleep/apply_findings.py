@@ -203,6 +203,52 @@ def calibrate_trust_score(synthesis: dict, target_date: str) -> dict:
         return {"success": False, "error": str(e)}
 
 
+def create_skill(skill_data: dict) -> dict:
+    """Create a skill in nexo.db from Deep Sleep extraction."""
+    if not NEXO_DB.exists():
+        return {"success": False, "error": "nexo.db not found"}
+    try:
+        import hashlib
+        skill_id = skill_data.get("id", "")
+        if not skill_id:
+            skill_id = "SK-DS-" + hashlib.md5(
+                skill_data.get("name", "").encode()
+            ).hexdigest()[:8].upper()
+
+        name = skill_data.get("name", "")
+        description = skill_data.get("description", "")
+        tags = json.dumps(skill_data.get("tags", []))
+        trigger_patterns = json.dumps(skill_data.get("trigger_patterns", []))
+        source_sessions = json.dumps(skill_data.get("source_sessions", []))
+        steps = skill_data.get("steps", [])
+        gotchas = skill_data.get("gotchas", [])
+
+        # Build file content for the skill .md file
+        steps_md = "\n".join(f"{i+1}. {s}" for i, s in enumerate(steps))
+        gotchas_md = "\n".join(f"- {g}" for g in gotchas) if gotchas else "None"
+
+        conn = sqlite3.connect(str(NEXO_DB))
+        # Check if skill already exists
+        existing = conn.execute("SELECT id FROM skills WHERE id = ?", (skill_id,)).fetchone()
+        if existing:
+            conn.close()
+            return {"success": False, "error": f"Skill {skill_id} already exists", "id": skill_id}
+
+        now = datetime.now().isoformat(timespec='seconds')
+        conn.execute(
+            """INSERT INTO skills
+               (id, name, description, level, trust_score, tags, trigger_patterns,
+                source_sessions, linked_learnings, created_at, updated_at)
+               VALUES (?, ?, ?, 'draft', 50, ?, ?, ?, '[]', ?, ?)""",
+            (skill_id, name, description, tags, trigger_patterns, source_sessions, now, now),
+        )
+        conn.commit()
+        conn.close()
+        return {"success": True, "id": skill_id, "name": name}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 def create_abandoned_followups(synthesis: dict) -> list[dict]:
     """Create followups for truly abandoned projects."""
     results = []
@@ -494,6 +540,11 @@ def apply_action(action: dict, run_id: str) -> dict:
         log_entry["status"] = "applied" if result.get("success") else "error"
         log_entry["details"] = result
 
+    elif action_type == "skill_create":
+        result = create_skill(content)
+        log_entry["status"] = "applied" if result.get("success") else "error"
+        log_entry["details"] = result
+
     elif action_type == "morning_briefing_item":
         # These are included in the briefing file, not applied separately
         log_entry["status"] = "included_in_briefing"
@@ -584,6 +635,26 @@ def main():
         print(f"  Trust: {trust_result['old_score']:.0f} → {trust_result['new_score']:.0f} (Δ{trust_result['delta']:+.0f}, {trust_result['trend']})")
     else:
         print(f"  Trust skip: {trust_result.get('error', '?')}")
+
+    # Create skills from synthesis
+    skills_data = synthesis.get("skills", [])
+    if skills_data:
+        print(f"[apply] Creating {len(skills_data)} skill(s)...")
+        for skill_data in skills_data:
+            if skill_data.get("confidence", 0) < 0.7:
+                continue
+            if skill_data.get("merge_with"):
+                print(f"  Skip {skill_data.get('id', '?')}: merge candidate (needs runtime merge)")
+                continue
+            result = create_skill(skill_data)
+            if result.get("success"):
+                stats["applied"] += 1
+                print(f"  Skill created: {result['id']} — {result.get('name', '')[:50]}")
+            elif "already exists" in result.get("error", ""):
+                stats["skipped_dedupe"] += 1
+            else:
+                stats["errors"] += 1
+                print(f"  Skill error: {result.get('error', 'unknown')}", file=sys.stderr)
 
     # Create followups for abandoned projects
     abandoned_results = create_abandoned_followups(synthesis)
