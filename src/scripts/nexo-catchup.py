@@ -126,7 +126,11 @@ def last_scheduled_time(hour: int, minute: int, weekday: int = None) -> datetime
 
     if weekday is not None:
         # Weekly task — find the most recent matching weekday
-        days_since = (now.weekday() - weekday) % 7
+        # Manifest uses cron/launchd convention: 0=Sunday, 6=Saturday
+        # Python datetime.weekday() uses: 0=Monday, 6=Sunday
+        # Convert: manifest 0 (Sun) -> python 6, manifest 1 (Mon) -> python 0, etc.
+        py_weekday = (weekday - 1) % 7
+        days_since = (now.weekday() - py_weekday) % 7
         target = now - timedelta(days=days_since)
         target = target.replace(hour=hour, minute=minute, second=0, microsecond=0)
         if target > now:

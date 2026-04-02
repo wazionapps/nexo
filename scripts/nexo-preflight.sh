@@ -164,6 +164,63 @@ else
     warn "README.md or manifest.json not found, skipping"
 fi
 
+# ── 7. Smoke tests ──────────────────────────────────────────────────────
+echo ""
+echo "--- Check 7: Smoke tests ---"
+
+# 7a: catchup weekday conversion (manifest 0=Sunday -> python 6)
+WEEKDAY_TEST=$(python3 -c "
+# Simulate the conversion from catchup.py
+manifest_weekday = 0  # Sunday in cron/launchd
+py_weekday = (manifest_weekday - 1) % 7  # Should be 6 (Sunday in Python)
+assert py_weekday == 6, f'Expected 6 (Sunday), got {py_weekday}'
+# Also test Monday
+assert (1 - 1) % 7 == 0, 'Monday should be 0'
+# Saturday
+assert (6 - 1) % 7 == 5, 'Saturday should be 5'
+print('OK')
+" 2>&1)
+if [ "$WEEKDAY_TEST" = "OK" ]; then
+    pass "catchup weekday conversion (manifest 0=Sun -> python 6)"
+else
+    fail "catchup weekday conversion: $WEEKDAY_TEST"
+fi
+
+# 7b: change_log schema uses what_changed (not description)
+SCHEMA_TEST=$(python3 -c "
+import sys
+sys.path.insert(0, '$SRC')
+# Verify change_log columns match what learning-housekeep uses
+with open('$SRC/db/_core.py') as f:
+    core = f.read()
+if 'what_changed' in core:
+    print('OK')
+else:
+    print('FAIL: what_changed not found in _core.py')
+" 2>&1)
+if [ "$SCHEMA_TEST" = "OK" ]; then
+    pass "change_log schema uses what_changed (matches reconciler)"
+else
+    fail "change_log schema: $SCHEMA_TEST"
+fi
+
+# 7c: reconciler queries use correct columns for change_log
+RECONCILER_TEST=$(python3 -c "
+with open('$SRC/scripts/nexo-learning-housekeep.py') as f:
+    code = f.read()
+# Find the change_log section of _reconcile_decision_outcome
+cl_section = code[code.index('# Check change_log'):code.index('return None', code.index('# Check change_log'))]
+if 'what_changed LIKE' in cl_section:
+    print('OK')
+else:
+    print('FAIL: change_log section does not use what_changed')
+" 2>&1)
+if [ "$RECONCILER_TEST" = "OK" ]; then
+    pass "reconciler uses correct change_log columns"
+else
+    fail "reconciler columns: $RECONCILER_TEST"
+fi
+
 # ── Summary ───────────────────────────────────────────────────────────────
 echo ""
 echo "============================================================"

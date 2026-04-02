@@ -230,16 +230,17 @@ def _reconcile_decision_outcome(conn, decision_id: int, decision_text: str) -> s
         result = followup_match['verification'] or followup_match['description']
         return f"[auto-reconciled from followup] {result[:200]}"
 
-    # Check change_log
-    like_clauses_c = " OR ".join(f"description LIKE ?" for _ in keywords)
+    # Check change_log (schema: what_changed, why, commit_ref, affects)
+    like_clauses_c = " OR ".join(f"what_changed LIKE ?" for _ in keywords)
     change_match = conn.execute(
-        f"SELECT description, commit_ref FROM change_log WHERE ({like_clauses_c}) "
+        f"SELECT what_changed, why, commit_ref FROM change_log WHERE ({like_clauses_c}) "
         "ORDER BY created_at DESC LIMIT 1",
         like_params
     ).fetchone()
     if change_match:
         ref = change_match['commit_ref'] or ''
-        return f"[auto-reconciled from change_log] {change_match['description'][:150]} {ref}"
+        desc = change_match['what_changed'] or change_match['why'] or ''
+        return f"[auto-reconciled from change_log] {desc[:150]} {ref}"
 
     return None
 
