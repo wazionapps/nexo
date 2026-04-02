@@ -49,8 +49,11 @@ def build_plist(cron: dict) -> dict:
     script_path = str(NEXO_CODE / cron["script"])
     script_type = cron.get("type", "python")
 
+    # Wrap all crons with nexo-cron-wrapper.sh for automatic execution tracking
+    wrapper_path = str(NEXO_CODE / "scripts" / "nexo-cron-wrapper.sh")
+
     if script_type == "shell":
-        program_args = ["/bin/bash", script_path]
+        program_args = ["/bin/bash", wrapper_path, cron_id, "/bin/bash", script_path]
     else:
         # Find python3
         python_candidates = [
@@ -64,7 +67,7 @@ def build_plist(cron: dict) -> dict:
             if Path(p).exists():
                 python_bin = p
                 break
-        program_args = [python_bin, script_path]
+        program_args = ["/bin/bash", wrapper_path, cron_id, python_bin, script_path]
 
     plist = {
         "Label": label,

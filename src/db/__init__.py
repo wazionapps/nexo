@@ -88,6 +88,11 @@ from db._evolution import (
     insert_evolution_log, get_evolution_history, update_evolution_log_status,
 )
 
+# Cron execution history
+from db._cron_runs import (
+    cron_run_start, cron_run_end, cron_runs_recent, cron_runs_summary,
+)
+
 # Skills
 from db._skills import (
     create_skill, get_skill, list_skills, search_skills,

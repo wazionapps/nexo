@@ -341,6 +341,23 @@ def _m16_skills_tables(conn):
 
 
 # Migration registry — APPEND ONLY, never reorder or delete
+def _m17_cron_runs(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS cron_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            cron_id TEXT NOT NULL,
+            started_at TEXT NOT NULL DEFAULT (datetime('now')),
+            ended_at TEXT,
+            exit_code INTEGER,
+            summary TEXT DEFAULT '',
+            error TEXT DEFAULT '',
+            duration_secs REAL
+        )
+    """)
+    _migrate_add_index(conn, "idx_cron_runs_cron_id", "cron_runs", "cron_id")
+    _migrate_add_index(conn, "idx_cron_runs_started", "cron_runs", "started_at")
+
+
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
     (2, "followups_reasoning", _m2_followups_reasoning),
@@ -358,6 +375,7 @@ MIGRATIONS = [
     (14, "learnings_priority_weight", _m14_learnings_priority_weight),
     (15, "core_rules_tables", _m15_core_rules_tables),
     (16, "skills_tables", _m16_skills_tables),
+    (17, "cron_runs", _m17_cron_runs),
 ]
 
 
