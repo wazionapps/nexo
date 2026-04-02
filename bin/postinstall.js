@@ -9,7 +9,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const NEXO_HOME = path.join(require("os").homedir(), ".nexo");
+const NEXO_HOME = process.env.NEXO_HOME || path.join(require("os").homedir(), ".nexo");
 const VERSION_FILE = path.join(NEXO_HOME, "version.json");
 
 if (process.env.NEXO_SKIP_POSTINSTALL === "1") {
@@ -36,7 +36,7 @@ if (fs.existsSync(VERSION_FILE)) {
   try {
     execSync(`node ${path.join(__dirname, "nexo-brain.js")} --yes`, {
       stdio: "inherit",
-      env: { ...process.env, NEXO_POSTINSTALL: "1" }
+      env: { ...process.env, NEXO_POSTINSTALL: "1", NEXO_HOME: NEXO_HOME }
     });
   } catch (e) {
     console.error(`\n  NEXO Brain: migration FAILED — ${e.message}`);

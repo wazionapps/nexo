@@ -19,7 +19,7 @@ const fs = require("fs");
 const path = require("path");
 const readline = require("readline");
 
-let NEXO_HOME = path.join(require("os").homedir(), ".nexo");
+let NEXO_HOME = process.env.NEXO_HOME || path.join(require("os").homedir(), ".nexo");
 const CLAUDE_SETTINGS = path.join(
   require("os").homedir(),
   ".claude",

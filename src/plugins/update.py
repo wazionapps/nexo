@@ -217,13 +217,64 @@ def _verify_import() -> str | None:
     return None
 
 
+def _backup_code_tree() -> tuple[str | None, str | None]:
+    """Snapshot NEXO_HOME code dirs before npm update. Returns (backup_dir, error)."""
+    timestamp = time.strftime("%Y-%m-%d-%H%M%S")
+    backup_dir = BACKUP_BASE / f"code-tree-{timestamp}"
+    # Directories and flat files that postinstall copies into NEXO_HOME
+    code_dirs = ["hooks", "plugins", "db", "cognitive", "dashboard", "rules", "crons", "scripts"]
+    code_files_glob = ["*.py", "requirements.txt"]
+    try:
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        # Backup directories
+        for d in code_dirs:
+            src = NEXO_HOME / d
+            if src.is_dir():
+                shutil.copytree(src, backup_dir / d, dirs_exist_ok=True)
+        # Backup flat code files in NEXO_HOME root
+        for pattern in code_files_glob:
+            for f in NEXO_HOME.glob(pattern):
+                if f.is_file():
+                    shutil.copy2(f, backup_dir / f.name)
+        # Backup version.json
+        vf = NEXO_HOME / "version.json"
+        if vf.is_file():
+            shutil.copy2(vf, backup_dir / "version.json")
+    except Exception as e:
+        return None, f"Code tree backup failed: {e}"
+    return str(backup_dir), None
+
+
+def _restore_code_tree(backup_dir: str) -> str | None:
+    """Restore NEXO_HOME code dirs from a backup snapshot. Returns error or None."""
+    bdir = Path(backup_dir)
+    if not bdir.is_dir():
+        return f"Code tree backup dir not found: {backup_dir}"
+    try:
+        for item in bdir.iterdir():
+            dest = NEXO_HOME / item.name
+            if item.is_dir():
+                if dest.is_dir():
+                    shutil.rmtree(dest)
+                shutil.copytree(item, dest)
+            elif item.is_file():
+                shutil.copy2(item, dest)
+    except Exception as e:
+        return f"Code tree restore failed: {e}"
+    return None
+
+
 def _rollback_npm_package(target_version: str) -> str | None:
-    """Rollback nexo-brain npm package to a specific version."""
+    """Rollback nexo-brain npm package to a specific version.
+
+    Uses NEXO_SKIP_POSTINSTALL because we restore the code tree
+    from our own pre-update backup — no need for postinstall migration.
+    """
     try:
         result = subprocess.run(
             ["npm", "install", "-g", f"nexo-brain@{target_version}"],
             capture_output=True, text=True, timeout=120,
-            env={**os.environ, "NEXO_SKIP_POSTINSTALL": "1"},
+            env={**os.environ, "NEXO_SKIP_POSTINSTALL": "1", "NEXO_HOME": str(NEXO_HOME)},
         )
         if result.returncode != 0:
             return f"npm rollback failed: {result.stderr or result.stdout}"
@@ -241,27 +292,41 @@ def _handle_packaged_update() -> str:
     if backup_err:
         return f"ABORTED at backup: {backup_err}"
 
-    # 2. Run npm update (postinstall.js will migrate ~/.nexo in-place)
+    # 2. Backup NEXO_HOME code tree BEFORE npm update
+    #    postinstall copies hooks/core/plugins/scripts into NEXO_HOME,
+    #    so we need a full snapshot to restore on failure.
+    code_backup_dir, code_err = _backup_code_tree()
+    if code_err:
+        return f"ABORTED at code tree backup: {code_err}"
+
+    # 3. Run npm update (postinstall.js will migrate NEXO_HOME in-place)
     try:
         result = subprocess.run(
             ["npm", "update", "-g", "nexo-brain"],
             capture_output=True, text=True, timeout=120,
+            env={**os.environ, "NEXO_HOME": str(NEXO_HOME)},
         )
         if result.returncode != 0:
-            # npm failed (including postinstall failures) — restore DBs
+            # npm failed (including postinstall failures) — restore DBs + code tree
             if backup_dir:
                 _restore_databases(backup_dir)
+            if code_backup_dir:
+                _restore_code_tree(code_backup_dir)
             return f"ABORTED: npm update failed: {result.stderr or result.stdout}"
     except FileNotFoundError:
         return "ABORTED: npm not found. Install Node.js to update packaged installs."
     except Exception as e:
+        if backup_dir:
+            _restore_databases(backup_dir)
+        if code_backup_dir:
+            _restore_code_tree(code_backup_dir)
         return f"ABORTED: npm update error: {e}"
 
     new_version = _read_version()
     if old_version == new_version:
         return f"Already up to date (v{old_version}). No changes."
 
-    # 3. Post-npm verification steps
+    # 4. Post-npm verification steps
     errors = []
 
     # Reinstall pip deps for new version
@@ -280,7 +345,11 @@ def _handle_packaged_update() -> str:
         errors.append(f"verification: {verify_err}")
 
     if errors:
-        # 4. Full rollback: restore DBs + rollback npm package to old version
+        # 5. Full rollback: restore code tree + DBs + rollback npm package
+        if code_backup_dir:
+            tree_err = _restore_code_tree(code_backup_dir)
+        else:
+            tree_err = "no code tree backup available"
         if backup_dir:
             _restore_databases(backup_dir)
         rollback_err = _rollback_npm_package(old_version)
@@ -288,6 +357,10 @@ def _handle_packaged_update() -> str:
         for err in errors:
             lines.append(f"  ERROR: {err}")
         lines.append(f"  Databases restored from: {backup_dir}")
+        if tree_err:
+            lines.append(f"  WARNING: code tree restore failed: {tree_err}")
+        else:
+            lines.append(f"  Code tree restored from: {code_backup_dir}")
         if rollback_err:
             lines.append(f"  WARNING: npm rollback failed: {rollback_err}")
             lines.append(f"  Manual rollback: npm install -g nexo-brain@{old_version}")
