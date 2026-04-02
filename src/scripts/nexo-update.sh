@@ -226,6 +226,15 @@ if [ -d "$HOOKS_SRC" ]; then
     fi
 fi
 
+# --- Step 8: Sync cron definitions with manifest ---
+CRON_SYNC="$SRC_DIR/crons/sync.py"
+if [ -f "$CRON_SYNC" ]; then
+    log "Syncing cron definitions..."
+    NEXO_HOME="$NEXO_HOME" NEXO_CODE="$SRC_DIR" python3 "$CRON_SYNC" 2>&1 && \
+        log "Cron definitions synced." || \
+        warn "Cron sync had warnings (non-fatal)."
+fi
+
 # --- Done ---
 echo ""
 log "========================================="

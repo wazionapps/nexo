@@ -149,6 +149,56 @@ def _sync_crons():
         _log(f"Cron sync warning: {e}")
 
 
+def _backup_dbs() -> str | None:
+    """Snapshot all .db files before migration. Returns backup dir or None."""
+    import sqlite3
+    import time as _time
+    timestamp = _time.strftime("%Y-%m-%d-%H%M%S")
+    backup_dir = NEXO_HOME / "backups" / f"pre-autoupdate-{timestamp}"
+
+    db_files = list(DATA_DIR.glob("*.db")) if DATA_DIR.is_dir() else []
+    db_files += [f for f in NEXO_HOME.glob("*.db") if f.is_file()]
+    src_db = SRC_DIR / "nexo.db"
+    if src_db.is_file() and src_db not in db_files:
+        db_files.append(src_db)
+
+    if not db_files:
+        return None
+
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    for db_file in db_files:
+        try:
+            src_conn = sqlite3.connect(str(db_file))
+            dst_conn = sqlite3.connect(str(backup_dir / db_file.name))
+            src_conn.backup(dst_conn)
+            dst_conn.close()
+            src_conn.close()
+        except Exception as e:
+            _log(f"DB backup warning ({db_file.name}): {e}")
+    return str(backup_dir)
+
+
+def _restore_dbs(backup_dir: str):
+    """Restore .db files from a backup directory."""
+    import sqlite3
+    bdir = Path(backup_dir)
+    if not bdir.is_dir():
+        return
+    for db_backup in bdir.glob("*.db"):
+        for candidate in [DATA_DIR / db_backup.name, NEXO_HOME / db_backup.name, SRC_DIR / db_backup.name]:
+            if candidate.is_file():
+                try:
+                    src_conn = sqlite3.connect(str(db_backup))
+                    dst_conn = sqlite3.connect(str(candidate))
+                    src_conn.backup(dst_conn)
+                    dst_conn.close()
+                    src_conn.close()
+                    _log(f"Restored DB: {db_backup.name}")
+                except Exception as e:
+                    _log(f"DB restore warning ({db_backup.name}): {e}")
+                break
+
+
 def _sync_hooks():
     """Copy hook scripts from src/hooks/ to NEXO_HOME/hooks/ after a git pull."""
     import shutil
@@ -220,13 +270,18 @@ def _check_git_updates() -> str | None:
     new_version = _read_package_version()
     new_req_hash = _requirements_hash()
 
+    # Backup databases before any changes that might run migrations
+    db_backup_dir = _backup_dbs()
+
     # Reinstall pip deps if requirements.txt content changed (not just version)
     if old_req_hash != new_req_hash:
         if not _reinstall_pip_deps():
-            # pip failed — rollback git to old HEAD
+            # pip failed — rollback git + DBs to old HEAD
             _log("pip install failed after pull, rolling back git...")
             _git("reset", "--hard", old_head)
             _reinstall_pip_deps()  # restore old deps (best-effort)
+            if db_backup_dir:
+                _restore_dbs(db_backup_dir)
             return None
 
     # Verify the new code can be imported before proceeding
@@ -235,14 +290,18 @@ def _check_git_updates() -> str | None:
         _git("reset", "--hard", old_head)
         if old_req_hash != new_req_hash:
             _reinstall_pip_deps()  # restore old deps (best-effort)
+        if db_backup_dir:
+            _restore_dbs(db_backup_dir)
         return None
 
     # Run DB migrations after pull — rollback if they fail
     if not _run_db_migrations():
-        _log("DB migration failed after pull, rolling back git...")
+        _log("DB migration failed after pull, rolling back git + DB...")
         _git("reset", "--hard", old_head)
         if old_req_hash != new_req_hash:
             _reinstall_pip_deps()
+        if db_backup_dir:
+            _restore_dbs(db_backup_dir)
         return None
 
     # Sync hooks to NEXO_HOME (nexo-brain.js copies them on install,

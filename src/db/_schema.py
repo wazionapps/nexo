@@ -399,6 +399,7 @@ def run_migrations(conn=None):
 
     applied = {r[0] for r in conn.execute("SELECT version FROM schema_migrations").fetchall()}
 
+    failed = []
     for version, name, fn in MIGRATIONS:
         if version not in applied:
             try:
@@ -409,9 +410,18 @@ def run_migrations(conn=None):
                 )
                 conn.commit()
             except Exception as e:
-                # Log but don't crash — partial migration is better than no server
+                conn.rollback()
                 import sys
                 print(f"[MIGRATION] v{version} ({name}) failed: {e}", file=sys.stderr)
+                failed.append((version, name, str(e)))
+                # Stop on first failure — don't run subsequent migrations
+                # against a potentially inconsistent schema
+                break
+
+    if failed:
+        raise RuntimeError(
+            f"Migration failed: v{failed[0][0]} ({failed[0][1]}): {failed[0][2]}"
+        )
 
     return len(MIGRATIONS) - len(applied)
 
