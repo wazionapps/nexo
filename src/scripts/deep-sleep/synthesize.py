@@ -115,6 +115,8 @@ def main():
     try:
         env = os.environ.copy()
         env["NEXO_HEADLESS"] = "1"  # Skip stop hook post-mortem
+        env.pop("CLAUDECODE", None)
+        env.pop("CLAUDE_CODE", None)
 
         result = subprocess.run(
             [
@@ -123,7 +125,7 @@ def main():
                 "--model", "opus",
                 "--output-format", "text",
                 "--allowedTools",
-                "Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__nexo_startup,mcp__nexo__nexo_learning_search,mcp__nexo__nexo_recall,mcp__nexo__nexo_reminders"
+                "Read,Grep,Bash"
             ],
             capture_output=True,
             text=True,

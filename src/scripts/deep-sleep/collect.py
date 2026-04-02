@@ -116,8 +116,15 @@ def extract_session(jsonl_path: Path) -> dict | None:
     }
 
 
-def collect_transcripts(target_date: str) -> list[dict]:
-    """Collect all sessions modified on the target date."""
+def collect_transcripts_since(since_iso: str, until_iso: str = "") -> list[dict]:
+    """Collect all sessions modified after `since_iso` (exclusive) up to `until_iso` (inclusive).
+
+    Uses a watermark approach: deep sleep tracks the last processed timestamp
+    so nothing is missed regardless of when sessions happen (day, night, etc.).
+    """
+    since_dt = datetime.fromisoformat(since_iso)
+    until_dt = datetime.fromisoformat(until_iso) if until_iso else datetime.now()
+
     sessions = []
     for sdir in find_session_dirs():
         for f in sdir.glob("*.jsonl"):
@@ -125,7 +132,7 @@ def collect_transcripts(target_date: str) -> list[dict]:
                 mtime = datetime.fromtimestamp(f.stat().st_mtime)
             except OSError:
                 continue
-            if mtime.strftime("%Y-%m-%d") == target_date:
+            if since_dt < mtime <= until_dt:
                 session = extract_session(f)
                 if session:
                     session["modified"] = mtime.isoformat()
@@ -339,24 +346,39 @@ def format_transcripts(sessions: list[dict]) -> str:
 
 
 def main():
-    target_date = sys.argv[1] if len(sys.argv) > 1 else datetime.now().strftime("%Y-%m-%d")
+    # Watermark-based collection: since_iso and until_iso passed by the wrapper script
+    # argv[1] = run_id (date label for output files)
+    # argv[2] = since_iso (exclusive lower bound, e.g. "2026-04-01T04:30:00")
+    # argv[3] = until_iso (inclusive upper bound, e.g. "2026-04-02T04:30:00") — optional, defaults to now
+    run_id = sys.argv[1] if len(sys.argv) > 1 else datetime.now().strftime("%Y-%m-%d")
+    since_iso = sys.argv[2] if len(sys.argv) > 2 else ""
+    until_iso = sys.argv[3] if len(sys.argv) > 3 else ""
+
     DEEP_SLEEP_DIR.mkdir(parents=True, exist_ok=True)
 
-    print(f"[collect] Phase 1: Collecting context for {target_date}")
+    print(f"[collect] Phase 1: Collecting context (run_id={run_id})")
 
-    # 1. Transcripts
-    print("[collect] Gathering transcripts...")
-    sessions = collect_transcripts(target_date)
+    # 1. Transcripts — watermark-based
+    if since_iso:
+        print(f"[collect] Gathering transcripts since {since_iso}" + (f" until {until_iso}" if until_iso else ""))
+        sessions = collect_transcripts_since(since_iso, until_iso)
+    else:
+        # Fallback: collect everything from last 48h (safe catch-all)
+        fallback_since = (datetime.now() - timedelta(hours=48)).isoformat()
+        print(f"[collect] No watermark — collecting last 48h since {fallback_since}")
+        sessions = collect_transcripts_since(fallback_since)
     print(f"  Found {len(sessions)} sessions")
 
     if not sessions:
-        print(f"[collect] No sessions found for {target_date}. Writing minimal context file.")
-        output_file = DEEP_SLEEP_DIR / f"{target_date}-context.txt"
+        print(f"[collect] No new sessions found. Writing minimal context file.")
+        output_file = DEEP_SLEEP_DIR / f"{run_id}-context.txt"
         output_file.write_text(
-            f"Deep Sleep Context for {target_date}\n\nNo sessions found for this date.\n"
+            f"Deep Sleep Context for {run_id}\n\nNo sessions found.\n"
         )
         print(f"[collect] Output: {output_file}")
         return
+
+    target_date = run_id  # Keep variable name for downstream compat
 
     # 2. Core DB data
     print("[collect] Querying databases...")
