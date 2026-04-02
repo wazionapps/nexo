@@ -198,8 +198,12 @@ def unload_plist(plist_path: Path, dry_run: bool):
 
 
 def sync(dry_run: bool = False):
-    if platform.system() != "Darwin":
-        log("Not macOS — cron sync only supports LaunchAgents. Skipping.")
+    system = platform.system()
+    if system == "Linux":
+        sync_linux(dry_run)
+        return
+    if system != "Darwin":
+        log(f"Unsupported platform: {system}. Skipping.")
         return
 
     LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -247,6 +251,100 @@ def sync(dry_run: bool = False):
                 unload_plist(plist_path, dry_run)
             else:
                 log(f"  SKIP (personal): {cron_id}")
+
+    log("Sync complete.")
+
+
+def sync_linux(dry_run: bool = False):
+    """Sync manifest to systemd user timers (Linux)."""
+    unit_dir = Path.home() / ".config" / "systemd" / "user"
+    unit_dir.mkdir(parents=True, exist_ok=True)
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+    manifest_crons = load_manifest()
+    wrapper_src = NEXO_CODE / "scripts" / "nexo-cron-wrapper.sh"
+    wrapper_dest = _copy_script_to_nexo_home(wrapper_src)
+
+    log(f"Manifest: {len(manifest_crons)} core crons")
+
+    python_bin = "/usr/bin/python3"
+    for p in ["/usr/bin/python3", "/usr/local/bin/python3"]:
+        if Path(p).exists():
+            python_bin = p
+            break
+
+    for cron in manifest_crons:
+        cron_id = cron["id"]
+        script_src = NEXO_CODE / cron["script"]
+        script_dest = _copy_script_to_nexo_home(script_src)
+        script_type = cron.get("type", "python")
+
+        # Copy subdirectories
+        subdir_name = script_src.stem.replace("nexo-", "")
+        subdir_src = NEXO_CODE / "scripts" / subdir_name
+        if subdir_src.is_dir():
+            _copy_script_to_nexo_home(subdir_src)
+
+        if script_type == "shell":
+            exec_cmd = f"/bin/bash {wrapper_dest} {cron_id} /bin/bash {script_dest}"
+        else:
+            exec_cmd = f"/bin/bash {wrapper_dest} {cron_id} {python_bin} {script_dest}"
+
+        service_path = unit_dir / f"nexo-{cron_id}.service"
+        timer_path = unit_dir / f"nexo-{cron_id}.timer"
+
+        service_content = f"""[Unit]
+Description=NEXO: {cron.get('description', cron_id)}
+
+[Service]
+Type=oneshot
+ExecStart={exec_cmd}
+Environment=NEXO_HOME={NEXO_HOME}
+Environment=NEXO_CODE={NEXO_CODE}
+Environment=HOME={Path.home()}
+"""
+
+        if "interval_seconds" in cron:
+            timer_spec = f"OnUnitActiveSec={cron['interval_seconds']}s\nOnBootSec=60s"
+        elif "schedule" in cron:
+            s = cron["schedule"]
+            h, m = s.get("hour", 0), s.get("minute", 0)
+            if "weekday" in s:
+                days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+                timer_spec = f"OnCalendar={days[s['weekday']]} *-*-* {h:02d}:{m:02d}:00"
+            else:
+                timer_spec = f"OnCalendar=*-*-* {h:02d}:{m:02d}:00"
+        else:
+            log(f"  SKIP {cron_id}: no schedule or interval")
+            continue
+
+        timer_content = f"""[Unit]
+Description=NEXO timer: {cron.get('description', cron_id)}
+
+[Timer]
+{timer_spec}
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+"""
+
+        if dry_run:
+            log(f"  DRY-RUN: would install {cron_id}")
+            continue
+
+        service_path.write_text(service_content)
+        timer_path.write_text(timer_content)
+        log(f"  Installed: {cron_id}")
+
+    if not dry_run:
+        subprocess.run(["systemctl", "--user", "daemon-reload"], capture_output=True)
+        for cron in manifest_crons:
+            subprocess.run(
+                ["systemctl", "--user", "enable", "--now", f"nexo-{cron['id']}.timer"],
+                capture_output=True
+            )
+        log("systemd timers enabled.")
 
     log("Sync complete.")
 
