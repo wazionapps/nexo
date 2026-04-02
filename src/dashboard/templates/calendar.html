@@ -311,13 +311,15 @@
                     // Reload items in background
                     await loadCalendarData();
                 } else {
-                    btn.innerHTML = '✗ Failed';
+                    const errMsg = data.error || data.detail || 'HTTP ' + res.status;
+                    btn.innerHTML = '✗ ' + errMsg;
+                    btn.title = errMsg;
                     btn.className = btn.className.replace('bg-violet-600 hover:bg-violet-500', 'bg-red-700');
-                    setTimeout(() => { btn.innerHTML = originalHtml; btn.disabled = false; btn.className = btn.className.replace('bg-red-700', 'bg-violet-600 hover:bg-violet-500'); }, 2000);
+                    setTimeout(() => { btn.innerHTML = originalHtml; btn.title = ''; btn.disabled = false; btn.className = btn.className.replace('bg-red-700', 'bg-violet-600 hover:bg-violet-500'); }, 3000);
                 }
             } catch(e) {
-                btn.innerHTML = '✗ Error';
-                setTimeout(() => { btn.innerHTML = originalHtml; btn.disabled = false; }, 2000);
+                btn.innerHTML = '✗ ' + e.message;
+                setTimeout(() => { btn.innerHTML = originalHtml; btn.disabled = false; }, 3000);
             }
         }
 

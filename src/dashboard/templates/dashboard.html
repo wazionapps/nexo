@@ -387,7 +387,7 @@
         closeModal();
         loadDashboardData();
       } else {
-        showToast(data.error || 'Failed to create');
+        showToast(data.error || data.detail || 'Create failed (HTTP ' + res.status + ')');
       }
     } catch (err) {
       showToast('Error: ' + err.message);

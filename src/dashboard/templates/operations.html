@@ -538,56 +538,72 @@
   // Actions
   // -----------------------------------------------------------------------
   async function completeItem(id, type) {
-    const url = type === 'reminder' ? '/api/reminders/' + id : '/api/followups/' + id;
-    const res = await fetch(url, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'COMPLETED' })
-    });
-    const data = await res.json();
-    if (data.success) {
-      showToast('Completed ' + id);
-      loadOpsData();
-    } else {
-      showToast(data.error || 'Failed', 'error');
+    try {
+      const url = type === 'reminder' ? '/api/reminders/' + id : '/api/followups/' + id;
+      const res = await fetch(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'COMPLETED' })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('Completed ' + id);
+        loadOpsData();
+      } else {
+        showToast(data.error || data.detail || 'Complete failed (HTTP ' + res.status + ')', 'error');
+      }
+    } catch (err) {
+      showToast('Complete error: ' + err.message, 'error');
     }
   }
 
   async function moveItem(id, direction) {
-    const res = await fetch('/api/ops/move', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, direction })
-    });
-    const data = await res.json();
-    if (data.success) {
-      showToast('Moved ' + id + ' to ' + (direction === 'to_followup' ? 'NEXO' : 'User'));
-      loadOpsData();
-    } else {
-      showToast(data.error || 'Failed to move', 'error');
+    try {
+      const res = await fetch('/api/ops/move', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, direction })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('Moved ' + id + ' to ' + (direction === 'to_followup' ? 'NEXO' : 'User'));
+        loadOpsData();
+      } else {
+        showToast(data.error || data.detail || 'Move failed (HTTP ' + res.status + ')', 'error');
+      }
+    } catch (err) {
+      showToast('Move error: ' + err.message, 'error');
     }
   }
 
   async function executeItem(id) {
-    const res = await fetch('/api/ops/execute/' + id, { method: 'POST' });
-    const data = await res.json();
-    if (data.success) {
-      showToast('Executing ' + id, 'info');
-    } else {
-      showToast(data.error || 'Failed', 'error');
+    try {
+      const res = await fetch('/api/ops/execute/' + id, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        showToast('Executing ' + id, 'info');
+      } else {
+        showToast(data.error || data.detail || 'Execute failed (HTTP ' + res.status + ')', 'error');
+      }
+    } catch (err) {
+      showToast('Execute error: ' + err.message, 'error');
     }
   }
 
   function deleteItem(id, type) {
     pendingConfirmAction = async () => {
-      const url = type === 'reminder' ? '/api/reminders/' + id : '/api/followups/' + id;
-      const res = await fetch(url, { method: 'DELETE' });
-      const data = await res.json();
-      if (data.success) {
-        showToast('Deleted ' + id);
-        loadOpsData();
-      } else {
-        showToast(data.error || 'Failed', 'error');
+      try {
+        const url = type === 'reminder' ? '/api/reminders/' + id : '/api/followups/' + id;
+        const res = await fetch(url, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.success) {
+          showToast('Deleted ' + id);
+          loadOpsData();
+        } else {
+          showToast(data.error || data.detail || 'Delete failed (HTTP ' + res.status + ')', 'error');
+        }
+      } catch (err) {
+        showToast('Delete error: ' + err.message, 'error');
       }
     };
     document.getElementById('confirm-message').textContent = 'Delete ' + id + '? This cannot be undone.';
@@ -693,10 +709,10 @@
         closeModal();
         loadOpsData();
       } else {
-        showToast(data.error || 'Failed', 'error');
+        showToast(data.error || data.detail || 'Save failed (HTTP ' + res.status + ')', 'error');
       }
     } catch (err) {
-      showToast('Error: ' + err.message, 'error');
+      showToast('Save error: ' + err.message, 'error');
     }
   }
 

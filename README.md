@@ -364,7 +364,13 @@ A web interface at `localhost:6174` with 6 interactive pages for visual insight 
 | **Adaptive** | Personality signals, learned weights, and current mode |
 | **Sessions** | Active and historical sessions with timeline and diary entries |
 
-Built with FastAPI backend and D3.js frontend. Runs as a LaunchAgent, auto-starts with the system.
+Built with FastAPI backend and D3.js frontend. Dashboard files are installed to `NEXO_HOME/dashboard/` but must be started manually:
+
+```bash
+python3 ~/.nexo/dashboard/app.py
+```
+
+This opens `localhost:6174` in your browser. Add `--port 8080` to change the port or `--no-browser` to skip auto-opening.
 
 ## Full Orchestration System
 
@@ -499,9 +505,9 @@ atlas
 
 Under the hood, the alias runs:
 ```bash
-claude --append-system-prompt "You are NEXO. Run nexo_startup immediately, load context, greet the user." "."
+claude --dangerously-skip-permissions "."
 ```
-`--append-system-prompt` adds to the default system prompt without replacing it (preserves CLAUDE.md). The `"."` triggers the operator to start immediately.
+`--dangerously-skip-permissions` launches Claude Code with tool-use permissions pre-approved so the operator can act autonomously. The `"."` triggers the operator to start immediately. Operator behavior (startup, context, greeting) is defined in `~/.claude/CLAUDE.md`.
 
 That's it. No need to run `claude` manually. Your operator will greet you immediately — adapted to the time of day, resuming from where you left off if there's a previous session. No cold starts, no waiting for your input.
 
@@ -687,7 +693,7 @@ This replaces OpenClaw's default memory system with NEXO Brain's full cognitive 
 
 ### Any MCP Client
 
-NEXO Brain works with any application that supports the MCP protocol. Configure it as an MCP server pointing to `server.py` in the code directory, with `NEXO_HOME` env var set.
+NEXO Brain works with any application that supports the MCP protocol. Configure it as an MCP server pointing to `server.py` inside `NEXO_HOME` (default `~/.nexo/server.py`), with the `NEXO_HOME` env var set to the same directory.
 
 ## Listed On
 

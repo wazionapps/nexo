@@ -1880,22 +1880,35 @@ ${doScan ? `- Stack: ${Object.keys(profileData.code.languages || {}).slice(0, 5)
 
   // Detect shell and add alias
   const userShell = process.env.SHELL || "/bin/bash";
-  const rcFile = userShell.includes("zsh")
-    ? path.join(require("os").homedir(), ".zshrc")
-    : path.join(require("os").homedir(), ".bash_profile");
+  const homeDir = require("os").homedir();
+  const rcFiles = [];
 
-  let rcContent = "";
-  if (fs.existsSync(rcFile)) {
-    rcContent = fs.readFileSync(rcFile, "utf8");
-  }
-
-  if (!rcContent.includes(`alias ${aliasName}=`)) {
-    fs.appendFileSync(rcFile, `\n${aliasComment}\n${aliasLine}\n`);
-    log(`Added '${aliasName}' alias to ${path.basename(rcFile)}`);
-    log(`After setup, open a new terminal and type: ${aliasName}`);
+  if (userShell.includes("zsh")) {
+    rcFiles.push(path.join(homeDir, ".zshrc"));
   } else {
-    log(`Alias '${aliasName}' already exists in ${path.basename(rcFile)}`);
+    // Bash: always write to .bash_profile (macOS login shells)
+    rcFiles.push(path.join(homeDir, ".bash_profile"));
+    // Also write to .bashrc if it exists (Linux interactive shells)
+    const bashrc = path.join(homeDir, ".bashrc");
+    if (fs.existsSync(bashrc)) {
+      rcFiles.push(bashrc);
+    }
   }
+
+  for (const rcFile of rcFiles) {
+    let rcContent = "";
+    if (fs.existsSync(rcFile)) {
+      rcContent = fs.readFileSync(rcFile, "utf8");
+    }
+
+    if (!rcContent.includes(`alias ${aliasName}=`)) {
+      fs.appendFileSync(rcFile, `\n${aliasComment}\n${aliasLine}\n`);
+      log(`Added '${aliasName}' alias to ${path.basename(rcFile)}`);
+    } else {
+      log(`Alias '${aliasName}' already exists in ${path.basename(rcFile)}`);
+    }
+  }
+  log(`After setup, open a new terminal and type: ${aliasName}`);
   console.log("");
 
   // Step 9: Generate CLAUDE.md template
