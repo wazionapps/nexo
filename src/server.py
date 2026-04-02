@@ -55,7 +55,71 @@ def _server_init():
     with open(_pid_file, "w") as f:
         f.write(str(os.getpid()))
 
-    init_db()
+    # ── Database initialization with recovery ─────────────────────
+    import sqlite3
+    try:
+        init_db()
+    except sqlite3.DatabaseError as exc:
+        # Corruption or unreadable DB — attempt restore from backup
+        print(f"[NEXO] DB init failed: {exc}", file=sys.stderr)
+        _recovered = False
+        try:
+            from db._core import DB_PATH as _db_path
+            import glob as _glob
+            _backup_dir = os.path.join(
+                os.environ.get("NEXO_HOME", os.path.join(os.path.expanduser("~"), ".nexo")),
+                "backups",
+            )
+            _backups = sorted(_glob.glob(os.path.join(_backup_dir, "nexo-*.db")), reverse=True)
+            for _bk in _backups:
+                try:
+                    _test = sqlite3.connect(_bk)
+                    _result = _test.execute("PRAGMA integrity_check").fetchone()
+                    _test.close()
+                    if _result and _result[0] == "ok":
+                        # Valid backup found — replace corrupt DB
+                        import shutil
+                        # Close any open connection before replacing
+                        try:
+                            close_db()
+                        except Exception:
+                            pass
+                        shutil.copy2(_bk, _db_path)
+                        print(f"[NEXO] Restored DB from backup: {os.path.basename(_bk)}", file=sys.stderr)
+                        init_db()
+                        _recovered = True
+                        break
+                except Exception:
+                    continue
+        except Exception as restore_exc:
+            print(f"[NEXO] Backup restore failed: {restore_exc}", file=sys.stderr)
+
+        if not _recovered:
+            # No valid backup — nuke corrupt file and start fresh
+            try:
+                close_db()
+            except Exception:
+                pass
+            try:
+                from db._core import DB_PATH as _db_path
+                if os.path.exists(_db_path):
+                    _corrupt_path = _db_path + ".corrupt"
+                    os.rename(_db_path, _corrupt_path)
+                    print(f"[NEXO] Corrupt DB moved to {os.path.basename(_corrupt_path)}", file=sys.stderr)
+                # Remove WAL/SHM files too
+                for _ext in (".db-wal", ".db-shm"):
+                    _wal = _db_path.replace(".db", _ext)
+                    if os.path.exists(_wal):
+                        os.remove(_wal)
+            except Exception:
+                pass
+            try:
+                init_db()
+                print("[NEXO] Fresh database created.", file=sys.stderr)
+            except Exception as fresh_exc:
+                print(f"[NEXO] FATAL: Cannot initialize database: {fresh_exc}", file=sys.stderr)
+                print("[NEXO] Check permissions on NEXO_HOME/data/ and disk space.", file=sys.stderr)
+                sys.exit(1)
 
     # ── Auto-update check (non-blocking, max 5s) ──────────────────
     try:
