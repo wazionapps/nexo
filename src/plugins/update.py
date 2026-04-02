@@ -217,17 +217,40 @@ def _verify_import() -> str | None:
     return None
 
 
+def _rollback_npm_package(target_version: str) -> str | None:
+    """Rollback nexo-brain npm package to a specific version."""
+    try:
+        result = subprocess.run(
+            ["npm", "install", "-g", f"nexo-brain@{target_version}"],
+            capture_output=True, text=True, timeout=120,
+            env={**os.environ, "NEXO_SKIP_POSTINSTALL": "1"},
+        )
+        if result.returncode != 0:
+            return f"npm rollback failed: {result.stderr or result.stdout}"
+    except Exception as e:
+        return f"npm rollback error: {e}"
+    return None
+
+
 def _handle_packaged_update() -> str:
     """Update a packaged (npm) install — no git repo available."""
     old_version = _read_version()
 
-    # Use npm to update the package
+    # 1. Backup databases BEFORE any changes
+    backup_dir, backup_err = _backup_databases()
+    if backup_err:
+        return f"ABORTED at backup: {backup_err}"
+
+    # 2. Run npm update (postinstall.js will migrate ~/.nexo in-place)
     try:
         result = subprocess.run(
             ["npm", "update", "-g", "nexo-brain"],
             capture_output=True, text=True, timeout=120,
         )
         if result.returncode != 0:
+            # npm failed (including postinstall failures) — restore DBs
+            if backup_dir:
+                _restore_databases(backup_dir)
             return f"ABORTED: npm update failed: {result.stderr or result.stdout}"
     except FileNotFoundError:
         return "ABORTED: npm not found. Install Node.js to update packaged installs."
@@ -238,11 +261,7 @@ def _handle_packaged_update() -> str:
     if old_version == new_version:
         return f"Already up to date (v{old_version}). No changes."
 
-    # Backup databases before applying changes
-    backup_dir, backup_err = _backup_databases()
-    if backup_err:
-        return f"ABORTED at backup: {backup_err}"
-
+    # 3. Post-npm verification steps
     errors = []
 
     # Reinstall pip deps for new version
@@ -261,13 +280,19 @@ def _handle_packaged_update() -> str:
         errors.append(f"verification: {verify_err}")
 
     if errors:
-        # Restore databases on failure
+        # 4. Full rollback: restore DBs + rollback npm package to old version
         if backup_dir:
             _restore_databases(backup_dir)
+        rollback_err = _rollback_npm_package(old_version)
         lines = [f"UPDATE FAILED (packaged install, v{old_version} -> v{new_version})"]
         for err in errors:
             lines.append(f"  ERROR: {err}")
         lines.append(f"  Databases restored from: {backup_dir}")
+        if rollback_err:
+            lines.append(f"  WARNING: npm rollback failed: {rollback_err}")
+            lines.append(f"  Manual rollback: npm install -g nexo-brain@{old_version}")
+        else:
+            lines.append(f"  npm package rolled back to v{old_version}")
         lines.append("")
         lines.append("Fix the errors above, then run nexo_update again.")
         return "\n".join(lines)
