@@ -1,3 +1,4 @@
+from __future__ import annotations
 """NEXO DB — Skills module.
 
 Skill Auto-Creation system: reusable procedures extracted from complex tasks.

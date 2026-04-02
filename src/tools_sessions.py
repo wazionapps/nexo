@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Session management tools: startup, heartbeat, status."""
 
 import time

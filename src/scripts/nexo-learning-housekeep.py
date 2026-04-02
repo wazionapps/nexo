@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from __future__ import annotations
 """NEXO Learning Housekeeping — Nightly dedup, weight adjustment, and review.
 
 Runs daily. Adjusts learning weights based on usage (guard_hits),

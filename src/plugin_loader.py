@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Dynamic plugin loader for NEXO MCP server."""
 
 import importlib

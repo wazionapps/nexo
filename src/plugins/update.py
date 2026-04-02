@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Update plugin — pull latest code, backup DBs, run migrations, verify."""
 import json
 import os

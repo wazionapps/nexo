@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from __future__ import annotations
 """
 Deep Sleep v2 -- Phase 3: Synthesize extractions into actionable findings.
 

@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Coordination tools: file tracking, messaging, Q&A."""
 
 from db import (

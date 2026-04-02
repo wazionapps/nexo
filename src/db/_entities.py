@@ -1,3 +1,4 @@
+from __future__ import annotations
 """NEXO DB — Entities module."""
 import time
 from db._core import get_db, _multi_word_like

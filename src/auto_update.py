@@ -1,3 +1,4 @@
+from __future__ import annotations
 """NEXO Auto-Update — lightweight startup check for git updates and file-based migrations.
 
 Called once per server startup. Respects a 1-hour cooldown to avoid redundant checks.

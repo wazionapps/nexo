@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from __future__ import annotations
 """
 Deep Sleep v2 -- Phase 1: Collect all context for overnight analysis.
 

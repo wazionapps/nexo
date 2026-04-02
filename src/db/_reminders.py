@@ -1,3 +1,4 @@
+from __future__ import annotations
 """NEXO DB — Reminders module."""
 import sqlite3, time, datetime
 from datetime import timedelta

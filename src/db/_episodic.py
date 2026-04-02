@@ -1,3 +1,4 @@
+from __future__ import annotations
 """NEXO DB — Episodic module."""
 import datetime, time, json
 from db._core import get_db, now_epoch, _multi_word_like

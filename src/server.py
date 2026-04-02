@@ -1,3 +1,4 @@
+from __future__ import annotations
 """NEXO MCP Server — Phase 4: Hot-Reload Plugin System."""
 
 import os

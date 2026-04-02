@@ -1,3 +1,4 @@
+from __future__ import annotations
 """NEXO DB — Sessions module."""
 import time, secrets, string, sqlite3
 from datetime import datetime

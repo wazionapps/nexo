@@ -1,3 +1,4 @@
+from __future__ import annotations
 """NEXO DB — Learnings module."""
 import re, time
 from db._core import get_db, now_epoch
