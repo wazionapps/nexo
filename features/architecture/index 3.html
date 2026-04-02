@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Architecture — NEXO Brain</title>
+    <meta name="description" content="Atkinson-Shiffrin memory architecture for AI agents. Modular packages (db/ 11 modules, cognitive/ 6 modules), KG-boosted search, HNSW vector indexing, claim graph, and Ebbinghaus decay.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/features/architecture/">
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://nexo-brain.com/features/architecture/">
+    <meta property="og:title" content="Architecture — NEXO Brain">
+    <meta property="og:description" content="Atkinson-Shiffrin memory architecture for AI agents. Three-store model with sensory register, STM, and LTM.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
+    <meta property="og:image:width" content="1536">
+    <meta property="og:image:height" content="1024">
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Architecture — NEXO Brain">
+    <meta name="twitter:description" content="Atkinson-Shiffrin memory architecture for AI agents. Three-store model with sensory register, STM, and LTM.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
+
+    <!-- Google Analytics (GA4) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+
+    <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-64.png" alt="NEXO Brain" width="32" height="32">
+            NEXO Brain
+        </a>
+        <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <div class="nav-links">
+            <a href="/features/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>Features</a>
+            <a href="/features/cognitive/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a8 8 0 0 1 8 8c0 3.5-2 6-4 7.5V19H8v-1.5C6 16 4 13.5 4 10a8 8 0 0 1 8-8z"/><path d="M9 22h6"/><path d="M10 19v-2.5"/><path d="M14 19v-2.5"/></svg>Cognitive</a>
+            <a href="/features/architecture/" style="color:var(--purple-light)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Architecture</a>
+            <a href="/features/tools/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>Tools</a>
+            <a href="/features/benchmark/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>Benchmark</a>
+            <a href="/changelog/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/></svg>Changelog</a>
+            <a href="/docs/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<!-- Header -->
+<section class="pt-nav" style="text-align:center;">
+    <div class="container">
+        <div class="section-label">Architecture</div>
+        <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">How memory works</h1>
+        <p class="section-subtitle">
+            Based on the Atkinson-Shiffrin model from cognitive psychology, adapted for AI agents.
+        </p>
+    </div>
+</section>
+
+<!-- Architecture -->
+<section id="architecture">
+    <div class="container">
+        <div class="architecture">
+            <div class="arch-visual">
+                <div class="arch-flow">
+                    <div class="arch-node arch-sensory">
+                        Sensory Register
+                        <small>Raw input &bull; 48h TTL &bull; Attention filter</small>
+                    </div>
+                    <div class="arch-arrow">&darr; rehearsal</div>
+                    <div class="arch-node arch-stm">
+                        Short-Term Memory
+                        <small>Working context &bull; Active rehearsal &bull; 7-day half-life</small>
+                    </div>
+                    <div class="arch-arrow">&darr; consolidation</div>
+                    <div class="arch-node arch-ltm">
+                        Long-Term Memory
+                        <small>Semantic vectors &bull; Sister fusion &bull; 60-day half-life</small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="arch-text">
+                <h3>Biologically inspired, practically engineered</h3>
+                <p>
+                    Every piece of information flows through three stores, each with its own retention rules and access patterns.
+                </p>
+                <ul class="arch-list">
+                    <li>Sensory Register captures everything, discards noise in 48 hours</li>
+                    <li>STM holds 7&plusmn;2 active items with exponential decay</li>
+                    <li>Rehearsal (retrieval, updates) resets decay timers</li>
+                    <li>Consolidation promotes STM to LTM via semantic similarity</li>
+                    <li>Sister memories fuse discriminatively: keep what differs, merge what overlaps</li>
+                    <li>Ebbinghaus forgetting curve controls natural memory pruning</li>
+                    <li>Prediction error gating rejects redundant input at write time</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="arch-infographic">
+            <img src="/assets/nexo-brain-architecture.png" alt="NEXO Brain Architecture Diagram — showing memory flow from sensory register through STM to LTM with cognitive pipelines" loading="lazy">
+            <p>Full architecture: sensory register, STM, LTM, input pipeline, retrieval, and proactive systems</p>
+        </div>
+    </div>
+</section>
+
+<!-- Psychology Table -->
+<section id="psychology">
+    <div class="container">
+        <div class="section-label">Science</div>
+        <h2 class="section-title">The psychology behind NEXO Brain</h2>
+        <p class="section-subtitle">
+            Not just engineering &mdash; applied cognitive psychology. Every feature maps to a real research concept.
+        </p>
+
+        <div style="overflow-x:auto;">
+            <table class="psychology-table">
+                <thead>
+                    <tr>
+                        <th>Psychological Concept</th>
+                        <th>How NEXO Brain Implements It</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Atkinson-Shiffrin (1968)</td>
+                        <td>Three memory stores: sensory register, STM, and LTM with distinct retention rules</td>
+                    </tr>
+                    <tr>
+                        <td>Ebbinghaus Forgetting Curve (1885)</td>
+                        <td>Exponential decay: strength = strength * e^(-lambda * time)</td>
+                    </tr>
+                    <tr>
+                        <td>Rehearsal Effect</td>
+                        <td>Accessing a memory resets its strength to 1.0</td>
+                    </tr>
+                    <tr>
+                        <td>Memory Consolidation</td>
+                        <td>Nightly process promotes frequently-used STM to LTM</td>
+                    </tr>
+                    <tr>
+                        <td>Prediction Error</td>
+                        <td>Only surprising (novel) information gets stored &mdash; redundant input is gated</td>
+                    </tr>
+                    <tr>
+                        <td>Spreading Activation (Collins & Loftus, 1975)</td>
+                        <td>Retrieving a memory co-activates related memories through an associative graph</td>
+                    </tr>
+                    <tr>
+                        <td>HyDE (Gao et al., 2022)</td>
+                        <td>Hypothetical document embeddings improve semantic recall</td>
+                    </tr>
+                    <tr>
+                        <td>Prospective Memory (Einstein & McDaniel, 1990)</td>
+                        <td>Context-triggered intentions fire when cue conditions match</td>
+                    </tr>
+                    <tr>
+                        <td>Metacognition</td>
+                        <td>Guard system checks past errors before acting</td>
+                    </tr>
+                    <tr>
+                        <td>Cognitive Dissonance (Festinger, 1957)</td>
+                        <td>Detects and verbalizes conflicts between old and new knowledge</td>
+                    </tr>
+                    <tr>
+                        <td>Theory of Mind</td>
+                        <td>Models user behavior, preferences, and mood</td>
+                    </tr>
+                    <tr>
+                        <td>Synaptic Pruning</td>
+                        <td>Automated cleanup of weak, unused memories</td>
+                    </tr>
+                    <tr>
+                        <td>Associative Memory</td>
+                        <td>Semantic search finds related concepts, not just matching words</td>
+                    </tr>
+                    <tr>
+                        <td>Memory Reconsolidation</td>
+                        <td>Dreaming process discovers hidden connections during sleep</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+
+<!-- Modular Architecture -->
+<section class="section-compact" style="background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
+    <div class="container">
+        <div class="section-label">Architecture</div>
+        <h2 class="section-title">Modular Package Architecture</h2>
+        <p class="section-subtitle">
+            The two largest files have been decomposed into focused, testable modules while maintaining full backwards compatibility.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>db/ package (11 modules)</h4><p>core, fts, schema, sessions, reminders, learnings, credentials, tasks, entities, episodic, evolution. All re-exported via __init__.py &mdash; existing imports unchanged.</p></div>
+                <div class="cognitive-card"><h4>cognitive/ package (6 modules)</h4><p>core, search, ingest, decay, trust, memory. Each module is independently testable. The search pipeline chains: embed &rarr; BM25 &rarr; temporal boost &rarr; KG boost &rarr; rerank.</p></div>
+                <div class="cognitive-card"><h4>KG-Boosted Search</h4><p>Memories with more Knowledge Graph connections rank higher. Logarithmic boost bridges semantic (vector) and structural (graph) retrieval.</p></div>
+                <div class="cognitive-card"><h4>HNSW Vector Indexing</h4><p>Optional hnswlib integration. Auto-activates at 10,000+ memories for sub-millisecond approximate nearest neighbor search. Graceful fallback to brute-force.</p></div>
+                <div class="cognitive-card"><h4>Claim Graph</h4><p>Decompose blob memories into atomic verifiable claims. Each claim has provenance, confidence, and verification status. Contradiction detection across sources.</p></div>
+                <div class="cognitive-card"><h4>24 Pytest Tests</h4><p>Migrations, CRUD, cosine similarity, KG boost, graph traversal, temporal boost. Each test uses isolated temp databases &mdash; zero interference with production.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section">
+    <div class="container">
+        <h2 class="section-title">Give your agent a mind</h2>
+        <p class="section-subtitle" style="margin: 16px auto 48px;">
+            Open source, AGPL-3.0 licensed, and built for builders who want their AI to actually remember.
+        </p>
+        <div class="hero-actions">
+            <a href="https://github.com/wazionapps/nexo" class="btn btn-primary">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+                Star on GitHub
+            </a>
+            <a href="/features/" class="btn btn-secondary">
+                Back to Features
+            </a>
+        </div>
+    </div>
+</section>
+
+<footer>
+    <div class="container">
+        <div class="footer-content">
+            <div class="footer-left">
+                Created by <strong>Francisco Cerd&agrave; Puigserver</strong> &amp; <strong>NEXO</strong> (Claude Opus) &bull; Built by <a href="https://www.wazion.com">WAzion</a> &bull; AGPL-3.0 License &bull; &copy; 2026
+            </div>
+            <div class="footer-links">
+                <a href="https://github.com/wazionapps/nexo">GitHub</a>
+                <a href="https://x.com/NEXOBRAIN">X / Twitter</a>
+                <a href="https://github.com/sponsors/wazionapps">Sponsor</a>
+                <a href="/docs/">Docs</a>
+                <a href="https://www.npmjs.com/package/nexo-brain">npm</a>
+                <a href="https://github.com/wazionapps/nexo/releases">Releases</a>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<script>
+const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+        if (entry.isIntersecting) {
+            entry.target.style.opacity = '1';
+            entry.target.style.transform = 'translateY(0)';
+        }
+    });
+}, { threshold: 0.1 });
+
+document.querySelectorAll('.cognitive-card, .benchmark-stat-card').forEach(el => {
+    el.style.opacity = '0';
+    el.style.transform = 'translateY(20px)';
+    el.style.transition = 'all 0.5s ease';
+    observer.observe(el);
+});
+</script>
+
+<!-- Cookie Consent (minimal, GDPR) -->
+<div id="cookie-consent" style="display:none;position:fixed;bottom:0;left:0;right:0;background:rgba(10,10,15,0.95);border-top:1px solid #1E1E2E;padding:12px 24px;z-index:200;font-size:13px;color:#94A3B8;text-align:center;">
+    This site uses analytics cookies to improve the experience. <a href="https://www.wazion.com/en/privacy" style="color:#A78BFA;">Privacy Policy</a>
+    <button onclick="document.getElementById('cookie-consent').style.display='none';localStorage.setItem('cc','1')" style="margin-left:16px;background:#7C3AED;color:#fff;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Accept</button>
+    <button onclick="document.getElementById('cookie-consent').style.display='none';localStorage.setItem('cc','0');window['ga-disable-G-1LNEMCJMS7']=true" style="margin-left:8px;background:transparent;color:#94A3B8;border:1px solid #333;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Decline</button>
+</div>
+<script>
+if(!localStorage.getItem('cc')){document.getElementById('cookie-consent').style.display='block';}
+else if(localStorage.getItem('cc')==='0'){window['ga-disable-G-1LNEMCJMS7']=true;}
+</script>
+
+<script>
+(function() {
+    var navLinks = document.querySelector('.nav-links');
+    var navToggle = document.querySelector('.nav-toggle');
+    navLinks.querySelectorAll('a').forEach(function(link) {
+        link.addEventListener('click', function() { navLinks.classList.remove('open'); });
+    });
+    document.addEventListener('click', function(e) {
+        if (navLinks.classList.contains('open') && !navLinks.contains(e.target) && !navToggle.contains(e.target)) {
+            navLinks.classList.remove('open');
+        }
+    });
+})();
+</script>
+
+</body>
+</html>

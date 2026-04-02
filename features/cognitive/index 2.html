@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Cognitive Features — NEXO Brain</title>
+    <meta name="description" content="24 cognitive features built on psychology research: prediction error gating, KG-boosted search, HNSW vector indexing, claim graph, quarantine queue, memory dreaming, HyDE retrieval, trust scoring, and more.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/features/cognitive/">
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://nexo-brain.com/features/cognitive/">
+    <meta property="og:title" content="Cognitive Features — NEXO Brain">
+    <meta property="og:description" content="24 cognitive features built on psychology research: prediction error gating, KG-boosted search, HNSW vector indexing, claim graph, quarantine queue, memory dreaming, HyDE retrieval, trust scoring, and more.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
+    <meta property="og:image:width" content="1536">
+    <meta property="og:image:height" content="1024">
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Cognitive Features — NEXO Brain">
+    <meta name="twitter:description" content="24 cognitive features built on psychology research: prediction error gating, KG-boosted search, HNSW vector indexing, claim graph, quarantine queue, memory dreaming, HyDE retrieval, trust scoring, and more.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
+
+    <!-- Google Analytics (GA4) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+
+    <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-64.png" alt="NEXO Brain" width="32" height="32">
+            NEXO Brain
+        </a>
+        <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <div class="nav-links">
+            <a href="/features/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>Features</a>
+            <a href="/features/cognitive/" style="color:var(--purple-light)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a8 8 0 0 1 8 8c0 3.5-2 6-4 7.5V19H8v-1.5C6 16 4 13.5 4 10a8 8 0 0 1 8-8z"/><path d="M9 22h6"/><path d="M10 19v-2.5"/><path d="M14 19v-2.5"/></svg>Cognitive</a>
+            <a href="/features/architecture/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Architecture</a>
+            <a href="/features/tools/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>Tools</a>
+            <a href="/features/benchmark/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>Benchmark</a>
+            <a href="/changelog/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/></svg>Changelog</a>
+            <a href="/docs/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<!-- Header -->
+<section class="pt-nav" style="text-align:center;">
+    <div class="container">
+        <div class="section-label">Since v0.5.0</div>
+        <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Cognitive Features</h1>
+        <p class="section-subtitle">
+            Thread-safe SQLite with WAL mode and connection pooling, passing 100% of concurrent stress tests. Built on formal schema migrations and trust auto-detection, on top of 21 cognitive tools implementing cognitive science concepts that go beyond basic memory storage.
+        </p>
+    </div>
+</section>
+
+<!-- Cognitive Features -->
+<section id="cognitive">
+    <div class="container">
+        <div class="cognitive-group">
+            <div class="cognitive-group-label">Input Pipeline</div>
+            <div class="cognitive-grid">
+                <div class="cognitive-card">
+                    <div class="cognitive-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
+                    <h4>Prediction Error Gating</h4>
+                    <p>Only novel information is stored. Redundant content that matches existing memories is rejected at write time, keeping memory clean without manual curation.</p>
+                </div>
+                <div class="cognitive-card">
+                    <div class="cognitive-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+                    <h4>Security Pipeline</h4>
+                    <p>4-layer defense against memory poisoning: injection detection, encoding analysis, behavioral anomaly scoring, and credential scanning.</p>
+                </div>
+                <div class="cognitive-card">
+                    <div class="cognitive-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></div>
+                    <h4>Quarantine Queue</h4>
+                    <p>New facts enter quarantine status and must pass a promotion policy before becoming trusted knowledge. Prevents unverified information from influencing decisions.</p>
+                </div>
+                <div class="cognitive-card">
+                    <div class="cognitive-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
+                    <h4>Secret Redaction</h4>
+                    <p>Auto-detects and redacts API keys, tokens, passwords, and other sensitive data before storage. Secrets never reach the vector database.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="cognitive-group">
+            <div class="cognitive-group-label">Memory Management</div>
+            <div class="cognitive-grid">
+                <div class="cognitive-card">
+                    <div class="cognitive-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></div>
+                    <h4>Pin / Snooze / Archive</h4>
+                    <p>Granular lifecycle states. Pin = never decays (critical knowledge). Snooze = temporarily hidden. Archive = cold storage (searchable but inactive).</p>
+                </div>
+                <div class="cognitive-card">
+                    <div class="cognitive-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></div>
+                    <h4>Auto-Merge Duplicates</h4>
+                    <p>Batch cosine deduplication during the 03:00 sleep cycle. Respects sibling discrimination &mdash; similar memories about different contexts are kept separate.</p>
+                </div>
+                <div class="cognitive-card">
+                    <div class="cognitive-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></div>
+                    <h4>Memory Dreaming</h4>
+                    <p>Discovers hidden connections between recent memories during sleep. Surfaces non-obvious patterns like "these three bugs all relate to the same root cause."</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="cognitive-group">
+            <div class="cognitive-group-label">Retrieval</div>
+            <div class="cognitive-grid">
+                <div class="cognitive-card">
+                    <div class="cognitive-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
+                    <h4>HyDE Query Expansion</h4>
+                    <p>Generates hypothetical answer embeddings for richer semantic search. Instead of searching for your query, it imagines what a helpful memory would look like, then searches for that.</p>
+                </div>
+                <div class="cognitive-card">
+                    <div class="cognitive-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg></div>
+                    <h4>Spreading Activation</h4>
+                    <p>Graph-based co-activation network. Memories retrieved together reinforce each other's connections, building an associative web that improves over time.</p>
+                </div>
+                <div class="cognitive-card">
+                    <div class="cognitive-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
+                    <h4>Recall Explanations</h4>
+                    <p>Transparent score breakdown for every retrieval result. Shows exactly why a memory was returned: semantic similarity, recency, access frequency, and co-activation bonuses.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="cognitive-group">
+            <div class="cognitive-group-label">Proactive</div>
+            <div class="cognitive-grid">
+                <div class="cognitive-card">
+                    <div class="cognitive-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></div>
+                    <h4>Prospective Memory</h4>
+                    <p>Context-triggered reminders that fire when conversation topics match, not just by date. "Remind me about X when we discuss Y" works naturally.</p>
+                </div>
+                <div class="cognitive-card">
+                    <div class="cognitive-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+                    <h4>Hook Auto-capture</h4>
+                    <p>Extracts decisions, corrections, and factual statements from conversations automatically. You don't need to say "remember this" &mdash; the system detects what's worth storing.</p>
+                </div>
+                <div class="cognitive-card">
+                    <div class="cognitive-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg></div>
+                    <h4>Formal Schema Migrations <span style="font-size:11px;background:#7C3AED22;color:#7C3AED;padding:2px 6px;border-radius:4px;margin-left:6px;">v0.4.0</span></h4>
+                    <p>Structured migration system with schema_migrations table tracking all database changes. Safe, reversible schema evolution for production systems. Prevents data loss during upgrades.</p>
+                </div>
+                <div class="cognitive-card">
+                    <div class="cognitive-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>
+                    <h4>Trust Auto-Detection <span style="font-size:11px;background:#7C3AED22;color:#7C3AED;padding:2px 6px;border-radius:4px;margin-left:6px;">v0.4.0</span></h4>
+                    <p>nexo_heartbeat now auto-detects trust events (thanks, corrections, delegation, repeated errors) directly from user text. No manual trust calls needed. Deltas configurable via DB table.</p>
+                </div>
+                <div class="cognitive-card">
+                    <div class="cognitive-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></div>
+                    <h4>Thread-Safe SQLite <span style="font-size:11px;background:#7C3AED22;color:#7C3AED;padding:2px 6px;border-radius:4px;margin-left:6px;">v0.5.0</span></h4>
+                    <p>WAL mode + connection pooling enables fully concurrent multi-agent access. 100% pass rate on concurrent stress tests. Multiple Claude instances can read and write simultaneously without locking or data corruption.</p>
+                </div>
+                <div class="cognitive-card">
+                    <div class="cognitive-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
+                    <h4>Incremental Diary Drafts + Auto-Close <span style="font-size:11px;background:#7C3AED22;color:#7C3AED;padding:2px 6px;border-radius:4px;margin-left:6px;">v0.4.0</span></h4>
+                    <p>Session diaries are written incrementally during the session, not just at close. Orphan sessions (crashed or abandoned) are auto-detected and closed with a synthetic summary, so context is never lost even when the agent dies mid-task.</p>
+                </div>
+                <div class="cognitive-card">
+                    <div class="cognitive-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></div>
+                    <h4>KG-Boosted Search <span style="font-size:11px;background:#EC489922;color:#EC4899;padding:2px 6px;border-radius:4px;margin-left:6px;">v1.5.0</span></h4>
+                    <p>Memories connected to more Knowledge Graph nodes rank higher. Logarithmic boost (capped at +0.08) bridges semantic and structural retrieval, so structurally important memories surface first.</p>
+                </div>
+                <div class="cognitive-card">
+                    <div class="cognitive-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg></div>
+                    <h4>HNSW Vector Indexing <span style="font-size:11px;background:#EC489922;color:#EC4899;padding:2px 6px;border-radius:4px;margin-left:6px;">v1.5.0</span></h4>
+                    <p>Optional hnswlib integration for approximate nearest neighbor search. Auto-activates at 10,000+ memories. Hooks into ingest, search, and garbage collection. Graceful fallback to brute-force.</p>
+                </div>
+                <div class="cognitive-card">
+                    <div class="cognitive-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div>
+                    <h4>Claim Graph <span style="font-size:11px;background:#EC489922;color:#EC4899;padding:2px 6px;border-radius:4px;margin-left:6px;">v1.5.0</span></h4>
+                    <p>Decompose blob memories into atomic verifiable claims. Each claim has provenance, confidence score, and verification status. Contradiction detection across sources ensures factual consistency.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section">
+    <div class="container">
+        <h2 class="section-title">Give your agent a mind</h2>
+        <p class="section-subtitle" style="margin: 16px auto 48px;">
+            Open source, AGPL-3.0 licensed, and built for builders who want their AI to actually remember.
+        </p>
+        <div class="hero-actions">
+            <a href="https://github.com/wazionapps/nexo" class="btn btn-primary">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+                Star on GitHub
+            </a>
+            <a href="/features/" class="btn btn-secondary">
+                Back to Features
+            </a>
+        </div>
+    </div>
+</section>
+
+<footer>
+    <div class="container">
+        <div class="footer-content">
+            <div class="footer-left">
+                Created by <strong>Francisco Cerd&agrave; Puigserver</strong> &amp; <strong>NEXO</strong> (Claude Opus) &bull; Built by <a href="https://www.wazion.com">WAzion</a> &bull; AGPL-3.0 License &bull; &copy; 2026
+            </div>
+            <div class="footer-links">
+                <a href="https://github.com/wazionapps/nexo">GitHub</a>
+                <a href="https://x.com/NEXOBRAIN">X / Twitter</a>
+                <a href="https://github.com/sponsors/wazionapps">Sponsor</a>
+                <a href="/docs/">Docs</a>
+                <a href="https://www.npmjs.com/package/nexo-brain">npm</a>
+                <a href="https://github.com/wazionapps/nexo/releases">Releases</a>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<script>
+const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+        if (entry.isIntersecting) {
+            entry.target.style.opacity = '1';
+            entry.target.style.transform = 'translateY(0)';
+        }
+    });
+}, { threshold: 0.1 });
+
+document.querySelectorAll('.cognitive-card').forEach(el => {
+    el.style.opacity = '0';
+    el.style.transform = 'translateY(20px)';
+    el.style.transition = 'all 0.5s ease';
+    observer.observe(el);
+});
+</script>
+
+<!-- Cookie Consent (minimal, GDPR) -->
+<div id="cookie-consent" style="display:none;position:fixed;bottom:0;left:0;right:0;background:rgba(10,10,15,0.95);border-top:1px solid #1E1E2E;padding:12px 24px;z-index:200;font-size:13px;color:#94A3B8;text-align:center;">
+    This site uses analytics cookies to improve the experience. <a href="https://www.wazion.com/en/privacy" style="color:#A78BFA;">Privacy Policy</a>
+    <button onclick="document.getElementById('cookie-consent').style.display='none';localStorage.setItem('cc','1')" style="margin-left:16px;background:#7C3AED;color:#fff;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Accept</button>
+    <button onclick="document.getElementById('cookie-consent').style.display='none';localStorage.setItem('cc','0');window['ga-disable-G-1LNEMCJMS7']=true" style="margin-left:8px;background:transparent;color:#94A3B8;border:1px solid #333;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Decline</button>
+</div>
+<script>
+if(!localStorage.getItem('cc')){document.getElementById('cookie-consent').style.display='block';}
+else if(localStorage.getItem('cc')==='0'){window['ga-disable-G-1LNEMCJMS7']=true;}
+</script>
+
+<script>
+(function() {
+    var navLinks = document.querySelector('.nav-links');
+    var navToggle = document.querySelector('.nav-toggle');
+    navLinks.querySelectorAll('a').forEach(function(link) {
+        link.addEventListener('click', function() { navLinks.classList.remove('open'); });
+    });
+    document.addEventListener('click', function(e) {
+        if (navLinks.classList.contains('open') && !navLinks.contains(e.target) && !navToggle.contains(e.target)) {
+            navLinks.classList.remove('open');
+        }
+    });
+})();
+</script>
+
+</body>
+</html>

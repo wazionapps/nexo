@@ -192,6 +192,26 @@
                 <p>Daily check for open issues, PRs without review, and unreleased commits on the NEXO Brain repository. Alerts on actionable items.</p>
             </div>
         </div>
+
+        <div class="section-label" style="margin-top:32px;">New in v2.4.0</div>
+        <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-top:16px;">
+            <div class="process-card">
+                <h4>Skill Auto-Creation</h4>
+                <p>Deep Sleep extracts reusable procedures from sessions. Steps, gotchas, and markdown content stored automatically. Trust pipeline controls quality.</p>
+            </div>
+            <div class="process-card">
+                <h4>Cron Scheduler</h4>
+                <p>Every cron execution tracked in cron_runs table. nexo_schedule_status shows overnight health. nexo_schedule_add creates new crons from conversation.</p>
+            </div>
+            <div class="process-card">
+                <h4>Deep Sleep Watermark</h4>
+                <p>Tracks last processed timestamp instead of filtering by date. Late-night sessions never missed. Per-session checkpointing survives crashes.</p>
+            </div>
+            <div class="process-card">
+                <h4>Security Hardening</h4>
+                <p>Credential redaction in tool logs, transcript sanitization, command injection fix, path traversal protection. Passed 5-phase automated audit.</p>
+            </div>
+        </div>
     </div>
 </section>
 
