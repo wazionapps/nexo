@@ -134,17 +134,38 @@ def _reinstall_pip_deps() -> bool:
         return False
 
 
+def _refresh_installed_manifest():
+    """Copy source crons/ to NEXO_HOME/crons/ so catchup & watchdog stay current."""
+    try:
+        import shutil
+        src_crons = SRC_DIR / "crons"
+        dst_crons = NEXO_HOME / "crons"
+        if src_crons.exists():
+            dst_crons.mkdir(parents=True, exist_ok=True)
+            for f in src_crons.iterdir():
+                if f.is_file():
+                    shutil.copy2(str(f), str(dst_crons / f.name))
+            _log("Refreshed installed crons manifest")
+    except Exception as e:
+        _log(f"Manifest refresh warning: {e}")
+
+
 def _sync_crons():
     """Sync cron definitions with manifest after a git pull."""
     try:
         cron_sync_path = SRC_DIR / "crons" / "sync.py"
         if cron_sync_path.exists():
-            subprocess.run(
+            result = subprocess.run(
                 [sys.executable, str(cron_sync_path)],
                 capture_output=True, text=True, timeout=30,
                 env={**os.environ, "NEXO_HOME": str(NEXO_HOME), "NEXO_CODE": str(SRC_DIR)},
             )
+            if result.returncode != 0:
+                _log(f"Cron sync failed (exit {result.returncode}): {result.stderr or result.stdout}")
+                return  # Don't refresh manifest if timers weren't actually updated
             _log("Synced cron definitions with manifest")
+        # Refresh the installed manifest only after successful sync
+        _refresh_installed_manifest()
     except Exception as e:
         _log(f"Cron sync warning: {e}")
 

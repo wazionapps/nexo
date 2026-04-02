@@ -296,6 +296,9 @@ def sync_linux(dry_run: bool = False):
         service_path = unit_dir / f"nexo-{cron_id}.service"
         timer_path = unit_dir / f"nexo-{cron_id}.timer"
 
+        stdout_log = LOG_DIR / f"{cron_id}-stdout.log"
+        stderr_log = LOG_DIR / f"{cron_id}-stderr.log"
+
         service_content = f"""[Unit]
 Description=NEXO: {cron.get('description', cron_id)}
 
@@ -305,6 +308,8 @@ ExecStart={exec_cmd}
 Environment=NEXO_HOME={NEXO_HOME}
 Environment=NEXO_CODE={NEXO_CODE}
 Environment=HOME={Path.home()}
+StandardOutput=append:{stdout_log}
+StandardError=append:{stderr_log}
 """
 
         if cron.get("run_at_load"):

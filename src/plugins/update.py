@@ -49,6 +49,20 @@ def _is_git_repo() -> bool:
     return (REPO_DIR / ".git").exists() or (REPO_DIR / ".git").is_file()
 
 
+def _refresh_installed_manifest():
+    """Copy source crons/ to NEXO_HOME/crons/ so catchup & watchdog stay current."""
+    try:
+        src_crons = SRC_DIR / "crons"
+        dst_crons = NEXO_HOME / "crons"
+        if src_crons.exists():
+            dst_crons.mkdir(parents=True, exist_ok=True)
+            for f in src_crons.iterdir():
+                if f.is_file():
+                    shutil.copy2(str(f), str(dst_crons / f.name))
+    except Exception:
+        pass
+
+
 def _read_version() -> str:
     """Read version from package.json or NEXO_HOME/version.json (packaged installs)."""
     try:
@@ -520,7 +534,12 @@ def handle_update(remote: str = "origin", branch: str = "main") -> str:
                     env={**os.environ, "NEXO_HOME": str(NEXO_HOME), "NEXO_CODE": str(SRC_DIR)},
                 )
                 cron_sync_result = r.stdout.strip()
-                steps_done.append("cron-sync")
+                if r.returncode == 0:
+                    steps_done.append("cron-sync")
+                    # Refresh installed manifest only after successful sync
+                    _refresh_installed_manifest()
+                else:
+                    cron_sync_result = f"Cron sync failed (exit {r.returncode}): {r.stderr or r.stdout}"
         except Exception as e:
             cron_sync_result = f"Cron sync warning: {e}"
 

@@ -553,6 +553,7 @@ def main():
 
         run_log = {"date": str(TODAY), "started": TIMESTAMP,
                    "stage_a": None, "stage_b": None, "completed": None}
+        sleep_had_errors = False
 
         # Stage A: Housekeeping (mechanical)
         if start_phase == "stage_a":
@@ -574,7 +575,8 @@ def main():
 
             if "error" in dream_result:
                 log(f"Stage B: Dreaming failed ({dream_result['error']}). "
-                    "Stage A cleanup completed successfully. Marking done to avoid retry loop.")
+                    "Stage A cleanup completed successfully. Not marking catchup to allow retry.")
+                sleep_had_errors = True
             else:
                 # Stage B2: Execute actions from CLI output
                 actions_file = COORD_DIR / "sleep-actions.json"
@@ -594,14 +596,15 @@ def main():
         append_sleep_log(run_log)
         log(f"NEXO Sleep v2 complete at {run_log['completed']}")
 
-        # Register for catch-up
-        try:
-            state_file = NEXO_HOME / "operations" / ".catchup-state.json"
-            st = json.loads(state_file.read_text()) if state_file.exists() else {}
-            st["sleep"] = datetime.now().isoformat()
-            state_file.write_text(json.dumps(st, indent=2))
-        except Exception:
-            pass
+        # Register for catch-up only if all stages succeeded
+        if not sleep_had_errors:
+            try:
+                state_file = NEXO_HOME / "operations" / ".catchup-state.json"
+                st = json.loads(state_file.read_text()) if state_file.exists() else {}
+                st["sleep"] = datetime.now().isoformat()
+                state_file.write_text(json.dumps(st, indent=2))
+            except Exception:
+                pass
 
     finally:
         try:

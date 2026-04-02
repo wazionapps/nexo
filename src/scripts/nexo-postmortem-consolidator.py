@@ -399,6 +399,7 @@ def main():
         return
 
     log("=== NEXO Post-Mortem Consolidator v2 starting ===")
+    had_errors = False
 
     # Stage 1: Collect data
     data = collect_data()
@@ -412,27 +413,31 @@ def main():
         if not success:
             log("Stage 2 failed (CLI unavailable or error). "
                 "Skipping intelligent consolidation. Stage 3 (sensory + force) will still run.")
+            had_errors = True
 
     # Stage 3: Sensory Register (mechanical, kept from v1)
     try:
         process_sensory_register()
     except Exception as e:
         log(f"Sensory register failed: {e}")
+        had_errors = True
 
     # Stage 3b: Force analysis (mechanical, kept from v1)
     try:
         analyze_force_events()
     except Exception as e:
         log(f"Force analysis failed: {e}")
+        had_errors = True
 
-    # Register successful run
-    try:
-        state_file = NEXO_HOME / "operations" / ".catchup-state.json"
-        state = json.loads(state_file.read_text()) if state_file.exists() else {}
-        state["postmortem"] = datetime.now().isoformat()
-        state_file.write_text(json.dumps(state, indent=2))
-    except Exception:
-        pass
+    # Register successful run only if no stages failed
+    if not had_errors:
+        try:
+            state_file = NEXO_HOME / "operations" / ".catchup-state.json"
+            state = json.loads(state_file.read_text()) if state_file.exists() else {}
+            state["postmortem"] = datetime.now().isoformat()
+            state_file.write_text(json.dumps(state, indent=2))
+        except Exception:
+            pass
 
     mark_done()
     log("=== Consolidation v2 complete ===")

@@ -228,11 +228,23 @@ fi
 
 # --- Step 8: Sync cron definitions with manifest ---
 CRON_SYNC="$SRC_DIR/crons/sync.py"
+CRON_SYNC_OK=false
 if [ -f "$CRON_SYNC" ]; then
     log "Syncing cron definitions..."
-    NEXO_HOME="$NEXO_HOME" NEXO_CODE="$SRC_DIR" python3 "$CRON_SYNC" 2>&1 && \
-        log "Cron definitions synced." || \
-        warn "Cron sync had warnings (non-fatal)."
+    if NEXO_HOME="$NEXO_HOME" NEXO_CODE="$SRC_DIR" python3 "$CRON_SYNC" 2>&1; then
+        log "Cron definitions synced."
+        CRON_SYNC_OK=true
+    else
+        warn "Cron sync failed (non-fatal). Installed manifest NOT refreshed to avoid divergence."
+    fi
+fi
+
+# --- Step 8b: Refresh installed manifest for catchup/watchdog (only if sync succeeded) ---
+if $CRON_SYNC_OK && [ -d "$SRC_DIR/crons" ]; then
+    mkdir -p "$NEXO_HOME/crons"
+    cp -f "$SRC_DIR/crons/"*.json "$NEXO_HOME/crons/" 2>/dev/null
+    cp -f "$SRC_DIR/crons/"*.py "$NEXO_HOME/crons/" 2>/dev/null
+    log "Refreshed installed crons manifest."
 fi
 
 # --- Done ---

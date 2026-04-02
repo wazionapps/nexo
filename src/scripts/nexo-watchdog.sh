@@ -58,18 +58,22 @@ _build_monitors_from_manifest() {
     return
   fi
   python3 -c "
-import json, sys
+import json, sys, platform
 
 nexo_home = '$NEXO_HOME'
+is_mac = platform.system() == 'Darwin'
 
 with open('$MANIFEST_FILE') as f:
     data = json.load(f)
 
 for c in data.get('crons', []):
     cid = c['id']
-    # Derive human-readable name from id
     name = cid.replace('-', ' ').title()
-    plist_id = 'com.nexo.' + cid
+    # Use the right service identifier per platform
+    if is_mac:
+        svc_id = 'com.nexo.' + cid
+    else:
+        svc_id = 'nexo-' + cid + '.timer'
     stdout_log = nexo_home + '/logs/' + cid + '-stdout.log'
     stderr_log = nexo_home + '/logs/' + cid + '-stderr.log'
 
@@ -103,7 +107,7 @@ for c in data.get('crons', []):
     mon_type = 'core' if c.get('core') else 'personal'
     proc_grep = ''  # manifest crons are one-shot, no persistent process
 
-    print(f'{name}|{plist_id}|{stdout_log}|{stderr_log}|{max_stale}|{proc_grep}|{schedule_desc}|{mon_type}')
+    print(f'{name}|{svc_id}|{stdout_log}|{stderr_log}|{max_stale}|{proc_grep}|{schedule_desc}|{mon_type}')
 " 2>/dev/null
 }
 
@@ -145,7 +149,12 @@ IS_MACOS=false
 log_repair() { echo "[$TS] REPAIR: $1" >> "$REPAIR_LOG"; log "REPAIR: $1"; }
 
 is_loaded() {
-  $IS_MACOS && launchctl list "$1" &>/dev/null
+  if $IS_MACOS; then
+    launchctl list "$1" &>/dev/null
+  else
+    # On Linux, check if the systemd timer is enabled
+    systemctl --user is-enabled "$1" &>/dev/null
+  fi
 }
 
 # ============================================================================
@@ -184,6 +193,36 @@ try_repair_launchagent() {
   return 1
 }
 
+try_repair_systemd() {
+  $IS_MACOS && return 1
+  local timer_unit="$1"
+  local service_unit="${timer_unit%.timer}.service"
+
+  # Repair 1: Timer not enabled — try to enable and start
+  if ! systemctl --user is-enabled "$timer_unit" &>/dev/null; then
+    systemctl --user daemon-reload 2>/dev/null
+    systemctl --user enable --now "$timer_unit" 2>/dev/null
+    sleep 1
+    if systemctl --user is-enabled "$timer_unit" &>/dev/null; then
+      log_repair "$timer_unit: enabled and started"
+      return 0
+    fi
+    return 1
+  fi
+
+  # Repair 2: Timer enabled but not active — start it
+  if ! systemctl --user is-active "$timer_unit" &>/dev/null; then
+    systemctl --user start "$timer_unit" 2>/dev/null
+    sleep 1
+    if systemctl --user is-active "$timer_unit" &>/dev/null; then
+      log_repair "$timer_unit: restarted"
+      return 0
+    fi
+  fi
+
+  return 1
+}
+
 try_repair_cron() {
   local script="$1"
 
@@ -200,29 +239,26 @@ try_repair_cron() {
 }
 
 try_reexecute_missed_cron() {
-  $IS_MACOS || return 1
-  # Re-execute a cron that missed its scheduled run
-  # Extracts ProgramArguments from the plist and runs them
-  local plist_id="$1"
-  local plist_file="$HOME_DIR/Library/LaunchAgents/${plist_id}.plist"
+  local svc_id="$1"
 
-  if [ ! -f "$plist_file" ]; then
-    log "Re-execute skipped: no plist for $plist_id"
-    return 1
-  fi
+  if $IS_MACOS; then
+    # macOS: extract command from plist and run it
+    local plist_file="$HOME_DIR/Library/LaunchAgents/${svc_id}.plist"
 
-  # Extract the full command from plist
-  local cmd
-  cmd=$(python3 -c "
+    if [ ! -f "$plist_file" ]; then
+      log "Re-execute skipped: no plist for $svc_id"
+      return 1
+    fi
+
+    local cmd
+    cmd=$(python3 -c "
 import plistlib, sys
 try:
     with open('$plist_file', 'rb') as f:
         d = plistlib.load(f)
     args = d.get('ProgramArguments', [])
-    # Skip KeepAlive services (they should be running, not re-executed)
     if d.get('KeepAlive'):
         sys.exit(1)
-    # Skip services without a schedule (RunAtLoad only)
     if not d.get('StartCalendarInterval') and not d.get('StartInterval'):
         sys.exit(1)
     print(' '.join(args))
@@ -230,28 +266,36 @@ except:
     sys.exit(1)
 " 2>/dev/null)
 
-  if [ -z "$cmd" ] || [ $? -ne 0 ]; then
-    return 1
-  fi
+    if [ -z "$cmd" ] || [ $? -ne 0 ]; then
+      return 1
+    fi
 
-  log "Re-executing missed cron: $plist_id → $cmd"
-  # Run in background with timeout (5 min max)
-  timeout 300 bash -c "$cmd" >> "$LOG_DIR/watchdog-reexec.log" 2>&1 &
-  local pid=$!
-
-  # Wait briefly and check if it started ok
-  sleep 2
-  if kill -0 "$pid" 2>/dev/null || wait "$pid" 2>/dev/null; then
-    log_repair "$plist_id: re-executed missed cron (PID $pid)"
-    return 0
+    log "Re-executing missed cron: $svc_id → $cmd"
+    timeout 300 bash -c "$cmd" >> "$LOG_DIR/watchdog-reexec.log" 2>&1 &
+    local pid=$!
+    sleep 2
+    if kill -0 "$pid" 2>/dev/null || wait "$pid" 2>/dev/null; then
+      log_repair "$svc_id: re-executed missed cron (PID $pid)"
+      return 0
+    else
+      log "Re-execute failed for $svc_id"
+      return 1
+    fi
   else
-    log "Re-execute failed for $plist_id"
-    return 1
+    # Linux: start the corresponding service unit directly
+    local service_unit="${svc_id%.timer}.service"
+    log "Re-executing missed cron: $svc_id → systemctl start $service_unit"
+    if systemctl --user start "$service_unit" 2>/dev/null; then
+      log_repair "$svc_id: re-executed via systemctl start $service_unit"
+      return 0
+    else
+      log "Re-execute failed for $svc_id"
+      return 1
+    fi
   fi
 }
 
 try_verify_repair() {
-  $IS_MACOS || return 1
   # After Level 2 repair, wait and verify the service is healthy
   local plist_id="$1"
   local log_stdout="$2"
@@ -393,20 +437,26 @@ for monitor in "${MONITORS[@]}"; do
   error_count=0
   proc_alive="n/a"
 
-  # Check 1: LaunchAgent loaded?
+  # Check 1: Service loaded? (launchd on macOS, systemd on Linux)
   if is_loaded "$plist_id"; then
     loaded="yes"
   else
     loaded="no"
-    # AUTO-REPAIR: try to bootstrap
-    if try_repair_launchagent "$plist_id" "$proc_grep"; then
+    # AUTO-REPAIR: try platform-appropriate repair
+    repair_ok=false
+    if $IS_MACOS; then
+      try_repair_launchagent "$plist_id" "$proc_grep" && repair_ok=true
+    else
+      try_repair_systemd "$plist_id" && repair_ok=true
+    fi
+    if $repair_ok; then
       loaded="yes"
       status="HEALED"
-      details="${details}Self-healed: bootstrapped. "
+      details="${details}Self-healed: service re-registered. "
       TOTAL_HEALED=$((TOTAL_HEALED + 1))
     else
       status="FAIL"
-      details="${details}Not loaded in launchctl (repair failed). "
+      details="${details}Service not loaded (repair failed). "
     fi
   fi
 
@@ -416,9 +466,10 @@ for monitor in "${MONITORS[@]}"; do
       proc_alive="yes"
     else
       proc_alive="no"
-      # AUTO-REPAIR: try to kickstart
+      # AUTO-REPAIR: try to kickstart (platform-appropriate)
       if [ "$status" != "FAIL" ] && [ "$status" != "HEALED" ]; then
-        if try_repair_launchagent "$plist_id" "$proc_grep"; then
+        if ($IS_MACOS && try_repair_launchagent "$plist_id" "$proc_grep") || \
+           (! $IS_MACOS && try_repair_systemd "$plist_id"); then
           proc_alive="yes"
           status="HEALED"
           details="${details}Self-healed: kickstarted. "
@@ -825,7 +876,7 @@ if [ "$TOTAL_FAIL" -gt 0 ]; then
 Schedule: ${m_sched}
 Type: ${m_type}
 Failure reason: ${m_details}
-Plist: ~/Library/LaunchAgents/${m_plist}.plist
+Service config: $($IS_MACOS && echo "~/Library/LaunchAgents/${m_plist}.plist" || echo "~/.config/systemd/user/${m_plist}")
 Process grep: ${m_proc}
 Stderr (last 20 lines):
 ${STDERR_TAIL}
@@ -862,7 +913,7 @@ Do NOT propagate fixes for [personal] services — those stay local only."
       cat > "$REPAIR_PROMPT_FILE" <<NEXOPROMPT
 WATCHDOG LEVEL 2 REPAIR — Automated diagnostic session.
 
-The watchdog detected services that failed mechanical repair (launchctl bootstrap/kickstart).
+The watchdog detected services that failed mechanical repair (launchctl/systemctl re-registration).
 Your job: diagnose the root cause and fix it. Do NOT ask the user anything — resolve autonomously.
 
 Each failure is tagged [core] or [personal]:
@@ -873,10 +924,10 @@ FAILURES:
 ${FAIL_DETAILS}
 
 STEPS:
-1. Read the plist file to understand the service configuration
+1. Read the service config (plist on macOS, systemd unit on Linux) to understand the service
 2. Check stderr/stdout logs for the actual error
 3. Fix the root cause (missing file, bad config, dependency issue, etc.)
-4. Reload the service and verify it is running
+4. Reload the service and verify it is running (launchctl on macOS, systemctl on Linux)
 5. Log what you did to $NEXO_HOME/logs/watchdog-repair-result.log
 ${PROPAGATE_BLOCK}
 
