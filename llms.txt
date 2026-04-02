@@ -1,8 +1,8 @@
 # NEXO Brain
 
-> Open-source cognitive memory system for AI agents (v2.1.0)
+> Open-source cognitive memory system for AI agents (v2.4.0)
 
-NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It provides 147+ MCP tools across 23 categories including semantic RAG, knowledge graph-boosted search, HNSW vector indexing, trust scoring, episodic memory, claim graph, metacognitive error prevention, inter-terminal coordination, web dashboard v2, natural memory decay, a full nervous system of 15 autonomous processes, unified code/data architecture, auto-update on startup, and auto-diary.
+NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It provides 147+ MCP tools across 23 categories including semantic RAG, knowledge graph-boosted search, HNSW vector indexing, trust scoring, episodic memory, claim graph, metacognitive error prevention, inter-terminal coordination, web dashboard v2, natural memory decay, a full nervous system of 15 autonomous processes, unified code/data architecture, auto-update on startup, auto-diary, skills system, cron scheduler, and external audit.
 
 ## Key Features
 
@@ -37,6 +37,12 @@ NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cogniti
 - Watchdog Level 3: auto-reexecutes missed crons, verifies repairs with post-fix checks
 - CLAUDE.md version tracker: section markers for safe core updates without losing customizations
 - Lambda decay fix: STM 7h to 7d, LTM 2.4d to 60d (was 24x too aggressive)
+- Skills System: reusable procedure library with match, create, merge, and result tracking for multi-step workflows
+- Cron Scheduler: built-in cron scheduling engine for autonomous processes via MCP tools
+- Deep Sleep Watermark & Checkpointing: resumable deep sleep with watermark-based progress tracking
+- External Audit System: structured framework for validating memory stores, cron health, trust calibration, and cognitive consistency
+- Security Fixes: hardened credential storage, sanitized MCP tool inputs, tightened file access permissions
+- Cognitive Quarantine: automated memories enter quarantine before promotion, with review/approve/reject workflow
 - 24 pytest tests with isolated databases
 - Plugin system with hot-reload
 - 100% local: SQLite + ONNX Runtime, zero cloud dependencies
@@ -44,7 +50,7 @@ NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cogniti
 ## Installation
 
 ```
-npx nexo-brain@2.1.0
+npx nexo-brain@2.4.0
 ```
 
 ## Documentation
@@ -69,7 +75,7 @@ Modular code: db/ package (11 modules: core, fts, schema, sessions, reminders, l
 
 NEXO Brain exposes all functionality as MCP (Model Context Protocol) tools. Compatible with Claude Code, OpenClaw, and any MCP client.
 
-Tool categories: Cognitive (8), Cognitive Input (5), Cognitive Advanced (8), Guard (6), Episodic (12), Sessions (5), Coordination (7), Reminders (5), Followups (4), Learnings (5), Credentials (5), Task History (3), Menu (1), Entities (5), Preferences (4), Agents (5), Backup (3), Evolution (5), Adaptive & Somatic (4), Knowledge Graph (4), Claim Graph (6), Artifacts (6), Context Continuity (2), Cognitive Triggers (6), Index Management (3), Files (1), Update (1), and more via plugins.
+Tool categories: Cognitive (8), Cognitive Input (5), Cognitive Advanced (8), Guard (6), Episodic (12), Sessions (5), Coordination (7), Reminders (5), Followups (4), Learnings (5), Credentials (5), Task History (3), Menu (1), Entities (5), Preferences (4), Agents (5), Backup (3), Evolution (5), Adaptive & Somatic (4), Knowledge Graph (4), Claim Graph (6), Artifacts (6), Context Continuity (2), Cognitive Triggers (6), Index Management (3), Files (1), Update (1), Skills (6), and more via plugins.
 
 ## License
 

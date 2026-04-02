@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>NEXO Brain — Cognitive Memory for AI Agents</title>
-    <meta name="description" content="Open-source cognitive memory system for AI agents. Deep Sleep overnight learning, emotional intelligence, 147+ MCP tools, 14 autonomous crons, adaptive calibration, and trust scoring. Built for Claude Code.">
+    <meta name="description" content="Open-source cognitive memory system for AI agents. Skills system, cron scheduler, deep sleep checkpointing, external audit, 147+ MCP tools, adaptive calibration, and trust scoring. Built for Claude Code.">
     <meta name="keywords" content="AI memory, cognitive architecture, MCP, Claude Code, RAG, vector search, AI agents, Atkinson-Shiffrin, memory system, open source">
     <meta name="author" content="WAzion">
     <meta name="robots" content="index, follow">
@@ -14,7 +14,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com">
     <meta property="og:title" content="NEXO Brain — Cognitive Memory for AI Agents">
-    <meta property="og:description" content="Open-source cognitive memory for AI agents. Deep Sleep overnight learning, emotional intelligence, 147+ MCP tools, cron manifest, and adaptive calibration.">
+    <meta property="og:description" content="Open-source cognitive memory for AI agents. Skills system, cron scheduler, deep sleep checkpointing, external audit, 147+ MCP tools, and adaptive calibration.">
     <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
     <meta property="og:image:width" content="1536">
     <meta property="og:image:height" content="1024">
@@ -22,7 +22,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="NEXO Brain — Cognitive Memory for AI Agents">
-    <meta name="twitter:description" content="Open-source cognitive memory for AI agents. Deep Sleep overnight learning, emotional intelligence, 147+ MCP tools, cron manifest, and adaptive calibration.">
+    <meta name="twitter:description" content="Open-source cognitive memory for AI agents. Skills system, cron scheduler, deep sleep checkpointing, external audit, 147+ MCP tools, and adaptive calibration.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
 
     <!-- Google Analytics (GA4) -->
@@ -369,7 +369,7 @@
     <div class="container">
         <div class="hero-badge fade-up">
             <span class="dot"></span>
-            <span id="version-badge">v2.1.0</span> &mdash; Deep Sleep v2 &amp; Emotional Intelligence
+            <span id="version-badge">v2.4.0</span> &mdash; Skills, Cron Scheduler &amp; External Audit
         </div>
         <div class="fade-up" style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;">
             <img src="https://img.shields.io/npm/v/nexo-brain?color=7C3AED&label=npm" alt="npm version">
@@ -614,6 +614,41 @@
 <section style="background:rgba(18,18,26,0.3);">
     <div class="container" style="text-align:center;">
         <img src="/assets/nexo-brain-infographic-v5.png" alt="NEXO Brain Architecture Infographic" style="max-width:800px;width:100%;border-radius:16px;box-shadow:0 8px 32px rgba(124,58,237,0.15);" class="fade-up">
+    </div>
+</section>
+
+<!-- v2.4.0 Skills, Cron Scheduler & External Audit -->
+<section class="feature-section" style="padding:48px 24px;">
+    <div style="max-width:900px;margin:0 auto;">
+        <div class="section-label">New in v2.4.0</div>
+        <h2 style="text-align:center;margin-bottom:32px;">Skills, Cron Scheduler &amp; External Audit</h2>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:24px;">
+            <div class="card">
+                <h3>Skills System</h3>
+                <p>Reusable procedure library with match, create, merge, and result tracking. Agents learn multi-step workflows and replay them on similar tasks. Skill stats track success rates for continuous improvement.</p>
+            </div>
+            <div class="card">
+                <h3>Cron Scheduler</h3>
+                <p>Built-in cron scheduling engine for autonomous processes. Define, update, and monitor recurring tasks directly from MCP tools. Replaces manual LaunchAgent/systemd configuration with a unified API.</p>
+            </div>
+            <div class="card">
+                <h3>Deep Sleep Watermark &amp; Checkpointing</h3>
+                <p>Resumable deep sleep with watermark-based progress tracking. If interrupted, the pipeline resumes from the last checkpoint instead of restarting. Eliminates duplicate processing on long overnight runs.</p>
+            </div>
+            <div class="card">
+                <h3>External Audit System</h3>
+                <p>Structured external audit framework for validating system integrity. Automated checks across memory stores, cron health, trust calibration, and cognitive consistency. Produces actionable audit reports.</p>
+            </div>
+            <div class="card">
+                <h3>Security Fixes</h3>
+                <p>Hardened credential storage, sanitized MCP tool inputs, and tightened file access permissions. Addresses findings from the external audit cycle with defense-in-depth improvements across the stack.</p>
+            </div>
+            <div class="card">
+                <h3>Cognitive Quarantine</h3>
+                <p>New memories from automated processes enter quarantine before promotion. Review, approve, or reject quarantined items via MCP tools. Prevents low-quality automated learnings from polluting the knowledge base.</p>
+            </div>
+        </div>
     </div>
 </section>
 
