@@ -115,9 +115,14 @@ PERSONAL_MONITORS=(
 MONITORS+=("${PERSONAL_MONITORS[@]+"${PERSONAL_MONITORS[@]}"}")
 
 # Cron jobs to check (NAME|SCRIPT|CHECK_PATH|MAX_STALE_SECS|SCHEDULE)
-CRON_MONITORS=(
-  "Backup Cron|$NEXO_DIR/backup_cron.sh|$NEXO_DIR/backups/|7200|Hourly"
-)
+# Core cron monitors are loaded from manifest above.
+# Maintainer-only monitors go here (guarded by NEXO_MAINTAINER env var).
+CRON_MONITORS=()
+if [ "${NEXO_MAINTAINER:-}" = "1" ]; then
+  CRON_MONITORS+=(
+    "Backup Cron|$NEXO_DIR/backup_cron.sh|$NEXO_DIR/backups/|7200|Hourly"
+  )
+fi
 
 # Error patterns to search in stderr logs (last 50 lines)
 ERROR_PATTERNS="Traceback|Error:|CRITICAL|FATAL|ModuleNotFoundError|PermissionError|FileNotFoundError|ConnectionRefused|Errno"
@@ -828,12 +833,12 @@ ${STDOUT_TAIL}
       log "Launching NEXO Level 2 repair..."
 
       # Build propagation instructions if core services failed
-      # Only the origin maintainer (user) propagates fixes to the public repo
+      # Only runs when NEXO_MAINTAINER=1 and NEXO_PUBLIC_REPO is configured
       PROPAGATE_BLOCK=""
-      # If you maintain a public NEXO repo, configure propagation here
-      NEXO_PUBLIC_REPO="${NEXO_PUBLIC_REPO:-}"
-      if $HAS_CORE_FAILS && [ -n "$NEXO_PUBLIC_REPO" ] && [ -d "$NEXO_PUBLIC_REPO/.git" ]; then
-        PROPAGATE_BLOCK="
+      if [ "${NEXO_MAINTAINER:-}" = "1" ]; then
+        NEXO_PUBLIC_REPO="${NEXO_PUBLIC_REPO:-}"
+        if $HAS_CORE_FAILS && [ -n "$NEXO_PUBLIC_REPO" ] && [ -d "$NEXO_PUBLIC_REPO/.git" ]; then
+          PROPAGATE_BLOCK="
 PROPAGATION (for [core] fixes ONLY):
 If your fix modifies a file under $NEXO_HOME/ (server.py, db/, plugins/, scripts/):
 1. Commit the fix locally with a descriptive message
@@ -842,6 +847,7 @@ If your fix modifies a file under $NEXO_HOME/ (server.py, db/, plugins/, scripts
 4. Commit + push
 5. Create a GitHub release with gh release create
 Do NOT propagate fixes for [personal] services — those stay local only."
+        fi
       fi
 
       # Write prompt to temp file (avoids heredoc quoting issues in subshell)

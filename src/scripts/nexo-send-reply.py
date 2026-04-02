@@ -41,8 +41,38 @@ CONFIG_PATH = NEXO_HOME / "nexo-email" / "config.json"
 
 
 def load_config():
-    with open(CONFIG_PATH) as f:
-        return json.load(f)
+    """Load email config from config.json or fall back to nexo.db credentials."""
+    # Primary: config file
+    if CONFIG_PATH.exists():
+        with open(CONFIG_PATH) as f:
+            return json.load(f)
+
+    # Fallback: nexo.db credential store (service='smtp')
+    import sqlite3
+    db_path = NEXO_HOME / "data" / "nexo.db"
+    if not db_path.exists():
+        return None
+    try:
+        conn = sqlite3.connect(str(db_path))
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT key, value FROM credentials WHERE service = 'smtp'"
+        ).fetchall()
+        conn.close()
+        if not rows:
+            return None
+        creds = {r["key"]: r["value"] for r in rows}
+        # Map credential keys to config keys expected by this script
+        return {
+            "email": creds.get("from_email", creds.get("user", "")),
+            "password": creds.get("password", ""),
+            "smtp_host": creds.get("host", ""),
+            "smtp_port": int(creds.get("port", "465")),
+            "imap_host": creds.get("imap_host", ""),
+            "imap_port": int(creds.get("imap_port", "993")),
+        }
+    except Exception:
+        return None
 
 
 def build_message(args, config):
@@ -62,8 +92,10 @@ def build_message(args, config):
         msg["In-Reply-To"] = args.in_reply_to
         msg["References"] = args.references or args.in_reply_to
 
-    # Standard headers
-    msg["Message-ID"] = make_msgid(domain="example.com")
+    # Standard headers — derive domain from sender email
+    sender_email = config.get("email", "")
+    domain = sender_email.split("@")[1] if "@" in sender_email else "localhost"
+    msg["Message-ID"] = make_msgid(domain=domain)
     msg["Date"] = formatdate(localtime=True)
 
     # Body
@@ -167,6 +199,10 @@ def main():
         sys.exit(1)
 
     config = load_config()
+    if not config or not config.get("smtp_host") or not config.get("email"):
+        print("SMTP not configured, skipping email")
+        sys.exit(0)
+
     msg = build_message(args, config)
     send(msg, config)
     save_to_sent(msg, config)

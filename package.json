@@ -57,7 +57,7 @@
     "bin/postinstall.js",
     "src/",
     "templates/",
-    "scripts/",
-    "tests/"
+    "README.md",
+    "LICENSE"
   ]
 }

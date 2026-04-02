@@ -755,7 +755,7 @@ If NEXO Brain is useful to you, consider:
 - **Auto-resolve followups**: Change log entries automatically cross-reference and complete matching open followups.
 - **Free-form learning categories**: No more hardcoded category validation — use any category name.
 - **CLAUDE.md template rewrite**: 494 to 127 lines, compact procedural format with full heartbeat signal reactions.
-- **Complete sanitization**: All hardcoded paths use `NEXO_HOME` env var. Zero personal data in the repo.
+- **Complete sanitization**: All hardcoded paths use `NEXO_HOME` env var. No credentials or personal data in the distributed package. Migration scripts and maintainer tooling use configurable paths.
 
 ### v1.6.0 — Nervous System + Dashboard v2 (2026-03-30)
 - **Nervous System**: 11 autonomous scripts (decay, deep sleep, self-audit, catchup, evolution, followup hygiene, immune, watchdog, github monitor, learning validator)
