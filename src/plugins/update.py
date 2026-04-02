@@ -25,11 +25,20 @@ def _is_git_repo() -> bool:
 
 
 def _read_version() -> str:
-    """Read version from package.json."""
+    """Read version from package.json or NEXO_HOME/version.json (packaged installs)."""
     try:
-        return json.loads(PACKAGE_JSON.read_text()).get("version", "unknown")
+        if PACKAGE_JSON.exists():
+            return json.loads(PACKAGE_JSON.read_text()).get("version", "unknown")
     except Exception:
-        return "unknown"
+        pass
+    # Packaged installs don't ship package.json — check version.json in NEXO_HOME
+    try:
+        version_file = NEXO_HOME / "version.json"
+        if version_file.exists():
+            return json.loads(version_file.read_text()).get("version", "unknown")
+    except Exception:
+        pass
+    return "unknown"
 
 
 def _git(*args, cwd=None) -> tuple[int, str, str]:
@@ -181,7 +190,7 @@ def _handle_packaged_update() -> str:
     # Use npm to update the package
     try:
         result = subprocess.run(
-            ["npm", "update", "-g", "@anthropic-ai/nexo"],
+            ["npm", "update", "-g", "nexo-brain"],
             capture_output=True, text=True, timeout=120,
         )
         if result.returncode != 0:

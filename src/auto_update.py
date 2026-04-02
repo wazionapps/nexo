@@ -96,6 +96,45 @@ def _read_package_version() -> str:
 
 # ── Hook sync ────────────────────────────────────────────────────────
 
+def _reinstall_pip_deps():
+    """Reinstall Python deps from requirements.txt after a version-changing pull."""
+    req_file = SRC_DIR / "requirements.txt"
+    if not req_file.exists():
+        return
+    venv_pip = NEXO_HOME / ".venv" / "bin" / "pip"
+    if not venv_pip.exists():
+        venv_pip = NEXO_HOME / ".venv" / "bin" / "pip3"
+    try:
+        if venv_pip.exists():
+            subprocess.run(
+                [str(venv_pip), "install", "--quiet", "-r", str(req_file)],
+                capture_output=True, text=True, timeout=120,
+            )
+        else:
+            subprocess.run(
+                [sys.executable, "-m", "pip", "install", "--quiet", "-r", str(req_file), "--break-system-packages"],
+                capture_output=True, text=True, timeout=120,
+            )
+        _log("Reinstalled Python dependencies after update")
+    except Exception as e:
+        _log(f"pip reinstall warning: {e}")
+
+
+def _sync_crons():
+    """Sync cron definitions with manifest after a git pull."""
+    try:
+        cron_sync_path = SRC_DIR / "crons" / "sync.py"
+        if cron_sync_path.exists():
+            subprocess.run(
+                [sys.executable, str(cron_sync_path)],
+                capture_output=True, text=True, timeout=30,
+                env={**os.environ, "NEXO_HOME": str(NEXO_HOME), "NEXO_CODE": str(SRC_DIR)},
+            )
+            _log("Synced cron definitions with manifest")
+    except Exception as e:
+        _log(f"Cron sync warning: {e}")
+
+
 def _sync_hooks():
     """Copy hook scripts from src/hooks/ to NEXO_HOME/hooks/ after a git pull."""
     import shutil
@@ -159,12 +198,19 @@ def _check_git_updates() -> str | None:
 
     new_version = _read_package_version()
 
+    # Reinstall pip deps if version changed
+    if old_version != new_version:
+        _reinstall_pip_deps()
+
     # Run DB migrations after pull
     _run_db_migrations()
 
     # Sync hooks to NEXO_HOME (nexo-brain.js copies them on install,
     # but auto-update via git pull bypasses nexo-brain.js)
     _sync_hooks()
+
+    # Sync cron definitions with manifest
+    _sync_crons()
 
     msg = f"Auto-updated: {old_version} -> {new_version}" if old_version != new_version else f"Auto-updated (v{new_version}, new commits)"
     _log(msg)

@@ -37,7 +37,7 @@ read_version() {
 # --- Check if this is a git repo ---
 if [ ! -d "$REPO_DIR/.git" ] && [ ! -f "$REPO_DIR/.git" ]; then
     err "ABORTED: Not a git repository at $REPO_DIR"
-    err "For packaged installs, use: npm update -g @anthropic-ai/nexo"
+    err "For packaged installs, use: npm update -g nexo-brain"
     exit 1
 fi
 
@@ -149,7 +149,7 @@ fi
 log "Verifying server.py import..."
 if ! (cd "$SRC_DIR" && python3 -c "import server" 2>&1); then
     err "Import verification failed! Rolling back..."
-    git reset --hard "$OLD_COMMIT"
+    git checkout "$OLD_COMMIT" -- .
     if [ -d "$BACKUP_DIR" ]; then
         for db in "$BACKUP_DIR"/*.db; do
             [ -f "$db" ] || continue

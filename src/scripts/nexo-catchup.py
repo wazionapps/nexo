@@ -18,6 +18,10 @@ import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
+HOME = Path.home()
+NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(HOME / ".nexo")))
+
+
 def _resolve_claude_cli() -> Path:
     """Find claude CLI: saved path > PATH > common locations."""
     saved = NEXO_HOME / "config" / "claude-cli-path"
@@ -30,18 +34,16 @@ def _resolve_claude_cli() -> Path:
     if found:
         return Path(found)
     for candidate in [
-        Path.home() / ".local" / "bin" / "claude",
-        Path.home() / ".npm-global" / "bin" / "claude",
+        HOME / ".local" / "bin" / "claude",
+        HOME / ".npm-global" / "bin" / "claude",
         Path("/usr/local/bin/claude"),
     ]:
         if candidate.exists():
             return candidate
-    return Path.home() / ".local" / "bin" / "claude"  # last resort
+    return HOME / ".local" / "bin" / "claude"  # last resort
+
 
 CLAUDE_CLI = _resolve_claude_cli()
-
-HOME = Path.home()
-NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 LOG_DIR = NEXO_HOME / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE = LOG_DIR / "catchup.log"

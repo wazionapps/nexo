@@ -260,13 +260,13 @@ def fallback_synthesis(data: dict):
     if data.get("overdue_reminders"):
         lines.append("## Overdue Reminders")
         for r in data["overdue_reminders"][:10]:
-            lines.append(f"- #{r.get('id', '?')} {r.get('title', '')} (due {r.get('due_date', '?')})")
+            lines.append(f"- #{r.get('id', '?')} {r.get('description', '')} (due {r.get('date', '?')})")
         lines.append("")
 
     if data.get("pending_followups"):
         lines.append("## Pending Followups")
         for f in data["pending_followups"][:10]:
-            lines.append(f"- #{f.get('id', '?')} {f.get('title', '')} (due {f.get('due_date', '?')})")
+            lines.append(f"- #{f.get('id', '?')} {f.get('description', '')} (due {f.get('date', '?')})")
         lines.append("")
 
     OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
