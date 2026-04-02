@@ -2,7 +2,7 @@
 
 > Open-source cognitive memory system for AI agents (v2.4.0)
 
-NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It provides 147+ MCP tools across 23 categories including semantic RAG, knowledge graph-boosted search, HNSW vector indexing, trust scoring, episodic memory, claim graph, metacognitive error prevention, inter-terminal coordination, web dashboard v2, natural memory decay, a full nervous system of 15 autonomous processes, unified code/data architecture, auto-update on startup, auto-diary, skills system, cron scheduler, and external audit.
+NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It provides 160+ MCP tools across 25 categories including semantic RAG, knowledge graph-boosted search, HNSW vector indexing, trust scoring, episodic memory, claim graph, metacognitive error prevention, inter-terminal coordination, web dashboard v2, natural memory decay, a full nervous system of 15 autonomous processes, unified code/data architecture, auto-update on startup, auto-diary, skills system, cron scheduler, and external audit.
 
 ## Key Features
 
@@ -31,8 +31,8 @@ NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cogniti
 - Somatic Markers: pain memory per file/area with risk scoring and validated recovery
 - Adaptive Personality: 6 weighted signals (vibe, corrections, brevity, topic, tool errors, git diff)
 - Evolution System: weekly self-improvement cycle with snapshot/rollback and circuit breakers
-- Deep Sleep v2: 4-phase overnight pipeline (Collect→Extract→Synthesize→Apply) with 8 finding types including emotional signals, abandoned projects, and productivity patterns
-- Session Tone: emotional intelligence layer — adapts next-day behavior based on mood, mistakes, and productivity
+- Deep Sleep v2: 4-phase overnight pipeline (Collect->Extract->Synthesize->Apply) with 8 finding types including emotional signals, abandoned projects, and productivity patterns
+- Session Tone: emotional intelligence layer -- adapts next-day behavior based on mood, mistakes, and productivity
 - Cron Manifest: declarative cron management (manifest.json + sync.py), auto-synced by nexo_update
 - Watchdog Level 3: auto-reexecutes missed crons, verifies repairs with post-fix checks
 - CLAUDE.md version tracker: section markers for safe core updates without losing customizations
