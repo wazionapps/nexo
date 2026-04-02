@@ -72,6 +72,27 @@
     </div>
 </section>
 
+<!-- v2.4.0 Skills, Cron Scheduler, Security -->
+<section id="v240" class="section-compact" style="background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
+    <div class="container">
+        <div class="section-label">New in v2.4.0</div>
+        <h2 class="section-title">Skills, Cron Scheduler &amp; Security</h2>
+        <p class="section-subtitle">
+            Deep Sleep now creates reusable skills automatically, every cron execution is tracked, and the system passed a 5-phase automated audit covering product, failure handling, security, packaging, and UX.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Skill Auto-Creation</h4><p>Deep Sleep extracts multi-step procedures from sessions and stores them as skills with full content (steps, gotchas, markdown). Trust pipeline: trace&rarr;draft&rarr;published&rarr;archived. 7 MCP tools for skill management.</p></div>
+                <div class="cognitive-card"><h4>Cron Scheduler</h4><p>Every cron execution tracked in <code>cron_runs</code> table. <code>nexo_schedule_status</code> shows what ran overnight. <code>nexo_schedule_add</code> creates new crons from conversation. Universal wrapper for all processes.</p></div>
+                <div class="cognitive-card"><h4>Deep Sleep v2.4</h4><p>Watermark-based collection (late-night sessions never missed). Per-session checkpointing (crash-safe resume). Retry x3 on failure. Auto-calibration of personality settings from emotional analysis.</p></div>
+                <div class="cognitive-card"><h4>Security Fixes</h4><p>Credential redaction in tool logs. Transcript sanitization in Deep Sleep. Command injection fix in dashboard. Path traversal protection in plugin loader. 5-phase audit passed.</p></div>
+                <div class="cognitive-card"><h4>Diary Filter</h4><p>Startup only shows human-interactive sessions. Automated cron diaries filtered out. Email sessions preserved as real interactions. Auto-closed sessions with heartbeats kept.</p></div>
+                <div class="cognitive-card"><h4>Python 3.9 + Linux</h4><p><code>from __future__ import annotations</code> across 18 files for Python 3.9 compat. Full systemd timer support. Bash alias written to <code>.bashrc</code> for Linux users.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
 <!-- v2.1.0 Deep Sleep v2 & Emotional Intelligence -->
 <section id="v210" class="section-compact" style="background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
     <div class="container">
