@@ -135,21 +135,52 @@ def update_calibration_mood(synthesis: dict) -> dict:
         # Keep last 30 days
         cal["mood_history"] = cal["mood_history"][-30:]
 
-        # Apply calibration recommendation if any
+        # Apply calibration recommendation automatically
         rec = emotional_day.get("calibration_recommendation")
         if rec and rec != "null":
-            if "calibration_notes" not in cal:
-                cal["calibration_notes"] = []
-            cal["calibration_notes"].append({
+            applied_changes = []
+
+            # Parse and apply known calibration adjustments
+            rec_lower = rec.lower()
+            personality = cal.get("personality", {})
+
+            # Autonomy adjustments
+            if "autonomy" in rec_lower or "autonomía" in rec_lower:
+                if any(w in rec_lower for w in ["full", "más autonomía", "subir", "increase"]):
+                    personality["autonomy"] = "full"
+                    applied_changes.append("autonomy → full")
+                elif any(w in rec_lower for w in ["conservative", "reducir", "bajar"]):
+                    personality["autonomy"] = "conservative"
+                    applied_changes.append("autonomy → conservative")
+
+            # Communication adjustments
+            if any(w in rec_lower for w in ["concis", "breve", "shorter", "telegráf"]):
+                personality["communication"] = "concise"
+                applied_changes.append("communication → concise")
+            elif any(w in rec_lower for w in ["detail", "explicar más", "más contexto"]):
+                personality["communication"] = "detailed"
+                applied_changes.append("communication → detailed")
+
+            # Proactivity adjustments
+            if any(w in rec_lower for w in ["más proactiv", "proactive", "anticipar"]):
+                personality["proactivity"] = "proactive"
+                applied_changes.append("proactivity → proactive")
+
+            cal["personality"] = personality
+
+            # Log the recommendation and what was applied
+            if "calibration_log" not in cal:
+                cal["calibration_log"] = []
+            cal["calibration_log"].append({
                 "date": synthesis.get("date", ""),
                 "recommendation": rec,
-                "applied": False,
+                "applied": applied_changes if applied_changes else ["noted, no auto-applicable changes"],
             })
-            # Keep last 10
-            cal["calibration_notes"] = cal["calibration_notes"][-10:]
+            cal["calibration_log"] = cal["calibration_log"][-20:]
 
         calibration_file.write_text(json.dumps(cal, indent=2, ensure_ascii=False))
-        return {"success": True, "mood_score": emotional_day.get("mood_score")}
+        changes_str = ", ".join(applied_changes) if rec and applied_changes else "none"
+        return {"success": True, "mood_score": emotional_day.get("mood_score"), "calibration_applied": changes_str}
     except Exception as e:
         return {"success": False, "error": str(e)}
 
