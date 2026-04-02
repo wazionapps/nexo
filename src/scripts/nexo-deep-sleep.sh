@@ -37,7 +37,7 @@ log "=== Deep Sleep v2 starting (run_id=$RUN_ID) ==="
 
 # Phase 1: Collect all context (Python, no LLM)
 log "Phase 1: Collecting context since $SINCE until $UNTIL..."
-python3 "$SCRIPT_DIR/deep-sleep/collect.py" "$RUN_ID" "$SINCE" "$UNTIL" 2>&1 | tee -a "$LOG_DIR/deep-sleep.log"
+python3 "$SCRIPT_DIR/deep-sleep/collect.py" "$RUN_ID" "$SINCE" "$UNTIL" >> "$LOG_DIR/deep-sleep.log" 2>&1
 
 if [ ! -f "$DEEP_SLEEP_DIR/$RUN_ID-context.txt" ]; then
     log "No context file generated. Skipping."
@@ -60,7 +60,7 @@ fi
 
 # Phase 2: Extract findings per session (Claude Opus)
 log "Phase 2: Extracting findings from $SESSIONS sessions..."
-python3 "$SCRIPT_DIR/deep-sleep/extract.py" "$RUN_ID" 2>&1 | tee -a "$LOG_DIR/deep-sleep.log"
+python3 "$SCRIPT_DIR/deep-sleep/extract.py" "$RUN_ID" >> "$LOG_DIR/deep-sleep.log" 2>&1
 
 if [ ! -f "$DEEP_SLEEP_DIR/$RUN_ID-extractions.json" ]; then
     log "Extraction failed. Watermark NOT updated (will retry next run)."
@@ -69,7 +69,7 @@ fi
 
 # Phase 3: Cross-session synthesis (Claude Opus, one call)
 log "Phase 3: Synthesizing cross-session findings..."
-python3 "$SCRIPT_DIR/deep-sleep/synthesize.py" "$RUN_ID" 2>&1 | tee -a "$LOG_DIR/deep-sleep.log"
+python3 "$SCRIPT_DIR/deep-sleep/synthesize.py" "$RUN_ID" >> "$LOG_DIR/deep-sleep.log" 2>&1
 
 if [ ! -f "$DEEP_SLEEP_DIR/$RUN_ID-synthesis.json" ]; then
     log "Synthesis failed. Falling back to extractions only."
@@ -78,7 +78,7 @@ fi
 
 # Phase 4: Apply findings
 log "Phase 4: Applying findings..."
-python3 "$SCRIPT_DIR/deep-sleep/apply_findings.py" "$RUN_ID" 2>&1 | tee -a "$LOG_DIR/deep-sleep.log"
+python3 "$SCRIPT_DIR/deep-sleep/apply_findings.py" "$RUN_ID" >> "$LOG_DIR/deep-sleep.log" 2>&1
 
 # Update watermark on success
 echo "$UNTIL" > "$WATERMARK_FILE"
