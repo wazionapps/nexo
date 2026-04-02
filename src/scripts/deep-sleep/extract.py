@@ -209,32 +209,70 @@ def main():
     print(f"[extract] Phase 2: Analyzing {len(session_files)} sessions for {target_date}")
     print(f"[extract] Claude CLI: {claude_bin}")
 
+    # Checkpoint directory: one JSON per session, survives crashes
+    checkpoint_dir = date_dir / "checkpoints"
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+
     all_extractions = []
     total_findings = 0
+    skipped = 0
+    MAX_RETRIES = 3
 
     for i, session_id in enumerate(session_files):
+        sid_safe = session_id.replace(".jsonl", "")[:30]
+        checkpoint_file = checkpoint_dir / f"{sid_safe}.json"
+
+        # Resume: skip already-processed sessions
+        if checkpoint_file.exists():
+            try:
+                with open(checkpoint_file) as f:
+                    cached = json.load(f)
+                findings_count = len(cached.get("findings", []))
+                total_findings += findings_count
+                all_extractions.append(cached)
+                skipped += 1
+                print(f"[extract] Session {i + 1}/{len(session_files)}: {session_id} (cached, {findings_count} findings)")
+                continue
+            except (json.JSONDecodeError, KeyError):
+                pass  # Corrupted checkpoint, re-process
+
         print(f"[extract] Session {i + 1}/{len(session_files)}: {session_id}")
 
-        result = analyze_session(session_id, date_dir, shared_context_file, claude_bin)
+        # Retry loop
+        result = None
+        for attempt in range(1, MAX_RETRIES + 1):
+            result = analyze_session(session_id, date_dir, shared_context_file, claude_bin)
+            if result:
+                break
+            if attempt < MAX_RETRIES:
+                print(f"    -> Attempt {attempt}/{MAX_RETRIES} failed, retrying...")
 
         if result:
             findings_count = len(result.get("findings", []))
             total_findings += findings_count
             all_extractions.append(result)
-            print(f"    -> {findings_count} findings extracted")
+            # Save checkpoint
+            with open(checkpoint_file, "w") as f:
+                json.dump(result, f, indent=2, ensure_ascii=False)
+            print(f"    -> {findings_count} findings extracted (checkpointed)")
         else:
-            print(f"    -> Extraction failed, continuing with next session")
-            all_extractions.append({
+            print(f"    -> Failed after {MAX_RETRIES} attempts, marking as failed")
+            failed_entry = {
                 "session_id": session_id,
                 "findings": [],
-                "error": "Extraction failed"
-            })
+                "error": f"Extraction failed after {MAX_RETRIES} attempts"
+            }
+            all_extractions.append(failed_entry)
+            # Save failed checkpoint too (so we don't retry forever)
+            with open(checkpoint_file, "w") as f:
+                json.dump(failed_entry, f, indent=2, ensure_ascii=False)
 
     # Merge into output
     output = {
         "date": target_date,
         "sessions_analyzed": len(session_files),
         "sessions_succeeded": len([e for e in all_extractions if "error" not in e]),
+        "sessions_cached": skipped,
         "total_findings": total_findings,
         "extractions": all_extractions
     }
@@ -243,7 +281,10 @@ def main():
     with open(output_file, "w") as f:
         json.dump(output, f, indent=2, ensure_ascii=False)
 
-    print(f"\n[extract] Done. {total_findings} total findings from {len(session_files)} sessions.")
+    if skipped:
+        print(f"\n[extract] Done. {total_findings} findings from {len(session_files)} sessions ({skipped} cached, {len(session_files) - skipped} new).")
+    else:
+        print(f"\n[extract] Done. {total_findings} findings from {len(session_files)} sessions.")
     print(f"[extract] Output: {output_file}")
 
 
