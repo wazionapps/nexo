@@ -46,8 +46,7 @@ def _copy_script_to_nexo_home(src: Path) -> Path:
     """Copy a script from NEXO_CODE to NEXO_HOME/scripts/ for Sandbox compatibility.
 
     macOS Sandbox blocks LaunchAgents from executing scripts in ~/Documents/.
-    We copy scripts to NEXO_HOME/scripts/ which is typically ~/claude/scripts/
-    or ~/.nexo/scripts/ — both outside the Sandbox restricted paths.
+    We copy scripts to NEXO_HOME/scripts/ which is outside the Sandbox restricted paths.
     """
     dest_dir = NEXO_HOME / "scripts"
     dest_dir.mkdir(parents=True, exist_ok=True)

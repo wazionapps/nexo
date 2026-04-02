@@ -221,6 +221,37 @@ else
     fail "reconciler columns: $RECONCILER_TEST"
 fi
 
+# ── 8. npm pack — verify distributed artifact is clean ──────────────────
+echo ""
+echo "--- Check 8: npm pack dry-run (no personal files in artifact) ---"
+PACK_LIST=$(cd "$REPO_ROOT" && npm pack --dry-run 2>&1)
+if echo "$PACK_LIST" | grep -qE "scripts/migrate|scripts/nexo-send|scripts/pre-commit|tests/"; then
+    fail "npm artifact includes non-product files (scripts/ or tests/)"
+    echo "$PACK_LIST" | grep -E "scripts/migrate|scripts/nexo-send|scripts/pre-commit|tests/" | head -5
+else
+    pass "npm artifact excludes scripts/ and tests/"
+fi
+
+# ── 9. Forbidden markers in distributed code ────────────────────────────
+echo ""
+echo "--- Check 9: No personal/legacy markers in src/ ---"
+FORBIDDEN_MARKERS="~/claude|_PhpstormProjects|backup_cron\.sh|francisco|systeam\.es"
+# Note: NEXO_PUBLIC_REPO is allowed — it's behind NEXO_MAINTAINER=1 guard
+# Only check src/ (distributed code), not scripts/ or docs/
+MARKER_HITS=$(grep -rEn "$FORBIDDEN_MARKERS" "$SRC" \
+    --include="*.py" --include="*.sh" --include="*.json" \
+    --exclude-dir="__pycache__" \
+    --exclude-dir="deep-sleep" \
+    2>/dev/null | grep -v "# .*example\|# .*TODO\|\.pyc" || true)
+
+if [ -z "$MARKER_HITS" ]; then
+    pass "no personal/legacy markers found in src/"
+else
+    MARKER_COUNT=$(echo "$MARKER_HITS" | wc -l | tr -d ' ')
+    fail "$MARKER_COUNT personal/legacy markers found in src/"
+    echo "$MARKER_HITS" | head -10
+fi
+
 # ── Summary ───────────────────────────────────────────────────────────────
 echo ""
 echo "============================================================"
