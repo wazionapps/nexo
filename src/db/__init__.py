@@ -87,3 +87,11 @@ from db._evolution import (
     insert_evolution_metric, get_latest_metrics,
     insert_evolution_log, get_evolution_history, update_evolution_log_status,
 )
+
+# Skills
+from db._skills import (
+    create_skill, get_skill, list_skills, search_skills,
+    update_skill, delete_skill,
+    record_usage as record_skill_usage,
+    match_skills, merge_skills, get_skill_stats, decay_unused_skills,
+)

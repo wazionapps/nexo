@@ -295,6 +295,51 @@ def _m15_core_rules_tables(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_core_rules_active ON core_rules(is_active)")
 
 
+def _m16_skills_tables(conn):
+    """Skill Auto-Creation system — reusable procedures extracted from complex tasks.
+
+    Skills are procedural knowledge (step-by-step how-tos) vs learnings which are
+    declarative (don't do X). Pipeline: trace → draft → published, fully autonomous.
+    Trust score with decay controls quality without human approval gates.
+    """
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS skills (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT DEFAULT '',
+            level TEXT NOT NULL DEFAULT 'trace',
+            trust_score INTEGER NOT NULL DEFAULT 50,
+            file_path TEXT DEFAULT '',
+            tags TEXT DEFAULT '[]',
+            trigger_patterns TEXT DEFAULT '[]',
+            source_sessions TEXT DEFAULT '[]',
+            linked_learnings TEXT DEFAULT '[]',
+            use_count INTEGER DEFAULT 0,
+            success_count INTEGER DEFAULT 0,
+            fail_count INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT (datetime('now')),
+            last_used_at TEXT DEFAULT NULL,
+            updated_at TEXT DEFAULT (datetime('now'))
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS skill_usage (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            skill_id TEXT NOT NULL REFERENCES skills(id) ON DELETE CASCADE,
+            session_id TEXT DEFAULT '',
+            success INTEGER NOT NULL DEFAULT 1,
+            context TEXT DEFAULT '',
+            notes TEXT DEFAULT '',
+            created_at TEXT DEFAULT (datetime('now'))
+        )
+    """)
+    _migrate_add_index(conn, "idx_skills_level", "skills", "level")
+    _migrate_add_index(conn, "idx_skills_trust", "skills", "trust_score")
+    _migrate_add_index(conn, "idx_skills_last_used", "skills", "last_used_at")
+    _migrate_add_index(conn, "idx_skill_usage_skill_id", "skill_usage", "skill_id")
+    _migrate_add_index(conn, "idx_skill_usage_created", "skill_usage", "created_at")
+
+
 # Migration registry — APPEND ONLY, never reorder or delete
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
@@ -312,6 +357,7 @@ MIGRATIONS = [
     (13, "claude_session_id", _m13_claude_session_id),
     (14, "learnings_priority_weight", _m14_learnings_priority_weight),
     (15, "core_rules_tables", _m15_core_rules_tables),
+    (16, "skills_tables", _m16_skills_tables),
 ]
 
 

@@ -732,6 +732,22 @@ def recall(query: str, days: int = 30) -> list[dict]:
     """, [cutoff_str] + params).fetchall()
     results.extend([dict(r) for r in rows])
 
+    # Skills
+    try:
+        frag, params = _multi_word_like(query, ["name", "description", "tags", "trigger_patterns"])
+        rows = conn.execute(f"""
+            SELECT id, created_at, 'skill' AS source,
+                   name AS title,
+                   (COALESCE(description,'') || ' | ' || COALESCE(tags,'') || ' | ' || COALESCE(trigger_patterns,'')) AS snippet,
+                   level AS category, 0 AS rank
+            FROM skills
+            WHERE created_at >= ? AND ({frag})
+            ORDER BY trust_score DESC LIMIT 10
+        """, [cutoff_str] + params).fetchall()
+        results.extend([dict(r) for r in rows])
+    except Exception:
+        pass  # Table may not exist yet during migration
+
     results.sort(key=lambda r: r.get('created_at', ''), reverse=True)
     return results[:20]
 

@@ -110,6 +110,8 @@ mcp = FastMCP(
         "write `nexo_session_diary_write(...)` with self_critique BEFORE responding. "
         "Detect intent, not keywords. If session closes without diary, auto_close handles it.\n"
         "- **Cortex:** `nexo_cortex_check` before budget/campaign/architecture changes\n"
+        "- **Skills:** before multi-step tasks, `nexo_skill_match(task)` to find reusable procedures. "
+        "If match found, read it and follow the steps. After completion, `nexo_skill_result(id, success, context)` to record outcome.\n"
         "- **Dissonance:** user contradicts memory→`nexo_cognitive_dissonance`. Frustrated→force=True\n"
         "- **Trust:** <40=paranoid verify twice, >80=fluid. Check: `nexo_cognitive_trust`"
     ),
