@@ -111,6 +111,25 @@ Rules:
 
     # Try CLI first, fall back to mechanical similarity
     if CLAUDE_CLI.exists():
+        try:
+            env = os.environ.copy()
+            env["NEXO_HEADLESS"] = "1"
+            env.pop("CLAUDECODE", None)
+            env.pop("CLAUDE_CODE", None)
+            learnings_text = "\n".join(
+                f"[#{l.get('id','')}] {l.get('title','')}: {l.get('content','')[:200]}"
+                for l in learnings[:20]
+            )
+            prompt = f"{VALIDATE_PROMPT}\n\nFinding:\n{finding}\n\nExisting learnings:\n{learnings_text}"
+            result = subprocess.run(
+                [str(CLAUDE_CLI), "-p", prompt, "--model", "sonnet", "--output-format", "text"],
+                capture_output=True, text=True, timeout=60, env=env
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                parsed = json.loads(result.stdout.strip())
+                return parsed
+        except Exception:
+            pass
     # Fallback: mechanical SequenceMatcher (original logic)
     return _mechanical_validate(finding, learnings)
 

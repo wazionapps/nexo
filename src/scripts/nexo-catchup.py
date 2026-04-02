@@ -157,7 +157,7 @@ def main():
         ("evolution", 3, 0, NEXO_PYTHON, "nexo-evolution-run.py", 6),  # Sunday = 6
         ("sleep", 4, 0, NEXO_PYTHON, "nexo-sleep.py", None),
         ("self-audit", 7, 0, NEXO_PYTHON, "nexo-daily-self-audit.py", None),
-("postmortem", 23, 30, NEXO_PYTHON, "nexo-postmortem-consolidator.py", None),
+        ("postmortem", 23, 30, NEXO_PYTHON, "nexo-postmortem-consolidator.py", None),
     ]
 
     ran = 0
@@ -186,6 +186,9 @@ def _cli_post_catchup_assessment(ran: int, skipped: int, state: dict):
     if not CLAUDE_CLI.exists():
         log(f"Caught up {ran} tasks, {skipped} already current. (CLI unavailable for assessment)")
         return
+    auth_check = subprocess.run(
+        [str(CLAUDE_CLI), "-p", "reply OK", "--output-format", "text"],
+        capture_output=True, text=True, timeout=30
     )
     if auth_check.returncode != 0:
         # CLI not authenticated, skip gracefully

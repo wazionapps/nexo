@@ -104,6 +104,19 @@ CLI_TIMEOUT = 21600  # 3h safety net (prevents zombie processes)
 
 
 def verify_claude_cli() -> bool:
+    """Check Claude CLI is available and authenticated."""
+    if not CLAUDE_CLI.exists():
+        return False
+    try:
+        result = subprocess.run(
+            [str(CLAUDE_CLI), "-p", "reply OK", "--output-format", "text"],
+            capture_output=True, text=True, timeout=30
+        )
+        return result.returncode == 0
+    except Exception:
+        return False
+
+
 def call_claude_cli(prompt: str) -> str:
     """Call claude -p prompt --model opus via subprocess. Returns stdout text."""
     env = os.environ.copy()
