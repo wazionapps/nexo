@@ -312,6 +312,8 @@ def _handle_packaged_update() -> str:
                 _restore_databases(backup_dir)
             if code_backup_dir:
                 _restore_code_tree(code_backup_dir)
+                # Reinstall pip deps from restored old requirements.txt
+                _reinstall_pip_deps()
             rollback_err = _rollback_npm_package(old_version)
             msg = f"ABORTED: npm update failed: {result.stderr or result.stdout}"
             if rollback_err:
@@ -325,6 +327,8 @@ def _handle_packaged_update() -> str:
             _restore_databases(backup_dir)
         if code_backup_dir:
             _restore_code_tree(code_backup_dir)
+            # Reinstall pip deps from restored old requirements.txt
+            _reinstall_pip_deps()
         rollback_err = _rollback_npm_package(old_version)
         msg = f"ABORTED: npm update error: {e}"
         if rollback_err:
@@ -355,13 +359,16 @@ def _handle_packaged_update() -> str:
         errors.append(f"verification: {verify_err}")
 
     if errors:
-        # 5. Full rollback: restore code tree + DBs + rollback npm package
+        # 5. Full rollback: restore code tree + DBs + pip deps + rollback npm package
         if code_backup_dir:
             tree_err = _restore_code_tree(code_backup_dir)
         else:
             tree_err = "no code tree backup available"
         if backup_dir:
             _restore_databases(backup_dir)
+        # Reinstall pip deps from the restored (old) requirements.txt
+        # so the venv matches the rolled-back code tree
+        pip_rollback_err = _reinstall_pip_deps() if not tree_err else None
         rollback_err = _rollback_npm_package(old_version)
         lines = [f"UPDATE FAILED (packaged install, v{old_version} -> v{new_version})"]
         for err in errors:
@@ -371,6 +378,10 @@ def _handle_packaged_update() -> str:
             lines.append(f"  WARNING: code tree restore failed: {tree_err}")
         else:
             lines.append(f"  Code tree restored from: {code_backup_dir}")
+        if pip_rollback_err:
+            lines.append(f"  WARNING: pip deps rollback failed: {pip_rollback_err}")
+        elif not tree_err:
+            lines.append("  Python deps: reinstalled from old requirements.txt")
         if rollback_err:
             lines.append(f"  WARNING: npm rollback failed: {rollback_err}")
             lines.append(f"  Manual rollback: npm install -g nexo-brain@{old_version}")
@@ -508,6 +519,14 @@ def handle_update(remote: str = "origin", branch: str = "main") -> str:
             rc, _, err = _git("checkout", old_commit, "--", ".")
             if rc == 0:
                 rollback_lines.append(f"  Git: restored files to {old_commit[:8]}")
+                # Reinstall pip deps from the restored old requirements.txt
+                # so the venv matches the rolled-back code
+                if "pip-deps" in steps_done:
+                    pip_rb_err = _reinstall_pip_deps()
+                    if pip_rb_err:
+                        rollback_lines.append(f"  WARNING: pip deps rollback failed: {pip_rb_err}")
+                    else:
+                        rollback_lines.append("  Python deps: reinstalled from old requirements.txt")
             else:
                 rollback_lines.append(f"  Git rollback FAILED: {err}")
 
