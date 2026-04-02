@@ -120,7 +120,7 @@ MONITORS+=("${PERSONAL_MONITORS[@]+"${PERSONAL_MONITORS[@]}"}")
 CRON_MONITORS=()
 if [ "${NEXO_MAINTAINER:-}" = "1" ]; then
   CRON_MONITORS+=(
-    "Backup Cron|$NEXO_DIR/backup_cron.sh|$NEXO_DIR/backups/|7200|Hourly"
+    "Backup|$NEXO_DIR/scripts/nexo-backup.sh|$NEXO_DIR/backups/|7200|Hourly"
   )
 fi
 
@@ -303,7 +303,7 @@ try_repair_backup() {
     if [ -n "$newest" ]; then
       if $IS_MACOS; then local age=$(( TS_EPOCH - $(stat -f %m "$newest") )); else local age=$(( TS_EPOCH - $(stat -c %Y "$newest") )); fi
       if [ "$age" -lt 60 ]; then
-        log_repair "backup_cron.sh: ran successfully, fresh backup created"
+        log_repair "nexo-backup.sh: ran successfully, fresh backup created"
         return 0
       fi
     fi

@@ -54,9 +54,7 @@ Every change requires: edit local → manually copy/sanitize → push to repo. T
   plugins/
     email.py                     # Personal plugin (IMAP/SMTP with credentials from DB)
   scripts/
-    nexo-send-reply.py           # Personal scripts
-    nexo-memory-stop.sh
-    (other personal scripts)
+    (personal scripts — email helpers, custom crons, etc.)
   backups/
     (hourly + weekly backups)
   brain/                         # Existing brain directory (policies, session_buffer, etc.)
