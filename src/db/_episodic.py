@@ -583,9 +583,20 @@ def read_session_diary(session_id: str = '', last_n: int = 3, last_day: bool = F
     domain_clause = " AND domain = ?" if domain else ""
     domain_params = (domain,) if domain else ()
     # By default, filter out automated sessions so startup shows human sessions only.
-    # Keeps: interactive sessions (source='claude') that aren't auto-generated summaries.
-    # Excludes: auto-close, cron, evolution, and [AUTO-*] summaries from CLI crons.
-    source_clause = "" if include_automated else " AND source NOT IN ('auto-close', 'cron', 'evolution', 'pre-compact-hook') AND summary NOT LIKE '[AUTO-%'"
+    # Keeps: interactive sessions + auto-closed sessions that had real user interaction.
+    # An auto-close is human if it has heartbeats > 0 (heartbeat only fires on user messages).
+    # Excludes: cron jobs, auto-closed crons (0 heartbeats or "Minimal diary").
+    if include_automated:
+        source_clause = ""
+    else:
+        source_clause = (
+            " AND ("
+            "  (source = 'claude' AND summary NOT LIKE '[AUTO-%')"
+            "  OR (source = 'auto-close'"
+            "      AND mental_state NOT LIKE '%0 heartbeats%'"
+            "      AND mental_state NOT LIKE '%Minimal diary%')"
+            ")"
+        )
 
     if session_id:
         rows = conn.execute(
