@@ -292,7 +292,7 @@ try_verify_repair() {
 }
 
 try_repair_backup() {
-  # Use the core backup script, not legacy personal backup_cron.sh
+  # Use the core backup script (nexo-backup.sh)
   local backup_script="$NEXO_DIR/scripts/nexo-backup.sh"
   [ ! -x "$backup_script" ] && backup_script="$SCRIPT_DIR/nexo-backup.sh"
   if [ -x "$backup_script" ]; then
