@@ -39,8 +39,17 @@ def create_skill(
     linked_learnings: list | str = '[]',
     file_path: str = '',
     trust_score: int = TRUST_INITIAL,
+    steps: list | str = '[]',
+    gotchas: list | str = '[]',
+    content: str = '',
 ) -> dict:
-    """Create a new skill entry."""
+    """Create a new skill entry.
+
+    Content can be:
+    - Markdown with numbered steps (auto-generated from steps/gotchas if empty)
+    - A reference to a script file (set file_path)
+    - Free-form procedure description
+    """
     if level not in VALID_LEVELS:
         return {"error": f"level must be one of: {', '.join(sorted(VALID_LEVELS))}"}
 
@@ -48,15 +57,31 @@ def create_skill(
     trigger_json = json.dumps(trigger_patterns) if isinstance(trigger_patterns, list) else trigger_patterns
     sessions_json = json.dumps(source_sessions) if isinstance(source_sessions, list) else source_sessions
     learnings_json = json.dumps(linked_learnings) if isinstance(linked_learnings, list) else linked_learnings
+    steps_json = json.dumps(steps) if isinstance(steps, list) else steps
+    gotchas_json = json.dumps(gotchas) if isinstance(gotchas, list) else gotchas
+
+    # Auto-generate content from steps/gotchas if not provided
+    if not content and steps:
+        steps_list = steps if isinstance(steps, list) else json.loads(steps_json)
+        gotchas_list = gotchas if isinstance(gotchas, list) else json.loads(gotchas_json)
+        lines = [f"# {name}", "", description, "", "## Steps"]
+        for i, s in enumerate(steps_list, 1):
+            lines.append(f"{i}. {s}")
+        if gotchas_list:
+            lines.extend(["", "## Gotchas"])
+            for g in gotchas_list:
+                lines.append(f"- {g}")
+        content = "\n".join(lines)
 
     conn = get_db()
     conn.execute(
         """INSERT INTO skills
            (id, name, description, level, trust_score, file_path, tags,
-            trigger_patterns, source_sessions, linked_learnings)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            trigger_patterns, source_sessions, linked_learnings, content, steps, gotchas)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (skill_id, name, description, level, trust_score, file_path,
-         tags_json, trigger_json, sessions_json, learnings_json),
+         tags_json, trigger_json, sessions_json, learnings_json,
+         content, steps_json, gotchas_json),
     )
     conn.commit()
 

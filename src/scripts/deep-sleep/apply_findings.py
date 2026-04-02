@@ -267,12 +267,27 @@ def create_skill(skill_data: dict) -> dict:
             return {"success": False, "error": f"Skill {skill_id} already exists", "id": skill_id}
 
         now = datetime.now().isoformat(timespec='seconds')
+        steps_json = json.dumps(steps) if isinstance(steps, list) else steps
+        gotchas_json = json.dumps(gotchas) if isinstance(gotchas, list) else gotchas
+
+        # Build markdown content from steps + gotchas
+        content_lines = [f"# {name}", "", description, "", "## Steps"]
+        for i, s in enumerate(steps if isinstance(steps, list) else json.loads(steps_json), 1):
+            content_lines.append(f"{i}. {s}")
+        gotchas_list = gotchas if isinstance(gotchas, list) else json.loads(gotchas_json)
+        if gotchas_list:
+            content_lines.extend(["", "## Gotchas"])
+            for g in gotchas_list:
+                content_lines.append(f"- {g}")
+        content = "\n".join(content_lines)
+
         conn.execute(
             """INSERT INTO skills
                (id, name, description, level, trust_score, tags, trigger_patterns,
-                source_sessions, linked_learnings, created_at, updated_at)
-               VALUES (?, ?, ?, 'draft', 50, ?, ?, ?, '[]', ?, ?)""",
-            (skill_id, name, description, tags, trigger_patterns, source_sessions, now, now),
+                source_sessions, linked_learnings, content, steps, gotchas, created_at, updated_at)
+               VALUES (?, ?, ?, 'draft', 50, ?, ?, ?, '[]', ?, ?, ?, ?, ?)""",
+            (skill_id, name, description, tags, trigger_patterns, source_sessions,
+             content, steps_json, gotchas_json, now, now),
         )
         conn.commit()
         conn.close()

@@ -358,6 +358,14 @@ def _m17_cron_runs(conn):
     _migrate_add_index(conn, "idx_cron_runs_started", "cron_runs", "started_at")
 
 
+def _m18_skills_steps(conn):
+    # content: the full procedure — markdown with steps, gotchas, notes.
+    # Can also reference a script file via file_path column.
+    _migrate_add_column(conn, "skills", "content", "TEXT DEFAULT ''")
+    _migrate_add_column(conn, "skills", "steps", "TEXT DEFAULT '[]'")
+    _migrate_add_column(conn, "skills", "gotchas", "TEXT DEFAULT '[]'")
+
+
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
     (2, "followups_reasoning", _m2_followups_reasoning),
@@ -376,6 +384,7 @@ MIGRATIONS = [
     (15, "core_rules_tables", _m15_core_rules_tables),
     (16, "skills_tables", _m16_skills_tables),
     (17, "cron_runs", _m17_cron_runs),
+    (18, "skills_steps_column", _m18_skills_steps),
 ]
 
 
