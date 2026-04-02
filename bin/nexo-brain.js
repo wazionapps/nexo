@@ -264,7 +264,7 @@ const DAY_MAP = {
  */
 function installAllProcesses(platform, pythonPath, nexoHome, schedule, launchAgentsDir) {
   const home = require("os").homedir();
-  const nexoCode = path.join(__dirname, "..");
+  const nexoCode = nexoHome;
   const logsDir = path.join(nexoHome, "logs");
   fs.mkdirSync(logsDir, { recursive: true });
 
