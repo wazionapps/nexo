@@ -225,12 +225,25 @@ def _check_git_updates() -> str | None:
         if not _reinstall_pip_deps():
             # pip failed — rollback git to old HEAD
             _log("pip install failed after pull, rolling back git...")
-            _git("checkout", old_head, "--", ".")
+            _git("reset", "--hard", old_head)
             _reinstall_pip_deps()  # restore old deps (best-effort)
             return None
 
-    # Run DB migrations after pull
-    _run_db_migrations()
+    # Verify the new code can be imported before proceeding
+    if not _verify_import():
+        _log("Import verification failed after pull, rolling back git...")
+        _git("reset", "--hard", old_head)
+        if old_req_hash != new_req_hash:
+            _reinstall_pip_deps()  # restore old deps (best-effort)
+        return None
+
+    # Run DB migrations after pull — rollback if they fail
+    if not _run_db_migrations():
+        _log("DB migration failed after pull, rolling back git...")
+        _git("reset", "--hard", old_head)
+        if old_req_hash != new_req_hash:
+            _reinstall_pip_deps()
+        return None
 
     # Sync hooks to NEXO_HOME (nexo-brain.js copies them on install,
     # but auto-update via git pull bypasses nexo-brain.js)
@@ -244,8 +257,28 @@ def _check_git_updates() -> str | None:
     return msg
 
 
-def _run_db_migrations():
-    """Run NEXO's DB schema migrations (from db._schema) after a pull."""
+def _verify_import() -> bool:
+    """Verify that the new code can be imported. Returns True on success."""
+    try:
+        result = subprocess.run(
+            [sys.executable, "-c", "import server"],
+            cwd=str(SRC_DIR),
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        if result.returncode != 0:
+            _log(f"Import verification failed: {result.stderr or result.stdout}")
+            return False
+        return True
+    except Exception as e:
+        _log(f"Import verification error: {e}")
+        return False
+
+
+def _run_db_migrations() -> bool:
+    """Run NEXO's DB schema migrations (from db._schema) after a pull.
+    Returns True on success, False on failure."""
     try:
         from db._schema import run_migrations
         from db._core import get_db
@@ -253,8 +286,10 @@ def _run_db_migrations():
         applied = run_migrations(conn)
         if applied > 0:
             _log(f"Applied {applied} DB migration(s)")
+        return True
     except Exception as e:
-        _log(f"DB migration error (continuing): {e}")
+        _log(f"DB migration error: {e}")
+        return False
 
 
 # ── npm version check (notify only) ─────────────────────────────────

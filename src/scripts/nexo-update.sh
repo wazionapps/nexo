@@ -133,7 +133,7 @@ if [ "$DEPS_CHANGED" = true ] || [ "$OLD_VERSION" != "$NEW_VERSION" ]; then
     log "Reinstalling Python dependencies..."
     if ! reinstall_pip_deps; then
         err "pip install failed! Rolling back..."
-        git checkout "$OLD_COMMIT" -- .
+        git reset --hard "$OLD_COMMIT"
         reinstall_pip_deps || warn "pip rollback also had issues"
         if [ -d "$BACKUP_DIR" ]; then
             for db in "$BACKUP_DIR"/*.db; do
@@ -160,7 +160,7 @@ if [ "$OLD_VERSION" != "$NEW_VERSION" ]; then
     log "Running migrations..."
     if ! (cd "$SRC_DIR" && python3 -c "import db; db.init_db()" 2>&1); then
         err "Migration failed! Rolling back..."
-        git checkout "$OLD_COMMIT" -- .
+        git reset --hard "$OLD_COMMIT"
         # Reinstall pip deps from restored old requirements.txt
         reinstall_pip_deps || warn "pip rollback also had issues"
         # Restore DB backups
@@ -189,7 +189,7 @@ fi
 log "Verifying server.py import..."
 if ! (cd "$SRC_DIR" && python3 -c "import server" 2>&1); then
     err "Import verification failed! Rolling back..."
-    git checkout "$OLD_COMMIT" -- .
+    git reset --hard "$OLD_COMMIT"
     # Reinstall pip deps from restored old requirements.txt
     reinstall_pip_deps || warn "pip rollback also had issues"
     if [ -d "$BACKUP_DIR" ]; then
@@ -207,6 +207,23 @@ if ! (cd "$SRC_DIR" && python3 -c "import server" 2>&1); then
     fi
     err "Rolled back to ${OLD_COMMIT:0:8}. Databases and deps restored."
     exit 1
+fi
+
+# --- Step 7: Sync hooks to NEXO_HOME ---
+HOOKS_SRC="$SRC_DIR/hooks"
+HOOKS_DEST="$NEXO_HOME/hooks"
+if [ -d "$HOOKS_SRC" ]; then
+    mkdir -p "$HOOKS_DEST"
+    SYNCED=0
+    for hook in "$HOOKS_SRC"/*.sh; do
+        [ -f "$hook" ] || continue
+        cp "$hook" "$HOOKS_DEST/$(basename "$hook")"
+        chmod 755 "$HOOKS_DEST/$(basename "$hook")"
+        SYNCED=$((SYNCED + 1))
+    done
+    if [ "$SYNCED" -gt 0 ]; then
+        log "Synced $SYNCED hook(s) to $HOOKS_DEST"
+    fi
 fi
 
 # --- Done ---

@@ -230,6 +230,25 @@ def _verify_import() -> str | None:
     return None
 
 
+def _sync_hooks_to_home():
+    """Copy hook scripts from src/hooks/ to NEXO_HOME/hooks/ after update."""
+    import shutil
+    hooks_src = SRC_DIR / "hooks"
+    hooks_dest = NEXO_HOME / "hooks"
+    if not hooks_src.is_dir():
+        return
+    hooks_dest.mkdir(parents=True, exist_ok=True)
+    synced = 0
+    for f in hooks_src.iterdir():
+        if f.is_file() and f.suffix == ".sh":
+            dest = hooks_dest / f.name
+            shutil.copy2(str(f), str(dest))
+            os.chmod(str(dest), 0o755)
+            synced += 1
+    if synced:
+        print(f"[NEXO update] Synced {synced} hook(s) to {hooks_dest}", file=sys.stderr)
+
+
 def _backup_code_tree() -> tuple[str | None, str | None]:
     """Snapshot NEXO_HOME code dirs before npm update. Returns (backup_dir, error)."""
     timestamp = time.strftime("%Y-%m-%d-%H%M%S")
@@ -424,7 +443,7 @@ def handle_update(remote: str = "origin", branch: str = "main") -> str:
     4. Reinstall Python dependencies if version changed
     5. Run migrations if version changed
     6. Verify server.py imports
-    7. Rollback on failure (to saved commit, not reset --hard)
+    7. Rollback on failure (git reset --hard to saved commit)
 
     Args:
         remote: Git remote name (default: origin)
@@ -505,6 +524,13 @@ def handle_update(remote: str = "origin", branch: str = "main") -> str:
         except Exception as e:
             cron_sync_result = f"Cron sync warning: {e}"
 
+        # Step 9: Sync hooks to NEXO_HOME
+        try:
+            _sync_hooks_to_home()
+            steps_done.append("hook-sync")
+        except Exception as e:
+            pass  # Non-critical, log in function
+
         # Build result
         if pull_out == "Already up to date.":
             return f"Already up to date (v{old_version}). No changes pulled."
@@ -522,6 +548,8 @@ def handle_update(remote: str = "origin", branch: str = "main") -> str:
             lines.append("  Migrations: applied")
         if "cron-sync" in steps_done:
             lines.append("  Crons: synced with manifest")
+        if "hook-sync" in steps_done:
+            lines.append("  Hooks: synced to NEXO_HOME")
         lines.append("")
         lines.append("MCP server restart needed to load new code.")
         return "\n".join(lines)
@@ -531,8 +559,8 @@ def handle_update(remote: str = "origin", branch: str = "main") -> str:
         rollback_lines = [f"UPDATE FAILED: {e}", "", "Rolling back..."]
 
         if old_commit and "git-pull" in steps_done:
-            # Safer rollback: checkout the old commit's tree without reset --hard
-            rc, _, err = _git("checkout", old_commit, "--", ".")
+            # Full rollback: reset HEAD + index + worktree to old commit
+            rc, _, err = _git("reset", "--hard", old_commit)
             if rc == 0:
                 rollback_lines.append(f"  Git: restored files to {old_commit[:8]}")
                 # Reinstall pip deps from the restored old requirements.txt
