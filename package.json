@@ -47,7 +47,7 @@
     "url": "git+https://github.com/wazionapps/nexo.git"
   },
   "scripts": {
-    "postinstall": "node bin/postinstall.js 2>/dev/null || true"
+    "postinstall": "node bin/postinstall.js"
   },
   "engines": {
     "node": ">=18"

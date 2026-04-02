@@ -307,12 +307,17 @@ def _handle_packaged_update() -> str:
             env={**os.environ, "NEXO_HOME": str(NEXO_HOME)},
         )
         if result.returncode != 0:
-            # npm failed (including postinstall failures) — restore DBs + code tree
+            # npm failed (including postinstall failures) — full rollback
             if backup_dir:
                 _restore_databases(backup_dir)
             if code_backup_dir:
                 _restore_code_tree(code_backup_dir)
-            return f"ABORTED: npm update failed: {result.stderr or result.stdout}"
+            rollback_err = _rollback_npm_package(old_version)
+            msg = f"ABORTED: npm update failed: {result.stderr or result.stdout}"
+            if rollback_err:
+                msg += f"\n  WARNING: npm rollback also failed: {rollback_err}"
+                msg += f"\n  Manual rollback: npm install -g nexo-brain@{old_version}"
+            return msg
     except FileNotFoundError:
         return "ABORTED: npm not found. Install Node.js to update packaged installs."
     except Exception as e:
@@ -320,7 +325,12 @@ def _handle_packaged_update() -> str:
             _restore_databases(backup_dir)
         if code_backup_dir:
             _restore_code_tree(code_backup_dir)
-        return f"ABORTED: npm update error: {e}"
+        rollback_err = _rollback_npm_package(old_version)
+        msg = f"ABORTED: npm update error: {e}"
+        if rollback_err:
+            msg += f"\n  WARNING: npm rollback also failed: {rollback_err}"
+            msg += f"\n  Manual rollback: npm install -g nexo-brain@{old_version}"
+        return msg
 
     new_version = _read_version()
     if old_version == new_version:
