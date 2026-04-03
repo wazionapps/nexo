@@ -93,6 +93,50 @@ class TestScriptsCreateAndSync:
         assert data == []
 
 
+class TestRuntimeUpdate:
+    def test_update_uses_recorded_source_repo(self, tmp_path):
+        runtime_home = tmp_path / "runtime"
+        runtime_home.mkdir()
+        (runtime_home / "bin").mkdir()
+
+        repo = tmp_path / "repo"
+        src = repo / "src"
+        src.mkdir(parents=True)
+        (repo / "package.json").write_text(json.dumps({"version": "9.9.9"}))
+
+        for dirname in ["db", "cognitive", "doctor", "dashboard", "rules", "crons", "hooks", "plugins"]:
+            (src / dirname).mkdir()
+        for flat in [
+            "server.py", "plugin_loader.py", "knowledge_graph.py", "kg_populate.py",
+            "maintenance.py", "storage_router.py", "claim_graph.py", "hnsw_index.py",
+            "evolution_cycle.py", "migrate_embeddings.py", "auto_close_sessions.py",
+            "auto_update.py", "tools_sessions.py", "tools_coordination.py",
+            "tools_reminders.py", "tools_reminders_crud.py", "tools_learnings.py",
+            "tools_credentials.py", "tools_task_history.py", "tools_menu.py",
+            "cli.py", "script_registry.py", "skills_runtime.py", "user_context.py",
+            "requirements.txt",
+        ]:
+            (src / flat).write_text("x = 1\n")
+
+        (runtime_home / "version.json").write_text(json.dumps({"version": "9.9.9", "source": str(repo)}))
+
+        env = {
+            **os.environ,
+            "NEXO_HOME": str(runtime_home),
+            "NEXO_CODE": str(runtime_home),
+            "HOME": str(tmp_path),
+        }
+        result = subprocess.run(
+            [sys.executable, CLI_PY, "update", "--json"],
+            capture_output=True, text=True, timeout=10, env=env,
+        )
+        assert result.returncode == 0
+        data = json.loads(result.stdout)
+        assert data["mode"] == "sync"
+        assert data["source"] == str(src)
+        assert (runtime_home / "db").is_dir()
+
+
 class TestScriptsRun:
     def test_run_python_script(self, nexo_home):
         script = nexo_home / "scripts" / "hello.py"

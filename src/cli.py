@@ -349,12 +349,67 @@ def _scripts_call(args):
 
 
 def _update(args):
-    """Sync all repo files to NEXO_HOME."""
+    """Update the installed runtime.
+
+    Modes:
+    - Dev-linked runtime: sync from the source repo recorded in version.json
+    - Explicit dev env: sync from NEXO_CODE/src
+    - Packaged/runtime-only install: delegate to plugins.update handle_update()
+    """
     import shutil
 
-    src_dir = NEXO_CODE
-    repo_dir = NEXO_CODE.parent
     dest = NEXO_HOME
+
+    def _runtime_version_source() -> Path | None:
+        version_file = NEXO_HOME / "version.json"
+        if not version_file.is_file():
+            return None
+        try:
+            data = json.loads(version_file.read_text())
+        except Exception:
+            return None
+        source = str(data.get("source", "")).strip()
+        if not source:
+            return None
+        candidate = Path(source).expanduser()
+        if (candidate / "src").is_dir() and (candidate / "package.json").is_file():
+            return candidate
+        return None
+
+    def _resolve_sync_source() -> tuple[Path | None, Path | None]:
+        # Explicit dev mode: NEXO_CODE points at repo/src
+        if (NEXO_CODE / "db").is_dir() and (NEXO_CODE.parent / "package.json").is_file():
+            return NEXO_CODE, NEXO_CODE.parent
+
+        # Installed runtime linked back to a source checkout
+        version_source = _runtime_version_source()
+        if version_source:
+            return version_source / "src", version_source
+
+        return None, None
+
+    src_dir, repo_dir = _resolve_sync_source()
+
+    if src_dir is None or repo_dir is None:
+        try:
+            from plugins.update import handle_update
+        except Exception as e:
+            print(
+                "No source repo recorded for this runtime and packaged updater is unavailable: "
+                f"{e}",
+                file=sys.stderr,
+            )
+            return 1
+
+        result = handle_update()
+        if args.json:
+            print(json.dumps({
+                "mode": "packaged",
+                "message": result,
+            }, indent=2, ensure_ascii=False))
+        else:
+            print(result)
+        return 0 if "UPDATE SUCCESSFUL" in result or "Already up to date" in result else 1
 
     # Packages (directories with __init__.py or known structure)
     packages = ["db", "cognitive", "doctor", "dashboard", "rules", "crons", "hooks"]
@@ -478,6 +533,7 @@ def _update(args):
         pass
 
     result = {
+        "mode": "sync",
         "packages": copied_packages,
         "files": copied_files,
         "nexo_home": str(dest),
@@ -686,7 +742,7 @@ Commands:
   nexo scripts list|create|sync|schedules|run|doctor|call
                                                       Personal scripts
   nexo skills list|apply|sync|approve                  Executable skills
-  nexo update                                          Sync repo to NEXO_HOME
+  nexo update                                          Update installed runtime
   nexo dashboard on|off|status                         Web dashboard control
 
 Run 'nexo <command> --help' for details.
@@ -742,7 +798,7 @@ def main():
     call_p.add_argument("--json-output", action="store_true", help="Force JSON output")
 
     # -- update --
-    update_parser = sub.add_parser("update", help="Sync all repo files to NEXO_HOME")
+    update_parser = sub.add_parser("update", help="Update installed runtime")
     update_parser.add_argument("--json", action="store_true", help="JSON output")
 
     # -- doctor --
