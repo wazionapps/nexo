@@ -16,12 +16,19 @@ from doctor.models import DoctorCheck
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parents[2])))
 LAUNCH_AGENTS_DIR = Path.home() / "Library" / "LaunchAgents"
+PROTECTED_MACOS_ROOTS = (
+    Path.home() / "Documents",
+    Path.home() / "Desktop",
+    Path.home() / "Downloads",
+    Path.home() / "Library" / "Mobile Documents",
+)
 
 # Freshness thresholds in seconds
 IMMUNE_FRESHNESS = 3600  # 1 hour (runs every 30 min)
 WATCHDOG_FRESHNESS = 3600  # 1 hour (runs every 30 min)
 DEFAULT_CRON_THRESHOLD = 7200  # Fallback when manifest data is unavailable
 SPECIAL_LAUNCHAGENT_IDS = {"prevent-sleep", "tcc-approve"}
+SPECIAL_ENV_NORMALIZE_IDS = SPECIAL_LAUNCHAGENT_IDS | {"day-orchestrator"}
 
 
 def _file_age_seconds(path: Path) -> float | None:
@@ -134,11 +141,14 @@ def _launchagent_schedule_expectations() -> dict[str, dict]:
                 "StartInterval": None,
                 "StartCalendarInterval": None,
                 "RunAtLoad": None,
+                "schedule_configured": False,
             }
             if cron.get("run_at_load"):
                 expected["RunAtLoad"] = True
+                expected["schedule_configured"] = True
             elif "interval_seconds" in cron:
                 expected["StartInterval"] = int(cron["interval_seconds"])
+                expected["schedule_configured"] = True
             elif "schedule" in cron:
                 schedule = cron.get("schedule") or {}
                 cal = {}
@@ -149,6 +159,7 @@ def _launchagent_schedule_expectations() -> dict[str, dict]:
                 if "weekday" in schedule:
                     cal["Weekday"] = schedule["weekday"]
                 expected["StartCalendarInterval"] = cal
+                expected["schedule_configured"] = True
             expectations[cron_id] = expected
         return expectations
     return {}
@@ -156,8 +167,9 @@ def _launchagent_schedule_expectations() -> dict[str, dict]:
 
 def _managed_launchagent_plists() -> list[tuple[str, Path]]:
     ids = set(SPECIAL_LAUNCHAGENT_IDS)
-    for cron_id in _launchagent_schedule_expectations().keys():
-        ids.add(cron_id)
+    for cron_id, expected in _launchagent_schedule_expectations().items():
+        if expected.get("schedule_configured"):
+            ids.add(cron_id)
 
     plists = []
     for cron_id in sorted(ids):
@@ -173,6 +185,43 @@ def _extract_launchctl_value(output: str, prefix: str) -> str | None:
         if stripped.startswith(prefix):
             return stripped[len(prefix):].strip()
     return None
+
+
+def _is_protected_macos_path(value: str | os.PathLike[str] | None) -> bool:
+    if not value or platform.system() != "Darwin":
+        return False
+    try:
+        raw = str(value).replace("~", str(Path.home()), 1)
+        candidate = Path(raw).expanduser().resolve(strict=False)
+    except Exception:
+        return False
+    return any(candidate == root or root in candidate.parents for root in PROTECTED_MACOS_ROOTS)
+
+
+def _plist_runtime_paths(plist_data: dict) -> list[str]:
+    paths: list[str] = []
+    env = plist_data.get("EnvironmentVariables") or {}
+    for key in ("NEXO_HOME", "NEXO_CODE"):
+        value = env.get(key)
+        if value:
+            paths.append(str(value))
+    for arg in plist_data.get("ProgramArguments") or []:
+        arg_str = str(arg)
+        if arg_str.startswith("/") or arg_str.startswith("~"):
+            paths.append(arg_str)
+    return paths
+
+
+def _recent_permission_denial(cron_id: str, max_age_seconds: int = 7 * 86400) -> bool:
+    stderr_path = NEXO_HOME / "logs" / f"{cron_id}-stderr.log"
+    age = _file_age_seconds(stderr_path)
+    if age is None or age > max_age_seconds:
+        return False
+    try:
+        tail = "\n".join(stderr_path.read_text(errors="ignore").splitlines()[-50:])
+    except Exception:
+        return False
+    return "Operation not permitted" in tail
 
 
 def _repair_launchagents(items: list[tuple[str, Path]]) -> tuple[bool, list[str]]:
@@ -196,6 +245,33 @@ def _repair_launchagents(items: list[tuple[str, Path]]) -> tuple[bool, list[str]
         if result.returncode != 0:
             ok = False
             evidence.append(f"{label}: {result.stderr.strip() or result.stdout.strip() or 'bootstrap failed'}")
+    return ok, evidence
+
+
+def _repair_special_launchagent_plists(items: list[tuple[str, Path]]) -> tuple[bool, list[str]]:
+    evidence: list[str] = []
+    ok = True
+    for cron_id, plist_path in items:
+        if cron_id not in SPECIAL_ENV_NORMALIZE_IDS:
+            continue
+        try:
+            with plist_path.open("rb") as fh:
+                plist_data = plistlib.load(fh)
+            env = plist_data.setdefault("EnvironmentVariables", {})
+            changed = False
+            if env.get("NEXO_CODE") != str(NEXO_HOME):
+                env["NEXO_CODE"] = str(NEXO_HOME)
+                changed = True
+            if env.get("NEXO_HOME") != str(NEXO_HOME):
+                env["NEXO_HOME"] = str(NEXO_HOME)
+                changed = True
+            if changed:
+                with plist_path.open("wb") as fh:
+                    plistlib.dump(plist_data, fh)
+                evidence.append(f"com.nexo.{cron_id}: normalized special LaunchAgent env")
+        except Exception as e:
+            ok = False
+            evidence.append(f"com.nexo.{cron_id}: {e}")
     return ok, evidence
 
 
@@ -465,6 +541,8 @@ def check_cron_freshness() -> DoctorCheck:
             if parsed is None:
                 stale.append(f"{cron_id}: unreadable timestamp {row[1]!r}")
                 continue
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=dt.timezone.utc)
 
             age = now - parsed.timestamp()
             expected = expectations.get(cron_id, {"threshold": DEFAULT_CRON_THRESHOLD, "label": "runtime default"})
@@ -522,6 +600,8 @@ def check_launchagent_integrity(fix: bool = False) -> DoctorCheck:
     problems = []
     problem_items: list[tuple[str, Path]] = []
     tmp_drift = False
+    tcc_risk = False
+    tcc_failure = False
     schedule_expectations = _launchagent_schedule_expectations()
     for cron_id, plist_path in managed:
         label = f"com.nexo.{cron_id}"
@@ -560,7 +640,24 @@ def check_launchagent_integrity(fix: bool = False) -> DoctorCheck:
             problems.append(f"{label}: plist unreadable ({e})")
             continue
 
+        protected_refs = [path for path in _plist_runtime_paths(plist_data) if _is_protected_macos_path(path)]
+        if protected_refs:
+            tcc_risk = True
+            if _recent_permission_denial(cron_id):
+                tcc_failure = True
+                problems.append(
+                    f"{label}: recent 'Operation not permitted' while using protected macOS path {protected_refs[0]}"
+                )
+            else:
+                problems.append(f"{label}: runtime points into protected macOS path {protected_refs[0]}")
+            had_problem = True
+
         for env_key in ("NEXO_HOME", "NEXO_CODE"):
+            if cron_id == "day-orchestrator" and env_key == "NEXO_CODE":
+                # The orchestrator can still be served by a transitional wrapper
+                # outside the manifest-managed shell path. Don't block runtime
+                # health on that env mismatch alone.
+                continue
             expected_value = env.get(env_key)
             if not expected_value:
                 continue
@@ -572,16 +669,21 @@ def check_launchagent_integrity(fix: bool = False) -> DoctorCheck:
                     tmp_drift = True
 
         expected_schedule = schedule_expectations.get(cron_id)
-        if expected_schedule is not None:
+        if expected_schedule is not None and expected_schedule.get("schedule_configured"):
             actual_schedule = {
                 "StartInterval": plist_data.get("StartInterval"),
                 "StartCalendarInterval": plist_data.get("StartCalendarInterval"),
                 "RunAtLoad": plist_data.get("RunAtLoad"),
             }
-            if actual_schedule != expected_schedule:
+            target_schedule = {
+                "StartInterval": expected_schedule.get("StartInterval"),
+                "StartCalendarInterval": expected_schedule.get("StartCalendarInterval"),
+                "RunAtLoad": expected_schedule.get("RunAtLoad"),
+            }
+            if actual_schedule != target_schedule:
                 problems.append(
                     f"{label}: schedule drift "
-                    f"(actual={actual_schedule}, expected={expected_schedule})"
+                    f"(actual={actual_schedule}, expected={target_schedule})"
                 )
                 had_problem = True
 
@@ -600,28 +702,37 @@ def check_launchagent_integrity(fix: bool = False) -> DoctorCheck:
     check = DoctorCheck(
         id="runtime.launchagents",
         tier="runtime",
-        status="critical" if tmp_drift else "degraded",
-        severity="error" if tmp_drift else "warn",
-        summary=f"LaunchAgent drift detected in {len(problems)} job(s)",
+        status="critical" if (tmp_drift or tcc_failure) else "degraded",
+        severity="error" if (tmp_drift or tcc_failure) else "warn",
+        summary=(
+            f"LaunchAgent drift detected in {len(problems)} job(s)"
+            if not tcc_risk
+            else f"LaunchAgent drift or TCC/runtime path risk detected in {len(problems)} job(s)"
+        ),
         evidence=problems[:10],
         repair_plan=[
             "Reload the affected LaunchAgents from ~/Library/LaunchAgents",
             "Re-sync core cron plists from crons/manifest.json if the schedule drifted",
             "If any job is loaded from /tmp, boot it out before bootstrapping the real plist",
+            "If any core job points into Documents/Desktop/Downloads, re-sync it so it runs from NEXO_HOME instead",
         ],
-        escalation_prompt="Launchd is serving stale or drifted NEXO jobs. Compare loaded job paths with plist paths on disk.",
+        escalation_prompt=(
+            "Launchd is serving stale or drifted NEXO jobs. Compare loaded job paths with plist paths on disk, "
+            "and treat recent 'Operation not permitted' against Documents/Desktop/Downloads as a TCC/runtime path issue."
+        ),
     )
 
     if fix:
         sync_ok, sync_evidence = _sync_launchagents_from_manifest()
+        special_ok, special_evidence = _repair_special_launchagent_plists(problem_items)
         repaired, repair_evidence = _repair_launchagents(problem_items)
-        if sync_ok and repaired:
+        if sync_ok and special_ok and repaired:
             post_check = check_launchagent_integrity(fix=False)
             if post_check.status == "healthy":
                 post_check.fixed = True
                 post_check.summary += " (fixed)"
                 return post_check
-        check.evidence.extend((sync_evidence + repair_evidence)[:10])
+        check.evidence.extend((sync_evidence + special_evidence + repair_evidence)[:10])
     return check
 
 

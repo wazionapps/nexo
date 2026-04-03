@@ -20,12 +20,14 @@ import json
 import os
 import platform
 import plistlib
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
-NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parent.parent)))
+SOURCE_ROOT = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parent.parent)))
+RUNTIME_ROOT = NEXO_HOME
 MANIFEST = Path(__file__).resolve().parent / "manifest.json"
 LAUNCH_AGENTS_DIR = Path.home() / "Library" / "LaunchAgents"
 LABEL_PREFIX = "com.nexo."
@@ -36,58 +38,89 @@ def log(msg: str):
     print(f"[cron-sync] {msg}", flush=True)
 
 
+def _sync_watchdog_hash_registry():
+    """Keep the immutable-hash registry aligned with the runtime watchdog script."""
+    try:
+        watchdog_path = RUNTIME_ROOT / "scripts" / "nexo-watchdog.sh"
+        if not watchdog_path.exists():
+            return
+        registry_path = RUNTIME_ROOT / "scripts" / ".watchdog-hashes"
+        entries: dict[str, str] = {}
+        if registry_path.exists():
+            for line in registry_path.read_text().splitlines():
+                if "|" not in line:
+                    continue
+                file_path, expected_hash = line.split("|", 1)
+                if file_path:
+                    entries[file_path] = expected_hash
+        import hashlib
+        entries[str(watchdog_path)] = hashlib.sha256(watchdog_path.read_bytes()).hexdigest()
+        registry_path.write_text(
+            "\n".join(f"{file_path}|{digest}" for file_path, digest in sorted(entries.items())) + "\n"
+        )
+    except Exception as e:
+        log(f"WARNING: could not sync watchdog hash registry: {e}")
+
+
 def load_manifest() -> list[dict]:
     with open(MANIFEST) as f:
         data = json.load(f)
     return data.get("crons", [])
 
 
-def _copy_script_to_nexo_home(src: Path) -> Path:
-    """Copy a script from NEXO_CODE to NEXO_HOME/scripts/ for Sandbox compatibility.
+def _runtime_relative_path(src: Path) -> Path:
+    """Return the path inside NEXO_HOME that mirrors the source tree."""
+    src = src.resolve()
+    try:
+        return src.relative_to(SOURCE_ROOT.resolve())
+    except Exception:
+        # Best effort fallback for unexpected inputs.
+        return Path("scripts") / src.name
 
-    macOS Sandbox blocks LaunchAgents from executing scripts in ~/Documents/.
-    We copy scripts to NEXO_HOME/scripts/ which is outside the Sandbox restricted paths.
+
+def _copy_into_runtime(src: Path) -> Path:
+    """Copy a script or directory from the source tree into NEXO_HOME.
+
+    LaunchAgents should execute from NEXO_HOME, not directly from repo paths
+    under macOS-protected folders such as ~/Documents.
     """
-    dest_dir = NEXO_HOME / "scripts"
-    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest = RUNTIME_ROOT / _runtime_relative_path(src)
+    dest.parent.mkdir(parents=True, exist_ok=True)
 
     if src.is_dir():
-        import shutil
-        dest = dest_dir / src.name
         if dest.exists():
             shutil.rmtree(dest)
         shutil.copytree(src, dest)
         return dest
-    else:
-        dest = dest_dir / src.name
-        import shutil
-        shutil.copy2(src, dest)
+
+    shutil.copy2(src, dest)
+    if src.suffix in {".sh", ".py"} or os.access(src, os.X_OK):
         dest.chmod(0o755)
-        return dest
+    return dest
 
 
 def build_plist(cron: dict) -> dict:
     """Build a macOS LaunchAgent plist dict from a manifest entry."""
     cron_id = cron["id"]
     label = f"{LABEL_PREFIX}{cron_id}"
-    script_src = NEXO_CODE / cron["script"]
+    script_src = SOURCE_ROOT / cron["script"]
     script_type = cron.get("type", "python")
 
-    # Copy scripts to NEXO_HOME/scripts/ to avoid macOS Sandbox restrictions
-    script_dest = _copy_script_to_nexo_home(script_src)
+    # Copy scripts into NEXO_HOME preserving the source tree layout.
+    script_dest = _copy_into_runtime(script_src)
     script_path = str(script_dest)
 
     # Also copy the wrapper and any subdirectories (e.g., deep-sleep/)
-    wrapper_src = NEXO_CODE / "scripts" / "nexo-cron-wrapper.sh"
-    wrapper_dest = _copy_script_to_nexo_home(wrapper_src)
+    wrapper_src = SOURCE_ROOT / "scripts" / "nexo-cron-wrapper.sh"
+    wrapper_dest = _copy_into_runtime(wrapper_src)
     wrapper_path = str(wrapper_dest)
 
     # Copy script subdirectories if they exist (e.g., deep-sleep/ for nexo-deep-sleep.sh)
     script_name = script_src.stem  # e.g., "nexo-deep-sleep"
     subdir_name = script_name.replace("nexo-", "")  # e.g., "deep-sleep"
-    subdir_src = NEXO_CODE / "scripts" / subdir_name
+    subdir_src = SOURCE_ROOT / "scripts" / subdir_name
     if subdir_src.is_dir():
-        _copy_script_to_nexo_home(subdir_src)
+        _copy_into_runtime(subdir_src)
 
     if script_type == "shell":
         program_args = ["/bin/bash", wrapper_path, cron_id, "/bin/bash", script_path]
@@ -118,7 +151,9 @@ def build_plist(cron: dict) -> dict:
                     + "/Library/Frameworks/Python.framework/Versions/3.12/bin",
             "HOME": str(Path.home()),
             "NEXO_HOME": str(NEXO_HOME),
-            "NEXO_CODE": str(NEXO_CODE),
+            "NEXO_CODE": str(RUNTIME_ROOT),
+            "NEXO_SOURCE_CODE": str(SOURCE_ROOT),
+            "NEXO_MANAGED_CORE_CRON": "1",
             "PYTHONUNBUFFERED": "1",
         },
     }
@@ -169,6 +204,8 @@ def plist_needs_update(existing_path: Path, new_plist: dict) -> bool:
     if existing.get("StartCalendarInterval") != new_plist.get("StartCalendarInterval"):
         return True
     if existing.get("RunAtLoad") != new_plist.get("RunAtLoad"):
+        return True
+    if existing.get("EnvironmentVariables") != new_plist.get("EnvironmentVariables"):
         return True
     return False
 
@@ -244,8 +281,15 @@ def sync(dry_run: bool = False):
             try:
                 with open(plist_path, "rb") as f:
                     existing = plistlib.load(f)
+                env = existing.get("EnvironmentVariables", {}) or {}
                 args = existing.get("ProgramArguments", [])
-                is_core = any(str(NEXO_CODE) in str(a) for a in args)
+                is_core = env.get("NEXO_MANAGED_CORE_CRON") == "1"
+                if not is_core:
+                    arg_blob = " ".join(str(a) for a in args)
+                    is_core = (
+                        "nexo-cron-wrapper.sh" in arg_blob
+                        and (str(SOURCE_ROOT) in arg_blob or str(NEXO_HOME) in arg_blob)
+                    )
             except Exception:
                 is_core = False
 
@@ -255,6 +299,7 @@ def sync(dry_run: bool = False):
             else:
                 log(f"  SKIP (personal): {cron_id}")
 
+    _sync_watchdog_hash_registry()
     log("Sync complete.")
 
 

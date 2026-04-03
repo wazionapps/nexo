@@ -87,6 +87,33 @@ function syncWatchdogHashRegistry(nexoHome) {
   }
 }
 
+function isProtectedMacPath(candidate) {
+  if (process.platform !== "darwin" || !candidate) return false;
+  const homeDir = require("os").homedir();
+  const expanded = candidate.replace(/^~/, homeDir);
+  const resolved = path.resolve(expanded);
+  const protectedRoots = [
+    path.join(homeDir, "Documents"),
+    path.join(homeDir, "Desktop"),
+    path.join(homeDir, "Downloads"),
+    path.join(homeDir, "Library", "Mobile Documents"),
+  ];
+  return protectedRoots.some((root) => resolved === root || resolved.startsWith(`${root}${path.sep}`));
+}
+
+function logMacPermissionsNotice(nexoHome, pythonPath = "") {
+  if (!isProtectedMacPath(nexoHome)) return;
+  log("macOS protected-folder warning:");
+  log(`  NEXO_HOME is inside a protected folder: ${nexoHome}`);
+  log("  Background jobs may fail with 'Operation not permitted'.");
+  log("  Recommended: move NEXO_HOME outside Documents/Desktop/Downloads/iCloud Drive.");
+  log("  If you keep it there, grant Full Disk Access to /bin/bash and your Python runtime.");
+  if (pythonPath) {
+    log(`  Python runtime: ${pythonPath}`);
+  }
+  log("  System Settings → Privacy & Security → Full Disk Access");
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // CORE PROCESS & HOOK DEFINITIONS
 // All 13 nightly/periodic processes and all 8 core hooks that make NEXO functional.
@@ -893,6 +920,8 @@ async function main() {
         });
       }
 
+      logMacPermissionsNotice(NEXO_HOME, syncPython);
+
       log(`Already at v${currentVersion}. No migration needed.`);
       rl.close();
       return;
@@ -937,6 +966,7 @@ async function main() {
   }
   const pyVersion = run(`${python} --version`);
   log(`Found ${pyVersion} at ${python}`);
+  logMacPermissionsNotice(NEXO_HOME, python);
 
   // Find or install Claude Code
   let claudeInstalled = run("which claude");

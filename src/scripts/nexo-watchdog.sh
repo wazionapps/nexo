@@ -16,6 +16,7 @@ NEXO_DIR="$NEXO_HOME"
 CORTEX_DIR="$NEXO_HOME/brain"
 OPS_DIR="$NEXO_HOME/operations"
 LOG_DIR="$NEXO_HOME/logs"
+DB_PATH="$NEXO_HOME/data/nexo.db"
 LOG="$LOG_DIR/watchdog.log"
 STATUS_JSON="$OPS_DIR/watchdog-status.json"
 REPORT_TXT="$OPS_DIR/watchdog-report.txt"
@@ -134,7 +135,7 @@ if [ "${NEXO_MAINTAINER:-}" = "1" ]; then
 fi
 
 # Error patterns to search in stderr logs (last 50 lines)
-ERROR_PATTERNS="Traceback|Error:|CRITICAL|FATAL|ModuleNotFoundError|PermissionError|FileNotFoundError|ConnectionRefused|Errno"
+ERROR_PATTERNS="Traceback|Error:|CRITICAL|FATAL|ModuleNotFoundError|PermissionError|FileNotFoundError|ConnectionRefused|Errno|Operation not permitted|SyntaxError|sqlite3\\.OperationalError"
 
 # ============================================================================
 # HELPER FUNCTIONS
@@ -150,7 +151,7 @@ log_repair() { echo "[$TS] REPAIR: $1" >> "$REPAIR_LOG"; log "REPAIR: $1"; }
 
 is_loaded() {
   if $IS_MACOS; then
-    launchctl list "$1" &>/dev/null
+    launchctl print "gui/$UID_NUM/$1" &>/dev/null
   else
     # On Linux, check if the systemd timer is enabled
     systemctl --user is-enabled "$1" &>/dev/null
@@ -242,45 +243,13 @@ try_reexecute_missed_cron() {
   local svc_id="$1"
 
   if $IS_MACOS; then
-    # macOS: extract command from plist and run it
-    local plist_file="$HOME_DIR/Library/LaunchAgents/${svc_id}.plist"
-
-    if [ ! -f "$plist_file" ]; then
-      log "Re-execute skipped: no plist for $svc_id"
-      return 1
-    fi
-
-    local cmd
-    cmd=$(python3 -c "
-import plistlib, sys
-try:
-    with open('$plist_file', 'rb') as f:
-        d = plistlib.load(f)
-    args = d.get('ProgramArguments', [])
-    if d.get('KeepAlive'):
-        sys.exit(1)
-    if not d.get('StartCalendarInterval') and not d.get('StartInterval'):
-        sys.exit(1)
-    print(' '.join(args))
-except:
-    sys.exit(1)
-" 2>/dev/null)
-
-    if [ -z "$cmd" ] || [ $? -ne 0 ]; then
-      return 1
-    fi
-
-    log "Re-executing missed cron: $svc_id → $cmd"
-    timeout 300 bash -c "$cmd" >> "$LOG_DIR/watchdog-reexec.log" 2>&1 &
-    local pid=$!
-    sleep 2
-    if kill -0 "$pid" 2>/dev/null || wait "$pid" 2>/dev/null; then
-      log_repair "$svc_id: re-executed missed cron (PID $pid)"
+    log "Re-executing missed cron via launchctl kickstart: $svc_id"
+    if launchctl kickstart -k "gui/$UID_NUM/$svc_id" >> "$LOG_DIR/watchdog-reexec.log" 2>&1; then
+      log_repair "$svc_id: re-executed missed cron via launchctl kickstart"
       return 0
-    else
-      log "Re-execute failed for $svc_id"
-      return 1
     fi
+    log "Re-execute failed for $svc_id"
+    return 1
   else
     # Linux: start the corresponding service unit directly
     local service_unit="${svc_id%.timer}.service"
@@ -300,6 +269,7 @@ try_verify_repair() {
   local plist_id="$1"
   local log_stdout="$2"
   local proc_grep="$3"
+  local mon_type="${4:-core}"
   local max_wait=30
 
   log "Verifying repair for $plist_id..."
@@ -325,7 +295,22 @@ try_verify_repair() {
     return 1
   fi
 
-  # Check 3: For scheduled crons, check if log was updated recently
+  # Check 3: For scheduled crons, check if cron_runs/logs were updated recently
+  if [ "$mon_type" = "core" ]; then
+    local cron_id
+    cron_id=$(cron_id_from_service "$plist_id")
+    local run_info
+    run_info=$(cron_last_run_info "$cron_id" || true)
+    if [ -n "$run_info" ]; then
+      local run_age
+      IFS='|' read -r run_age _ _ _ _ _ <<< "$run_info"
+      if [ -n "$run_age" ] && [ "$run_age" -lt 300 ]; then
+        log "Verify OK: $plist_id cron_runs updated ${run_age}s ago"
+        return 0
+      fi
+    fi
+  fi
+
   if [ -n "$log_stdout" ] && [ -f "$log_stdout" ]; then
     local age
     age=$(file_age "$log_stdout")
@@ -408,6 +393,51 @@ process_running() {
   fi
 }
 
+cron_id_from_service() {
+  local svc_id="$1"
+  if $IS_MACOS; then
+    echo "${svc_id#com.nexo.}"
+  else
+    echo "${svc_id#nexo-}" | sed 's/\.timer$//'
+  fi
+}
+
+cron_last_run_info() {
+  local cron_id="$1"
+  [ ! -f "$DB_PATH" ] && return 1
+  sqlite3 -separator '|' "$DB_PATH" "
+    SELECT
+      CAST(strftime('%s','now') - strftime('%s', started_at) AS INTEGER) AS age_secs,
+      COALESCE(started_at, ''),
+      COALESCE(ended_at, ''),
+      COALESCE(exit_code, ''),
+      COALESCE(error, ''),
+      COALESCE(summary, '')
+    FROM cron_runs
+    WHERE cron_id = '$cron_id'
+    ORDER BY id DESC
+    LIMIT 1;
+  " 2>/dev/null
+}
+
+classify_log_issue() {
+  local logfile="$1"
+  if [ ! -f "$logfile" ] || [ ! -s "$logfile" ]; then
+    return 0
+  fi
+  local tail_text
+  tail_text=$(tail -50 "$logfile" 2>/dev/null || true)
+  if echo "$tail_text" | grep -q "Operation not permitted"; then
+    echo "tcc"
+  elif echo "$tail_text" | grep -q "ModuleNotFoundError"; then
+    echo "dependency"
+  elif echo "$tail_text" | grep -q "SyntaxError"; then
+    echo "syntax"
+  elif echo "$tail_text" | grep -q "sqlite3.OperationalError"; then
+    echo "schema"
+  fi
+}
+
 # Escape strings for JSON
 json_escape() {
   echo "$1" | sed 's/\\/\\\\/g; s/"/\\"/g; s/	/ /g' | tr '\n' ' '
@@ -436,6 +466,10 @@ for monitor in "${MONITORS[@]}"; do
   stale_age="n/a"
   error_count=0
   proc_alive="n/a"
+  error_kind=""
+  cron_id=$(cron_id_from_service "$plist_id")
+  latest_run_has_record=false
+  latest_run_failed=false
 
   # Check 1: Service loaded? (launchd on macOS, systemd on Linux)
   if is_loaded "$plist_id"; then
@@ -490,8 +524,47 @@ for monitor in "${MONITORS[@]}"; do
     fi
   fi
 
-  # Check 3: Log staleness + AUTO RE-EXECUTE missed crons
-  if [ -n "$log_stdout" ] && [ "$max_stale" -gt 0 ]; then
+  # Check 3: Staleness + AUTO RE-EXECUTE missed crons
+  if [ "$mon_type" = "core" ] && [ "$max_stale" -gt 0 ]; then
+    run_info=$(cron_last_run_info "$cron_id" || true)
+    if [ -n "$run_info" ]; then
+      latest_run_has_record=true
+      IFS='|' read -r age _ _ last_exit last_error last_summary <<< "$run_info"
+      age="${age:-999999}"
+      stale_age=$(format_age "$age")
+      if [ -n "$last_exit" ] && [ "$last_exit" != "0" ]; then
+        latest_run_failed=true
+        status="FAIL"
+        details="${details}Last run exited ${last_exit}. "
+        [ -n "$last_error" ] && details="${details}Error: ${last_error}. "
+      fi
+      if [ "$age" -gt $(( max_stale * 3 )) ]; then
+        if try_reexecute_missed_cron "$plist_id"; then
+          status="HEALED"
+          details="${details}Self-healed: re-executed missed cron (last run: $stale_age). "
+          TOTAL_HEALED=$((TOTAL_HEALED + 1))
+        else
+          status="FAIL"
+          details="${details}cron_runs stale: $stale_age (limit: $(format_age "$max_stale")). Re-execute failed. "
+        fi
+      elif [ "$age" -gt "$max_stale" ]; then
+        [ "$status" = "PASS" ] && status="WARN"
+        details="${details}cron_runs slightly stale: $stale_age. "
+      elif [ -z "$details" ] && [ -n "$last_summary" ]; then
+        details="${details}Last run summary: ${last_summary}. "
+      fi
+    else
+      stale_age="no cron_runs entry"
+      if try_reexecute_missed_cron "$plist_id"; then
+        status="HEALED"
+        details="${details}Self-healed: executed missing cron for first run. "
+        TOTAL_HEALED=$((TOTAL_HEALED + 1))
+      else
+        status="FAIL"
+        details="${details}No cron_runs entry recorded yet. "
+      fi
+    fi
+  elif [ -n "$log_stdout" ] && [ "$max_stale" -gt 0 ]; then
     age=$(file_age "$log_stdout")
     stale_age=$(format_age "$age")
     if [ "$age" -gt $(( max_stale * 3 )) ]; then
@@ -519,10 +592,35 @@ for monitor in "${MONITORS[@]}"; do
 
   # Check 4: Errors in stderr log
   if [ -n "$log_stderr" ]; then
-    error_count=$(check_errors "$log_stderr")
-    if [ "$error_count" -gt 5 ]; then
-      [ "$status" = "PASS" ] && status="WARN"
-      details="${details}${error_count} errors in recent stderr. "
+    consider_stderr=true
+    if [ "$mon_type" = "core" ] && $latest_run_has_record && ! $latest_run_failed && [ "$loaded" = "yes" ]; then
+      consider_stderr=false
+    fi
+    if $consider_stderr; then
+      error_count=$(check_errors "$log_stderr")
+      error_kind=$(classify_log_issue "$log_stderr" || true)
+      if [ "$error_count" -gt 5 ]; then
+        [ "$status" = "PASS" ] && status="WARN"
+        details="${details}${error_count} errors in recent stderr. "
+      fi
+      case "$error_kind" in
+        tcc)
+          status="FAIL"
+          details="${details}Recent stderr shows macOS TCC/Sandbox denial ('Operation not permitted'). "
+          ;;
+        dependency)
+          [ "$status" = "PASS" ] && status="WARN"
+          details="${details}Recent stderr shows missing Python dependency. "
+          ;;
+        syntax)
+          status="FAIL"
+          details="${details}Recent stderr shows syntax error. "
+          ;;
+        schema)
+          status="FAIL"
+          details="${details}Recent stderr shows DB/schema mismatch. "
+          ;;
+      esac
     fi
   fi
 
@@ -557,7 +655,7 @@ done
 # --- Cron job checks ---
 CRON_JSON=""
 CRON_REPORT=""
-for cron_entry in "${CRON_MONITORS[@]}"; do
+for cron_entry in ${CRON_MONITORS[@]+"${CRON_MONITORS[@]}"}; do
   IFS='|' read -r name script check_path max_stale schedule <<< "$cron_entry"
 
   c_status="PASS"
@@ -973,7 +1071,7 @@ NEXOPROMPT
           VERIFY_FAIL=0
           for failed in ${FAILED_MONITORS[@]+"${FAILED_MONITORS[@]}"}; do
             IFS='|' read -r v_name v_plist v_stdout v_stderr v_proc v_sched v_type v_details <<< "$failed"
-            if try_verify_repair "$v_plist" "$v_stdout" "$v_proc"; then
+            if try_verify_repair "$v_plist" "$v_stdout" "$v_proc" "$v_type"; then
               VERIFY_PASS=$((VERIFY_PASS + 1))
               log "VERIFY OK: $v_name"
             else

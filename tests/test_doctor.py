@@ -132,7 +132,7 @@ class TestRuntimeChecks:
         conn = sqlite3.connect(str(nexo_home / "data" / "nexo.db"))
         conn.execute(
             "INSERT INTO cron_runs (cron_id, started_at) VALUES (?, ?)",
-            ("self-audit", time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time() - 12 * 3600))),
+            ("self-audit", time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time() - 12 * 3600))),
         )
         conn.commit()
         conn.close()
@@ -145,7 +145,7 @@ class TestRuntimeChecks:
         conn = sqlite3.connect(str(nexo_home / "data" / "nexo.db"))
         conn.execute(
             "INSERT INTO cron_runs (cron_id, started_at) VALUES (?, ?)",
-            ("watchdog", time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time() - 3 * 3600))),
+            ("watchdog", time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time() - 3 * 3600))),
         )
         conn.commit()
         conn.close()
@@ -164,7 +164,7 @@ class TestRuntimeChecks:
         conn = sqlite3.connect(str(nexo_home / "data" / "nexo.db"))
         conn.execute(
             "INSERT INTO cron_runs (cron_id, started_at) VALUES (?, ?)",
-            ("catchup", time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time() - 3 * 3600))),
+            ("catchup", time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time() - 3 * 3600))),
         )
         conn.commit()
         conn.close()
@@ -228,6 +228,7 @@ class TestRuntimeChecks:
                 "StartInterval": None,
                 "StartCalendarInterval": None,
                 "RunAtLoad": True,
+                "schedule_configured": True,
             }
         })
         monkeypatch.setattr(runtime.os, "getuid", lambda: 501)
@@ -250,6 +251,44 @@ class TestRuntimeChecks:
         assert check.status == "degraded"
         assert any("schedule drift" in item for item in check.evidence)
 
+    def test_launchagent_integrity_detects_tcc_risk_from_protected_paths(self, nexo_home, monkeypatch):
+        from doctor.providers import runtime
+
+        plist_path = nexo_home / "com.nexo.deep-sleep.plist"
+        protected_code = os.path.join(os.path.expanduser("~"), "Documents", "nexo", "src")
+        with plist_path.open("wb") as fh:
+            plistlib.dump({
+                "EnvironmentVariables": {
+                    "NEXO_HOME": str(nexo_home),
+                    "NEXO_CODE": protected_code,
+                },
+                "ProgramArguments": ["/bin/bash", str(nexo_home / "scripts" / "nexo-cron-wrapper.sh"), "deep-sleep", "/bin/bash", protected_code + "/scripts/nexo-deep-sleep.sh"],
+                "StartCalendarInterval": {"Hour": 4, "Minute": 30},
+            }, fh)
+
+        monkeypatch.setattr(runtime.platform, "system", lambda: "Darwin")
+        monkeypatch.setattr(runtime, "_managed_launchagent_plists", lambda: [("deep-sleep", plist_path)])
+        monkeypatch.setattr(runtime, "_recent_permission_denial", lambda cron_id: cron_id == "deep-sleep")
+        monkeypatch.setattr(runtime.os, "getuid", lambda: 501)
+
+        def fake_run(args, **kwargs):
+            return SimpleNamespace(
+                returncode=0,
+                stdout=(
+                    "gui/501/com.nexo.deep-sleep = {\n"
+                    f"path = {plist_path}\n"
+                    f"NEXO_HOME => {nexo_home}\n"
+                    f"NEXO_CODE => {protected_code}\n"
+                    "}\n"
+                ),
+                stderr="",
+            )
+
+        monkeypatch.setattr(runtime.subprocess, "run", fake_run)
+        check = runtime.check_launchagent_integrity()
+        assert check.status == "critical"
+        assert any("Operation not permitted" in item for item in check.evidence)
+
     def test_managed_launchagents_include_run_at_load_jobs(self, nexo_home, monkeypatch):
         from doctor.providers import runtime
 
@@ -263,6 +302,7 @@ class TestRuntimeChecks:
                 "StartInterval": None,
                 "StartCalendarInterval": None,
                 "RunAtLoad": True,
+                "schedule_configured": True,
             }
         })
         managed = runtime._managed_launchagent_plists()
@@ -315,6 +355,53 @@ class TestRuntimeChecks:
         assert check.fixed
         assert check.status == "healthy"
         assert any(args[1] == "bootstrap" for args in calls)
+
+    def test_launchagent_integrity_fix_normalizes_special_launchagent_env(self, nexo_home, monkeypatch):
+        from doctor.providers import runtime
+
+        plist_path = nexo_home / "com.nexo.tcc-approve.plist"
+        old_code = os.path.join(os.path.expanduser("~"), "Documents", "nexo", "src")
+        with plist_path.open("wb") as fh:
+            plistlib.dump({
+                "EnvironmentVariables": {
+                    "NEXO_HOME": str(nexo_home),
+                    "NEXO_CODE": old_code,
+                },
+                "ProgramArguments": ["/bin/bash", str(nexo_home / "scripts" / "nexo-tcc-approve.sh")],
+                "RunAtLoad": True,
+            }, fh)
+
+        monkeypatch.setattr(runtime.platform, "system", lambda: "Darwin")
+        monkeypatch.setattr(runtime, "_managed_launchagent_plists", lambda: [("tcc-approve", plist_path)])
+        monkeypatch.setattr(runtime, "_launchagent_schedule_expectations", lambda: {})
+        monkeypatch.setattr(runtime, "_recent_permission_denial", lambda cron_id: False)
+        monkeypatch.setattr(runtime.os, "getuid", lambda: 501)
+
+        calls = {"print": 0}
+
+        def fake_run(args, **kwargs):
+            if args[:2] == ["launchctl", "print"]:
+                calls["print"] += 1
+                current_code = old_code if calls["print"] == 1 else str(nexo_home)
+                return SimpleNamespace(
+                    returncode=0,
+                    stdout=(
+                        "gui/501/com.nexo.tcc-approve = {\n"
+                        f"path = {plist_path}\n"
+                        f"NEXO_HOME => {nexo_home}\n"
+                        f"NEXO_CODE => {current_code}\n"
+                        "}\n"
+                    ),
+                    stderr="",
+                )
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+        monkeypatch.setattr(runtime.subprocess, "run", fake_run)
+        check = runtime.check_launchagent_integrity(fix=True)
+        assert check.fixed
+        with plist_path.open("rb") as fh:
+            fixed = plistlib.load(fh)
+        assert fixed["EnvironmentVariables"]["NEXO_CODE"] == str(nexo_home)
 
 
 class TestDeepChecks:

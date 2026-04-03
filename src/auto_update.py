@@ -81,6 +81,29 @@ def _sync_watchdog_hash_registry():
         _log(f"watchdog hash registry sync error: {e}")
 
 
+def _warn_protected_runtime_location():
+    """Log a targeted macOS TCC warning for risky NEXO_HOME locations."""
+    if sys.platform != "darwin":
+        return
+    try:
+        home = Path.home()
+        resolved = NEXO_HOME.resolve(strict=False)
+        protected_roots = (
+            home / "Documents",
+            home / "Desktop",
+            home / "Downloads",
+            home / "Library" / "Mobile Documents",
+        )
+        if any(resolved == root or root in resolved.parents for root in protected_roots):
+            _log(
+                "NEXO_HOME is inside a macOS protected folder. Background jobs may need Full Disk Access "
+                "for /bin/bash and the NEXO Python runtime, or NEXO_HOME should be moved outside "
+                "Documents/Desktop/Downloads/iCloud Drive."
+            )
+    except Exception as e:
+        _log(f"protected runtime warning skipped: {e}")
+
+
 def _is_git_repo() -> bool:
     """Check if REPO_DIR is inside a git repository."""
     try:
@@ -886,6 +909,7 @@ def auto_update_check() -> dict:
         _log(f"scripts backfill error: {e}")
 
     _sync_watchdog_hash_registry()
+    _warn_protected_runtime_location()
 
     # Backfill runtime CLI modules for existing installs
     try:
