@@ -554,6 +554,19 @@ def _toolbox_summary(conn) -> str:
         parts = []
         if skill_count > 0:
             parts.append(f"{skill_count} skills available — use `nexo_skill_match(task)` before multi-step tasks")
+            try:
+                from skills_runtime import get_featured_skill_summaries
+
+                featured = get_featured_skill_summaries(limit=3)
+                if featured:
+                    parts.append("Featured skills:")
+                    for skill in featured:
+                        triggers = ", ".join(skill.get("trigger_patterns", [])[:2]) or "no triggers"
+                        parts.append(
+                            f"- {skill['id']} — {skill['mode']}/{skill['execution_level']} — triggers: {triggers}"
+                        )
+            except Exception:
+                pass
         if learning_count > 0:
             parts.append(f"{learning_count} high-priority learnings — use `nexo_guard_check` before editing code")
         if parts:

@@ -366,6 +366,21 @@ def _m18_skills_steps(conn):
     _migrate_add_column(conn, "skills", "gotchas", "TEXT DEFAULT '[]'")
 
 
+def _m19_skills_v2(conn):
+    _migrate_add_column(conn, "skills", "mode", "TEXT DEFAULT 'guide'")
+    _migrate_add_column(conn, "skills", "source_kind", "TEXT DEFAULT 'personal'")
+    _migrate_add_column(conn, "skills", "execution_level", "TEXT DEFAULT 'none'")
+    _migrate_add_column(conn, "skills", "approval_required", "INTEGER DEFAULT 0")
+    _migrate_add_column(conn, "skills", "approved_at", "TEXT DEFAULT ''")
+    _migrate_add_column(conn, "skills", "approved_by", "TEXT DEFAULT ''")
+    _migrate_add_column(conn, "skills", "params_schema", "TEXT DEFAULT '{}'")
+    _migrate_add_column(conn, "skills", "command_template", "TEXT DEFAULT '{}'")
+    _migrate_add_column(conn, "skills", "executable_entry", "TEXT DEFAULT ''")
+    _migrate_add_column(conn, "skills", "stable_after_uses", "INTEGER DEFAULT 10")
+    _migrate_add_column(conn, "skills", "definition_path", "TEXT DEFAULT ''")
+    _migrate_add_column(conn, "skills", "last_reviewed_at", "TEXT DEFAULT NULL")
+
+
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
     (2, "followups_reasoning", _m2_followups_reasoning),
@@ -385,6 +400,7 @@ MIGRATIONS = [
     (16, "skills_tables", _m16_skills_tables),
     (17, "cron_runs", _m17_cron_runs),
     (18, "skills_steps_column", _m18_skills_steps),
+    (19, "skills_v2", _m19_skills_v2),
 ]
 
 
@@ -443,5 +459,4 @@ def get_schema_version() -> int:
         return row[0] or 0
     except Exception:
         return 0
-
 

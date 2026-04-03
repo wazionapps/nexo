@@ -625,6 +625,55 @@ def check_launchagent_integrity(fix: bool = False) -> DoctorCheck:
     return check
 
 
+def check_skill_health(fix: bool = False) -> DoctorCheck:
+    """Check executable skill consistency and approval state."""
+    try:
+        from db import get_skill_health_report
+        report = get_skill_health_report(fix=fix)
+    except Exception as e:
+        return DoctorCheck(
+            id="runtime.skills",
+            tier="runtime",
+            status="degraded",
+            severity="warn",
+            summary=f"Skill health check failed: {e}",
+        )
+
+    issues = report.get("issues", [])
+    if not issues:
+        summary = f"Skills consistent ({report.get('checked', 0)} checked)"
+        if fix:
+            summary += " (fixed)"
+        return DoctorCheck(
+            id="runtime.skills",
+            tier="runtime",
+            status="healthy",
+            severity="info",
+            summary=summary,
+            fixed=fix,
+        )
+
+    errors = [issue for issue in issues if issue.get("severity") == "error"]
+    warnings = [issue for issue in issues if issue.get("severity") != "error"]
+    status = "critical" if errors else "degraded"
+    severity = "error" if errors else "warn"
+    evidence = [f"{issue['skill_id']}: {issue['message']}" for issue in issues[:10]]
+    return DoctorCheck(
+        id="runtime.skills",
+        tier="runtime",
+        status=status,
+        severity=severity,
+        summary=f"Skill issues detected in {len(issues)} item(s)",
+        evidence=evidence,
+        repair_plan=[
+            "Run nexo skills sync to reconcile filesystem definitions",
+            "Approve local/remote skills explicitly before execution",
+            "Fix or restore missing executable files for execute/hybrid skills",
+        ],
+        escalation_prompt="Skill metadata and filesystem artifacts are out of sync or an executable skill is unsafe to run.",
+    )
+
+
 def run_runtime_checks(fix: bool = False) -> list[DoctorCheck]:
     """Run all runtime-tier checks. Read-only by default."""
     return [
@@ -633,4 +682,5 @@ def run_runtime_checks(fix: bool = False) -> list[DoctorCheck]:
         check_stale_sessions(),
         check_cron_freshness(),
         check_launchagent_integrity(fix=fix),
+        check_skill_health(fix=fix),
     ]

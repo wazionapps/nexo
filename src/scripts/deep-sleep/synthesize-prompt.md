@@ -79,6 +79,9 @@ Consolidate `skill_candidates` from all session extractions into publishable ski
 - Generalize: replace session-specific IDs, paths, or names with placeholders or descriptions
 - Only include skills with confidence >= 0.7
 - Check if a similar skill already exists (use `nexo_skill_match` if available) — if so, note it for merging instead of creating new
+- Prefer `mode=guide` unless there is strong evidence that some steps are safely automatable
+- Deep Sleep may only auto-create executable drafts for `read-only` automations
+- If the likely scope is `local` or `remote`, set approval_required=true and keep the skill in guide mode unless a reviewed script already exists
 
 For each skill, generate:
 - A unique ID starting with `SK-` (e.g., `SK-DEPLOY-CHROME-EXT`)
@@ -144,9 +147,31 @@ Return ONLY valid JSON. No markdown code fences. No explanation text.
       "tags": ["tag1", "tag2"],
       "trigger_patterns": ["trigger phrase 1", "trigger phrase 2"],
       "gotchas": ["Warning or caveat"],
+      "mode": "guide|execute|hybrid",
+      "execution_level": "none|read-only|local|remote",
+      "approval_required": false,
+      "params_schema": {
+        "param_name": {"type": "string", "required": true}
+      },
+      "command_template": {
+        "argv": ["script.py", "{{param_name}}"]
+      },
+      "executable_entry": "script.py",
       "source_sessions": ["session1.jsonl"],
       "confidence": 0.85,
       "merge_with": null
+    }
+  ],
+
+  "skill_evolution_candidates": [
+    {
+      "id": "SK-EXISTING-ID",
+      "reason": "Used successfully 3+ times without major corrections",
+      "suggested_mode": "hybrid",
+      "suggested_execution_level": "read-only|local|remote",
+      "approval_required": true,
+      "params_schema": {},
+      "script_brief": "What a future script should automate"
     }
   ],
 

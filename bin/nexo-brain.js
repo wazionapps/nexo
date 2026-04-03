@@ -827,6 +827,44 @@ async function main() {
         }
       }
 
+      // Same version — refresh packaged core skills/templates/runtime helpers too.
+      const skillsCoreDest = path.join(NEXO_HOME, "skills-core");
+      const skillsCoreSrc = path.join(__dirname, "..", "src", "skills");
+      if (fs.existsSync(skillsCoreSrc)) {
+        const copyDirRec3 = (src, dest) => {
+          fs.mkdirSync(dest, { recursive: true });
+          fs.readdirSync(src).forEach(item => {
+            if (item === "__pycache__" || item.endsWith(".pyc")) return;
+            const srcP = path.join(src, item);
+            const destP = path.join(dest, item);
+            if (fs.statSync(srcP).isDirectory()) copyDirRec3(srcP, destP);
+            else fs.copyFileSync(srcP, destP);
+          });
+        };
+        copyDirRec3(skillsCoreSrc, skillsCoreDest);
+        log("Refreshed skills-core/ directory.");
+      }
+
+      ["skills_runtime.py"].forEach((fname) => {
+        const srcFile = path.join(__dirname, "..", "src", fname);
+        const destFile = path.join(NEXO_HOME, fname);
+        if (fs.existsSync(srcFile)) {
+          fs.copyFileSync(srcFile, destFile);
+        }
+      });
+
+      const templatesSrc = path.join(__dirname, "..", "templates");
+      const templatesDest = path.join(NEXO_HOME, "templates");
+      if (fs.existsSync(templatesSrc)) {
+        fs.mkdirSync(templatesDest, { recursive: true });
+        ["script-template.py", "nexo_helper.py", "skill-template.md", "skill-script-template.py"].forEach((f) => {
+          const src = path.join(templatesSrc, f);
+          if (fs.existsSync(src)) {
+            fs.copyFileSync(src, path.join(templatesDest, f));
+          }
+        });
+      }
+
       log(`Already at v${currentVersion}. No migration needed.`);
       rl.close();
       return;
@@ -1313,6 +1351,9 @@ async function main() {
     path.join(NEXO_HOME, "bin"),
     path.join(NEXO_HOME, "plugins"),
     path.join(NEXO_HOME, "scripts"),
+    path.join(NEXO_HOME, "skills"),
+    path.join(NEXO_HOME, "skills-core"),
+    path.join(NEXO_HOME, "skills-runtime"),
     path.join(NEXO_HOME, "logs"),
     path.join(NEXO_HOME, "backups"),
     path.join(NEXO_HOME, "coordination"),
@@ -1362,6 +1403,7 @@ async function main() {
   const srcDir = path.join(__dirname, "..", "src");
   const pluginsSrcDir = path.join(srcDir, "plugins");
   const scriptsSrcDir = path.join(srcDir, "scripts");
+  const skillsSrcDir = path.join(srcDir, "skills");
   const templateDir = path.join(__dirname, "..", "templates");
 
   // Recursive copy helper (skips __pycache__, .pyc, .db files)
@@ -1404,6 +1446,7 @@ async function main() {
     "requirements.txt",
     "cli.py",
     "script_registry.py",
+    "skills_runtime.py",
   ];
   coreFiles.forEach((f) => {
     const src = path.join(srcDir, f);
@@ -1461,6 +1504,12 @@ async function main() {
     });
   }
 
+  // Core skills are shipped separately from personal skills.
+  if (fs.existsSync(skillsSrcDir)) {
+    copyDirRecursive(skillsSrcDir, path.join(NEXO_HOME, "skills-core"));
+    log("  Core skills installed.");
+  }
+
   // Dashboard (recursive — includes static/, templates/)
   const dashSrcDir = path.join(srcDir, "dashboard");
   if (fs.existsSync(dashSrcDir)) {
@@ -1482,17 +1531,17 @@ async function main() {
     log("  Crons installed.");
   }
 
-  // Templates directory (script-template.py, nexo_helper.py)
+  // Templates directory (scripts + skills scaffolds)
   const templatesDest = path.join(NEXO_HOME, "templates");
   fs.mkdirSync(templatesDest, { recursive: true });
   if (fs.existsSync(templateDir)) {
-    ["script-template.py", "nexo_helper.py"].forEach(f => {
+    ["script-template.py", "nexo_helper.py", "skill-template.md", "skill-script-template.py"].forEach(f => {
       const src = path.join(templateDir, f);
       if (fs.existsSync(src)) {
         fs.copyFileSync(src, path.join(templatesDest, f));
       }
     });
-    log("  Script templates installed.");
+    log("  Script and skill templates installed.");
   }
 
   // Hooks directory

@@ -70,6 +70,10 @@ For each candidate, extract:
 - Tags describing the domain (e.g., "shopify", "chrome", "deploy")
 - Trigger phrases that would indicate this procedure is needed (e.g., "deploy extension", "push theme")
 - Any gotchas or warnings discovered during execution
+- Whether the procedure looks scriptable (`scriptable: true|false`)
+- Automation scope: `read-only|local|remote`
+- Candidate params if the procedure clearly has repeated inputs (e.g. store, version, environment)
+- Which steps are automatable vs still manual
 
 Only flag if the procedure was SUCCESSFUL (the task was completed without major failures).
 Do NOT flag trivial tasks (single-step actions, simple file edits, quick lookups).
@@ -223,6 +227,16 @@ Return ONLY valid JSON. No markdown code fences. No explanation text before or a
       "tags": ["domain1", "domain2"],
       "trigger_phrases": ["phrase that would trigger this", "another trigger"],
       "gotchas": ["Warning or caveat discovered during execution"],
+      "scriptable": false,
+      "automation_scope": "read-only|local|remote",
+      "candidate_params": {
+        "param_name": {
+          "type": "string|integer|number|boolean",
+          "required": true
+        }
+      },
+      "automatable_steps": ["Step that could be automated"],
+      "manual_steps": ["Step that still needs human judgment"],
       "evidence": {
         "type": "transcript",
         "session_id": "filename.jsonl",

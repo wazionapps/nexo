@@ -23,6 +23,10 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parents[2])))
+if str(NEXO_CODE) not in sys.path:
+    sys.path.insert(0, str(NEXO_CODE))
+
 DEEP_SLEEP_DIR = NEXO_HOME / "operations" / "deep-sleep"
 NEXO_DB = NEXO_HOME / "data" / "nexo.db"
 COGNITIVE_DB = NEXO_HOME / "data" / "cognitive.db"
@@ -236,62 +240,60 @@ def calibrate_trust_score(synthesis: dict, target_date: str) -> dict:
 
 
 def create_skill(skill_data: dict) -> dict:
-    """Create a skill in nexo.db from Deep Sleep extraction."""
-    if not NEXO_DB.exists():
-        return {"success": False, "error": "nexo.db not found"}
+    """Create a personal Skill v2 definition and sync it into SQLite."""
     try:
-        import hashlib
+        from db import materialize_personal_skill_definition
+
         skill_id = skill_data.get("id", "")
         if not skill_id:
             skill_id = "SK-DS-" + hashlib.md5(
                 skill_data.get("name", "").encode()
             ).hexdigest()[:8].upper()
 
-        name = skill_data.get("name", "")
-        description = skill_data.get("description", "")
-        tags = json.dumps(skill_data.get("tags", []))
-        trigger_patterns = json.dumps(skill_data.get("trigger_patterns", []))
-        source_sessions = json.dumps(skill_data.get("source_sessions", []))
-        steps = skill_data.get("steps", [])
-        gotchas = skill_data.get("gotchas", [])
+        execution_level = skill_data.get("execution_level", "")
+        scriptable = bool(skill_data.get("scriptable"))
+        mode = skill_data.get("mode", "")
+        if not mode:
+            if scriptable and execution_level == "read-only":
+                mode = "hybrid"
+            else:
+                mode = "guide"
 
-        # Build file content for the skill .md file
-        steps_md = "\n".join(f"{i+1}. {s}" for i, s in enumerate(steps))
-        gotchas_md = "\n".join(f"- {g}" for g in gotchas) if gotchas else "None"
+        approval_required = bool(skill_data.get("approval_required", execution_level in {"local", "remote"}))
+        script_body = str(skill_data.get("script_body", "") or "")
+        executable_entry = str(skill_data.get("executable_entry", "") or "")
 
-        conn = sqlite3.connect(str(NEXO_DB))
-        # Check if skill already exists
-        existing = conn.execute("SELECT id FROM skills WHERE id = ?", (skill_id,)).fetchone()
-        if existing:
-            conn.close()
-            return {"success": False, "error": f"Skill {skill_id} already exists", "id": skill_id}
+        if execution_level in {"local", "remote"}:
+            # Deep Sleep can propose these, but must not auto-materialize them as executable.
+            mode = "guide"
+            approval_required = True
+            script_body = ""
+            executable_entry = ""
 
-        now = datetime.now().isoformat(timespec='seconds')
-        steps_json = json.dumps(steps) if isinstance(steps, list) else steps
-        gotchas_json = json.dumps(gotchas) if isinstance(gotchas, list) else gotchas
-
-        # Build markdown content from steps + gotchas
-        content_lines = [f"# {name}", "", description, "", "## Steps"]
-        for i, s in enumerate(steps if isinstance(steps, list) else json.loads(steps_json), 1):
-            content_lines.append(f"{i}. {s}")
-        gotchas_list = gotchas if isinstance(gotchas, list) else json.loads(gotchas_json)
-        if gotchas_list:
-            content_lines.extend(["", "## Gotchas"])
-            for g in gotchas_list:
-                content_lines.append(f"- {g}")
-        content = "\n".join(content_lines)
-
-        conn.execute(
-            """INSERT INTO skills
-               (id, name, description, level, trust_score, tags, trigger_patterns,
-                source_sessions, linked_learnings, content, steps, gotchas, created_at, updated_at)
-               VALUES (?, ?, ?, 'draft', 50, ?, ?, ?, '[]', ?, ?, ?, ?, ?)""",
-            (skill_id, name, description, tags, trigger_patterns, source_sessions,
-             content, steps_json, gotchas_json, now, now),
+        result = materialize_personal_skill_definition(
+            {
+                "id": skill_id,
+                "name": skill_data.get("name", ""),
+                "description": skill_data.get("description", ""),
+                "level": skill_data.get("level", "draft"),
+                "mode": mode,
+                "execution_level": execution_level if mode != "guide" else "none",
+                "approval_required": approval_required,
+                "tags": skill_data.get("tags", []),
+                "trigger_patterns": skill_data.get("trigger_patterns", []),
+                "source_sessions": skill_data.get("source_sessions", []),
+                "steps": skill_data.get("steps", []),
+                "gotchas": skill_data.get("gotchas", []),
+                "params_schema": skill_data.get("params_schema", skill_data.get("candidate_params", {})),
+                "command_template": skill_data.get("command_template", {}),
+                "executable_entry": executable_entry,
+                "script_body": script_body,
+                "content": skill_data.get("content", ""),
+            }
         )
-        conn.commit()
-        conn.close()
-        return {"success": True, "id": skill_id, "name": name}
+        if "error" in result:
+            return {"success": False, "error": result["error"], "id": skill_id}
+        return {"success": True, "id": result["id"], "name": result.get("name", "")}
     except Exception as e:
         return {"success": False, "error": str(e)}
 
@@ -702,6 +704,13 @@ def main():
             else:
                 stats["errors"] += 1
                 print(f"  Skill error: {result.get('error', 'unknown')}", file=sys.stderr)
+
+    evolution_candidates = synthesis.get("skill_evolution_candidates", [])
+    if evolution_candidates:
+        evolution_file = DEEP_SLEEP_DIR / f"{target_date}-skill-evolution-candidates.json"
+        with open(evolution_file, "w") as f:
+            json.dump(evolution_candidates, f, indent=2, ensure_ascii=False)
+        print(f"  Skill evolution candidates: {evolution_file}")
 
     # Create followups for abandoned projects
     abandoned_results = create_abandoned_followups(synthesis)

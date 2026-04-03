@@ -555,6 +555,14 @@ nexo scripts run my-script     # Run a script with injected NEXO env
 nexo scripts doctor            # Validate all personal scripts
 nexo scripts call nexo_learning_search --input '{"query":"cron"}' # Call any MCP tool
 
+# Skills v2
+nexo skills sync               # Sync filesystem skill definitions into SQLite
+nexo skills list               # List published/stable skills
+nexo skills get SK-...         # Inspect a skill definition
+nexo skills apply SK-... --dry-run --json  # Resolve guide/execute/hybrid without running it
+nexo skills approve SK-... --execution-level local --approved-by Francisco
+nexo skills evolution          # Show text→script and improvement candidates
+
 # Unified Doctor
 nexo doctor                    # Quick boot diagnostics
 nexo doctor --tier all         # Full system check (boot + runtime + deep)
@@ -563,6 +571,8 @@ nexo doctor --fix              # Apply deterministic repairs
 ```
 
 Personal scripts live in `NEXO_HOME/scripts/` with inline metadata. See `docs/writing-scripts.md` for details.
+
+Skills v2 combine procedural guides with optional executable scripts. Personal skills live in `NEXO_HOME/skills/`, packaged core skills live in `NEXO_CODE/skills/` during development and `NEXO_HOME/skills-core/` in installed environments, and staged runtime copies live in `NEXO_HOME/skills-runtime/`. See `docs/skills-v2.md` for the full model.
 
 The Doctor system reads existing health artifacts (immune, watchdog, self-audit) without triggering repairs in default mode.
 

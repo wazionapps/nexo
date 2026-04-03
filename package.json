@@ -58,6 +58,7 @@
     "bin/nexo.js",
     "bin/postinstall.js",
     "src/",
+    "community/",
     "!src/**/__pycache__",
     "!src/**/*.pyc",
     "!src/**/*.pyo",

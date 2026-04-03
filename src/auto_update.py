@@ -853,9 +853,9 @@ def auto_update_check() -> dict:
     except Exception as e:
         _log(f"scripts backfill error: {e}")
 
-    # Backfill cli.py and script_registry.py for existing installs
+    # Backfill runtime CLI modules for existing installs
     try:
-        for fname in ("cli.py", "script_registry.py"):
+        for fname in ("cli.py", "script_registry.py", "skills_runtime.py"):
             src_file = SRC_DIR / fname
             dest_file = NEXO_HOME / fname
             if src_file.is_file() and (not dest_file.exists() or src_file.stat().st_mtime > dest_file.stat().st_mtime):
@@ -894,6 +894,31 @@ def auto_update_check() -> dict:
     except Exception as e:
         _log(f"Doctor backfill error: {e}")
 
+    # Backfill packaged core skills to a dedicated directory.
+    try:
+        skills_src = SRC_DIR / "skills"
+        skills_dest = NEXO_HOME / "skills-core"
+        if skills_src.is_dir():
+            import shutil
+            if not skills_dest.is_dir():
+                shutil.copytree(str(skills_src), str(skills_dest), ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+                _log("Backfilled skills-core")
+            else:
+                for root, dirs, files in os.walk(str(skills_src)):
+                    dirs[:] = [d for d in dirs if d != "__pycache__"]
+                    rel = os.path.relpath(root, str(skills_src))
+                    dest_dir = skills_dest / rel
+                    dest_dir.mkdir(parents=True, exist_ok=True)
+                    for f in files:
+                        if f.endswith(".pyc"):
+                            continue
+                        src_f = Path(root) / f
+                        dst_f = dest_dir / f
+                        if not dst_f.exists() or src_f.stat().st_mtime > dst_f.stat().st_mtime:
+                            shutil.copy2(str(src_f), str(dst_f))
+    except Exception as e:
+        _log(f"Skills backfill error: {e}")
+
     # Backfill MCP doctor plugin so existing installs expose nexo_doctor.
     try:
         plugin_src = SRC_DIR / "plugins" / "doctor.py"
@@ -906,12 +931,12 @@ def auto_update_check() -> dict:
     except Exception as e:
         _log(f"Doctor plugin backfill error: {e}")
 
-    # Backfill script templates for existing installs
+    # Backfill script/skill templates for existing installs
     try:
         templates_src = REPO_DIR / "templates"
         templates_dest = NEXO_HOME / "templates"
         templates_dest.mkdir(parents=True, exist_ok=True)
-        for fname in ("script-template.py", "nexo_helper.py"):
+        for fname in ("script-template.py", "nexo_helper.py", "skill-template.md", "skill-script-template.py"):
             src_file = templates_src / fname
             dest_file = templates_dest / fname
             if src_file.is_file() and (not dest_file.exists() or src_file.stat().st_mtime > dest_file.stat().st_mtime):

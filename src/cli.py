@@ -3,9 +3,16 @@
 
 Entry points:
   nexo scripts list [--all] [--json]
-  nexo scripts run NAME [-- args...]
-  nexo scripts doctor [NAME] [--json]
+  nexo scripts run NAME_OR_PATH [-- args...]
+  nexo scripts doctor [NAME_OR_PATH] [--json]
   nexo scripts call TOOL --input JSON [--json-output]
+  nexo skills list [--level ...] [--source-kind ...] [--json]
+  nexo skills get ID [--json]
+  nexo skills apply ID [--params JSON] [--mode ...] [--dry-run] [--json]
+  nexo skills sync [--json]
+  nexo skills approve ID [--execution-level ...] [--approved-by ...] [--json]
+  nexo skills featured [--limit N] [--json]
+  nexo skills evolution [--json]
   nexo doctor [--tier boot|runtime|deep|all] [--json] [--fix]
 """
 from __future__ import annotations
@@ -47,9 +54,9 @@ def _scripts_list(args):
 
 
 def _scripts_run(args):
-    from script_registry import resolve_script, classify_runtime, load_core_script_names
+    from script_registry import resolve_script_reference
 
-    info = resolve_script(args.name)
+    info = resolve_script_reference(args.name)
     if not info:
         print(f"Script not found: {args.name}", file=sys.stderr)
         return 1
@@ -233,12 +240,14 @@ def _scripts_call(args):
 def _doctor(args):
     """Run unified doctor diagnostics."""
     try:
+        from db import init_db
         from doctor.orchestrator import run_doctor
         from doctor.formatters import format_report
     except ImportError:
         print("Doctor module not found. Ensure NEXO is properly installed.", file=sys.stderr)
         return 1
 
+    init_db()
     report = run_doctor(tier=args.tier, fix=args.fix)
     output = format_report(report, fmt="json" if args.json else "text")
     print(output)
@@ -247,6 +256,109 @@ def _doctor(args):
         return 2
     elif report.overall_status == "degraded":
         return 1
+    return 0
+
+
+def _skills_list(args):
+    from db import init_db, list_skills, sync_skill_directories
+
+    init_db()
+    sync_skill_directories()
+    skills = list_skills(level=args.level, tag=args.tag, source_kind=args.source_kind)
+    if args.json:
+        print(json.dumps(skills, indent=2, ensure_ascii=False))
+        return 0
+
+    if not skills:
+        print("No skills found.")
+        return 0
+
+    for skill in skills:
+        print(
+            f"[{skill['id']}] {skill['name']} "
+            f"({skill['level']}, {skill.get('mode', 'guide')}, {skill.get('source_kind', 'personal')}, "
+            f"trust={skill['trust_score']}, used={skill['use_count']}x)"
+        )
+    return 0
+
+
+def _skills_get(args):
+    from db import get_skill, init_db, sync_skill_directories
+
+    init_db()
+    sync_skill_directories()
+    skill = get_skill(args.id)
+    if not skill:
+        print(f"Skill not found: {args.id}", file=sys.stderr)
+        return 1
+    if args.json:
+        print(json.dumps(skill, indent=2, ensure_ascii=False))
+    else:
+        print(json.dumps(skill, indent=2, ensure_ascii=False))
+    return 0
+
+
+def _skills_apply(args):
+    from skills_runtime import apply_skill
+
+    try:
+        params = json.loads(args.params) if args.params else {}
+    except json.JSONDecodeError as e:
+        print(f"Invalid params JSON: {e}", file=sys.stderr)
+        return 1
+
+    result = apply_skill(args.id, params=params, mode=args.mode, dry_run=args.dry_run, context=args.context)
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    else:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    return 0 if result.get("ok") else 1
+
+
+def _skills_sync(args):
+    from skills_runtime import sync_skills
+
+    result = sync_skills()
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    else:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    return 0 if not result.get("issues") else 1
+
+
+def _skills_approve(args):
+    from skills_runtime import approve_skill_execution
+
+    result = approve_skill_execution(args.id, execution_level=args.execution_level, approved_by=args.approved_by)
+    if "error" in result:
+        print(result["error"], file=sys.stderr)
+        return 1
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    else:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    return 0
+
+
+def _skills_featured(args):
+    from skills_runtime import get_featured_skill_summaries
+
+    result = get_featured_skill_summaries(limit=args.limit)
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    else:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    return 0
+
+
+def _skills_evolution(args):
+    from skills_runtime import list_evolution_candidates
+
+    result = list_evolution_candidates()
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    else:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
     return 0
 
 
@@ -286,6 +398,44 @@ def main():
     doctor_parser.add_argument("--json", action="store_true", help="JSON output")
     doctor_parser.add_argument("--fix", action="store_true", help="Apply deterministic fixes")
 
+    # -- skills --
+    skills_parser = sub.add_parser("skills", help="Skills v2 runtime")
+    skills_sub = skills_parser.add_subparsers(dest="skills_command")
+
+    skills_list_p = skills_sub.add_parser("list", help="List skills")
+    skills_list_p.add_argument("--level", default="", help="Filter by level")
+    skills_list_p.add_argument("--tag", default="", help="Filter by tag")
+    skills_list_p.add_argument("--source-kind", default="", help="Filter by source kind")
+    skills_list_p.add_argument("--json", action="store_true", help="JSON output")
+
+    skills_get_p = skills_sub.add_parser("get", help="Get skill")
+    skills_get_p.add_argument("id", help="Skill ID")
+    skills_get_p.add_argument("--json", action="store_true", help="JSON output")
+
+    skills_apply_p = skills_sub.add_parser("apply", help="Apply a skill")
+    skills_apply_p.add_argument("id", help="Skill ID")
+    skills_apply_p.add_argument("--params", default="{}", help="JSON parameters")
+    skills_apply_p.add_argument("--mode", default="auto", choices=["auto", "guide", "execute", "hybrid"])
+    skills_apply_p.add_argument("--dry-run", action="store_true", help="Render without executing")
+    skills_apply_p.add_argument("--context", default="", help="Usage context for feedback loop")
+    skills_apply_p.add_argument("--json", action="store_true", help="JSON output")
+
+    skills_sync_p = skills_sub.add_parser("sync", help="Sync filesystem skills")
+    skills_sync_p.add_argument("--json", action="store_true", help="JSON output")
+
+    skills_approve_p = skills_sub.add_parser("approve", help="Approve an executable skill")
+    skills_approve_p.add_argument("id", help="Skill ID")
+    skills_approve_p.add_argument("--execution-level", default="", choices=["", "read-only", "local", "remote"])
+    skills_approve_p.add_argument("--approved-by", default="", help="Approver name")
+    skills_approve_p.add_argument("--json", action="store_true", help="JSON output")
+
+    skills_featured_p = skills_sub.add_parser("featured", help="Featured startup skills")
+    skills_featured_p.add_argument("--limit", type=int, default=5)
+    skills_featured_p.add_argument("--json", action="store_true", help="JSON output")
+
+    skills_evolution_p = skills_sub.add_parser("evolution", help="Evolution candidates")
+    skills_evolution_p.add_argument("--json", action="store_true", help="JSON output")
+
     args = parser.parse_args()
 
     if args.command == "scripts":
@@ -302,6 +452,24 @@ def main():
             return 0
     elif args.command == "doctor":
         return _doctor(args)
+    elif args.command == "skills":
+        if args.skills_command == "list":
+            return _skills_list(args)
+        elif args.skills_command == "get":
+            return _skills_get(args)
+        elif args.skills_command == "apply":
+            return _skills_apply(args)
+        elif args.skills_command == "sync":
+            return _skills_sync(args)
+        elif args.skills_command == "approve":
+            return _skills_approve(args)
+        elif args.skills_command == "featured":
+            return _skills_featured(args)
+        elif args.skills_command == "evolution":
+            return _skills_evolution(args)
+        else:
+            skills_parser.print_help()
+            return 0
     else:
         parser.print_help()
         return 0

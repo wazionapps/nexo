@@ -99,4 +99,9 @@ from db._skills import (
     update_skill, delete_skill,
     record_usage as record_skill_usage,
     match_skills, merge_skills, get_skill_stats, decay_unused_skills,
+    get_featured_skills, get_skill_execution_spec, resolve_skill_paths,
+    validate_skill_params, render_command_template, sync_skill_directories,
+    import_skill_from_directory, approve_skill, collect_scriptable_skill_candidates,
+    collect_skill_improvement_candidates, materialize_personal_skill_definition,
+    get_skill_health_report,
 )

@@ -202,6 +202,22 @@ def resolve_script(name: str) -> dict | None:
     return None
 
 
+def resolve_script_reference(ref: str) -> dict | None:
+    """Resolve a script by name or by direct filesystem path."""
+    direct = Path(ref)
+    if direct.is_file():
+        meta = parse_inline_metadata(direct)
+        return {
+            "name": meta.get("name", direct.stem),
+            "runtime": classify_runtime(direct, meta),
+            "description": meta.get("description", ""),
+            "path": str(direct),
+            "core": direct.name in load_core_script_names(),
+            "metadata": meta,
+        }
+    return resolve_script(ref)
+
+
 def doctor_script(path_or_name: str) -> dict:
     """Validate a single script. Returns dict with pass/warn/fail items."""
     # Resolve

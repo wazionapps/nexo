@@ -1,264 +1,224 @@
-"""Skills plugin — reusable procedures extracted from complex tasks.
+"""Skills plugin — reusable procedures, executable skills, and feedback loops."""
 
-Skills are procedural knowledge (step-by-step how-tos) vs learnings which are
-declarative (don't do X). Created automatically by Deep Sleep or manually.
-
-Pipeline: trace → draft → published, fully autonomous.
-Trust score with decay controls quality — no human approval gates.
-"""
+from __future__ import annotations
 
 import json
+
 from db import (
-    create_skill, get_skill, list_skills, search_skills,
-    update_skill, delete_skill,
-    record_skill_usage, match_skills, merge_skills, get_skill_stats,
+    create_skill,
+    delete_skill,
+    get_skill,
+    get_skill_stats,
+    list_skills,
+    match_skills,
+    merge_skills,
+    record_skill_usage,
+    search_skills,
+    update_skill,
+)
+from skills_runtime import (
+    apply_skill,
+    approve_skill_execution,
+    get_featured_skill_summaries,
+    list_evolution_candidates,
+    sync_skills,
 )
 
 
 def handle_skill_create(
     id: str,
     name: str,
-    description: str = '',
-    level: str = 'draft',
-    tags: str = '[]',
-    trigger_patterns: str = '[]',
-    source_sessions: str = '[]',
-    linked_learnings: str = '[]',
-    file_path: str = '',
+    description: str = "",
+    level: str = "draft",
+    tags: str = "[]",
+    trigger_patterns: str = "[]",
+    source_sessions: str = "[]",
+    linked_learnings: str = "[]",
+    file_path: str = "",
+    mode: str = "",
+    source_kind: str = "personal",
+    execution_level: str = "none",
+    approval_required: bool = False,
+    params_schema: str = "{}",
+    command_template: str = "{}",
+    executable_entry: str = "",
 ) -> str:
-    """Create a new skill (reusable procedure).
-
-    Skills are procedural knowledge — step-by-step instructions for complex tasks.
-    Created by Deep Sleep (auto-extraction) or manually during sessions.
-
-    Pipeline levels: trace → draft → published → archived.
-    Promotion is automatic: 2+ successful uses in distinct contexts → published.
-
-    Args:
-        id: Unique ID starting with 'SK-' (e.g., SK-DEPLOY-CHROME-EXT).
-        name: Human-readable name (e.g., 'Deploy Chrome Extension').
-        description: What this skill does (1-2 sentences).
-        level: Starting level — trace, draft (default), published, archived.
-        tags: JSON array of tags for discovery (e.g., '["chrome", "extension", "deploy"]').
-        trigger_patterns: JSON array of phrases that should trigger this skill
-                         (e.g., '["deploy extension", "publish chrome"]').
-        source_sessions: JSON array of diary IDs where this skill was observed.
-        linked_learnings: JSON array of learning IDs related to this skill.
-        file_path: Path to the .md file with full procedure (if stored as file).
-    """
-    if not id.startswith('SK-'):
+    if not id.startswith("SK-"):
         return "ERROR: Skill ID must start with 'SK-' (e.g., SK-DEPLOY-CHROME-EXT)"
-
-    existing = get_skill(id)
-    if existing:
+    if get_skill(id):
         return f"ERROR: Skill {id} already exists. Use nexo_skill_update to modify."
 
     result = create_skill(
-        skill_id=id, name=name, description=description, level=level,
-        tags=tags, trigger_patterns=trigger_patterns,
-        source_sessions=source_sessions, linked_learnings=linked_learnings,
+        skill_id=id,
+        name=name,
+        description=description,
+        level=level,
+        tags=tags,
+        trigger_patterns=trigger_patterns,
+        source_sessions=source_sessions,
+        linked_learnings=linked_learnings,
         file_path=file_path,
+        mode=mode,
+        source_kind=source_kind,
+        execution_level=execution_level,
+        approval_required=approval_required,
+        params_schema=params_schema,
+        command_template=command_template,
+        executable_entry=executable_entry,
     )
     if "error" in result:
         return f"ERROR: {result['error']}"
 
     return (
-        f"Skill {id} created ({level}, trust={result.get('trust_score', 50)}).\n"
+        f"Skill {id} created ({result['level']}, {result.get('mode', 'guide')}, trust={result.get('trust_score', 50)}).\n"
         f"  Name: {name}\n"
-        f"  Tags: {tags}\n"
-        f"  Triggers: {trigger_patterns}"
+        f"  Source: {result.get('source_kind', source_kind)}\n"
+        f"  Execution: {result.get('execution_level', execution_level)}"
     )
 
 
-def handle_skill_match(task: str, level: str = '') -> str:
-    """Find skills matching a task description. Call BEFORE starting multi-step tasks.
-
-    Searches by: FTS5 relevance, trigger pattern matching, tag keyword overlap.
-    Returns top-3 matches sorted by trust score.
-
-    Args:
-        task: Description of what you're about to do (e.g., 'deploy chrome extension to CWS').
-        level: Filter by level (optional). Default: draft + published.
-    """
+def handle_skill_match(task: str, level: str = "") -> str:
     matches = match_skills(task, level=level)
     if not matches:
         return f"No skills found for: '{task}'"
 
     lines = [f"SKILLS MATCHED ({len(matches)}) for '{task}':"]
-    for m in matches:
-        match_method = m.pop('_match', 'unknown')
-        fp = f" → {m['file_path']}" if m.get('file_path') else ""
+    for match in matches:
+        match_method = match.pop("_match", "unknown")
         lines.append(
-            f"  [{m['id']}] {m['name']} ({m['level']}, trust={m['trust_score']}, "
-            f"used={m['use_count']}x) via {match_method}{fp}\n"
-            f"    {m['description'][:120]}"
+            f"  [{match['id']}] {match['name']} ({match['level']}, {match.get('mode', 'guide')}, "
+            f"{match.get('source_kind', 'personal')}, trust={match['trust_score']}, used={match['use_count']}x) "
+            f"via {match_method}"
         )
-        try:
-            triggers = json.loads(m.get('trigger_patterns', '[]'))
-            if triggers:
-                lines.append(f"    Triggers: {', '.join(triggers[:5])}")
-        except (json.JSONDecodeError, TypeError):
-            pass
+        lines.append(f"    {match['description'][:140]}")
     return "\n".join(lines)
 
 
 def handle_skill_get(id: str) -> str:
-    """Get a skill's full details including usage history.
-
-    Args:
-        id: Skill ID (e.g., SK-DEPLOY-CHROME-EXT).
-    """
     skill = get_skill(id)
     if not skill:
         return f"ERROR: Skill {id} not found."
-
-    from db import get_db
-    conn = get_db()
-    recent_uses = conn.execute(
-        "SELECT * FROM skill_usage WHERE skill_id = ? ORDER BY created_at DESC LIMIT 5",
-        (id,),
-    ).fetchall()
 
     lines = [
         f"SKILL: {skill['id']}",
         f"  Name: {skill['name']}",
         f"  Description: {skill['description']}",
         f"  Level: {skill['level']}",
+        f"  Mode: {skill.get('mode', 'guide')}",
+        f"  Source: {skill.get('source_kind', 'personal')}",
         f"  Trust: {skill['trust_score']}",
-        f"  File: {skill['file_path'] or '(none)'}",
-        f"  Tags: {skill['tags']}",
+        f"  Execution level: {skill.get('execution_level', 'none')}",
+        f"  Approval required: {bool(skill.get('approval_required', 0))}",
+        f"  Approved at: {skill.get('approved_at') or 'no'}",
+        f"  Definition: {skill.get('definition_path') or '(none)'}",
+        f"  File: {skill.get('file_path') or '(none)'}",
+        f"  Params schema: {skill.get('params_schema', '{}')}",
         f"  Triggers: {skill['trigger_patterns']}",
-        f"  Source sessions: {skill['source_sessions']}",
-        f"  Linked learnings: {skill['linked_learnings']}",
         f"  Stats: {skill['use_count']} uses, {skill['success_count']} success, {skill['fail_count']} fail",
-        f"  Created: {skill['created_at']}",
-        f"  Last used: {skill['last_used_at'] or 'never'}",
     ]
-
-    if recent_uses:
-        lines.append("\n  RECENT USAGE:")
-        for u in recent_uses:
-            u = dict(u)
-            status = "✓" if u['success'] else "✗"
-            lines.append(f"    {status} {u['created_at']} — {u['context'][:60] or '(no context)'}")
-            if u.get('notes'):
-                lines.append(f"      Notes: {u['notes'][:80]}")
-
     return "\n".join(lines)
 
 
-def handle_skill_result(id: str, success: bool = True, context: str = '', notes: str = '') -> str:
-    """Record the result of using a skill. Auto-promotes/degrades based on trust rules.
-
-    Call this AFTER following a skill's procedure to record whether it worked.
-    - Success: trust +5. After 2+ successes in distinct contexts: draft → published.
-    - Failure: trust -10. If trust < 20: → archived.
-
-    Args:
-        id: Skill ID.
-        success: Whether the skill's procedure worked correctly.
-        context: What task you were doing (used for distinct-context promotion).
-        notes: Additional notes (especially useful for failures — what went wrong).
-    """
+def handle_skill_result(id: str, success: bool = True, context: str = "", notes: str = "") -> str:
     result = record_skill_usage(skill_id=id, success=success, context=context, notes=notes)
     if "error" in result:
         return f"ERROR: {result['error']}"
 
-    promotion = result.pop('_promotion', None)
-    status = "SUCCESS" if success else "FAILURE"
-    msg = f"Skill {id} usage recorded: {status} (trust={result['trust_score']})"
+    promotion = result.get("_promotion")
+    msg = f"Skill {id} usage recorded: {'SUCCESS' if success else 'FAILURE'} (trust={result['trust_score']})"
     if promotion:
         msg += f"\n  ⚡ PROMOTION: {promotion}"
     return msg
 
 
-def handle_skill_list(level: str = '', tag: str = '') -> str:
-    """List all skills, optionally filtered by level or tag.
-
-    Args:
-        level: Filter by level — trace, draft, published, archived.
-        tag: Filter by tag (e.g., 'chrome', 'deploy', 'shopify').
-    """
-    skills = list_skills(level=level, tag=tag)
+def handle_skill_list(level: str = "", tag: str = "", source_kind: str = "") -> str:
+    skills = list_skills(level=level, tag=tag, source_kind=source_kind)
     if not skills:
-        filters = []
-        if level: filters.append(f"level={level}")
-        if tag: filters.append(f"tag={tag}")
-        return f"No skills found{' (' + ', '.join(filters) + ')' if filters else ''}."
+        return "No skills found."
 
     lines = [f"SKILLS ({len(skills)}):"]
-    for s in skills:
-        fp = f" → {s['file_path']}" if s.get('file_path') else ""
-        used = f", last={s['last_used_at'][:10]}" if s.get('last_used_at') else ""
+    for skill in skills:
         lines.append(
-            f"  [{s['id']}] {s['name']} ({s['level']}, trust={s['trust_score']}, "
-            f"used={s['use_count']}x{used}){fp}"
+            f"  [{skill['id']}] {skill['name']} ({skill['level']}, {skill.get('mode', 'guide')}, "
+            f"{skill.get('source_kind', 'personal')}, trust={skill['trust_score']}, used={skill['use_count']}x)"
         )
     return "\n".join(lines)
 
 
-def handle_skill_merge(id1: str, id2: str, keep_id: str = '') -> str:
-    """Merge two similar skills into one. Combines tags, triggers, usage history.
-
-    The survivor keeps the higher trust score and all combined metadata.
-    The donor is deleted.
-
-    Args:
-        id1: First skill ID.
-        id2: Second skill ID.
-        keep_id: Which one to keep (default: higher trust score).
-    """
+def handle_skill_merge(id1: str, id2: str, keep_id: str = "") -> str:
     result = merge_skills(id1, id2, keep_id=keep_id)
     if "error" in result:
         return f"ERROR: {result['error']}"
-
-    merged_from = result.pop('_merged_from', '?')
     return (
-        f"Skills merged. Kept {result['id']}, deleted {merged_from}.\n"
-        f"  Trust: {result['trust_score']}, Uses: {result['use_count']}, "
-        f"Tags: {result['tags']}"
+        f"Skills merged. Kept {result['id']}, deleted {result['_merged_from']}.\n"
+        f"  Trust: {result['trust_score']}, Uses: {result['use_count']}"
     )
 
 
 def handle_skill_stats() -> str:
-    """Show aggregate skill statistics: total count, by level, avg trust, usage rates."""
     stats = get_skill_stats()
-    levels = stats.get('by_level', {})
-    lines = [
-        "SKILL STATS:",
-        f"  Total: {stats['total']}",
-        f"  By level: {', '.join(f'{k}={v}' for k, v in sorted(levels.items()))}",
-        f"  Avg trust: {stats['avg_trust']}",
-        f"  Total uses: {stats['total_uses']} (success rate: {stats['success_rate']}%)",
-        f"  Uses last 7d: {stats['uses_last_7d']}",
-    ]
-    return "\n".join(lines)
+    return (
+        "SKILL STATS:\n"
+        f"  Total: {stats['total']}\n"
+        f"  By level: {', '.join(f'{k}={v}' for k, v in sorted(stats['by_level'].items()))}\n"
+        f"  Avg trust: {stats['avg_trust']}\n"
+        f"  Total uses: {stats['total_uses']} (success rate: {stats['success_rate']}%)\n"
+        f"  Uses last 7d: {stats['uses_last_7d']}"
+    )
 
 
-# Plugin registration — TOOLS array consumed by plugin_loader.py
+def handle_skill_apply(id: str, params: str = "{}", mode: str = "auto", dry_run: bool = False, context: str = "") -> str:
+    return json.dumps(apply_skill(id, params=params, mode=mode, dry_run=dry_run, context=context), ensure_ascii=False)
+
+
+def handle_skill_approve(id: str, execution_level: str = "", approved_by: str = "") -> str:
+    result = approve_skill_execution(id, execution_level=execution_level, approved_by=approved_by)
+    if "error" in result:
+        return f"ERROR: {result['error']}"
+    return (
+        f"Skill {id} approved.\n"
+        f"  Execution level: {result.get('execution_level', 'none')}\n"
+        f"  Approved at: {result.get('approved_at', '')}\n"
+        f"  Approved by: {result.get('approved_by', '')}"
+    )
+
+
+def handle_skill_sync() -> str:
+    result = sync_skills()
+    return json.dumps(result, ensure_ascii=False)
+
+
+def handle_skill_featured(limit: int = 5) -> str:
+    return json.dumps(get_featured_skill_summaries(limit=limit), ensure_ascii=False)
+
+
+def handle_skill_evolution_candidates() -> str:
+    return json.dumps(list_evolution_candidates(), ensure_ascii=False)
+
+
 TOOLS = [
     (handle_skill_create, "nexo_skill_create",
-     "Create a new skill (reusable procedure). Skills are step-by-step instructions for complex tasks. "
-     "Auto-promoted from draft→published after 2+ successful uses. ID must start with 'SK-'."),
-
+     "Create a new skill with guide/execute/hybrid metadata, triggers, params schema, and execution level."),
     (handle_skill_match, "nexo_skill_match",
-     "Find skills matching a task description. Call BEFORE starting multi-step tasks "
-     "to check if a reusable procedure exists. Returns top-3 matches by trust score."),
-
+     "Find skills matching a task description. Call before multi-step tasks."),
     (handle_skill_get, "nexo_skill_get",
-     "Get a skill's full details including procedure, tags, triggers, and usage history."),
-
+     "Get a skill's full details, including execution metadata and approval state."),
     (handle_skill_result, "nexo_skill_result",
-     "Record the result of using a skill (success/failure). Auto-promotes draft→published "
-     "after 2+ successes, auto-archives if trust drops below 20."),
-
+     "Record the result of using a skill. Updates trust and promotions."),
     (handle_skill_list, "nexo_skill_list",
-     "List all skills, optionally filtered by level (trace/draft/published/archived) or tag."),
-
+     "List skills, optionally filtered by level, tag, or source kind."),
     (handle_skill_merge, "nexo_skill_merge",
-     "Merge two similar skills into one. Combines tags, triggers, and usage history. "
-     "Survivor keeps the higher trust score."),
-
+     "Merge two similar skills into one."),
     (handle_skill_stats, "nexo_skill_stats",
-     "Show aggregate skill statistics: count by level, average trust, usage rates."),
+     "Show aggregate skill statistics."),
+    (handle_skill_apply, "nexo_skill_apply",
+     "Apply a skill in guide, execute, or hybrid mode. Execution goes through the stable nexo scripts runtime."),
+    (handle_skill_approve, "nexo_skill_approve",
+     "Approve a local/remote executable skill so it can run."),
+    (handle_skill_sync, "nexo_skill_sync",
+     "Sync filesystem skill definitions from personal/core/community directories into SQLite."),
+    (handle_skill_featured, "nexo_skill_featured",
+     "Return featured published/stable skills for startup discovery."),
+    (handle_skill_evolution_candidates, "nexo_skill_evolution_candidates",
+     "Return candidates for skill improvement or text-to-script evolution."),
 ]
