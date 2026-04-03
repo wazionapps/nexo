@@ -5,6 +5,7 @@ Personal scripts use CLI as stable interface, never direct DB access.
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import platform
@@ -44,7 +45,20 @@ _FORBIDDEN_PATTERNS = [
     re.compile(r"\bfrom\s+cognitive\s+import\b"),
 ]
 
-METADATA_KEYS = {"name", "description", "runtime", "timeout", "requires", "tools", "hidden"}
+METADATA_KEYS = {
+    "name",
+    "description",
+    "runtime",
+    "timeout",
+    "requires",
+    "tools",
+    "hidden",
+    "category",
+    "cron_id",
+    "schedule",
+    "interval_seconds",
+    "schedule_required",
+}
 SUPPORTED_RUNTIMES = {"python", "shell", "node", "php", "unknown"}
 
 
@@ -173,48 +187,186 @@ def _is_script_candidate(path: Path, metadata: dict | None = None) -> bool:
         return False
 
 
+def _truthy(value: str | bool | None) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _safe_slug(value: str) -> str:
+    chars: list[str] = []
+    for ch in value.lower():
+        if ch.isalnum():
+            chars.append(ch)
+        elif ch in {"-", "_", " "}:
+            chars.append("-")
+    slug = "".join(chars).strip("-")
+    return slug or "script"
+
+
+def get_declared_schedule(metadata: dict, default_name: str = "") -> dict:
+    """Parse desired schedule metadata from inline script metadata."""
+    cron_id = metadata.get("cron_id", "").strip() or _safe_slug(default_name or metadata.get("name", "script"))
+    interval_raw = metadata.get("interval_seconds", "").strip()
+    schedule_raw = metadata.get("schedule", "").strip()
+    required = _truthy(metadata.get("schedule_required")) or bool(interval_raw or schedule_raw)
+
+    if interval_raw and schedule_raw:
+        return {
+            "required": required,
+            "valid": False,
+            "error": "Both schedule and interval_seconds are set; choose one.",
+            "cron_id": cron_id,
+        }
+
+    if interval_raw:
+        try:
+            interval = int(interval_raw)
+        except ValueError:
+            return {
+                "required": required,
+                "valid": False,
+                "error": f"Invalid interval_seconds: {interval_raw}",
+                "cron_id": cron_id,
+            }
+        if interval <= 0:
+            return {
+                "required": required,
+                "valid": False,
+                "error": f"interval_seconds must be > 0 (got {interval_raw})",
+                "cron_id": cron_id,
+            }
+        return {
+            "required": required,
+            "valid": True,
+            "cron_id": cron_id,
+            "schedule_type": "interval",
+            "schedule_value": str(interval),
+            "schedule_label": f"every {interval}s",
+            "schedule": "",
+            "interval_seconds": interval,
+        }
+
+    if schedule_raw:
+        parts = schedule_raw.split(":")
+        if len(parts) not in {2, 3}:
+            return {
+                "required": required,
+                "valid": False,
+                "error": f"Invalid schedule format: {schedule_raw}",
+                "cron_id": cron_id,
+            }
+        try:
+            hour = int(parts[0])
+            minute = int(parts[1])
+            weekday = int(parts[2]) if len(parts) == 3 else None
+        except ValueError:
+            return {
+                "required": required,
+                "valid": False,
+                "error": f"Invalid schedule format: {schedule_raw}",
+                "cron_id": cron_id,
+            }
+        if not (0 <= hour <= 23 and 0 <= minute <= 59):
+            return {
+                "required": required,
+                "valid": False,
+                "error": f"Invalid schedule time: {schedule_raw}",
+                "cron_id": cron_id,
+            }
+        if weekday is not None and not (0 <= weekday <= 6):
+            return {
+                "required": required,
+                "valid": False,
+                "error": f"Invalid schedule weekday: {schedule_raw}",
+                "cron_id": cron_id,
+            }
+        label = f"{hour:02d}:{minute:02d}"
+        if weekday is not None:
+            label += f" weekday={weekday}"
+        else:
+            label += " daily"
+        return {
+            "required": required,
+            "valid": True,
+            "cron_id": cron_id,
+            "schedule_type": "calendar",
+            "schedule_value": schedule_raw,
+            "schedule_label": label,
+            "schedule": schedule_raw,
+            "interval_seconds": 0,
+        }
+
+    return {
+        "required": required,
+        "valid": not required,
+        "error": "" if not required else "schedule_required=true but no schedule metadata was provided.",
+        "cron_id": cron_id,
+    }
+
+
+def _script_entry(path: Path, meta: dict, *, is_core: bool, classification: str, reason: str = "") -> dict:
+    runtime = classify_runtime(path, meta)
+    name = meta.get("name", path.stem)
+    return {
+        "name": name,
+        "runtime": runtime,
+        "description": meta.get("description", ""),
+        "path": str(path),
+        "core": is_core,
+        "metadata": meta,
+        "classification": classification,
+        "reason": reason,
+        "declared_schedule": get_declared_schedule(meta, name),
+    }
+
+
+def classify_scripts_dir() -> dict:
+    """Classify every file in NEXO_HOME/scripts into personal/core/ignored/non-script buckets."""
+    scripts_dir = get_scripts_dir()
+    if not scripts_dir.is_dir():
+        return {"scripts_dir": str(scripts_dir), "entries": [], "summary": {}}
+
+    core_names = load_core_script_names()
+    entries: list[dict] = []
+    for f in sorted(scripts_dir.iterdir()):
+        if not f.is_file():
+            continue
+
+        meta = parse_inline_metadata(f)
+        if _is_ignored(f):
+            entries.append(_script_entry(f, meta, is_core=False, classification="ignored", reason="internal or hidden artifact"))
+            continue
+
+        if not _is_script_candidate(f, meta):
+            entries.append(_script_entry(f, meta, is_core=False, classification="non-script", reason="not an executable/script candidate"))
+            continue
+
+        is_core = f.name in core_names
+        classification = "core" if is_core else "personal"
+        entries.append(_script_entry(f, meta, is_core=is_core, classification=classification))
+
+    summary: dict[str, int] = {}
+    for entry in entries:
+        summary[entry["classification"]] = summary.get(entry["classification"], 0) + 1
+    return {"scripts_dir": str(scripts_dir), "entries": entries, "summary": summary}
+
+
 def list_scripts(include_core: bool = False) -> list[dict]:
     """List scripts in NEXO_HOME/scripts/.
 
     By default only personal scripts. With include_core=True, also shows core/cron scripts.
     """
-    scripts_dir = get_scripts_dir()
-    if not scripts_dir.is_dir():
-        return []
-
-    core_names = load_core_script_names()
     results = []
-
-    for f in sorted(scripts_dir.iterdir()):
-        if not f.is_file():
+    for entry in classify_scripts_dir()["entries"]:
+        if entry["classification"] not in {"personal", "core"}:
             continue
-        if _is_ignored(f):
+        if entry["core"] and not include_core:
             continue
-
-        meta = parse_inline_metadata(f)
-        if not _is_script_candidate(f, meta):
-            continue
-
-        is_core = f.name in core_names
-        if is_core and not include_core:
-            continue
-
-        runtime = classify_runtime(f, meta)
-        name = meta.get("name", f.stem)
-        hidden = meta.get("hidden", "").lower() in ("true", "1", "yes")
-
+        hidden = _truthy(entry.get("metadata", {}).get("hidden"))
         if hidden and not include_core:
             continue
-
-        results.append({
-            "name": name,
-            "runtime": runtime,
-            "description": meta.get("description", ""),
-            "path": str(f),
-            "core": is_core,
-            "metadata": meta,
-        })
-
+        results.append(entry)
     return results
 
 
@@ -365,9 +517,134 @@ def sync_personal_scripts(prune_missing: bool = True) -> dict:
     from db import init_db, sync_personal_scripts_registry
 
     init_db()
-    scripts = list_scripts(include_core=False)
+    classification = classify_scripts_dir()
+    scripts = [entry for entry in classification["entries"] if entry["classification"] == "personal"]
     schedules = discover_personal_schedules()
-    return sync_personal_scripts_registry(scripts, schedules, prune_missing=prune_missing)
+    result = sync_personal_scripts_registry(scripts, schedules, prune_missing=prune_missing)
+    result["classification"] = classification["summary"]
+    missing_declared = []
+    schedules_by_path: dict[str, list[dict]] = {}
+    for schedule in schedules:
+        schedules_by_path.setdefault(schedule["script_path"], []).append(schedule)
+    for script in scripts:
+        declared = script.get("declared_schedule", {})
+        if not declared.get("required"):
+            continue
+        attached = schedules_by_path.get(script["path"], [])
+        if not attached:
+            missing_declared.append({
+                "name": script["name"],
+                "path": script["path"],
+                "declared_schedule": declared,
+            })
+    result["missing_declared_schedules"] = missing_declared
+    return result
+
+
+def _schedule_matches(existing: dict, declared: dict) -> bool:
+    if not existing or not declared.get("valid"):
+        return False
+    if existing.get("cron_id") != declared.get("cron_id"):
+        return False
+    if existing.get("schedule_type") != declared.get("schedule_type"):
+        return False
+    if str(existing.get("schedule_value", "")) != str(declared.get("schedule_value", "")):
+        return False
+    return True
+
+
+def ensure_personal_schedules(*, dry_run: bool = False) -> dict:
+    """Create or repair personal schedules declared in inline script metadata."""
+    classification = classify_scripts_dir()
+    scripts = [entry for entry in classification["entries"] if entry["classification"] == "personal"]
+    discovered = discover_personal_schedules()
+    schedules_by_path: dict[str, list[dict]] = {}
+    for schedule in discovered:
+        schedules_by_path.setdefault(schedule["script_path"], []).append(schedule)
+
+    report = {
+        "ok": True,
+        "dry_run": dry_run,
+        "created": [],
+        "repaired": [],
+        "already_present": [],
+        "skipped": [],
+        "invalid": [],
+    }
+
+    for script in scripts:
+        declared = script.get("declared_schedule", {})
+        if not declared.get("required"):
+            report["skipped"].append({
+                "name": script["name"],
+                "reason": "no declared schedule",
+            })
+            continue
+        if not declared.get("valid"):
+            report["invalid"].append({
+                "name": script["name"],
+                "path": script["path"],
+                "error": declared.get("error", "invalid schedule metadata"),
+            })
+            continue
+
+        existing = schedules_by_path.get(script["path"], [])
+        matching = next((item for item in existing if _schedule_matches(item, declared)), None)
+        if matching:
+            report["already_present"].append({
+                "name": script["name"],
+                "cron_id": matching["cron_id"],
+                "schedule_label": matching.get("schedule_label", ""),
+            })
+            continue
+
+        if dry_run:
+            report["repaired" if existing else "created"].append({
+                "name": script["name"],
+                "cron_id": declared["cron_id"],
+                "schedule_label": declared["schedule_label"],
+                "dry_run": True,
+            })
+            continue
+
+        if existing:
+            unschedule_personal_script(script["name"])
+
+        from plugins.schedule import handle_schedule_add
+
+        response = handle_schedule_add(
+            cron_id=declared["cron_id"],
+            script=script["path"],
+            schedule=declared.get("schedule", ""),
+            interval_seconds=declared.get("interval_seconds", 0),
+            description=script.get("description", ""),
+            script_type=script.get("runtime", "auto"),
+        )
+        target = report["repaired" if existing else "created"]
+        target.append({
+            "name": script["name"],
+            "cron_id": declared["cron_id"],
+            "schedule_label": declared["schedule_label"],
+            "result": response,
+        })
+
+    sync_result = sync_personal_scripts()
+    report["sync"] = sync_result
+    report["classification"] = classification["summary"]
+    return report
+
+
+def reconcile_personal_scripts(*, dry_run: bool = False) -> dict:
+    """Full lifecycle reconciliation: classify, sync registry, ensure declared schedules."""
+    sync_result = sync_personal_scripts()
+    ensure_result = ensure_personal_schedules(dry_run=dry_run)
+    return {
+        "ok": True,
+        "dry_run": dry_run,
+        "sync": sync_result,
+        "ensure_schedules": ensure_result,
+        "classification": ensure_result.get("classification", sync_result.get("classification", {})),
+    }
 
 
 def _template_path(filename: str) -> Path | None:
@@ -455,6 +732,82 @@ def create_script(name: str, *, description: str = "", runtime: str = "python", 
     }
 
 
+def unschedule_personal_script(name_or_path: str) -> dict:
+    """Remove all personal schedules attached to a script and prune registry entries."""
+    from db import (
+        init_db,
+        get_personal_script,
+        delete_personal_script_schedule,
+    )
+
+    init_db()
+    sync_personal_scripts()
+    script = get_personal_script(name_or_path)
+    if not script:
+        return {"ok": False, "error": f"Personal script not found: {name_or_path}"}
+
+    removed: list[dict] = []
+    for schedule in script.get("schedules", []):
+        plist_path = schedule.get("plist_path", "")
+        if plist_path:
+            plist = Path(plist_path)
+            if platform.system() == "Darwin" and plist.is_file():
+                subprocess.run(
+                    ["launchctl", "bootout", f"gui/{os.getuid()}", str(plist)],
+                    capture_output=True,
+                )
+                with contextlib.suppress(FileNotFoundError):
+                    plist.unlink()
+        delete_personal_script_schedule(schedule["cron_id"])
+        removed.append({
+            "cron_id": schedule["cron_id"],
+            "plist_path": plist_path,
+        })
+
+    sync_result = sync_personal_scripts()
+    return {
+        "ok": True,
+        "script": script["name"],
+        "removed_schedules": removed,
+        "sync": sync_result,
+    }
+
+
+def remove_personal_script(name_or_path: str, *, keep_file: bool = False) -> dict:
+    """Remove a personal script from the runtime and registry."""
+    from db import init_db, get_personal_script, delete_personal_script
+
+    init_db()
+    sync_personal_scripts()
+    script = get_personal_script(name_or_path)
+    if not script:
+        resolved = resolve_script(name_or_path)
+        if not resolved or resolved.get("core"):
+            return {"ok": False, "error": f"Personal script not found: {name_or_path}"}
+        script = resolved
+
+    if script.get("core"):
+        return {"ok": False, "error": "Refusing to remove a core script via personal scripts lifecycle."}
+
+    unschedule_result = unschedule_personal_script(script["path"])
+    deleted_file = False
+    path = Path(script["path"])
+    if not keep_file and path.is_file() and _within_scripts_dir(path):
+        path.unlink()
+        deleted_file = True
+    delete_personal_script(script["path"])
+    sync_result = sync_personal_scripts()
+    return {
+        "ok": True,
+        "script": script["name"],
+        "path": script["path"],
+        "deleted_file": deleted_file,
+        "keep_file": keep_file,
+        "unschedule": unschedule_result,
+        "sync": sync_result,
+    }
+
+
 def doctor_script(path_or_name: str) -> dict:
     """Validate a single script. Returns dict with pass/warn/fail items."""
     # Resolve
@@ -516,6 +869,13 @@ def doctor_script(path_or_name: str) -> dict:
             items.append({"level": "pass", "msg": f"Timeout: {timeout_str}s"})
         except ValueError:
             items.append({"level": "fail", "msg": f"Invalid timeout value: {timeout_str}"})
+
+    declared = get_declared_schedule(meta, name)
+    if declared.get("required"):
+        if declared.get("valid"):
+            items.append({"level": "pass", "msg": f"Declared schedule: {declared['schedule_label']}"})
+        else:
+            items.append({"level": "fail", "msg": declared.get("error", "Invalid declared schedule metadata")})
 
     if runtime == "node" and not shutil.which("node"):
         items.append({"level": "fail", "msg": "Node runtime not found in PATH"})

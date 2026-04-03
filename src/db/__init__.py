@@ -98,6 +98,8 @@ from db._personal_scripts import (
     upsert_personal_script, list_personal_scripts, get_personal_script,
     delete_missing_personal_scripts, register_personal_script_schedule,
     delete_missing_personal_schedules, list_personal_script_schedules,
+    get_personal_script_schedule, delete_personal_script_schedule,
+    delete_personal_script,
     record_personal_script_run, sync_personal_scripts_registry,
     get_personal_script_health_report,
 )

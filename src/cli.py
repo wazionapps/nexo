@@ -5,8 +5,13 @@ Entry points:
   nexo chat [PATH]
   nexo scripts list [--all] [--json]
   nexo scripts create NAME [--runtime python|shell] [--description TEXT]
+  nexo scripts classify [--json]
   nexo scripts sync [--json]
+  nexo scripts reconcile [--dry-run] [--json]
+  nexo scripts ensure-schedules [--dry-run] [--json]
   nexo scripts schedules [--json]
+  nexo scripts unschedule NAME [--json]
+  nexo scripts remove NAME [--keep-file] [--json]
   nexo scripts run NAME_OR_PATH [-- args...]
   nexo scripts doctor [NAME_OR_PATH] [--json]
   nexo scripts call TOOL --input JSON [--json-output]
@@ -106,6 +111,64 @@ def _scripts_sync(args):
     return 0
 
 
+def _scripts_classify(args):
+    from script_registry import classify_scripts_dir
+
+    report = classify_scripts_dir()
+    if args.json:
+        print(json.dumps(report, indent=2, ensure_ascii=False))
+        return 0
+
+    entries = report.get("entries", [])
+    if not entries:
+        print("No scripts directory found:", report.get("scripts_dir", NEXO_HOME / "scripts"))
+        return 0
+
+    path_w = max(len(Path(entry["path"]).name) for entry in entries)
+    for entry in entries:
+        reason = f" — {entry['reason']}" if entry.get("reason") else ""
+        print(f"  {Path(entry['path']).name:<{path_w}}  {entry['classification']}{reason}")
+    return 0
+
+
+def _scripts_reconcile(args):
+    from script_registry import reconcile_personal_scripts
+
+    result = reconcile_personal_scripts(dry_run=args.dry_run)
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    else:
+        sync = result.get("sync", {})
+        ensured = result.get("ensure_schedules", {})
+        print(
+            f"Reconciled personal scripts: {sync.get('registered_scripts', 0)} registered, "
+            f"{len(ensured.get('created', []))} schedule(s) created, "
+            f"{len(ensured.get('repaired', []))} repaired, "
+            f"{len(ensured.get('invalid', []))} invalid."
+        )
+        if args.dry_run:
+            print("  Dry run only — no schedules changed.")
+    return 0 if not result.get("ensure_schedules", {}).get("invalid") else 1
+
+
+def _scripts_ensure_schedules(args):
+    from script_registry import ensure_personal_schedules
+
+    result = ensure_personal_schedules(dry_run=args.dry_run)
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    else:
+        print(
+            f"Ensured schedules: {len(result.get('created', []))} created, "
+            f"{len(result.get('repaired', []))} repaired, "
+            f"{len(result.get('already_present', []))} already present, "
+            f"{len(result.get('invalid', []))} invalid."
+        )
+        if args.dry_run:
+            print("  Dry run only — no schedules changed.")
+    return 0 if not result.get("invalid") else 1
+
+
 def _scripts_create(args):
     from script_registry import create_script
 
@@ -147,6 +210,35 @@ def _scripts_schedules(args):
         label = schedule.get("schedule_label") or schedule.get("schedule_value") or schedule.get("schedule_type")
         print(f"  {schedule['cron_id']:<{cron_w}}  {label}")
     return 0
+
+
+def _scripts_unschedule(args):
+    from script_registry import unschedule_personal_script
+
+    result = unschedule_personal_script(args.name)
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    else:
+        if not result.get("ok"):
+            print(result.get("error", "Failed to unschedule script"), file=sys.stderr)
+            return 1
+        print(f"Removed {len(result.get('removed_schedules', []))} schedule(s) from {result['script']}")
+    return 0 if result.get("ok") else 1
+
+
+def _scripts_remove(args):
+    from script_registry import remove_personal_script
+
+    result = remove_personal_script(args.name, keep_file=args.keep_file)
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    else:
+        if not result.get("ok"):
+            print(result.get("error", "Failed to remove script"), file=sys.stderr)
+            return 1
+        action = "unregistered" if args.keep_file else "removed"
+        print(f"Script {result['script']} {action}")
+    return 0 if result.get("ok") else 1
 
 
 def _scripts_run(args):
@@ -778,7 +870,7 @@ def _print_help():
 Commands:
   nexo chat [path]                                    Launch Claude Code
   nexo doctor [--tier boot|runtime|deep|all] [--fix]   System diagnostics
-  nexo scripts list|create|sync|schedules|run|doctor|call
+  nexo scripts list|create|classify|sync|reconcile|ensure-schedules|schedules|run|doctor|call|unschedule|remove
                                                       Personal scripts
   nexo skills list|apply|sync|approve                  Executable skills
   nexo update                                          Update installed runtime
@@ -816,13 +908,38 @@ def main():
     create_p.add_argument("--force", action="store_true", help="Overwrite if the target file exists")
     create_p.add_argument("--json", action="store_true", help="JSON output")
 
+    # scripts classify
+    classify_p = scripts_sub.add_parser("classify", help="Classify all files in NEXO_HOME/scripts")
+    classify_p.add_argument("--json", action="store_true", help="JSON output")
+
     # scripts sync
     sync_p = scripts_sub.add_parser("sync", help="Sync script registry from filesystem and personal LaunchAgents")
     sync_p.add_argument("--json", action="store_true", help="JSON output")
 
+    # scripts reconcile
+    reconcile_p = scripts_sub.add_parser("reconcile", help="Classify, sync, and ensure declared schedules")
+    reconcile_p.add_argument("--dry-run", action="store_true", help="Show what would change without editing schedules")
+    reconcile_p.add_argument("--json", action="store_true", help="JSON output")
+
+    # scripts ensure-schedules
+    ensure_p = scripts_sub.add_parser("ensure-schedules", help="Create or repair declared personal schedules")
+    ensure_p.add_argument("--dry-run", action="store_true", help="Show what would change without editing schedules")
+    ensure_p.add_argument("--json", action="store_true", help="JSON output")
+
     # scripts schedules
     schedules_p = scripts_sub.add_parser("schedules", help="List registered personal script schedules")
     schedules_p.add_argument("--json", action="store_true", help="JSON output")
+
+    # scripts unschedule
+    unschedule_p = scripts_sub.add_parser("unschedule", help="Remove all personal schedules from a script")
+    unschedule_p.add_argument("name", help="Script name or path")
+    unschedule_p.add_argument("--json", action="store_true", help="JSON output")
+
+    # scripts remove
+    remove_p = scripts_sub.add_parser("remove", help="Remove a personal script and any attached schedules")
+    remove_p.add_argument("name", help="Script name or path")
+    remove_p.add_argument("--keep-file", action="store_true", help="Keep the script file and only unregister/unschedule it")
+    remove_p.add_argument("--json", action="store_true", help="JSON output")
 
     # scripts run
     run_p = scripts_sub.add_parser("run", help="Run a script by name")
@@ -907,10 +1024,20 @@ def main():
             return _scripts_list(args)
         elif args.scripts_command == "create":
             return _scripts_create(args)
+        elif args.scripts_command == "classify":
+            return _scripts_classify(args)
         elif args.scripts_command == "sync":
             return _scripts_sync(args)
+        elif args.scripts_command == "reconcile":
+            return _scripts_reconcile(args)
+        elif args.scripts_command == "ensure-schedules":
+            return _scripts_ensure_schedules(args)
         elif args.scripts_command == "schedules":
             return _scripts_schedules(args)
+        elif args.scripts_command == "unschedule":
+            return _scripts_unschedule(args)
+        elif args.scripts_command == "remove":
+            return _scripts_remove(args)
         elif args.scripts_command == "run":
             return _scripts_run(args)
         elif args.scripts_command == "doctor":

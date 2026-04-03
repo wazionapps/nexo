@@ -92,6 +92,27 @@ class TestScriptsCreateAndSync:
         data = json.loads(result.stdout)
         assert data == []
 
+    def test_classify_json(self, nexo_home):
+        (nexo_home / "scripts" / "my-tool.py").write_text("# nexo: name=my-tool\nprint('hi')\n")
+        (nexo_home / "scripts" / "notes.txt").write_text("notes\n")
+        result = _run_cli(nexo_home, "scripts", "classify", "--json")
+        assert result.returncode == 0
+        data = json.loads(result.stdout)
+        assert data["summary"]["personal"] == 1
+        assert data["summary"]["non-script"] == 1
+
+    def test_reconcile_dry_run_json(self, nexo_home):
+        (nexo_home / "scripts" / "monitor.py").write_text(
+            "# nexo: name=email-monitor\n"
+            "# nexo: interval_seconds=300\n"
+            "# nexo: schedule_required=true\n"
+            "print('ok')\n"
+        )
+        result = _run_cli(nexo_home, "scripts", "reconcile", "--dry-run", "--json")
+        assert result.returncode == 0
+        data = json.loads(result.stdout)
+        assert data["ensure_schedules"]["created"][0]["cron_id"] == "email-monitor"
+
 
 class TestRuntimeUpdate:
     def test_update_uses_recorded_source_repo(self, tmp_path):

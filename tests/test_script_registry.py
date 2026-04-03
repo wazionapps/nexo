@@ -11,12 +11,16 @@ from db import init_db, get_personal_script, list_personal_scripts, list_persona
 from script_registry import (
     parse_inline_metadata,
     classify_runtime,
+    classify_scripts_dir,
+    get_declared_schedule,
     list_scripts,
     resolve_script,
     doctor_script,
     load_core_script_names,
     create_script,
+    ensure_personal_schedules,
     sync_personal_scripts,
+    unschedule_personal_script,
 )
 
 
@@ -87,6 +91,19 @@ class TestMetadataParsing:
         script.write_text("// nexo: name=valid-js\n")
         meta = parse_inline_metadata(script)
         assert meta["name"] == "valid-js"
+
+    def test_schedule_metadata(self, tmp_path):
+        script = tmp_path / "test.py"
+        script.write_text(
+            "# nexo: name=monitor\n"
+            "# nexo: interval_seconds=300\n"
+            "# nexo: schedule_required=true\n"
+        )
+        meta = parse_inline_metadata(script)
+        declared = get_declared_schedule(meta, "monitor")
+        assert declared["valid"] is True
+        assert declared["schedule_type"] == "interval"
+        assert declared["interval_seconds"] == 300
 
 
 class TestRuntimeDetection:
@@ -161,6 +178,19 @@ class TestCoreFiltering:
         (scripts_dir / "nexo-dashboard.sh").write_text("#!/bin/bash\necho dashboard\n")
         scripts = list_scripts(include_core=False)
         assert scripts == []
+
+    def test_classify_scripts_dir(self, scripts_dir):
+        (scripts_dir / "nexo-immune.py").write_text("# core script\n")
+        (scripts_dir / "my-tool.py").write_text("# nexo: name=my-tool\nprint('hi')\n")
+        (scripts_dir / "notes.csv").write_text("a,b,c\n")
+        (scripts_dir / "nexo-dashboard.sh").write_text("#!/bin/bash\necho dashboard\n")
+
+        report = classify_scripts_dir()
+        classes = {entry["name"]: entry["classification"] for entry in report["entries"]}
+        assert classes["nexo-immune"] == "core"
+        assert classes["my-tool"] == "personal"
+        assert classes["notes"] == "non-script"
+        assert classes["nexo-dashboard"] == "ignored"
 
 
 class TestResolveScript:
@@ -263,3 +293,55 @@ class TestRegistrySync:
         schedules = list_personal_script_schedules()
         assert len(schedules) == 1
         assert schedules[0]["cron_id"] == "backup"
+
+    def test_ensure_personal_schedules_dry_run(self, scripts_dir, monkeypatch):
+        import script_registry
+
+        init_db()
+        script = scripts_dir / "monitor.py"
+        script.write_text(
+            "# nexo: name=email-monitor\n"
+            "# nexo: description=Monitor inbox\n"
+            "# nexo: interval_seconds=300\n"
+            "# nexo: schedule_required=true\n"
+            "print('ok')\n"
+        )
+        monkeypatch.setattr(script_registry, "discover_personal_schedules", lambda: [])
+
+        result = ensure_personal_schedules(dry_run=True)
+        assert result["created"][0]["cron_id"] == "email-monitor"
+        assert result["sync"]["missing_declared_schedules"][0]["name"] == "email-monitor"
+
+    def test_unschedule_personal_script_prunes_schedule(self, scripts_dir, monkeypatch):
+        import script_registry
+
+        init_db()
+        script = scripts_dir / "backup.py"
+        script.write_text("# nexo: name=backup\nprint('ok')\n")
+        plist_path = scripts_dir / "com.nexo.backup.plist"
+        plist_path.write_text("plist")
+
+        def _discover():
+            if not plist_path.exists():
+                return []
+            return [{
+                "cron_id": "backup",
+                "script_path": str(script),
+                "schedule_type": "interval",
+                "schedule_value": "300",
+                "schedule_label": "every 300s",
+                "launchd_label": "com.nexo.backup",
+                "plist_path": str(plist_path),
+                "enabled": True,
+                "description": "Backup schedule",
+            }]
+
+        monkeypatch.setattr(script_registry, "discover_personal_schedules", _discover)
+        monkeypatch.setattr(script_registry.platform, "system", lambda: "Darwin")
+        monkeypatch.setattr(script_registry.subprocess, "run", lambda *args, **kwargs: None)
+
+        sync_personal_scripts()
+        result = unschedule_personal_script("backup")
+        assert result["ok"] is True
+        assert result["removed_schedules"][0]["cron_id"] == "backup"
+        assert list_personal_script_schedules() == []

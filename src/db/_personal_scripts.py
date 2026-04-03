@@ -242,6 +242,24 @@ def list_personal_script_schedules(script_id: str = "", include_disabled: bool =
     return [hydrate_personal_schedule(_row_to_dict(row)) for row in rows]
 
 
+def get_personal_script_schedule(cron_id: str) -> dict | None:
+    conn = get_db()
+    row = conn.execute(
+        "SELECT * FROM personal_script_schedules WHERE cron_id = ?",
+        (cron_id,),
+    ).fetchone()
+    return hydrate_personal_schedule(_row_to_dict(row)) if row else None
+
+
+def delete_personal_script_schedule(cron_id: str) -> int:
+    conn = get_db()
+    result = conn.execute(
+        "DELETE FROM personal_script_schedules WHERE cron_id = ?",
+        (cron_id,),
+    )
+    return int(result.rowcount or 0)
+
+
 def hydrate_personal_schedule(row: dict) -> dict:
     if not row:
         return {}
@@ -341,6 +359,15 @@ def get_personal_script(name_or_path: str) -> dict | None:
     return script
 
 
+def delete_personal_script(name_or_path: str) -> int:
+    conn = get_db()
+    result = conn.execute(
+        "DELETE FROM personal_scripts WHERE path = ? OR name = ? OR id = ?",
+        (name_or_path, name_or_path, name_or_path),
+    )
+    return int(result.rowcount or 0)
+
+
 def record_personal_script_run(name_or_path: str, exit_code: int, run_at: str | None = None) -> None:
     conn = get_db()
     run_at = run_at or _now_text()
@@ -437,6 +464,25 @@ def get_personal_script_health_report(*, fix: bool = False) -> dict:
                     "severity": "warn",
                     "message": f"missing plist for cron {schedule['cron_id']}: {plist_path}",
                 })
+        try:
+            from script_registry import get_declared_schedule
+
+            declared = get_declared_schedule(script.get("metadata", {}), script.get("name", ""))
+            if declared.get("required"):
+                if not declared.get("valid"):
+                    issues.append({
+                        "script_id": script["id"],
+                        "severity": "error",
+                        "message": f"invalid declared schedule for {script['name']}: {declared.get('error', 'invalid metadata')}",
+                    })
+                elif not script.get("has_schedule"):
+                    issues.append({
+                        "script_id": script["id"],
+                        "severity": "warn",
+                        "message": f"missing declared schedule for {script['name']}: {declared.get('schedule_label', declared.get('cron_id', ''))}",
+                    })
+        except Exception:
+            pass
 
     if fix and issues:
         existing_paths = [script["path"] for script in scripts if Path(script["path"]).is_file()]

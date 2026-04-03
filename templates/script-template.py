@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 # nexo: name=example-script
 # nexo: description=Example personal script using the stable NEXO CLI
+# nexo: category=automation
 # nexo: runtime=python
 # nexo: timeout=60
 # nexo: tools=nexo_learning_search,nexo_schedule_status
+# nexo: interval_seconds=300
+# nexo: schedule_required=false
 
 """Example personal script for NEXO.
 

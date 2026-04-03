@@ -16,14 +16,14 @@ Personal scripts extend NEXO with custom automation. They live in `NEXO_HOME/scr
    nexo scripts doctor my-script
    ```
 
-4. Run:
+4. Reconcile registry + declared schedules:
    ```bash
-   nexo scripts run my-script -- --query "something"
+   nexo scripts reconcile
    ```
 
-5. Sync the registry:
+5. Run:
    ```bash
-   nexo scripts sync
+   nexo scripts run my-script -- --query "something"
    ```
 
 ## Registry Model
@@ -48,10 +48,13 @@ Add inline metadata in the first 25 lines using `# nexo:` comments:
 ```python
 # nexo: name=my-script
 # nexo: description=What this script does
+# nexo: category=shopify
 # nexo: runtime=python
 # nexo: timeout=60
 # nexo: requires=git,rsync
 # nexo: tools=nexo_learning_search,nexo_schedule_status
+# nexo: interval_seconds=300
+# nexo: cron_id=my-script
 ```
 
 All keys are optional. Without metadata, the script name defaults to the filename stem.
@@ -62,11 +65,52 @@ All keys are optional. Without metadata, the script name defaults to the filenam
 |-----|-------------|
 | `name` | Script name (default: filename stem) |
 | `description` | One-line description |
+| `category` | Optional grouping label for humans/NEXO |
 | `runtime` | `python`, `shell`, `node`, or `php` (auto-detected from shebang/extension) |
 | `timeout` | Max execution time in seconds |
 | `requires` | Comma-separated commands that must be in PATH |
 | `tools` | Comma-separated NEXO MCP tools this script uses |
 | `hidden` | `true` to hide from default list |
+| `cron_id` | Stable schedule ID when the script has a personal cron |
+| `schedule` | Calendar schedule: `HH:MM` or `HH:MM:weekday` |
+| `interval_seconds` | Interval schedule in seconds |
+| `schedule_required` | `true` if the script must have a schedule |
+
+### Declaring Personal Schedules
+
+If a script should run automatically, declare it inline and let NEXO reconcile it:
+
+```python
+# nexo: name=email-monitor
+# nexo: description=Monitor inbox every 5 minutes
+# nexo: runtime=python
+# nexo: interval_seconds=300
+# nexo: schedule_required=true
+```
+
+Or for a calendar schedule:
+
+```python
+# nexo: name=morning-brief
+# nexo: description=Send the morning briefing
+# nexo: runtime=shell
+# nexo: schedule=08:00
+# nexo: schedule_required=true
+```
+
+Then run:
+
+```bash
+nexo scripts reconcile
+```
+
+This does three things in order:
+
+1. Classifies everything in `NEXO_HOME/scripts/`
+2. Syncs personal scripts into the registry
+3. Creates or repairs any **declared personal schedules**
+
+NEXO must never invent a core cron by touching `crons/manifest.json` for a personal script.
 
 ## Calling NEXO Tools
 
@@ -121,8 +165,13 @@ nexo scripts list              # List personal scripts
 nexo scripts list --all        # Include core/internal scripts
 nexo scripts list --json       # JSON output
 nexo scripts create NAME       # Create scaffold in NEXO_HOME/scripts
+nexo scripts classify          # Classify files in NEXO_HOME/scripts
 nexo scripts sync              # Sync registry from filesystem + personal LaunchAgents
+nexo scripts reconcile         # Sync and ensure declared schedules
+nexo scripts ensure-schedules  # Create/repair schedules declared in metadata
 nexo scripts schedules         # List registered personal schedules
+nezo scripts unschedule NAME   # Remove a script's personal schedules
+nezo scripts remove NAME       # Unschedule + remove a personal script
 nexo scripts run NAME          # Run a script
 nexo scripts run NAME -- args  # Run with arguments
 nexo scripts doctor            # Validate all personal scripts
