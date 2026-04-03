@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive memory system. Every feature, fix, and improvement from v0.8.10 to v2.4.0.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive memory system. Every feature, fix, and improvement from v0.8.10 to v2.6.0.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive memory system. Every feature, fix, and improvement from v0.8.10 to v2.4.0.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive memory system. Every feature, fix, and improvement from v0.8.10 to v2.6.0.">
     <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
     <meta property="og:image:width" content="1536">
     <meta property="og:image:height" content="1024">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive memory system. Every feature, fix, and improvement from v0.8.10 to v2.4.0.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive memory system. Every feature, fix, and improvement from v0.8.10 to v2.6.0.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
 
     <!-- Google Analytics (GA4) -->
@@ -72,6 +72,27 @@
     </div>
 </section>
 
+<!-- v2.6.0 Personal Scripts Registry, Plugin Marketplace, Managed Evolution -->
+<section id="v260" class="section-compact" style="background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
+    <div class="container">
+        <div class="section-label">New in v2.6.0</div>
+        <h2 class="section-title">Personal Scripts Registry, Plugin Marketplace &amp; Managed Evolution</h2>
+        <p class="section-subtitle">
+            Your scripts become first-class citizens with 9 MCP tools for lifecycle management. NEXO Brain is now structured as a Claude Code plugin. The Day Orchestrator has been decoupled from core to reduce complexity.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Personal Scripts Registry</h4><p>Scripts in NEXO_HOME/scripts/ are tracked in SQLite with metadata, categories, and schedule associations. 9 MCP tools: list, create, remove, reconcile, sync, classify, schedule, unschedule, ensure_schedules. Full lifecycle management.</p></div>
+                <div class="cognitive-card"><h4>Claude Code Plugin</h4><p>Added <code>plugin.json</code>, entry point, and packaging structure for the Anthropic Claude Code plugin marketplace. NEXO Brain can now be discovered and installed as a first-class Claude Code extension.</p></div>
+                <div class="cognitive-card"><h4>Managed Evolution</h4><p>Evolution can now modify core behavior modules (not just config) when running in managed mode. Automatic rollback followups ensure safe self-improvement. Fixed false-positive watchdog tamper detection.</p></div>
+                <div class="cognitive-card"><h4><code>nexo chat</code></h4><p>Official CLI command to launch Claude Code with NEXO as operator. Supports directory arguments. Runtime version now correctly surfaces in installed environments.</p></div>
+                <div class="cognitive-card"><h4>Orchestrator Decoupled</h4><p>The Day Orchestrator (autonomous headless cycles every 15 min) has been removed from the core product. Reduces complexity for standard installs. Power users can keep it as a personal script.</p></div>
+                <div class="cognitive-card"><h4>Cron Reliability</h4><p>Hardened cron runtime recovery with TCC diagnostics. Keepalive sync alignment. Disabled optional crons correctly respected. Personal schedules handled during boot recovery. Duplicate learning prevention.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
 <!-- v2.4.0 Skills, Cron Scheduler, Security -->
 <section id="v240" class="section-compact" style="background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
     <div class="container">
@@ -120,12 +141,12 @@
         <div class="section-label">v2.0.0</div>
         <h2 class="section-title">Unified Architecture</h2>
         <p class="section-subtitle">
-            Code and data fully separated. 15 autonomous processes auto-installed. Auto-update on startup. Auto-diary captures everything. 147+ MCP tools. 12 rounds of external audit with ~60 findings resolved.
+            Code and data fully separated. 14 autonomous processes auto-installed. Auto-update on startup. Auto-diary captures everything. 144+ MCP tools. 12 rounds of external audit with ~60 findings resolved.
         </p>
         <div class="cognitive-group">
             <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
                 <div class="cognitive-card"><h4>Unified Architecture</h4><p>Code lives in the repo, personal data in NEXO_HOME (~/.nexo/). Clean separation means updates never touch your data and multiple agents can share the same codebase.</p></div>
-                <div class="cognitive-card"><h4>15 Autonomous Processes</h4><p>All processes auto-installed: watchdog, immune, synthesis, backup, catchup, cognitive-decay, postmortem, self-audit, sleep, deep-sleep, evolution, followup-hygiene, prevent-sleep, tcc-approve, auto-close-sessions. Plus 7 hooks.</p></div>
+                <div class="cognitive-card"><h4>14 Autonomous Processes</h4><p>All processes auto-installed: watchdog, immune, synthesis, backup, catchup, cognitive-decay, postmortem, self-audit, sleep, deep-sleep, evolution, followup-hygiene, prevent-sleep, tcc-approve, auto-close-sessions. Plus 7 hooks.</p></div>
                 <div class="cognitive-card"><h4>Auto-Update on Startup</h4><p>Non-blocking update check (5s max) on every server start. Resilient to network failures. Opt-out via schedule.json. No more manual npm updates.</p></div>
                 <div class="cognitive-card"><h4>Auto-Diary</h4><p>3-layer diary system: PostToolUse writes every 10 calls, PreCompact catches emergencies before context eviction, heartbeat triggers on DIARY_OVERDUE. Never lose session context again.</p></div>
                 <div class="cognitive-card"><h4>schedule.json</h4><p>Customizable process schedules with timezone support. Control when each autonomous process runs. Override defaults without editing plist/timer files.</p></div>

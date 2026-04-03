@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>NEXO Brain — Cognitive Memory for AI Agents</title>
-    <meta name="description" content="Open-source cognitive memory system for AI agents. Runtime CLI, unified doctor, Skills v2, Day Orchestrator, 160+ MCP tools, dashboard with 23 modules, adaptive calibration, and trust scoring. Built for Claude Code.">
+    <meta name="description" content="Open-source cognitive memory system for AI agents. Runtime CLI, personal scripts registry, Skills v2, managed evolution, 144+ MCP tools, dashboard with 23 modules, adaptive calibration, and trust scoring. Built for Claude Code.">
     <meta name="keywords" content="AI memory, cognitive architecture, MCP, Claude Code, RAG, vector search, AI agents, Atkinson-Shiffrin, memory system, open source">
     <meta name="author" content="WAzion">
     <meta name="robots" content="index, follow">
@@ -14,7 +14,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com">
     <meta property="og:title" content="NEXO Brain — Cognitive Memory for AI Agents">
-    <meta property="og:description" content="Open-source cognitive memory for AI agents. Runtime CLI, unified doctor, Skills v2, Day Orchestrator, 160+ MCP tools, dashboard with 23 modules, and adaptive calibration.">
+    <meta property="og:description" content="Open-source cognitive memory for AI agents. Runtime CLI, personal scripts registry, Skills v2, managed evolution, 144+ MCP tools, dashboard with 23 modules, and adaptive calibration.">
     <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
     <meta property="og:image:width" content="1536">
     <meta property="og:image:height" content="1024">
@@ -22,7 +22,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="NEXO Brain — Cognitive Memory for AI Agents">
-    <meta name="twitter:description" content="Open-source cognitive memory for AI agents. Runtime CLI, unified doctor, Skills v2, Day Orchestrator, 160+ MCP tools, dashboard with 23 modules, and adaptive calibration.">
+    <meta name="twitter:description" content="Open-source cognitive memory for AI agents. Runtime CLI, personal scripts registry, Skills v2, managed evolution, 144+ MCP tools, dashboard with 23 modules, and adaptive calibration.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
 
     <!-- Google Analytics (GA4) -->
@@ -142,7 +142,7 @@
                 "name": "What is NEXO Brain?",
                 "acceptedAnswer": {
                     "@type": "Answer",
-                    "text": "NEXO Brain is an open-source cognitive memory system for AI agents. It gives your AI persistent memory across sessions using the Atkinson-Shiffrin memory model (Sensory Register, Short-Term Memory, Long-Term Memory), with 160+ MCP tools, a runtime CLI, unified doctor diagnostics, Skills v2 with executable modes, Day Orchestrator for autonomous operation, an always-on dashboard with 23 modules, a full nervous system of 15 autonomous processes, and metacognitive error prevention."
+                    "text": "NEXO Brain is an open-source cognitive memory system for AI agents. It gives your AI persistent memory across sessions using the Atkinson-Shiffrin memory model (Sensory Register, Short-Term Memory, Long-Term Memory), with 144+ MCP tools, a runtime CLI, unified doctor diagnostics, Skills v2 with executable modes, personal scripts registry with 9 lifecycle tools, Claude Code plugin structure, managed evolution, an always-on dashboard with 23 modules, a full nervous system of 14 autonomous processes, and metacognitive error prevention."
                 }
             },
             {
@@ -286,7 +286,7 @@
                 "name": "Can I use NEXO Brain in production?",
                 "acceptedAnswer": {
                     "@type": "Answer",
-                    "text": "Yes. NEXO Brain is designed for continuous, production-grade operation. It runs 24/7 with 15 autonomous processes (nightly decay, deep sleep analysis, watchdog monitoring, immune system, synthesis, backup, prevent-sleep, and more), handles concurrent sessions, and includes backup/restore capabilities. It has been battle-tested in real daily operations."
+                    "text": "Yes. NEXO Brain is designed for continuous, production-grade operation. It runs 24/7 with 14 autonomous processes (nightly decay, deep sleep analysis, watchdog monitoring, immune system, synthesis, backup, prevent-sleep, and more), handles concurrent sessions, and includes backup/restore capabilities. It has been battle-tested in real daily operations."
                 }
             },
             {
@@ -294,7 +294,7 @@
                 "name": "What are LaunchAgent templates?",
                 "acceptedAnswer": {
                     "@type": "Answer",
-                    "text": "NEXO Brain v2.0.0 ships with 15 auto-installed processes via LaunchAgent plists on macOS and systemd timers on Linux. All processes (watchdog, cognitive decay, deep sleep, evolution, prevent-sleep, tcc-approve, backup, etc.) are configured automatically during installation. Customizable via schedule.json."
+                    "text": "NEXO Brain v2.0.0 ships with 14 auto-installed processes via LaunchAgent plists on macOS and systemd timers on Linux. All processes (watchdog, cognitive decay, deep sleep, evolution, prevent-sleep, tcc-approve, backup, etc.) are configured automatically during installation. Customizable via schedule.json."
                 }
             },
             {
@@ -310,7 +310,7 @@
                 "name": "How do I migrate to v2.0?",
                 "acceptedAnswer": {
                     "@type": "Answer",
-                    "text": "Run 'npx nexo-brain init' and the installer handles everything automatically. For v2.0, code and data are cleanly separated: code stays in the repo, personal data in NEXO_HOME (~/.nexo/). All 15 autonomous processes are auto-installed, and existing data is preserved. The migration is non-destructive."
+                    "text": "Run 'npx nexo-brain init' and the installer handles everything automatically. For v2.0, code and data are cleanly separated: code stays in the repo, personal data in NEXO_HOME (~/.nexo/). All 14 autonomous processes are auto-installed, and existing data is preserved. The migration is non-destructive."
                 }
             },
             {
@@ -318,7 +318,7 @@
                 "name": "What is the nervous system?",
                 "acceptedAnswer": {
                     "@type": "Answer",
-                    "text": "The nervous system is a collection of 15 autonomous processes that run on schedule without user intervention: watchdog, immune system, daily synthesis, backup, catchup, cognitive decay, postmortem, self-audit, sleep, deep sleep, evolution, followup hygiene, prevent-sleep, tcc-approve, and auto-close-sessions."
+                    "text": "The nervous system is a collection of 14 autonomous processes that run on schedule without user intervention: watchdog, immune system, daily synthesis, backup, catchup, cognitive decay, postmortem, self-audit, sleep, deep sleep, evolution, followup hygiene, prevent-sleep, tcc-approve, and auto-close-sessions."
                 }
             },
             {
@@ -369,7 +369,7 @@
     <div class="container">
         <div class="hero-badge fade-up">
             <span class="dot"></span>
-            <span id="version-badge">v2.5.0</span> &mdash; Runtime CLI, Unified Doctor &amp; Skills v2
+            <span id="version-badge">v2.6.0</span> &mdash; Personal Scripts Registry, Plugin Marketplace &amp; Managed Evolution
         </div>
         <div class="fade-up" style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;">
             <img src="https://img.shields.io/npm/v/nexo-brain?color=7C3AED&label=npm" alt="npm version">
@@ -383,7 +383,7 @@
         </h1>
 
         <p class="hero-subtitle fade-up">
-            Give your AI agent a brain that remembers, learns, and protects itself from repeating mistakes. F1 0.588 on LoCoMo &mdash; +55% vs GPT-4. Built on the Atkinson-Shiffrin memory model with 160+ MCP tools.
+            Give your AI agent a brain that remembers, learns, and protects itself from repeating mistakes. F1 0.588 on LoCoMo &mdash; +55% vs GPT-4. Built on the Atkinson-Shiffrin memory model with 144+ MCP tools.
         </p>
 
         <div class="hero-actions fade-up">
@@ -413,7 +413,7 @@
     <div class="stats">
         <div class="stat">
             <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></div>
-            <div class="stat-value">160+</div>
+            <div class="stat-value">144+</div>
             <div class="stat-label">MCP Tools</div>
         </div>
         <div class="stat">
@@ -617,43 +617,43 @@
     </div>
 </section>
 
-<!-- v2.5.0 Runtime CLI, Unified Doctor & Skills v2 -->
+<!-- v2.6.0 Personal Scripts Registry, Plugin Marketplace, Managed Evolution -->
 <section class="feature-section">
     <div class="container">
-        <div class="section-label">New in v2.5.0</div>
-        <h2 class="section-title">Runtime CLI, Unified Doctor &amp; Skills v2</h2>
-        <p class="section-subtitle">Six new capabilities that turn NEXO from a tool you use into a system that works for you.</p>
+        <div class="section-label">New in v2.6.0</div>
+        <h2 class="section-title">Personal Scripts Registry, Plugin Marketplace &amp; Managed Evolution</h2>
+        <p class="section-subtitle">Your scripts become first-class citizens. NEXO Brain is now a Claude Code plugin. Evolution modifies core behavior.</p>
 
         <div class="features-grid">
             <div class="feature-card">
-                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></div>
-                <h3>Runtime CLI</h3>
-                <p>The <code>nexo</code> command gives you direct terminal access to scripts, doctor diagnostics, skills, and updates. One binary, full control — no MCP client needed.</p>
+                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></div>
+                <h3>Personal Scripts Registry</h3>
+                <p>Scripts tracked in a first-class SQLite registry with 9 MCP tools for full lifecycle: create, schedule, reconcile, sync, classify. Your automations are now managed entities, not loose files.</p>
             </div>
             <div class="feature-card">
-                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
-                <h3>Unified Doctor</h3>
-                <p>Three-level diagnostic system: boot, runtime, and deep checks. The <code>--fix</code> mode auto-repairs common issues. Also available as MCP tool for in-session diagnostics.</p>
+                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg></div>
+                <h3>Claude Code Plugin</h3>
+                <p>Marketplace-ready <code>plugin.json</code> and entry point for the Anthropic Claude Code plugin marketplace. Install NEXO Brain as a first-class Claude Code extension.</p>
             </div>
             <div class="feature-card">
                 <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
-                <h3>Skills v2</h3>
-                <p>Executable skills with three modes: guide, execute, and hybrid. Security levels (read-only, local, remote) control what each skill can access. Deep Sleep auto-evolves skills over time.</p>
+                <h3>Managed Evolution</h3>
+                <p>Evolution can now modify core behavior modules — not just config. Managed mode with automatic rollback followups ensures safe self-improvement of the cognitive engine.</p>
             </div>
             <div class="feature-card">
-                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
-                <h3>Day Orchestrator</h3>
-                <p>Autonomous NEXO cycles every 15 minutes, 8:00 to 23:00. Checks followups, emails, infrastructure — acts on what it can, emails you only when needed. Your agent works even when you don't.</p>
+                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></div>
+                <h3><code>nexo chat</code></h3>
+                <p>Official CLI command to launch Claude Code with NEXO as operator. Supports directory arguments. One command to start a cognitive session from any terminal.</p>
             </div>
             <div class="feature-card">
-                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>
-                <h3>Dashboard Always-On</h3>
-                <p>Web dashboard at localhost:6174 with 23 modules. Runs permanently as a system service — auto-starts on boot, dark theme, real-time memory health and session monitoring.</p>
+                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
+                <h3>Cron Reliability</h3>
+                <p>Hardened cron runtime recovery with TCC diagnostics, keepalive sync alignment, and correct handling of personal schedules during boot recovery. Fewer missed processes.</p>
             </div>
             <div class="feature-card">
-                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></div>
-                <h3>Personal Scripts</h3>
-                <p>Auto-discovery of scripts in your NEXO home directory. Inline metadata, runtime detection, forbidden-pattern validation. Extend NEXO with your own automation workflows.</p>
+                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></div>
+                <h3>Orchestrator Decoupled</h3>
+                <p>The Day Orchestrator has been removed from the core product to reduce complexity. Power users can keep it as a personal script — it's no longer required for standard use.</p>
             </div>
         </div>
     </div>
@@ -740,7 +740,7 @@
                     <span>What is NEXO Brain?</span>
                     <svg class="faq-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                 </summary>
-                <div class="faq-answer">NEXO Brain is an open-source cognitive memory system for AI agents. It gives your AI persistent memory across sessions using the Atkinson-Shiffrin memory model (Sensory Register, Short-Term Memory, Long-Term Memory), with 160+ MCP tools, a runtime CLI (<code>nexo</code> command), unified doctor diagnostics, Skills v2 with executable modes, Day Orchestrator for autonomous operation, an always-on dashboard with 23 modules, a full nervous system of 15 autonomous processes, and metacognitive error prevention.</div>
+                <div class="faq-answer">NEXO Brain is an open-source cognitive memory system for AI agents. It gives your AI persistent memory across sessions using the Atkinson-Shiffrin memory model (Sensory Register, Short-Term Memory, Long-Term Memory), with 144+ MCP tools, a runtime CLI (<code>nexo</code> command), unified doctor diagnostics, Skills v2 with executable modes, personal scripts registry with 9 lifecycle tools, Claude Code plugin structure, managed evolution, an always-on dashboard with 23 modules, a full nervous system of 14 autonomous processes, and metacognitive error prevention.</div>
             </details>
 
             <details class="faq-item">
@@ -884,7 +884,7 @@
                     <span>Can I use NEXO Brain in production?</span>
                     <svg class="faq-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                 </summary>
-                <div class="faq-answer">Yes. NEXO Brain is designed for continuous, production-grade operation. It runs 24/7 with 15 autonomous processes (nightly decay, deep sleep analysis, watchdog monitoring, immune system, synthesis, backup, prevent-sleep, and more), handles concurrent sessions, and includes backup/restore capabilities.</div>
+                <div class="faq-answer">Yes. NEXO Brain is designed for continuous, production-grade operation. It runs 24/7 with 14 autonomous processes (nightly decay, deep sleep analysis, watchdog monitoring, immune system, synthesis, backup, prevent-sleep, and more), handles concurrent sessions, and includes backup/restore capabilities.</div>
             </details>
 
             <details class="faq-item">
@@ -892,7 +892,7 @@
                     <span>What are LaunchAgent templates?</span>
                     <svg class="faq-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                 </summary>
-                <div class="faq-answer">NEXO Brain v2.0.0 ships with 15 auto-installed processes via LaunchAgent plists on macOS and systemd timers on Linux. All processes (watchdog, cognitive decay, deep sleep, evolution, prevent-sleep, tcc-approve, backup, etc.) are configured automatically during installation. Customizable via schedule.json.</div>
+                <div class="faq-answer">NEXO Brain v2.0.0 ships with 14 auto-installed processes via LaunchAgent plists on macOS and systemd timers on Linux. All processes (watchdog, cognitive decay, deep sleep, evolution, prevent-sleep, tcc-approve, backup, etc.) are configured automatically during installation. Customizable via schedule.json.</div>
             </details>
 
             <details class="faq-item">
@@ -908,7 +908,7 @@
                     <span>How do I migrate to v2.0?</span>
                     <svg class="faq-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                 </summary>
-                <div class="faq-answer">Run <code>npx nexo-brain init</code> and the installer handles everything automatically. For v2.0, your code and data are cleanly separated: code stays in the repo, personal data in NEXO_HOME (~/.nexo/). All 15 autonomous processes are auto-installed, and existing data is preserved. The migration is non-destructive.</div>
+                <div class="faq-answer">Run <code>npx nexo-brain init</code> and the installer handles everything automatically. For v2.0, your code and data are cleanly separated: code stays in the repo, personal data in NEXO_HOME (~/.nexo/). All 14 autonomous processes are auto-installed, and existing data is preserved. The migration is non-destructive.</div>
             </details>
 
             <details class="faq-item">
@@ -916,7 +916,7 @@
                     <span>What is the nervous system?</span>
                     <svg class="faq-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                 </summary>
-                <div class="faq-answer">The nervous system is a collection of 15 autonomous processes that run on schedule without user intervention: watchdog, immune system, daily synthesis, backup, catchup, cognitive decay, postmortem, self-audit, sleep, deep sleep, evolution, followup hygiene, prevent-sleep, tcc-approve, and auto-close-sessions. All are auto-installed and customizable via schedule.json.</div>
+                <div class="faq-answer">The nervous system is a collection of 14 autonomous processes that run on schedule without user intervention: watchdog, immune system, daily synthesis, backup, catchup, cognitive decay, postmortem, self-audit, sleep, deep sleep, evolution, followup hygiene, prevent-sleep, tcc-approve, and auto-close-sessions. All are auto-installed and customizable via schedule.json.</div>
             </details>
 
             <details class="faq-item">
