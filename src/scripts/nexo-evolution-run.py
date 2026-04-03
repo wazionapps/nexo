@@ -34,17 +34,35 @@ SANDBOX_DIR = CLAUDE_DIR / "sandbox" / "workspace"
 MAX_CONSECUTIVE_FAILURES = 3
 MAX_SNAPSHOTS = 8
 
-# ── Immutable files — NEVER touch (applies to ALL modes) ────────────────
-IMMUTABLE_FILES = {
-    "db.py", "server.py", "plugin_loader.py", "nexo-watchdog.sh",
-    "cortex-wrapper.py", "CLAUDE.md", "personality.md",
-    "user-profile.md", "evolution_cycle.py",
-    # Core cognitive engine — never auto-modified
-    "cognitive.py", "knowledge_graph.py", "storage_router.py",
-    # Core tools — never auto-modified
-    "tools_sessions.py", "tools_coordination.py", "tools_reminders.py",
-    "tools_reminders_crud.py", "tools_learnings.py", "tools_credentials.py",
-    "tools_task_history.py", "tools_menu.py",
+# ── Immutable files — split by risk tier ────────────────────────────────
+# These remain locked even in managed mode because they can break bootstrap,
+# persistence, or the evolution engine itself.
+GLOBAL_IMMUTABLE_FILES = {
+    "db.py",
+    "server.py",
+    "plugin_loader.py",
+    "nexo-watchdog.sh",
+    "cortex-wrapper.py",
+    "CLAUDE.md",
+    "personality.md",
+    "user-profile.md",
+    "evolution_cycle.py",
+    "storage_router.py",
+}
+
+# Managed mode may autoevolve behavior/tooling modules, but auto/review keep
+# these guarded to stay conservative for public installs.
+STANDARD_MODE_IMMUTABLE_FILES = {
+    "cognitive.py",
+    "knowledge_graph.py",
+    "tools_sessions.py",
+    "tools_coordination.py",
+    "tools_reminders.py",
+    "tools_reminders_crud.py",
+    "tools_learnings.py",
+    "tools_credentials.py",
+    "tools_task_history.py",
+    "tools_menu.py",
 }
 
 
@@ -92,6 +110,13 @@ def _normalize_mode(mode: str) -> str:
         "manual": "review",
     }
     return aliases.get(value, value if value in {"auto", "review", "managed"} else "auto")
+
+
+def _immutable_files_for_mode(mode: str) -> set[str]:
+    normalized = _normalize_mode(mode)
+    if normalized == "managed":
+        return set(GLOBAL_IMMUTABLE_FILES)
+    return set(GLOBAL_IMMUTABLE_FILES) | set(STANDARD_MODE_IMMUTABLE_FILES)
 
 # ── Claude CLI path ──────────────────────────────────────────────────────
 def _resolve_claude_cli() -> Path:
@@ -199,7 +224,7 @@ def is_safe_path(filepath: str, mode: str = "auto") -> bool:
     filename = Path(expanded).name
     mode = _normalize_mode(mode)
 
-    if filename in IMMUTABLE_FILES:
+    if filename in _immutable_files_for_mode(mode):
         return False
 
     prefixes = _managed_safe_prefixes() if mode in {"managed", "review"} else _public_safe_prefixes()

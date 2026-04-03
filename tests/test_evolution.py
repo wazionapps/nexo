@@ -129,6 +129,14 @@ class TestEvolutionModes:
         assert runner.is_safe_path(str(core_target), mode="managed") is True
         assert runner.is_safe_path(str(core_target), mode="auto") is False
 
+    def test_managed_mode_unlocks_tools_modules_but_keeps_kernel_guarded(self, evolution_env, monkeypatch):
+        _, runner = _load_runner_module(monkeypatch, evolution_env)
+
+        assert runner.is_safe_path(str(REPO_SRC / "tools_learnings.py"), mode="managed") is True
+        assert runner.is_safe_path(str(REPO_SRC / "tools_learnings.py"), mode="review") is False
+        assert runner.is_safe_path(str(REPO_SRC / "tools_learnings.py"), mode="auto") is False
+        assert runner.is_safe_path(str(REPO_SRC / "server.py"), mode="managed") is False
+
 
 class TestManagedExecution:
     def test_failed_auto_proposal_rolls_back_and_creates_followup(self, evolution_env, monkeypatch):

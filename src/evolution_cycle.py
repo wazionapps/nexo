@@ -271,12 +271,15 @@ def build_evolution_prompt(week_data: dict, objective: dict) -> str:
     if mode == "review":
         mode_desc = "review-only, nothing executes automatically"
         safe_zones = "~/.nexo/scripts/, ~/.nexo/plugins/, ~/.nexo/brain/"
+        immutable_files = "db.py, server.py, plugin_loader.py, storage_router.py, cognitive.py, knowledge_graph.py, tools_*.py, nexo-watchdog.sh, evolution_cycle.py, CLAUDE.md"
     elif mode == "managed":
         mode_desc = f"owner-managed, max {max_auto} auto-applied changes with rollback and followups"
         safe_zones = "~/.nexo/scripts/, ~/.nexo/plugins/, ~/.nexo/brain/, NEXO_CODE/src, repo bin/docs/templates/tests"
+        immutable_files = "db.py, server.py, plugin_loader.py, storage_router.py, nexo-watchdog.sh, evolution_cycle.py, CLAUDE.md, personality.md, user-profile.md"
     else:
         mode_desc = f"public auto, max {max_auto} auto-applied changes in personal safe zones"
         safe_zones = "~/.nexo/scripts/, ~/.nexo/plugins/"
+        immutable_files = "db.py, server.py, plugin_loader.py, storage_router.py, cognitive.py, knowledge_graph.py, tools_*.py, nexo-watchdog.sh, evolution_cycle.py, CLAUDE.md"
 
     prompt = f"""You are NEXO Evolution — the weekly self-improvement cycle.
 
@@ -311,7 +314,7 @@ LOOK FOR:
 
 SAFETY:
 - Safe zones for this mode: {safe_zones}
-- IMMUTABLE files (never touch): db.py, server.py, plugin_loader.py, cognitive.py, CLAUDE.md
+- IMMUTABLE files (never touch in this mode): {immutable_files}
 - Every change needs: what file, what to change, why, risk, how to verify
 - AUTO changes must be deterministic. If the edit is ambiguous, risky, or needs human taste, mark it as "propose".
 - In managed mode, failed AUTO changes will be rolled back automatically and turned into followups with evidence.
