@@ -4,7 +4,8 @@
   "mcpName": "io.github.wazionapps/nexo",
   "description": "NEXO — Cognitive co-operator for Claude Code. Memory, emotional intelligence, overnight learning (Deep Sleep), cron management, trust scoring, and adaptive calibration.",
   "bin": {
-    "nexo-brain": "./bin/nexo-brain.js"
+    "nexo-brain": "./bin/nexo-brain.js",
+    "nexo": "./bin/nexo.js"
   },
   "keywords": [
     "claude-code",
@@ -54,6 +55,7 @@
   },
   "files": [
     "bin/nexo-brain.js",
+    "bin/nexo.js",
     "bin/postinstall.js",
     "src/",
     "!src/**/__pycache__",

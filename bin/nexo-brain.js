@@ -66,9 +66,9 @@ const ALL_PROCESSES = [
   // --- Every 5 minutes ---
   { name: "auto-close-sessions", script: "auto_close_sessions.py", interpreter: "python", scriptDir: "root",
     type: "interval", intervalMinutes: 5, purpose: "Clean stale sessions" },
-  { name: "watchdog", script: "nexo-watchdog.sh", interpreter: "bash", scriptDir: "scripts",
-    type: "interval", intervalMinutes: 5, purpose: "Health monitoring" },
   // --- Every 30 minutes ---
+  { name: "watchdog", script: "nexo-watchdog.sh", interpreter: "bash", scriptDir: "scripts",
+    type: "interval", intervalMinutes: 30, purpose: "Health monitoring" },
   { name: "immune", script: "nexo-immune.py", interpreter: "python", scriptDir: "scripts",
     type: "interval", intervalMinutes: 30, purpose: "System immunity checks" },
   // --- Every 2 hours ---
@@ -1315,6 +1315,8 @@ async function main() {
     "tools_task_history.py",
     "tools_menu.py",
     "requirements.txt",
+    "cli.py",
+    "script_registry.py",
   ];
   coreFiles.forEach((f) => {
     const src = path.join(srcDir, f);
@@ -1324,7 +1326,7 @@ async function main() {
   });
 
   // Core packages (directories with __init__.py)
-  ["db", "cognitive"].forEach(pkg => {
+  ["db", "cognitive", "doctor"].forEach(pkg => {
     const pkgSrc = path.join(srcDir, pkg);
     if (fs.existsSync(pkgSrc)) {
       copyDirRecursive(pkgSrc, path.join(NEXO_HOME, pkg));
@@ -1368,6 +1370,19 @@ async function main() {
   if (fs.existsSync(cronsSrcDir)) {
     copyDirRecursive(cronsSrcDir, path.join(NEXO_HOME, "crons"));
     log("  Crons installed.");
+  }
+
+  // Templates directory (script-template.py, nexo_helper.py)
+  const templatesDest = path.join(NEXO_HOME, "templates");
+  fs.mkdirSync(templatesDest, { recursive: true });
+  if (fs.existsSync(templateDir)) {
+    ["script-template.py", "nexo_helper.py"].forEach(f => {
+      const src = path.join(templateDir, f);
+      if (fs.existsSync(src)) {
+        fs.copyFileSync(src, path.join(templatesDest, f));
+      }
+    });
+    log("  Script templates installed.");
   }
 
   // Hooks directory

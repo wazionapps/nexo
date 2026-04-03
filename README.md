@@ -544,6 +544,28 @@ That's it. No need to run `claude` manually. Your operator will greet you immedi
 | Auto-diary | 3-layer system: PostToolUse every 10 calls, PreCompact emergency, heartbeat DIARY_OVERDUE | Built into hooks |
 | Claude Code config | MCP server + 7 hooks + 15 processes registered | ~/.claude/settings.json |
 
+### Runtime CLI
+
+After installation, the `nexo` command provides operational tools:
+
+```bash
+# Personal Scripts
+nexo scripts list              # List your personal scripts
+nexo scripts run my-script     # Run a script with injected NEXO env
+nexo scripts doctor            # Validate all personal scripts
+nexo scripts call nexo_learning_search --input '{"query":"cron"}' # Call any MCP tool
+
+# Unified Doctor
+nexo doctor                    # Quick boot diagnostics
+nexo doctor --tier all         # Full system check (boot + runtime + deep)
+nexo doctor --tier runtime --json  # Machine-readable health report
+nexo doctor --fix              # Apply deterministic repairs
+```
+
+Personal scripts live in `NEXO_HOME/scripts/` with inline metadata. See `docs/writing-scripts.md` for details.
+
+The Doctor system reads existing health artifacts (immune, watchdog, self-audit) without triggering repairs in default mode.
+
 ### Requirements
 
 - **macOS or Linux** (Windows via [WSL](https://learn.microsoft.com/en-us/windows/wsl/install))

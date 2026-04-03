@@ -1,0 +1,186 @@
+"""Tests for script_registry — metadata parsing, runtime detection, doctor validation."""
+import os
+import stat
+import sys
+
+import pytest
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+
+from script_registry import (
+    parse_inline_metadata,
+    classify_runtime,
+    list_scripts,
+    resolve_script,
+    doctor_script,
+    load_core_script_names,
+)
+
+
+@pytest.fixture
+def scripts_dir(tmp_path, monkeypatch):
+    """Create a temp NEXO_HOME with scripts/ and crons/manifest.json."""
+    nexo_home = tmp_path / "nexo"
+    scripts = nexo_home / "scripts"
+    scripts.mkdir(parents=True)
+
+    # Minimal manifest with one core script
+    crons_dir = nexo_home / "crons"
+    crons_dir.mkdir()
+    (crons_dir / "manifest.json").write_text('{"crons":[{"id":"immune","script":"scripts/nexo-immune.py"}]}')
+
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
+    # Patch module-level constants
+    import script_registry
+    monkeypatch.setattr(script_registry, "NEXO_HOME", nexo_home)
+
+    return scripts
+
+
+class TestMetadataParsing:
+    def test_basic_metadata(self, tmp_path):
+        script = tmp_path / "test.py"
+        script.write_text(
+            "#!/usr/bin/env python3\n"
+            "# nexo: name=my-script\n"
+            "# nexo: description=A test script\n"
+            "# nexo: runtime=python\n"
+            "# nexo: timeout=30\n"
+            "# nexo: requires=git,rsync\n"
+            "# nexo: tools=nexo_learning_search\n"
+            "print('hello')\n"
+        )
+        meta = parse_inline_metadata(script)
+        assert meta["name"] == "my-script"
+        assert meta["description"] == "A test script"
+        assert meta["runtime"] == "python"
+        assert meta["timeout"] == "30"
+        assert meta["requires"] == "git,rsync"
+        assert meta["tools"] == "nexo_learning_search"
+
+    def test_no_metadata(self, tmp_path):
+        script = tmp_path / "test.py"
+        script.write_text("print('no metadata')\n")
+        meta = parse_inline_metadata(script)
+        assert meta == {}
+
+    def test_only_first_25_lines(self, tmp_path):
+        script = tmp_path / "test.py"
+        lines = ["# filler\n"] * 26 + ["# nexo: name=hidden\n"]
+        script.write_text("".join(lines))
+        meta = parse_inline_metadata(script)
+        assert "name" not in meta
+
+    def test_invalid_key_ignored(self, tmp_path):
+        script = tmp_path / "test.py"
+        script.write_text("# nexo: invalidkey=value\n# nexo: name=valid\n")
+        meta = parse_inline_metadata(script)
+        assert "invalidkey" not in meta
+        assert meta["name"] == "valid"
+
+
+class TestRuntimeDetection:
+    def test_metadata_runtime(self, tmp_path):
+        script = tmp_path / "test.sh"
+        assert classify_runtime(script, {"runtime": "python"}) == "python"
+
+    def test_shebang_python(self, tmp_path):
+        script = tmp_path / "test"
+        script.write_text("#!/usr/bin/env python3\nprint('hi')\n")
+        assert classify_runtime(script, {}) == "python"
+
+    def test_shebang_bash(self, tmp_path):
+        script = tmp_path / "test"
+        script.write_text("#!/bin/bash\necho hi\n")
+        assert classify_runtime(script, {}) == "shell"
+
+    def test_extension_py(self, tmp_path):
+        script = tmp_path / "test.py"
+        script.write_text("print('hi')\n")
+        assert classify_runtime(script, {}) == "python"
+
+    def test_extension_sh(self, tmp_path):
+        script = tmp_path / "test.sh"
+        script.write_text("echo hi\n")
+        assert classify_runtime(script, {}) == "shell"
+
+    def test_unknown(self, tmp_path):
+        script = tmp_path / "test.rb"
+        script.write_text("puts 'hi'\n")
+        assert classify_runtime(script, {}) == "unknown"
+
+
+class TestCoreFiltering:
+    def test_core_excluded_by_default(self, scripts_dir):
+        # Create a core script
+        (scripts_dir / "nexo-immune.py").write_text("# core script\n")
+        # Create a personal script
+        (scripts_dir / "my-backup.py").write_text("# nexo: name=my-backup\nprint('hi')\n")
+
+        scripts = list_scripts(include_core=False)
+        names = [s["name"] for s in scripts]
+        assert "my-backup" in names
+        assert "nexo-immune" not in names
+
+    def test_core_included_with_flag(self, scripts_dir):
+        (scripts_dir / "nexo-immune.py").write_text("# core script\n")
+        (scripts_dir / "my-backup.py").write_text("# nexo: name=my-backup\nprint('hi')\n")
+
+        scripts = list_scripts(include_core=True)
+        names = [s["name"] for s in scripts]
+        assert "my-backup" in names
+        assert "nexo-immune" in names
+
+
+class TestResolveScript:
+    def test_resolve_by_name(self, scripts_dir):
+        (scripts_dir / "my-tool.py").write_text("# nexo: name=my-tool\n# nexo: description=A tool\n")
+        info = resolve_script("my-tool")
+        assert info is not None
+        assert info["name"] == "my-tool"
+
+    def test_resolve_by_stem(self, scripts_dir):
+        (scripts_dir / "quick-check.sh").write_text("#!/bin/bash\necho ok\n")
+        info = resolve_script("quick-check")
+        assert info is not None
+
+    def test_resolve_not_found(self, scripts_dir):
+        assert resolve_script("nonexistent") is None
+
+
+class TestDoctorScript:
+    def test_healthy_script(self, scripts_dir):
+        script = scripts_dir / "good.py"
+        script.write_text(
+            "#!/usr/bin/env python3\n"
+            "# nexo: name=good\n"
+            "# nexo: runtime=python\n"
+            "# nexo: timeout=30\n"
+            "print('hello')\n"
+        )
+        result = doctor_script(str(script))
+        assert result["status"] == "pass"
+
+    def test_forbidden_pattern(self, scripts_dir):
+        script = scripts_dir / "bad.py"
+        script.write_text(
+            "# nexo: name=bad\n"
+            "import sqlite3\n"
+            "conn = sqlite3.connect('nexo.db')\n"
+        )
+        result = doctor_script(str(script))
+        assert result["status"] == "fail"
+        fail_msgs = [i["msg"] for i in result["items"] if i["level"] == "fail"]
+        assert any("sqlite3" in m for m in fail_msgs)
+
+    def test_missing_executable_bit(self, scripts_dir):
+        script = scripts_dir / "noexec.sh"
+        script.write_text("#!/bin/bash\necho hello\n")
+        os.chmod(str(script), 0o644)  # no exec bit
+        result = doctor_script(str(script))
+        warn_msgs = [i["msg"] for i in result["items"] if i["level"] == "warn"]
+        assert any("executable" in m.lower() for m in warn_msgs)
+
+    def test_not_found(self, scripts_dir):
+        result = doctor_script("nonexistent")
+        assert result["status"] == "fail"

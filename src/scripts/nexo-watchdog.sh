@@ -1,7 +1,7 @@
 #!/bin/bash
 # ============================================================================
 # NEXO Watchdog — Comprehensive health monitor for all NEXO services
-# Cron: */5 * * * * NEXO_HOME/scripts/nexo-watchdog.sh
+# Schedule: every 30 minutes (interval_seconds: 1800)
 # ============================================================================
 # Monitors ALL LaunchAgents, cron jobs, and background processes.
 # Outputs: watchdog-status.json (machine), watchdog-report.txt (human),
