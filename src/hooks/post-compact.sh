@@ -18,8 +18,12 @@ fi
 # PreCompact writes the SID to /tmp/nexo-compacting-sid
 TARGET_SID=""
 if [ -f /tmp/nexo-compacting-sid ]; then
-    TARGET_SID=$(cat /tmp/nexo-compacting-sid 2>/dev/null || echo "")
+    RAW_SID=$(cat /tmp/nexo-compacting-sid 2>/dev/null || echo "")
     rm -f /tmp/nexo-compacting-sid
+    # Validate SID format: must be nexo-DIGITS-DIGITS
+    if [[ "$RAW_SID" =~ ^nexo-[0-9]+-[0-9]+$ ]]; then
+        TARGET_SID="$RAW_SID"
+    fi
 fi
 
 CHECKPOINT=""

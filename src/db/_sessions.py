@@ -15,8 +15,27 @@ def local_time_str() -> str:
     return datetime.now().strftime("%H:%M")
 
 
+import re
+_SID_PATTERN = re.compile(r'^nexo-\d+-\d+$')
+
+def _validate_sid(sid: str) -> str:
+    """Validate and sanitize SID. Extracts clean SID if embedded in text."""
+    if not sid:
+        raise ValueError("SID cannot be empty")
+    # If the SID is clean, return it
+    sid = sid.strip()
+    if _SID_PATTERN.match(sid):
+        return sid
+    # Try to extract SID from text like "SID: nexo-1234-5678\nOther stuff..."
+    match = _SID_PATTERN.search(sid)
+    if match:
+        return match.group(0)
+    raise ValueError(f"Invalid SID format: {sid[:80]}")
+
+
 def register_session(sid: str, task: str, claude_session_id: str = "") -> dict:
     """Register or re-register a session."""
+    sid = _validate_sid(sid)
     conn = get_db()
     now = now_epoch()
     conn.execute(
@@ -35,6 +54,7 @@ def update_session(sid: str, task: str | None) -> dict:
         sid: Session ID.
         task: New task description, or None to keep current task (keepalive touch).
     """
+    sid = _validate_sid(sid)
     conn = get_db()
     now = now_epoch()
     row = conn.execute("SELECT started_epoch, task FROM sessions WHERE sid = ?", (sid,)).fetchone()
@@ -57,6 +77,7 @@ def update_session(sid: str, task: str | None) -> dict:
 
 def complete_session(sid: str):
     """Remove session and its tracked files."""
+    sid = _validate_sid(sid)
     conn = get_db()
     conn.execute("PRAGMA foreign_keys=ON")
     conn.execute("DELETE FROM tracked_files WHERE sid = ?", (sid,))

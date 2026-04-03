@@ -22,7 +22,7 @@ if [ -f "$NEXO_DB" ]; then
         SELECT sid FROM sessions ORDER BY last_update_epoch DESC LIMIT 1
     " 2>/dev/null || echo "")
 
-    if [ -n "$LATEST_SID" ]; then
+    if [ -n "$LATEST_SID" ] && [[ "$LATEST_SID" =~ ^nexo-[0-9]+-[0-9]+$ ]]; then
         # Write SID to temp file so PostCompact knows which session compacted
         echo "$LATEST_SID" > /tmp/nexo-compacting-sid
         # Pull diary draft data into checkpoint

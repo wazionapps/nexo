@@ -79,7 +79,7 @@ def ingest(
 
     # Auto-pin: corrections and blocking learnings get pinned (zero decay, +0.2 boost)
     # This ensures user's corrections NEVER fade away
-    _pin_lifecycle = None
+    _pin_lifecycle = 'active'
     if auto_pin or (source_type in ('learning', 'feedback') and
                     any(kw in content.upper() for kw in ('BLOCKING', 'CRÍTICO', 'CRITICAL', 'NUNCA', 'NEVER', 'PROHIBIDO'))):
         _pin_lifecycle = 'pinned'
