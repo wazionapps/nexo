@@ -17,6 +17,8 @@ def nexo_home(tmp_path):
     home = tmp_path / "nexo"
     scripts = home / "scripts"
     scripts.mkdir(parents=True)
+    for dirname in ["data", "plugins", "hooks", "coordination", "operations", "logs"]:
+        (home / dirname).mkdir()
     (home / "crons").mkdir()
     (home / "crons" / "manifest.json").write_text('{"crons":[]}')
     return home
@@ -101,3 +103,33 @@ class TestScriptsDoctor:
         assert result.returncode == 0
         data = json.loads(result.stdout)
         assert isinstance(data, list)
+
+
+class TestScriptsCall:
+    def test_call_plugin_tool_json_output(self, nexo_home):
+        (nexo_home / "data" / "nexo.db").write_text("")
+        result = _run_cli(
+            nexo_home,
+            "scripts",
+            "call",
+            "nexo_doctor",
+            "--input",
+            json.dumps({"tier": "boot", "output": "json"}),
+            "--json-output",
+        )
+        assert result.returncode == 0
+        data = json.loads(result.stdout)
+        assert "overall_status" in data
+        assert "[PLUGIN LOADED]" not in result.stderr
+
+    def test_call_unknown_tool(self, nexo_home):
+        result = _run_cli(
+            nexo_home,
+            "scripts",
+            "call",
+            "does_not_exist",
+            "--input",
+            "{}",
+        )
+        assert result.returncode == 1
+        assert "Tool not found" in result.stderr

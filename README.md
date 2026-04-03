@@ -546,7 +546,7 @@ That's it. No need to run `claude` manually. Your operator will greet you immedi
 
 ### Runtime CLI
 
-After installation, the `nexo` command provides operational tools:
+After installation or auto-update, NEXO adds `NEXO_HOME/bin` to your shell `PATH`. Open a new terminal and the `nexo` command provides operational tools:
 
 ```bash
 # Personal Scripts

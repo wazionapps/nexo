@@ -11,6 +11,9 @@ Entry points:
 from __future__ import annotations
 
 import argparse
+import asyncio
+import contextlib
+import io
 import json
 import os
 import subprocess
@@ -141,39 +144,87 @@ def _scripts_call(args):
         print(f"Invalid JSON input: {e}", file=sys.stderr)
         return 1
 
-    # In-process call: bootstrap server in CLI mode
-    os.environ["NEXO_CLI_MODE"] = "1"
-    try:
+    def _bootstrap_mcp():
+        os.environ["NEXO_CLI_MODE"] = "1"
+        from db import init_db
+        from plugin_loader import load_all_plugins
         from server import mcp
-        import asyncio
+
+        init_db()
+
+        # Plugin loading is required so scripts can call plugin tools such as
+        # nexo_doctor, but the loader is noisy on stderr and would pollute CLI output.
+        with contextlib.redirect_stderr(io.StringIO()):
+            load_all_plugins(mcp)
+
+        return mcp
+
+    def _extract_tool_value(result):
+        structured = getattr(result, "structured_content", None)
+        if structured not in (None, {}):
+            return structured
+
+        content = getattr(result, "content", None)
+        if isinstance(content, list):
+            texts = [item.text for item in content if hasattr(item, "text")]
+            if texts:
+                return "\n".join(texts)
+
+        dumped = getattr(result, "model_dump", None)
+        if callable(dumped):
+            data = dumped()
+            if isinstance(data, dict):
+                return data.get("structured_content") or data.get("content") or data
+
+        return str(result)
+
+    try:
+        mcp = _bootstrap_mcp()
 
         async def _call():
-            tools = mcp._tool_manager._tools
-            if tool_name not in tools:
-                print(f"Tool not found: {tool_name}", file=sys.stderr)
-                print("Available tools:", ", ".join(sorted(tools.keys())), file=sys.stderr)
-                return 1
-            tool = tools[tool_name]
-            result = await tool.run(payload)
-            return result
+            tool = await mcp.get_tool(tool_name)
+            if tool is None:
+                tools = await mcp.list_tools()
+                available = sorted(t.name for t in tools)
+                raise LookupError(
+                    f"Tool not found: {tool_name}\nAvailable tools: {', '.join(available)}"
+                )
+            return await mcp.call_tool(tool_name, payload)
 
         result = asyncio.run(_call())
-        if isinstance(result, dict) or isinstance(result, list):
-            output = json.dumps(result, indent=2, ensure_ascii=False)
-        else:
-            output = str(result)
+        value = _extract_tool_value(result)
 
         if args.json_output:
-            # Ensure valid JSON
-            try:
-                parsed = json.loads(output)
-                print(json.dumps(parsed, indent=2, ensure_ascii=False))
-            except (json.JSONDecodeError, TypeError):
-                print(json.dumps({"result": output}, ensure_ascii=False))
+            if (
+                isinstance(value, dict)
+                and set(value.keys()) == {"result"}
+                and isinstance(value["result"], str)
+            ):
+                try:
+                    value = json.loads(value["result"])
+                except json.JSONDecodeError:
+                    pass
+            if isinstance(value, str):
+                try:
+                    value = json.loads(value)
+                except json.JSONDecodeError:
+                    value = {"result": value}
+            elif not isinstance(value, (dict, list)):
+                value = {"result": value}
+            print(json.dumps(value, indent=2, ensure_ascii=False))
+            return 0
+
+        if isinstance(value, dict) and set(value.keys()) == {"result"} and isinstance(value["result"], str):
+            print(value["result"])
+        elif isinstance(value, (dict, list)):
+            print(json.dumps(value, indent=2, ensure_ascii=False))
         else:
-            print(output)
+            print(value)
         return 0
 
+    except LookupError as e:
+        print(str(e), file=sys.stderr)
+        return 1
     except Exception as e:
         print(f"Error calling tool {tool_name}: {e}", file=sys.stderr)
         return 1

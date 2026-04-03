@@ -1,6 +1,7 @@
 """Tests for the Doctor diagnostic system."""
 import json
 import os
+import sqlite3
 import sys
 import time
 
@@ -16,11 +17,28 @@ def nexo_home(tmp_path, monkeypatch):
     for d in ["data", "scripts", "plugins", "crons", "hooks", "coordination", "operations", "logs"]:
         (home / d).mkdir(parents=True)
 
-    # Create a minimal DB
-    import sqlite3
+    (home / "crons" / "manifest.json").write_text(json.dumps({
+        "crons": [
+            {"id": "immune", "interval_seconds": 1800},
+            {"id": "watchdog", "interval_seconds": 1800},
+            {"id": "self-audit", "schedule": {"hour": 7, "minute": 0}},
+        ]
+    }))
+
+    # Create a minimal DB with the real columns Doctor inspects.
     db_path = home / "data" / "nexo.db"
     conn = sqlite3.connect(str(db_path))
-    conn.execute("CREATE TABLE IF NOT EXISTS sessions (id TEXT, status TEXT, started_at TEXT)")
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS sessions ("
+        "sid TEXT PRIMARY KEY, task TEXT NOT NULL DEFAULT '', started_epoch REAL NOT NULL, "
+        "last_update_epoch REAL NOT NULL, local_time TEXT NOT NULL DEFAULT ''"
+        ")"
+    )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS cron_runs ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, cron_id TEXT NOT NULL, started_at TEXT NOT NULL"
+        ")"
+    )
     conn.execute("PRAGMA user_version = 42")
     conn.close()
 
@@ -60,7 +78,10 @@ class TestBootChecks:
 
 class TestRuntimeChecks:
     def test_fresh_immune(self, nexo_home):
-        status = {"overall_status": "healthy", "checks": [1, 2, 3]}
+        status = {
+            "counts": {"OK": 3, "WARN": 0, "FAIL": 0},
+            "checks": {"db": [1], "services": [1, 2]},
+        }
         (nexo_home / "coordination" / "immune-status.json").write_text(json.dumps(status))
         from doctor.providers.runtime import check_immune_status
         check = check_immune_status()
@@ -68,7 +89,9 @@ class TestRuntimeChecks:
 
     def test_stale_watchdog(self, nexo_home):
         status_file = nexo_home / "operations" / "watchdog-status.json"
-        status_file.write_text('{"monitors_total": 5, "monitors_pass": 5, "monitors_fail": 0}')
+        status_file.write_text(json.dumps({
+            "summary": {"total": 5, "pass": 5, "warn": 0, "fail": 0, "overall": "PASS"}
+        }))
         # Make it old
         old_time = time.time() - 7200
         os.utime(str(status_file), (old_time, old_time))
@@ -76,9 +99,57 @@ class TestRuntimeChecks:
         check = check_watchdog_status()
         assert check.status == "degraded"
 
+    def test_watchdog_fail_is_critical(self, nexo_home):
+        status_file = nexo_home / "operations" / "watchdog-status.json"
+        status_file.write_text(json.dumps({
+            "summary": {"total": 5, "pass": 3, "warn": 1, "fail": 1, "overall": "FAIL"}
+        }))
+        from doctor.providers.runtime import check_watchdog_status
+        check = check_watchdog_status()
+        assert check.status == "critical"
+
     def test_missing_watchdog(self, nexo_home):
         from doctor.providers.runtime import check_watchdog_status
         check = check_watchdog_status()
+        assert check.status == "degraded"
+
+    def test_stale_sessions_uses_last_update_epoch(self, nexo_home):
+        conn = sqlite3.connect(str(nexo_home / "data" / "nexo.db"))
+        conn.execute(
+            "INSERT INTO sessions (sid, task, started_epoch, last_update_epoch, local_time) VALUES (?, ?, ?, ?, ?)",
+            ("nexo-123-456", "audit", time.time() - 10800, time.time() - 10800, "10:00"),
+        )
+        conn.commit()
+        conn.close()
+
+        from doctor.providers.runtime import check_stale_sessions
+        check = check_stale_sessions()
+        assert check.status == "degraded"
+
+    def test_cron_freshness_respects_daily_schedule(self, nexo_home):
+        conn = sqlite3.connect(str(nexo_home / "data" / "nexo.db"))
+        conn.execute(
+            "INSERT INTO cron_runs (cron_id, started_at) VALUES (?, ?)",
+            ("self-audit", time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time() - 12 * 3600))),
+        )
+        conn.commit()
+        conn.close()
+
+        from doctor.providers.runtime import check_cron_freshness
+        check = check_cron_freshness()
+        assert check.status == "healthy"
+
+    def test_cron_freshness_flags_stale_interval_cron(self, nexo_home):
+        conn = sqlite3.connect(str(nexo_home / "data" / "nexo.db"))
+        conn.execute(
+            "INSERT INTO cron_runs (cron_id, started_at) VALUES (?, ?)",
+            ("watchdog", time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time() - 3 * 3600))),
+        )
+        conn.commit()
+        conn.close()
+
+        from doctor.providers.runtime import check_cron_freshness
+        check = check_cron_freshness()
         assert check.status == "degraded"
 
 
@@ -93,6 +164,34 @@ class TestDeepChecks:
         from doctor.providers.deep import check_self_audit_summary
         check = check_self_audit_summary()
         assert check.status == "degraded"
+
+    def test_self_audit_errors_are_critical(self, nexo_home):
+        (nexo_home / "logs" / "self-audit-summary.json").write_text(json.dumps({
+            "findings": [{"severity": "ERROR", "msg": "boom"}],
+            "counts": {"error": 1, "warn": 0, "info": 0},
+        }))
+        from doctor.providers.deep import check_self_audit_summary
+        check = check_self_audit_summary()
+        assert check.status == "critical"
+
+    def test_failed_preflight_is_critical(self, nexo_home):
+        (nexo_home / "logs" / "runtime-preflight-summary.json").write_text(json.dumps({
+            "ok": False,
+            "checks": {"db_copy": False},
+            "errors": ["db copy failed"],
+        }))
+        from doctor.providers.deep import check_preflight_summary
+        check = check_preflight_summary()
+        assert check.status == "critical"
+
+    def test_failed_watchdog_smoke_is_critical(self, nexo_home):
+        (nexo_home / "logs" / "watchdog-smoke-summary.json").write_text(json.dumps({
+            "ok": False,
+            "findings": [{"severity": "ERROR", "msg": "hash mismatch"}],
+        }))
+        from doctor.providers.deep import check_watchdog_smoke
+        check = check_watchdog_smoke()
+        assert check.status == "critical"
 
 
 class TestOrchestrator:

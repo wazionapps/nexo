@@ -94,6 +94,61 @@ def _read_package_version() -> str:
     return "unknown"
 
 
+def _runtime_cli_wrapper_text() -> str:
+    return (
+        "#!/usr/bin/env bash\n"
+        "set -euo pipefail\n\n"
+        f'NEXO_HOME="{NEXO_HOME}"\n'
+        'PYTHON="$NEXO_HOME/.venv/bin/python3"\n'
+        'if [ ! -x "$PYTHON" ]; then\n'
+        '  if command -v python3 >/dev/null 2>&1; then\n'
+        '    PYTHON="python3"\n'
+        "  else\n"
+        '    PYTHON="python"\n'
+        "  fi\n"
+        "fi\n"
+        'export NEXO_HOME\n'
+        'export NEXO_CODE="$NEXO_HOME"\n'
+        'exec "$PYTHON" "$NEXO_HOME/cli.py" "$@"\n'
+    )
+
+
+def _shell_rc_files() -> list[Path]:
+    shell = os.environ.get("SHELL", "/bin/bash")
+    home_dir = Path.home()
+    if "zsh" in shell:
+        return [home_dir / ".zshrc"]
+    return [home_dir / ".bash_profile", home_dir / ".bashrc"]
+
+
+def _ensure_runtime_cli_in_shell():
+    path_line = f'export PATH="{NEXO_HOME / "bin"}:$PATH"'
+    comment = "# NEXO runtime CLI"
+    for rc_file in _shell_rc_files():
+        try:
+            content = rc_file.read_text() if rc_file.exists() else ""
+            if path_line not in content:
+                with rc_file.open("a") as fh:
+                    fh.write(f"\n{comment}\n{path_line}\n")
+                _log(f"Backfilled runtime CLI PATH in {rc_file.name}")
+        except Exception as e:
+            _log(f"Shell PATH backfill error for {rc_file.name}: {e}")
+
+
+def _ensure_runtime_cli_wrapper():
+    try:
+        bin_dir = NEXO_HOME / "bin"
+        bin_dir.mkdir(parents=True, exist_ok=True)
+        wrapper = bin_dir / "nexo"
+        content = _runtime_cli_wrapper_text()
+        if not wrapper.exists() or wrapper.read_text() != content:
+            wrapper.write_text(content)
+            wrapper.chmod(0o755)
+            _log("Backfilled runtime CLI wrapper")
+    except Exception as e:
+        _log(f"Runtime CLI wrapper backfill error: {e}")
+
+
 # ── Hook sync ────────────────────────────────────────────────────────
 
 def _requirements_hash() -> str:
@@ -810,6 +865,9 @@ def auto_update_check() -> dict:
     except Exception as e:
         _log(f"CLI backfill error: {e}")
 
+    _ensure_runtime_cli_wrapper()
+    _ensure_runtime_cli_in_shell()
+
     # Backfill doctor package for existing installs
     try:
         doctor_src = SRC_DIR / "doctor"
@@ -835,6 +893,18 @@ def auto_update_check() -> dict:
                             shutil.copy2(str(src_f), str(dst_f))
     except Exception as e:
         _log(f"Doctor backfill error: {e}")
+
+    # Backfill MCP doctor plugin so existing installs expose nexo_doctor.
+    try:
+        plugin_src = SRC_DIR / "plugins" / "doctor.py"
+        plugin_dest = NEXO_HOME / "plugins" / "doctor.py"
+        plugin_dest.parent.mkdir(parents=True, exist_ok=True)
+        if plugin_src.is_file() and (not plugin_dest.exists() or plugin_src.stat().st_mtime > plugin_dest.stat().st_mtime):
+            import shutil
+            shutil.copy2(str(plugin_src), str(plugin_dest))
+            _log("Backfilled doctor plugin")
+    except Exception as e:
+        _log(f"Doctor plugin backfill error: {e}")
 
     # Backfill script templates for existing installs
     try:

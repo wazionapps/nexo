@@ -1260,6 +1260,7 @@ async function main() {
   log("Setting up NEXO home...");
   const dirs = [
     NEXO_HOME,
+    path.join(NEXO_HOME, "bin"),
     path.join(NEXO_HOME, "plugins"),
     path.join(NEXO_HOME, "scripts"),
     path.join(NEXO_HOME, "logs"),
@@ -1360,6 +1361,29 @@ async function main() {
       fs.copyFileSync(src, path.join(NEXO_HOME, f));
     }
   });
+
+  // Runtime CLI wrapper lives in NEXO_HOME/bin so it survives npx installs.
+  const runtimeCli = [
+    "#!/usr/bin/env bash",
+    "set -euo pipefail",
+    "",
+    `NEXO_HOME="${NEXO_HOME}"`,
+    'PYTHON="$NEXO_HOME/.venv/bin/python3"',
+    'if [ ! -x "$PYTHON" ]; then',
+    '  if command -v python3 >/dev/null 2>&1; then',
+    '    PYTHON="python3"',
+    "  else",
+    '    PYTHON="python"',
+    "  fi",
+    "fi",
+    'export NEXO_HOME',
+    'export NEXO_CODE="$NEXO_HOME"',
+    'exec "$PYTHON" "$NEXO_HOME/cli.py" "$@"',
+    "",
+  ].join("\n");
+  const runtimeCliPath = path.join(NEXO_HOME, "bin", "nexo");
+  fs.writeFileSync(runtimeCliPath, runtimeCli);
+  fs.chmodSync(runtimeCliPath, 0o755);
 
   // Core packages (directories with __init__.py)
   ["db", "cognitive", "doctor"].forEach(pkg => {
@@ -1927,7 +1951,7 @@ ${doScan ? `- Stack: ${Object.keys(profileData.code.languages || {}).slice(0, 5)
   // Note: prevent-sleep and tcc-approve are now part of ALL_PROCESSES
   // and installed by installAllProcesses() above. No separate caffeinate block needed.
 
-  // Step 8: Create shell alias so user can just type the operator's name
+  // Step 8: Create shell alias and add runtime CLI to PATH
   log("Creating shell alias...");
   const aliasName = operatorName.toLowerCase();
   const savedCliPath = (() => {
@@ -1937,6 +1961,8 @@ ${doScan ? `- Stack: ${Object.keys(profileData.code.languages || {}).slice(0, 5)
   const claudeBin = savedCliPath || run("which claude") || "claude";
   const aliasLine = `alias ${aliasName}='${claudeBin} --dangerously-skip-permissions "."'`;
   const aliasComment = `# ${operatorName} — start Claude Code with ${operatorName} speaking first`;
+  const nexoPathLine = `export PATH="${path.join(NEXO_HOME, "bin")}:$PATH"`;
+  const nexoPathComment = "# NEXO runtime CLI";
 
   // Detect shell and add alias
   const userShell = process.env.SHELL || "/bin/bash";
@@ -1959,6 +1985,14 @@ ${doScan ? `- Stack: ${Object.keys(profileData.code.languages || {}).slice(0, 5)
       rcContent = fs.readFileSync(rcFile, "utf8");
     }
 
+    if (!rcContent.includes(nexoPathLine)) {
+      fs.appendFileSync(rcFile, `\n${nexoPathComment}\n${nexoPathLine}\n`);
+      log(`Added NEXO runtime CLI to ${path.basename(rcFile)}`);
+      rcContent += `\n${nexoPathComment}\n${nexoPathLine}\n`;
+    } else {
+      log(`Runtime CLI already present in ${path.basename(rcFile)}`);
+    }
+
     if (!rcContent.includes(`alias ${aliasName}=`)) {
       fs.appendFileSync(rcFile, `\n${aliasComment}\n${aliasLine}\n`);
       log(`Added '${aliasName}' alias to ${path.basename(rcFile)}`);
@@ -1966,7 +2000,7 @@ ${doScan ? `- Stack: ${Object.keys(profileData.code.languages || {}).slice(0, 5)
       log(`Alias '${aliasName}' already exists in ${path.basename(rcFile)}`);
     }
   }
-  log(`After setup, open a new terminal and type: ${aliasName}`);
+  log(`After setup, open a new terminal and type: ${aliasName} or nexo`);
   console.log("");
 
   // Step 9: Generate CLAUDE.md template
