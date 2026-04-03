@@ -308,6 +308,50 @@ class TestRuntimeChecks:
         managed = runtime._managed_launchagent_plists()
         assert ("catchup", launch_agents / "com.nexo.catchup.plist") in managed
 
+    def test_launchagent_integrity_detects_keepalive_schedule_drift(self, nexo_home, monkeypatch):
+        from doctor.providers import runtime
+
+        plist_path = nexo_home / "com.nexo.day-orchestrator.plist"
+        with plist_path.open("wb") as fh:
+            plistlib.dump({
+                "EnvironmentVariables": {
+                    "NEXO_HOME": str(nexo_home),
+                    "NEXO_CODE": str(nexo_home),
+                },
+                "RunAtLoad": True,
+            }, fh)
+
+        monkeypatch.setattr(runtime.platform, "system", lambda: "Darwin")
+        monkeypatch.setattr(runtime, "_managed_launchagent_plists", lambda: [("day-orchestrator", plist_path)])
+        monkeypatch.setattr(runtime, "_launchagent_schedule_expectations", lambda: {
+            "day-orchestrator": {
+                "StartInterval": None,
+                "StartCalendarInterval": None,
+                "RunAtLoad": True,
+                "KeepAlive": True,
+                "schedule_configured": True,
+            }
+        })
+        monkeypatch.setattr(runtime.os, "getuid", lambda: 501)
+
+        def fake_run(args, **kwargs):
+            return SimpleNamespace(
+                returncode=0,
+                stdout=(
+                    "gui/501/com.nexo.day-orchestrator = {\n"
+                    f"path = {plist_path}\n"
+                    f"NEXO_HOME => {nexo_home}\n"
+                    f"NEXO_CODE => {nexo_home}\n"
+                    "}\n"
+                ),
+                stderr="",
+            )
+
+        monkeypatch.setattr(runtime.subprocess, "run", fake_run)
+        check = runtime.check_launchagent_integrity()
+        assert check.status == "degraded"
+        assert any("KeepAlive" in item for item in check.evidence)
+
     def test_launchagent_integrity_fix_bootstraps_real_plist(self, nexo_home, monkeypatch):
         from doctor.providers import runtime
 

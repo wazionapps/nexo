@@ -79,9 +79,14 @@ for c in data.get('crons', []):
     stderr_log = nexo_home + '/logs/' + cid + '-stderr.log'
 
     # Derive max_stale_secs and schedule_desc from schedule config
-    if c.get('run_at_load'):
+    if c.get('keep_alive'):
+        max_stale = 0
+        schedule_desc = 'KeepAlive'
+        proc_grep = c.get('script', '').split('/')[-1]
+    elif c.get('run_at_load'):
         max_stale = 0
         schedule_desc = 'RunAtLoad once'
+        proc_grep = ''
     elif 'interval_seconds' in c:
         iv = c['interval_seconds']
         # Allow 2x the interval before WARN
@@ -90,6 +95,7 @@ for c in data.get('crons', []):
             schedule_desc = f'Every {iv // 3600}h'
         else:
             schedule_desc = f'Every {iv // 60} min'
+        proc_grep = ''
     elif 'schedule' in c:
         s = c['schedule']
         h = s.get('hour', 0)
@@ -101,12 +107,13 @@ for c in data.get('crons', []):
         else:
             schedule_desc = f'Daily {h}:{m:02d}'
             max_stale = 90000  # ~25h
+        proc_grep = ''
     else:
         max_stale = 0
         schedule_desc = 'unknown'
+        proc_grep = ''
 
     mon_type = 'core' if c.get('core') else 'personal'
-    proc_grep = ''  # manifest crons are one-shot, no persistent process
 
     print(f'{name}|{svc_id}|{stdout_log}|{stderr_log}|{max_stale}|{proc_grep}|{schedule_desc}|{mon_type}')
 " 2>/dev/null

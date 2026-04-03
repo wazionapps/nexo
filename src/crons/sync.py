@@ -32,6 +32,7 @@ MANIFEST = Path(__file__).resolve().parent / "manifest.json"
 LAUNCH_AGENTS_DIR = Path.home() / "Library" / "LaunchAgents"
 LABEL_PREFIX = "com.nexo."
 LOG_DIR = NEXO_HOME / "logs"
+OPTIONALS_FILE = NEXO_HOME / "config" / "optionals.json"
 
 
 def log(msg: str):
@@ -62,10 +63,35 @@ def _sync_watchdog_hash_registry():
         log(f"WARNING: could not sync watchdog hash registry: {e}")
 
 
+def _refresh_runtime_manifest():
+    """Keep the installed crons manifest aligned with the source manifest."""
+    try:
+        runtime_manifest = RUNTIME_ROOT / "crons" / "manifest.json"
+        runtime_manifest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(MANIFEST, runtime_manifest)
+    except Exception as e:
+        log(f"WARNING: could not refresh runtime manifest: {e}")
+
+
 def load_manifest() -> list[dict]:
     with open(MANIFEST) as f:
         data = json.load(f)
-    return data.get("crons", [])
+    crons = data.get("crons", [])
+
+    enabled_optionals: dict[str, bool] = {}
+    if OPTIONALS_FILE.is_file():
+        try:
+            enabled_optionals = json.loads(OPTIONALS_FILE.read_text())
+        except Exception as e:
+            log(f"WARNING: could not read optionals.json: {e}")
+
+    filtered = []
+    for cron in crons:
+        optional_key = cron.get("optional")
+        if optional_key and not enabled_optionals.get(optional_key, False):
+            continue
+        filtered.append(cron)
+    return filtered
 
 
 def _runtime_relative_path(src: Path) -> Path:
@@ -159,7 +185,10 @@ def build_plist(cron: dict) -> dict:
     }
 
     # Schedule
-    if cron.get("run_at_load"):
+    if cron.get("keep_alive"):
+        plist["RunAtLoad"] = True
+        plist["KeepAlive"] = True
+    elif cron.get("run_at_load"):
         plist["RunAtLoad"] = True
     elif "interval_seconds" in cron:
         plist["StartInterval"] = cron["interval_seconds"]
@@ -204,6 +233,8 @@ def plist_needs_update(existing_path: Path, new_plist: dict) -> bool:
     if existing.get("StartCalendarInterval") != new_plist.get("StartCalendarInterval"):
         return True
     if existing.get("RunAtLoad") != new_plist.get("RunAtLoad"):
+        return True
+    if existing.get("KeepAlive") != new_plist.get("KeepAlive"):
         return True
     if existing.get("EnvironmentVariables") != new_plist.get("EnvironmentVariables"):
         return True
@@ -299,6 +330,7 @@ def sync(dry_run: bool = False):
             else:
                 log(f"  SKIP (personal): {cron_id}")
 
+    _refresh_runtime_manifest()
     _sync_watchdog_hash_registry()
     log("Sync complete.")
 

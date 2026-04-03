@@ -99,6 +99,7 @@
       "id": "day-orchestrator",
       "script": "scripts/nexo-day-orchestrator.sh",
       "type": "shell",
+      "keep_alive": true,
       "description": "Autonomous NEXO cycle — checks followups, emails, infra every 15 min (8:00-23:00)",
       "core": true,
       "optional": "orchestrator"

@@ -87,7 +87,7 @@ def _cron_expectations() -> dict[str, dict]:
         expectations = {}
         for cron in data.get("crons", []):
             cron_id = cron.get("id")
-            if not cron_id or cron.get("run_at_load"):
+            if not cron_id or cron.get("run_at_load") or cron.get("keep_alive"):
                 continue
 
             interval_seconds = cron.get("interval_seconds")
@@ -141,9 +141,14 @@ def _launchagent_schedule_expectations() -> dict[str, dict]:
                 "StartInterval": None,
                 "StartCalendarInterval": None,
                 "RunAtLoad": None,
+                "KeepAlive": None,
                 "schedule_configured": False,
             }
-            if cron.get("run_at_load"):
+            if cron.get("keep_alive"):
+                expected["RunAtLoad"] = True
+                expected["KeepAlive"] = True
+                expected["schedule_configured"] = True
+            elif cron.get("run_at_load"):
                 expected["RunAtLoad"] = True
                 expected["schedule_configured"] = True
             elif "interval_seconds" in cron:
@@ -674,11 +679,13 @@ def check_launchagent_integrity(fix: bool = False) -> DoctorCheck:
                 "StartInterval": plist_data.get("StartInterval"),
                 "StartCalendarInterval": plist_data.get("StartCalendarInterval"),
                 "RunAtLoad": plist_data.get("RunAtLoad"),
+                "KeepAlive": plist_data.get("KeepAlive"),
             }
             target_schedule = {
                 "StartInterval": expected_schedule.get("StartInterval"),
                 "StartCalendarInterval": expected_schedule.get("StartCalendarInterval"),
                 "RunAtLoad": expected_schedule.get("RunAtLoad"),
+                "KeepAlive": expected_schedule.get("KeepAlive"),
             }
             if actual_schedule != target_schedule:
                 problems.append(
