@@ -1,279 +1,201 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NEXO Brain — Knowledge Graph</title>
-    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>tailwind.config={theme:{extend:{fontFamily:{display:['Space Grotesk','system-ui','sans-serif'],mono:['JetBrains Mono','monospace']}}}}</script>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <style>
-        html, body { height: 100%; overflow: hidden; }
-        .node circle { transition: filter 0.15s ease; }
-        .node:hover circle { filter: drop-shadow(0 0 10px currentColor); }
-        .link-label { fill: #64748b; font-size: 10px; pointer-events: none; opacity: 0.6; }
-    </style>
-</head>
-<body class="bg-gray-950 text-slate-200 h-full">
+{% extends "base.html" %}
 
-    <!-- Sidebar: 56px icon-only fixed left -->
-    <aside class="fixed left-0 top-0 bottom-0 w-14 bg-slate-900 border-r border-slate-800 flex flex-col items-center py-4 z-50">
-        <!-- Logo -->
-        <a href="/" class="mb-6 flex items-center justify-center w-8 h-8">
-            <img src="/static/nexo-logo.png" alt="NEXO" class="w-7 h-7" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-            <div style="display:none" class="w-7 h-7 rounded-lg bg-violet-600 items-center justify-center text-white text-xs font-bold font-display">N</div>
-        </a>
+{% block title %}Knowledge Graph{% endblock %}
+{% block page_title %}Knowledge Graph{% endblock %}
 
-        <!-- Nav icons -->
-        <nav class="flex flex-col items-center gap-1 flex-1">
-            <!-- Dashboard -->
-            <a href="/" title="Dashboard" class="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-            </a>
-            <!-- Operations -->
-            <a href="/ops" title="Operations" class="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-            </a>
-            <!-- Calendar -->
-            <a href="/calendar" title="Calendar" class="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-            </a>
-            <!-- Inbox -->
-            <a href="/inbox" title="Inbox" class="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
-            </a>
+{% block head %}
+<style>
+    .node circle { transition: filter 0.15s ease; }
+    .node:hover circle { filter: drop-shadow(0 0 10px currentColor); }
+    .link-label { fill: #64748b; font-size: 10px; pointer-events: none; opacity: 0.6; }
+</style>
+{% endblock %}
 
-            <div class="w-6 h-px bg-slate-800 my-1"></div>
+{% block header_actions %}
+<input type="number" id="center" placeholder="Node ID"
+    class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1 text-xs w-24 text-slate-200 focus:outline-none focus:ring-1 focus:ring-violet-500">
+<select id="depth" class="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-violet-500">
+    <option>1</option><option selected>2</option><option>3</option>
+</select>
+<button onclick="loadGraph()" class="px-3 py-1 text-xs bg-violet-600 text-white rounded-lg hover:bg-violet-500 transition-colors">Load</button>
+<span id="info" class="text-xs text-slate-500 font-mono"></span>
+<div class="flex items-center gap-3 ml-2 text-xs text-slate-400">
+    <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-violet-500 inline-block"></span>area</span>
+    <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>file</span>
+    <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-blue-500 inline-block"></span>learning</span>
+    <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-amber-500 inline-block"></span>decision</span>
+    <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-pink-500 inline-block"></span>entity</span>
+    <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-slate-500 inline-block"></span>change</span>
+    <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-cyan-500 inline-block"></span>memory</span>
+</div>
+{% endblock %}
 
-            <!-- Memory -->
-            <a href="/memory" title="Memory" class="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"/><path d="M9 21h6"/><path d="M10 21v1a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-1"/></svg>
-            </a>
-            <!-- Graph — ACTIVE -->
-            <a href="/graph" title="Knowledge Graph" class="w-9 h-9 flex items-center justify-center rounded-lg bg-violet-600/20 text-violet-400 transition-colors">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-            </a>
-            <!-- Sessions -->
-            <a href="/sessions" title="Sessions" class="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            </a>
-            <!-- Somatic -->
-            <a href="/somatic" title="Somatic" class="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-            </a>
-            <!-- Adaptive -->
-            <a href="/adaptive" title="Adaptive" class="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
-            </a>
-        </nav>
+{% block content %}
+<div class="flex overflow-hidden" style="height: calc(100vh - 8.5rem);">
+    <!-- Graph canvas -->
+    <div id="graph-container" class="flex-1 overflow-hidden">
+        <svg id="svg" class="w-full h-full"></svg>
+    </div>
 
-        <!-- Trust score -->
-        <div class="flex flex-col items-center gap-0.5 mt-2">
-            <span class="text-xs font-display font-semibold text-slate-500 uppercase tracking-widest">Trust</span>
-            <span id="trust-score" class="text-sm font-mono font-bold text-violet-400">--</span>
+    <!-- Node detail sidebar -->
+    <div id="sidebar" class="overflow-hidden bg-slate-900 border-l border-slate-800 transition-all duration-300 flex-shrink-0" style="width:0">
+        <div class="p-5 w-80">
+            <div class="flex items-center justify-between mb-3">
+                <h3 id="sb-label" class="text-sm font-display font-semibold text-violet-400 pr-4 leading-tight"></h3>
+                <button onclick="closeSidebar()" class="text-slate-400 hover:text-white text-lg leading-none flex-shrink-0">&times;</button>
+            </div>
+            <div id="sb-meta" class="text-xs text-slate-500 mb-3 font-mono space-y-0.5"></div>
+            <div class="text-xs font-display font-semibold text-slate-400 uppercase tracking-wide mb-2">Connections</div>
+            <div id="sb-neighbors" class="space-y-1"></div>
         </div>
-    </aside>
+    </div>
+</div>
+{% endblock %}
 
-    <!-- Main content: full height flex -->
-    <main class="ml-14 min-h-screen bg-gray-950 text-slate-200 flex flex-col" style="height:100vh">
-        <header class="h-12 border-b border-slate-800/50 flex items-center gap-4 px-6 flex-shrink-0">
-            <h1 class="text-sm font-display font-semibold">Knowledge Graph</h1>
-            <input type="number" id="center" placeholder="Node ID"
-                class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1 text-xs w-24 text-slate-200 focus:outline-none focus:ring-1 focus:ring-violet-500">
-            <select id="depth" class="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-violet-500">
-                <option>1</option><option selected>2</option><option>3</option>
-            </select>
-            <button onclick="loadGraph()" class="px-3 py-1 text-xs bg-violet-600 text-white rounded-lg hover:bg-violet-500 transition-colors">Load</button>
-            <span id="info" class="text-xs text-slate-500 font-mono"></span>
-            <div class="flex items-center gap-3 ml-auto text-xs text-slate-400">
-                <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-violet-500 inline-block"></span>area</span>
-                <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>file</span>
-                <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-blue-500 inline-block"></span>learning</span>
-                <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-amber-500 inline-block"></span>decision</span>
-                <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-pink-500 inline-block"></span>entity</span>
-                <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-slate-500 inline-block"></span>change</span>
-                <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-cyan-500 inline-block"></span>memory</span>
-            </div>
-        </header>
+{% block scripts %}
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script>
+    const typeColors = {
+        area: '#8B5CF6',
+        file: '#10B981',
+        learning: '#3B82F6',
+        decision: '#F59E0B',
+        entity: '#EC4899',
+        change: '#64748B',
+        memory: '#06B6D4'
+    };
 
-        <div class="flex-1 flex overflow-hidden">
-            <!-- Graph canvas -->
-            <div id="graph-container" class="flex-1 overflow-hidden">
-                <svg id="svg" class="w-full h-full"></svg>
-            </div>
+    function nodeColor(type) { return typeColors[type] || '#64748B'; }
+    function nodeRadius(d) { return d.depth === 0 ? 16 : d.depth === 1 ? 10 : 7; }
 
-            <!-- Node detail sidebar -->
-            <div id="sidebar" class="overflow-hidden bg-slate-900 border-l border-slate-800 transition-all duration-300 flex-shrink-0" style="width:0">
-                <div class="p-5 w-80">
-                    <div class="flex items-center justify-between mb-3">
-                        <h3 id="sb-label" class="text-sm font-display font-semibold text-violet-400 pr-4 leading-tight"></h3>
-                        <button onclick="closeSidebar()" class="text-slate-400 hover:text-white text-lg leading-none flex-shrink-0">&times;</button>
-                    </div>
-                    <div id="sb-meta" class="text-xs text-slate-500 mb-3 font-mono space-y-0.5"></div>
-                    <div class="text-xs font-display font-semibold text-slate-400 uppercase tracking-wide mb-2">Connections</div>
-                    <div id="sb-neighbors" class="space-y-1"></div>
-                </div>
-            </div>
-        </div>
-    </main>
+    let currentSim = null;
 
-    <script src="https://d3js.org/d3.v7.min.js"></script>
-    <script>
-        const typeColors = {
-            area: '#8B5CF6',
-            file: '#10B981',
-            learning: '#3B82F6',
-            decision: '#F59E0B',
-            entity: '#EC4899',
-            change: '#64748B',
-            memory: '#06B6D4'
-        };
+    async function loadGraph() {
+        const center = document.getElementById('center').value;
+        const depth = document.getElementById('depth').value;
+        const url = center ? `/api/graph?center=${center}&depth=${depth}` : '/api/graph';
+        const data = await fetch(url).then(r => r.json());
 
-        function nodeColor(type) { return typeColors[type] || '#64748B'; }
-        function nodeRadius(d) { return d.depth === 0 ? 16 : d.depth === 1 ? 10 : 7; }
-
-        let currentSim = null;
-
-        async function loadGraph() {
-            const center = document.getElementById('center').value;
-            const depth = document.getElementById('depth').value;
-            const url = center ? `/api/graph?center=${center}&depth=${depth}` : '/api/graph';
-            const data = await fetch(url).then(r => r.json());
-
-            if (!data.nodes || data.nodes.length === 0) {
-                const hints = (data.hints || []).map(h => `${h.label} (id:${h.id})`).join(', ');
-                document.getElementById('info').textContent = hints ? `No subgraph found. Top: ${hints}` : 'No graph data found';
-                if (data.hints && data.hints.length > 0) {
-                    document.getElementById('center').value = data.hints[0].id;
-                    loadGraph();
-                }
-                return;
+        if (!data.nodes || data.nodes.length === 0) {
+            const hints = (data.hints || []).map(h => `${h.label} (id:${h.id})`).join(', ');
+            document.getElementById('info').textContent = hints ? `No subgraph found. Top: ${hints}` : 'No graph data found';
+            if (data.hints && data.hints.length > 0) {
+                document.getElementById('center').value = data.hints[0].id;
+                loadGraph();
             }
-
-            document.getElementById('info').textContent = `${data.nodes.length} nodes · ${data.edges.length} edges`;
-            renderGraph(data);
+            return;
         }
 
-        function renderGraph(data) {
-            const svg = d3.select('#svg');
-            svg.selectAll('*').remove();
-            const width = svg.node().clientWidth;
-            const height = svg.node().clientHeight;
-            const g = svg.append('g');
+        document.getElementById('info').textContent = `${data.nodes.length} nodes · ${data.edges.length} edges`;
+        renderGraph(data);
+    }
 
-            svg.call(d3.zoom().scaleExtent([0.1, 8]).on('zoom', e => g.attr('transform', e.transform)));
+    function renderGraph(data) {
+        const svg = d3.select('#svg');
+        svg.selectAll('*').remove();
+        const width = svg.node().clientWidth;
+        const height = svg.node().clientHeight;
+        const g = svg.append('g');
 
-            if (currentSim) currentSim.stop();
-            currentSim = d3.forceSimulation(data.nodes)
-                .force('link', d3.forceLink(data.edges).id(d => d.id).distance(80))
-                .force('charge', d3.forceManyBody().strength(-300))
-                .force('center', d3.forceCenter(width / 2, height / 2))
-                .force('collision', d3.forceCollide().radius(d => nodeRadius(d) + 20));
+        svg.call(d3.zoom().scaleExtent([0.1, 8]).on('zoom', e => g.attr('transform', e.transform)));
 
-            // Edges
-            const link = g.selectAll('.link').data(data.edges).join('line')
-                .attr('class', 'link')
-                .attr('stroke', '#334155')
-                .attr('stroke-width', d => Math.max(1, (d.weight || 0.5) * 2.5))
-                .attr('stroke-opacity', d => Math.min(0.6, 0.2 + (d.weight || 0.3) * 0.4));
+        if (currentSim) currentSim.stop();
+        currentSim = d3.forceSimulation(data.nodes)
+            .force('link', d3.forceLink(data.edges).id(d => d.id).distance(80))
+            .force('charge', d3.forceManyBody().strength(-300))
+            .force('center', d3.forceCenter(width / 2, height / 2))
+            .force('collision', d3.forceCollide().radius(d => nodeRadius(d) + 20));
 
-            // Edge labels
-            const linkLabel = g.selectAll('.link-label').data(data.edges).join('text')
-                .attr('class', 'link-label')
-                .text(d => d.relation);
+        const link = g.selectAll('.link').data(data.edges).join('line')
+            .attr('class', 'link')
+            .attr('stroke', '#334155')
+            .attr('stroke-width', d => Math.max(1, (d.weight || 0.5) * 2.5))
+            .attr('stroke-opacity', d => Math.min(0.6, 0.2 + (d.weight || 0.3) * 0.4));
 
-            // Nodes
-            const node = g.selectAll('.node').data(data.nodes).join('g')
-                .attr('class', 'node')
-                .style('cursor', 'pointer')
-                .on('click', (e, d) => showNodeDetail(d))
-                .call(d3.drag()
-                    .on('start', (e, d) => { if (!e.active) currentSim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
-                    .on('drag', (e, d) => { d.fx = e.x; d.fy = e.y; })
-                    .on('end', (e, d) => { if (!e.active) currentSim.alphaTarget(0); d.fx = null; d.fy = null; }));
+        const linkLabel = g.selectAll('.link-label').data(data.edges).join('text')
+            .attr('class', 'link-label')
+            .text(d => d.relation);
 
-            node.append('circle')
-                .attr('r', d => nodeRadius(d))
-                .attr('fill', d => nodeColor(d.type))
-                .attr('stroke', d => d.depth === 0 ? '#fff' : nodeColor(d.type))
-                .attr('stroke-width', d => d.depth === 0 ? 2.5 : 1)
-                .attr('stroke-opacity', d => d.depth === 0 ? 0.8 : 0.3)
-                .style('color', d => nodeColor(d.type));
+        const node = g.selectAll('.node').data(data.nodes).join('g')
+            .attr('class', 'node')
+            .style('cursor', 'pointer')
+            .on('click', (e, d) => showNodeDetail(d))
+            .call(d3.drag()
+                .on('start', (e, d) => { if (!e.active) currentSim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+                .on('drag', (e, d) => { d.fx = e.x; d.fy = e.y; })
+                .on('end', (e, d) => { if (!e.active) currentSim.alphaTarget(0); d.fx = null; d.fy = null; }));
 
-            // Labels for center + depth 1
-            node.filter(d => d.depth <= 1).append('text')
-                .attr('dx', d => nodeRadius(d) + 5)
-                .attr('dy', 4)
-                .attr('fill', '#94a3b8')
-                .attr('font-size', d => d.depth === 0 ? '13px' : '11px')
-                .attr('font-weight', d => d.depth === 0 ? '600' : '400')
-                .attr('font-family', 'Space Grotesk, system-ui, sans-serif')
-                .text(d => d.label.length > 40 ? d.label.slice(0, 37) + '...' : d.label);
+        node.append('circle')
+            .attr('r', d => nodeRadius(d))
+            .attr('fill', d => nodeColor(d.type))
+            .attr('stroke', d => d.depth === 0 ? '#fff' : nodeColor(d.type))
+            .attr('stroke-width', d => d.depth === 0 ? 2.5 : 1)
+            .attr('stroke-opacity', d => d.depth === 0 ? 0.8 : 0.3)
+            .style('color', d => nodeColor(d.type));
 
-            // Tooltip for depth 2+
-            node.filter(d => d.depth > 1).append('title')
-                .text(d => `[${d.type}] ${d.label}`);
+        node.filter(d => d.depth <= 1).append('text')
+            .attr('dx', d => nodeRadius(d) + 5)
+            .attr('dy', 4)
+            .attr('fill', '#94a3b8')
+            .attr('font-size', d => d.depth === 0 ? '13px' : '11px')
+            .attr('font-weight', d => d.depth === 0 ? '600' : '400')
+            .attr('font-family', 'Space Grotesk, system-ui, sans-serif')
+            .text(d => d.label.length > 40 ? d.label.slice(0, 37) + '...' : d.label);
 
-            currentSim.on('tick', () => {
-                link.attr('x1', d => d.source.x).attr('y1', d => d.source.y)
-                    .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
-                linkLabel.attr('x', d => (d.source.x + d.target.x) / 2)
-                    .attr('y', d => (d.source.y + d.target.y) / 2);
-                node.attr('transform', d => `translate(${d.x},${d.y})`);
+        node.filter(d => d.depth > 1).append('title')
+            .text(d => `[${d.type}] ${d.label}`);
+
+        currentSim.on('tick', () => {
+            link.attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+                .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+            linkLabel.attr('x', d => (d.source.x + d.target.x) / 2)
+                .attr('y', d => (d.source.y + d.target.y) / 2);
+            node.attr('transform', d => `translate(${d.x},${d.y})`);
+        });
+    }
+
+    async function showNodeDetail(d) {
+        document.getElementById('sb-label').textContent = d.label;
+        document.getElementById('sb-meta').innerHTML =
+            `<div>Type: <span style="color:${nodeColor(d.type)}">${d.type}</span></div>` +
+            `<div>ID: ${d.id}</div>` +
+            `<div>Depth: ${d.depth}</div>`;
+
+        document.getElementById('sidebar').style.width = '320px';
+
+        const resp = await fetch(`/api/graph?center=${d.id}&depth=1`);
+        const data = await resp.json();
+        const nbDiv = document.getElementById('sb-neighbors');
+
+        if (!data.edges || data.edges.length === 0) {
+            nbDiv.innerHTML = '<p class="text-sm text-slate-500">No connections found</p>';
+            return;
+        }
+
+        const neighbors = data.nodes.filter(n => n.id !== d.id).slice(0, 20);
+        nbDiv.innerHTML = `<p class="text-xs text-slate-500 mb-2">${data.edges.length} connections</p>` +
+            neighbors.map(n => {
+                const label = n.label.length > 45 ? n.label.slice(0, 42) + '...' : n.label;
+                return `<div class="neighbor-item px-2 py-1.5 rounded-md hover:bg-slate-800 cursor-pointer transition-colors" data-id="${n.id}">
+                    <span class="text-xs font-semibold" style="color:${nodeColor(n.type)}">[${n.type}]</span>
+                    <span class="text-sm text-slate-300 ml-1">${label.replace(/</g, '&lt;')}</span>
+                    <div class="text-xs text-slate-600 mt-0.5">Click to center</div>
+                </div>`;
+            }).join('');
+
+        nbDiv.querySelectorAll('.neighbor-item').forEach(el => {
+            el.addEventListener('click', () => {
+                document.getElementById('center').value = el.dataset.id;
+                loadGraph();
             });
-        }
+        });
+    }
 
-        async function showNodeDetail(d) {
-            document.getElementById('sb-label').textContent = d.label;
-            document.getElementById('sb-meta').innerHTML =
-                `<div>Type: <span style="color:${nodeColor(d.type)}">${d.type}</span></div>` +
-                `<div>ID: ${d.id}</div>` +
-                `<div>Depth: ${d.depth}</div>`;
+    function closeSidebar() {
+        document.getElementById('sidebar').style.width = '0';
+    }
 
-            document.getElementById('sidebar').style.width = '320px';
-
-            const resp = await fetch(`/api/graph?center=${d.id}&depth=1`);
-            const data = await resp.json();
-            const nbDiv = document.getElementById('sb-neighbors');
-
-            if (!data.edges || data.edges.length === 0) {
-                nbDiv.innerHTML = '<p class="text-sm text-slate-500">No connections found</p>';
-                return;
-            }
-
-            const neighbors = data.nodes.filter(n => n.id !== d.id).slice(0, 20);
-            nbDiv.innerHTML = `<p class="text-xs text-slate-500 mb-2">${data.edges.length} connections</p>` +
-                neighbors.map(n => {
-                    const label = n.label.length > 45 ? n.label.slice(0, 42) + '...' : n.label;
-                    return `<div class="neighbor-item px-2 py-1.5 rounded-md hover:bg-slate-800 cursor-pointer transition-colors" data-id="${n.id}">
-                        <span class="text-xs font-semibold" style="color:${nodeColor(n.type)}">[${n.type}]</span>
-                        <span class="text-sm text-slate-300 ml-1">${label.replace(/</g, '&lt;')}</span>
-                        <div class="text-xs text-slate-600 mt-0.5">Click to center</div>
-                    </div>`;
-                }).join('');
-
-            nbDiv.querySelectorAll('.neighbor-item').forEach(el => {
-                el.addEventListener('click', () => {
-                    document.getElementById('center').value = el.dataset.id;
-                    loadGraph();
-                });
-            });
-        }
-
-        function closeSidebar() {
-            document.getElementById('sidebar').style.width = '0';
-        }
-
-        // Load trust score
-        fetch('/api/stats').then(r => r.json()).then(data => {
-            if (data.trust_score != null) {
-                document.getElementById('trust-score').textContent = Math.round(data.trust_score);
-            }
-        }).catch(() => {});
-
-        // Auto-load on page open
-        loadGraph();
-    </script>
-</body>
-</html>
+    // Auto-load on page open
+    loadGraph();
+</script>
+{% endblock %}

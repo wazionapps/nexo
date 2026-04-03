@@ -1,722 +1,591 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NEXO Brain — Calendar</title>
-    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>tailwind.config={theme:{extend:{fontFamily:{display:['Space Grotesk','system-ui','sans-serif'],mono:['JetBrains Mono','monospace']}}}}</script>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <style>
-        .modal-backdrop { backdrop-filter: blur(4px); }
-        .status-done { opacity: 0.6; }
-        .status-done .item-text { text-decoration: line-through; }
-        @keyframes fadeIn { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
-        .modal-animate { animation: fadeIn 0.15s ease-out; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .spin { animation: spin 0.6s linear infinite; }
-    </style>
-</head>
-<body class="bg-gray-950 text-slate-200">
-    <div class="flex min-h-screen">
+{% extends "base.html" %}
 
-        <!-- Sidebar: 56px icon-only fixed left -->
-        <aside class="fixed left-0 top-0 bottom-0 w-14 bg-slate-900 border-r border-slate-800 flex flex-col items-center py-4 z-50">
-            <!-- Logo -->
-            <a href="/" class="mb-6 flex items-center justify-center w-8 h-8">
-                <img src="/static/nexo-logo.png" alt="NEXO" class="w-7 h-7" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-                <div class="w-7 h-7 rounded-lg bg-violet-600 items-center justify-center hidden">
-                    <span class="text-white font-display font-bold text-xs">N</span>
-                </div>
-            </a>
+{% block title %}Calendar{% endblock %}
 
-            <!-- Nav icons -->
-            <nav class="flex flex-col items-center gap-1 flex-1">
-                <!-- Dashboard -->
-                <a href="/" title="Dashboard" class="w-9 h-9 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors">
-                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                    </svg>
-                </a>
-                <!-- Operations -->
-                <a href="/ops" title="Operations" class="w-9 h-9 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors">
-                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                    </svg>
-                </a>
-                <!-- Calendar — ACTIVE -->
-                <a href="/calendar" title="Calendar" class="w-9 h-9 rounded-lg flex items-center justify-center bg-violet-500/10 text-violet-400 transition-colors">
-                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                </a>
-                <!-- Inbox -->
-                <a href="/inbox" title="Inbox" class="w-9 h-9 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors relative">
-                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                    </svg>
-                    <span id="inbox-badge" class="absolute -top-0.5 -right-0.5 w-4 h-4 bg-pink-500 rounded-full text-white text-xs font-bold flex items-center justify-center hidden"></span>
-                </a>
+{% block page_title %}Calendar{% endblock %}
 
-                <div class="w-6 h-px bg-slate-800 my-1"></div>
+{% block header_actions %}
+<!-- View toggle -->
+<div class="flex items-center gap-0.5 bg-slate-800/60 rounded-lg p-0.5 mr-3">
+    <button id="btn-month" onclick="setView('month')" class="text-xs px-3 py-1 rounded-md font-display font-medium transition-all">Month</button>
+    <button id="btn-week" onclick="setView('week')" class="text-xs px-3 py-1 rounded-md font-display font-medium transition-all">Week</button>
+    <button id="btn-day" onclick="setView('day')" class="text-xs px-3 py-1 rounded-md font-display font-medium transition-all">Day</button>
+</div>
+<!-- Navigation -->
+<button onclick="navigatePrev()" class="text-slate-400 hover:text-white px-2 py-1 transition-colors text-lg leading-none">&larr;</button>
+<span id="period-label" class="text-sm font-display font-medium min-w-[200px] text-center"></span>
+<button onclick="navigateNext()" class="text-slate-400 hover:text-white px-2 py-1 transition-colors text-lg leading-none">&rarr;</button>
+<button onclick="goToday()" class="text-xs px-2.5 py-1 rounded-md bg-slate-800 text-slate-400 hover:bg-slate-700 transition-colors">Today</button>
+{% endblock %}
 
-                <!-- Memory -->
-                <a href="/memory" title="Memory" class="w-9 h-9 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors">
-                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                    </svg>
-                </a>
-                <!-- Graph -->
-                <a href="/graph" title="Graph" class="w-9 h-9 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors">
-                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
-                    </svg>
-                </a>
-                <!-- Sessions -->
-                <a href="/sessions" title="Sessions" class="w-9 h-9 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors">
-                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                </a>
-                <!-- Somatic -->
-                <a href="/somatic" title="Somatic" class="w-9 h-9 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors">
-                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                    </svg>
-                </a>
-                <!-- Adaptive -->
-                <a href="/adaptive" title="Adaptive" class="w-9 h-9 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors">
-                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-                    </svg>
-                </a>
-            </nav>
+{% block head %}
+<style>
+    .modal-backdrop { backdrop-filter: blur(4px); }
+    .status-done { opacity: 0.6; }
+    .status-done .item-text { text-decoration: line-through; }
+    @keyframes calFadeIn { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+    .modal-animate { animation: calFadeIn 0.15s ease-out; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spin { animation: spin 0.6s linear infinite; }
+</style>
+{% endblock %}
 
-            <!-- Trust score at bottom -->
-            <div class="mt-auto flex flex-col items-center gap-0.5">
-                <span class="text-xs uppercase tracking-widest text-slate-500 font-mono">trust</span>
-                <span id="trust-score" class="text-xs font-mono font-medium text-violet-400">--</span>
+{% block content %}
+<!-- Calendar content area -->
+<div id="calendar-content" class="flex-1 overflow-auto"></div>
+
+<!-- Modal -->
+<div id="modal-overlay" class="hidden fixed inset-0 z-[100] flex items-center justify-center modal-backdrop bg-gray-950/70" onclick="closeModal(event)">
+    <div id="modal-box" class="modal-animate bg-slate-900 border border-slate-700/60 rounded-xl shadow-2xl w-full max-w-lg mx-4 max-h-[85vh] flex flex-col" onclick="event.stopPropagation()">
+        <!-- Modal header -->
+        <div class="flex items-center justify-between px-5 py-4 border-b border-slate-800/60 flex-shrink-0">
+            <div>
+                <h2 id="modal-title" class="text-base font-display font-semibold text-slate-100"></h2>
+                <p id="modal-subtitle" class="text-xs text-slate-500 font-mono mt-0.5"></p>
             </div>
-        </aside>
-
-        <!-- Main: offset by sidebar width -->
-        <main class="ml-14 min-h-screen bg-gray-950 text-slate-200 w-full flex flex-col">
-
-            <!-- Header -->
-            <header class="h-12 border-b border-slate-800/50 flex items-center justify-between px-6 flex-shrink-0">
-                <div class="flex items-center gap-3">
-                    <h1 class="text-sm font-display font-semibold">Calendar</h1>
-                    <!-- View toggle -->
-                    <div class="flex items-center gap-0.5 bg-slate-800/60 rounded-lg p-0.5">
-                        <button id="btn-month" onclick="setView('month')" class="text-xs px-3 py-1 rounded-md font-display font-medium transition-all">Month</button>
-                        <button id="btn-week" onclick="setView('week')" class="text-xs px-3 py-1 rounded-md font-display font-medium transition-all">Week</button>
-                        <button id="btn-day" onclick="setView('day')" class="text-xs px-3 py-1 rounded-md font-display font-medium transition-all">Day</button>
-                    </div>
-                </div>
-                <div class="flex items-center gap-3">
-                    <button onclick="navigatePrev()" class="text-slate-400 hover:text-white px-2 py-1 transition-colors text-lg leading-none">&larr;</button>
-                    <span id="period-label" class="text-sm font-display font-medium min-w-[200px] text-center"></span>
-                    <button onclick="navigateNext()" class="text-slate-400 hover:text-white px-2 py-1 transition-colors text-lg leading-none">&rarr;</button>
-                    <button onclick="goToday()" class="text-xs px-2.5 py-1 rounded-md bg-slate-800 text-slate-400 hover:bg-slate-700 transition-colors">Today</button>
-                </div>
-            </header>
-
-            <!-- Content area -->
-            <div id="calendar-content" class="flex-1 p-6 overflow-auto"></div>
-
-        </main>
-    </div>
-
-    <!-- Modal -->
-    <div id="modal-overlay" class="hidden fixed inset-0 z-[100] flex items-center justify-center modal-backdrop bg-gray-950/70" onclick="closeModal(event)">
-        <div id="modal-box" class="modal-animate bg-slate-900 border border-slate-700/60 rounded-xl shadow-2xl w-full max-w-lg mx-4 max-h-[85vh] flex flex-col" onclick="event.stopPropagation()">
-            <!-- Modal header -->
-            <div class="flex items-center justify-between px-5 py-4 border-b border-slate-800/60 flex-shrink-0">
-                <div>
-                    <h2 id="modal-title" class="text-base font-display font-semibold text-slate-100"></h2>
-                    <p id="modal-subtitle" class="text-xs text-slate-500 font-mono mt-0.5"></p>
-                </div>
-                <button onclick="closeModalDirect()" class="w-7 h-7 flex items-center justify-center rounded-lg text-slate-500 hover:text-slate-200 hover:bg-slate-800 transition-colors text-xl leading-none">&times;</button>
-            </div>
-            <!-- Modal body -->
-            <div id="modal-body" class="overflow-y-auto flex-1 px-5 py-4 space-y-5"></div>
+            <button onclick="closeModalDirect()" class="w-7 h-7 flex items-center justify-center rounded-lg text-slate-500 hover:text-slate-200 hover:bg-slate-800 transition-colors text-xl leading-none">&times;</button>
         </div>
+        <!-- Modal body -->
+        <div id="modal-body" class="overflow-y-auto flex-1 px-5 py-4 space-y-5"></div>
     </div>
+</div>
+{% endblock %}
 
-    <script>
-        const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-        const DAYS_SHORT = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-        const DAYS_LONG = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+{% block scripts %}
+<script>
+    const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    const DAYS_SHORT = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+    const DAYS_LONG = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
 
-        let currentView = 'month';
-        let currentYear = new Date().getFullYear();
-        let currentMonth = new Date().getMonth() + 1;
-        let currentWeekStart = getWeekStart(new Date()); // Monday of current week
-        let currentDay = new Date();
-        let calendarItems = { reminders: [], followups: [] };
+    let currentView = 'month';
+    let currentYear = new Date().getFullYear();
+    let currentMonth = new Date().getMonth() + 1;
+    let currentWeekStart = getWeekStart(new Date());
+    let currentDay = new Date();
+    let calendarItems = { reminders: [], followups: [] };
 
-        // ─── Helpers ───────────────────────────────────────────────────────────
+    // --- Helpers ---
 
-        function today() {
-            const d = new Date();
-            return ymd(d);
-        }
+    function today() {
+        const d = new Date();
+        return ymd(d);
+    }
 
-        function ymd(date) {
-            return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
-        }
+    function ymd(date) {
+        return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+    }
 
-        function parseDate(str) {
-            // Parse YYYY-MM-DD safely (no timezone shift)
-            const parts = str.slice(0,10).split('-');
-            return new Date(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2]));
-        }
+    function parseDate(str) {
+        const parts = str.slice(0,10).split('-');
+        return new Date(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2]));
+    }
 
-        function getWeekStart(date) {
-            const d = new Date(date);
-            const dow = (d.getDay() + 6) % 7; // 0=Mon
-            d.setDate(d.getDate() - dow);
-            return d;
-        }
+    function getWeekStart(date) {
+        const d = new Date(date);
+        const dow = (d.getDay() + 6) % 7;
+        d.setDate(d.getDate() - dow);
+        return d;
+    }
 
-        function addDays(date, n) {
-            const d = new Date(date);
-            d.setDate(d.getDate() + n);
-            return d;
-        }
+    function addDays(date, n) {
+        const d = new Date(date);
+        d.setDate(d.getDate() + n);
+        return d;
+    }
 
-        function escapeHtml(str) {
-            return String(str || '')
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;');
-        }
+    function getItemDate(item) {
+        return (item.due_date || item.date || '').slice(0, 10);
+    }
 
-        function getItemDate(item) {
-            return (item.due_date || item.date || '').slice(0, 10);
-        }
+    function getItemStatus(item, dateStr) {
+        const status = (item.status || 'pending').toLowerCase();
+        if (status === 'completed' || status === 'done') return 'done';
+        const todayStr = today();
+        if (dateStr && dateStr < todayStr) return 'overdue';
+        return 'pending';
+    }
 
-        function getItemStatus(item, dateStr) {
-            const status = (item.status || 'pending').toLowerCase();
-            if (status === 'completed' || status === 'done') return 'done';
-            const todayStr = today();
-            if (dateStr && dateStr < todayStr) return 'overdue';
-            return 'pending';
-        }
-
-        function buildItemsLookup(items) {
-            const map = {};
-            (items.reminders || []).forEach(r => {
-                const d = getItemDate(r);
-                if (d) {
-                    if (!map[d]) map[d] = { reminders: [], followups: [] };
-                    map[d].reminders.push(r);
-                }
-            });
-            (items.followups || []).forEach(f => {
-                const d = getItemDate(f);
-                if (d) {
-                    if (!map[d]) map[d] = { reminders: [], followups: [] };
-                    map[d].followups.push(f);
-                }
-            });
-            return map;
-        }
-
-        // ─── Status badge HTML ─────────────────────────────────────────────────
-
-        function statusBadgeHtml(status) {
-            if (status === 'done') {
-                return `<span class="inline-flex items-center gap-1 text-xs font-mono font-semibold px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 uppercase tracking-wide">
-                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block"></span>DONE
-                </span>`;
+    function buildItemsLookup(items) {
+        const map = {};
+        (items.reminders || []).forEach(r => {
+            const d = getItemDate(r);
+            if (d) {
+                if (!map[d]) map[d] = { reminders: [], followups: [] };
+                map[d].reminders.push(r);
             }
-            if (status === 'overdue') {
-                return `<span class="inline-flex items-center gap-1 text-xs font-mono font-semibold px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 uppercase tracking-wide">
-                    <span class="w-1.5 h-1.5 rounded-full bg-red-500 inline-block"></span>OVERDUE
-                </span>`;
+        });
+        (items.followups || []).forEach(f => {
+            const d = getItemDate(f);
+            if (d) {
+                if (!map[d]) map[d] = { reminders: [], followups: [] };
+                map[d].followups.push(f);
             }
-            return `<span class="inline-flex items-center gap-1 text-xs font-mono font-semibold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 uppercase tracking-wide">
-                <span class="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block"></span>PENDING
+        });
+        return map;
+    }
+
+    // --- Status badge HTML ---
+
+    function statusBadgeHtml(status) {
+        if (status === 'done') {
+            return `<span class="inline-flex items-center gap-1 text-xs font-mono font-semibold px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 uppercase tracking-wide">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block"></span>DONE
             </span>`;
         }
-
-        function statusDotHtml(status) {
-            if (status === 'done') return '<span class="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0 inline-block"></span>';
-            if (status === 'overdue') return '<span class="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0 inline-block"></span>';
-            return '<span class="w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0 inline-block"></span>';
+        if (status === 'overdue') {
+            return `<span class="inline-flex items-center gap-1 text-xs font-mono font-semibold px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 uppercase tracking-wide">
+                <span class="w-1.5 h-1.5 rounded-full bg-red-500 inline-block"></span>OVERDUE
+            </span>`;
         }
+        return `<span class="inline-flex items-center gap-1 text-xs font-mono font-semibold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 uppercase tracking-wide">
+            <span class="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block"></span>PENDING
+        </span>`;
+    }
 
-        // ─── Item card HTML (used in modal + week/day views) ───────────────────
+    function statusDotHtml(status) {
+        if (status === 'done') return '<span class="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0 inline-block"></span>';
+        if (status === 'overdue') return '<span class="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0 inline-block"></span>';
+        return '<span class="w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0 inline-block"></span>';
+    }
 
-        function itemCardHtml(item, type, dateStr, compact) {
-            const status = getItemStatus(item, dateStr);
-            const desc = escapeHtml(item.description || item.content || item.title || '—');
-            const category = item.category ? escapeHtml(item.category) : null;
-            const id = item.id;
-            const isReminder = type === 'reminder';
-            const isDone = status === 'done';
+    // --- Item card HTML ---
 
-            const typeTag = isReminder
-                ? `<span class="text-xs font-mono font-semibold px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-400 uppercase tracking-wide">Reminder</span>`
-                : `<span class="text-xs font-mono font-semibold px-1.5 py-0.5 rounded bg-pink-500/15 text-pink-400 uppercase tracking-wide">Followup</span>`;
+    function itemCardHtml(item, type, dateStr, compact) {
+        const status = getItemStatus(item, dateStr);
+        const desc = escapeHtml(item.description || item.content || item.title || '—');
+        const category = item.category ? escapeHtml(item.category) : null;
+        const id = item.id;
+        const isReminder = type === 'reminder';
+        const isDone = status === 'done';
 
-            const catTag = category
-                ? `<span class="text-xs font-mono px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-400">${category}</span>`
-                : '';
+        const typeTag = isReminder
+            ? `<span class="text-xs font-mono font-semibold px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-400 uppercase tracking-wide">Reminder</span>`
+            : `<span class="text-xs font-mono font-semibold px-1.5 py-0.5 rounded bg-pink-500/15 text-pink-400 uppercase tracking-wide">Followup</span>`;
 
-            const executeBtn = (!isReminder && !isDone)
-                ? `<button onclick="executeFollowup(${id}, this)" class="ml-auto text-xs px-2.5 py-1 rounded-md bg-violet-600 hover:bg-violet-500 text-white font-display font-medium transition-colors flex-shrink-0 flex items-center gap-1">
-                    <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 3l14 9-14 9V3z"/></svg>
-                    Execute
-                  </button>`
-                : '';
+        const catTag = category
+            ? `<span class="text-xs font-mono px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-400">${category}</span>`
+            : '';
 
-            const idTag = `<span class="text-xs font-mono text-slate-600">#${id}</span>`;
+        const executeBtn = (!isReminder && !isDone)
+            ? `<button onclick="executeFollowup(${id}, this)" class="ml-auto text-xs px-2.5 py-1 rounded-md bg-violet-600 hover:bg-violet-500 text-white font-display font-medium transition-colors flex-shrink-0 flex items-center gap-1">
+                <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 3l14 9-14 9V3z"/></svg>
+                Execute
+              </button>`
+            : '';
 
-            if (compact) {
-                // Compact: used in week view cells
-                return `<div class="flex items-start gap-1.5 py-1 ${isDone ? 'opacity-60' : ''}">
-                    ${statusDotHtml(status)}
-                    <span class="text-xs text-slate-300 leading-snug ${isDone ? 'line-through text-slate-500' : ''} flex-1 min-w-0 truncate">${desc}</span>
-                </div>`;
-            }
+        const idTag = `<span class="text-xs font-mono text-slate-600">#${id}</span>`;
 
-            return `<div class="bg-slate-800/40 border border-slate-700/40 rounded-lg p-3.5 ${isDone ? 'status-done' : ''}">
-                <div class="flex items-center gap-2 flex-wrap mb-2">
-                    ${typeTag}
-                    ${statusBadgeHtml(status)}
-                    ${catTag}
-                    ${idTag}
-                    ${executeBtn}
-                </div>
-                <div class="text-sm text-slate-200 leading-relaxed item-text">${desc}</div>
+        if (compact) {
+            return `<div class="flex items-start gap-1.5 py-1 ${isDone ? 'opacity-60' : ''}">
+                ${statusDotHtml(status)}
+                <span class="text-xs text-slate-300 leading-snug ${isDone ? 'line-through text-slate-500' : ''} flex-1 min-w-0 truncate">${desc}</span>
             </div>`;
         }
 
-        // ─── Execute followup ──────────────────────────────────────────────────
+        return `<div class="bg-slate-800/40 border border-slate-700/40 rounded-lg p-3.5 ${isDone ? 'status-done' : ''}">
+            <div class="flex items-center gap-2 flex-wrap mb-2">
+                ${typeTag}
+                ${statusBadgeHtml(status)}
+                ${catTag}
+                ${idTag}
+                ${executeBtn}
+            </div>
+            <div class="text-sm text-slate-200 leading-relaxed item-text">${desc}</div>
+        </div>`;
+    }
 
-        async function executeFollowup(id, btn) {
-            const originalHtml = btn.innerHTML;
-            btn.innerHTML = `<svg class="w-3 h-3 spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Running`;
-            btn.disabled = true;
-            try {
-                const res = await fetch(`/api/ops/execute/${id}`, { method: 'POST' });
-                const data = await res.json();
-                if (res.ok) {
-                    btn.innerHTML = `<svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg> Done`;
-                    btn.className = btn.className.replace('bg-violet-600 hover:bg-violet-500', 'bg-emerald-700 cursor-default');
-                    // Reload items in background
-                    await loadCalendarData();
-                } else {
-                    const errMsg = data.error || data.detail || 'HTTP ' + res.status;
-                    btn.innerHTML = '✗ ' + errMsg;
-                    btn.title = errMsg;
-                    btn.className = btn.className.replace('bg-violet-600 hover:bg-violet-500', 'bg-red-700');
-                    setTimeout(() => { btn.innerHTML = originalHtml; btn.title = ''; btn.disabled = false; btn.className = btn.className.replace('bg-red-700', 'bg-violet-600 hover:bg-violet-500'); }, 3000);
-                }
-            } catch(e) {
-                btn.innerHTML = '✗ ' + e.message;
-                setTimeout(() => { btn.innerHTML = originalHtml; btn.disabled = false; }, 3000);
-            }
-        }
+    // --- Execute followup ---
 
-        // ─── Data loading ──────────────────────────────────────────────────────
-
-        async function loadCalendarData() {
-            try {
-                const res = await fetch(`/api/calendar?year=${currentYear}&month=${currentMonth}`);
-                calendarItems = await res.json();
-            } catch(e) {
-                calendarItems = { reminders: [], followups: [] };
-            }
-        }
-
-        // ─── View management ───────────────────────────────────────────────────
-
-        function setView(view) {
-            currentView = view;
-            updateViewButtons();
-            renderView();
-        }
-
-        function updateViewButtons() {
-            ['month','week','day'].forEach(v => {
-                const btn = document.getElementById(`btn-${v}`);
-                if (v === currentView) {
-                    btn.className = 'text-xs px-3 py-1 rounded-md font-display font-medium transition-all bg-violet-600 text-white';
-                } else {
-                    btn.className = 'text-xs px-3 py-1 rounded-md font-display font-medium transition-all text-slate-400 hover:text-slate-200';
-                }
-            });
-        }
-
-        function navigatePrev() {
-            if (currentView === 'month') {
-                currentMonth--;
-                if (currentMonth < 1) { currentMonth = 12; currentYear--; }
-            } else if (currentView === 'week') {
-                currentWeekStart = addDays(currentWeekStart, -7);
-                currentYear = currentWeekStart.getFullYear();
-                currentMonth = currentWeekStart.getMonth() + 1;
+    async function executeFollowup(id, btn) {
+        const originalHtml = btn.innerHTML;
+        btn.innerHTML = `<svg class="w-3 h-3 spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Running`;
+        btn.disabled = true;
+        try {
+            const res = await fetch(`/api/ops/execute/${id}`, { method: 'POST' });
+            const data = await res.json();
+            if (res.ok) {
+                btn.innerHTML = `<svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg> Done`;
+                btn.className = btn.className.replace('bg-violet-600 hover:bg-violet-500', 'bg-emerald-700 cursor-default');
+                await loadCalendarData();
             } else {
-                currentDay = addDays(currentDay, -1);
-                currentYear = currentDay.getFullYear();
-                currentMonth = currentDay.getMonth() + 1;
+                const errMsg = data.error || data.detail || 'HTTP ' + res.status;
+                btn.innerHTML = '\u2717 ' + errMsg;
+                btn.title = errMsg;
+                btn.className = btn.className.replace('bg-violet-600 hover:bg-violet-500', 'bg-red-700');
+                setTimeout(() => { btn.innerHTML = originalHtml; btn.title = ''; btn.disabled = false; btn.className = btn.className.replace('bg-red-700', 'bg-violet-600 hover:bg-violet-500'); }, 3000);
             }
-            loadAndRender();
+        } catch(e) {
+            btn.innerHTML = '\u2717 ' + e.message;
+            setTimeout(() => { btn.innerHTML = originalHtml; btn.disabled = false; }, 3000);
         }
+    }
 
-        function navigateNext() {
-            if (currentView === 'month') {
-                currentMonth++;
-                if (currentMonth > 12) { currentMonth = 1; currentYear++; }
-            } else if (currentView === 'week') {
-                currentWeekStart = addDays(currentWeekStart, 7);
-                currentYear = currentWeekStart.getFullYear();
-                currentMonth = currentWeekStart.getMonth() + 1;
+    // --- Data loading ---
+
+    async function loadCalendarData() {
+        try {
+            const res = await fetch(`/api/calendar?year=${currentYear}&month=${currentMonth}`);
+            calendarItems = await res.json();
+        } catch(e) {
+            calendarItems = { reminders: [], followups: [] };
+        }
+    }
+
+    // --- View management ---
+
+    function setView(view) {
+        currentView = view;
+        updateViewButtons();
+        renderView();
+    }
+
+    function updateViewButtons() {
+        ['month','week','day'].forEach(v => {
+            const btn = document.getElementById(`btn-${v}`);
+            if (v === currentView) {
+                btn.className = 'text-xs px-3 py-1 rounded-md font-display font-medium transition-all bg-violet-600 text-white';
             } else {
-                currentDay = addDays(currentDay, 1);
-                currentYear = currentDay.getFullYear();
-                currentMonth = currentDay.getMonth() + 1;
+                btn.className = 'text-xs px-3 py-1 rounded-md font-display font-medium transition-all text-slate-400 hover:text-slate-200';
             }
-            loadAndRender();
+        });
+    }
+
+    function navigatePrev() {
+        if (currentView === 'month') {
+            currentMonth--;
+            if (currentMonth < 1) { currentMonth = 12; currentYear--; }
+        } else if (currentView === 'week') {
+            currentWeekStart = addDays(currentWeekStart, -7);
+            currentYear = currentWeekStart.getFullYear();
+            currentMonth = currentWeekStart.getMonth() + 1;
+        } else {
+            currentDay = addDays(currentDay, -1);
+            currentYear = currentDay.getFullYear();
+            currentMonth = currentDay.getMonth() + 1;
         }
+        loadAndRender();
+    }
 
-        function goToday() {
-            const now = new Date();
-            currentYear = now.getFullYear();
-            currentMonth = now.getMonth() + 1;
-            currentWeekStart = getWeekStart(now);
-            currentDay = now;
-            loadAndRender();
+    function navigateNext() {
+        if (currentView === 'month') {
+            currentMonth++;
+            if (currentMonth > 12) { currentMonth = 1; currentYear++; }
+        } else if (currentView === 'week') {
+            currentWeekStart = addDays(currentWeekStart, 7);
+            currentYear = currentWeekStart.getFullYear();
+            currentMonth = currentWeekStart.getMonth() + 1;
+        } else {
+            currentDay = addDays(currentDay, 1);
+            currentYear = currentDay.getFullYear();
+            currentMonth = currentDay.getMonth() + 1;
         }
+        loadAndRender();
+    }
 
-        async function loadAndRender() {
-            await loadCalendarData();
-            renderView();
-        }
+    function goToday() {
+        const now = new Date();
+        currentYear = now.getFullYear();
+        currentMonth = now.getMonth() + 1;
+        currentWeekStart = getWeekStart(now);
+        currentDay = now;
+        loadAndRender();
+    }
 
-        function renderView() {
-            if (currentView === 'month') renderMonth();
-            else if (currentView === 'week') renderWeek();
-            else renderDay();
-        }
+    async function loadAndRender() {
+        await loadCalendarData();
+        renderView();
+    }
 
-        // ─── Month view ────────────────────────────────────────────────────────
+    function renderView() {
+        if (currentView === 'month') renderMonth();
+        else if (currentView === 'week') renderWeek();
+        else renderDay();
+    }
 
-        function renderMonth() {
-            document.getElementById('period-label').textContent = `${MONTHS[currentMonth - 1]} ${currentYear}`;
+    // --- Month view ---
 
-            const firstDay = new Date(currentYear, currentMonth - 1, 1);
-            const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
-            const startDow = (firstDay.getDay() + 6) % 7; // Monday = 0
-            const todayStr = today();
-            const itemsByDate = buildItemsLookup(calendarItems);
+    function renderMonth() {
+        document.getElementById('period-label').textContent = `${MONTHS[currentMonth - 1]} ${currentYear}`;
 
-            let headerHtml = `<div class="grid grid-cols-7 mb-1">`;
-            DAYS_SHORT.forEach(d => {
-                headerHtml += `<div class="p-2 text-center text-xs uppercase tracking-wider text-slate-500 font-display font-medium">${d}</div>`;
-            });
-            headerHtml += `</div>`;
+        const firstDay = new Date(currentYear, currentMonth - 1, 1);
+        const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
+        const startDow = (firstDay.getDay() + 6) % 7;
+        const todayStr = today();
+        const itemsByDate = buildItemsLookup(calendarItems);
 
-            let cells = '';
+        let headerHtml = `<div class="grid grid-cols-7 mb-1">`;
+        DAYS_SHORT.forEach(d => {
+            headerHtml += `<div class="p-2 text-center text-xs uppercase tracking-wider text-slate-500 font-display font-medium">${d}</div>`;
+        });
+        headerHtml += `</div>`;
 
-            // Previous month padding
-            const prevMonthLast = new Date(currentYear, currentMonth - 1, 0).getDate();
-            for (let i = startDow - 1; i >= 0; i--) {
-                cells += `<div class="bg-gray-950 p-2 min-h-[90px] opacity-25">
-                    <div class="text-xs text-slate-500 font-display">${prevMonthLast - i}</div>
-                </div>`;
-            }
+        let cells = '';
 
-            // Current month days
-            for (let d = 1; d <= daysInMonth; d++) {
-                const dateStr = `${currentYear}-${String(currentMonth).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-                const isToday = dateStr === todayStr;
-                const dayItems = itemsByDate[dateStr];
-
-                const bgClass = `bg-gray-950 hover:bg-slate-900/60 cursor-pointer transition-colors`;
-                const ringClass = isToday ? 'ring-1 ring-inset ring-violet-500/50' : '';
-                const dayNumClass = isToday
-                    ? 'w-6 h-6 flex items-center justify-center rounded-full bg-violet-600 text-white font-semibold text-xs'
-                    : 'text-xs text-slate-400 font-display';
-
-                let dotsHtml = '';
-                if (dayItems) {
-                    const allItems = [
-                        ...dayItems.reminders.map(r => ({ ...r, type: 'reminder' })),
-                        ...dayItems.followups.map(f => ({ ...f, type: 'followup' }))
-                    ];
-                    const total = allItems.length;
-
-                    // Count by status
-                    let doneDots = [], pendingDots = [], overdueDots = [];
-                    allItems.forEach(item => {
-                        const st = getItemStatus(item, dateStr);
-                        const color = st === 'done' ? 'bg-emerald-500' : st === 'overdue' ? 'bg-red-500' : 'bg-amber-500';
-                        const dot = `<span class="w-1.5 h-1.5 rounded-full ${color} flex-shrink-0"></span>`;
-                        if (st === 'done') doneDots.push(dot);
-                        else if (st === 'overdue') overdueDots.push(dot);
-                        else pendingDots.push(dot);
-                    });
-
-                    const visibleDots = [...overdueDots, ...pendingDots, ...doneDots].slice(0, 5);
-                    const overflow = total > 5 ? `<span class="text-xs text-slate-500 font-mono leading-none">+${total - 5}</span>` : '';
-                    dotsHtml = `<div class="flex flex-wrap gap-0.5 mt-1.5 items-center">${visibleDots.join('')}${overflow}</div>`;
-                }
-
-                cells += `<div class="${bgClass} ${ringClass} p-2 min-h-[90px]" onclick="openDayModal('${dateStr}')">
-                    <div class="${dayNumClass}">${d}</div>
-                    ${dotsHtml}
-                </div>`;
-            }
-
-            // Next month padding
-            const totalCells = startDow + daysInMonth;
-            const remaining = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
-            for (let d = 1; d <= remaining; d++) {
-                cells += `<div class="bg-gray-950 p-2 min-h-[90px] opacity-25">
-                    <div class="text-xs text-slate-500 font-display">${d}</div>
-                </div>`;
-            }
-
-            document.getElementById('calendar-content').innerHTML = `
-                ${headerHtml}
-                <div class="grid grid-cols-7 gap-px bg-slate-800/30 rounded-lg overflow-hidden border border-slate-800/30">
-                    ${cells}
-                </div>
-            `;
-        }
-
-        // ─── Week view ─────────────────────────────────────────────────────────
-
-        function renderWeek() {
-            const weekEnd = addDays(currentWeekStart, 6);
-            const startLabel = currentWeekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-            const endLabel = weekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-            document.getElementById('period-label').textContent = `${startLabel} – ${endLabel}`;
-
-            const todayStr = today();
-            const itemsByDate = buildItemsLookup(calendarItems);
-
-            let headerHtml = `<div class="grid grid-cols-7 gap-px mb-0.5">`;
-            for (let i = 0; i < 7; i++) {
-                const d = addDays(currentWeekStart, i);
-                const dStr = ymd(d);
-                const isToday = dStr === todayStr;
-                const dayItems = itemsByDate[dStr];
-                const count = dayItems ? (dayItems.reminders.length + dayItems.followups.length) : 0;
-
-                headerHtml += `<div class="p-3 text-center ${isToday ? 'bg-violet-500/10' : 'bg-slate-900/30'} rounded-t-lg cursor-pointer hover:bg-slate-800/50 transition-colors" onclick="openDayModal('${dStr}')">
-                    <div class="text-xs uppercase tracking-wider text-slate-500 font-display">${DAYS_SHORT[i]}</div>
-                    <div class="text-lg font-display font-semibold mt-0.5 ${isToday ? 'text-violet-400' : 'text-slate-200'}">${d.getDate()}</div>
-                    ${count > 0 ? `<div class="text-xs font-mono text-slate-500 mt-0.5">${count} item${count !== 1 ? 's' : ''}</div>` : ''}
-                </div>`;
-            }
-            headerHtml += `</div>`;
-
-            let bodyHtml = `<div class="grid grid-cols-7 gap-px bg-slate-800/20 rounded-b-lg overflow-hidden border border-slate-800/30 border-t-0">`;
-            for (let i = 0; i < 7; i++) {
-                const d = addDays(currentWeekStart, i);
-                const dStr = ymd(d);
-                const isToday = dStr === todayStr;
-                const dayItems = itemsByDate[dStr];
-
-                let itemsHtml = '';
-                if (dayItems) {
-                    const allItems = [
-                        ...dayItems.reminders.map(r => ({ ...r, _type: 'reminder' })),
-                        ...dayItems.followups.map(f => ({ ...f, _type: 'followup' }))
-                    ];
-                    // Sort: overdue first, then pending, then done
-                    allItems.sort((a, b) => {
-                        const order = { overdue: 0, pending: 1, done: 2 };
-                        return order[getItemStatus(a, dStr)] - order[getItemStatus(b, dStr)];
-                    });
-                    itemsHtml = allItems.map(item => itemCardHtml(item, item._type, dStr, true)).join('');
-                }
-
-                bodyHtml += `<div class="${isToday ? 'bg-violet-500/5' : 'bg-gray-950'} p-2 min-h-[160px] cursor-pointer hover:bg-slate-900/40 transition-colors" onclick="openDayModal('${dStr}')">
-                    ${itemsHtml || `<div class="text-xs text-slate-700 text-center mt-4">—</div>`}
-                </div>`;
-            }
-            bodyHtml += `</div>`;
-
-            document.getElementById('calendar-content').innerHTML = headerHtml + bodyHtml;
-        }
-
-        // ─── Day view ──────────────────────────────────────────────────────────
-
-        function renderDay() {
-            const dStr = ymd(currentDay);
-            const label = currentDay.toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-            document.getElementById('period-label').textContent = label;
-
-            const itemsByDate = buildItemsLookup(calendarItems);
-            const dayItems = itemsByDate[dStr];
-
-            const dayReminders = dayItems ? dayItems.reminders : [];
-            const dayFollowups = dayItems ? dayItems.followups : [];
-            const total = dayReminders.length + dayFollowups.length;
-
-            const todayStr = today();
-            const isToday = dStr === todayStr;
-
-            let html = `<div class="max-w-2xl mx-auto">`;
-
-            // Day header
-            html += `<div class="flex items-center gap-3 mb-6">
-                <div class="text-2xl font-display font-bold ${isToday ? 'text-violet-400' : 'text-slate-100'}">${label}</div>
-                <span class="text-sm font-mono text-slate-500">${total} item${total !== 1 ? 's' : ''}</span>
+        // Previous month padding
+        const prevMonthLast = new Date(currentYear, currentMonth - 1, 0).getDate();
+        for (let i = startDow - 1; i >= 0; i--) {
+            cells += `<div class="bg-gray-950 p-2 min-h-[90px] opacity-25">
+                <div class="text-xs text-slate-500 font-display">${prevMonthLast - i}</div>
             </div>`;
-
-            if (total === 0) {
-                html += `<div class="text-center py-16 text-slate-600 font-display">
-                    <div class="text-4xl mb-3">—</div>
-                    <div>No items for this day</div>
-                </div>`;
-            } else {
-                // Reminders section
-                if (dayReminders.length > 0) {
-                    html += `<div class="mb-6">
-                        <div class="flex items-center gap-2 mb-3">
-                            <span class="text-xs font-mono font-semibold px-2 py-0.5 rounded bg-violet-500/15 text-violet-400 uppercase tracking-wide">Reminders (User)</span>
-                            <span class="text-xs text-slate-600 font-mono">${dayReminders.length}</span>
-                        </div>
-                        <div class="space-y-2">
-                            ${dayReminders.map(r => itemCardHtml(r, 'reminder', dStr, false)).join('')}
-                        </div>
-                    </div>`;
-                }
-
-                // Followups section
-                if (dayFollowups.length > 0) {
-                    html += `<div class="mb-6">
-                        <div class="flex items-center gap-2 mb-3">
-                            <span class="text-xs font-mono font-semibold px-2 py-0.5 rounded bg-pink-500/15 text-pink-400 uppercase tracking-wide">Followups (NEXO)</span>
-                            <span class="text-xs text-slate-600 font-mono">${dayFollowups.length}</span>
-                        </div>
-                        <div class="space-y-2">
-                            ${dayFollowups.map(f => itemCardHtml(f, 'followup', dStr, false)).join('')}
-                        </div>
-                    </div>`;
-                }
-            }
-
-            html += `</div>`;
-            document.getElementById('calendar-content').innerHTML = html;
         }
 
-        // ─── Modal ─────────────────────────────────────────────────────────────
-
-        function openDayModal(dateStr) {
-            const date = parseDate(dateStr);
-            const label = date.toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-            const todayStr = today();
-
-            const itemsByDate = buildItemsLookup(calendarItems);
+        // Current month days
+        for (let d = 1; d <= daysInMonth; d++) {
+            const dateStr = `${currentYear}-${String(currentMonth).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+            const isToday = dateStr === todayStr;
             const dayItems = itemsByDate[dateStr];
 
-            const dayReminders = dayItems ? dayItems.reminders : [];
-            const dayFollowups = dayItems ? dayItems.followups : [];
-            const total = dayReminders.length + dayFollowups.length;
+            const bgClass = `bg-gray-950 hover:bg-slate-900/60 cursor-pointer transition-colors`;
+            const ringClass = isToday ? 'ring-1 ring-inset ring-violet-500/50' : '';
+            const dayNumClass = isToday
+                ? 'w-6 h-6 flex items-center justify-center rounded-full bg-violet-600 text-white font-semibold text-xs'
+                : 'text-xs text-slate-400 font-display';
 
-            document.getElementById('modal-title').textContent = label;
-            document.getElementById('modal-subtitle').textContent = `${total} item${total !== 1 ? 's' : ''}`;
+            let dotsHtml = '';
+            if (dayItems) {
+                const allItems = [
+                    ...dayItems.reminders.map(r => ({ ...r, type: 'reminder' })),
+                    ...dayItems.followups.map(f => ({ ...f, type: 'followup' }))
+                ];
+                const total = allItems.length;
 
-            let bodyHtml = '';
+                let doneDots = [], pendingDots = [], overdueDots = [];
+                allItems.forEach(item => {
+                    const st = getItemStatus(item, dateStr);
+                    const color = st === 'done' ? 'bg-emerald-500' : st === 'overdue' ? 'bg-red-500' : 'bg-amber-500';
+                    const dot = `<span class="w-1.5 h-1.5 rounded-full ${color} flex-shrink-0"></span>`;
+                    if (st === 'done') doneDots.push(dot);
+                    else if (st === 'overdue') overdueDots.push(dot);
+                    else pendingDots.push(dot);
+                });
 
-            if (total === 0) {
-                bodyHtml = `<div class="text-center py-10 text-slate-600 font-display">No items for this day</div>`;
-            } else {
-                // Sort each group: overdue → pending → done
-                const sortItems = (arr, type) => {
-                    const copy = arr.map(r => ({ ...r, _type: type }));
-                    copy.sort((a, b) => {
-                        const order = { overdue: 0, pending: 1, done: 2 };
-                        return order[getItemStatus(a, dateStr)] - order[getItemStatus(b, dateStr)];
-                    });
-                    return copy;
-                };
-
-                if (dayReminders.length > 0) {
-                    bodyHtml += `<div>
-                        <div class="flex items-center gap-2 mb-2.5">
-                            <span class="text-xs font-mono font-semibold px-2 py-0.5 rounded bg-violet-500/15 text-violet-400 uppercase tracking-wide">Reminders (User)</span>
-                            <span class="text-xs text-slate-600 font-mono">${dayReminders.length}</span>
-                        </div>
-                        <div class="space-y-2">
-                            ${sortItems(dayReminders, 'reminder').map(r => itemCardHtml(r, 'reminder', dateStr, false)).join('')}
-                        </div>
-                    </div>`;
-                }
-
-                if (dayFollowups.length > 0) {
-                    bodyHtml += `<div>
-                        <div class="flex items-center gap-2 mb-2.5">
-                            <span class="text-xs font-mono font-semibold px-2 py-0.5 rounded bg-pink-500/15 text-pink-400 uppercase tracking-wide">Followups (NEXO)</span>
-                            <span class="text-xs text-slate-600 font-mono">${dayFollowups.length}</span>
-                        </div>
-                        <div class="space-y-2">
-                            ${sortItems(dayFollowups, 'followup').map(f => itemCardHtml(f, 'followup', dateStr, false)).join('')}
-                        </div>
-                    </div>`;
-                }
+                const visibleDots = [...overdueDots, ...pendingDots, ...doneDots].slice(0, 5);
+                const overflow = total > 5 ? `<span class="text-xs text-slate-500 font-mono leading-none">+${total - 5}</span>` : '';
+                dotsHtml = `<div class="flex flex-wrap gap-0.5 mt-1.5 items-center">${visibleDots.join('')}${overflow}</div>`;
             }
 
-            document.getElementById('modal-body').innerHTML = bodyHtml;
-
-            const overlay = document.getElementById('modal-overlay');
-            overlay.classList.remove('hidden');
-            // Re-trigger animation
-            const box = document.getElementById('modal-box');
-            box.classList.remove('modal-animate');
-            void box.offsetWidth;
-            box.classList.add('modal-animate');
-
-            // ESC to close
-            document._modalEscHandler = (e) => { if (e.key === 'Escape') closeModalDirect(); };
-            document.addEventListener('keydown', document._modalEscHandler);
+            cells += `<div class="${bgClass} ${ringClass} p-2 min-h-[90px]" onclick="openDayModal('${dateStr}')">
+                <div class="${dayNumClass}">${d}</div>
+                ${dotsHtml}
+            </div>`;
         }
 
-        function closeModal(e) {
-            // Called on backdrop click — only close if clicking the backdrop itself
-            if (e.target === document.getElementById('modal-overlay')) {
-                closeModalDirect();
+        // Next month padding
+        const totalCells = startDow + daysInMonth;
+        const remaining = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
+        for (let d = 1; d <= remaining; d++) {
+            cells += `<div class="bg-gray-950 p-2 min-h-[90px] opacity-25">
+                <div class="text-xs text-slate-500 font-display">${d}</div>
+            </div>`;
+        }
+
+        document.getElementById('calendar-content').innerHTML = `
+            ${headerHtml}
+            <div class="grid grid-cols-7 gap-px bg-slate-800/30 rounded-lg overflow-hidden border border-slate-800/30">
+                ${cells}
+            </div>
+        `;
+    }
+
+    // --- Week view ---
+
+    function renderWeek() {
+        const weekEnd = addDays(currentWeekStart, 6);
+        const startLabel = currentWeekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        const endLabel = weekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        document.getElementById('period-label').textContent = `${startLabel} \u2013 ${endLabel}`;
+
+        const todayStr = today();
+        const itemsByDate = buildItemsLookup(calendarItems);
+
+        let headerHtml = `<div class="grid grid-cols-7 gap-px mb-0.5">`;
+        for (let i = 0; i < 7; i++) {
+            const d = addDays(currentWeekStart, i);
+            const dStr = ymd(d);
+            const isToday = dStr === todayStr;
+            const dayItems = itemsByDate[dStr];
+            const count = dayItems ? (dayItems.reminders.length + dayItems.followups.length) : 0;
+
+            headerHtml += `<div class="p-3 text-center ${isToday ? 'bg-violet-500/10' : 'bg-slate-900/30'} rounded-t-lg cursor-pointer hover:bg-slate-800/50 transition-colors" onclick="openDayModal('${dStr}')">
+                <div class="text-xs uppercase tracking-wider text-slate-500 font-display">${DAYS_SHORT[i]}</div>
+                <div class="text-lg font-display font-semibold mt-0.5 ${isToday ? 'text-violet-400' : 'text-slate-200'}">${d.getDate()}</div>
+                ${count > 0 ? `<div class="text-xs font-mono text-slate-500 mt-0.5">${count} item${count !== 1 ? 's' : ''}</div>` : ''}
+            </div>`;
+        }
+        headerHtml += `</div>`;
+
+        let bodyHtml = `<div class="grid grid-cols-7 gap-px bg-slate-800/20 rounded-b-lg overflow-hidden border border-slate-800/30 border-t-0">`;
+        for (let i = 0; i < 7; i++) {
+            const d = addDays(currentWeekStart, i);
+            const dStr = ymd(d);
+            const isToday = dStr === todayStr;
+            const dayItems = itemsByDate[dStr];
+
+            let itemsHtml = '';
+            if (dayItems) {
+                const allItems = [
+                    ...dayItems.reminders.map(r => ({ ...r, _type: 'reminder' })),
+                    ...dayItems.followups.map(f => ({ ...f, _type: 'followup' }))
+                ];
+                allItems.sort((a, b) => {
+                    const order = { overdue: 0, pending: 1, done: 2 };
+                    return order[getItemStatus(a, dStr)] - order[getItemStatus(b, dStr)];
+                });
+                itemsHtml = allItems.map(item => itemCardHtml(item, item._type, dStr, true)).join('');
+            }
+
+            bodyHtml += `<div class="${isToday ? 'bg-violet-500/5' : 'bg-gray-950'} p-2 min-h-[160px] cursor-pointer hover:bg-slate-900/40 transition-colors" onclick="openDayModal('${dStr}')">
+                ${itemsHtml || `<div class="text-xs text-slate-700 text-center mt-4">\u2014</div>`}
+            </div>`;
+        }
+        bodyHtml += `</div>`;
+
+        document.getElementById('calendar-content').innerHTML = headerHtml + bodyHtml;
+    }
+
+    // --- Day view ---
+
+    function renderDay() {
+        const dStr = ymd(currentDay);
+        const label = currentDay.toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+        document.getElementById('period-label').textContent = label;
+
+        const itemsByDate = buildItemsLookup(calendarItems);
+        const dayItems = itemsByDate[dStr];
+
+        const dayReminders = dayItems ? dayItems.reminders : [];
+        const dayFollowups = dayItems ? dayItems.followups : [];
+        const total = dayReminders.length + dayFollowups.length;
+
+        const todayStr = today();
+        const isToday = dStr === todayStr;
+
+        let html = `<div class="max-w-2xl mx-auto">`;
+
+        html += `<div class="flex items-center gap-3 mb-6">
+            <div class="text-2xl font-display font-bold ${isToday ? 'text-violet-400' : 'text-slate-100'}">${label}</div>
+            <span class="text-sm font-mono text-slate-500">${total} item${total !== 1 ? 's' : ''}</span>
+        </div>`;
+
+        if (total === 0) {
+            html += `<div class="text-center py-16 text-slate-600 font-display">
+                <div class="text-4xl mb-3">\u2014</div>
+                <div>No items for this day</div>
+            </div>`;
+        } else {
+            if (dayReminders.length > 0) {
+                html += `<div class="mb-6">
+                    <div class="flex items-center gap-2 mb-3">
+                        <span class="text-xs font-mono font-semibold px-2 py-0.5 rounded bg-violet-500/15 text-violet-400 uppercase tracking-wide">Reminders (User)</span>
+                        <span class="text-xs text-slate-600 font-mono">${dayReminders.length}</span>
+                    </div>
+                    <div class="space-y-2">
+                        ${dayReminders.map(r => itemCardHtml(r, 'reminder', dStr, false)).join('')}
+                    </div>
+                </div>`;
+            }
+
+            if (dayFollowups.length > 0) {
+                html += `<div class="mb-6">
+                    <div class="flex items-center gap-2 mb-3">
+                        <span class="text-xs font-mono font-semibold px-2 py-0.5 rounded bg-pink-500/15 text-pink-400 uppercase tracking-wide">Followups (NEXO)</span>
+                        <span class="text-xs text-slate-600 font-mono">${dayFollowups.length}</span>
+                    </div>
+                    <div class="space-y-2">
+                        ${dayFollowups.map(f => itemCardHtml(f, 'followup', dStr, false)).join('')}
+                    </div>
+                </div>`;
             }
         }
 
-        function closeModalDirect() {
-            document.getElementById('modal-overlay').classList.add('hidden');
-            if (document._modalEscHandler) {
-                document.removeEventListener('keydown', document._modalEscHandler);
+        html += `</div>`;
+        document.getElementById('calendar-content').innerHTML = html;
+    }
+
+    // --- Modal ---
+
+    function openDayModal(dateStr) {
+        const date = parseDate(dateStr);
+        const label = date.toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+        const itemsByDate = buildItemsLookup(calendarItems);
+        const dayItems = itemsByDate[dateStr];
+
+        const dayReminders = dayItems ? dayItems.reminders : [];
+        const dayFollowups = dayItems ? dayItems.followups : [];
+        const total = dayReminders.length + dayFollowups.length;
+
+        document.getElementById('modal-title').textContent = label;
+        document.getElementById('modal-subtitle').textContent = `${total} item${total !== 1 ? 's' : ''}`;
+
+        let bodyHtml = '';
+
+        if (total === 0) {
+            bodyHtml = `<div class="text-center py-10 text-slate-600 font-display">No items for this day</div>`;
+        } else {
+            const sortItems = (arr, type) => {
+                const copy = arr.map(r => ({ ...r, _type: type }));
+                copy.sort((a, b) => {
+                    const order = { overdue: 0, pending: 1, done: 2 };
+                    return order[getItemStatus(a, dateStr)] - order[getItemStatus(b, dateStr)];
+                });
+                return copy;
+            };
+
+            if (dayReminders.length > 0) {
+                bodyHtml += `<div>
+                    <div class="flex items-center gap-2 mb-2.5">
+                        <span class="text-xs font-mono font-semibold px-2 py-0.5 rounded bg-violet-500/15 text-violet-400 uppercase tracking-wide">Reminders (User)</span>
+                        <span class="text-xs text-slate-600 font-mono">${dayReminders.length}</span>
+                    </div>
+                    <div class="space-y-2">
+                        ${sortItems(dayReminders, 'reminder').map(r => itemCardHtml(r, 'reminder', dateStr, false)).join('')}
+                    </div>
+                </div>`;
+            }
+
+            if (dayFollowups.length > 0) {
+                bodyHtml += `<div>
+                    <div class="flex items-center gap-2 mb-2.5">
+                        <span class="text-xs font-mono font-semibold px-2 py-0.5 rounded bg-pink-500/15 text-pink-400 uppercase tracking-wide">Followups (NEXO)</span>
+                        <span class="text-xs text-slate-600 font-mono">${dayFollowups.length}</span>
+                    </div>
+                    <div class="space-y-2">
+                        ${sortItems(dayFollowups, 'followup').map(f => itemCardHtml(f, 'followup', dateStr, false)).join('')}
+                    </div>
+                </div>`;
             }
         }
 
-        // ─── Sidebar data ──────────────────────────────────────────────────────
+        document.getElementById('modal-body').innerHTML = bodyHtml;
 
-        fetch('/api/stats').then(r => r.json()).then(data => {
-            const val = data.trust_score;
-            if (val != null) document.getElementById('trust-score').textContent = val.toFixed(1);
-        }).catch(() => {});
+        const overlay = document.getElementById('modal-overlay');
+        overlay.classList.remove('hidden');
+        const box = document.getElementById('modal-box');
+        box.classList.remove('modal-animate');
+        void box.offsetWidth;
+        box.classList.add('modal-animate');
 
-        fetch('/api/inbox?limit=100').then(r => r.json()).then(data => {
-            const notes = data.notes || [];
-            const unread = notes.filter(m => m.direction === 'to_user' && !m.read).length;
-            const badge = document.getElementById('inbox-badge');
-            if (unread > 0) {
-                badge.textContent = unread > 9 ? '9+' : unread;
-                badge.classList.remove('hidden');
-            }
-        }).catch(() => {});
+        document._modalEscHandler = (e) => { if (e.key === 'Escape') closeModalDirect(); };
+        document.addEventListener('keydown', document._modalEscHandler);
+    }
 
-        // ─── Init ──────────────────────────────────────────────────────────────
+    function closeModal(e) {
+        if (e.target === document.getElementById('modal-overlay')) {
+            closeModalDirect();
+        }
+    }
 
-        updateViewButtons();
-        loadAndRender();
-    </script>
-</body>
-</html>
+    function closeModalDirect() {
+        document.getElementById('modal-overlay').classList.add('hidden');
+        if (document._modalEscHandler) {
+            document.removeEventListener('keydown', document._modalEscHandler);
+        }
+    }
+
+    // --- Init ---
+
+    updateViewButtons();
+    loadAndRender();
+</script>
+{% endblock %}

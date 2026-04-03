@@ -1,748 +1,571 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NEXO Brain — Operations</title>
-  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          fontFamily: {
-            display: ['Space Grotesk', 'system-ui', 'sans-serif'],
-            mono: ['JetBrains Mono', 'monospace']
-          }
-        }
-      }
-    }
-  </script>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <style>
-    body { background: #030712; }
-    .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-    /* Scrollbar */
-    ::-webkit-scrollbar { width: 4px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
-    ::-webkit-scrollbar-thumb:hover { background: #475569; }
-    /* Toast slide-in */
-    @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-    .toast-enter { animation: slideIn 0.2s ease-out; }
-    /* Modal backdrop */
-    .modal-backdrop { backdrop-filter: blur(4px); }
-  </style>
-</head>
-<body class="bg-gray-950 text-slate-200 font-display">
+{% extends "base.html" %}
 
-  <!-- SIDEBAR (56px icon-only, fixed left) -->
-  <aside class="fixed left-0 top-0 bottom-0 w-14 bg-slate-900 border-r border-slate-800 flex flex-col items-center py-4 z-50">
-    <!-- Logo -->
-    <a href="/" class="mb-6 flex items-center justify-center w-8 h-8">
-      <img src="/static/nexo-logo.png" alt="NEXO" class="w-7 h-7 rounded">
-    </a>
+{% block title %}Operations{% endblock %}
+{% block page_title %}Operations{% endblock %}
 
-    <!-- Nav -->
-    <nav class="flex flex-col items-center gap-1 flex-1">
-      <!-- Dashboard -->
-      <a href="/" title="Dashboard" class="w-9 h-9 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-800 hover:text-slate-300 transition-colors">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="3" width="7" height="7" rx="1"/>
-          <rect x="14" y="3" width="7" height="7" rx="1"/>
-          <rect x="3" y="14" width="7" height="7" rx="1"/>
-          <rect x="14" y="14" width="7" height="7" rx="1"/>
-        </svg>
-      </a>
+{% block head %}
+<style>
+  .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  .toast-enter { animation: slideIn 0.2s ease-out; }
+  .modal-backdrop { backdrop-filter: blur(4px); }
+</style>
+{% endblock %}
 
-      <!-- Operations (ACTIVE) -->
-      <a href="/ops" title="Operations" class="w-9 h-9 rounded-lg flex items-center justify-center bg-violet-500/10 text-violet-400 transition-colors">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/>
-          <rect x="9" y="3" width="6" height="4" rx="1"/>
-          <path d="M9 12h6M9 16h4"/>
-        </svg>
-      </a>
+{% block header_actions %}
+<input
+  type="text"
+  id="ops-search"
+  placeholder="Search..."
+  oninput="filterOps()"
+  class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1 text-xs text-slate-200 w-48 focus:outline-none focus:ring-1 focus:ring-violet-500 placeholder-slate-500"
+>
+<select
+  id="ops-status"
+  onchange="loadOpsData()"
+  class="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-violet-500"
+>
+  <option value="PENDING">Pending</option>
+  <option value="all">All</option>
+  <option value="COMPLETED">Completed</option>
+</select>
+{% endblock %}
 
-      <!-- Calendar -->
-      <a href="/calendar" title="Calendar" class="w-9 h-9 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-800 hover:text-slate-300 transition-colors">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="4" width="18" height="18" rx="2"/>
-          <path d="M16 2v4M8 2v4M3 10h18"/>
-        </svg>
-      </a>
+{% block content %}
+<div class="grid grid-cols-2 gap-6">
 
-      <!-- Inbox -->
-      <a href="/inbox" title="Inbox" class="relative w-9 h-9 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-800 hover:text-slate-300 transition-colors">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-          <polyline points="22,6 12,13 2,6"/>
-        </svg>
-        <span id="inbox-badge" class="hidden absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-red-500 text-xs font-mono text-white flex items-center justify-center leading-none">0</span>
-      </a>
-
-      <div class="w-6 h-px bg-slate-800 my-1"></div>
-
-      <!-- Memory -->
-      <a href="/memory" title="Memory" class="w-9 h-9 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-800 hover:text-slate-300 transition-colors">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-          <ellipse cx="12" cy="5" rx="9" ry="3"/>
-          <path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/>
-          <path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/>
-        </svg>
-      </a>
-
-      <!-- Graph -->
-      <a href="/graph" title="Graph" class="w-9 h-9 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-800 hover:text-slate-300 transition-colors">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="3"/>
-          <circle cx="4" cy="6" r="2"/>
-          <circle cx="20" cy="6" r="2"/>
-          <circle cx="4" cy="18" r="2"/>
-          <circle cx="20" cy="18" r="2"/>
-          <path d="M6 6.5l4 4M14 13.5l4 4M6 17.5l4-4M14 10.5l4-4"/>
-        </svg>
-      </a>
-
-      <!-- Sessions -->
-      <a href="/sessions" title="Sessions" class="w-9 h-9 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-800 hover:text-slate-300 transition-colors">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="23 4 23 10 17 10"/>
-          <polyline points="1 20 1 14 7 14"/>
-          <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
-        </svg>
-      </a>
-
-      <!-- Somatic -->
-      <a href="/somatic" title="Somatic" class="w-9 h-9 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-800 hover:text-slate-300 transition-colors">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/>
-        </svg>
-      </a>
-
-      <!-- Adaptive -->
-      <a href="/adaptive" title="Adaptive" class="w-9 h-9 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-800 hover:text-slate-300 transition-colors">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-        </svg>
-      </a>
-    </nav>
-
-    <!-- Trust score -->
-    <div class="flex flex-col items-center gap-0.5 mt-2">
-      <span class="text-xs uppercase tracking-widest text-slate-600 font-mono">trust</span>
-      <span id="sidebar-trust" class="text-xs font-mono font-medium text-slate-400">--</span>
+  <!-- LEFT: User's Items (Reminders) -->
+  <div>
+    <div class="flex items-center justify-between mb-3">
+      <div class="flex items-center gap-2">
+        <div class="w-2 h-2 rounded-full bg-violet-400"></div>
+        <h2 class="text-sm font-display font-semibold text-slate-100">User</h2>
+        <span id="reminder-count" class="text-xs px-1.5 py-0.5 rounded-full bg-violet-500/20 text-violet-400 font-mono">0</span>
+      </div>
+      <button onclick="openCreate('reminder')" class="text-xs px-2 py-1 rounded-md bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200 transition-colors">
+        + Add
+      </button>
     </div>
-  </aside>
+    <div id="reminders-list" class="space-y-2">
+      <div class="text-xs text-slate-600 font-mono py-4 text-center">Loading...</div>
+    </div>
+  </div>
 
-  <!-- MAIN -->
-  <main class="ml-14 min-h-screen bg-gray-950 text-slate-200">
+  <!-- RIGHT: NEXO's Items (Followups) -->
+  <div>
+    <div class="flex items-center justify-between mb-3">
+      <div class="flex items-center gap-2">
+        <div class="w-2 h-2 rounded-full bg-pink-400"></div>
+        <h2 class="text-sm font-display font-semibold text-slate-100">NEXO</h2>
+        <span id="followup-count" class="text-xs px-1.5 py-0.5 rounded-full bg-pink-500/20 text-pink-400 font-mono">0</span>
+      </div>
+      <button onclick="openCreate('followup')" class="text-xs px-2 py-1 rounded-md bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200 transition-colors">
+        + Add
+      </button>
+    </div>
+    <div id="followups-list" class="space-y-2">
+      <div class="text-xs text-slate-600 font-mono py-4 text-center">Loading...</div>
+    </div>
+  </div>
 
-    <!-- Top bar -->
-    <header class="h-12 border-b border-slate-800/50 flex items-center justify-between px-6 sticky top-0 bg-gray-950/90 backdrop-blur-sm z-40">
-      <h1 class="text-sm font-display font-semibold text-slate-100">Operations</h1>
-      <div class="flex items-center gap-3">
+</div>
+
+<!-- CREATE/EDIT MODAL -->
+<div id="ops-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center">
+  <div class="absolute inset-0 bg-black/60 modal-backdrop" onclick="closeModal()"></div>
+  <div class="relative bg-slate-900 border border-slate-700/50 rounded-xl shadow-2xl w-full max-w-md mx-4">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-slate-800">
+      <h2 id="modal-title" class="text-sm font-display font-semibold text-slate-100">New Item</h2>
+      <button onclick="closeModal()" class="w-6 h-6 rounded-md flex items-center justify-center text-slate-500 hover:bg-slate-800 hover:text-slate-300 transition-colors text-lg leading-none">&times;</button>
+    </div>
+    <form id="modal-form" onsubmit="submitForm(event)" class="px-5 py-4 space-y-4">
+      <div>
+        <label class="block text-xs text-slate-400 mb-1.5 font-medium">Description</label>
+        <textarea
+          name="description"
+          rows="3"
+          required
+          class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-violet-500 resize-none placeholder-slate-500"
+          placeholder="Describe the item..."
+        ></textarea>
+      </div>
+      <div>
+        <label class="block text-xs text-slate-400 mb-1.5 font-medium">Date <span class="text-slate-600">(optional)</span></label>
         <input
-          type="text"
-          id="ops-search"
-          placeholder="Search..."
-          oninput="filterOps()"
-          class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1 text-xs text-slate-200 w-48 focus:outline-none focus:ring-1 focus:ring-violet-500 placeholder-slate-500"
+          type="date"
+          name="date"
+          class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-violet-500"
         >
-        <select
-          id="ops-status"
-          onchange="loadOpsData()"
-          class="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-violet-500"
-        >
-          <option value="PENDING">Pending</option>
-          <option value="all">All</option>
-          <option value="COMPLETED">Completed</option>
+      </div>
+      <div id="category-group" class="hidden">
+        <label class="block text-xs text-slate-400 mb-1.5 font-medium">Category</label>
+        <select name="category" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-violet-500">
+          <option value="general">General</option>
+          <option value="ideas">Ideas</option>
+          <option value="my-project">My Project</option>
+          <option value="project-a">Project A</option>
+          <option value="server">Server</option>
         </select>
       </div>
-    </header>
-
-    <!-- Content -->
-    <div class="p-6">
-      <div class="grid grid-cols-2 gap-6">
-
-        <!-- LEFT: User's Items (Reminders) -->
-        <div>
-          <div class="flex items-center justify-between mb-3">
-            <div class="flex items-center gap-2">
-              <div class="w-2 h-2 rounded-full bg-violet-400"></div>
-              <h2 class="text-sm font-display font-semibold text-slate-100">User</h2>
-              <span id="reminder-count" class="text-xs px-1.5 py-0.5 rounded-full bg-violet-500/20 text-violet-400 font-mono">0</span>
-            </div>
-            <button onclick="openCreate('reminder')" class="text-xs px-2 py-1 rounded-md bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200 transition-colors">
-              + Add
-            </button>
-          </div>
-          <div id="reminders-list" class="space-y-2">
-            <div class="text-xs text-slate-600 font-mono py-4 text-center">Loading...</div>
-          </div>
-        </div>
-
-        <!-- RIGHT: NEXO's Items (Followups) -->
-        <div>
-          <div class="flex items-center justify-between mb-3">
-            <div class="flex items-center gap-2">
-              <div class="w-2 h-2 rounded-full bg-pink-400"></div>
-              <h2 class="text-sm font-display font-semibold text-slate-100">NEXO</h2>
-              <span id="followup-count" class="text-xs px-1.5 py-0.5 rounded-full bg-pink-500/20 text-pink-400 font-mono">0</span>
-            </div>
-            <button onclick="openCreate('followup')" class="text-xs px-2 py-1 rounded-md bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200 transition-colors">
-              + Add
-            </button>
-          </div>
-          <div id="followups-list" class="space-y-2">
-            <div class="text-xs text-slate-600 font-mono py-4 text-center">Loading...</div>
-          </div>
-        </div>
-
+      <div id="verification-group" class="hidden">
+        <label class="block text-xs text-slate-400 mb-1.5 font-medium">Verification</label>
+        <textarea
+          name="verification"
+          rows="2"
+          class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-violet-500 resize-none placeholder-slate-500"
+          placeholder="How to verify this is done..."
+        ></textarea>
       </div>
-    </div>
-  </main>
-
-  <!-- CREATE/EDIT MODAL -->
-  <div id="ops-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center">
-    <div class="absolute inset-0 bg-black/60 modal-backdrop" onclick="closeModal()"></div>
-    <div class="relative bg-slate-900 border border-slate-700/50 rounded-xl shadow-2xl w-full max-w-md mx-4">
-      <div class="flex items-center justify-between px-5 py-4 border-b border-slate-800">
-        <h2 id="modal-title" class="text-sm font-display font-semibold text-slate-100">New Item</h2>
-        <button onclick="closeModal()" class="w-6 h-6 rounded-md flex items-center justify-center text-slate-500 hover:bg-slate-800 hover:text-slate-300 transition-colors text-lg leading-none">&times;</button>
+      <div id="reasoning-group" class="hidden">
+        <label class="block text-xs text-slate-400 mb-1.5 font-medium">Reasoning</label>
+        <textarea
+          name="reasoning"
+          rows="2"
+          class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-violet-500 resize-none placeholder-slate-500"
+          placeholder="Why this followup exists..."
+        ></textarea>
       </div>
-      <form id="modal-form" onsubmit="submitForm(event)" class="px-5 py-4 space-y-4">
-        <div>
-          <label class="block text-xs text-slate-400 mb-1.5 font-medium">Description</label>
-          <textarea
-            name="description"
-            rows="3"
-            required
-            class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-violet-500 resize-none placeholder-slate-500"
-            placeholder="Describe the item..."
-          ></textarea>
-        </div>
-        <div>
-          <label class="block text-xs text-slate-400 mb-1.5 font-medium">Date <span class="text-slate-600">(optional)</span></label>
-          <input
-            type="date"
-            name="date"
-            class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-violet-500"
-          >
-        </div>
-        <div id="category-group" class="hidden">
-          <label class="block text-xs text-slate-400 mb-1.5 font-medium">Category</label>
-          <select name="category" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-violet-500">
-            <option value="general">General</option>
-            <option value="ideas">Ideas</option>
-            <option value="my-project">My Project</option>
-            <option value="project-a">Project A</option>
-            <option value="server">Server</option>
-          </select>
-        </div>
-        <div id="verification-group" class="hidden">
-          <label class="block text-xs text-slate-400 mb-1.5 font-medium">Verification</label>
-          <textarea
-            name="verification"
-            rows="2"
-            class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-violet-500 resize-none placeholder-slate-500"
-            placeholder="How to verify this is done..."
-          ></textarea>
-        </div>
-        <div id="reasoning-group" class="hidden">
-          <label class="block text-xs text-slate-400 mb-1.5 font-medium">Reasoning</label>
-          <textarea
-            name="reasoning"
-            rows="2"
-            class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-violet-500 resize-none placeholder-slate-500"
-            placeholder="Why this followup exists..."
-          ></textarea>
-        </div>
-        <input type="hidden" name="type" id="modal-type">
-        <input type="hidden" name="edit_id" id="modal-edit-id">
-        <div class="flex items-center justify-end gap-2 pt-1">
-          <button type="button" onclick="closeModal()" class="text-xs px-3 py-1.5 rounded-lg bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200 transition-colors">
-            Cancel
-          </button>
-          <button type="submit" id="modal-submit-btn" class="text-xs px-3 py-1.5 rounded-lg bg-violet-600 text-white hover:bg-violet-500 transition-colors font-medium">
-            Create
-          </button>
-        </div>
-      </form>
-    </div>
+      <input type="hidden" name="type" id="modal-type">
+      <input type="hidden" name="edit_id" id="modal-edit-id">
+      <div class="flex items-center justify-end gap-2 pt-1">
+        <button type="button" onclick="closeModal()" class="text-xs px-3 py-1.5 rounded-lg bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200 transition-colors">
+          Cancel
+        </button>
+        <button type="submit" id="modal-submit-btn" class="text-xs px-3 py-1.5 rounded-lg bg-violet-600 text-white hover:bg-violet-500 transition-colors font-medium">
+          Create
+        </button>
+      </div>
+    </form>
   </div>
+</div>
 
-  <!-- CONFIRM MODAL -->
-  <div id="confirm-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center">
-    <div class="absolute inset-0 bg-black/60 modal-backdrop" onclick="closeConfirm()"></div>
-    <div class="relative bg-slate-900 border border-slate-700/50 rounded-xl shadow-2xl w-full max-w-sm mx-4">
-      <div class="flex items-center justify-between px-5 py-4 border-b border-slate-800">
-        <h2 class="text-sm font-display font-semibold text-slate-100">Confirm</h2>
-        <button onclick="closeConfirm()" class="w-6 h-6 rounded-md flex items-center justify-center text-slate-500 hover:bg-slate-800 hover:text-slate-300 transition-colors text-lg leading-none">&times;</button>
-      </div>
-      <div class="px-5 py-4">
-        <p id="confirm-message" class="text-xs text-slate-300 mb-4">Are you sure?</p>
-        <div class="flex items-center justify-end gap-2">
-          <button onclick="closeConfirm()" class="text-xs px-3 py-1.5 rounded-lg bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200 transition-colors">
-            Cancel
-          </button>
-          <button id="confirm-btn" onclick="confirmAction()" class="text-xs px-3 py-1.5 rounded-lg bg-red-600 text-white hover:bg-red-500 transition-colors font-medium">
-            Delete
-          </button>
-        </div>
+<!-- CONFIRM MODAL -->
+<div id="confirm-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center">
+  <div class="absolute inset-0 bg-black/60 modal-backdrop" onclick="closeConfirm()"></div>
+  <div class="relative bg-slate-900 border border-slate-700/50 rounded-xl shadow-2xl w-full max-w-sm mx-4">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-slate-800">
+      <h2 class="text-sm font-display font-semibold text-slate-100">Confirm</h2>
+      <button onclick="closeConfirm()" class="w-6 h-6 rounded-md flex items-center justify-center text-slate-500 hover:bg-slate-800 hover:text-slate-300 transition-colors text-lg leading-none">&times;</button>
+    </div>
+    <div class="px-5 py-4">
+      <p id="confirm-message" class="text-xs text-slate-300 mb-4">Are you sure?</p>
+      <div class="flex items-center justify-end gap-2">
+        <button onclick="closeConfirm()" class="text-xs px-3 py-1.5 rounded-lg bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200 transition-colors">
+          Cancel
+        </button>
+        <button id="confirm-btn" onclick="confirmAction()" class="text-xs px-3 py-1.5 rounded-lg bg-red-600 text-white hover:bg-red-500 transition-colors font-medium">
+          Delete
+        </button>
       </div>
     </div>
   </div>
+</div>
 
-  <!-- TOAST -->
-  <div id="toast" class="hidden fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl border shadow-lg text-xs font-medium toast-enter max-w-xs">
-    <span id="toast-icon" class="flex-shrink-0"></span>
-    <span id="toast-message"></span>
-  </div>
+<!-- OPS TOAST (separate from base toast) -->
+<div id="ops-toast" class="hidden fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl border shadow-lg text-xs font-medium toast-enter max-w-xs">
+  <span id="ops-toast-icon" class="flex-shrink-0"></span>
+  <span id="ops-toast-message"></span>
+</div>
+{% endblock %}
 
-  <script>
-  // -----------------------------------------------------------------------
-  // State
-  // -----------------------------------------------------------------------
-  let allReminders = [];
-  let allFollowups = [];
-  let pendingConfirmAction = null;
+{% block scripts %}
+<script>
+// -----------------------------------------------------------------------
+// State
+// -----------------------------------------------------------------------
+let allReminders = [];
+let allFollowups = [];
+let pendingConfirmAction = null;
 
-  // -----------------------------------------------------------------------
-  // Toast
-  // -----------------------------------------------------------------------
-  function showToast(message, type = 'success') {
-    const toast = document.getElementById('toast');
-    const msg = document.getElementById('toast-message');
-    const icon = document.getElementById('toast-icon');
-    msg.textContent = message;
+// -----------------------------------------------------------------------
+// Ops Toast (uses its own element to avoid conflict with base toast)
+// -----------------------------------------------------------------------
+function opsToast(message, type = 'success') {
+  const toast = document.getElementById('ops-toast');
+  const msg = document.getElementById('ops-toast-message');
+  const icon = document.getElementById('ops-toast-icon');
+  msg.textContent = message;
 
-    const styles = {
-      success: { bg: 'bg-slate-800', border: 'border-emerald-500/30', text: 'text-emerald-400', iconSvg: '✓' },
-      error:   { bg: 'bg-slate-800', border: 'border-red-500/30',     text: 'text-red-400',     iconSvg: '✕' },
-      info:    { bg: 'bg-slate-800', border: 'border-violet-500/30',  text: 'text-violet-400',  iconSvg: '·' },
-    };
-    const s = styles[type] || styles.info;
-    toast.className = `fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl border shadow-lg text-xs font-medium toast-enter max-w-xs ${s.bg} ${s.border}`;
-    icon.className = s.text;
-    icon.textContent = s.iconSvg;
-    msg.className = 'text-slate-200';
-    toast.classList.remove('hidden');
-    clearTimeout(toast._timer);
-    toast._timer = setTimeout(() => { toast.classList.add('hidden'); }, 3000);
-  }
+  const styles = {
+    success: { bg: 'bg-slate-800', border: 'border-emerald-500/30', text: 'text-emerald-400', iconSvg: '\u2713' },
+    error:   { bg: 'bg-slate-800', border: 'border-red-500/30',     text: 'text-red-400',     iconSvg: '\u2715' },
+    info:    { bg: 'bg-slate-800', border: 'border-violet-500/30',  text: 'text-violet-400',  iconSvg: '\u00b7' },
+  };
+  const s = styles[type] || styles.info;
+  toast.className = `fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl border shadow-lg text-xs font-medium toast-enter max-w-xs ${s.bg} ${s.border}`;
+  icon.className = s.text;
+  icon.textContent = s.iconSvg;
+  msg.className = 'text-slate-200';
+  toast.classList.remove('hidden');
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => { toast.classList.add('hidden'); }, 3000);
+}
 
-  // -----------------------------------------------------------------------
-  // Helpers
-  // -----------------------------------------------------------------------
-  function getToday() {
-    return new Date().toISOString().split('T')[0];
-  }
+// -----------------------------------------------------------------------
+// Helpers
+// -----------------------------------------------------------------------
+function getToday() {
+  return new Date().toISOString().split('T')[0];
+}
 
-  function getWeekEnd() {
-    const d = new Date();
-    d.setDate(d.getDate() + 7);
-    return d.toISOString().split('T')[0];
-  }
+function getWeekEnd() {
+  const d = new Date();
+  d.setDate(d.getDate() + 7);
+  return d.toISOString().split('T')[0];
+}
 
-  function relativeDate(dateStr) {
-    if (!dateStr) return '';
-    const d = new Date(dateStr + 'T00:00:00'), now = new Date();
-    now.setHours(0,0,0,0);
-    const diff = Math.round((d - now) / 86400000);
-    if (diff < -1) return Math.abs(diff) + 'd ago';
-    if (diff === -1) return 'yesterday';
-    if (diff === 0) return 'today';
-    if (diff === 1) return 'tomorrow';
-    if (diff <= 7) return diff + 'd';
-    return d.toLocaleDateString('en', { month: 'short', day: 'numeric' });
-  }
+function opsRelativeDate(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr + 'T00:00:00'), now = new Date();
+  now.setHours(0,0,0,0);
+  const diff = Math.round((d - now) / 86400000);
+  if (diff < -1) return Math.abs(diff) + 'd ago';
+  if (diff === -1) return 'yesterday';
+  if (diff === 0) return 'today';
+  if (diff === 1) return 'tomorrow';
+  if (diff <= 7) return diff + 'd';
+  return d.toLocaleDateString('en', { month: 'short', day: 'numeric' });
+}
 
-  function escapeHtml(str) {
-    if (!str) return '';
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-  }
+// -----------------------------------------------------------------------
+// Grouping
+// -----------------------------------------------------------------------
+function groupItems(items) {
+  const today = getToday();
+  const weekEnd = getWeekEnd();
+  return {
+    overdue:  items.filter(i => i.date && i.date < today && i.status !== 'COMPLETED'),
+    today:    items.filter(i => i.date === today),
+    week:     items.filter(i => i.date && i.date > today && i.date <= weekEnd),
+    upcoming: items.filter(i => i.date && i.date > weekEnd),
+    noDate:   items.filter(i => !i.date),
+  };
+}
 
-  async function fetchJSON(url) {
-    try {
-      const res = await fetch(url);
-      if (!res.ok) {
-        let detail = `HTTP ${res.status}`;
-        try { const b = await res.json(); detail = b.error || b.detail || detail; } catch {}
-        throw new Error(detail);
-      }
-      return await res.json();
-    } catch (err) {
-      console.error(`fetchJSON(${url}):`, err);
-      return null;
-    }
-  }
+// -----------------------------------------------------------------------
+// Rendering
+// -----------------------------------------------------------------------
+function renderItem(item, type) {
+  const today = getToday();
+  const isOverdue  = item.date && item.date < today && item.status !== 'COMPLETED';
+  const isToday    = item.date === today;
+  const isCompleted = item.status === 'COMPLETED';
 
-  // -----------------------------------------------------------------------
-  // Grouping
-  // -----------------------------------------------------------------------
-  function groupItems(items) {
-    const today = getToday();
-    const weekEnd = getWeekEnd();
-    return {
-      overdue:  items.filter(i => i.date && i.date < today && i.status !== 'COMPLETED'),
-      today:    items.filter(i => i.date === today),
-      week:     items.filter(i => i.date && i.date > today && i.date <= weekEnd),
-      upcoming: items.filter(i => i.date && i.date > weekEnd),
-      noDate:   items.filter(i => !i.date),
-    };
-  }
+  const dotColor   = isCompleted ? 'bg-emerald-400' : isOverdue ? 'bg-red-400' : isToday ? 'bg-amber-400' : 'bg-slate-500';
+  const dateLabel  = opsRelativeDate(item.date);
+  const dateClass  = isOverdue ? 'text-red-400' : isToday ? 'text-amber-400' : 'text-slate-500';
 
-  // -----------------------------------------------------------------------
-  // Rendering
-  // -----------------------------------------------------------------------
-  function renderItem(item, type) {
-    const today = getToday();
-    const isOverdue  = item.date && item.date < today && item.status !== 'COMPLETED';
-    const isToday    = item.date === today;
-    const isCompleted = item.status === 'COMPLETED';
+  const desc = escapeHtml(item.description || '');
+  const idLabel = escapeHtml(item.id || '');
+  const category = type === 'reminder' && item.category ? escapeHtml(item.category) : '';
 
-    const dotColor   = isCompleted ? 'bg-emerald-400' : isOverdue ? 'bg-red-400' : isToday ? 'bg-amber-400' : 'bg-slate-500';
-    const dateLabel  = relativeDate(item.date);
-    const dateClass  = isOverdue ? 'text-red-400' : isToday ? 'text-amber-400' : 'text-slate-500';
+  const moveLabel  = type === 'reminder' ? '\u2192 NEXO' : '\u2190 User';
+  const moveDir    = type === 'reminder' ? 'to_followup' : 'to_reminder';
 
-    const desc = escapeHtml(item.description || '');
-    const idLabel = escapeHtml(item.id || '');
-    const category = type === 'reminder' && item.category ? escapeHtml(item.category) : '';
+  const runBtn = type === 'followup'
+    ? `<button onclick="executeItem('${item.id}')" class="text-xs px-2.5 py-1 rounded bg-pink-500/10 text-pink-400 hover:bg-pink-500/20 transition-colors">\u25b6 Run</button>`
+    : '';
 
-    const moveLabel  = type === 'reminder' ? '→ NEXO' : '← User';
-    const moveDir    = type === 'reminder' ? 'to_followup' : 'to_reminder';
+  const completedOpacity = isCompleted ? 'opacity-50' : '';
 
-    const runBtn = type === 'followup'
-      ? `<button onclick="executeItem('${item.id}')" class="text-xs px-2.5 py-1 rounded bg-pink-500/10 text-pink-400 hover:bg-pink-500/20 transition-colors">▶ Run</button>`
-      : '';
-
-    const completedOpacity = isCompleted ? 'opacity-50' : '';
-
-    return `
-      <div class="bg-slate-900/50 border border-slate-800/50 rounded-lg p-4 group hover:border-slate-700 transition-colors ${completedOpacity}" data-id="${idLabel}">
-        <div class="flex items-start gap-2">
-          <div class="w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${dotColor}"></div>
-          <div class="flex-1 min-w-0">
-            <p class="text-sm text-slate-200 leading-relaxed line-clamp-2">${desc}</p>
-            <div class="flex items-center gap-2 mt-1.5 flex-wrap">
-              <span class="text-xs font-mono text-slate-600">${idLabel}</span>
-              ${dateLabel ? `<span class="text-xs font-mono ${dateClass}">${dateLabel}</span>` : ''}
-              ${category ? `<span class="text-xs px-1.5 py-0.5 rounded bg-slate-800 text-slate-500">${category}</span>` : ''}
-              ${isCompleted ? `<span class="text-xs px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-500">done</span>` : ''}
-            </div>
+  return `
+    <div class="bg-slate-900/50 border border-slate-800/50 rounded-lg p-4 group hover:border-slate-700 transition-colors ${completedOpacity}" data-id="${idLabel}">
+      <div class="flex items-start gap-2">
+        <div class="w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${dotColor}"></div>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm text-slate-200 leading-relaxed line-clamp-2">${desc}</p>
+          <div class="flex items-center gap-2 mt-1.5 flex-wrap">
+            <span class="text-xs font-mono text-slate-600">${idLabel}</span>
+            ${dateLabel ? `<span class="text-xs font-mono ${dateClass}">${dateLabel}</span>` : ''}
+            ${category ? `<span class="text-xs px-1.5 py-0.5 rounded bg-slate-800 text-slate-500">${category}</span>` : ''}
+            ${isCompleted ? `<span class="text-xs px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-500">done</span>` : ''}
           </div>
         </div>
-        <div class="flex items-center gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-          ${!isCompleted ? `<button onclick="completeItem('${item.id}','${type}')" class="text-xs px-2.5 py-1 rounded bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors">Done</button>` : ''}
-          <button onclick="editItem('${item.id}','${type}')" class="text-xs px-2.5 py-1 rounded bg-slate-800 text-slate-400 hover:bg-slate-700 transition-colors">Edit</button>
-          <button onclick="moveItem('${item.id}','${moveDir}')" class="text-xs px-2.5 py-1 rounded bg-violet-500/10 text-violet-400 hover:bg-violet-500/20 transition-colors">${moveLabel}</button>
-          ${runBtn}
-          <button onclick="deleteItem('${item.id}','${type}')" class="text-xs px-2.5 py-1 rounded text-red-400/60 hover:bg-red-500/10 hover:text-red-400 transition-colors ml-auto">✕</button>
-        </div>
       </div>
-    `;
-  }
+      <div class="flex items-center gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+        ${!isCompleted ? `<button onclick="completeItem('${item.id}','${type}')" class="text-xs px-2.5 py-1 rounded bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors">Done</button>` : ''}
+        <button onclick="editItem('${item.id}','${type}')" class="text-xs px-2.5 py-1 rounded bg-slate-800 text-slate-400 hover:bg-slate-700 transition-colors">Edit</button>
+        <button onclick="moveItem('${item.id}','${moveDir}')" class="text-xs px-2.5 py-1 rounded bg-violet-500/10 text-violet-400 hover:bg-violet-500/20 transition-colors">${moveLabel}</button>
+        ${runBtn}
+        <button onclick="deleteItem('${item.id}','${type}')" class="text-xs px-2.5 py-1 rounded text-red-400/60 hover:bg-red-500/10 hover:text-red-400 transition-colors ml-auto">\u2715</button>
+      </div>
+    </div>
+  `;
+}
 
-  function renderGroupLabel(label, colorClass) {
-    return `<div class="text-xs uppercase tracking-wider ${colorClass} font-medium mb-2 mt-4 first:mt-0">${label}</div>`;
-  }
+function renderGroupedItems(items, type, containerId) {
+  const container = document.getElementById(containerId);
+  const g = groupItems(items);
 
-  function renderGroupedItems(items, type, containerId) {
-    const container = document.getElementById(containerId);
-    const g = groupItems(items);
+  const groups = [
+    { key: 'overdue',  label: 'Overdue',     color: 'text-red-400' },
+    { key: 'today',    label: 'Today',        color: 'text-amber-400' },
+    { key: 'week',     label: 'This Week',    color: 'text-violet-400' },
+    { key: 'upcoming', label: 'Upcoming',     color: 'text-slate-400' },
+    { key: 'noDate',   label: 'No Date',      color: 'text-slate-600' },
+  ];
 
-    const groups = [
-      { key: 'overdue',  label: 'Overdue',     color: 'text-red-400' },
-      { key: 'today',    label: 'Today',        color: 'text-amber-400' },
-      { key: 'week',     label: 'This Week',    color: 'text-violet-400' },
-      { key: 'upcoming', label: 'Upcoming',     color: 'text-slate-400' },
-      { key: 'noDate',   label: 'No Date',      color: 'text-slate-600' },
-    ];
-
-    let html = '';
-    let first = true;
-    groups.forEach(({ key, label, color }) => {
-      const list = g[key];
-      if (!list || list.length === 0) return;
-      const marginClass = first ? '' : 'mt-4';
-      html += `<div class="text-xs uppercase tracking-wider ${color} font-medium mb-2 ${marginClass}">${label} <span class="opacity-50">(${list.length})</span></div>`;
-      html += '<div class="space-y-2">' + list.map(i => renderItem(i, type)).join('') + '</div>';
-      first = false;
-    });
-
-    if (!html) {
-      html = '<div class="text-xs text-slate-600 font-mono py-8 text-center">No items</div>';
-    }
-
-    container.innerHTML = html;
-  }
-
-  // -----------------------------------------------------------------------
-  // Data loading
-  // -----------------------------------------------------------------------
-  async function loadOpsData() {
-    const status = document.getElementById('ops-status').value;
-    const statusParam = status !== 'all' ? '?status=' + status : '';
-
-    const [remData, fupData, trustData, inboxData] = await Promise.all([
-      fetchJSON('/api/reminders' + statusParam),
-      fetchJSON('/api/followups' + statusParam),
-      fetchJSON('/api/trust'),
-      fetchJSON('/api/inbox/unread'),
-    ]);
-
-    if (remData) {
-      allReminders = remData.reminders || [];
-      document.getElementById('reminder-count').textContent = allReminders.length;
-    }
-    if (fupData) {
-      allFollowups = fupData.followups || [];
-      document.getElementById('followup-count').textContent = allFollowups.length;
-    }
-    if (trustData) {
-      const score = (trustData.current_score ?? 0).toFixed(1);
-      document.getElementById('sidebar-trust').textContent = score;
-    }
-    if (inboxData) {
-      const total = inboxData.total || 0;
-      const badge = document.getElementById('inbox-badge');
-      if (total > 0) {
-        badge.textContent = total > 99 ? '99' : total;
-        badge.classList.remove('hidden');
-        badge.classList.add('flex');
-      } else {
-        badge.classList.add('hidden');
-        badge.classList.remove('flex');
-      }
-    }
-
-    filterOps();
-  }
-
-  function filterOps() {
-    const search = (document.getElementById('ops-search').value || '').toLowerCase();
-
-    const filteredReminders = allReminders.filter(r =>
-      !search ||
-      (r.description || '').toLowerCase().includes(search) ||
-      (r.id || '').toLowerCase().includes(search) ||
-      (r.category || '').toLowerCase().includes(search)
-    );
-    const filteredFollowups = allFollowups.filter(f =>
-      !search ||
-      (f.description || '').toLowerCase().includes(search) ||
-      (f.id || '').toLowerCase().includes(search)
-    );
-
-    renderGroupedItems(filteredReminders, 'reminder', 'reminders-list');
-    renderGroupedItems(filteredFollowups, 'followup', 'followups-list');
-  }
-
-  // -----------------------------------------------------------------------
-  // Actions
-  // -----------------------------------------------------------------------
-  async function completeItem(id, type) {
-    try {
-      const url = type === 'reminder' ? '/api/reminders/' + id : '/api/followups/' + id;
-      const res = await fetch(url, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'COMPLETED' })
-      });
-      const data = await res.json();
-      if (data.success) {
-        showToast('Completed ' + id);
-        loadOpsData();
-      } else {
-        showToast(data.error || data.detail || 'Complete failed (HTTP ' + res.status + ')', 'error');
-      }
-    } catch (err) {
-      showToast('Complete error: ' + err.message, 'error');
-    }
-  }
-
-  async function moveItem(id, direction) {
-    try {
-      const res = await fetch('/api/ops/move', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, direction })
-      });
-      const data = await res.json();
-      if (data.success) {
-        showToast('Moved ' + id + ' to ' + (direction === 'to_followup' ? 'NEXO' : 'User'));
-        loadOpsData();
-      } else {
-        showToast(data.error || data.detail || 'Move failed (HTTP ' + res.status + ')', 'error');
-      }
-    } catch (err) {
-      showToast('Move error: ' + err.message, 'error');
-    }
-  }
-
-  async function executeItem(id) {
-    try {
-      const res = await fetch('/api/ops/execute/' + id, { method: 'POST' });
-      const data = await res.json();
-      if (data.success) {
-        showToast('Executing ' + id, 'info');
-      } else {
-        showToast(data.error || data.detail || 'Execute failed (HTTP ' + res.status + ')', 'error');
-      }
-    } catch (err) {
-      showToast('Execute error: ' + err.message, 'error');
-    }
-  }
-
-  function deleteItem(id, type) {
-    pendingConfirmAction = async () => {
-      try {
-        const url = type === 'reminder' ? '/api/reminders/' + id : '/api/followups/' + id;
-        const res = await fetch(url, { method: 'DELETE' });
-        const data = await res.json();
-        if (data.success) {
-          showToast('Deleted ' + id);
-          loadOpsData();
-        } else {
-          showToast(data.error || data.detail || 'Delete failed (HTTP ' + res.status + ')', 'error');
-        }
-      } catch (err) {
-        showToast('Delete error: ' + err.message, 'error');
-      }
-    };
-    document.getElementById('confirm-message').textContent = 'Delete ' + id + '? This cannot be undone.';
-    document.getElementById('confirm-modal').classList.remove('hidden');
-  }
-
-  function closeConfirm() {
-    document.getElementById('confirm-modal').classList.add('hidden');
-    pendingConfirmAction = null;
-  }
-
-  function confirmAction() {
-    if (pendingConfirmAction) pendingConfirmAction();
-    closeConfirm();
-  }
-
-  // -----------------------------------------------------------------------
-  // Modal
-  // -----------------------------------------------------------------------
-  function openCreate(type) {
-    const form = document.getElementById('modal-form');
-    form.reset();
-    document.getElementById('modal-type').value = type;
-    document.getElementById('modal-edit-id').value = '';
-    document.getElementById('modal-title').textContent = type === 'reminder' ? 'New Reminder' : 'New Followup';
-    document.getElementById('modal-submit-btn').textContent = 'Create';
-    document.getElementById('category-group').classList.toggle('hidden', type !== 'reminder');
-    document.getElementById('verification-group').classList.toggle('hidden', type !== 'followup');
-    document.getElementById('reasoning-group').classList.toggle('hidden', type !== 'followup');
-    document.getElementById('ops-modal').classList.remove('hidden');
-  }
-
-  function editItem(id, type) {
-    const source = type === 'reminder' ? allReminders : allFollowups;
-    const item = source.find(i => i.id === id);
-    if (!item) return;
-
-    const form = document.getElementById('modal-form');
-    form.reset();
-    document.getElementById('modal-type').value = type;
-    document.getElementById('modal-edit-id').value = id;
-    document.getElementById('modal-title').textContent = 'Edit ' + id;
-    document.getElementById('modal-submit-btn').textContent = 'Save';
-    document.getElementById('category-group').classList.toggle('hidden', type !== 'reminder');
-    document.getElementById('verification-group').classList.toggle('hidden', type !== 'followup');
-    document.getElementById('reasoning-group').classList.toggle('hidden', type !== 'followup');
-
-    form.elements.description.value = item.description || '';
-    form.elements.date.value = item.date || '';
-    if (type === 'reminder' && item.category) {
-      form.elements.category.value = item.category;
-    }
-    if (type === 'followup') {
-      form.elements.verification.value = item.verification || '';
-      form.elements.reasoning.value = item.reasoning || '';
-    }
-
-    document.getElementById('ops-modal').classList.remove('hidden');
-  }
-
-  function closeModal() {
-    document.getElementById('ops-modal').classList.add('hidden');
-  }
-
-  async function submitForm(e) {
-    e.preventDefault();
-    const form = document.getElementById('modal-form');
-    const fd = new FormData(form);
-    const type = fd.get('type');
-    const editId = fd.get('edit_id');
-    const isEdit = !!editId;
-
-    let url, method, body;
-
-    if (type === 'reminder') {
-      url = isEdit ? '/api/reminders/' + editId : '/api/reminders';
-      method = isEdit ? 'PUT' : 'POST';
-      body = {
-        description: fd.get('description'),
-        date: fd.get('date') || null,
-        category: fd.get('category') || 'general'
-      };
-    } else {
-      url = isEdit ? '/api/followups/' + editId : '/api/followups';
-      method = isEdit ? 'PUT' : 'POST';
-      body = {
-        description: fd.get('description'),
-        date: fd.get('date') || null,
-        verification: fd.get('verification') || null,
-        reasoning: fd.get('reasoning') || null
-      };
-    }
-
-    try {
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
-      const data = await res.json();
-      if (data.success) {
-        showToast(isEdit ? 'Updated ' + editId : 'Created successfully');
-        closeModal();
-        loadOpsData();
-      } else {
-        showToast(data.error || data.detail || 'Save failed (HTTP ' + res.status + ')', 'error');
-      }
-    } catch (err) {
-      showToast('Save error: ' + err.message, 'error');
-    }
-  }
-
-  // -----------------------------------------------------------------------
-  // Keyboard shortcuts
-  // -----------------------------------------------------------------------
-  document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') {
-      closeModal();
-      closeConfirm();
-    }
-    // R = new reminder, F = new followup (when not in input)
-    if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'SELECT') {
-      if (e.key === 'r') openCreate('reminder');
-      if (e.key === 'f') openCreate('followup');
-    }
+  let html = '';
+  let first = true;
+  groups.forEach(({ key, label, color }) => {
+    const list = g[key];
+    if (!list || list.length === 0) return;
+    const marginClass = first ? '' : 'mt-4';
+    html += `<div class="text-xs uppercase tracking-wider ${color} font-medium mb-2 ${marginClass}">${label} <span class="opacity-50">(${list.length})</span></div>`;
+    html += '<div class="space-y-2">' + list.map(i => renderItem(i, type)).join('') + '</div>';
+    first = false;
   });
 
-  // -----------------------------------------------------------------------
-  // Init
-  // -----------------------------------------------------------------------
-  loadOpsData();
-  setInterval(loadOpsData, 60000);
-  </script>
-</body>
-</html>
+  if (!html) {
+    html = '<div class="text-xs text-slate-600 font-mono py-8 text-center">No items</div>';
+  }
+
+  container.innerHTML = html;
+}
+
+// -----------------------------------------------------------------------
+// Data loading
+// -----------------------------------------------------------------------
+async function loadOpsData() {
+  const status = document.getElementById('ops-status').value;
+  const statusParam = status !== 'all' ? '?status=' + status : '';
+
+  const [remData, fupData] = await Promise.all([
+    fetchJSON('/api/reminders' + statusParam),
+    fetchJSON('/api/followups' + statusParam),
+  ]);
+
+  if (remData) {
+    allReminders = remData.reminders || [];
+    document.getElementById('reminder-count').textContent = allReminders.length;
+  }
+  if (fupData) {
+    allFollowups = fupData.followups || [];
+    document.getElementById('followup-count').textContent = allFollowups.length;
+  }
+
+  filterOps();
+}
+
+function filterOps() {
+  const search = (document.getElementById('ops-search').value || '').toLowerCase();
+
+  const filteredReminders = allReminders.filter(r =>
+    !search ||
+    (r.description || '').toLowerCase().includes(search) ||
+    (r.id || '').toLowerCase().includes(search) ||
+    (r.category || '').toLowerCase().includes(search)
+  );
+  const filteredFollowups = allFollowups.filter(f =>
+    !search ||
+    (f.description || '').toLowerCase().includes(search) ||
+    (f.id || '').toLowerCase().includes(search)
+  );
+
+  renderGroupedItems(filteredReminders, 'reminder', 'reminders-list');
+  renderGroupedItems(filteredFollowups, 'followup', 'followups-list');
+}
+
+// -----------------------------------------------------------------------
+// Actions
+// -----------------------------------------------------------------------
+async function completeItem(id, type) {
+  try {
+    const url = type === 'reminder' ? '/api/reminders/' + id : '/api/followups/' + id;
+    const res = await fetch(url, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'COMPLETED' })
+    });
+    const data = await res.json();
+    if (data.success) {
+      opsToast('Completed ' + id);
+      loadOpsData();
+    } else {
+      opsToast(data.error || data.detail || 'Complete failed (HTTP ' + res.status + ')', 'error');
+    }
+  } catch (err) {
+    opsToast('Complete error: ' + err.message, 'error');
+  }
+}
+
+async function moveItem(id, direction) {
+  try {
+    const res = await fetch('/api/ops/move', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, direction })
+    });
+    const data = await res.json();
+    if (data.success) {
+      opsToast('Moved ' + id + ' to ' + (direction === 'to_followup' ? 'NEXO' : 'User'));
+      loadOpsData();
+    } else {
+      opsToast(data.error || data.detail || 'Move failed (HTTP ' + res.status + ')', 'error');
+    }
+  } catch (err) {
+    opsToast('Move error: ' + err.message, 'error');
+  }
+}
+
+async function executeItem(id) {
+  try {
+    const res = await fetch('/api/ops/execute/' + id, { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
+      opsToast('Executing ' + id, 'info');
+    } else {
+      opsToast(data.error || data.detail || 'Execute failed (HTTP ' + res.status + ')', 'error');
+    }
+  } catch (err) {
+    opsToast('Execute error: ' + err.message, 'error');
+  }
+}
+
+function deleteItem(id, type) {
+  pendingConfirmAction = async () => {
+    try {
+      const url = type === 'reminder' ? '/api/reminders/' + id : '/api/followups/' + id;
+      const res = await fetch(url, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        opsToast('Deleted ' + id);
+        loadOpsData();
+      } else {
+        opsToast(data.error || data.detail || 'Delete failed (HTTP ' + res.status + ')', 'error');
+      }
+    } catch (err) {
+      opsToast('Delete error: ' + err.message, 'error');
+    }
+  };
+  document.getElementById('confirm-message').textContent = 'Delete ' + id + '? This cannot be undone.';
+  document.getElementById('confirm-modal').classList.remove('hidden');
+}
+
+function closeConfirm() {
+  document.getElementById('confirm-modal').classList.add('hidden');
+  pendingConfirmAction = null;
+}
+
+function confirmAction() {
+  if (pendingConfirmAction) pendingConfirmAction();
+  closeConfirm();
+}
+
+// -----------------------------------------------------------------------
+// Modal
+// -----------------------------------------------------------------------
+function openCreate(type) {
+  const form = document.getElementById('modal-form');
+  form.reset();
+  document.getElementById('modal-type').value = type;
+  document.getElementById('modal-edit-id').value = '';
+  document.getElementById('modal-title').textContent = type === 'reminder' ? 'New Reminder' : 'New Followup';
+  document.getElementById('modal-submit-btn').textContent = 'Create';
+  document.getElementById('category-group').classList.toggle('hidden', type !== 'reminder');
+  document.getElementById('verification-group').classList.toggle('hidden', type !== 'followup');
+  document.getElementById('reasoning-group').classList.toggle('hidden', type !== 'followup');
+  document.getElementById('ops-modal').classList.remove('hidden');
+}
+
+function editItem(id, type) {
+  const source = type === 'reminder' ? allReminders : allFollowups;
+  const item = source.find(i => i.id === id);
+  if (!item) return;
+
+  const form = document.getElementById('modal-form');
+  form.reset();
+  document.getElementById('modal-type').value = type;
+  document.getElementById('modal-edit-id').value = id;
+  document.getElementById('modal-title').textContent = 'Edit ' + id;
+  document.getElementById('modal-submit-btn').textContent = 'Save';
+  document.getElementById('category-group').classList.toggle('hidden', type !== 'reminder');
+  document.getElementById('verification-group').classList.toggle('hidden', type !== 'followup');
+  document.getElementById('reasoning-group').classList.toggle('hidden', type !== 'followup');
+
+  form.elements.description.value = item.description || '';
+  form.elements.date.value = item.date || '';
+  if (type === 'reminder' && item.category) {
+    form.elements.category.value = item.category;
+  }
+  if (type === 'followup') {
+    form.elements.verification.value = item.verification || '';
+    form.elements.reasoning.value = item.reasoning || '';
+  }
+
+  document.getElementById('ops-modal').classList.remove('hidden');
+}
+
+function closeModal() {
+  document.getElementById('ops-modal').classList.add('hidden');
+}
+
+async function submitForm(e) {
+  e.preventDefault();
+  const form = document.getElementById('modal-form');
+  const fd = new FormData(form);
+  const type = fd.get('type');
+  const editId = fd.get('edit_id');
+  const isEdit = !!editId;
+
+  let url, method, body;
+
+  if (type === 'reminder') {
+    url = isEdit ? '/api/reminders/' + editId : '/api/reminders';
+    method = isEdit ? 'PUT' : 'POST';
+    body = {
+      description: fd.get('description'),
+      date: fd.get('date') || null,
+      category: fd.get('category') || 'general'
+    };
+  } else {
+    url = isEdit ? '/api/followups/' + editId : '/api/followups';
+    method = isEdit ? 'PUT' : 'POST';
+    body = {
+      description: fd.get('description'),
+      date: fd.get('date') || null,
+      verification: fd.get('verification') || null,
+      reasoning: fd.get('reasoning') || null
+    };
+  }
+
+  try {
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (data.success) {
+      opsToast(isEdit ? 'Updated ' + editId : 'Created successfully');
+      closeModal();
+      loadOpsData();
+    } else {
+      opsToast(data.error || data.detail || 'Save failed (HTTP ' + res.status + ')', 'error');
+    }
+  } catch (err) {
+    opsToast('Save error: ' + err.message, 'error');
+  }
+}
+
+// -----------------------------------------------------------------------
+// Keyboard shortcuts
+// -----------------------------------------------------------------------
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    closeModal();
+    closeConfirm();
+  }
+  if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'SELECT') {
+    if (e.key === 'r') openCreate('reminder');
+    if (e.key === 'f') openCreate('followup');
+  }
+});
+
+// -----------------------------------------------------------------------
+// Init
+// -----------------------------------------------------------------------
+loadOpsData();
+setInterval(loadOpsData, 60000);
+</script>
+{% endblock %}
