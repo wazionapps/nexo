@@ -16,18 +16,19 @@ def local_time_str() -> str:
 
 
 import re
-_SID_PATTERN = re.compile(r'^nexo-\d+-\d+$')
+_SID_EXACT = re.compile(r'^nexo-\d+-\d+$')
+_SID_SEARCH = re.compile(r'nexo-\d+-\d+')
 
 def _validate_sid(sid: str) -> str:
     """Validate and sanitize SID. Extracts clean SID if embedded in text."""
     if not sid:
         raise ValueError("SID cannot be empty")
-    # If the SID is clean, return it
     sid = sid.strip()
-    if _SID_PATTERN.match(sid):
+    # Clean SID — most common case
+    if _SID_EXACT.match(sid):
         return sid
-    # Try to extract SID from text like "SID: nexo-1234-5678\nOther stuff..."
-    match = _SID_PATTERN.search(sid)
+    # Extract SID from text like "SID: nexo-1234-5678\nOther stuff..."
+    match = _SID_SEARCH.search(sid)
     if match:
         return match.group(0)
     raise ValueError(f"Invalid SID format: {sid[:80]}")

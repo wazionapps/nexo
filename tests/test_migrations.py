@@ -30,19 +30,19 @@ def test_migrations_idempotent():
 
 def test_session_crud():
     """Register, update, and clean sessions."""
-    info = db_mod.register_session("test-sid-1", "test task")
-    assert info["sid"] == "test-sid-1"
+    info = db_mod.register_session("nexo-9999999-11111", "test task")
+    assert info["sid"] == "nexo-9999999-11111"
 
     active = db_mod.get_active_sessions()
     sids = [s["sid"] for s in active]
-    assert "test-sid-1" in sids
+    assert "nexo-9999999-11111" in sids
 
-    db_mod.update_session("test-sid-1", "updated task")
+    db_mod.update_session("nexo-9999999-11111", "updated task")
 
-    db_mod.complete_session("test-sid-1")
+    db_mod.complete_session("nexo-9999999-11111")
     active2 = db_mod.get_active_sessions()
     sids2 = [s["sid"] for s in active2]
-    assert "test-sid-1" not in sids2
+    assert "nexo-9999999-11111" not in sids2
 
 
 def test_learning_crud():
