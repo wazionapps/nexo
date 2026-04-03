@@ -4,6 +4,9 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
+import platform
+import plistlib
+import subprocess
 import time
 from pathlib import Path
 
@@ -11,11 +14,13 @@ from doctor.models import DoctorCheck
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parents[2])))
+LAUNCH_AGENTS_DIR = Path.home() / "Library" / "LaunchAgents"
 
 # Freshness thresholds in seconds
 IMMUNE_FRESHNESS = 3600  # 1 hour (runs every 30 min)
 WATCHDOG_FRESHNESS = 3600  # 1 hour (runs every 30 min)
 DEFAULT_CRON_THRESHOLD = 7200  # Fallback when manifest data is unavailable
+SPECIAL_LAUNCHAGENT_IDS = {"prevent-sleep", "tcc-approve"}
 
 
 def _file_age_seconds(path: Path) -> float | None:
@@ -95,6 +100,51 @@ def _cron_expectations() -> dict[str, dict]:
             expectations[cron_id] = {"threshold": threshold, "label": label}
         return expectations
     return {}
+
+
+def _managed_launchagent_plists() -> list[tuple[str, Path]]:
+    ids = set(SPECIAL_LAUNCHAGENT_IDS)
+    for cron_id in _cron_expectations().keys():
+        ids.add(cron_id)
+
+    plists = []
+    for cron_id in sorted(ids):
+        plist_path = LAUNCH_AGENTS_DIR / f"com.nexo.{cron_id}.plist"
+        if plist_path.is_file():
+            plists.append((cron_id, plist_path))
+    return plists
+
+
+def _extract_launchctl_value(output: str, prefix: str) -> str | None:
+    for line in output.splitlines():
+        stripped = line.strip()
+        if stripped.startswith(prefix):
+            return stripped[len(prefix):].strip()
+    return None
+
+
+def _repair_launchagents(items: list[tuple[str, Path]]) -> tuple[bool, list[str]]:
+    evidence = []
+    uid = str(os.getuid())
+    ok = True
+    for cron_id, plist_path in items:
+        label = f"com.nexo.{cron_id}"
+        subprocess.run(
+            ["launchctl", "bootout", f"gui/{uid}/{label}"],
+            capture_output=True,
+            text=True,
+            timeout=3,
+        )
+        result = subprocess.run(
+            ["launchctl", "bootstrap", f"gui/{uid}", str(plist_path)],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode != 0:
+            ok = False
+            evidence.append(f"{label}: {result.stderr.strip() or result.stdout.strip() or 'bootstrap failed'}")
+    return ok, evidence
 
 
 def check_immune_status() -> DoctorCheck:
@@ -370,6 +420,109 @@ def check_cron_freshness() -> DoctorCheck:
         )
 
 
+def check_launchagent_integrity(fix: bool = False) -> DoctorCheck:
+    """Check that core LaunchAgents are loaded from the real plist paths, not temp installs."""
+    if platform.system() != "Darwin":
+        return DoctorCheck(
+            id="runtime.launchagents",
+            tier="runtime",
+            status="healthy",
+            severity="info",
+            summary="LaunchAgent integrity check skipped on non-macOS",
+        )
+
+    managed = _managed_launchagent_plists()
+    if not managed:
+        return DoctorCheck(
+            id="runtime.launchagents",
+            tier="runtime",
+            status="healthy",
+            severity="info",
+            summary="No managed LaunchAgents found on disk",
+        )
+
+    uid = str(os.getuid())
+    problems = []
+    tmp_drift = False
+    for cron_id, plist_path in managed:
+        label = f"com.nexo.{cron_id}"
+        try:
+            result = subprocess.run(
+                ["launchctl", "print", f"gui/{uid}/{label}"],
+                capture_output=True,
+                text=True,
+                timeout=3,
+            )
+        except Exception as e:
+            problems.append(f"{label}: launchctl print failed ({e})")
+            continue
+
+        output = (result.stdout or "") + (result.stderr or "")
+        if result.returncode != 0 or "Could not find service" in output:
+            problems.append(f"{label}: not loaded")
+            continue
+
+        expected_path = str(plist_path)
+        actual_path = _extract_launchctl_value(output, "path = ")
+        if actual_path != expected_path:
+            problems.append(f"{label}: loaded from {actual_path or 'unknown path'}")
+            if actual_path and "/tmp/" in actual_path:
+                tmp_drift = True
+
+        try:
+            with plist_path.open("rb") as fh:
+                plist_data = plistlib.load(fh)
+            env = plist_data.get("EnvironmentVariables") or {}
+        except Exception as e:
+            problems.append(f"{label}: plist unreadable ({e})")
+            continue
+
+        for env_key in ("NEXO_HOME", "NEXO_CODE"):
+            expected_value = env.get(env_key)
+            if not expected_value:
+                continue
+            marker = f"{env_key} => {expected_value}"
+            if marker not in output:
+                problems.append(f"{label}: {env_key} drift")
+                if "/tmp/" in output:
+                    tmp_drift = True
+
+    if not problems:
+        return DoctorCheck(
+            id="runtime.launchagents",
+            tier="runtime",
+            status="healthy",
+            severity="info",
+            summary=f"LaunchAgents aligned for {len(managed)} managed job(s)",
+        )
+
+    check = DoctorCheck(
+        id="runtime.launchagents",
+        tier="runtime",
+        status="critical" if tmp_drift else "degraded",
+        severity="error" if tmp_drift else "warn",
+        summary=f"LaunchAgent drift detected in {len(problems)} job(s)",
+        evidence=problems[:10],
+        repair_plan=[
+            "Reload the affected LaunchAgents from ~/Library/LaunchAgents",
+            "If any job is loaded from /tmp, boot it out before bootstrapping the real plist",
+        ],
+        escalation_prompt="Launchd is serving stale or drifted NEXO jobs. Compare loaded job paths with plist paths on disk.",
+    )
+
+    if fix:
+        repaired, repair_evidence = _repair_launchagents(managed)
+        if repaired:
+            check.fixed = True
+            check.status = "healthy"
+            check.severity = "info"
+            check.summary += " (fixed)"
+            check.evidence = []
+        else:
+            check.evidence.extend(repair_evidence[:10])
+    return check
+
+
 def run_runtime_checks(fix: bool = False) -> list[DoctorCheck]:
     """Run all runtime-tier checks. Read-only by default."""
     return [
@@ -377,4 +530,5 @@ def run_runtime_checks(fix: bool = False) -> list[DoctorCheck]:
         check_watchdog_status(),
         check_stale_sessions(),
         check_cron_freshness(),
+        check_launchagent_integrity(fix=fix),
     ]

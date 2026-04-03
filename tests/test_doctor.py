@@ -1,9 +1,11 @@
 """Tests for the Doctor diagnostic system."""
 import json
 import os
+import plistlib
 import sqlite3
 import sys
 import time
+from types import SimpleNamespace
 
 import pytest
 
@@ -151,6 +153,70 @@ class TestRuntimeChecks:
         from doctor.providers.runtime import check_cron_freshness
         check = check_cron_freshness()
         assert check.status == "degraded"
+
+    def test_launchagent_integrity_detects_tmp_drift(self, nexo_home, monkeypatch):
+        from doctor.providers import runtime
+
+        plist_path = nexo_home / "com.nexo.deep-sleep.plist"
+        with plist_path.open("wb") as fh:
+            plistlib.dump({
+                "EnvironmentVariables": {
+                    "NEXO_HOME": str(nexo_home),
+                    "NEXO_CODE": str(nexo_home / "src"),
+                }
+            }, fh)
+
+        monkeypatch.setattr(runtime.platform, "system", lambda: "Darwin")
+        monkeypatch.setattr(runtime, "_managed_launchagent_plists", lambda: [("deep-sleep", plist_path)])
+        monkeypatch.setattr(runtime.os, "getuid", lambda: 501)
+
+        def fake_run(args, **kwargs):
+            return SimpleNamespace(
+                returncode=0,
+                stdout=(
+                    "gui/501/com.nexo.deep-sleep = {\n"
+                    "path = /private/tmp/nexo-audit-install-XYZ/Library/LaunchAgents/com.nexo.deep-sleep.plist\n"
+                    "NEXO_HOME => /tmp/nexo-audit-install-XYZ/.nexo\n"
+                    "NEXO_CODE => /tmp/nexo-audit-install-XYZ/.nexo\n"
+                    "}\n"
+                ),
+                stderr="",
+            )
+
+        monkeypatch.setattr(runtime.subprocess, "run", fake_run)
+        check = runtime.check_launchagent_integrity()
+        assert check.status == "critical"
+        assert any("/private/tmp/" in item or "/tmp/" in item for item in check.evidence)
+
+    def test_launchagent_integrity_fix_bootstraps_real_plist(self, nexo_home, monkeypatch):
+        from doctor.providers import runtime
+
+        plist_path = nexo_home / "com.nexo.watchdog.plist"
+        with plist_path.open("wb") as fh:
+            plistlib.dump({
+                "EnvironmentVariables": {
+                    "NEXO_HOME": str(nexo_home),
+                    "NEXO_CODE": str(nexo_home / "src"),
+                }
+            }, fh)
+
+        monkeypatch.setattr(runtime.platform, "system", lambda: "Darwin")
+        monkeypatch.setattr(runtime, "_managed_launchagent_plists", lambda: [("watchdog", plist_path)])
+        monkeypatch.setattr(runtime.os, "getuid", lambda: 501)
+
+        calls = []
+
+        def fake_run(args, **kwargs):
+            calls.append(args)
+            if args[1] == "print":
+                return SimpleNamespace(returncode=1, stdout="", stderr='Could not find service "com.nexo.watchdog"')
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+        monkeypatch.setattr(runtime.subprocess, "run", fake_run)
+        check = runtime.check_launchagent_integrity(fix=True)
+        assert check.fixed
+        assert check.status == "healthy"
+        assert any(args[1] == "bootstrap" for args in calls)
 
 
 class TestDeepChecks:

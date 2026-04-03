@@ -31,6 +31,13 @@ const LAUNCH_AGENTS = path.join(
   "LaunchAgents"
 );
 
+function isEphemeralInstall(nexoHome) {
+  const homeDir = require("os").homedir();
+  const allowEphemeral = process.env.NEXO_ALLOW_EPHEMERAL_INSTALL === "1";
+  if (allowEphemeral) return false;
+  return nexoHome.startsWith("/tmp/") || homeDir.startsWith("/tmp/");
+}
+
 const rl = readline.createInterface({
   input: process.stdin,
   output: process.stdout,
@@ -1938,7 +1945,11 @@ ${doScan ? `- Stack: ${Object.keys(profileData.code.languages || {}).slice(0, 5)
   log("Setting up automated processes...");
   const schedule = loadOrCreateSchedule(NEXO_HOME);
   const enabledOptionals = { dashboard: doDashboard };
-  installAllProcesses(platform, python, NEXO_HOME, schedule, LAUNCH_AGENTS, enabledOptionals);
+  if (isEphemeralInstall(NEXO_HOME)) {
+    log("Ephemeral HOME/NEXO_HOME detected — skipping LaunchAgents installation.");
+  } else {
+    installAllProcesses(platform, python, NEXO_HOME, schedule, LAUNCH_AGENTS, enabledOptionals);
+  }
 
   // Persist optional process preferences for auto-update
   try {
