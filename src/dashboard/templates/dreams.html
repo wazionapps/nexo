@@ -145,7 +145,7 @@
   function groupByNight(dreams) {
     const groups = {};
     for (const d of dreams) {
-      const date = (d.created_at || '').split('T')[0] || 'Unknown';
+      const date = (d.created_at || '').split(/[T ]/)[0] || 'Unknown';
       if (!groups[date]) groups[date] = [];
       groups[date].push(d);
     }
@@ -229,7 +229,7 @@
     let cardIdx = 0;
     for (const [night, nightDreams] of Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0]))) {
       const d = new Date(night + 'T00:00:00');
-      const label = d.toLocaleDateString('en', { weekday: 'long', month: 'short', day: 'numeric' });
+      const label = isNaN(d.getTime()) ? night : d.toLocaleDateString('en', { weekday: 'long', month: 'short', day: 'numeric' });
       html += `<div class="night-divider"><span class="text-xs text-indigo-400/60 font-mono">${escapeHtml(label)} &mdash; ${nightDreams.length} dream${nightDreams.length > 1 ? 's' : ''}</span></div>`;
       for (const dream of nightDreams) {
         html += renderDreamCard(dream, cardIdx++);
