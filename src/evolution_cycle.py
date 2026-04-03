@@ -34,14 +34,83 @@ PROMPT_FILE = _resolve_evolution_file("evolution-prompt.md")
 MAX_SNAPSHOTS = 8
 
 
+def _normalize_dimensions(raw: dict | None) -> dict:
+    normalized = {}
+    for key, value in (raw or {}).items():
+        canonical_key = "agi" if key == "agi_readiness" else key
+        if isinstance(value, dict):
+            normalized[canonical_key] = {
+                "current": int(value.get("current", 0) or 0),
+                "target": int(value.get("target", 0) or 0),
+            }
+        else:
+            normalized[canonical_key] = {
+                "current": 0,
+                "target": int(value or 0),
+            }
+    return normalized
+
+
+def normalize_objective(obj: dict | None) -> dict:
+    """Upgrade legacy objective files to the canonical schema."""
+    source = dict(obj or {})
+
+    if "evolution_mode" in source:
+        mode = str(source.get("evolution_mode") or "auto").strip().lower()
+    else:
+        legacy_mode = str(source.get("review_mode") or "").strip().lower()
+        if legacy_mode in {"manual", "review"}:
+            mode = "review"
+        elif legacy_mode in {"managed", "hybrid", "owner", "core"}:
+            mode = "managed"
+        else:
+            mode = "auto"
+
+    if mode not in {"auto", "review", "managed"}:
+        mode = "auto"
+
+    dimensions = source.get("dimensions")
+    if not isinstance(dimensions, dict) or not dimensions:
+        dimensions = _normalize_dimensions(source.get("dimension_targets"))
+    else:
+        dimensions = _normalize_dimensions(dimensions)
+
+    defaults = {
+        "episodic_memory": {"current": 0, "target": 90},
+        "autonomy": {"current": 0, "target": 80},
+        "proactivity": {"current": 0, "target": 70},
+        "self_improvement": {"current": 0, "target": 60},
+        "agi": {"current": 0, "target": 20},
+    }
+    merged_dimensions = dict(defaults)
+    merged_dimensions.update(dimensions)
+
+    normalized = dict(source)
+    normalized["evolution_mode"] = mode
+    normalized["dimensions"] = merged_dimensions
+    normalized["total_evolutions"] = int(source.get("total_evolutions", source.get("cycles_completed", 0)) or 0)
+    normalized["last_evolution"] = source.get("last_evolution", source.get("last_cycle"))
+    normalized["total_proposals_made"] = int(source.get("total_proposals_made", 0) or 0)
+    normalized["total_auto_applied"] = int(source.get("total_auto_applied", 0) or 0)
+    normalized["consecutive_failures"] = int(source.get("consecutive_failures", 0) or 0)
+    normalized["history"] = source.get("history", []) if isinstance(source.get("history"), list) else []
+    normalized["evolution_enabled"] = bool(source.get("evolution_enabled", True))
+    normalized.pop("review_mode", None)
+    normalized.pop("dimension_targets", None)
+    normalized.pop("cycles_completed", None)
+    normalized.pop("last_cycle", None)
+    return normalized
+
+
 def load_objective() -> dict:
     if OBJECTIVE_FILE.exists():
-        return json.loads(OBJECTIVE_FILE.read_text())
-    return {}
+        return normalize_objective(json.loads(OBJECTIVE_FILE.read_text()))
+    return normalize_objective({})
 
 
 def save_objective(obj: dict):
-    OBJECTIVE_FILE.write_text(json.dumps(obj, indent=2, ensure_ascii=False))
+    OBJECTIVE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    OBJECTIVE_FILE.write_text(json.dumps(normalize_objective(obj), indent=2, ensure_ascii=False))
 
 
 def get_week_data(db_path: str) -> dict:
@@ -196,9 +265,18 @@ def build_evolution_prompt(week_data: dict, objective: dict) -> str:
         "current_scores": {dim: m["score"] for dim, m in week_data.get("current_metrics", {}).items()},
     }
 
-    mode = objective.get("evolution_mode", "auto")
+    mode = normalize_objective(objective).get("evolution_mode", "auto")
     total = objective.get("total_evolutions", 0)
     max_auto = max_auto_changes(total)
+    if mode == "review":
+        mode_desc = "review-only, nothing executes automatically"
+        safe_zones = "~/.nexo/scripts/, ~/.nexo/plugins/, ~/.nexo/brain/"
+    elif mode == "managed":
+        mode_desc = f"owner-managed, max {max_auto} auto-applied changes with rollback and followups"
+        safe_zones = "~/.nexo/scripts/, ~/.nexo/plugins/, ~/.nexo/brain/, NEXO_CODE/src, repo bin/docs/templates/tests"
+    else:
+        mode_desc = f"public auto, max {max_auto} auto-applied changes in personal safe zones"
+        safe_zones = "~/.nexo/scripts/, ~/.nexo/plugins/"
 
     prompt = f"""You are NEXO Evolution — the weekly self-improvement cycle.
 
@@ -212,7 +290,7 @@ WEEK SUMMARY:
 - {stats['evolution_history']} past evolution proposals
 - Current scores: {json.dumps(stats['current_scores'])}
 
-MODE: {mode} ({"proposals only, owner reviews" if mode == "review" else f"max {max_auto} auto-applied changes"})
+MODE: {mode} ({mode_desc})
 CYCLE: #{total + 1}
 
 INVESTIGATE using these tools:
@@ -232,9 +310,11 @@ LOOK FOR:
 - Patterns in self-critique that suggest systemic issues
 
 SAFETY:
-- Safe zones for auto changes: ~/.nexo/scripts/, ~/.nexo/plugins/, ~/.nexo/brain/
+- Safe zones for this mode: {safe_zones}
 - IMMUTABLE files (never touch): db.py, server.py, plugin_loader.py, cognitive.py, CLAUDE.md
 - Every change needs: what file, what to change, why, risk, how to verify
+- AUTO changes must be deterministic. If the edit is ambiguous, risky, or needs human taste, mark it as "propose".
+- In managed mode, failed AUTO changes will be rolled back automatically and turned into followups with evidence.
 
 OUTPUT FORMAT (JSON):
 {{

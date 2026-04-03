@@ -8,6 +8,7 @@ This is separate from plugins/update.py which handles MANUAL updates with rollba
 """
 
 import json
+import hashlib
 import os
 import re
 import subprocess
@@ -54,6 +55,30 @@ def _write_last_check(data: dict):
         LAST_CHECK_FILE.write_text(json.dumps(data))
     except Exception as e:
         _log(f"Failed to write last-check file: {e}")
+
+
+def _sync_watchdog_hash_registry():
+    """Keep the immutable-hash registry aligned with the installed watchdog script."""
+    try:
+        watchdog_file = NEXO_HOME / "scripts" / "nexo-watchdog.sh"
+        if not watchdog_file.exists():
+            return
+        registry_file = NEXO_HOME / "scripts" / ".watchdog-hashes"
+        entries: dict[str, str] = {}
+        if registry_file.exists():
+            for line in registry_file.read_text().splitlines():
+                if "|" not in line:
+                    continue
+                filepath, expected = line.split("|", 1)
+                if filepath:
+                    entries[filepath] = expected
+        actual_hash = hashlib.sha256(watchdog_file.read_bytes()).hexdigest()
+        entries[str(watchdog_file)] = actual_hash
+        registry_file.write_text(
+            "\n".join(f"{filepath}|{digest}" for filepath, digest in sorted(entries.items())) + "\n"
+        )
+    except Exception as e:
+        _log(f"watchdog hash registry sync error: {e}")
 
 
 def _is_git_repo() -> bool:
@@ -811,13 +836,14 @@ def auto_update_check() -> dict:
     # Backfill evolution-objective.json for existing installs
     try:
         evo_obj_path = NEXO_HOME / "brain" / "evolution-objective.json"
+        from evolution_cycle import normalize_objective
         if not evo_obj_path.exists():
             (NEXO_HOME / "brain").mkdir(parents=True, exist_ok=True)
             default_objective = {
                 "objective": "Improve operational excellence and reduce repeated errors",
                 "focus_areas": ["error_prevention", "proactivity", "memory_quality"],
                 "evolution_enabled": True,
-                "evolution_mode": "review",
+                "evolution_mode": "auto",
                 "dimensions": {
                     "episodic_memory": {"current": 0, "target": 90},
                     "autonomy": {"current": 0, "target": 80},
@@ -831,6 +857,12 @@ def auto_update_check() -> dict:
             }
             evo_obj_path.write_text(json.dumps(default_objective, indent=2))
             _log("Backfilled evolution-objective.json for existing install")
+        else:
+            raw_objective = json.loads(evo_obj_path.read_text())
+            normalized = normalize_objective(raw_objective)
+            if normalized != raw_objective:
+                evo_obj_path.write_text(json.dumps(normalized, indent=2, ensure_ascii=False))
+                _log("Normalized legacy evolution-objective.json")
     except Exception as e:
         _log(f"evolution-objective.json backfill error: {e}")
 
@@ -852,6 +884,8 @@ def auto_update_check() -> dict:
             _log("Backfilled NEXO_HOME/scripts/ from NEXO_CODE for existing install")
     except Exception as e:
         _log(f"scripts backfill error: {e}")
+
+    _sync_watchdog_hash_registry()
 
     # Backfill runtime CLI modules for existing installs
     try:

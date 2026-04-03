@@ -15,6 +15,7 @@
  */
 
 const { execSync, spawnSync } = require("child_process");
+const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const readline = require("readline");
@@ -57,6 +58,33 @@ function run(cmd, opts = {}) {
 
 function log(msg) {
   console.log(`  ${msg}`);
+}
+
+function syncWatchdogHashRegistry(nexoHome) {
+  try {
+    const watchdogPath = path.join(nexoHome, "scripts", "nexo-watchdog.sh");
+    if (!fs.existsSync(watchdogPath)) return;
+
+    const registryPath = path.join(nexoHome, "scripts", ".watchdog-hashes");
+    const entries = new Map();
+    if (fs.existsSync(registryPath)) {
+      for (const line of fs.readFileSync(registryPath, "utf8").split(/\r?\n/)) {
+        if (!line.includes("|")) continue;
+        const [filePath, expectedHash] = line.split("|");
+        if (filePath) entries.set(filePath, expectedHash || "");
+      }
+    }
+
+    const digest = crypto.createHash("sha256").update(fs.readFileSync(watchdogPath)).digest("hex");
+    entries.set(watchdogPath, digest);
+    const body = Array.from(entries.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([filePath, hash]) => `${filePath}|${hash}`)
+      .join("\n");
+    fs.writeFileSync(registryPath, `${body}\n`);
+  } catch (err) {
+    log(`WARN: could not sync watchdog hash registry: ${err.message}`);
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1370,7 +1398,7 @@ async function main() {
       objective: "Improve operational excellence and reduce repeated errors",
       focus_areas: ["error_prevention", "proactivity", "memory_quality"],
       evolution_enabled: true,
-      evolution_mode: "review",
+      evolution_mode: "auto",
       dimensions: {
         episodic_memory: { current: 0, target: 90 },
         autonomy: { current: 0, target: 80 },
@@ -1502,6 +1530,7 @@ async function main() {
     fs.readdirSync(scriptsDest).filter(f => f.endsWith(".sh")).forEach(f => {
       fs.chmodSync(path.join(scriptsDest, f), "755");
     });
+    syncWatchdogHashRegistry(NEXO_HOME);
   }
 
   // Core skills are shipped separately from personal skills.

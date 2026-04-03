@@ -34,23 +34,6 @@ SANDBOX_DIR = CLAUDE_DIR / "sandbox" / "workspace"
 MAX_CONSECUTIVE_FAILURES = 3
 MAX_SNAPSHOTS = 8
 
-# ── Safe zones for AUTO execution ────────────────────────────────────────
-# "review" mode (owner): broader zones, but nothing executes without approval
-# "auto" mode (public users): restricted to user scripts and plugins ONLY
-AUTO_SAFE_PREFIXES = [
-    str(CLAUDE_DIR / "scripts") + "/",
-    str(CLAUDE_DIR / "brain") + "/",
-    str(NEXO_CODE / "plugins") + "/",
-    str(CLAUDE_DIR / "logs") + "/",
-    str(CLAUDE_DIR / "coordination") + "/",
-]
-
-# Public mode: user scripts and plugins only — NEVER core code
-AUTO_SAFE_PREFIXES_PUBLIC = [
-    str(CLAUDE_DIR / "scripts") + "/",
-    str(CLAUDE_DIR / "plugins") + "/",
-]
-
 # ── Immutable files — NEVER touch (applies to ALL modes) ────────────────
 IMMUTABLE_FILES = {
     "db.py", "server.py", "plugin_loader.py", "nexo-watchdog.sh",
@@ -63,6 +46,52 @@ IMMUTABLE_FILES = {
     "tools_reminders_crud.py", "tools_learnings.py", "tools_credentials.py",
     "tools_task_history.py", "tools_menu.py",
 }
+
+
+def _repo_root() -> Path | None:
+    candidate = NEXO_CODE.parent
+    if (candidate / "package.json").exists():
+        return candidate
+    return None
+
+
+def _public_safe_prefixes() -> list[str]:
+    return [
+        str(CLAUDE_DIR / "scripts") + "/",
+        str(CLAUDE_DIR / "plugins") + "/",
+        str(CLAUDE_DIR / "skills") + "/",
+        str(CLAUDE_DIR / "skills-runtime") + "/",
+    ]
+
+
+def _managed_safe_prefixes() -> list[str]:
+    prefixes = [
+        str(CLAUDE_DIR / "scripts") + "/",
+        str(CLAUDE_DIR / "plugins") + "/",
+        str(CLAUDE_DIR / "brain") + "/",
+        str(CLAUDE_DIR / "coordination") + "/",
+        str(CLAUDE_DIR / "logs") + "/",
+        str(CLAUDE_DIR / "skills") + "/",
+        str(CLAUDE_DIR / "skills-core") + "/",
+        str(CLAUDE_DIR / "skills-runtime") + "/",
+        str(NEXO_CODE) + "/",
+    ]
+    repo_root = _repo_root()
+    if repo_root:
+        for rel in ("bin", "docs", "templates", "tests"):
+            prefixes.append(str(repo_root / rel) + "/")
+    return prefixes
+
+
+def _normalize_mode(mode: str) -> str:
+    value = str(mode or "auto").strip().lower()
+    aliases = {
+        "owner": "managed",
+        "core": "managed",
+        "hybrid": "managed",
+        "manual": "review",
+    }
+    return aliases.get(value, value if value in {"auto", "review", "managed"} else "auto")
 
 # ── Claude CLI path ──────────────────────────────────────────────────────
 def _resolve_claude_cli() -> Path:
@@ -162,16 +191,18 @@ def call_claude_cli(prompt: str) -> str:
 # ── File safety validation ───────────────────────────────────────────────
 def is_safe_path(filepath: str, mode: str = "auto") -> bool:
     """Check if a file path is within safe zones and not immutable.
-    mode='auto' (public): restricted to scripts/ and plugins/ only.
-    mode='review' (owner): broader zones but nothing executes without approval anyway.
+    mode='auto' (public): restricted to personal automation surfaces.
+    mode='managed' (owner): broader repo/core surfaces with rollback.
+    mode='review': broader zones for proposal validation, but no execution.
     """
     expanded = str(Path(filepath).expanduser().resolve())
     filename = Path(expanded).name
+    mode = _normalize_mode(mode)
 
     if filename in IMMUTABLE_FILES:
         return False
 
-    prefixes = AUTO_SAFE_PREFIXES if mode == "review" else AUTO_SAFE_PREFIXES_PUBLIC
+    prefixes = _managed_safe_prefixes() if mode in {"managed", "review"} else _public_safe_prefixes()
     for prefix in prefixes:
         resolved_prefix = str(Path(prefix).expanduser().resolve())
         if expanded.startswith(resolved_prefix):
@@ -218,13 +249,13 @@ def validate_syntax(filepath: str) -> tuple[bool, str]:
 
 
 # ── Apply a single change operation ──────────────────────────────────────
-def apply_change(change: dict) -> tuple[bool, str]:
+def apply_change(change: dict, mode: str = "auto") -> tuple[bool, str]:
     """Apply a single file change operation. Returns (success, message)."""
     filepath = str(Path(change["file"]).expanduser())
     operation = change.get("operation", "")
     content = change.get("content", "")
 
-    if not is_safe_path(filepath):
+    if not is_safe_path(filepath, mode=mode):
         return False, f"BLOCKED: {filepath} is outside safe zones or immutable"
 
     try:
@@ -269,7 +300,7 @@ def apply_change(change: dict) -> tuple[bool, str]:
 
 
 # ── Execute AUTO proposals ───────────────────────────────────────────────
-def execute_auto_proposal(proposal: dict, cycle_num: int, conn: sqlite3.Connection) -> dict:
+def execute_auto_proposal(proposal: dict, cycle_num: int, conn: sqlite3.Connection, mode: str = "auto") -> dict:
     """Execute an AUTO proposal with snapshot/apply/validate/rollback."""
     changes = proposal.get("changes", [])
     if not changes:
@@ -278,7 +309,7 @@ def execute_auto_proposal(proposal: dict, cycle_num: int, conn: sqlite3.Connecti
     # Validate all paths first
     for change in changes:
         filepath = str(Path(change["file"]).expanduser())
-        if not is_safe_path(filepath):
+        if not is_safe_path(filepath, mode=mode):
             return {"status": "blocked", "reason": f"Unsafe path: {filepath}"}
 
     # Collect files to snapshot (existing files only)
@@ -299,7 +330,7 @@ def execute_auto_proposal(proposal: dict, cycle_num: int, conn: sqlite3.Connecti
     all_results = []
     try:
         for change in changes:
-            success, msg = apply_change(change)
+            success, msg = apply_change(change, mode=mode)
             all_results.append(msg)
             log(f"    {msg}")
             if not success:
@@ -343,55 +374,100 @@ def execute_auto_proposal(proposal: dict, cycle_num: int, conn: sqlite3.Connecti
                     log(f"  Removed created file: {filepath}")
 
         return {
-            "status": "failed",
+            "status": "rolled_back",
             "snapshot_ref": snapshot_ref,
             "files_changed": [],
             "test_result": f"ROLLBACK: {e}; " + "; ".join(all_results),
         }
 
 
-# ── Review followup for owner mode ──────────────────────────────────────
-def _create_review_followup(conn: sqlite3.Connection, cycle_num: int,
-                            items: list[dict], analysis: str):
-    """Create a followup summarizing Evolution proposals for owner review."""
+# ── Followups for managed/review modes ──────────────────────────────────
+def _insert_followup(conn: sqlite3.Connection, followup_id: str, description: str,
+                     verification: str, due_date: str | None = None):
+    now_epoch = datetime.now().timestamp()
+    conn.execute(
+        "INSERT OR REPLACE INTO followups (id, description, date, status, verification, created_at, updated_at) "
+        "VALUES (?, ?, ?, 'PENDING', ?, ?, ?)",
+        (followup_id, description, due_date, verification, now_epoch, now_epoch)
+    )
+    conn.commit()
+
+
+def _create_cycle_followup(conn: sqlite3.Connection, cycle_num: int,
+                           items: list[dict], analysis: str, mode: str):
+    """Create a followup summarizing pending proposals or owner review items."""
     tomorrow = (date.today() + timedelta(days=1)).isoformat()
     followup_id = f"NF-EVO-C{cycle_num}"
 
     public_items = [i for i in items if i.get("scope") == "public"]
     local_items = [i for i in items if i.get("scope") != "public"]
 
-    lines = [f"Evolution Cycle #{cycle_num} — {len(items)} proposals to review."]
+    title = "proposals to review" if mode == "review" else "items needing attention"
+    lines = [f"Evolution Cycle #{cycle_num} — {len(items)} {title}."]
     lines.append(f"Analysis: {analysis[:200]}")
     lines.append("")
 
     if public_items:
         lines.append(f"FOR EVERYONE ({len(public_items)}):")
         for i, item in enumerate(public_items, 1):
-            lines.append(f"  {i}. [{item['dimension']}] {item['action'][:120]}")
+            status = item.get("status", "proposed").upper()
+            lines.append(f"  {i}. [{status}] [{item['dimension']}] {item['action'][:120]}")
             lines.append(f"     Why: {item['reasoning'][:100]}")
+            if item.get("detail"):
+                lines.append(f"     Detail: {item['detail'][:160]}")
         lines.append("")
 
     if local_items:
         lines.append(f"FOR YOU ONLY ({len(local_items)}):")
         for i, item in enumerate(local_items, 1):
-            lines.append(f"  {i}. [{item['dimension']}] {item['action'][:120]}")
+            status = item.get("status", "proposed").upper()
+            lines.append(f"  {i}. [{status}] [{item['dimension']}] {item['action'][:120]}")
             lines.append(f"     Why: {item['reasoning'][:100]}")
+            if item.get("detail"):
+                lines.append(f"     Detail: {item['detail'][:160]}")
 
     description = "\n".join(lines)
 
     try:
-        now_epoch = datetime.now().timestamp()
-        conn.execute(
-            "INSERT OR REPLACE INTO followups (id, description, date, status, verification, created_at, updated_at) "
-            "VALUES (?, ?, ?, 'pending', ?, ?, ?)",
-            (followup_id, description, tomorrow,
-             f"SELECT * FROM evolution_log WHERE cycle_number={cycle_num}",
-             now_epoch, now_epoch)
+        _insert_followup(
+            conn,
+            followup_id,
+            description,
+            f"SELECT * FROM evolution_log WHERE cycle_number={cycle_num}",
+            due_date=tomorrow,
         )
-        conn.commit()
         log(f"  Followup {followup_id} created for {tomorrow}")
     except Exception as e:
         log(f"  WARN: Failed to create followup: {e}")
+
+
+def _create_failure_followup(conn: sqlite3.Connection, cycle_num: int, log_id: int,
+                             proposal: dict, result: dict):
+    """Create an incident-style followup for a failed or blocked AUTO proposal."""
+    followup_id = f"NF-EVO-L{log_id}"
+    lines = [
+        f"Evolution AUTO proposal failed in cycle #{cycle_num}.",
+        f"Action: {proposal.get('action', '')[:200]}",
+        f"Dimension: {proposal.get('dimension', 'other')}",
+        f"Status: {result.get('status', 'failed')}",
+        f"Reason: {(result.get('reason') or result.get('test_result') or 'unknown')[:400]}",
+    ]
+    snapshot_ref = result.get("snapshot_ref")
+    if snapshot_ref:
+        lines.append(f"Snapshot: {snapshot_ref}")
+    description = "\n".join(lines)
+
+    try:
+        _insert_followup(
+            conn,
+            followup_id,
+            description,
+            f"SELECT * FROM evolution_log WHERE id={log_id}",
+            due_date=(date.today() + timedelta(days=1)).isoformat(),
+        )
+        log(f"  Failure followup {followup_id} created")
+    except Exception as e:
+        log(f"  WARN: Failed to create failure followup: {e}")
 
 
 # ── Main run ─────────────────────────────────────────────────────────────
@@ -482,14 +558,12 @@ def run():
     max_auto = max_auto_changes(objective.get("total_evolutions", 0))
     auto_count = 0
     auto_applied = 0
-    evolution_mode = objective.get("evolution_mode", "auto")  # "auto" (public) or "review" (owner)
+    evolution_mode = _normalize_mode(objective.get("evolution_mode", "auto"))
 
     conn = sqlite3.connect(str(NEXO_DB), timeout=10)
     conn.execute("PRAGMA busy_timeout=5000")
 
-    # In "review" mode: log everything as pending_review, create followup
-    # In "auto" mode: execute AUTO proposals, log PROPOSE as proposed
-    review_items = []
+    followup_items = []
 
     for p in proposals:
         classification = p.get("classification", "propose")
@@ -499,30 +573,29 @@ def run():
         scope = p.get("scope", "local")  # "public" or "local"
 
         if evolution_mode == "review":
-            # Owner mode: nothing executes, everything queued for review
             log(f"  QUEUED [{scope}]: {action[:80]}")
             conn.execute(
                 "INSERT INTO evolution_log (cycle_number, dimension, proposal, classification, "
                 "reasoning, status) VALUES (?, ?, ?, ?, ?, ?)",
                 (cycle_num, dimension, action, classification, reasoning, "pending_review")
             )
-            review_items.append({
+            followup_items.append({
                 "dimension": dimension,
                 "action": action,
                 "reasoning": reasoning,
                 "scope": scope,
                 "classification": classification,
+                "status": "pending_review",
             })
 
         elif classification == "auto" and auto_count < max_auto:
-            # Public mode: execute AUTO proposals
             auto_count += 1
             log(f"  AUTO #{auto_count}/{max_auto}: {action[:80]}")
 
-            result = execute_auto_proposal(p, cycle_num, conn)
+            result = execute_auto_proposal(p, cycle_num, conn, mode=evolution_mode)
             status = result["status"]
 
-            conn.execute(
+            cur = conn.execute(
                 "INSERT INTO evolution_log (cycle_number, dimension, proposal, classification, "
                 "reasoning, status, files_changed, snapshot_ref, test_result) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -531,16 +604,20 @@ def run():
                  result.get("snapshot_ref", ""),
                  result.get("test_result", ""))
             )
+            log_id = cur.lastrowid
 
             if status == "applied":
                 auto_applied += 1
                 log(f"    APPLIED successfully")
             elif status == "blocked":
-                log(f"    BLOCKED: {result.get('test_result', '')}")
+                detail = result.get("reason") or result.get("test_result", "")
+                log(f"    BLOCKED: {detail[:100]}")
+                _create_failure_followup(conn, cycle_num, log_id, p, result)
             elif status == "skipped":
                 log(f"    SKIPPED: {result.get('reason', '')}")
             else:
-                log(f"    FAILED: {result.get('test_result', '')[:100]}")
+                log(f"    ROLLED BACK: {result.get('test_result', '')[:100]}")
+                _create_failure_followup(conn, cycle_num, log_id, p, result)
 
         else:
             # PROPOSE or over auto limit
@@ -555,12 +632,20 @@ def run():
                 "reasoning, status) VALUES (?, ?, ?, ?, ?, ?)",
                 (cycle_num, dimension, action, classification, reasoning, "proposed")
             )
+            if evolution_mode in {"review", "managed"}:
+                followup_items.append({
+                    "dimension": dimension,
+                    "action": action,
+                    "reasoning": reasoning,
+                    "scope": scope,
+                    "classification": classification,
+                    "status": "proposed",
+                })
 
     conn.commit()
 
-    # In review mode: create followup for owner
-    if evolution_mode == "review" and review_items:
-        _create_review_followup(conn, cycle_num, review_items, response.get("analysis", ""))
+    if evolution_mode in {"review", "managed"} and followup_items:
+        _create_cycle_followup(conn, cycle_num, followup_items, response.get("analysis", ""), evolution_mode)
 
     # Update metrics
     scores = response.get("dimension_scores", {})
@@ -591,6 +676,7 @@ def run():
     objective.setdefault("history", []).insert(0, {
         "cycle": cycle_num,
         "date": str(date.today()),
+        "mode": evolution_mode,
         "proposals": len(proposals),
         "auto_count": auto_count,
         "auto_applied": auto_applied,

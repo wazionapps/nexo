@@ -43,8 +43,15 @@ def handle_evolution_history(limit: int = 10) -> str:
 
     lines = [f"EVOLUTION HISTORY ({len(history)} entries):"]
     for h in history:
-        status_icon = {"applied": "✓", "rolled_back": "✗", "proposed": "?",
-                       "accepted": "✓✓", "rejected": "✗✗"}.get(h["status"], "·")
+        status_icon = {
+            "applied": "✓",
+            "rolled_back": "↺",
+            "blocked": "⛔",
+            "proposed": "?",
+            "pending_review": "…",
+            "accepted": "✓✓",
+            "rejected": "✗✗",
+        }.get(h["status"], "·")
         lines.append(f"  {status_icon} #{h['id']} [{h['classification']}] {h['dimension']}")
         lines.append(f"    {h['proposal'][:100]}")
         if h.get("test_result"):
