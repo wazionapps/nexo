@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>NEXO Brain — Cognitive Memory for AI Agents</title>
-    <meta name="description" content="Open-source cognitive memory system for AI agents. Skills system, cron scheduler, deep sleep checkpointing, external audit, 160+ MCP tools, adaptive calibration, and trust scoring. Built for Claude Code.">
+    <meta name="description" content="Open-source cognitive memory system for AI agents. Runtime CLI, unified doctor, Skills v2, Day Orchestrator, 160+ MCP tools, dashboard with 23 modules, adaptive calibration, and trust scoring. Built for Claude Code.">
     <meta name="keywords" content="AI memory, cognitive architecture, MCP, Claude Code, RAG, vector search, AI agents, Atkinson-Shiffrin, memory system, open source">
     <meta name="author" content="WAzion">
     <meta name="robots" content="index, follow">
@@ -14,7 +14,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com">
     <meta property="og:title" content="NEXO Brain — Cognitive Memory for AI Agents">
-    <meta property="og:description" content="Open-source cognitive memory for AI agents. Skills system, cron scheduler, deep sleep checkpointing, external audit, 160+ MCP tools, and adaptive calibration.">
+    <meta property="og:description" content="Open-source cognitive memory for AI agents. Runtime CLI, unified doctor, Skills v2, Day Orchestrator, 160+ MCP tools, dashboard with 23 modules, and adaptive calibration.">
     <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
     <meta property="og:image:width" content="1536">
     <meta property="og:image:height" content="1024">
@@ -22,7 +22,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="NEXO Brain — Cognitive Memory for AI Agents">
-    <meta name="twitter:description" content="Open-source cognitive memory for AI agents. Skills system, cron scheduler, deep sleep checkpointing, external audit, 160+ MCP tools, and adaptive calibration.">
+    <meta name="twitter:description" content="Open-source cognitive memory for AI agents. Runtime CLI, unified doctor, Skills v2, Day Orchestrator, 160+ MCP tools, dashboard with 23 modules, and adaptive calibration.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
 
     <!-- Google Analytics (GA4) -->
@@ -142,7 +142,7 @@
                 "name": "What is NEXO Brain?",
                 "acceptedAnswer": {
                     "@type": "Answer",
-                    "text": "NEXO Brain is an open-source cognitive memory system for AI agents. It gives your AI persistent memory across sessions using the Atkinson-Shiffrin memory model (Sensory Register, Short-Term Memory, Long-Term Memory), with 160+ MCP tools, a full nervous system of 15 autonomous processes, a visual dashboard v2, unified code/data architecture, auto-update, auto-diary, knowledge graph search, and metacognitive error prevention."
+                    "text": "NEXO Brain is an open-source cognitive memory system for AI agents. It gives your AI persistent memory across sessions using the Atkinson-Shiffrin memory model (Sensory Register, Short-Term Memory, Long-Term Memory), with 160+ MCP tools, a runtime CLI, unified doctor diagnostics, Skills v2 with executable modes, Day Orchestrator for autonomous operation, an always-on dashboard with 23 modules, a full nervous system of 15 autonomous processes, and metacognitive error prevention."
                 }
             },
             {
@@ -302,7 +302,7 @@
                 "name": "What is Dashboard v2?",
                 "acceptedAnswer": {
                     "@type": "Answer",
-                    "text": "Dashboard v2 is a FastAPI-powered web interface at localhost:6174 with 6 pages: overview dashboard, operations, calendar, inbox, and CRUD interfaces for managing memories. It includes sidebar navigation, a trust score widget, and static assets for a polished visual experience."
+                    "text": "The NEXO Dashboard is an always-on FastAPI-powered web interface at localhost:6174 with 23 modules across multiple pages: overview, operations, calendar, inbox, and CRUD interfaces for managing memories. It includes sidebar navigation, trust score widget, and auto-starts on boot for continuous monitoring."
                 }
             },
             {
@@ -369,7 +369,7 @@
     <div class="container">
         <div class="hero-badge fade-up">
             <span class="dot"></span>
-            <span id="version-badge">v2.4.0</span> &mdash; Skills, Cron Scheduler &amp; External Audit
+            <span id="version-badge">v2.5.0</span> &mdash; Runtime CLI, Unified Doctor &amp; Skills v2
         </div>
         <div class="fade-up" style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;">
             <img src="https://img.shields.io/npm/v/nexo-brain?color=7C3AED&label=npm" alt="npm version">
@@ -418,7 +418,7 @@
         </div>
         <div class="stat">
             <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg></div>
-            <div class="stat-value">22</div>
+            <div class="stat-value">25</div>
             <div class="stat-label">Categories</div>
         </div>
         <div class="stat">
@@ -617,36 +617,36 @@
     </div>
 </section>
 
-<!-- v2.4.0 Skills, Cron Scheduler & External Audit -->
+<!-- v2.5.0 Runtime CLI, Unified Doctor & Skills v2 -->
 <section class="feature-section" style="padding:48px 24px;">
     <div style="max-width:900px;margin:0 auto;">
-        <div class="section-label">New in v2.4.0</div>
-        <h2 style="text-align:center;margin-bottom:32px;">Skills, Cron Scheduler &amp; External Audit</h2>
+        <div class="section-label">New in v2.5.0</div>
+        <h2 style="text-align:center;margin-bottom:32px;">Runtime CLI, Unified Doctor &amp; Skills v2</h2>
 
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:24px;">
             <div class="card">
-                <h3>Skills System</h3>
-                <p>Reusable procedure library with match, create, merge, and result tracking. Agents learn multi-step workflows and replay them on similar tasks. Skill stats track success rates for continuous improvement.</p>
+                <h3>Runtime CLI</h3>
+                <p>The <code>nexo</code> command gives you direct terminal access to scripts, doctor diagnostics, skills, and updates. Manage your cognitive system without opening an MCP client. One binary, full control.</p>
             </div>
             <div class="card">
-                <h3>Cron Scheduler</h3>
-                <p>Built-in cron scheduling engine for autonomous processes. Define, update, and monitor recurring tasks directly from MCP tools. Replaces manual LaunchAgent/systemd configuration with a unified API.</p>
+                <h3>Unified Doctor</h3>
+                <p>Three-level diagnostic system: boot, runtime, and deep checks. The <code>--fix</code> mode auto-repairs common issues. Also available as an MCP tool for in-session diagnostics without leaving your workflow.</p>
             </div>
             <div class="card">
-                <h3>Deep Sleep Watermark &amp; Checkpointing</h3>
-                <p>Resumable deep sleep with watermark-based progress tracking. If interrupted, the pipeline resumes from the last checkpoint instead of restarting. Eliminates duplicate processing on long overnight runs.</p>
+                <h3>Skills v2</h3>
+                <p>Executable skills with three modes: guide (step-by-step instructions), execute (autonomous run), and hybrid (guided with auto-execution). Security levels control what each skill can access and modify.</p>
             </div>
             <div class="card">
-                <h3>External Audit System</h3>
-                <p>Structured external audit framework for validating system integrity. Automated checks across memory stores, cron health, trust calibration, and cognitive consistency. Produces actionable audit reports.</p>
+                <h3>Day Orchestrator</h3>
+                <p>Autonomous NEXO operation every 15 minutes from 8:00 to 23:00. Handles routine maintenance, followup checks, and proactive tasks without manual intervention. Your agent works even when you don't.</p>
             </div>
             <div class="card">
-                <h3>Security Fixes</h3>
-                <p>Hardened credential storage, sanitized MCP tool inputs, and tightened file access permissions. Addresses findings from the external audit cycle with defense-in-depth improvements across the stack.</p>
+                <h3>Dashboard Always-On</h3>
+                <p>The web dashboard at localhost:6174 now runs permanently with 23 modules. Auto-starts on boot, provides continuous monitoring of memory health, trust scores, sessions, and system processes.</p>
             </div>
             <div class="card">
-                <h3>Cognitive Quarantine</h3>
-                <p>New memories from automated processes enter quarantine before promotion. Review, approve, or reject quarantined items via MCP tools. Prevents low-quality automated learnings from polluting the knowledge base.</p>
+                <h3>Personal Scripts Framework</h3>
+                <p>Auto-discovery of personal scripts in your NEXO home directory. Register, organize, and execute custom automation scripts directly from the CLI or MCP tools. Extends NEXO with your own workflows.</p>
             </div>
         </div>
     </div>
@@ -733,7 +733,7 @@
                     <span>What is NEXO Brain?</span>
                     <svg class="faq-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                 </summary>
-                <div class="faq-answer">NEXO Brain is an open-source cognitive memory system for AI agents. It gives your AI persistent memory across sessions using the Atkinson-Shiffrin memory model (Sensory Register, Short-Term Memory, Long-Term Memory), with 160+ MCP tools, a full nervous system of 15 autonomous processes, a visual dashboard v2, unified code/data architecture, auto-update, auto-diary, knowledge graph search, and metacognitive error prevention.</div>
+                <div class="faq-answer">NEXO Brain is an open-source cognitive memory system for AI agents. It gives your AI persistent memory across sessions using the Atkinson-Shiffrin memory model (Sensory Register, Short-Term Memory, Long-Term Memory), with 160+ MCP tools, a runtime CLI (<code>nexo</code> command), unified doctor diagnostics, Skills v2 with executable modes, Day Orchestrator for autonomous operation, an always-on dashboard with 23 modules, a full nervous system of 15 autonomous processes, and metacognitive error prevention.</div>
             </details>
 
             <details class="faq-item">
@@ -893,7 +893,7 @@
                     <span>What is Dashboard v2?</span>
                     <svg class="faq-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                 </summary>
-                <div class="faq-answer">Dashboard v2 is a FastAPI-powered web interface at localhost:6174 with 6 pages: overview dashboard, operations, calendar, inbox, and CRUD interfaces for managing memories. It includes sidebar navigation, a trust score widget, and static assets for a polished visual experience.</div>
+                <div class="faq-answer">The NEXO Dashboard is an always-on FastAPI-powered web interface at localhost:6174 with 23 modules across multiple pages: overview, operations, calendar, inbox, and CRUD interfaces for managing memories. It includes sidebar navigation, trust score widget, and auto-starts on boot for continuous monitoring.</div>
             </details>
 
             <details class="faq-item">

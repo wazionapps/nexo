@@ -1,8 +1,8 @@
 # NEXO Brain
 
-> Open-source cognitive memory system for AI agents (v2.4.0)
+> Open-source cognitive memory system for AI agents (v2.5.0)
 
-NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It provides 160+ MCP tools across 25 categories including semantic RAG, knowledge graph-boosted search, HNSW vector indexing, trust scoring, episodic memory, claim graph, metacognitive error prevention, inter-terminal coordination, web dashboard v2, natural memory decay, a full nervous system of 15 autonomous processes, unified code/data architecture, auto-update on startup, auto-diary, skills system, cron scheduler, and external audit.
+NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It provides 160+ MCP tools across 25 categories including semantic RAG, knowledge graph-boosted search, HNSW vector indexing, trust scoring, episodic memory, claim graph, metacognitive error prevention, inter-terminal coordination, always-on web dashboard with 23 modules, natural memory decay, a full nervous system of 15 autonomous processes, unified code/data architecture, auto-update on startup, auto-diary, Skills v2 with executable modes, cron scheduler, external audit, runtime CLI, unified doctor diagnostics, Day Orchestrator, and personal scripts framework.
 
 ## Key Features
 
@@ -18,7 +18,7 @@ NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cogniti
 - Metacognitive Guard: pre-edit checks with learnings and blocking rules
 - Episodic memory: change logs, decisions, session diaries with mental state continuity
 - Inter-terminal coordination: auto-inbox via PostToolUse hook, claude_session_id tracking
-- Web Dashboard v2: FastAPI with 6 pages (Overview, Operations, Calendar, Inbox), CRUD UI, sidebar nav, trust widget
+- Always-On Dashboard: FastAPI at localhost:6174 with 23 modules, auto-starts on boot, continuous monitoring
 - Unified Architecture: code in repo, personal data in NEXO_HOME (~/.nexo/). Clean separation.
 - Auto-Update: non-blocking update check on startup (5s max), opt-out via schedule.json
 - Auto-Diary: 3-layer system (PostToolUse every 10 calls, PreCompact emergency, heartbeat DIARY_OVERDUE)
@@ -37,12 +37,16 @@ NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cogniti
 - Watchdog Level 3: auto-reexecutes missed crons, verifies repairs with post-fix checks
 - CLAUDE.md version tracker: section markers for safe core updates without losing customizations
 - Lambda decay fix: STM 7h to 7d, LTM 2.4d to 60d (was 24x too aggressive)
-- Skills System: reusable procedure library with match, create, merge, and result tracking for multi-step workflows
+- Skills v2: executable skills with guide/execute/hybrid modes, security levels, reusable procedure library with match, create, merge, and result tracking
 - Cron Scheduler: built-in cron scheduling engine for autonomous processes via MCP tools
 - Deep Sleep Watermark & Checkpointing: resumable deep sleep with watermark-based progress tracking
 - External Audit System: structured framework for validating memory stores, cron health, trust calibration, and cognitive consistency
 - Security Fixes: hardened credential storage, sanitized MCP tool inputs, tightened file access permissions
 - Cognitive Quarantine: automated memories enter quarantine before promotion, with review/approve/reject workflow
+- Runtime CLI: `nexo` command for direct terminal access to scripts, doctor, skills, and updates
+- Unified Doctor: boot/runtime/deep diagnostics with --fix mode and MCP tool integration
+- Day Orchestrator: autonomous operation every 15 minutes (8:00-23:00), handles routine maintenance and proactive tasks
+- Personal Scripts Framework: auto-discovery of custom scripts with CLI and MCP execution
 - 24 pytest tests with isolated databases
 - Plugin system with hot-reload
 - 100% local: SQLite + ONNX Runtime, zero cloud dependencies
@@ -50,7 +54,7 @@ NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cogniti
 ## Installation
 
 ```
-npx nexo-brain@2.4.0
+npx nexo-brain@2.5.0
 ```
 
 ## Documentation
@@ -75,7 +79,7 @@ Modular code: db/ package (11 modules: core, fts, schema, sessions, reminders, l
 
 NEXO Brain exposes all functionality as MCP (Model Context Protocol) tools. Compatible with Claude Code, OpenClaw, and any MCP client.
 
-Tool categories: Cognitive (8), Cognitive Input (5), Cognitive Advanced (8), Guard (6), Episodic (12), Sessions (5), Coordination (7), Reminders (5), Followups (4), Learnings (5), Credentials (5), Task History (3), Menu (1), Entities (5), Preferences (4), Agents (5), Backup (3), Evolution (5), Adaptive & Somatic (4), Knowledge Graph (4), Claim Graph (6), Artifacts (6), Context Continuity (2), Cognitive Triggers (6), Index Management (3), Files (1), Update (1), Skills (6), and more via plugins.
+Tool categories: Cognitive (8), Cognitive Input (5), Cognitive Advanced (8), Guard (6), Episodic (12), Sessions (5), Coordination (7), Reminders (5), Followups (4), Learnings (5), Credentials (5), Task History (3), Menu (1), Entities (5), Preferences (4), Agents (5), Backup (3), Evolution (5), Adaptive & Somatic (4), Knowledge Graph (4), Claim Graph (6), Artifacts (6), Context Continuity (2), Cognitive Triggers (6), Index Management (3), Files (1), Update (1), Skills (6), Doctor (1), and more via plugins.
 
 ## License
 
