@@ -86,6 +86,8 @@ const ALL_PROCESSES = [
   // --- KeepAlive (persistent daemon) ---
   { name: "prevent-sleep", script: "nexo-prevent-sleep.sh", interpreter: "bash", scriptDir: "scripts",
     type: "keepAlive", purpose: "Keep machine awake for nocturnal processes" },
+  { name: "dashboard", script: "nexo-dashboard.sh", interpreter: "bash", scriptDir: "scripts",
+    type: "keepAlive", purpose: "Web dashboard at localhost:6174" },
   // --- Daily (times from schedule.json) ---
   { name: "cognitive-decay", script: "nexo-cognitive-decay.py", interpreter: "python", scriptDir: "scripts",
     type: "daily", defaultHour: 3, defaultMinute: 0, purpose: "Memory decay" },
