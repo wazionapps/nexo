@@ -1,185 +1,218 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NEXO Brain — Sessions</title>
-    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>tailwind.config={theme:{extend:{fontFamily:{display:['Space Grotesk','system-ui','sans-serif'],mono:['JetBrains Mono','monospace']}}}}</script>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-</head>
-<body class="bg-gray-950 text-slate-200">
+{% extends "base.html" %}
 
-    <!-- Sidebar: 56px icon-only fixed left -->
-    <aside class="fixed left-0 top-0 bottom-0 w-14 bg-slate-900 border-r border-slate-800 flex flex-col items-center py-4 z-50">
-        <!-- Logo -->
-        <a href="/" class="mb-6 flex items-center justify-center w-8 h-8">
-            <img src="/static/nexo-logo.png" alt="NEXO" class="w-7 h-7" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-            <div style="display:none" class="w-7 h-7 rounded-lg bg-violet-600 items-center justify-center text-white text-xs font-bold font-display">N</div>
-        </a>
+{% block title %}Session Replay{% endblock %}
+{% block page_title %}Session Replay{% endblock %}
 
-        <!-- Nav icons -->
-        <nav class="flex flex-col items-center gap-1 flex-1">
-            <!-- Dashboard -->
-            <a href="/" title="Dashboard" class="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-            </a>
-            <!-- Operations -->
-            <a href="/ops" title="Operations" class="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-            </a>
-            <!-- Calendar -->
-            <a href="/calendar" title="Calendar" class="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-            </a>
-            <!-- Inbox -->
-            <a href="/inbox" title="Inbox" class="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
-            </a>
+{% block content %}
+<div class="space-y-5">
+  <!-- Active sessions -->
+  <div>
+    <div class="text-xs uppercase tracking-wider text-slate-400 font-medium mb-3">Active Sessions</div>
+    <div class="grid grid-cols-3 gap-4" id="active-sessions">
+      <div class="text-xs text-slate-600 py-4 text-center col-span-3">loading...</div>
+    </div>
+  </div>
 
-            <div class="w-6 h-px bg-slate-800 my-1"></div>
+  <!-- Main content: Diaries + Checkpoints -->
+  <div class="grid grid-cols-3 gap-5">
+    <!-- Diary timeline -->
+    <div class="col-span-2 bg-slate-900/50 border border-slate-800/50 rounded-xl p-5 card">
+      <div class="flex items-center justify-between mb-4">
+        <div class="text-xs uppercase tracking-wider text-slate-400 font-medium">Session Diaries</div>
+        <button onclick="loadMore()" id="load-more-btn" class="text-xs px-2.5 py-1 rounded-md bg-slate-800/50 text-slate-400 hover:bg-slate-700 transition-colors hidden">Load more</button>
+      </div>
+      <div class="space-y-3" id="diaries">
+        <div class="text-xs text-slate-600 py-4 text-center">loading...</div>
+      </div>
+    </div>
 
-            <!-- Memory -->
-            <a href="/memory" title="Memory" class="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"/><path d="M9 21h6"/><path d="M10 21v1a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-1"/></svg>
-            </a>
-            <!-- Graph -->
-            <a href="/graph" title="Knowledge Graph" class="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-            </a>
-            <!-- Sessions — ACTIVE -->
-            <a href="/sessions" title="Sessions" class="w-9 h-9 flex items-center justify-center rounded-lg bg-violet-600/20 text-violet-400 transition-colors">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            </a>
-            <!-- Somatic -->
-            <a href="/somatic" title="Somatic" class="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-            </a>
-            <!-- Adaptive -->
-            <a href="/adaptive" title="Adaptive" class="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
-            </a>
-        </nav>
-
-        <!-- Trust score -->
-        <div class="flex flex-col items-center gap-0.5 mt-2">
-            <span class="text-xs font-display font-semibold text-slate-500 uppercase tracking-widest">Trust</span>
-            <span id="trust-score" class="text-sm font-mono font-bold text-violet-400">--</span>
+    <!-- Sidebar: Checkpoints + Mental states -->
+    <div class="space-y-5">
+      <!-- Mental State -->
+      <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-5 card">
+        <div class="text-xs uppercase tracking-wider text-slate-400 font-medium mb-3">Mental States</div>
+        <div class="space-y-2" id="mental-states">
+          <div class="text-xs text-slate-600">loading...</div>
         </div>
-    </aside>
+      </div>
 
-    <!-- Main content -->
-    <main class="ml-14 min-h-screen bg-gray-950 text-slate-200">
-        <header class="h-12 border-b border-slate-800/50 flex items-center px-6">
-            <h1 class="text-sm font-display font-semibold">Sessions</h1>
-        </header>
-
-        <div class="p-6 max-w-3xl">
-            <div id="sessions" class="space-y-3"></div>
-            <button id="load-more" onclick="loadMore()" class="mt-4 w-full py-2 text-xs text-slate-400 bg-slate-900/50 border border-slate-800/50 rounded-lg hover:bg-slate-800 transition-colors" style="display:none">Load more</button>
+      <!-- Checkpoints -->
+      <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-5 card">
+        <div class="text-xs uppercase tracking-wider text-slate-400 font-medium mb-3">Checkpoints</div>
+        <div class="space-y-2" id="checkpoints">
+          <div class="text-xs text-slate-600">loading...</div>
         </div>
-    </main>
+      </div>
+    </div>
+  </div>
+</div>
 
-    <script>
-        let offset = 0;
-        const PAGE_SIZE = 15;
-        let exhausted = false;
+<style>
+  @keyframes livePulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(16,185,129,0.4); } 50% { box-shadow: 0 0 0 6px rgba(16,185,129,0); } }
+  .live-pulse { animation: livePulse 2s ease-in-out infinite; }
+</style>
+{% endblock %}
 
-        function escapeHtml(text) {
-            const el = document.createElement('div');
-            el.textContent = text || '';
-            return el.innerHTML;
-        }
+{% block scripts %}
+<script>
+let diaryOffset = 0;
+const PAGE_SIZE = 15;
+let exhausted = false;
 
-        function renderSession(s) {
-            const session_id = s.session_id || s.id || '';
-            const created_at = s.created_at || '';
-            const domain = s.domain || '';
-            const summary = s.summary || '';
-            const self_critique = s.self_critique || '';
-            const mental_state = s.mental_state || '';
+const STATE_BADGES = {
+  focused: 'bg-violet-500/15 text-violet-400 border-violet-500/30',
+  energized: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+  tired: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
+  frustrated: 'bg-red-500/15 text-red-400 border-red-500/30',
+  calm: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
+  flow: 'bg-pink-500/15 text-pink-400 border-pink-500/30',
+};
 
-            return `<div class="bg-slate-900/50 border border-slate-800/50 rounded-lg p-4">
-                <div class="flex items-center gap-2 mb-2 flex-wrap">
-                    <span class="text-xs font-mono text-violet-400">${escapeHtml(String(session_id))}</span>
-                    <span class="text-xs text-slate-500">${escapeHtml(created_at)}</span>
-                    ${domain ? `<span class="text-xs px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">${escapeHtml(domain)}</span>` : ''}
-                </div>
-                ${summary ? `<p class="text-sm text-slate-200 leading-relaxed mb-3 whitespace-pre-wrap">${escapeHtml(summary)}</p>` : ''}
-                ${self_critique ? `<div class="border-l-2 border-amber-500/30 pl-3 mb-2"><p class="text-sm text-amber-300/80 leading-relaxed whitespace-pre-wrap">${escapeHtml(self_critique)}</p></div>` : ''}
-                ${mental_state ? `<div class="border-l-2 border-violet-500/30 pl-3"><p class="text-sm text-violet-300/80 italic leading-relaxed whitespace-pre-wrap">${escapeHtml(mental_state)}</p></div>` : ''}
-            </div>`;
-        }
+function renderActiveSession(s) {
+  const sid = s.session_id || s.id || '';
+  const shortId = String(sid).substring(0, 12);
+  const lastHB = s.last_heartbeat || s.created_at;
+  const cutoff = Date.now() - 15 * 60 * 1000;
+  const isLive = new Date(lastHB).getTime() > cutoff;
 
-        async function loadMore() {
-            if (exhausted) return;
-            const btn = document.getElementById('load-more');
-            btn.textContent = 'Loading...';
-            btn.disabled = true;
+  return `<div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-4 card ${isLive ? 'live-pulse' : ''}">
+    <div class="flex items-center gap-2 mb-2">
+      <span class="relative flex h-2 w-2">
+        ${isLive ? `<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>` : ''}
+        <span class="relative inline-flex rounded-full h-2 w-2 ${isLive ? 'bg-emerald-500' : 'bg-slate-600'}"></span>
+      </span>
+      <span class="text-xs font-mono text-violet-400">${escapeHtml(shortId)}</span>
+      <span class="ml-auto text-[10px] text-slate-500">${isLive ? 'LIVE' : 'idle'}</span>
+    </div>
+    <div class="text-[10px] text-slate-500">Started ${relativeTime(s.created_at)}</div>
+    ${lastHB ? `<div class="text-[10px] text-slate-600">Last heartbeat: ${relativeTime(lastHB)}</div>` : ''}
+  </div>`;
+}
 
-            try {
-                const resp = await fetch(`/api/sessions?limit=${PAGE_SIZE}&offset=${offset}`);
-                if (!resp.ok) {
-                    let detail = `HTTP ${resp.status}`;
-                    try { const b = await resp.json(); detail = b.error || b.detail || detail; } catch {}
-                    throw new Error(detail);
-                }
-                const data = await resp.json();
-                const sessions = data.sessions || [];
+function renderDiary(d) {
+  const sid = d.session_id || d.id || '';
+  const state = d.mental_state || '';
+  const stateLower = state.toLowerCase();
+  const badgeClass = STATE_BADGES[stateLower] || 'bg-slate-500/15 text-slate-400 border-slate-500/30';
 
-                if (sessions.length > 0) {
-                    document.getElementById('sessions').insertAdjacentHTML('beforeend', sessions.map(renderSession).join(''));
-                    offset += sessions.length;
-                }
+  return `<div class="bg-slate-800/30 border border-slate-800/30 rounded-lg p-4 hover:border-slate-700/50 transition-colors">
+    <div class="flex items-center gap-2 mb-2 flex-wrap">
+      <span class="text-xs font-mono text-violet-400">${escapeHtml(String(sid).substring(0, 12))}</span>
+      <span class="text-[10px] text-slate-500">${escapeHtml(d.created_at || '')}</span>
+      ${d.domain ? `<span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">${escapeHtml(d.domain)}</span>` : ''}
+      ${state ? `<span class="text-[10px] px-1.5 py-0.5 rounded border ${badgeClass}">${escapeHtml(state)}</span>` : ''}
+    </div>
+    ${d.summary ? `<p class="text-sm text-slate-200 leading-relaxed mb-2 whitespace-pre-wrap">${escapeHtml(d.summary)}</p>` : ''}
+    ${d.self_critique ? `<div class="border-l-2 border-amber-500/30 pl-3 mb-2"><p class="text-xs text-amber-300/80 leading-relaxed whitespace-pre-wrap">${escapeHtml(d.self_critique)}</p></div>` : ''}
+  </div>`;
+}
 
-                if (sessions.length < PAGE_SIZE) {
-                    exhausted = true;
-                    btn.style.display = 'none';
-                } else {
-                    btn.textContent = 'Load more';
-                    btn.disabled = false;
-                }
-            } catch (err) {
-                btn.textContent = 'Error: ' + err.message + ' — retry';
-                btn.disabled = false;
-            }
-        }
+async function loadMore() {
+  if (exhausted) return;
+  const btn = document.getElementById('load-more-btn');
+  btn.textContent = 'Loading...'; btn.disabled = true;
 
-        async function init() {
-            const resp = await fetch(`/api/sessions?limit=${PAGE_SIZE}&offset=0`);
-            if (!resp.ok) {
-                let detail = `HTTP ${resp.status}`;
-                try { const b = await resp.json(); detail = b.error || b.detail || detail; } catch {}
-                document.getElementById('sessions').innerHTML = `<p class="text-sm text-red-400 text-center py-8">Error loading sessions: ${detail}</p>`;
-                return;
-            }
-            const data = await resp.json();
-            const sessions = data.sessions || [];
-            const container = document.getElementById('sessions');
-            const btn = document.getElementById('load-more');
+  try {
+    const data = await fetchJSON(`/api/sessions?limit=${PAGE_SIZE}&offset=${diaryOffset}`);
+    if (!data) throw new Error('No data');
+    const diaries = data.diaries || data.sessions || [];
 
-            if (sessions.length === 0) {
-                container.innerHTML = '<p class="text-sm text-slate-500 text-center py-8">No session diaries found</p>';
-                return;
-            }
+    if (diaries.length > 0) {
+      document.getElementById('diaries').insertAdjacentHTML('beforeend', diaries.map(renderDiary).join(''));
+      diaryOffset += diaries.length;
+    }
+    if (diaries.length < PAGE_SIZE) {
+      exhausted = true; btn.classList.add('hidden');
+    } else {
+      btn.textContent = 'Load more'; btn.disabled = false;
+    }
+  } catch (err) {
+    btn.textContent = 'Error -- retry'; btn.disabled = false;
+  }
+}
 
-            container.innerHTML = sessions.map(renderSession).join('');
-            offset = sessions.length;
+async function loadSessions() {
+  const data = await fetchJSON('/api/sessions?limit=' + PAGE_SIZE);
+  if (!data) return;
 
-            if (sessions.length >= PAGE_SIZE) {
-                btn.style.display = 'block';
-            }
-        }
+  // Active sessions
+  const sessions = data.sessions || [];
+  const activeContainer = document.getElementById('active-sessions');
+  const cutoff = Date.now() - 15 * 60 * 1000;
+  const activeSessions = sessions.filter(s => new Date(s.last_heartbeat || s.created_at || 0).getTime() > cutoff);
 
-        // Load trust score
-        fetch('/api/stats').then(r => r.json()).then(data => {
-            if (data.trust_score != null) {
-                document.getElementById('trust-score').textContent = Math.round(data.trust_score);
-            }
-        }).catch(() => {});
+  if (activeSessions.length > 0) {
+    activeContainer.innerHTML = activeSessions.map(renderActiveSession).join('');
+  } else {
+    activeContainer.innerHTML = '<div class="col-span-3 bg-slate-900/50 border border-slate-800/50 rounded-xl p-4 text-xs text-slate-500 text-center">No active sessions</div>';
+  }
 
-        init();
-    </script>
-</body>
-</html>
+  // Diaries
+  const diaries = data.diaries || sessions;
+  const diaryContainer = document.getElementById('diaries');
+  if (diaries.length > 0) {
+    diaryContainer.innerHTML = diaries.map(renderDiary).join('');
+    diaryOffset = diaries.length;
+    if (diaries.length >= PAGE_SIZE) {
+      document.getElementById('load-more-btn').classList.remove('hidden');
+    }
+  } else {
+    diaryContainer.innerHTML = '<div class="text-xs text-slate-600 py-4 text-center">No session diaries found</div>';
+  }
+
+  // Mental states
+  const mentalContainer = document.getElementById('mental-states');
+  const states = {};
+  diaries.forEach(d => {
+    if (d.mental_state) {
+      const s = d.mental_state.toLowerCase();
+      states[s] = (states[s] || 0) + 1;
+    }
+  });
+  const stateEntries = Object.entries(states).sort((a, b) => b[1] - a[1]);
+  if (stateEntries.length) {
+    mentalContainer.innerHTML = stateEntries.map(([state, count]) => {
+      const badgeClass = STATE_BADGES[state] || 'bg-slate-500/15 text-slate-400 border-slate-500/30';
+      return `<div class="flex items-center justify-between">
+        <span class="text-xs px-2 py-0.5 rounded border ${badgeClass}">${escapeHtml(state)}</span>
+        <span class="text-xs font-mono text-slate-500">${count}</span>
+      </div>`;
+    }).join('');
+  } else {
+    mentalContainer.innerHTML = '<div class="text-xs text-slate-600">No mental state data</div>';
+  }
+
+  // Checkpoints
+  const checkpoints = data.checkpoints || [];
+  const cpContainer = document.getElementById('checkpoints');
+  if (checkpoints.length) {
+    cpContainer.innerHTML = checkpoints.slice(0, 10).map(cp => {
+      return `<div class="flex items-center gap-2 py-1.5 border-b border-slate-800/30 last:border-0">
+        <svg class="w-3.5 h-3.5 text-slate-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+        <span class="text-xs text-slate-400 truncate flex-1">${escapeHtml(cp.label || cp.session_id || 'checkpoint')}</span>
+        <span class="text-[10px] text-slate-600 font-mono">${relativeTime(cp.created_at)}</span>
+      </div>`;
+    }).join('');
+  } else {
+    cpContainer.innerHTML = '<div class="text-xs text-slate-600">No checkpoints</div>';
+  }
+}
+
+loadSessions();
+setInterval(() => {
+  // Refresh active sessions only
+  fetchJSON('/api/sessions?limit=5').then(data => {
+    if (!data) return;
+    const sessions = data.sessions || [];
+    const activeContainer = document.getElementById('active-sessions');
+    const cutoff = Date.now() - 15 * 60 * 1000;
+    const activeSessions = sessions.filter(s => new Date(s.last_heartbeat || s.created_at || 0).getTime() > cutoff);
+    if (activeSessions.length > 0) {
+      activeContainer.innerHTML = activeSessions.map(renderActiveSession).join('');
+    } else {
+      activeContainer.innerHTML = '<div class="col-span-3 bg-slate-900/50 border border-slate-800/50 rounded-xl p-4 text-xs text-slate-500 text-center">No active sessions</div>';
+    }
+  });
+}, 60000);
+</script>
+{% endblock %}

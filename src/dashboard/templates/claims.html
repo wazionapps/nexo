@@ -1,0 +1,259 @@
+{% extends "base.html" %}
+
+{% block title %}Claims Network{% endblock %}
+{% block page_title %}Claims Network{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+  <!-- Status counts -->
+  <div class="grid grid-cols-4 gap-4" id="status-cards">
+    <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-4 card">
+      <div class="text-xs uppercase tracking-wider text-slate-400 font-medium mb-2">Total Claims</div>
+      <div class="text-xl font-mono font-semibold text-slate-200" id="total-claims">--</div>
+    </div>
+    <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-4 card">
+      <div class="text-xs uppercase tracking-wider text-emerald-400/70 font-medium mb-2">Verified</div>
+      <div class="text-xl font-mono font-semibold text-emerald-400" id="verified-claims">--</div>
+    </div>
+    <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-4 card">
+      <div class="text-xs uppercase tracking-wider text-amber-400/70 font-medium mb-2">Pending</div>
+      <div class="text-xl font-mono font-semibold text-amber-400" id="pending-claims">--</div>
+    </div>
+    <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-4 card">
+      <div class="text-xs uppercase tracking-wider text-red-400/70 font-medium mb-2">Disputed</div>
+      <div class="text-xl font-mono font-semibold text-red-400" id="disputed-claims">--</div>
+    </div>
+  </div>
+
+  <!-- Filter bar -->
+  <div class="flex items-center gap-2 flex-wrap">
+    <span class="text-xs text-slate-500">Filter:</span>
+    <button onclick="filterClaims('all')" class="filter-btn active px-2.5 py-1 rounded-md text-xs bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors" data-filter="all">All</button>
+    <button onclick="filterClaims('verified')" class="filter-btn px-2.5 py-1 rounded-md text-xs bg-slate-800/50 text-slate-400 hover:bg-slate-700 transition-colors" data-filter="verified">Verified</button>
+    <button onclick="filterClaims('pending')" class="filter-btn px-2.5 py-1 rounded-md text-xs bg-slate-800/50 text-slate-400 hover:bg-slate-700 transition-colors" data-filter="pending">Pending</button>
+    <button onclick="filterClaims('disputed')" class="filter-btn px-2.5 py-1 rounded-md text-xs bg-slate-800/50 text-slate-400 hover:bg-slate-700 transition-colors" data-filter="disputed">Disputed</button>
+    <div class="flex-1"></div>
+    <input type="text" id="claim-search" placeholder="Search claims..." class="px-3 py-1.5 rounded-lg bg-slate-800/50 border border-slate-700/50 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-violet-500 w-48" oninput="searchClaims(this.value)">
+  </div>
+
+  <div class="grid grid-cols-3 gap-5">
+    <!-- Network visualization -->
+    <div class="col-span-2 bg-slate-900/50 border border-slate-800/50 rounded-xl p-5 card">
+      <div class="text-xs uppercase tracking-wider text-slate-400 font-medium mb-4">Claim Network</div>
+      <canvas id="network-canvas" class="w-full rounded-lg" style="height: 420px; background: rgba(15,23,42,0.5);"></canvas>
+    </div>
+
+    <!-- Claim detail panel -->
+    <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-5 card">
+      <div class="text-xs uppercase tracking-wider text-slate-400 font-medium mb-4">Claim Details</div>
+      <div id="claim-detail" class="text-xs text-slate-600 text-center py-12">
+        Click a node to see details
+      </div>
+    </div>
+  </div>
+
+  <!-- Claims list -->
+  <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-5 card">
+    <div class="text-xs uppercase tracking-wider text-slate-400 font-medium mb-4">All Claims</div>
+    <div class="space-y-2" id="claims-list">
+      <div class="text-xs text-slate-600 py-4 text-center">loading...</div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let allClaims = [];
+let allLinks = [];
+let currentFilter = 'all';
+let nodes = [];
+let selectedNode = null;
+
+const STATUS_COLORS = {
+  verified: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', fill: '#10B981' },
+  pending: { bg: 'bg-amber-500/10', text: 'text-amber-400', fill: '#F59E0B' },
+  disputed: { bg: 'bg-red-500/10', text: 'text-red-400', fill: '#EF4444' },
+  unknown: { bg: 'bg-slate-500/10', text: 'text-slate-400', fill: '#64748b' },
+};
+
+function filterClaims(status) {
+  currentFilter = status;
+  document.querySelectorAll('.filter-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.filter === status);
+    b.classList.toggle('bg-slate-800', b.dataset.filter === status);
+    b.classList.toggle('text-slate-300', b.dataset.filter === status);
+    b.classList.toggle('bg-slate-800/50', b.dataset.filter !== status);
+    b.classList.toggle('text-slate-400', b.dataset.filter !== status);
+  });
+  renderClaimsList();
+  drawNetwork();
+}
+
+function searchClaims(query) {
+  const q = query.toLowerCase();
+  document.querySelectorAll('#claims-list .claim-item').forEach(el => {
+    const text = el.textContent.toLowerCase();
+    el.style.display = text.includes(q) ? '' : 'none';
+  });
+}
+
+function getFilteredClaims() {
+  if (currentFilter === 'all') return allClaims;
+  return allClaims.filter(c => (c.verification_status || 'pending') === currentFilter);
+}
+
+function renderClaimsList() {
+  const container = document.getElementById('claims-list');
+  const claims = getFilteredClaims();
+  if (!claims.length) { container.innerHTML = '<div class="text-xs text-slate-600 py-4 text-center">No claims found</div>'; return; }
+
+  container.innerHTML = claims.map(c => {
+    const status = c.verification_status || 'pending';
+    const sc = STATUS_COLORS[status] || STATUS_COLORS.unknown;
+    const conf = c.confidence != null ? (c.confidence * 100).toFixed(0) + '%' : '--';
+    return `<div class="claim-item flex items-start gap-3 py-2.5 px-3 rounded-lg hover:bg-slate-800/30 transition-colors cursor-pointer border border-transparent hover:border-slate-800/50" onclick="selectClaim(${c.id})">
+      <span class="w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0" style="background:${sc.fill}"></span>
+      <div class="flex-1 min-w-0">
+        <div class="text-xs text-slate-300 leading-relaxed">${escapeHtml(c.text || '--')}</div>
+        <div class="flex items-center gap-2 mt-1">
+          <span class="px-1.5 py-0.5 rounded text-[10px] font-medium ${sc.bg} ${sc.text}">${status}</span>
+          ${c.domain ? `<span class="text-[10px] text-slate-500">${escapeHtml(c.domain)}</span>` : ''}
+          <span class="text-[10px] text-slate-600 font-mono">conf: ${conf}</span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function selectClaim(id) {
+  const c = allClaims.find(x => x.id === id);
+  if (!c) return;
+  selectedNode = id;
+
+  const status = c.verification_status || 'pending';
+  const sc = STATUS_COLORS[status] || STATUS_COLORS.unknown;
+  const linkedClaims = allLinks.filter(l => l.source_claim_id === id || l.target_claim_id === id);
+
+  document.getElementById('claim-detail').innerHTML = `
+    <div class="space-y-4 text-left">
+      <div>
+        <span class="px-1.5 py-0.5 rounded text-[10px] font-medium ${sc.bg} ${sc.text}">${status}</span>
+        ${c.domain ? `<span class="ml-2 text-[10px] text-slate-500">${escapeHtml(c.domain)}</span>` : ''}
+      </div>
+      <p class="text-sm text-slate-200 leading-relaxed">${escapeHtml(c.text || '--')}</p>
+      <div class="grid grid-cols-2 gap-3">
+        <div><div class="text-[10px] text-slate-500 uppercase">Confidence</div><div class="text-sm font-mono text-slate-300">${c.confidence != null ? (c.confidence * 100).toFixed(1) + '%' : '--'}</div></div>
+        <div><div class="text-[10px] text-slate-500 uppercase">ID</div><div class="text-sm font-mono text-slate-300">#${c.id}</div></div>
+      </div>
+      ${linkedClaims.length ? `
+        <div class="border-t border-slate-800/50 pt-3">
+          <div class="text-[10px] text-slate-500 uppercase mb-2">Linked Claims (${linkedClaims.length})</div>
+          <div class="space-y-1.5">${linkedClaims.map(l => {
+            const otherId = l.source_claim_id === id ? l.target_claim_id : l.source_claim_id;
+            const other = allClaims.find(x => x.id === otherId);
+            return `<div class="text-xs text-slate-400 flex items-center gap-2">
+              <span class="text-[10px] text-violet-400 font-mono">${escapeHtml(l.relation || 'related')}</span>
+              <span class="truncate">${other ? escapeHtml((other.text || '').substring(0, 60)) : '#' + otherId}</span>
+            </div>`;
+          }).join('')}</div>
+        </div>` : ''}
+    </div>`;
+
+  drawNetwork();
+}
+
+function drawNetwork() {
+  const canvas = document.getElementById('network-canvas');
+  const ctx = canvas.getContext('2d');
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * window.devicePixelRatio;
+  canvas.height = rect.height * window.devicePixelRatio;
+  ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+  const w = rect.width, h = rect.height;
+
+  ctx.clearRect(0, 0, w, h);
+
+  const filtered = getFilteredClaims();
+  const idSet = new Set(filtered.map(c => c.id));
+
+  if (!nodes.length) {
+    nodes = filtered.map((c, i) => {
+      const angle = (2 * Math.PI * i) / filtered.length;
+      const r = Math.min(w, h) * 0.35;
+      return { id: c.id, x: w / 2 + r * Math.cos(angle) + (Math.random() - 0.5) * 40, y: h / 2 + r * Math.sin(angle) + (Math.random() - 0.5) * 40, claim: c };
+    });
+  }
+
+  // Draw links
+  const visLinks = allLinks.filter(l => idSet.has(l.source_claim_id) && idSet.has(l.target_claim_id));
+  visLinks.forEach(l => {
+    const src = nodes.find(n => n.id === l.source_claim_id);
+    const tgt = nodes.find(n => n.id === l.target_claim_id);
+    if (!src || !tgt) return;
+    ctx.beginPath();
+    ctx.moveTo(src.x, src.y);
+    ctx.lineTo(tgt.x, tgt.y);
+    ctx.strokeStyle = (selectedNode === src.id || selectedNode === tgt.id) ? 'rgba(124,58,237,0.5)' : 'rgba(51,65,85,0.3)';
+    ctx.lineWidth = (selectedNode === src.id || selectedNode === tgt.id) ? 2 : 1;
+    ctx.stroke();
+  });
+
+  // Draw nodes
+  nodes.forEach(n => {
+    if (!idSet.has(n.id)) return;
+    const status = n.claim.verification_status || 'pending';
+    const color = (STATUS_COLORS[status] || STATUS_COLORS.unknown).fill;
+    const isSelected = selectedNode === n.id;
+    const radius = isSelected ? 8 : 5;
+
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, radius, 0, 2 * Math.PI);
+    ctx.fillStyle = color;
+    ctx.fill();
+    if (isSelected) {
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+  });
+}
+
+canvas_click: {
+  const canvas = document.getElementById('network-canvas');
+  canvas.addEventListener('click', e => {
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    let closest = null, minDist = 20;
+    nodes.forEach(n => {
+      const d = Math.hypot(n.x - x, n.y - y);
+      if (d < minDist) { minDist = d; closest = n; }
+    });
+    if (closest) selectClaim(closest.id);
+  });
+}
+
+async function loadClaims() {
+  const data = await fetchJSON('/api/claims');
+  if (!data) return;
+
+  allClaims = data.claims || [];
+  allLinks = data.links || [];
+  const counts = data.status_counts || {};
+
+  document.getElementById('total-claims').textContent = allClaims.length;
+  document.getElementById('verified-claims').textContent = counts.verified || 0;
+  document.getElementById('pending-claims').textContent = counts.pending || 0;
+  document.getElementById('disputed-claims').textContent = counts.disputed || 0;
+
+  nodes = [];
+  renderClaimsList();
+  drawNetwork();
+}
+
+loadClaims();
+setInterval(loadClaims, 60000);
+window.addEventListener('resize', () => { if (allClaims.length) { nodes = []; drawNetwork(); } });
+</script>
+{% endblock %}

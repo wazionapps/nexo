@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}NEXO Brain{% endblock %} — Dashboard</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            display: ['Space Grotesk', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            nexo: {
+              50: '#f3f0ff', 100: '#e9e3ff', 200: '#d4c9ff',
+              300: '#b49dff', 400: '#9061ff', 500: '#7C3AED',
+              600: '#6d28d9', 700: '#5b21b6', 800: '#4c1d95', 900: '#2e1065',
+            }
+          },
+          animation: {
+            'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            'fade-in': 'fadeIn 0.3s ease-out',
+            'slide-in': 'slideIn 0.3s ease-out',
+          },
+          keyframes: {
+            fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+            slideIn: { '0%': { opacity: '0', transform: 'translateY(8px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
+          }
+        }
+      }
+    }
+  </script>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+    /* Sidebar group toggle */
+    .nav-group-items { max-height: 0; overflow: hidden; transition: max-height 0.25s ease-out; }
+    .nav-group.open .nav-group-items { max-height: 500px; }
+    .nav-group .chevron { transition: transform 0.2s; }
+    .nav-group.open .chevron { transform: rotate(90deg); }
+
+    /* Active nav item */
+    .nav-item.active { background: rgba(124, 58, 237, 0.12); color: #a78bfa; border-left: 2px solid #7C3AED; }
+    .nav-item { border-left: 2px solid transparent; }
+    .nav-item:hover:not(.active) { background: rgba(51, 65, 85, 0.3); }
+
+    /* Card hover */
+    .card { transition: border-color 0.2s, box-shadow 0.2s; }
+    .card:hover { border-color: rgba(124, 58, 237, 0.3); box-shadow: 0 0 20px rgba(124, 58, 237, 0.08); }
+
+    /* Glow dot */
+    @keyframes glow { 0%, 100% { box-shadow: 0 0 4px currentColor; } 50% { box-shadow: 0 0 12px currentColor; } }
+    .glow-dot { animation: glow 2s ease-in-out infinite; }
+
+    /* Chat styles */
+    .chat-bubble { animation: slideIn 0.3s ease-out; }
+  </style>
+  {% block head %}{% endblock %}
+</head>
+<body class="h-full bg-gray-950 text-slate-200 antialiased font-display">
+
+  <!-- Sidebar -->
+  <aside id="sidebar" class="fixed left-0 top-0 bottom-0 w-56 bg-slate-900/95 backdrop-blur border-r border-slate-800/80 flex flex-col z-50 overflow-hidden">
+    <!-- Logo -->
+    <a href="/" class="flex items-center gap-2.5 px-4 py-3.5 border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
+      <img src="/static/nexo-logo.png" alt="NEXO" class="w-7 h-7">
+      <span class="text-sm font-display font-semibold text-slate-100 tracking-tight">NEXO Brain</span>
+      <span class="ml-auto text-[10px] font-mono text-slate-600">v2.0</span>
+    </a>
+
+    <!-- Navigation -->
+    <nav class="flex-1 overflow-y-auto py-2 px-2 space-y-0.5" id="main-nav">
+
+      <!-- OVERVIEW -->
+      <div class="nav-group open" data-group="overview">
+        <button class="w-full flex items-center gap-2 px-2 py-1.5 text-[10px] uppercase tracking-widest text-slate-500 font-semibold hover:text-slate-400" onclick="toggleGroup(this)">
+          <svg class="w-3 h-3 chevron" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"/></svg>
+          Overview
+        </button>
+        <div class="nav-group-items">
+          <a href="/" class="nav-item flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs text-slate-400 transition-colors" data-page="dashboard">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+            Cognitive Pulse
+          </a>
+          <a href="/feed" class="nav-item flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs text-slate-400 transition-colors" data-page="feed">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+            Activity Feed
+          </a>
+        </div>
+      </div>
+
+      <!-- OPERATIONS -->
+      <div class="nav-group open" data-group="operations">
+        <button class="w-full flex items-center gap-2 px-2 py-1.5 text-[10px] uppercase tracking-widest text-slate-500 font-semibold hover:text-slate-400" onclick="toggleGroup(this)">
+          <svg class="w-3 h-3 chevron" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"/></svg>
+          Operations
+        </button>
+        <div class="nav-group-items">
+          <a href="/crons" class="nav-item flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs text-slate-400 transition-colors" data-page="crons">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            Crons Control
+          </a>
+          <a href="/ops" class="nav-item flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs text-slate-400 transition-colors" data-page="ops">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+            Ops Center
+          </a>
+          <a href="/calendar" class="nav-item flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs text-slate-400 transition-colors" data-page="calendar">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+            Calendar
+          </a>
+        </div>
+      </div>
+
+      <!-- INTELLIGENCE -->
+      <div class="nav-group open" data-group="intelligence">
+        <button class="w-full flex items-center gap-2 px-2 py-1.5 text-[10px] uppercase tracking-widest text-slate-500 font-semibold hover:text-slate-400" onclick="toggleGroup(this)">
+          <svg class="w-3 h-3 chevron" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"/></svg>
+          Intelligence
+        </button>
+        <div class="nav-group-items">
+          <a href="/chat" class="nav-item flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs text-slate-400 transition-colors" data-page="chat">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+            NEXO Chat
+            <span class="ml-auto px-1.5 py-0.5 text-[9px] font-bold uppercase bg-nexo-500/20 text-nexo-400 rounded">new</span>
+          </a>
+          <a href="/memory" class="nav-item flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs text-slate-400 transition-colors" data-page="memory">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+            Memory Flow
+          </a>
+          <a href="/dreams" class="nav-item flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs text-slate-400 transition-colors" data-page="dreams">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+            Dream Journal
+          </a>
+          <a href="/skills" class="nav-item flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs text-slate-400 transition-colors" data-page="skills">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/></svg>
+            Skills Lab
+          </a>
+          <a href="/trust" class="nav-item flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs text-slate-400 transition-colors" data-page="trust">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+            Trust Deep-Dive
+          </a>
+        </div>
+      </div>
+
+      <!-- SECURITY -->
+      <div class="nav-group" data-group="security">
+        <button class="w-full flex items-center gap-2 px-2 py-1.5 text-[10px] uppercase tracking-widest text-slate-500 font-semibold hover:text-slate-400" onclick="toggleGroup(this)">
+          <svg class="w-3 h-3 chevron" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"/></svg>
+          Security
+        </button>
+        <div class="nav-group-items">
+          <a href="/guard" class="nav-item flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs text-slate-400 transition-colors" data-page="guard">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            Guard Heatmap
+          </a>
+          <a href="/cortex" class="nav-item flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs text-slate-400 transition-colors" data-page="cortex">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+            Cortex Monitor
+          </a>
+          <a href="/rules" class="nav-item flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs text-slate-400 transition-colors" data-page="rules">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
+            Core Rules
+          </a>
+          <a href="/plugins" class="nav-item flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs text-slate-400 transition-colors" data-page="plugins">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"/></svg>
+            Plugins
+          </a>
+        </div>
+      </div>
+
+      <!-- ADVANCED -->
+      <div class="nav-group" data-group="advanced">
+        <button class="w-full flex items-center gap-2 px-2 py-1.5 text-[10px] uppercase tracking-widest text-slate-500 font-semibold hover:text-slate-400" onclick="toggleGroup(this)">
+          <svg class="w-3 h-3 chevron" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"/></svg>
+          Advanced
+        </button>
+        <div class="nav-group-items">
+          <a href="/evolution" class="nav-item flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs text-slate-400 transition-colors" data-page="evolution">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+            Evolution
+          </a>
+          <a href="/claims" class="nav-item flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs text-slate-400 transition-colors" data-page="claims">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
+            Claims Network
+          </a>
+          <a href="/sentiment" class="nav-item flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs text-slate-400 transition-colors" data-page="sentiment">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
+            Sentiment
+          </a>
+          <a href="/sessions" class="nav-item flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs text-slate-400 transition-colors" data-page="sessions">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"/></svg>
+            Sessions
+          </a>
+          <a href="/triggers" class="nav-item flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs text-slate-400 transition-colors" data-page="triggers">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+            Triggers
+          </a>
+          <a href="/artifacts" class="nav-item flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs text-slate-400 transition-colors" data-page="artifacts">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+            Artifacts
+          </a>
+        </div>
+      </div>
+
+      <!-- SYSTEM -->
+      <div class="nav-group" data-group="system">
+        <button class="w-full flex items-center gap-2 px-2 py-1.5 text-[10px] uppercase tracking-widest text-slate-500 font-semibold hover:text-slate-400" onclick="toggleGroup(this)">
+          <svg class="w-3 h-3 chevron" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"/></svg>
+          System
+        </button>
+        <div class="nav-group-items">
+          <a href="/inbox" class="nav-item flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs text-slate-400 transition-colors" data-page="inbox">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+            Inbox
+          </a>
+          <a href="/email" class="nav-item flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs text-slate-400 transition-colors" data-page="email">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/></svg>
+            Email Monitor
+          </a>
+          <a href="/credentials" class="nav-item flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs text-slate-400 transition-colors" data-page="credentials">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
+            Credentials
+          </a>
+          <a href="/backups" class="nav-item flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs text-slate-400 transition-colors" data-page="backups">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/></svg>
+            Backups
+          </a>
+          <a href="/followup-health" class="nav-item flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs text-slate-400 transition-colors" data-page="followup-health">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+            Followup Health
+          </a>
+        </div>
+      </div>
+
+      <!-- Knowledge (from existing) -->
+      <div class="nav-group" data-group="knowledge">
+        <button class="w-full flex items-center gap-2 px-2 py-1.5 text-[10px] uppercase tracking-widest text-slate-500 font-semibold hover:text-slate-400" onclick="toggleGroup(this)">
+          <svg class="w-3 h-3 chevron" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"/></svg>
+          Knowledge
+        </button>
+        <div class="nav-group-items">
+          <a href="/graph" class="nav-item flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs text-slate-400 transition-colors" data-page="graph">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
+            Knowledge Graph
+          </a>
+          <a href="/somatic" class="nav-item flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs text-slate-400 transition-colors" data-page="somatic">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
+            Somatic Markers
+          </a>
+          <a href="/adaptive" class="nav-item flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs text-slate-400 transition-colors" data-page="adaptive">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
+            Adaptive Mode
+          </a>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Sidebar footer -->
+    <div class="border-t border-slate-800/50 p-3">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <div class="w-2 h-2 rounded-full glow-dot" id="system-status-dot" style="color: #10B981; background: #10B981;"></div>
+          <span class="text-[10px] text-slate-500 uppercase tracking-wider">System</span>
+        </div>
+        <span class="text-xs font-mono text-slate-500" id="sidebar-clock">--:--</span>
+      </div>
+      <div class="mt-2 flex items-center justify-between">
+        <span class="text-[10px] text-slate-500">Trust</span>
+        <span class="text-xs font-mono font-medium text-nexo-400" id="sidebar-trust-value">--</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main content -->
+  <main class="ml-56 min-h-screen bg-gray-950">
+    <!-- Top bar -->
+    <header class="h-12 border-b border-slate-800/50 flex items-center justify-between px-6 sticky top-0 bg-gray-950/95 backdrop-blur-md z-40">
+      <div class="flex items-center gap-3">
+        <h1 class="text-sm font-display font-semibold text-slate-100">{% block page_title %}Dashboard{% endblock %}</h1>
+        {% block page_subtitle %}{% endblock %}
+      </div>
+      <div class="flex items-center gap-2">
+        {% block header_actions %}{% endblock %}
+        <div class="w-px h-4 bg-slate-700 mx-1"></div>
+        <span class="text-xs text-slate-500 font-mono tabular-nums" id="current-time">--:--:--</span>
+      </div>
+    </header>
+
+    <!-- Page content -->
+    <div class="p-5 animate-fade-in">
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+
+  <!-- Toast -->
+  <div id="toast" class="hidden fixed bottom-4 right-4 z-[60] bg-slate-800 border border-slate-700 rounded-lg px-4 py-2.5 text-sm text-slate-200 shadow-xl flex items-center gap-2 animate-slide-in">
+    <span id="toast-msg"></span>
+  </div>
+
+  <script>
+  // -----------------------------------------------------------------------
+  // Global utilities
+  // -----------------------------------------------------------------------
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str || '';
+    return div.innerHTML;
+  }
+
+  function showToast(msg, duration = 2500) {
+    const t = document.getElementById('toast');
+    document.getElementById('toast-msg').textContent = msg;
+    t.classList.remove('hidden');
+    t.classList.add('flex');
+    clearTimeout(t._timer);
+    t._timer = setTimeout(() => { t.classList.add('hidden'); t.classList.remove('flex'); }, duration);
+  }
+
+  async function fetchJSON(url) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) { let d = `HTTP ${res.status}`; try { const b = await res.json(); d = b.error || b.detail || d; } catch {} throw new Error(d); }
+      return await res.json();
+    } catch (err) { console.error(`fetchJSON(${url}):`, err); return null; }
+  }
+
+  function relativeTime(dateStr) {
+    if (!dateStr) return '--';
+    const d = new Date(dateStr);
+    const now = new Date();
+    const diff = Math.floor((now - d) / 1000);
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+    if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+    return Math.floor(diff / 86400) + 'd ago';
+  }
+
+  function relativeDate(dateStr) {
+    if (!dateStr) return 'no date';
+    const d = new Date(dateStr + 'T00:00:00');
+    const now = new Date(); now.setHours(0, 0, 0, 0);
+    const diff = Math.round((d - now) / 86400000);
+    if (diff < -1) return Math.abs(diff) + 'd overdue';
+    if (diff === -1) return 'yesterday';
+    if (diff === 0) return 'today';
+    if (diff === 1) return 'tomorrow';
+    return d.toLocaleDateString('en', { month: 'short', day: 'numeric' });
+  }
+
+  function formatNumber(n) {
+    if (n === null || n === undefined) return '--';
+    return n.toLocaleString();
+  }
+
+  // -----------------------------------------------------------------------
+  // Clock
+  // -----------------------------------------------------------------------
+  function updateClock() {
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    document.getElementById('current-time').textContent = timeStr;
+    document.getElementById('sidebar-clock').textContent = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  }
+  updateClock();
+  setInterval(updateClock, 1000);
+
+  // -----------------------------------------------------------------------
+  // Navigation
+  // -----------------------------------------------------------------------
+  function toggleGroup(btn) {
+    btn.closest('.nav-group').classList.toggle('open');
+  }
+
+  // Highlight active nav item
+  (function() {
+    const path = window.location.pathname;
+    document.querySelectorAll('.nav-item').forEach(item => {
+      const href = item.getAttribute('href');
+      if (href === path || (path === '/' && href === '/')) {
+        item.classList.add('active');
+        // Open parent group
+        const group = item.closest('.nav-group');
+        if (group) group.classList.add('open');
+      }
+    });
+  })();
+
+  // -----------------------------------------------------------------------
+  // Sidebar trust score (global, updates on all pages)
+  // -----------------------------------------------------------------------
+  async function updateSidebarTrust() {
+    const data = await fetchJSON('/api/trust');
+    if (data) {
+      const score = data.current_score ?? 0;
+      document.getElementById('sidebar-trust-value').textContent = score.toFixed(1);
+    }
+  }
+  updateSidebarTrust();
+  setInterval(updateSidebarTrust, 120000);
+  </script>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>

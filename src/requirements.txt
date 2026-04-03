@@ -10,3 +10,4 @@ fastembed
 fastapi
 uvicorn
 pydantic
+jinja2

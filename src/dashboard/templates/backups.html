@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+
+{% block title %}Backup Monitor{% endblock %}
+{% block page_title %}Backup Monitor{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+  <!-- DB size cards -->
+  <div class="grid grid-cols-4 gap-4" id="db-cards">
+    <div class="text-xs text-slate-600 py-4 text-center col-span-4">loading...</div>
+  </div>
+
+  <!-- Backup list -->
+  <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-5 card">
+    <div class="flex items-center justify-between mb-4">
+      <div class="text-xs uppercase tracking-wider text-slate-400 font-medium">Backup Files</div>
+      <div class="flex items-center gap-3 text-[10px] text-slate-500">
+        <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-500"></span>&lt;24h</span>
+        <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-amber-500"></span>&lt;72h</span>
+        <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-red-500"></span>&gt;72h</span>
+      </div>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left">
+        <thead>
+          <tr class="border-b border-slate-800/50">
+            <th class="text-[10px] uppercase tracking-wider text-slate-500 font-medium pb-2 pr-4">Freshness</th>
+            <th class="text-[10px] uppercase tracking-wider text-slate-500 font-medium pb-2 pr-4">Name</th>
+            <th class="text-[10px] uppercase tracking-wider text-slate-500 font-medium pb-2 pr-4">Size</th>
+            <th class="text-[10px] uppercase tracking-wider text-slate-500 font-medium pb-2 pr-4">Type</th>
+            <th class="text-[10px] uppercase tracking-wider text-slate-500 font-medium pb-2 text-right">Modified</th>
+          </tr>
+        </thead>
+        <tbody id="backup-table" class="divide-y divide-slate-800/30">
+          <tr><td colspan="5" class="text-xs text-slate-600 py-8 text-center">loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function getFreshness(modified) {
+  if (!modified) return { color: 'bg-slate-600', label: 'unknown', class: '' };
+  const now = Date.now();
+  const mod = new Date(modified).getTime();
+  const hoursAgo = (now - mod) / (1000 * 60 * 60);
+
+  if (hoursAgo < 24) return { color: 'bg-emerald-500', label: 'fresh', class: 'text-emerald-400' };
+  if (hoursAgo < 72) return { color: 'bg-amber-500', label: 'aging', class: 'text-amber-400' };
+  return { color: 'bg-red-500', label: 'stale', class: 'text-red-400' };
+}
+
+function formatSize(mb) {
+  if (mb == null) return '--';
+  if (mb < 1) return (mb * 1024).toFixed(0) + ' KB';
+  if (mb >= 1024) return (mb / 1024).toFixed(1) + ' GB';
+  return mb.toFixed(1) + ' MB';
+}
+
+function renderDBCards(dbSizes) {
+  const container = document.getElementById('db-cards');
+  const entries = Object.entries(dbSizes || {});
+
+  if (!entries.length) {
+    container.innerHTML = '<div class="col-span-4 text-xs text-slate-600 py-4 text-center">No database size info</div>';
+    return;
+  }
+
+  container.innerHTML = entries.map(([name, mb]) => {
+    const size = typeof mb === 'number' ? mb : parseFloat(mb) || 0;
+    return `<div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-4 card">
+      <div class="flex items-center gap-2 mb-2">
+        <svg class="w-4 h-4 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/></svg>
+        <span class="text-xs uppercase tracking-wider text-slate-400 font-medium truncate">${escapeHtml(name)}</span>
+      </div>
+      <div class="text-xl font-mono font-semibold text-slate-200">${formatSize(size)}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderBackups(backups) {
+  const tbody = document.getElementById('backup-table');
+  if (!backups || !backups.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="text-xs text-slate-600 py-8 text-center">No backups found</td></tr>';
+    return;
+  }
+
+  // Sort by modified descending
+  const sorted = [...backups].sort((a, b) => {
+    const ta = new Date(a.modified || 0).getTime();
+    const tb = new Date(b.modified || 0).getTime();
+    return tb - ta;
+  });
+
+  tbody.innerHTML = sorted.map(b => {
+    const freshness = getFreshness(b.modified);
+    const isDir = b.is_dir;
+    const icon = isDir
+      ? '<svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>'
+      : '<svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>';
+
+    return `<tr class="hover:bg-slate-800/20 transition-colors">
+      <td class="py-2.5 pr-4">
+        <div class="flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full ${freshness.color} flex-shrink-0"></span>
+          <span class="text-[10px] ${freshness.class}">${freshness.label}</span>
+        </div>
+      </td>
+      <td class="py-2.5 pr-4">
+        <div class="flex items-center gap-2">
+          ${icon}
+          <span class="text-xs text-slate-300 font-mono truncate">${escapeHtml(b.name || '--')}</span>
+        </div>
+      </td>
+      <td class="py-2.5 pr-4 text-xs text-slate-400 font-mono">${b.size_mb != null ? formatSize(b.size_mb) : '--'}</td>
+      <td class="py-2.5 pr-4 text-xs text-slate-500">${isDir ? 'directory' : 'file'}</td>
+      <td class="py-2.5 text-xs text-slate-500 text-right whitespace-nowrap">${b.modified ? relativeTime(b.modified) : '--'}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function loadBackups() {
+  const data = await fetchJSON('/api/backups');
+  if (!data) return;
+
+  renderDBCards(data.db_sizes || {});
+  renderBackups(data.backups || []);
+}
+
+loadBackups();
+setInterval(loadBackups, 60000);
+</script>
+{% endblock %}

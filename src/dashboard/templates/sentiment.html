@@ -1,0 +1,247 @@
+{% extends "base.html" %}
+
+{% block title %}Sentiment Timeline{% endblock %}
+{% block page_title %}Sentiment Timeline{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+  <!-- Summary cards -->
+  <div class="grid grid-cols-5 gap-4">
+    <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-4 card">
+      <div class="text-xs uppercase tracking-wider text-slate-400 font-medium mb-2">Avg Intensity</div>
+      <div class="text-xl font-mono font-semibold text-violet-400" id="avg-intensity">--</div>
+    </div>
+    <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-4 card">
+      <div class="text-xs uppercase tracking-wider text-emerald-400/70 font-medium mb-2">Positive</div>
+      <div class="text-xl font-mono font-semibold text-emerald-400" id="total-positive">--</div>
+    </div>
+    <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-4 card">
+      <div class="text-xs uppercase tracking-wider text-slate-400 font-medium mb-2">Neutral</div>
+      <div class="text-xl font-mono font-semibold text-slate-300" id="total-neutral">--</div>
+    </div>
+    <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-4 card">
+      <div class="text-xs uppercase tracking-wider text-red-400/70 font-medium mb-2">Negative</div>
+      <div class="text-xl font-mono font-semibold text-red-400" id="total-negative">--</div>
+    </div>
+    <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-4 card">
+      <div class="text-xs uppercase tracking-wider text-amber-400/70 font-medium mb-2">Urgent</div>
+      <div class="text-xl font-mono font-semibold text-amber-400" id="total-urgent">--</div>
+    </div>
+  </div>
+
+  <!-- Charts row -->
+  <div class="grid grid-cols-2 gap-5">
+    <!-- Timeline chart -->
+    <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-5 card">
+      <div class="text-xs uppercase tracking-wider text-slate-400 font-medium mb-4">Daily Sentiment</div>
+      <div style="min-height: 280px;" class="relative">
+        <canvas id="timeline-canvas" class="w-full" style="height: 260px;"></canvas>
+      </div>
+    </div>
+
+    <!-- Intensity heatmap -->
+    <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-5 card">
+      <div class="text-xs uppercase tracking-wider text-slate-400 font-medium mb-4">Intensity Heatmap</div>
+      <div id="heatmap" class="grid gap-1" style="min-height: 260px;">
+        <div class="text-xs text-slate-600 py-12 text-center">loading...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom row -->
+  <div class="grid grid-cols-2 gap-5">
+    <!-- Signal word cloud -->
+    <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-5 card">
+      <div class="text-xs uppercase tracking-wider text-slate-400 font-medium mb-4">Signal Words</div>
+      <div id="word-cloud" class="flex flex-wrap gap-2 items-center justify-center min-h-[180px]">
+        <div class="text-xs text-slate-600">loading...</div>
+      </div>
+    </div>
+
+    <!-- Recent sentiment logs -->
+    <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-5 card">
+      <div class="text-xs uppercase tracking-wider text-slate-400 font-medium mb-4">Recent Logs</div>
+      <div class="space-y-2 max-h-[320px] overflow-y-auto" id="sentiment-logs">
+        <div class="text-xs text-slate-600 py-4 text-center">loading...</div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const SENT_COLORS = { positive: '#10B981', negative: '#EF4444', neutral: '#64748b', urgent: '#F59E0B' };
+
+function drawTimeline(daily) {
+  const canvas = document.getElementById('timeline-canvas');
+  const ctx = canvas.getContext('2d');
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * window.devicePixelRatio;
+  canvas.height = rect.height * window.devicePixelRatio;
+  ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+  const w = rect.width, h = rect.height;
+  const pad = { t: 10, r: 10, b: 30, l: 35 };
+
+  ctx.clearRect(0, 0, w, h);
+
+  const dates = Object.keys(daily).sort();
+  if (!dates.length) { ctx.fillStyle = '#475569'; ctx.font = '12px system-ui'; ctx.textAlign = 'center'; ctx.fillText('No data', w/2, h/2); return; }
+
+  const chartW = w - pad.l - pad.r;
+  const chartH = h - pad.t - pad.b;
+  const maxVal = Math.max(...dates.map(d => Math.max(daily[d].positive || 0, daily[d].negative || 0, daily[d].neutral || 0)), 1);
+  const xStep = chartW / Math.max(dates.length - 1, 1);
+
+  // Grid
+  for (let i = 0; i <= 4; i++) {
+    const y = pad.t + (chartH / 4) * i;
+    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(w - pad.r, y);
+    ctx.strokeStyle = 'rgba(51,65,85,0.3)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = '#475569'; ctx.font = '10px monospace'; ctx.textAlign = 'right';
+    ctx.fillText(Math.round(maxVal - (maxVal / 4) * i), pad.l - 4, y + 3);
+  }
+
+  // Lines
+  ['positive', 'negative', 'neutral'].forEach(type => {
+    ctx.beginPath();
+    dates.forEach((date, i) => {
+      const x = pad.l + i * xStep;
+      const val = daily[date][type] || 0;
+      const y = pad.t + chartH - (val / maxVal) * chartH;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.strokeStyle = SENT_COLORS[type];
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Area fill
+    ctx.lineTo(pad.l + (dates.length - 1) * xStep, pad.t + chartH);
+    ctx.lineTo(pad.l, pad.t + chartH);
+    ctx.closePath();
+    ctx.fillStyle = SENT_COLORS[type] + '15';
+    ctx.fill();
+  });
+
+  // X labels
+  const labelInterval = Math.max(1, Math.floor(dates.length / 7));
+  ctx.fillStyle = '#475569'; ctx.font = '10px monospace'; ctx.textAlign = 'center';
+  dates.forEach((date, i) => {
+    if (i % labelInterval === 0 || i === dates.length - 1) {
+      const x = pad.l + i * xStep;
+      ctx.fillText(date.substring(5), x, h - 8);
+    }
+  });
+}
+
+function renderHeatmap(daily) {
+  const container = document.getElementById('heatmap');
+  const dates = Object.keys(daily).sort().slice(-28);
+  if (!dates.length) { container.innerHTML = '<div class="text-xs text-slate-600 py-12 text-center">No data</div>'; return; }
+
+  const maxIntensity = Math.max(...dates.map(d => daily[d].avg_intensity || 0), 0.1);
+
+  // Group by weeks
+  const weeks = [];
+  for (let i = 0; i < dates.length; i += 7) {
+    weeks.push(dates.slice(i, i + 7));
+  }
+
+  container.innerHTML = `<div class="space-y-1.5">
+    ${weeks.map(week => `<div class="flex gap-1">
+      ${week.map(d => {
+        const intensity = (daily[d].avg_intensity || 0) / maxIntensity;
+        const alpha = Math.max(0.1, intensity);
+        const dominant = (daily[d].positive || 0) >= (daily[d].negative || 0) ? '#10B981' : '#EF4444';
+        return `<div class="w-8 h-8 rounded-md flex items-center justify-center cursor-default group relative" style="background: ${dominant}; opacity: ${alpha}" title="${d}: intensity ${(daily[d].avg_intensity || 0).toFixed(2)}">
+          <span class="text-[8px] font-mono text-white/70">${d.substring(8)}</span>
+        </div>`;
+      }).join('')}
+      ${week.length < 7 ? `<div class="flex-1"></div>` : ''}
+    </div>`).join('')}
+  </div>
+  <div class="flex items-center gap-3 mt-3 text-[10px] text-slate-500">
+    <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-emerald-500/50"></span>Positive</span>
+    <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-red-500/50"></span>Negative</span>
+    <span>Opacity = intensity</span>
+  </div>`;
+}
+
+function renderWordCloud(logs) {
+  const container = document.getElementById('word-cloud');
+  const signalCounts = {};
+  (logs || []).forEach(l => {
+    const signals = l.signals || [];
+    (Array.isArray(signals) ? signals : (typeof signals === 'string' ? signals.split(',') : [])).forEach(s => {
+      const word = s.trim().toLowerCase();
+      if (word) signalCounts[word] = (signalCounts[word] || 0) + 1;
+    });
+  });
+
+  const entries = Object.entries(signalCounts).sort((a, b) => b[1] - a[1]).slice(0, 30);
+  if (!entries.length) { container.innerHTML = '<div class="text-xs text-slate-600">No signals detected</div>'; return; }
+
+  const maxCount = entries[0][1];
+  const colors = ['text-violet-400', 'text-pink-400', 'text-emerald-400', 'text-amber-400', 'text-blue-400', 'text-slate-300'];
+
+  container.innerHTML = entries.map(([word, count], i) => {
+    const size = 0.7 + (count / maxCount) * 0.8;
+    const color = colors[i % colors.length];
+    return `<span class="${color} font-display cursor-default hover:opacity-80 transition-opacity" style="font-size:${size}rem" title="${count} occurrences">${escapeHtml(word)}</span>`;
+  }).join(' ');
+}
+
+function renderLogs(logs) {
+  const container = document.getElementById('sentiment-logs');
+  if (!logs || !logs.length) { container.innerHTML = '<div class="text-xs text-slate-600 py-4 text-center">No logs</div>'; return; }
+
+  container.innerHTML = logs.slice(0, 30).map(l => {
+    const sent = l.sentiment || 'neutral';
+    const color = SENT_COLORS[sent] || SENT_COLORS.neutral;
+    const intensity = l.intensity != null ? l.intensity.toFixed(2) : '--';
+    return `<div class="flex items-start gap-3 py-2 border-b border-slate-800/30 last:border-0">
+      <span class="w-2 h-2 rounded-full mt-1 flex-shrink-0" style="background:${color}"></span>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-slate-300 capitalize">${escapeHtml(sent)}</span>
+          <span class="text-[10px] font-mono text-slate-500">i:${intensity}</span>
+          <span class="text-[10px] text-slate-600 ml-auto">${relativeTime(l.created_at)}</span>
+        </div>
+        ${l.signals ? `<div class="text-[10px] text-slate-500 mt-0.5">${escapeHtml(Array.isArray(l.signals) ? l.signals.join(', ') : l.signals)}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function loadSentiment() {
+  const data = await fetchJSON('/api/sentiment');
+  if (!data) return;
+
+  const logs = data.logs || [];
+  const daily = data.daily || {};
+
+  // Summary
+  let totalPos = 0, totalNeg = 0, totalNeu = 0, totalUrg = 0, totalInt = 0, count = 0;
+  Object.values(daily).forEach(d => {
+    totalPos += d.positive || 0; totalNeg += d.negative || 0;
+    totalNeu += d.neutral || 0; totalUrg += d.urgent || 0;
+    if (d.avg_intensity) { totalInt += d.avg_intensity; count++; }
+  });
+
+  document.getElementById('avg-intensity').textContent = count ? (totalInt / count).toFixed(2) : '--';
+  document.getElementById('total-positive').textContent = totalPos;
+  document.getElementById('total-neutral').textContent = totalNeu;
+  document.getElementById('total-negative').textContent = totalNeg;
+  document.getElementById('total-urgent').textContent = totalUrg;
+
+  drawTimeline(daily);
+  renderHeatmap(daily);
+  renderWordCloud(logs);
+  renderLogs(logs);
+}
+
+loadSentiment();
+setInterval(loadSentiment, 60000);
+window.addEventListener('resize', () => loadSentiment());
+</script>
+{% endblock %}

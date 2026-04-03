@@ -1,16 +1,15 @@
-"""NEXO Brain Dashboard — FastAPI app for inspecting cognitive state.
-
-Local dashboard: graphs, memories, somatic markers, trust, adaptive personality.
-Runs on-demand (not embedded in MCP stdio). Opens browser automatically.
+"""NEXO Brain Dashboard v3.0 — Full 23-module cognitive dashboard.
 
 Usage:
     python3 -m dashboard.app [--port 6174] [--no-browser]
 """
 
 import argparse
+import datetime
 import json
 import os
 import platform
+import sqlite3
 import subprocess
 import sys
 import time
@@ -21,6 +20,7 @@ from typing import Optional
 from fastapi import FastAPI, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from jinja2 import Environment, FileSystemLoader
 from pydantic import BaseModel
 
 # Add parent dir to path so we can import NEXO modules
@@ -28,7 +28,7 @@ _PARENT = str(Path(__file__).resolve().parent.parent)
 if _PARENT not in sys.path:
     sys.path.insert(0, _PARENT)
 
-app = FastAPI(title="NEXO Brain Dashboard", version="2.0.0")
+app = FastAPI(title="NEXO Brain Dashboard", version="3.0.0")
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -36,6 +36,12 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 # Mount static files
 STATIC_DIR.mkdir(exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+# Jinja2 environment
+jinja_env = Environment(
+    loader=FileSystemLoader(str(TEMPLATES_DIR)),
+    autoescape=True,
+)
 
 # ---------------------------------------------------------------------------
 # Startup — create dashboard_notes table
@@ -121,66 +127,167 @@ class InboxCreate(BaseModel):
     content: str
     reply_to: Optional[int] = None
 
+class ChatMessage(BaseModel):
+    message: str
+
 
 # ---------------------------------------------------------------------------
-# HTML page routes — serve template files
+# Helper DB connections
 # ---------------------------------------------------------------------------
 
-def _render_template(name: str) -> HTMLResponse:
-    """Read a template file and return as HTML."""
-    path = TEMPLATES_DIR / name
-    if not path.exists():
-        return HTMLResponse(
-            f"<html><body><h1>Template not found: {name}</h1>"
-            f"<p>Create it at <code>{path}</code></p></body></html>",
-            status_code=200,
-        )
-    return HTMLResponse(path.read_text(encoding="utf-8"))
+def _cognitive_db():
+    """Direct connection to cognitive.db."""
+    nexo_home = os.environ.get("NEXO_HOME", str(Path.home() / "claude"))
+    db_path = Path(nexo_home) / "data" / "cognitive.db"
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def _email_db():
+    """Direct connection to nexo-email.db."""
+    db_path = Path.home() / "claude" / "nexo-email" / "nexo-email.db"
+    if not db_path.exists():
+        return None
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    return conn
 
 
+# ---------------------------------------------------------------------------
+# HTML page routes — Jinja2 with fallback to plain file
+# ---------------------------------------------------------------------------
+
+def _render(name: str, **ctx) -> HTMLResponse:
+    """Render a Jinja2 template with context."""
+    try:
+        tmpl = jinja_env.get_template(name)
+        return HTMLResponse(tmpl.render(**ctx))
+    except Exception as exc:
+        import logging
+        logging.getLogger("dashboard").error("Template render failed for %s: %s", name, exc)
+        path = TEMPLATES_DIR / name
+        if path.exists():
+            return HTMLResponse(path.read_text(encoding="utf-8"))
+        return HTMLResponse(f"<h1>Template not found: {name}</h1>", status_code=200)
+
+# Overview
 @app.get("/", response_class=HTMLResponse)
 async def page_dashboard():
-    return _render_template("dashboard.html")
+    return _render("dashboard.html")
 
+@app.get("/feed", response_class=HTMLResponse)
+async def page_feed():
+    return _render("feed.html")
+
+# Operations
+@app.get("/crons", response_class=HTMLResponse)
+async def page_crons():
+    return _render("crons.html")
 
 @app.get("/ops", response_class=HTMLResponse)
 async def page_ops():
-    return _render_template("operations.html")
-
+    return _render("operations.html")
 
 @app.get("/calendar", response_class=HTMLResponse)
 async def page_calendar():
-    return _render_template("calendar.html")
+    return _render("calendar.html")
 
-
-@app.get("/inbox", response_class=HTMLResponse)
-async def page_inbox():
-    return _render_template("inbox.html")
-
-
-@app.get("/graph", response_class=HTMLResponse)
-async def page_graph():
-    return _render_template("graph.html")
-
+# Intelligence
+@app.get("/chat", response_class=HTMLResponse)
+async def page_chat():
+    return _render("chat.html")
 
 @app.get("/memory", response_class=HTMLResponse)
 async def page_memory():
-    return _render_template("memory.html")
+    return _render("memory.html")
 
+@app.get("/dreams", response_class=HTMLResponse)
+async def page_dreams():
+    return _render("dreams.html")
 
-@app.get("/somatic", response_class=HTMLResponse)
-async def page_somatic():
-    return _render_template("somatic.html")
+@app.get("/skills", response_class=HTMLResponse)
+async def page_skills():
+    return _render("skills.html")
 
+@app.get("/trust", response_class=HTMLResponse)
+async def page_trust():
+    return _render("trust.html")
 
-@app.get("/adaptive", response_class=HTMLResponse)
-async def page_adaptive():
-    return _render_template("adaptive.html")
+# Security
+@app.get("/guard", response_class=HTMLResponse)
+async def page_guard():
+    return _render("guard.html")
 
+@app.get("/cortex", response_class=HTMLResponse)
+async def page_cortex():
+    return _render("cortex.html")
+
+@app.get("/rules", response_class=HTMLResponse)
+async def page_rules():
+    return _render("rules.html")
+
+@app.get("/plugins", response_class=HTMLResponse)
+async def page_plugins():
+    return _render("plugins.html")
+
+# Advanced
+@app.get("/evolution", response_class=HTMLResponse)
+async def page_evolution():
+    return _render("evolution.html")
+
+@app.get("/claims", response_class=HTMLResponse)
+async def page_claims():
+    return _render("claims.html")
+
+@app.get("/sentiment", response_class=HTMLResponse)
+async def page_sentiment():
+    return _render("sentiment.html")
 
 @app.get("/sessions", response_class=HTMLResponse)
 async def page_sessions():
-    return _render_template("sessions.html")
+    return _render("sessions.html")
+
+@app.get("/triggers", response_class=HTMLResponse)
+async def page_triggers():
+    return _render("triggers.html")
+
+@app.get("/artifacts", response_class=HTMLResponse)
+async def page_artifacts():
+    return _render("artifacts.html")
+
+# System
+@app.get("/inbox", response_class=HTMLResponse)
+async def page_inbox():
+    return _render("inbox.html")
+
+@app.get("/email", response_class=HTMLResponse)
+async def page_email():
+    return _render("email.html")
+
+@app.get("/credentials", response_class=HTMLResponse)
+async def page_credentials():
+    return _render("credentials.html")
+
+@app.get("/backups", response_class=HTMLResponse)
+async def page_backups():
+    return _render("backups.html")
+
+@app.get("/followup-health", response_class=HTMLResponse)
+async def page_followup_health():
+    return _render("followup_health.html")
+
+# Knowledge
+@app.get("/graph", response_class=HTMLResponse)
+async def page_graph():
+    return _render("graph.html")
+
+@app.get("/somatic", response_class=HTMLResponse)
+async def page_somatic():
+    return _render("somatic.html")
+
+@app.get("/adaptive", response_class=HTMLResponse)
+async def page_adaptive():
+    return _render("adaptive.html")
 
 
 # ---------------------------------------------------------------------------
@@ -767,6 +874,564 @@ async def api_watchdog():
         return data
     except json.JSONDecodeError as e:
         return JSONResponse({"error": f"Invalid JSON: {e}"}, status_code=500)
+
+
+# ===========================================================================
+# NEW API ENDPOINTS — Dashboard v3.0 modules
+# ===========================================================================
+
+# ---------------------------------------------------------------------------
+# Activity Feed
+# ---------------------------------------------------------------------------
+
+@app.get("/api/feed")
+async def api_feed(limit: int = Query(50, ge=1, le=200)):
+    """Unified activity stream from multiple sources."""
+    db = _db()
+    conn = db.get_db()
+    events = []
+
+    for row in conn.execute(
+        "SELECT 'diary' as type, created_at, summary as content, domain, mental_state "
+        "FROM session_diary ORDER BY created_at DESC LIMIT ?", (limit,)
+    ).fetchall():
+        d = dict(row); d["icon"] = "book"; events.append(d)
+
+    for row in conn.execute(
+        "SELECT 'change' as type, created_at, what_changed as content, files, why "
+        "FROM change_log ORDER BY created_at DESC LIMIT ?", (limit,)
+    ).fetchall():
+        d = dict(row); d["icon"] = "code"; events.append(d)
+
+    for row in conn.execute(
+        "SELECT 'cortex' as type, created_at, goal as content, task_type, mode "
+        "FROM cortex_log ORDER BY created_at DESC LIMIT ?", (limit,)
+    ).fetchall():
+        d = dict(row); d["icon"] = "eye"; events.append(d)
+
+    for row in conn.execute(
+        "SELECT 'cron' as type, started_at as created_at, cron_id as content, "
+        "exit_code, duration_secs, summary "
+        "FROM cron_runs ORDER BY started_at DESC LIMIT ?", (limit,)
+    ).fetchall():
+        d = dict(row); d["icon"] = "clock"; events.append(d)
+
+    for row in conn.execute(
+        "SELECT 'decision' as type, created_at, decision as content, domain, confidence "
+        "FROM decisions ORDER BY created_at DESC LIMIT ?", (limit,)
+    ).fetchall():
+        d = dict(row); d["icon"] = "scale"; events.append(d)
+
+    events.sort(key=lambda e: e.get("created_at") or "", reverse=True)
+    return {"count": len(events[:limit]), "events": events[:limit]}
+
+
+# ---------------------------------------------------------------------------
+# Crons Control Center
+# ---------------------------------------------------------------------------
+
+@app.get("/api/crons")
+async def api_crons(hours: int = Query(24, ge=1, le=168)):
+    db = _db()
+    conn = db.get_db()
+    cutoff = (datetime.datetime.now() - datetime.timedelta(hours=hours)).isoformat()
+    rows = conn.execute(
+        "SELECT * FROM cron_runs WHERE started_at >= ? ORDER BY started_at DESC", (cutoff,)
+    ).fetchall()
+    runs = [dict(r) for r in rows]
+
+    cron_summary = {}
+    for r in runs:
+        cid = r["cron_id"]
+        if cid not in cron_summary:
+            cron_summary[cid] = {"total": 0, "success": 0, "fail": 0, "last_run": r["started_at"], "durations": []}
+        cron_summary[cid]["total"] += 1
+        if r.get("exit_code") == 0:
+            cron_summary[cid]["success"] += 1
+        else:
+            cron_summary[cid]["fail"] += 1
+        if r.get("duration_secs"):
+            cron_summary[cid]["durations"].append(r["duration_secs"])
+
+    for cid, s in cron_summary.items():
+        s["avg_duration"] = round(sum(s["durations"]) / len(s["durations"]), 2) if s["durations"] else 0
+        del s["durations"]
+
+    return {"hours": hours, "total_runs": len(runs), "runs": runs[:100], "summary": cron_summary}
+
+@app.get("/api/crons/timeline")
+async def api_crons_timeline():
+    db = _db()
+    conn = db.get_db()
+    cutoff = (datetime.datetime.now() - datetime.timedelta(hours=24)).isoformat()
+    rows = conn.execute(
+        "SELECT cron_id, started_at, exit_code, duration_secs "
+        "FROM cron_runs WHERE started_at >= ? ORDER BY started_at", (cutoff,)
+    ).fetchall()
+    return {"timeline": [dict(r) for r in rows]}
+
+
+# ---------------------------------------------------------------------------
+# NEXO Chat
+# ---------------------------------------------------------------------------
+
+@app.post("/api/chat")
+async def api_chat(body: ChatMessage):
+    msg = body.message.lower().strip()
+    db = _db()
+    conn = db.get_db()
+
+    if any(w in msg for w in ["anoche", "noche", "last night", "overnight"]):
+        rows = conn.execute(
+            "SELECT * FROM session_diary WHERE domain LIKE '%sleep%' OR domain LIKE '%night%' "
+            "ORDER BY created_at DESC LIMIT 3"
+        ).fetchall()
+        if not rows:
+            rows = conn.execute("SELECT * FROM session_diary ORDER BY created_at DESC LIMIT 3").fetchall()
+        return {"answer": "Actividad nocturna reciente:", "data": [dict(r) for r in rows], "query_type": "diary"}
+
+    elif any(w in msg for w in ["watchdog", "salud", "health", "status"]):
+        nexo_home = os.environ.get("NEXO_HOME", str(Path.home() / ".nexo"))
+        wp = Path(nexo_home) / "operations" / "watchdog-status.json"
+        if wp.exists():
+            return {"answer": "Estado del watchdog:", "data": json.loads(wp.read_text()), "query_type": "watchdog"}
+        return {"answer": "Watchdog no disponible.", "data": [], "query_type": "watchdog"}
+
+    elif any(w in msg for w in ["skill", "habilidad"]):
+        rows = conn.execute(
+            "SELECT id, name, level, trust_score, use_count FROM skills ORDER BY trust_score DESC LIMIT 20"
+        ).fetchall()
+        return {"answer": f"{len(rows)} skills:", "data": [dict(r) for r in rows], "query_type": "skills"}
+
+    elif any(w in msg for w in ["cron", "ejecut", "cycle"]):
+        rows = conn.execute(
+            "SELECT cron_id, started_at, exit_code, duration_secs, summary "
+            "FROM cron_runs ORDER BY started_at DESC LIMIT 10"
+        ).fetchall()
+        return {"answer": "Últimas ejecuciones:", "data": [dict(r) for r in rows], "query_type": "crons"}
+
+    elif any(w in msg for w in ["trust", "confianza"]):
+        cog = _cognitive()
+        return {"answer": f"Trust: {cog.get_trust_score()}", "data": cog.get_trust_history(days=7), "query_type": "trust"}
+
+    elif any(w in msg for w in ["decision", "decidi"]):
+        rows = conn.execute(
+            "SELECT domain, decision, confidence, created_at FROM decisions ORDER BY created_at DESC LIMIT 10"
+        ).fetchall()
+        return {"answer": "Decisiones recientes:", "data": [dict(r) for r in rows], "query_type": "decisions"}
+
+    elif any(w in msg for w in ["followup", "pendiente", "overdue"]):
+        rows = conn.execute(
+            "SELECT id, description, date, status FROM followups "
+            "WHERE status NOT IN ('completed','archived','deleted') ORDER BY date ASC LIMIT 20"
+        ).fetchall()
+        return {"answer": f"{len(rows)} followups pendientes:", "data": [dict(r) for r in rows], "query_type": "followups"}
+
+    elif any(w in msg for w in ["learn", "aprend", "error"]):
+        rows = conn.execute(
+            "SELECT id, category, title, priority, created_at FROM learnings WHERE status='active' ORDER BY created_at DESC LIMIT 15"
+        ).fetchall()
+        return {"answer": f"{len(rows)} learnings:", "data": [dict(r) for r in rows], "query_type": "learnings"}
+
+    elif any(w in msg for w in ["plugin"]):
+        rows = conn.execute("SELECT filename, tools_count, tool_names FROM plugins").fetchall()
+        return {"answer": f"{len(rows)} plugins:", "data": [dict(r) for r in rows], "query_type": "plugins"}
+
+    elif any(w in msg for w in ["memoria", "memory", "stm", "ltm"]):
+        cog = _cognitive()
+        return {"answer": "Memoria cognitiva:", "data": cog.get_stats(), "query_type": "memory"}
+
+    elif any(w in msg for w in ["resumen", "summary", "semana", "week"]):
+        rows = conn.execute(
+            "SELECT domain, summary, mental_state, created_at FROM session_diary ORDER BY created_at DESC LIMIT 10"
+        ).fetchall()
+        return {"answer": "Sesiones recientes:", "data": [dict(r) for r in rows], "query_type": "summary"}
+
+    elif any(w in msg for w in ["guard", "riesgo", "risk"]):
+        rows = conn.execute(
+            "SELECT area, files, learnings_returned, blocking_rules_returned, created_at "
+            "FROM guard_checks ORDER BY created_at DESC LIMIT 15"
+        ).fetchall()
+        return {"answer": "Guard checks:", "data": [dict(r) for r in rows], "query_type": "guard"}
+
+    else:
+        rows = conn.execute(
+            "SELECT 'learning' as source, title as content, category, created_at FROM learnings "
+            "WHERE title LIKE ? OR content LIKE ? ORDER BY created_at DESC LIMIT 5",
+            (f"%{msg[:50]}%", f"%{msg[:50]}%")
+        ).fetchall()
+        results = [dict(r) for r in rows]
+        diary = conn.execute(
+            "SELECT 'diary' as source, summary as content, domain, created_at FROM session_diary "
+            "WHERE summary LIKE ? ORDER BY created_at DESC LIMIT 5", (f"%{msg[:50]}%",)
+        ).fetchall()
+        results.extend([dict(r) for r in diary])
+        if results:
+            return {"answer": f"{len(results)} resultados:", "data": results, "query_type": "search"}
+        return {"answer": "Prueba: crons, trust, skills, memorias, decisiones, anoche, followups, learnings, guard, plugins, resumen.", "data": [], "query_type": "help"}
+
+
+# ---------------------------------------------------------------------------
+# Memory Flow
+# ---------------------------------------------------------------------------
+
+@app.get("/api/memory/flow")
+async def api_memory_flow():
+    cog_conn = _cognitive_db()
+    stm = cog_conn.execute("SELECT COUNT(*) FROM stm_memories").fetchone()[0]
+    ltm = cog_conn.execute("SELECT COUNT(*) FROM ltm_memories").fetchone()[0]
+    quar = cog_conn.execute("SELECT COUNT(*) FROM quarantine WHERE status='pending'").fetchone()[0]
+    promoted = cog_conn.execute("SELECT COUNT(*) FROM stm_memories WHERE promoted_to_ltm=1").fetchone()[0]
+    dreamed = cog_conn.execute("SELECT COUNT(*) FROM dreamed_pairs").fetchone()[0]
+
+    stm_recent = [dict(r) for r in cog_conn.execute(
+        "SELECT id, content, source_type, domain, strength, created_at, promoted_to_ltm "
+        "FROM stm_memories ORDER BY created_at DESC LIMIT 20"
+    ).fetchall()]
+    ltm_recent = [dict(r) for r in cog_conn.execute(
+        "SELECT id, content, source_type, domain, strength, access_count, created_at "
+        "FROM ltm_memories ORDER BY created_at DESC LIMIT 20"
+    ).fetchall()]
+    quarantine = [dict(r) for r in cog_conn.execute(
+        "SELECT id, content, source_type, confidence, status, created_at FROM quarantine ORDER BY created_at DESC LIMIT 15"
+    ).fetchall()]
+    cog_conn.close()
+
+    return {"counts": {"stm": stm, "ltm": ltm, "quarantine": quar, "promoted": promoted, "dreamed": dreamed},
+            "stm_recent": stm_recent, "ltm_recent": ltm_recent, "quarantine": quarantine}
+
+
+# ---------------------------------------------------------------------------
+# Dream Journal
+# ---------------------------------------------------------------------------
+
+@app.get("/api/dreams")
+async def api_dreams(limit: int = Query(20, ge=1, le=100)):
+    cog_conn = _cognitive_db()
+    pairs = cog_conn.execute(
+        "SELECT dp.id, dp.memory_a_id, dp.memory_b_id, dp.insight_id, dp.created_at, "
+        "ltm.content as insight_content "
+        "FROM dreamed_pairs dp LEFT JOIN ltm_memories ltm ON dp.insight_id = ltm.id "
+        "ORDER BY dp.created_at DESC LIMIT ?", (limit,)
+    ).fetchall()
+    cog_conn.close()
+
+    db = _db()
+    conn = db.get_db()
+    sleep = [dict(r) for r in conn.execute(
+        "SELECT summary, domain, mental_state, created_at FROM session_diary "
+        "WHERE domain LIKE '%sleep%' OR domain LIKE '%dream%' OR domain LIKE '%night%' "
+        "ORDER BY created_at DESC LIMIT 10"
+    ).fetchall()]
+
+    return {"dreams": [dict(r) for r in pairs], "sleep_entries": sleep}
+
+
+# ---------------------------------------------------------------------------
+# Skills Lab
+# ---------------------------------------------------------------------------
+
+@app.get("/api/skills")
+async def api_skills():
+    db = _db()
+    conn = db.get_db()
+    skills = [dict(r) for r in conn.execute("SELECT * FROM skills ORDER BY trust_score DESC").fetchall()]
+    for s in skills:
+        for f in ("tags", "trigger_patterns", "source_sessions", "linked_learnings", "steps", "gotchas"):
+            if s.get(f) and isinstance(s[f], str):
+                try: s[f] = json.loads(s[f])
+                except: pass
+
+    usage = [dict(r) for r in conn.execute(
+        "SELECT skill_id, success, context, created_at FROM skill_usage ORDER BY created_at DESC LIMIT 30"
+    ).fetchall()]
+
+    levels = {}
+    for s in skills:
+        lvl = s.get("level", "unknown")
+        levels[lvl] = levels.get(lvl, 0) + 1
+
+    return {"skills": skills, "usage": usage, "levels": levels, "total": len(skills)}
+
+
+# ---------------------------------------------------------------------------
+# Trust Events
+# ---------------------------------------------------------------------------
+
+@app.get("/api/trust/events")
+async def api_trust_events(limit: int = Query(50, ge=1, le=200)):
+    cog_conn = _cognitive_db()
+    rows = cog_conn.execute("SELECT * FROM trust_score ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()
+    cog_conn.close()
+    return {"events": [dict(r) for r in rows]}
+
+
+# ---------------------------------------------------------------------------
+# Guard Heatmap
+# ---------------------------------------------------------------------------
+
+@app.get("/api/guard")
+async def api_guard(limit: int = Query(100, ge=1, le=500)):
+    db = _db()
+    conn = db.get_db()
+    checks = [dict(r) for r in conn.execute("SELECT * FROM guard_checks ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()]
+
+    heatmap = {}
+    for c in checks:
+        area = c.get("area") or "unknown"
+        if area not in heatmap:
+            heatmap[area] = {"count": 0, "blocking": 0, "learnings": 0}
+        heatmap[area]["count"] += 1
+        heatmap[area]["blocking"] += c.get("blocking_rules_returned") or 0
+        heatmap[area]["learnings"] += c.get("learnings_returned") or 0
+
+    cog_conn = _cognitive_db()
+    markers = [dict(r) for r in cog_conn.execute(
+        "SELECT target, target_type, risk_score, incident_count, last_incident "
+        "FROM somatic_markers WHERE risk_score > 0 ORDER BY risk_score DESC LIMIT 30"
+    ).fetchall()]
+    cog_conn.close()
+
+    return {"checks": checks[:50], "heatmap": heatmap, "somatic_markers": markers}
+
+
+# ---------------------------------------------------------------------------
+# Cortex Monitor
+# ---------------------------------------------------------------------------
+
+@app.get("/api/cortex")
+async def api_cortex(limit: int = Query(50, ge=1, le=200)):
+    db = _db()
+    conn = db.get_db()
+    logs = [dict(r) for r in conn.execute("SELECT * FROM cortex_log ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()]
+    decisions = [dict(r) for r in conn.execute("SELECT * FROM decisions ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()]
+    return {"cortex_logs": logs, "decisions": decisions}
+
+
+# ---------------------------------------------------------------------------
+# Core Rules
+# ---------------------------------------------------------------------------
+
+@app.get("/api/rules")
+async def api_rules():
+    db = _db()
+    conn = db.get_db()
+    rules = [dict(r) for r in conn.execute("SELECT * FROM core_rules ORDER BY importance DESC, category").fetchall()]
+    categories = {}
+    for r in rules:
+        cat = r.get("category", "uncategorized")
+        categories.setdefault(cat, []).append(r)
+    return {"rules": rules, "categories": categories, "total": len(rules), "active": sum(1 for r in rules if r.get("is_active"))}
+
+
+# ---------------------------------------------------------------------------
+# Plugins
+# ---------------------------------------------------------------------------
+
+@app.get("/api/plugins")
+async def api_plugins():
+    db = _db()
+    conn = db.get_db()
+    plugins = [dict(r) for r in conn.execute("SELECT * FROM plugins").fetchall()]
+    return {"plugins": plugins, "total": len(plugins), "total_tools": sum(p.get("tools_count", 0) for p in plugins)}
+
+
+# ---------------------------------------------------------------------------
+# Evolution
+# ---------------------------------------------------------------------------
+
+@app.get("/api/evolution")
+async def api_evolution():
+    db = _db()
+    conn = db.get_db()
+    logs = [dict(r) for r in conn.execute("SELECT * FROM evolution_log ORDER BY created_at DESC LIMIT 50").fetchall()]
+    metrics = [dict(r) for r in conn.execute("SELECT * FROM evolution_metrics ORDER BY measured_at DESC LIMIT 100").fetchall()]
+    dimensions = {}
+    for m in metrics:
+        dim = m["dimension"]
+        if dim not in dimensions:
+            dimensions[dim] = {"score": m["score"], "delta": m.get("delta", 0), "measured_at": m["measured_at"]}
+    return {"logs": logs, "metrics": metrics, "dimensions": dimensions}
+
+
+# ---------------------------------------------------------------------------
+# Claims Network
+# ---------------------------------------------------------------------------
+
+@app.get("/api/claims")
+async def api_claims(limit: int = Query(100, ge=1, le=500)):
+    cog_conn = _cognitive_db()
+    claims = [dict(r) for r in cog_conn.execute(
+        "SELECT id, text, source_type, source_id, confidence, verification_status, domain, created_at "
+        "FROM claims ORDER BY created_at DESC LIMIT ?", (limit,)
+    ).fetchall()]
+    links = [dict(r) for r in cog_conn.execute(
+        "SELECT source_claim_id, target_claim_id, relation, confidence FROM claim_links LIMIT ?", (limit * 2,)
+    ).fetchall()]
+    cog_conn.close()
+    status_counts = {}
+    for c in claims:
+        s = c.get("verification_status", "unknown")
+        status_counts[s] = status_counts.get(s, 0) + 1
+    return {"claims": claims, "links": links, "status_counts": status_counts, "total": len(claims)}
+
+
+# ---------------------------------------------------------------------------
+# Sentiment
+# ---------------------------------------------------------------------------
+
+@app.get("/api/sentiment")
+async def api_sentiment(days: int = Query(30, ge=1, le=90)):
+    cog_conn = _cognitive_db()
+    cutoff = (datetime.datetime.now() - datetime.timedelta(days=days)).isoformat()
+    logs = [dict(r) for r in cog_conn.execute(
+        "SELECT * FROM sentiment_log WHERE created_at >= ? ORDER BY created_at", (cutoff,)
+    ).fetchall()]
+    cog_conn.close()
+
+    daily = {}
+    for l in logs:
+        day = l["created_at"][:10] if l.get("created_at") else "unknown"
+        if day not in daily:
+            daily[day] = {"positive": 0, "negative": 0, "neutral": 0, "urgent": 0, "count": 0, "total_intensity": 0}
+        s = l.get("sentiment", "neutral")
+        if s in daily[day]: daily[day][s] += 1
+        daily[day]["count"] += 1
+        daily[day]["total_intensity"] += l.get("intensity", 0.5)
+    for d in daily.values():
+        d["avg_intensity"] = round(d["total_intensity"] / d["count"], 2) if d["count"] else 0
+        del d["total_intensity"]
+
+    return {"logs": logs, "daily": daily}
+
+
+# ---------------------------------------------------------------------------
+# Triggers
+# ---------------------------------------------------------------------------
+
+@app.get("/api/triggers")
+async def api_triggers():
+    cog_conn = _cognitive_db()
+    triggers = [dict(r) for r in cog_conn.execute("SELECT * FROM prospective_triggers ORDER BY created_at DESC").fetchall()]
+    cog_conn.close()
+    return {"triggers": triggers, "total": len(triggers),
+            "armed": sum(1 for t in triggers if t.get("status") == "armed"),
+            "fired": sum(1 for t in triggers if t.get("status") == "fired")}
+
+
+# ---------------------------------------------------------------------------
+# Artifacts
+# ---------------------------------------------------------------------------
+
+@app.get("/api/artifacts")
+async def api_artifacts():
+    db = _db()
+    conn = db.get_db()
+    artifacts = [dict(r) for r in conn.execute("SELECT * FROM artifact_registry ORDER BY last_touched_at DESC").fetchall()]
+    for a in artifacts:
+        for f in ("aliases", "ports", "paths"):
+            if a.get(f) and isinstance(a[f], str):
+                try: a[f] = json.loads(a[f])
+                except: pass
+        if a.get("metadata") and isinstance(a["metadata"], str):
+            try: a["metadata"] = json.loads(a["metadata"])
+            except: pass
+    kinds = {}
+    for a in artifacts:
+        k = a.get("kind", "unknown")
+        kinds[k] = kinds.get(k, 0) + 1
+    return {"artifacts": artifacts, "total": len(artifacts), "kinds": kinds}
+
+
+# ---------------------------------------------------------------------------
+# Email Monitor
+# ---------------------------------------------------------------------------
+
+@app.get("/api/email")
+async def api_email_stats():
+    conn = _email_db()
+    if not conn:
+        return {"error": "Email DB not found", "stats": {}}
+    total = conn.execute("SELECT COUNT(*) FROM emails").fetchone()[0]
+    processed = conn.execute("SELECT COUNT(*) FROM emails WHERE status='processed'").fetchone()[0]
+    pending = conn.execute("SELECT COUNT(*) FROM emails WHERE status='pending'").fetchone()[0]
+    recent = [dict(r) for r in conn.execute(
+        "SELECT message_id, from_addr, from_name, subject, received_at, status FROM emails ORDER BY received_at DESC LIMIT 20"
+    ).fetchall()]
+    threads = [dict(r) for r in conn.execute(
+        "SELECT thread_id, COUNT(*) as count, MAX(received_at) as last_email "
+        "FROM emails GROUP BY thread_id ORDER BY last_email DESC LIMIT 15"
+    ).fetchall()]
+    conn.close()
+    return {"stats": {"total": total, "processed": processed, "pending": pending}, "recent": recent, "threads": threads}
+
+
+# ---------------------------------------------------------------------------
+# Credentials (names only)
+# ---------------------------------------------------------------------------
+
+@app.get("/api/credentials")
+async def api_credentials():
+    db = _db()
+    conn = db.get_db()
+    rows = conn.execute("SELECT service, key, notes, created_at, updated_at FROM credentials ORDER BY service, key").fetchall()
+    creds = [dict(r) for r in rows]
+    services = {}
+    for c in creds:
+        services.setdefault(c["service"], []).append({"key": c["key"], "notes": c.get("notes", "")})
+    return {"credentials": creds, "services": services, "total": len(creds)}
+
+
+# ---------------------------------------------------------------------------
+# Backups
+# ---------------------------------------------------------------------------
+
+@app.get("/api/backups")
+async def api_backups():
+    nexo_home = Path(os.environ.get("NEXO_HOME", str(Path.home() / "claude")))
+    backup_dir = nexo_home / "backups"
+    data_dir = nexo_home / "data"
+    backups = []
+    if backup_dir.exists():
+        for item in sorted(backup_dir.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True)[:20]:
+            stat = item.stat()
+            backups.append({"name": item.name, "size_mb": round(stat.st_size / 1048576, 2) if item.is_file() else None,
+                            "modified": datetime.datetime.fromtimestamp(stat.st_mtime).isoformat(), "is_dir": item.is_dir()})
+    db_sizes = {}
+    for dbfile in ["nexo.db", "cognitive.db"]:
+        p = data_dir / dbfile
+        if p.exists():
+            db_sizes[dbfile] = round(p.stat().st_size / 1048576, 2)
+    return {"backups": backups, "db_sizes": db_sizes}
+
+
+# ---------------------------------------------------------------------------
+# Followup Health
+# ---------------------------------------------------------------------------
+
+@app.get("/api/followup-health")
+async def api_followup_health():
+    db = _db()
+    conn = db.get_db()
+    all_f = [dict(r) for r in conn.execute("SELECT * FROM followups").fetchall()]
+    today = datetime.date.today().isoformat()
+    pending = [f for f in all_f if f.get("status") not in ("completed", "archived", "deleted")]
+    completed = [f for f in all_f if f.get("status") == "completed"]
+    overdue = [f for f in pending if f.get("date") and f["date"] < today]
+    rate = round(len(completed) / max(len(all_f), 1) * 100, 1)
+    age_buckets = {"0-3d": 0, "4-7d": 0, "8-14d": 0, "15-30d": 0, "30d+": 0}
+    for f in overdue:
+        if f.get("date"):
+            try:
+                age = (datetime.date.today() - datetime.date.fromisoformat(f["date"])).days
+            except: continue
+            if age <= 3: age_buckets["0-3d"] += 1
+            elif age <= 7: age_buckets["4-7d"] += 1
+            elif age <= 14: age_buckets["8-14d"] += 1
+            elif age <= 30: age_buckets["15-30d"] += 1
+            else: age_buckets["30d+"] += 1
+    return {"total": len(all_f), "pending": len(pending), "completed": len(completed),
+            "overdue": len(overdue), "completion_rate": rate, "age_buckets": age_buckets, "overdue_items": overdue[:20]}
 
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+
+{% block title %}Evolution Cockpit{% endblock %}
+{% block page_title %}Evolution Cockpit{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+  <!-- Top stats -->
+  <div class="grid grid-cols-5 gap-4" id="dim-cards">
+    <!-- Populated by JS -->
+  </div>
+
+  <!-- Main row: Radar + History -->
+  <div class="grid grid-cols-2 gap-5">
+    <!-- Radar Chart -->
+    <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-5 card">
+      <div class="text-xs uppercase tracking-wider text-slate-400 font-medium mb-4">Dimension Radar</div>
+      <div class="flex items-center justify-center" style="min-height: 320px;">
+        <svg id="radar-svg" viewBox="0 0 400 400" class="w-full max-w-sm"></svg>
+      </div>
+    </div>
+
+    <!-- Score History -->
+    <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-5 card">
+      <div class="text-xs uppercase tracking-wider text-slate-400 font-medium mb-4">Score History</div>
+      <div class="space-y-3" id="score-history">
+        <div class="text-xs text-slate-600 py-8 text-center">loading...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Evolution Log Timeline -->
+  <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-5 card">
+    <div class="text-xs uppercase tracking-wider text-slate-400 font-medium mb-4">Evolution Log</div>
+    <div class="space-y-3" id="evo-log">
+      <div class="text-xs text-slate-600 py-4 text-center">loading...</div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const DIMS = ['autonomy', 'reasoning', 'memory', 'trust', 'creativity'];
+const DIM_COLORS = {
+  autonomy: '#7C3AED', reasoning: '#3B82F6', memory: '#EC4899',
+  trust: '#10B981', creativity: '#F59E0B'
+};
+
+function drawRadar(dimensions) {
+  const svg = document.getElementById('radar-svg');
+  const cx = 200, cy = 200, maxR = 150;
+  const n = DIMS.length;
+  const angleStep = (2 * Math.PI) / n;
+
+  let html = '';
+  // Grid rings
+  for (let ring = 1; ring <= 5; ring++) {
+    const r = (ring / 5) * maxR;
+    let points = '';
+    for (let i = 0; i < n; i++) {
+      const a = -Math.PI / 2 + i * angleStep;
+      points += `${cx + r * Math.cos(a)},${cy + r * Math.sin(a)} `;
+    }
+    html += `<polygon points="${points}" fill="none" stroke="rgba(51,65,85,0.4)" stroke-width="1"/>`;
+    if (ring === 5) {
+      html += `<text x="${cx + 4}" y="${cy - r - 4}" class="text-[10px]" fill="#64748b">100</text>`;
+    }
+  }
+
+  // Axes
+  for (let i = 0; i < n; i++) {
+    const a = -Math.PI / 2 + i * angleStep;
+    const ex = cx + maxR * Math.cos(a);
+    const ey = cy + maxR * Math.sin(a);
+    html += `<line x1="${cx}" y1="${cy}" x2="${ex}" y2="${ey}" stroke="rgba(51,65,85,0.3)" stroke-width="1"/>`;
+    const lx = cx + (maxR + 20) * Math.cos(a);
+    const ly = cy + (maxR + 20) * Math.sin(a);
+    html += `<text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle" fill="${DIM_COLORS[DIMS[i]]}" class="text-xs font-display font-semibold" style="font-size:11px">${DIMS[i]}</text>`;
+  }
+
+  // Data polygon
+  if (dimensions) {
+    let points = '';
+    for (let i = 0; i < n; i++) {
+      const score = dimensions[DIMS[i]]?.score ?? 0;
+      const r = (score / 100) * maxR;
+      const a = -Math.PI / 2 + i * angleStep;
+      points += `${cx + r * Math.cos(a)},${cy + r * Math.sin(a)} `;
+    }
+    html += `<polygon points="${points}" fill="rgba(124,58,237,0.15)" stroke="#7C3AED" stroke-width="2"/>`;
+
+    // Data points
+    for (let i = 0; i < n; i++) {
+      const score = dimensions[DIMS[i]]?.score ?? 0;
+      const r = (score / 100) * maxR;
+      const a = -Math.PI / 2 + i * angleStep;
+      const px = cx + r * Math.cos(a);
+      const py = cy + r * Math.sin(a);
+      html += `<circle cx="${px}" cy="${py}" r="4" fill="${DIM_COLORS[DIMS[i]]}" stroke="#0f172a" stroke-width="2"/>`;
+    }
+  }
+
+  svg.innerHTML = html;
+}
+
+function renderDimCards(dimensions) {
+  const container = document.getElementById('dim-cards');
+  if (!dimensions) { container.innerHTML = '<div class="col-span-5 text-xs text-slate-600 text-center py-4">No dimension data</div>'; return; }
+
+  container.innerHTML = DIMS.map(dim => {
+    const d = dimensions[dim] || {};
+    const score = d.score ?? 0;
+    const delta = d.delta ?? 0;
+    const deltaSign = delta > 0 ? '+' : '';
+    const deltaColor = delta > 0 ? 'text-emerald-400' : delta < 0 ? 'text-red-400' : 'text-slate-500';
+    const color = DIM_COLORS[dim];
+    return `<div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-4 card">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="w-2 h-2 rounded-full" style="background:${color}"></span>
+        <span class="text-xs uppercase tracking-wider text-slate-400 font-medium">${dim}</span>
+      </div>
+      <div class="flex items-end gap-2">
+        <span class="text-xl font-mono font-semibold text-slate-200">${score.toFixed(1)}</span>
+        <span class="text-xs font-mono ${deltaColor} mb-0.5">${deltaSign}${delta.toFixed(1)}</span>
+      </div>
+      <div class="mt-2 h-1 bg-slate-800 rounded-full overflow-hidden">
+        <div class="h-full rounded-full transition-all duration-700" style="width:${Math.min(100, score)}%;background:${color}"></div>
+      </div>
+      <div class="mt-1 text-[10px] text-slate-600">${d.measured_at ? relativeTime(d.measured_at) : '--'}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderHistory(metrics) {
+  const container = document.getElementById('score-history');
+  if (!metrics || !metrics.length) { container.innerHTML = '<div class="text-xs text-slate-600 py-8 text-center">No history data</div>'; return; }
+
+  const maxEntries = 20;
+  const items = metrics.slice(0, maxEntries);
+  container.innerHTML = items.map(m => {
+    const dim = m.dimension || m.name || '--';
+    const score = m.score ?? m.value ?? 0;
+    const color = DIM_COLORS[dim] || '#64748b';
+    return `<div class="flex items-center gap-3">
+      <span class="w-16 text-[10px] text-slate-500 font-mono">${relativeTime(m.measured_at || m.created_at)}</span>
+      <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:${color}"></span>
+      <span class="text-xs text-slate-400 flex-1">${escapeHtml(dim)}</span>
+      <span class="text-xs font-mono text-slate-300">${score.toFixed(1)}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderLog(logs) {
+  const container = document.getElementById('evo-log');
+  if (!logs || !logs.length) { container.innerHTML = '<div class="text-xs text-slate-600 py-4 text-center">No evolution logs</div>'; return; }
+
+  container.innerHTML = logs.map(log => {
+    const status = log.status || 'proposed';
+    const statusColors = { approved: 'bg-emerald-500/10 text-emerald-400', rejected: 'bg-red-500/10 text-red-400', proposed: 'bg-amber-500/10 text-amber-400' };
+    const sc = statusColors[status] || statusColors.proposed;
+    return `<div class="flex items-start gap-3 py-2 border-b border-slate-800/30 last:border-0">
+      <div class="w-1 h-1 rounded-full bg-slate-600 mt-1.5 flex-shrink-0"></div>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="text-xs text-slate-300">${escapeHtml(log.proposal || log.description || log.text || '--')}</span>
+          <span class="px-1.5 py-0.5 rounded text-[10px] font-medium ${sc}">${escapeHtml(status)}</span>
+        </div>
+        <div class="text-[10px] text-slate-600 mt-0.5">${escapeHtml(log.dimension || '')} ${log.created_at ? '-- ' + relativeTime(log.created_at) : ''}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function loadEvolution() {
+  const data = await fetchJSON('/api/evolution');
+  if (!data) return;
+
+  const dimensions = data.dimensions || {};
+  drawRadar(dimensions);
+  renderDimCards(dimensions);
+  renderHistory(data.metrics || []);
+  renderLog(data.logs || []);
+}
+
+loadEvolution();
+setInterval(loadEvolution, 60000);
+</script>
+{% endblock %}

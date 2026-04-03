@@ -1,198 +1,318 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NEXO Brain — Cognitive Memory</title>
-    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>tailwind.config={theme:{extend:{fontFamily:{display:['Space Grotesk','system-ui','sans-serif'],mono:['JetBrains Mono','monospace']}}}}</script>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-</head>
-<body class="bg-gray-950 text-slate-200">
+{% extends "base.html" %}
 
-    <!-- Sidebar: 56px icon-only fixed left -->
-    <aside class="fixed left-0 top-0 bottom-0 w-14 bg-slate-900 border-r border-slate-800 flex flex-col items-center py-4 z-50">
-        <!-- Logo -->
-        <a href="/" class="mb-6 flex items-center justify-center w-8 h-8">
-            <img src="/static/nexo-logo.png" alt="NEXO" class="w-7 h-7" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-            <div style="display:none" class="w-7 h-7 rounded-lg bg-violet-600 items-center justify-center text-white text-xs font-bold font-display">N</div>
-        </a>
+{% block title %}Memory Flow{% endblock %}
+{% block page_title %}Memory Flow{% endblock %}
 
-        <!-- Nav icons -->
-        <nav class="flex flex-col items-center gap-1 flex-1">
-            <!-- Dashboard -->
-            <a href="/" title="Dashboard" class="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-            </a>
-            <!-- Operations -->
-            <a href="/ops" title="Operations" class="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-            </a>
-            <!-- Calendar -->
-            <a href="/calendar" title="Calendar" class="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-            </a>
-            <!-- Inbox -->
-            <a href="/inbox" title="Inbox" class="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
-            </a>
+{% block head %}
+<style>
+  .flow-connector {
+    position: absolute;
+    height: 3px;
+    background: linear-gradient(90deg, var(--from), var(--to));
+    top: 50%;
+    transform: translateY(-50%);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .flow-connector::after {
+    content: '';
+    position: absolute;
+    top: 0; left: -100%; width: 60%; height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+    animation: flowPulse 2s ease-in-out infinite;
+  }
+  @keyframes flowPulse {
+    0% { left: -60%; }
+    100% { left: 160%; }
+  }
+  .flow-box {
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .flow-box:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+  }
+  .memory-card {
+    transition: all 0.2s ease;
+    cursor: pointer;
+  }
+  .memory-card:hover {
+    border-color: rgba(124,58,237,0.4);
+    box-shadow: 0 0 20px rgba(124,58,237,0.1);
+  }
+  .memory-card .full-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+  }
+  .memory-card.expanded .full-content {
+    max-height: 500px;
+  }
+  .strength-bar {
+    transition: width 0.8s ease-out;
+  }
+  @keyframes countUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .count-animate {
+    animation: countUp 0.5s ease-out forwards;
+  }
+</style>
+{% endblock %}
 
-            <div class="w-6 h-px bg-slate-800 my-1"></div>
+{% block header_actions %}
+<div class="flex items-center gap-2">
+  <input type="text" id="search-input" placeholder="Search memories..."
+    class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500 w-64"
+    onkeydown="if(event.key==='Enter')searchMemories()">
+  <button onclick="searchMemories()" class="px-3 py-1.5 text-xs bg-violet-600 text-white rounded-lg hover:bg-violet-500 transition-colors font-medium">Search</button>
+</div>
+{% endblock %}
 
-            <!-- Memory — ACTIVE -->
-            <a href="/memory" title="Memory" class="w-9 h-9 flex items-center justify-center rounded-lg bg-violet-600/20 text-violet-400 transition-colors">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"/><path d="M9 21h6"/><path d="M10 21v1a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-1"/></svg>
-            </a>
-            <!-- Graph -->
-            <a href="/graph" title="Knowledge Graph" class="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-            </a>
-            <!-- Sessions -->
-            <a href="/sessions" title="Sessions" class="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            </a>
-            <!-- Somatic -->
-            <a href="/somatic" title="Somatic" class="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-            </a>
-            <!-- Adaptive -->
-            <a href="/adaptive" title="Adaptive" class="w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
-            </a>
-        </nav>
+{% block content %}
+<!-- Flow Diagram -->
+<div class="mb-6">
+  <h2 class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-4">Memory Pipeline</h2>
+  <div class="relative flex items-center justify-center gap-0 py-6 px-4" id="flow-diagram">
+    <!-- STM Box -->
+    <div class="flow-box bg-cyan-500/10 border border-cyan-500/30 rounded-xl p-5 text-center min-w-[140px] z-10">
+      <div class="text-xs uppercase tracking-wider text-cyan-400 font-semibold mb-1">STM</div>
+      <div class="text-3xl font-display font-bold text-cyan-300 count-animate" id="count-stm">--</div>
+      <div class="text-[10px] text-cyan-500/60 mt-1">Short-Term</div>
+    </div>
 
-        <!-- Trust score -->
-        <div class="flex flex-col items-center gap-0.5 mt-2">
-            <span class="text-xs font-display font-semibold text-slate-500 uppercase tracking-widest">Trust</span>
-            <span id="trust-score" class="text-sm font-mono font-bold text-violet-400">--</span>
+    <!-- Arrow STM -> LTM -->
+    <div class="flex flex-col items-center mx-2 z-10">
+      <div class="text-[10px] text-emerald-400 font-mono font-semibold mb-1" id="count-promoted">--</div>
+      <div class="w-24 h-[3px] rounded-full relative overflow-hidden bg-gradient-to-r from-cyan-500 to-violet-500">
+        <div class="absolute top-0 left-0 w-1/2 h-full bg-gradient-to-r from-transparent via-white/40 to-transparent" style="animation: flowPulse 2s ease-in-out infinite;"></div>
+      </div>
+      <div class="text-[10px] text-slate-600 mt-1">promoted</div>
+    </div>
+
+    <!-- LTM Box -->
+    <div class="flow-box bg-violet-500/10 border border-violet-500/30 rounded-xl p-5 text-center min-w-[140px] z-10">
+      <div class="text-xs uppercase tracking-wider text-violet-400 font-semibold mb-1">LTM</div>
+      <div class="text-3xl font-display font-bold text-violet-300 count-animate" id="count-ltm">--</div>
+      <div class="text-[10px] text-violet-500/60 mt-1">Long-Term</div>
+    </div>
+
+    <!-- Arrow to Dreamed -->
+    <div class="flex flex-col items-center mx-2 z-10">
+      <div class="text-[10px] text-indigo-400 font-mono font-semibold mb-1" id="count-dreamed">--</div>
+      <div class="w-16 h-[3px] rounded-full bg-gradient-to-r from-violet-500 to-indigo-500 relative overflow-hidden">
+        <div class="absolute top-0 left-0 w-1/2 h-full bg-gradient-to-r from-transparent via-white/30 to-transparent" style="animation: flowPulse 3s ease-in-out infinite;"></div>
+      </div>
+      <div class="text-[10px] text-slate-600 mt-1">dreamed</div>
+    </div>
+
+    <!-- Dreamed Box -->
+    <div class="flow-box bg-indigo-500/10 border border-indigo-500/30 rounded-xl p-5 text-center min-w-[130px] z-10">
+      <div class="text-xs uppercase tracking-wider text-indigo-400 font-semibold mb-1">Dreamed</div>
+      <div class="text-3xl font-display font-bold text-indigo-300 count-animate" id="count-dreamed-box">--</div>
+      <div class="text-[10px] text-indigo-500/60 mt-1">Insights</div>
+    </div>
+
+    <!-- Quarantine Branch (below STM) -->
+    <div class="absolute left-[calc(50%-280px)] top-[calc(100%-10px)] flex flex-col items-center z-10" id="quarantine-branch">
+      <div class="w-[3px] h-8 bg-gradient-to-b from-cyan-500/50 to-amber-500/50 rounded-full"></div>
+      <div class="flow-box bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 text-center min-w-[120px]">
+        <div class="text-xs uppercase tracking-wider text-amber-400 font-semibold mb-1">Quarantine</div>
+        <div class="text-2xl font-display font-bold text-amber-300 count-animate" id="count-quarantine">--</div>
+        <div class="text-[10px] text-amber-500/60 mt-1">Pending Review</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Two-column: STM and LTM Recent -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6" id="columns-area">
+  <!-- Recent STM -->
+  <div>
+    <h2 class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-3 flex items-center gap-2">
+      <span class="w-2 h-2 rounded-full bg-cyan-400 glow-dot" style="color:#22d3ee"></span>
+      Recent STM
+    </h2>
+    <div class="space-y-2" id="stm-list">
+      <div class="text-xs text-slate-600 text-center py-8">Loading...</div>
+    </div>
+  </div>
+
+  <!-- Recent LTM -->
+  <div>
+    <h2 class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-3 flex items-center gap-2">
+      <span class="w-2 h-2 rounded-full bg-violet-400 glow-dot" style="color:#a78bfa"></span>
+      Recent LTM
+    </h2>
+    <div class="space-y-2" id="ltm-list">
+      <div class="text-xs text-slate-600 text-center py-8">Loading...</div>
+    </div>
+  </div>
+</div>
+
+<!-- Quarantine Items -->
+<div class="mb-6" id="quarantine-section">
+  <h2 class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-3 flex items-center gap-2">
+    <span class="w-2 h-2 rounded-full bg-amber-400 glow-dot" style="color:#fbbf24"></span>
+    Quarantine Queue
+  </h2>
+  <div class="space-y-2" id="quarantine-list">
+    <div class="text-xs text-slate-600 text-center py-4">Loading...</div>
+  </div>
+</div>
+
+<!-- Search Results (hidden by default) -->
+<div class="mb-6 hidden" id="search-results-section">
+  <div class="flex items-center justify-between mb-3">
+    <h2 class="text-xs uppercase tracking-wider text-slate-500 font-semibold flex items-center gap-2">
+      Search Results
+      <span class="text-violet-400 font-mono" id="search-count"></span>
+    </h2>
+    <button onclick="clearSearch()" class="text-xs text-slate-500 hover:text-slate-300 transition-colors">Clear</button>
+  </div>
+  <div class="space-y-2" id="search-results"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const REFRESH_MS = 60000;
+
+  function sourceTypeBadge(type) {
+    const map = {
+      learning: 'bg-blue-500/10 text-blue-400',
+      feedback: 'bg-pink-500/10 text-pink-400',
+      preference: 'bg-violet-500/10 text-violet-400',
+      diary: 'bg-cyan-500/10 text-cyan-400',
+      decision: 'bg-amber-500/10 text-amber-400',
+    };
+    return map[type] || 'bg-slate-700 text-slate-400';
+  }
+
+  function renderMemoryCard(m) {
+    const content = m.content || '';
+    const snippet = content.length > 180 ? content.substring(0, 180) + '...' : content;
+    const hasMore = content.length > 180;
+    const strength = m.strength != null ? m.strength : null;
+    const sourceType = m.source_type || 'unknown';
+    const domain = m.domain || '';
+    const created = m.created_at ? relativeTime(m.created_at) : '';
+
+    return `<div class="memory-card bg-slate-900/50 border border-slate-800/50 rounded-xl p-4" onclick="this.classList.toggle('expanded')">
+      <div class="flex items-center gap-2 mb-2 flex-wrap">
+        <span class="text-[10px] px-1.5 py-0.5 rounded font-medium ${sourceTypeBadge(sourceType)}">${escapeHtml(sourceType)}</span>
+        ${domain ? `<span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-500">${escapeHtml(domain)}</span>` : ''}
+        <span class="text-[10px] text-slate-600 ml-auto font-mono">${escapeHtml(created)}</span>
+      </div>
+      <p class="text-sm text-slate-300 leading-relaxed">${escapeHtml(snippet)}</p>
+      ${hasMore ? `<div class="full-content mt-2 pt-2 border-t border-slate-800/50">
+        <p class="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">${escapeHtml(content)}</p>
+      </div>
+      <div class="text-[10px] text-violet-400 mt-1">Click to expand</div>` : ''}
+      ${strength != null ? `<div class="mt-2 flex items-center gap-2">
+        <span class="text-[10px] text-slate-600">Strength</span>
+        <div class="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+          <div class="strength-bar h-full rounded-full ${strength > 0.7 ? 'bg-emerald-500' : strength > 0.4 ? 'bg-violet-500' : 'bg-amber-500'}" style="width:${(strength * 100).toFixed(0)}%"></div>
         </div>
-    </aside>
+        <span class="text-[10px] text-slate-500 font-mono">${strength.toFixed(2)}</span>
+      </div>` : ''}
+    </div>`;
+  }
 
-    <!-- Main content -->
-    <main class="ml-14 min-h-screen bg-gray-950 text-slate-200">
-        <header class="h-12 border-b border-slate-800/50 flex items-center gap-4 px-6">
-            <h1 class="text-sm font-display font-semibold">Memory</h1>
-            <div class="flex-1 flex items-center gap-2 max-w-xl">
-                <input type="text" id="query" placeholder="Search cognitive memories..."
-                    class="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
-                    onkeydown="if(event.key==='Enter')search()">
-                <select id="store" class="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-violet-500">
-                    <option value="both">Both</option>
-                    <option value="stm">STM</option>
-                    <option value="ltm">LTM</option>
-                </select>
-                <button onclick="search()" class="px-3 py-1.5 text-xs bg-violet-600 text-white rounded-lg hover:bg-violet-500 transition-colors">Search</button>
-            </div>
-            <span id="count" class="text-xs text-slate-500 font-mono"></span>
-        </header>
+  function renderQuarantineCard(m) {
+    const content = m.content || '';
+    const reason = m.quarantine_reason || m.reason || 'Unknown reason';
+    return `<div class="bg-amber-500/5 border border-amber-500/20 rounded-xl p-4">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 font-medium">quarantine</span>
+        <span class="text-[10px] text-amber-500/60 ml-auto">${escapeHtml(reason)}</span>
+      </div>
+      <p class="text-sm text-slate-400 leading-relaxed">${escapeHtml(content.length > 200 ? content.substring(0, 200) + '...' : content)}</p>
+    </div>`;
+  }
 
-        <div id="results" class="p-6 space-y-2 max-w-4xl"></div>
-        <div id="empty" class="p-12 text-center text-slate-500 text-sm">Search your cognitive memories</div>
-    </main>
+  async function loadFlow() {
+    const data = await fetchJSON('/api/memory/flow');
+    if (!data) return;
 
-    <script>
-        function escapeHtml(text) {
-            const el = document.createElement('div');
-            el.textContent = text || '';
-            return el.innerHTML;
-        }
+    const c = data.counts || {};
+    animateCount('count-stm', c.stm || 0);
+    animateCount('count-ltm', c.ltm || 0);
+    animateCount('count-quarantine', c.quarantine || 0);
+    animateCount('count-dreamed-box', c.dreamed || 0);
+    document.getElementById('count-promoted').textContent = formatNumber(c.promoted || 0);
+    document.getElementById('count-dreamed').textContent = formatNumber(c.dreamed || 0);
 
-        function scoreColor(score) {
-            if (score > 0.8) return 'text-emerald-400';
-            if (score > 0.6) return 'text-amber-400';
-            return 'text-red-400';
-        }
+    // STM recent
+    const stmList = document.getElementById('stm-list');
+    const stmItems = data.stm_recent || [];
+    stmList.innerHTML = stmItems.length === 0
+      ? '<div class="text-xs text-slate-600 text-center py-6">No recent STM memories</div>'
+      : stmItems.map(renderMemoryCard).join('');
 
-        function storeBadge(store) {
-            if ((store || '').toLowerCase() === 'stm') return 'bg-cyan-500/10 text-cyan-400';
-            return 'bg-violet-500/10 text-violet-400';
-        }
+    // LTM recent
+    const ltmList = document.getElementById('ltm-list');
+    const ltmItems = data.ltm_recent || [];
+    ltmList.innerHTML = ltmItems.length === 0
+      ? '<div class="text-xs text-slate-600 text-center py-6">No recent LTM memories</div>'
+      : ltmItems.map(renderMemoryCard).join('');
 
-        function typeBadge(type) {
-            const map = {
-                learning: 'bg-blue-500/10 text-blue-400',
-                feedback: 'bg-pink-500/10 text-pink-400',
-                preference: 'bg-violet-500/10 text-violet-400',
-                diary: 'bg-cyan-500/10 text-cyan-400',
-                decision: 'bg-amber-500/10 text-amber-400',
-                change: 'bg-slate-700 text-slate-400'
-            };
-            return map[type] || 'bg-slate-700 text-slate-400';
-        }
+    // Quarantine
+    const qList = document.getElementById('quarantine-list');
+    const qItems = data.quarantine || [];
+    qList.innerHTML = qItems.length === 0
+      ? '<div class="text-xs text-slate-600 text-center py-4">No items in quarantine</div>'
+      : qItems.map(renderQuarantineCard).join('');
+  }
 
-        function renderCard(m) {
-            const score = m.score || m.similarity || 0;
-            const store = (m.store || 'ltm').toUpperCase();
-            const source_type = m.source_type || 'unknown';
-            const content = m.content || '';
-            const domain = m.domain || '';
-            const created_at = m.created_at || '';
-            const strength = m.strength;
+  function animateCount(id, target) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const start = parseInt(el.textContent) || 0;
+    if (start === target) { el.textContent = formatNumber(target); return; }
+    const duration = 600;
+    const startTime = performance.now();
+    function step(now) {
+      const progress = Math.min((now - startTime) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      el.textContent = formatNumber(Math.round(start + (target - start) * eased));
+      if (progress < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
 
-            const strengthBar = strength !== undefined
-                ? `<div class="mt-2 flex items-center gap-2">
-                    <span class="text-xs text-slate-500">Strength</span>
-                    <div class="flex-1 h-1 bg-slate-800 rounded-full overflow-hidden">
-                        <div class="h-full bg-violet-500 rounded-full" style="width:${strength * 100}%"></div>
-                    </div>
-                    <span class="text-xs text-slate-500 font-mono">${strength.toFixed(2)}</span>
-                   </div>`
-                : '';
+  async function searchMemories() {
+    const q = document.getElementById('search-input').value.trim();
+    if (!q) return;
 
-            return `<div class="bg-slate-900/50 border border-slate-800/50 rounded-lg p-4">
-                <div class="flex items-center gap-2 mb-1.5 flex-wrap">
-                    <span class="text-xs font-mono ${scoreColor(score)}">${score.toFixed(3)}</span>
-                    <span class="text-xs px-1.5 py-0.5 rounded ${storeBadge(store)}">${store}</span>
-                    <span class="text-xs px-1.5 py-0.5 rounded ${typeBadge(source_type)}">${escapeHtml(source_type)}</span>
-                    ${domain ? `<span class="text-xs px-1.5 py-0.5 rounded bg-slate-800 text-slate-500">${escapeHtml(domain)}</span>` : ''}
-                    <span class="text-xs text-slate-600 ml-auto">${escapeHtml(created_at)}</span>
-                </div>
-                <p class="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap">${escapeHtml(content)}</p>
-                ${strengthBar}
-            </div>`;
-        }
+    const section = document.getElementById('search-results-section');
+    const results = document.getElementById('search-results');
+    const count = document.getElementById('search-count');
 
-        async function search() {
-            const q = document.getElementById('query').value.trim();
-            if (!q) return;
-            const store = document.getElementById('store').value;
-            const countEl = document.getElementById('count');
-            const resultsEl = document.getElementById('results');
-            const emptyEl = document.getElementById('empty');
+    section.classList.remove('hidden');
+    results.innerHTML = '<div class="text-xs text-slate-500 text-center py-4">Searching...</div>';
 
-            countEl.textContent = 'Searching...';
-            emptyEl.style.display = 'none';
-            resultsEl.innerHTML = '';
+    const data = await fetchJSON(`/api/memories?q=${encodeURIComponent(q)}&limit=30`);
+    if (!data) {
+      results.innerHTML = '<div class="text-xs text-red-400 text-center py-4">Search failed</div>';
+      return;
+    }
 
-            try {
-                const resp = await fetch(`/api/memories?q=${encodeURIComponent(q)}&store=${store}&limit=30`);
-                const data = await resp.json();
-                const results = data.results || [];
+    const items = data.results || [];
+    count.textContent = `(${items.length})`;
+    results.innerHTML = items.length === 0
+      ? '<div class="text-xs text-slate-600 text-center py-6">No memories found</div>'
+      : items.map(renderMemoryCard).join('');
+  }
 
-                countEl.textContent = `${data.count || results.length} results`;
+  function clearSearch() {
+    document.getElementById('search-results-section').classList.add('hidden');
+    document.getElementById('search-input').value = '';
+  }
 
-                if (results.length === 0) {
-                    resultsEl.innerHTML = '';
-                    emptyEl.textContent = 'No memories found';
-                    emptyEl.style.display = 'block';
-                } else {
-                    resultsEl.innerHTML = results.map(renderCard).join('');
-                    emptyEl.style.display = 'none';
-                }
-            } catch (err) {
-                countEl.textContent = '';
-                resultsEl.innerHTML = `<div class="text-xs text-red-400 p-3 bg-red-500/10 rounded-lg border border-red-500/20">Error: ${escapeHtml(err.message)}</div>`;
-                emptyEl.style.display = 'none';
-            }
-        }
-
-        // Load trust score
-        fetch('/api/stats').then(r => r.json()).then(data => {
-            if (data.trust_score != null) {
-                document.getElementById('trust-score').textContent = Math.round(data.trust_score);
-            }
-        }).catch(() => {});
-    </script>
-</body>
-</html>
+  // Init
+  loadFlow();
+  setInterval(loadFlow, REFRESH_MS);
+</script>
+{% endblock %}

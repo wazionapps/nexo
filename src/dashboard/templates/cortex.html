@@ -1,0 +1,262 @@
+{% extends "base.html" %}
+
+{% block title %}Cortex Monitor{% endblock %}
+
+{% block page_title %}Cortex Monitor{% endblock %}
+{% block page_subtitle %}
+<span class="text-xs text-slate-500 ml-2">Pre-action gate activity</span>
+<span class="ml-3 flex items-center gap-1.5" id="pulse-indicator">
+  <span class="w-2 h-2 rounded-full bg-emerald-400 glow-dot" style="color: #34D399;"></span>
+  <span class="text-[10px] text-emerald-400 uppercase tracking-wider font-semibold">Live</span>
+</span>
+{% endblock %}
+
+{% block header_actions %}
+<select id="filter-mode" onchange="applyFilters()" class="text-xs bg-slate-800 border border-slate-700 rounded-md px-2 py-1 text-slate-300 focus:outline-none focus:border-nexo-500">
+  <option value="">All Modes</option>
+  <option value="conservative">Conservative</option>
+  <option value="balanced">Balanced</option>
+  <option value="full">Full</option>
+</select>
+<select id="filter-domain" onchange="applyFilters()" class="text-xs bg-slate-800 border border-slate-700 rounded-md px-2 py-1 text-slate-300 focus:outline-none focus:border-nexo-500">
+  <option value="">All Domains</option>
+</select>
+<button onclick="loadData()" class="text-xs text-slate-400 hover:text-slate-200 transition-colors px-2 py-1 rounded hover:bg-slate-800">
+  <svg class="w-3.5 h-3.5 inline -mt-0.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+  Refresh
+</button>
+{% endblock %}
+
+{% block content %}
+<!-- Stats row -->
+<div class="grid grid-cols-4 gap-4 mb-6">
+  <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-5 card">
+    <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1">Total Decisions</p>
+    <p class="text-2xl font-display font-bold text-slate-100" id="stat-decisions">--</p>
+  </div>
+  <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-5 card">
+    <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1">Avg Confidence</p>
+    <p class="text-2xl font-display font-bold text-nexo-400" id="stat-confidence">--</p>
+  </div>
+  <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-5 card">
+    <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1">Cortex Logs</p>
+    <p class="text-2xl font-display font-bold text-slate-100" id="stat-logs">--</p>
+  </div>
+  <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-5 card">
+    <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1">Success Rate</p>
+    <p class="text-2xl font-display font-bold text-emerald-400" id="stat-success">--</p>
+  </div>
+</div>
+
+<!-- Confidence distribution mini-chart -->
+<div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-5 card mb-6">
+  <h2 class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-3">Confidence Distribution</h2>
+  <div id="confidence-chart" class="flex items-end gap-1 h-16"></div>
+  <div class="flex justify-between mt-1 text-[10px] text-slate-600">
+    <span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span>
+  </div>
+</div>
+
+<!-- Split view: Logs + Decisions -->
+<div class="grid grid-cols-2 gap-5">
+  <!-- Cortex Logs -->
+  <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-5 card">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-xs uppercase tracking-wider text-slate-500 font-semibold">Cortex Logs</h2>
+      <span class="text-[10px] text-slate-600 font-mono" id="logs-count">--</span>
+    </div>
+    <div id="cortex-logs" class="space-y-2 max-h-[600px] overflow-y-auto pr-1">
+      <div class="py-12 text-center text-sm text-slate-500">Loading cortex logs...</div>
+    </div>
+  </div>
+
+  <!-- Decisions -->
+  <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-5 card">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-xs uppercase tracking-wider text-slate-500 font-semibold">Decisions</h2>
+      <span class="text-[10px] text-slate-600 font-mono" id="decisions-count">--</span>
+    </div>
+    <div id="decisions-list" class="space-y-3 max-h-[600px] overflow-y-auto pr-1">
+      <div class="py-12 text-center text-sm text-slate-500">Loading decisions...</div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+  @keyframes cortexPulse {
+    0%, 100% { opacity: 0.5; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.15); }
+  }
+  .cortex-pulse { animation: cortexPulse 2s ease-in-out infinite; }
+</style>
+<script>
+  let allLogs = [];
+  let allDecisions = [];
+
+  const modeColors = {
+    conservative: { bg: 'bg-blue-500/15', text: 'text-blue-400', border: 'border-blue-500/30' },
+    balanced:     { bg: 'bg-nexo-500/15', text: 'text-nexo-400', border: 'border-nexo-500/30' },
+    full:         { bg: 'bg-amber-500/15', text: 'text-amber-400', border: 'border-amber-500/30' },
+  };
+
+  function getModeBadge(mode) {
+    const c = modeColors[mode] || modeColors.balanced;
+    return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase ${c.bg} ${c.text}">${escapeHtml(mode || 'unknown')}</span>`;
+  }
+
+  function getOutcomeBadge(outcome) {
+    if (!outcome) return '<span class="text-[10px] text-slate-600">pending</span>';
+    const isGood = outcome === 'success' || outcome === 'positive' || outcome === 'good';
+    const isBad = outcome === 'failure' || outcome === 'negative' || outcome === 'bad';
+    if (isGood) return '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-400"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>Success</span>';
+    if (isBad) return '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-500/15 text-red-400"><span class="w-1.5 h-1.5 rounded-full bg-red-400"></span>Failed</span>';
+    return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-700/50 text-slate-400">${escapeHtml(outcome)}</span>`;
+  }
+
+  function confidenceBadge(confidence) {
+    if (confidence == null) return '';
+    const pct = typeof confidence === 'number' ? (confidence > 1 ? confidence : confidence * 100) : parseFloat(confidence);
+    const color = pct >= 80 ? 'text-emerald-400' : pct >= 50 ? 'text-amber-400' : 'text-red-400';
+    return `<span class="font-mono text-xs font-medium ${color}">${pct.toFixed(0)}%</span>`;
+  }
+
+  function renderLogs(logs) {
+    const container = document.getElementById('cortex-logs');
+    document.getElementById('logs-count').textContent = `${logs.length} entries`;
+
+    if (!logs.length) {
+      container.innerHTML = '<div class="py-12 text-center text-sm text-slate-500">No cortex logs found</div>';
+      return;
+    }
+
+    container.innerHTML = logs.slice(0, 50).map((log, i) => {
+      const hasWarnings = log.warnings && (Array.isArray(log.warnings) ? log.warnings.length > 0 : true);
+      const warningBorder = hasWarnings ? 'border-l-2 border-l-amber-500/50' : 'border-l-2 border-l-transparent';
+      return `
+        <div class="bg-slate-800/30 rounded-lg p-3 ${warningBorder} hover:bg-slate-800/50 transition-colors animate-fade-in" style="animation-delay: ${i * 30}ms">
+          <div class="flex items-center justify-between mb-1.5">
+            ${getModeBadge(log.mode)}
+            <span class="text-[10px] text-slate-600">${relativeTime(log.created_at)}</span>
+          </div>
+          <p class="text-sm text-slate-200 mb-1">${escapeHtml(log.goal || '--')}</p>
+          <div class="flex items-center gap-2 flex-wrap">
+            ${log.task_type ? `<span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-400 font-mono">${escapeHtml(log.task_type)}</span>` : ''}
+            ${log.trust_score != null ? `<span class="text-[10px] font-mono text-slate-500">trust: ${Number(log.trust_score).toFixed(1)}</span>` : ''}
+          </div>
+          ${hasWarnings ? `
+            <div class="mt-2 bg-amber-500/10 rounded px-2 py-1.5">
+              <p class="text-[10px] text-amber-400 font-semibold uppercase tracking-wider mb-0.5">Warnings</p>
+              <p class="text-xs text-amber-300/80">${escapeHtml(Array.isArray(log.warnings) ? log.warnings.join(', ') : String(log.warnings))}</p>
+            </div>
+          ` : ''}
+        </div>
+      `;
+    }).join('');
+  }
+
+  function renderDecisions(decisions) {
+    const container = document.getElementById('decisions-list');
+    document.getElementById('decisions-count').textContent = `${decisions.length} decisions`;
+
+    if (!decisions.length) {
+      container.innerHTML = '<div class="py-12 text-center text-sm text-slate-500">No decisions recorded</div>';
+      return;
+    }
+
+    container.innerHTML = decisions.slice(0, 50).map((d, i) => `
+      <div class="bg-slate-800/30 rounded-lg p-4 hover:bg-slate-800/50 transition-colors border border-transparent hover:border-slate-700/50 animate-fade-in" style="animation-delay: ${i * 40}ms">
+        <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center gap-2">
+            ${d.domain ? `<span class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-nexo-500/15 text-nexo-400 uppercase tracking-wider">${escapeHtml(d.domain)}</span>` : ''}
+            ${confidenceBadge(d.confidence)}
+          </div>
+          ${getOutcomeBadge(d.outcome)}
+        </div>
+        <p class="text-sm text-slate-200 mb-2">${escapeHtml(d.decision || '--')}</p>
+        ${d.alternatives ? `
+          <div class="mb-2">
+            <p class="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Alternatives considered</p>
+            <div class="flex flex-wrap gap-1">
+              ${(Array.isArray(d.alternatives) ? d.alternatives : [d.alternatives]).map(a =>
+                `<span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-400">${escapeHtml(String(a))}</span>`
+              ).join('')}
+            </div>
+          </div>
+        ` : ''}
+        <div class="flex items-center justify-between">
+          <span class="text-[10px] text-slate-600">${relativeTime(d.created_at)}</span>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function renderConfidenceChart(decisions) {
+    const chart = document.getElementById('confidence-chart');
+    const buckets = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]; // 10 buckets: 0-10, 10-20, ...
+    decisions.forEach(d => {
+      if (d.confidence == null) return;
+      const pct = typeof d.confidence === 'number' ? (d.confidence > 1 ? d.confidence : d.confidence * 100) : parseFloat(d.confidence);
+      const idx = Math.min(Math.floor(pct / 10), 9);
+      buckets[idx]++;
+    });
+    const max = Math.max(...buckets, 1);
+    chart.innerHTML = buckets.map((count, i) => {
+      const height = (count / max * 100).toFixed(0);
+      const color = i < 3 ? 'bg-red-500/60' : i < 5 ? 'bg-amber-500/60' : i < 8 ? 'bg-nexo-500/60' : 'bg-emerald-500/60';
+      return `<div class="flex-1 rounded-t ${color} transition-all duration-500 hover:opacity-80 relative group cursor-default" style="height:${Math.max(height, 4)}%" title="${i*10}-${(i+1)*10}%: ${count}">
+        <span class="absolute -top-5 left-1/2 -translate-x-1/2 text-[10px] text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">${count}</span>
+      </div>`;
+    }).join('');
+  }
+
+  function applyFilters() {
+    const modeFilter = document.getElementById('filter-mode').value;
+    const domainFilter = document.getElementById('filter-domain').value;
+
+    const filteredLogs = modeFilter ? allLogs.filter(l => l.mode === modeFilter) : allLogs;
+    const filteredDecisions = domainFilter ? allDecisions.filter(d => d.domain === domainFilter) : allDecisions;
+
+    renderLogs(filteredLogs);
+    renderDecisions(filteredDecisions);
+  }
+
+  async function loadData() {
+    const data = await fetchJSON('/api/cortex');
+    if (!data) return;
+
+    allLogs = data.cortex_logs || [];
+    allDecisions = data.decisions || [];
+
+    // Populate domain filter
+    const domains = [...new Set(allDecisions.map(d => d.domain).filter(Boolean))];
+    const domainSelect = document.getElementById('filter-domain');
+    const currentDomain = domainSelect.value;
+    domainSelect.innerHTML = '<option value="">All Domains</option>' +
+      domains.map(d => `<option value="${escapeHtml(d)}" ${d === currentDomain ? 'selected' : ''}>${escapeHtml(d)}</option>`).join('');
+
+    // Stats
+    document.getElementById('stat-decisions').textContent = formatNumber(allDecisions.length);
+    document.getElementById('stat-logs').textContent = formatNumber(allLogs.length);
+
+    const confidences = allDecisions.filter(d => d.confidence != null).map(d => {
+      const v = typeof d.confidence === 'number' ? (d.confidence > 1 ? d.confidence : d.confidence * 100) : parseFloat(d.confidence);
+      return v;
+    });
+    const avgConf = confidences.length ? (confidences.reduce((a, b) => a + b, 0) / confidences.length) : 0;
+    document.getElementById('stat-confidence').textContent = avgConf.toFixed(0) + '%';
+
+    const outcomes = allDecisions.filter(d => d.outcome);
+    const successes = outcomes.filter(d => d.outcome === 'success' || d.outcome === 'positive' || d.outcome === 'good');
+    const successRate = outcomes.length ? ((successes.length / outcomes.length) * 100) : 0;
+    document.getElementById('stat-success').textContent = successRate.toFixed(0) + '%';
+
+    renderConfidenceChart(allDecisions);
+    applyFilters();
+  }
+
+  loadData();
+  setInterval(loadData, 60000);
+</script>
+{% endblock %}
