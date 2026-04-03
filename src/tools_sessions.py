@@ -101,7 +101,72 @@ def handle_startup(task: str = "Startup", claude_session_id: str = "") -> str:
             age = _format_age(m["created_epoch"])
             lines.append(f"  [{m['from_sid']}] ({age}): {m['text']}")
 
+    # Check LaunchAgent health (macOS only)
+    la_warnings = _check_launchagents()
+    if la_warnings:
+        lines.append("")
+        lines.append("⚠ LAUNCHAGENT MISMATCH (plist on disk ≠ loaded in memory):")
+        for w in la_warnings:
+            lines.append(f"  {w}")
+        lines.append("  Fix: launchctl unload + load the affected plists, or restart.")
+
     return "\n".join(lines)
+
+
+def _check_launchagents() -> list[str]:
+    """Compare on-disk plists with what launchctl has loaded. macOS only."""
+    import platform
+    if platform.system() != "Darwin":
+        return []
+
+    import os, subprocess, plistlib, glob
+
+    plist_dir = os.path.expanduser("~/Library/LaunchAgents")
+    warnings = []
+
+    for plist_path in glob.glob(os.path.join(plist_dir, "com.nexo.*.plist")):
+        label = os.path.basename(plist_path).replace(".plist", "")
+        try:
+            with open(plist_path, "rb") as f:
+                disk = plistlib.load(f)
+            disk_args = disk.get("ProgramArguments", [])
+
+            result = subprocess.run(
+                ["launchctl", "list", label],
+                capture_output=True, text=True, timeout=5
+            )
+            if result.returncode != 0:
+                warnings.append(f"{label}: not loaded (plist exists on disk)")
+                continue
+
+            # Parse loaded ProgramArguments from launchctl output
+            loaded_args = []
+            in_args = False
+            for line in result.stdout.splitlines():
+                if '"ProgramArguments"' in line:
+                    in_args = True
+                    continue
+                if in_args:
+                    line = line.strip().rstrip(";")
+                    if line == ");":
+                        break
+                    if line.startswith('"') and line.endswith('"'):
+                        loaded_args.append(line.strip('"'))
+
+            if loaded_args and disk_args and loaded_args != disk_args:
+                # Check if loaded path points to /tmp or nonexistent path
+                stale = any("/tmp/" in a or not os.path.exists(a) for a in loaded_args if "/" in a)
+                if stale:
+                    # Auto-repair: reload the plist
+                    subprocess.run(["launchctl", "unload", plist_path], capture_output=True, timeout=5)
+                    subprocess.run(["launchctl", "load", plist_path], capture_output=True, timeout=5)
+                    warnings.append(f"{label}: AUTO-REPAIRED (was pointing to stale/tmp path, reloaded from disk)")
+                else:
+                    warnings.append(f"{label}: loaded args differ from disk plist")
+        except Exception:
+            continue
+
+    return warnings
 
 
 def handle_heartbeat(sid: str, task: str, context_hint: str = '') -> str:

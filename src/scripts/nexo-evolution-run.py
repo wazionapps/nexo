@@ -45,9 +45,10 @@ AUTO_SAFE_PREFIXES = [
     str(CLAUDE_DIR / "coordination") + "/",
 ]
 
-# Public mode: only user-created scripts — NEVER core, cortex, or plugins
+# Public mode: user scripts and plugins only — NEVER core code
 AUTO_SAFE_PREFIXES_PUBLIC = [
     str(CLAUDE_DIR / "scripts") + "/",
+    str(CLAUDE_DIR / "plugins") + "/",
 ]
 
 # ── Immutable files — NEVER touch (applies to ALL modes) ────────────────

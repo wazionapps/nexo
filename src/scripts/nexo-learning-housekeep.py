@@ -70,7 +70,7 @@ def adjust_weights(conn):
         priority = l["priority"] or "medium"
 
         # Priority floor — critical learnings never drop below 0.5
-        priority_floor = {"critical": 0.5, "high": 0.3, "medium": 0.1, "low": 0.05}[priority]
+        priority_floor = {"critical": 0.5, "high": 0.3, "medium": 0.1, "low": 0.05}.get(priority, 0.1)
 
         new_weight = old_weight
 
