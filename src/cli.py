@@ -35,11 +35,17 @@ NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parent
 
 
 def _get_version() -> str:
-    """Read version from package.json automatically."""
-    for candidate in [NEXO_CODE.parent / "package.json", NEXO_HOME / "package.json"]:
+    """Read version from runtime version.json or package.json automatically."""
+    json_candidates = [
+        (NEXO_HOME / "version.json", "version"),
+        (NEXO_CODE.parent / "version.json", "version"),
+        (NEXO_CODE.parent / "package.json", "version"),
+        (NEXO_HOME / "package.json", "version"),
+    ]
+    for candidate, key in json_candidates:
         try:
             if candidate.is_file():
-                return json.loads(candidate.read_text()).get("version", "?")
+                return json.loads(candidate.read_text()).get(key, "?")
         except Exception:
             continue
     return "?"
@@ -417,6 +423,20 @@ def _update(args):
         for f in templates_src.iterdir():
             if f.is_file():
                 shutil.copy2(str(f), str(templates_dest / f.name))
+
+    # Runtime version metadata
+    package_json = repo_dir / "package.json"
+    if package_json.is_file():
+        shutil.copy2(str(package_json), str(dest / "package.json"))
+        try:
+            pkg = json.loads(package_json.read_text())
+            version_payload = {
+                "version": pkg.get("version", "?"),
+                "source": str(repo_dir),
+            }
+            (dest / "version.json").write_text(json.dumps(version_payload, indent=2))
+        except Exception:
+            pass
 
     # Core skills
     skills_src = src_dir / "skills"
