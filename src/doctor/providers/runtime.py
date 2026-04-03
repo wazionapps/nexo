@@ -29,6 +29,7 @@ WATCHDOG_FRESHNESS = 3600  # 1 hour (runs every 30 min)
 DEFAULT_CRON_THRESHOLD = 7200  # Fallback when manifest data is unavailable
 SPECIAL_LAUNCHAGENT_IDS = {"prevent-sleep", "tcc-approve"}
 SPECIAL_ENV_NORMALIZE_IDS = SPECIAL_LAUNCHAGENT_IDS | {"day-orchestrator"}
+OPTIONALS_FILE = NEXO_HOME / "config" / "optionals.json"
 
 
 def _file_age_seconds(path: Path) -> float | None:
@@ -71,11 +72,23 @@ def _parse_timestamp(value: str) -> dt.datetime | None:
         return None
 
 
-def _cron_expectations() -> dict[str, dict]:
+def _enabled_optionals() -> dict[str, bool]:
+    try:
+        if OPTIONALS_FILE.is_file():
+            data = json.loads(OPTIONALS_FILE.read_text())
+            if isinstance(data, dict):
+                return {str(k): bool(v) for k, v in data.items()}
+    except Exception:
+        pass
+    return {}
+
+
+def _enabled_manifest_crons() -> list[dict]:
     manifest_candidates = [
         NEXO_HOME / "crons" / "manifest.json",
         NEXO_CODE / "crons" / "manifest.json",
     ]
+    optionals = _enabled_optionals()
     for manifest_path in manifest_candidates:
         if not manifest_path.is_file():
             continue
@@ -84,30 +97,43 @@ def _cron_expectations() -> dict[str, dict]:
         except Exception:
             continue
 
-        expectations = {}
+        enabled = []
         for cron in data.get("crons", []):
             cron_id = cron.get("id")
-            if not cron_id or cron.get("run_at_load") or cron.get("keep_alive"):
+            if not cron_id:
                 continue
+            optional_key = cron.get("optional")
+            if optional_key and not optionals.get(optional_key, False):
+                continue
+            enabled.append(cron)
+        return enabled
+    return []
 
-            interval_seconds = cron.get("interval_seconds")
-            schedule = cron.get("schedule") or {}
-            if interval_seconds:
-                threshold = max(int(interval_seconds) * 3, int(interval_seconds) + 600)
-                label = f"every {int(interval_seconds) // 60}m"
-            elif "weekday" in schedule:
-                threshold = 8 * 86400
-                label = "weekly"
-            elif "hour" in schedule and "minute" in schedule:
-                threshold = 36 * 3600
-                label = "daily"
-            else:
-                threshold = DEFAULT_CRON_THRESHOLD
-                label = "custom"
 
-            expectations[cron_id] = {"threshold": threshold, "label": label}
-        return expectations
-    return {}
+def _cron_expectations() -> dict[str, dict]:
+    expectations = {}
+    for cron in _enabled_manifest_crons():
+        cron_id = cron.get("id")
+        if not cron_id or cron.get("run_at_load") or cron.get("keep_alive"):
+            continue
+
+        interval_seconds = cron.get("interval_seconds")
+        schedule = cron.get("schedule") or {}
+        if interval_seconds:
+            threshold = max(int(interval_seconds) * 3, int(interval_seconds) + 600)
+            label = f"every {int(interval_seconds) // 60}m"
+        elif "weekday" in schedule:
+            threshold = 8 * 86400
+            label = "weekly"
+        elif "hour" in schedule and "minute" in schedule:
+            threshold = 36 * 3600
+            label = "daily"
+        else:
+            threshold = DEFAULT_CRON_THRESHOLD
+            label = "custom"
+
+        expectations[cron_id] = {"threshold": threshold, "label": label}
+    return expectations
 
 
 def _run_at_load_cron_ids() -> set[str]:
@@ -119,55 +145,42 @@ def _run_at_load_cron_ids() -> set[str]:
 
 
 def _launchagent_schedule_expectations() -> dict[str, dict]:
-    manifest_candidates = [
-        NEXO_HOME / "crons" / "manifest.json",
-        NEXO_CODE / "crons" / "manifest.json",
-    ]
-    for manifest_path in manifest_candidates:
-        if not manifest_path.is_file():
-            continue
-        try:
-            data = _load_json(manifest_path)
-        except Exception:
+    expectations = {}
+    for cron in _enabled_manifest_crons():
+        cron_id = cron.get("id")
+        if not cron_id:
             continue
 
-        expectations = {}
-        for cron in data.get("crons", []):
-            cron_id = cron.get("id")
-            if not cron_id:
-                continue
-
-            expected = {
-                "StartInterval": None,
-                "StartCalendarInterval": None,
-                "RunAtLoad": None,
-                "KeepAlive": None,
-                "schedule_configured": False,
-            }
-            if cron.get("keep_alive"):
-                expected["RunAtLoad"] = True
-                expected["KeepAlive"] = True
-                expected["schedule_configured"] = True
-            elif cron.get("run_at_load"):
-                expected["RunAtLoad"] = True
-                expected["schedule_configured"] = True
-            elif "interval_seconds" in cron:
-                expected["StartInterval"] = int(cron["interval_seconds"])
-                expected["schedule_configured"] = True
-            elif "schedule" in cron:
-                schedule = cron.get("schedule") or {}
-                cal = {}
-                if "hour" in schedule:
-                    cal["Hour"] = schedule["hour"]
-                if "minute" in schedule:
-                    cal["Minute"] = schedule["minute"]
-                if "weekday" in schedule:
-                    cal["Weekday"] = schedule["weekday"]
-                expected["StartCalendarInterval"] = cal
-                expected["schedule_configured"] = True
-            expectations[cron_id] = expected
-        return expectations
-    return {}
+        expected = {
+            "StartInterval": None,
+            "StartCalendarInterval": None,
+            "RunAtLoad": None,
+            "KeepAlive": None,
+            "schedule_configured": False,
+        }
+        if cron.get("keep_alive"):
+            expected["RunAtLoad"] = True
+            expected["KeepAlive"] = True
+            expected["schedule_configured"] = True
+        elif cron.get("run_at_load"):
+            expected["RunAtLoad"] = True
+            expected["schedule_configured"] = True
+        elif "interval_seconds" in cron:
+            expected["StartInterval"] = int(cron["interval_seconds"])
+            expected["schedule_configured"] = True
+        elif "schedule" in cron:
+            schedule = cron.get("schedule") or {}
+            cal = {}
+            if "hour" in schedule:
+                cal["Hour"] = schedule["hour"]
+            if "minute" in schedule:
+                cal["Minute"] = schedule["minute"]
+            if "weekday" in schedule:
+                cal["Weekday"] = schedule["weekday"]
+            expected["StartCalendarInterval"] = cal
+            expected["schedule_configured"] = True
+        expectations[cron_id] = expected
+    return expectations
 
 
 def _managed_launchagent_plists() -> list[tuple[str, Path]]:
@@ -537,10 +550,13 @@ def check_cron_freshness() -> DoctorCheck:
         stale = []
         expectations = _cron_expectations()
         ignored_crons = _run_at_load_cron_ids()
+        tracked_crons = set(expectations)
         now = time.time()
         for row in rows:
             cron_id = row[0]
             if cron_id in ignored_crons:
+                continue
+            if cron_id not in tracked_crons:
                 continue
             parsed = _parse_timestamp(row[1]) if row[1] else None
             if parsed is None:
@@ -568,7 +584,7 @@ def check_cron_freshness() -> DoctorCheck:
             tier="runtime",
             status="healthy",
             severity="info",
-            summary=f"All {len(rows)} tracked crons ran recently",
+            summary=f"All {len(tracked_crons)} tracked crons ran recently",
         )
     except Exception as e:
         return DoctorCheck(

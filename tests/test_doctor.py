@@ -308,6 +308,25 @@ class TestRuntimeChecks:
         managed = runtime._managed_launchagent_plists()
         assert ("catchup", launch_agents / "com.nexo.catchup.plist") in managed
 
+    def test_launchagent_expectations_skip_disabled_optional_jobs(self, nexo_home, monkeypatch):
+        from doctor.providers import runtime
+
+        (nexo_home / "config").mkdir(parents=True, exist_ok=True)
+        (nexo_home / "config" / "optionals.json").write_text('{"orchestrator": false}')
+        (nexo_home / "crons" / "manifest.json").write_text(json.dumps({
+            "crons": [
+                {"id": "watchdog", "interval_seconds": 1800, "core": True},
+                {"id": "day-orchestrator", "keep_alive": True, "optional": "orchestrator", "core": True},
+            ]
+        }))
+
+        monkeypatch.setattr(runtime, "NEXO_HOME", nexo_home)
+        monkeypatch.setattr(runtime, "OPTIONALS_FILE", nexo_home / "config" / "optionals.json")
+
+        expectations = runtime._launchagent_schedule_expectations()
+        assert "watchdog" in expectations
+        assert "day-orchestrator" not in expectations
+
     def test_launchagent_integrity_detects_keepalive_schedule_drift(self, nexo_home, monkeypatch):
         from doctor.providers import runtime
 
@@ -351,6 +370,35 @@ class TestRuntimeChecks:
         check = runtime.check_launchagent_integrity()
         assert check.status == "degraded"
         assert any("KeepAlive" in item for item in check.evidence)
+
+    def test_cron_freshness_ignores_personal_crons(self, nexo_home, monkeypatch):
+        from doctor.providers import runtime
+
+        (nexo_home / "config").mkdir(parents=True, exist_ok=True)
+        (nexo_home / "config" / "optionals.json").write_text("{}")
+        (nexo_home / "crons" / "manifest.json").write_text(json.dumps({
+            "crons": [
+                {"id": "watchdog", "interval_seconds": 1800, "core": True},
+            ]
+        }))
+
+        conn = sqlite3.connect(str(nexo_home / "data" / "nexo.db"))
+        conn.execute(
+            "INSERT INTO cron_runs (cron_id, started_at) VALUES (?, ?)",
+            ("watchdog", time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time() - 600))),
+        )
+        conn.execute(
+            "INSERT INTO cron_runs (cron_id, started_at) VALUES (?, ?)",
+            ("personal-backup", time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time() - 12 * 3600))),
+        )
+        conn.commit()
+        conn.close()
+
+        monkeypatch.setattr(runtime, "NEXO_HOME", nexo_home)
+        monkeypatch.setattr(runtime, "OPTIONALS_FILE", nexo_home / "config" / "optionals.json")
+
+        check = runtime.check_cron_freshness()
+        assert check.status == "healthy"
 
     def test_launchagent_integrity_fix_bootstraps_real_plist(self, nexo_home, monkeypatch):
         from doctor.providers import runtime

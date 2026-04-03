@@ -63,12 +63,25 @@ import json, sys, platform
 
 nexo_home = '$NEXO_HOME'
 is_mac = platform.system() == 'Darwin'
+optionals_file = '$NEXO_HOME/config/optionals.json'
+optionals = {}
 
 with open('$MANIFEST_FILE') as f:
     data = json.load(f)
 
+try:
+    with open(optionals_file) as f:
+        maybe = json.load(f)
+        if isinstance(maybe, dict):
+            optionals = {str(k): bool(v) for k, v in maybe.items()}
+except Exception:
+    optionals = {}
+
 for c in data.get('crons', []):
     cid = c['id']
+    optional_key = c.get('optional')
+    if optional_key and not optionals.get(optional_key, False):
+        continue
     name = cid.replace('-', ' ').title()
     # Use the right service identifier per platform
     if is_mac:
