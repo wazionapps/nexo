@@ -155,11 +155,16 @@ mcp = FastMCP(
     name="nexo",
     instructions=(
         "NEXO — cognitive co-operator. Save important info from tool results before they clear.\n\n"
+        "## CRITICAL — do these or you WILL get corrected\n"
+        "- **Guard (MANDATORY before ANY code edit):** `nexo_guard_check(files='...', area='...')` BEFORE editing code. "
+        "No exceptions. Blocking rules→resolve first. `nexo_track(sid=SID, paths=[...])` before shared files\n"
+        "- **Skills (MANDATORY before multi-step tasks):** `nexo_skill_match(task)` to find reusable procedures. "
+        "If match found, read it and follow the steps. After completion, `nexo_skill_result(id, success, context)` to record outcome.\n"
+        "- **Learnings (MANDATORY on corrections):** When you discover a bug, pattern, or get corrected→`nexo_learning_add` IMMEDIATELY. "
+        "Do NOT batch. Do NOT wait until end of session.\n\n"
         "## Rules\n"
         "- **Heartbeat:** `nexo_heartbeat(sid=SID, task='...', context_hint='...')` every user msg. "
         "React: DIARY REMINDER→write diary, VIBE:NEGATIVE→ultra-concise, AUTO-PRIME→read learnings\n"
-        "- **Guard:** `nexo_guard_check(files='...', area='...')` BEFORE editing code. "
-        "Blocking rules→resolve first. `nexo_track(sid=SID, paths=[...])` before shared files\n"
         "- **Followups:** NEXO tasks, execute silently. 'done'/'all set'→`nexo_followup_complete` NOW. "
         "Reminders=user's, alert when due\n"
         "- **Observe:** correction→learning. 'tomorrow'→followup. person→entity. open topic→followup 3d\n"
@@ -175,8 +180,6 @@ mcp = FastMCP(
         "write `nexo_session_diary_write(...)` with self_critique BEFORE responding. "
         "Detect intent, not keywords. If session closes without diary, auto_close handles it.\n"
         "- **Cortex:** `nexo_cortex_check` before budget/campaign/architecture changes\n"
-        "- **Skills:** before multi-step tasks, `nexo_skill_match(task)` to find reusable procedures. "
-        "If match found, read it and follow the steps. After completion, `nexo_skill_result(id, success, context)` to record outcome.\n"
         "- **Dissonance:** user contradicts memory→`nexo_cognitive_dissonance`. Frustrated→force=True\n"
         "- **Trust:** <40=paranoid verify twice, >80=fluid. Check: `nexo_cognitive_trust`"
     ),

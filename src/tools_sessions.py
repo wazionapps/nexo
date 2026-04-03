@@ -274,6 +274,18 @@ def handle_heartbeat(sid: str, task: str, context_hint: str = '') -> str:
             parts.append("")
             parts.append(f"⚠ DIARY_OVERDUE: {_hb_count} heartbeats, {int(age_seconds/60)}min active, no diary. Write nexo_session_diary_write NOW.")
 
+    # Guard check reminder: if context_hint mentions code editing and no guard_check this session
+    if context_hint and _hint_suggests_code_edit(context_hint):
+        try:
+            guard_used = conn.execute(
+                "SELECT COUNT(*) FROM guard_log WHERE session_id = ?", (sid,)
+            ).fetchone()[0]
+            if guard_used == 0:
+                parts.append("")
+                parts.append("⚠ GUARD REMINDER: You appear to be editing code but haven't called `nexo_guard_check` this session. Do it NOW before any edits.")
+        except Exception:
+            pass  # guard_log table may not exist in older installs
+
     return "\n".join(parts)
 
 
@@ -510,9 +522,45 @@ def handle_smart_startup_query() -> str:
             lines.append("")
             lines.append(tone)
 
+        # Toolbox reminder: skills + behavioral learnings count
+        toolbox = _toolbox_summary(conn)
+        if toolbox:
+            lines.append("")
+            lines.append(toolbox)
+
         return "\n".join(lines)
     except Exception as e:
         return f"Smart startup query error: {e}"
+
+
+def _hint_suggests_code_edit(hint: str) -> bool:
+    """Check if a heartbeat context_hint suggests the agent is editing code."""
+    hint_lower = hint.lower()
+    edit_signals = ['edit', 'fix', 'patch', 'modify', 'implement', 'refactor', 'add function',
+                    'change code', 'update script', 'write code', '.py', '.js', '.ts', '.php',
+                    'commit', 'arregl', 'modific', 'implement', 'correg']
+    return any(signal in hint_lower for signal in edit_signals)
+
+
+def _toolbox_summary(conn) -> str:
+    """Quick count of available skills and behavioral learnings for startup reminder."""
+    try:
+        skill_count = conn.execute(
+            "SELECT COUNT(*) FROM skills"
+        ).fetchone()[0]
+        learning_count = conn.execute(
+            "SELECT COUNT(*) FROM learnings WHERE status = 'active' AND priority IN ('critical', 'high')"
+        ).fetchone()[0]
+        parts = []
+        if skill_count > 0:
+            parts.append(f"{skill_count} skills available — use `nexo_skill_match(task)` before multi-step tasks")
+        if learning_count > 0:
+            parts.append(f"{learning_count} high-priority learnings — use `nexo_guard_check` before editing code")
+        if parts:
+            return "TOOLBOX REMINDER:\n  " + "\n  ".join(parts)
+    except Exception:
+        pass
+    return ""
 
 
 def handle_stop(sid: str) -> str:
