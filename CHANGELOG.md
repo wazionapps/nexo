@@ -1,5 +1,122 @@
 # Changelog
 
+## [2.6.0] - 2026-04-03
+
+### Personal Scripts — First-Class Citizen
+- **Personal scripts registry**: Scripts in `NEXO_HOME/scripts/` are now tracked in SQLite with metadata, categories, and schedule associations. `nexo_personal_scripts_list`, `nexo_personal_script_create`, `nexo_personal_script_remove` MCP tools.
+- **Lifecycle reconciliation**: `nexo_personal_scripts_reconcile` detects orphaned scripts, missing DB entries, and stale schedules. `nexo_personal_scripts_sync` syncs filesystem state into the registry.
+- **Schedule lifecycle**: Personal scripts can be scheduled/unscheduled via `nexo_personal_script_schedules` and `nexo_personal_script_unschedule`. Full integration with LaunchAgent/systemd generation.
+- **Script templates**: `templates/script-template.sh` and `templates/script-template.py` with inline metadata format and NEXO env injection.
+
+### Orchestrator Removed from Core
+- **Breaking**: The Day Orchestrator is no longer part of the core product. It was an opt-in personal automation that added complexity for all users. Existing orchestrator users can keep their personal setup in `NEXO_HOME/scripts/`.
+- Orchestrator LaunchAgent and related code removed from manifest and sync.
+
+### Claude Code Plugin Structure
+- **Marketplace-ready**: Added `plugin.json`, entry point, and packaging structure for submission to the Claude Code plugin marketplace (Anthropic).
+- Plugin metadata includes capabilities, required permissions, and installation instructions.
+
+### Runtime CLI Enhancements
+- **`nexo chat`**: Official command to launch Claude Code with NEXO as operator. Supports directory argument.
+- **Runtime version surfacing**: `nexo -v` and CLI help now show the correct version from the installed runtime, not just the repo.
+- **Self-sync prevention**: Runtime updates no longer trigger redundant self-sync cycles.
+
+### Managed Evolution Hardening
+- Evolution can now modify core behavior modules (not just config) when running in managed mode with rollback followups.
+- Fixed false-positive watchdog tamper detection that was disabling Evolution after hash recovery.
+
+### Cron & Runtime Reliability
+- Hardened cron runtime recovery: TCC diagnostics, keepalive sync alignment, disabled optional cron respect.
+- Catchup script handles personal schedules correctly during boot recovery.
+- Runtime release rollout gaps closed — installed environments receive all files consistently.
+
+### Fixes
+- Prevent duplicate learning titles before insert (exact-title guard)
+- Orchestrator prompt tuned: skip startup ceremony, direct email, 50-turn limit
+- Runtime CLI version correctly surfaces in installed (non-repo) environments
+
+## [2.5.1] - 2026-04-03
+
+### Added
+- Custom CLI help screen with auto-version from package.json, `nexo -v`
+- Dashboard/Orchestrator control: `nexo dashboard on|off|status`, `nexo orchestrator on|off|status`
+- Managed Evolution mode: auto-executes deterministic improvements with rollback + followups
+
+### Fixed
+- False-positive watchdog tamper detection disabling Evolution
+
+## [2.5.0] - 2026-04-03
+
+### Runtime CLI (`nexo`)
+- New `nexo` command for operational tasks — separate from `nexo-brain` installer
+- `nexo scripts list/run/doctor/call` — personal scripts framework with auto-discovery, inline metadata, forbidden-pattern validation
+- `nexo doctor --tier boot|runtime|deep|all` — unified modular diagnostic system
+- `nexo skills list/apply/sync/approve` — skills v2 with executable scripts
+- `nexo update` — sync all repo files to NEXO_HOME in one command
+
+### Unified Doctor
+- Modular check providers: boot (<100ms), runtime (<5s), deep (<60s)
+- Report-only by default, deterministic `--fix` mode
+- MCP tool `nexo_doctor` via plugin
+- LaunchAgent schedule drift detection and reconciliation
+
+### Skills v2 — Executable Skills
+- Three modes: guide (text), execute (script), hybrid (both)
+- Security levels: read-only, local, remote — with explicit approval
+- Core vs personal vs community skill directories
+- Deep Sleep integration for automatic skill evolution
+
+### Day Orchestrator
+- Autonomous NEXO cycles every 15 min (8:00-23:00)
+- Launches Claude Code in headless mode with full MCP access
+- Checks followups, emails, infrastructure — acts on what it can
+- Emails user only when needed
+
+### Dashboard Always-On
+- Web dashboard at localhost:6174 as persistent LaunchAgent
+- 23 modules with Jinja2 templating and dark theme (v3.0)
+
+### Other
+- Configurable operator name via UserContext singleton
+- Watchdog schedule normalized to 30 min
+- LaunchAgent drift reconciliation in doctor --fix
+
+## [2.4.0] - 2026-04-02
+
+### Skills System
+- Skills store full procedural content (steps, gotchas, markdown)
+- Deep Sleep correctly populates skills with step-by-step procedures
+- Migration #18 adds content/steps/gotchas columns
+
+### Security Fixes
+- Credential redaction in tool logs (capture-tool-logs.sh)
+- Sensitive data redaction in Deep Sleep transcripts
+- Command injection fix in dashboard followup executor
+- Path traversal protection in plugin loader
+
+### Cron Scheduler
+- Execution tracking (cron_runs table) + `nexo_schedule_status` MCP tool
+- Deep Sleep: watermark collection, checkpointing, retry, JSON fix
+- Preflight CI: 66 automated checks
+
+### UX/Docs
+- README accuracy pass: dashboard, alias, integration paths corrected
+- Bash alias written to .bashrc for Linux users
+- Dashboard shows real error messages instead of generic 'Failed'
+
+## [2.3.0] - 2026-04-02
+
+### Added
+- Cron execution tracking (cron_runs table + nexo_schedule_status)
+- Deep Sleep: watermark collection, checkpointing, retry, skill extraction, auto-calibration
+- Linux systemd full support
+- Preflight CI (64 checks)
+
+### Fixed
+- 3 broken scripts identified and fixed during audit
+- Manifest as single source of truth for cron definitions
+- README aligned with actual feature state
+
 ## [2.2.0] - 2026-04-01
 
 ### Trust Score v2 — Fair Scoring System
