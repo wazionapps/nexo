@@ -803,6 +803,62 @@ def check_skill_health(fix: bool = False) -> DoctorCheck:
     )
 
 
+def check_personal_script_registry(fix: bool = False) -> DoctorCheck:
+    """Check the DB-backed personal script registry against filesystem/plists."""
+    try:
+        from db import init_db, get_personal_script_health_report
+        from script_registry import sync_personal_scripts
+
+        init_db()
+        sync_personal_scripts(prune_missing=True)
+        report = get_personal_script_health_report(fix=fix)
+    except Exception as e:
+        return DoctorCheck(
+            id="runtime.personal_scripts",
+            tier="runtime",
+            status="degraded",
+            severity="warn",
+            summary=f"Personal scripts registry check failed: {e}",
+        )
+
+    issues = report.get("issues", [])
+    if not issues:
+        summary = (
+            f"Personal scripts registered "
+            f"({report.get('scripts', 0)} scripts, {report.get('schedules', 0)} schedules)"
+        )
+        if fix:
+            summary += " (fixed)"
+        return DoctorCheck(
+            id="runtime.personal_scripts",
+            tier="runtime",
+            status="healthy",
+            severity="info",
+            summary=summary,
+            fixed=fix,
+        )
+
+    errors = [issue for issue in issues if issue.get("severity") == "error"]
+    warnings = [issue for issue in issues if issue.get("severity") != "error"]
+    return DoctorCheck(
+        id="runtime.personal_scripts",
+        tier="runtime",
+        status="critical" if errors else "degraded",
+        severity="error" if errors else "warn",
+        summary=f"Personal scripts registry issues detected in {len(issues)} item(s)",
+        evidence=[issue["message"] for issue in issues[:10]],
+        repair_plan=[
+            "Run nexo scripts sync to reconcile filesystem scripts and personal LaunchAgents",
+            "Remove registry entries for deleted scripts or missing plists",
+            "Keep personal scripts in NEXO_HOME/scripts so updates do not collide with core",
+        ],
+        escalation_prompt=(
+            "Personal script metadata, files, and personal cron schedules are out of sync. "
+            "Reconcile NEXO_HOME/scripts with personal LaunchAgents without treating them as core crons."
+        ),
+    )
+
+
 def run_runtime_checks(fix: bool = False) -> list[DoctorCheck]:
     """Run all runtime-tier checks. Read-only by default."""
     return [
@@ -811,5 +867,6 @@ def run_runtime_checks(fix: bool = False) -> list[DoctorCheck]:
         check_stale_sessions(),
         check_cron_freshness(),
         check_launchagent_integrity(fix=fix),
+        check_personal_script_registry(fix=fix),
         check_skill_health(fix=fix),
     ]

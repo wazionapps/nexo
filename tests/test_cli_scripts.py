@@ -30,6 +30,7 @@ def _run_cli(nexo_home, *args, timeout=10):
         **os.environ,
         "NEXO_HOME": str(nexo_home),
         "NEXO_CODE": os.path.join(os.path.dirname(__file__), "..", "src"),
+        "HOME": str(nexo_home),
     }
     result = subprocess.run(
         [sys.executable, CLI_PY, *args],
@@ -62,6 +63,36 @@ class TestScriptsList:
         assert data[0]["name"] == "my-tool"
 
 
+class TestScriptsCreateAndSync:
+    def test_create_script(self, nexo_home):
+        result = _run_cli(
+            nexo_home,
+            "scripts",
+            "create",
+            "Daily Backup",
+            "--description",
+            "Backup data daily",
+        )
+        assert result.returncode == 0
+        created = nexo_home / "scripts" / "daily-backup.py"
+        assert created.is_file()
+
+    def test_sync_registry_json(self, nexo_home):
+        script = nexo_home / "scripts" / "my-tool.py"
+        script.write_text("# nexo: name=my-tool\nprint('hi')\n")
+        result = _run_cli(nexo_home, "scripts", "sync", "--json")
+        assert result.returncode == 0
+        data = json.loads(result.stdout)
+        assert data["ok"] is True
+        assert data["scripts_upserted"] == 1
+
+    def test_schedules_empty(self, nexo_home):
+        result = _run_cli(nexo_home, "scripts", "schedules", "--json")
+        assert result.returncode == 0
+        data = json.loads(result.stdout)
+        assert data == []
+
+
 class TestScriptsRun:
     def test_run_python_script(self, nexo_home):
         script = nexo_home / "scripts" / "hello.py"
@@ -80,6 +111,13 @@ class TestScriptsRun:
         result = _run_cli(nexo_home, "scripts", "run", "argtest", "foo", "bar")
         assert result.returncode == 0
         assert "foo bar" in result.stdout
+
+    def test_run_node_script(self, nexo_home):
+        script = nexo_home / "scripts" / "hello.js"
+        script.write_text("// nexo: name=hello-js\nconsole.log('hello-js')\n")
+        result = _run_cli(nexo_home, "scripts", "run", "hello-js")
+        assert result.returncode == 0
+        assert "hello-js" in result.stdout
 
 
 class TestScriptsDoctor:

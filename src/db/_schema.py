@@ -381,6 +381,49 @@ def _m19_skills_v2(conn):
     _migrate_add_column(conn, "skills", "last_reviewed_at", "TEXT DEFAULT NULL")
 
 
+def _m20_personal_scripts_registry(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS personal_scripts (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            path TEXT NOT NULL UNIQUE,
+            description TEXT DEFAULT '',
+            runtime TEXT DEFAULT 'unknown',
+            metadata_json TEXT DEFAULT '{}',
+            created_by TEXT DEFAULT 'manual',
+            source TEXT DEFAULT 'filesystem',
+            enabled INTEGER NOT NULL DEFAULT 1,
+            has_inline_metadata INTEGER NOT NULL DEFAULT 0,
+            last_run_at TEXT DEFAULT NULL,
+            last_exit_code INTEGER DEFAULT NULL,
+            last_synced_at TEXT DEFAULT (datetime('now')),
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now'))
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS personal_script_schedules (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            script_id TEXT NOT NULL REFERENCES personal_scripts(id) ON DELETE CASCADE,
+            cron_id TEXT NOT NULL UNIQUE,
+            schedule_type TEXT DEFAULT '',
+            schedule_value TEXT DEFAULT '',
+            schedule_label TEXT DEFAULT '',
+            launchd_label TEXT DEFAULT '',
+            plist_path TEXT DEFAULT '',
+            description TEXT DEFAULT '',
+            enabled INTEGER NOT NULL DEFAULT 1,
+            last_synced_at TEXT DEFAULT (datetime('now')),
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now'))
+        )
+    """)
+    _migrate_add_index(conn, "idx_personal_scripts_name", "personal_scripts", "name")
+    _migrate_add_index(conn, "idx_personal_scripts_enabled", "personal_scripts", "enabled")
+    _migrate_add_index(conn, "idx_personal_script_schedules_script", "personal_script_schedules", "script_id")
+    _migrate_add_index(conn, "idx_personal_script_schedules_enabled", "personal_script_schedules", "enabled")
+
+
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
     (2, "followups_reasoning", _m2_followups_reasoning),
@@ -401,6 +444,7 @@ MIGRATIONS = [
     (17, "cron_runs", _m17_cron_runs),
     (18, "skills_steps_column", _m18_skills_steps),
     (19, "skills_v2", _m19_skills_v2),
+    (20, "personal_scripts_registry", _m20_personal_scripts_registry),
 ]
 
 
@@ -459,4 +503,3 @@ def get_schema_version() -> int:
         return row[0] or 0
     except Exception:
         return 0
-

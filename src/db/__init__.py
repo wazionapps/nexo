@@ -93,6 +93,15 @@ from db._cron_runs import (
     cron_run_start, cron_run_end, cron_runs_recent, cron_runs_summary,
 )
 
+# Personal scripts registry
+from db._personal_scripts import (
+    upsert_personal_script, list_personal_scripts, get_personal_script,
+    delete_missing_personal_scripts, register_personal_script_schedule,
+    delete_missing_personal_schedules, list_personal_script_schedules,
+    record_personal_script_run, sync_personal_scripts_registry,
+    get_personal_script_health_report,
+)
+
 # Skills
 from db._skills import (
     create_skill, get_skill, list_skills, search_skills,

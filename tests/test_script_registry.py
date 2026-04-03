@@ -7,6 +7,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
+from db import init_db, get_personal_script, list_personal_scripts, list_personal_script_schedules
 from script_registry import (
     parse_inline_metadata,
     classify_runtime,
@@ -14,6 +15,8 @@ from script_registry import (
     resolve_script,
     doctor_script,
     load_core_script_names,
+    create_script,
+    sync_personal_scripts,
 )
 
 
@@ -30,6 +33,7 @@ def scripts_dir(tmp_path, monkeypatch):
     (crons_dir / "manifest.json").write_text('{"crons":[{"id":"immune","script":"scripts/nexo-immune.py"}]}')
 
     monkeypatch.setenv("NEXO_HOME", str(nexo_home))
+    monkeypatch.setenv("HOME", str(nexo_home))
     # Patch module-level constants
     import script_registry
     monkeypatch.setattr(script_registry, "NEXO_HOME", nexo_home)
@@ -78,6 +82,12 @@ class TestMetadataParsing:
         assert "invalidkey" not in meta
         assert meta["name"] == "valid"
 
+    def test_js_comment_metadata(self, tmp_path):
+        script = tmp_path / "test.js"
+        script.write_text("// nexo: name=valid-js\n")
+        meta = parse_inline_metadata(script)
+        assert meta["name"] == "valid-js"
+
 
 class TestRuntimeDetection:
     def test_metadata_runtime(self, tmp_path):
@@ -109,6 +119,16 @@ class TestRuntimeDetection:
         script.write_text("puts 'hi'\n")
         assert classify_runtime(script, {}) == "unknown"
 
+    def test_extension_js(self, tmp_path):
+        script = tmp_path / "test.js"
+        script.write_text("console.log('hi')\n")
+        assert classify_runtime(script, {}) == "node"
+
+    def test_extension_php(self, tmp_path):
+        script = tmp_path / "test.php"
+        script.write_text("<?php echo 'hi';\n")
+        assert classify_runtime(script, {}) == "php"
+
 
 class TestCoreFiltering:
     def test_core_excluded_by_default(self, scripts_dir):
@@ -130,6 +150,17 @@ class TestCoreFiltering:
         names = [s["name"] for s in scripts]
         assert "my-backup" in names
         assert "nexo-immune" in names
+
+    def test_non_script_artifacts_ignored(self, scripts_dir):
+        (scripts_dir / "notes.csv").write_text("a,b,c\n")
+        (scripts_dir / "debug.log").write_text("hello\n")
+        scripts = list_scripts(include_core=False)
+        assert scripts == []
+
+    def test_internal_runtime_scripts_ignored(self, scripts_dir):
+        (scripts_dir / "nexo-dashboard.sh").write_text("#!/bin/bash\necho dashboard\n")
+        scripts = list_scripts(include_core=False)
+        assert scripts == []
 
 
 class TestResolveScript:
@@ -184,3 +215,51 @@ class TestDoctorScript:
     def test_not_found(self, scripts_dir):
         result = doctor_script("nonexistent")
         assert result["status"] == "fail"
+
+
+class TestRegistrySync:
+    def test_create_script_registers_in_db(self, scripts_dir, monkeypatch):
+        import script_registry
+
+        init_db()
+        result = create_script("My Script", description="Created by test", runtime="python")
+        assert result["ok"] is True
+
+        registered = get_personal_script(result["path"])
+        assert registered is not None
+        assert registered["description"] == "Created by test"
+        assert registered["runtime"] == "python"
+
+    def test_sync_personal_scripts_links_schedule(self, scripts_dir, monkeypatch):
+        import script_registry
+
+        init_db()
+        script = scripts_dir / "backup.py"
+        script.write_text("# nexo: name=backup\n# nexo: description=Backup\nprint('ok')\n")
+
+        monkeypatch.setattr(
+            script_registry,
+            "discover_personal_schedules",
+            lambda: [{
+                "cron_id": "backup",
+                "script_path": str(script),
+                "schedule_type": "interval",
+                "schedule_value": "300",
+                "schedule_label": "every 300s",
+                "launchd_label": "com.nexo.backup",
+                "plist_path": "/tmp/com.nexo.backup.plist",
+                "enabled": True,
+                "description": "Backup schedule",
+            }],
+        )
+
+        result = sync_personal_scripts()
+        assert result["scripts_upserted"] == 1
+        assert result["schedules_upserted"] == 1
+
+        scripts = list_personal_scripts()
+        assert len(scripts) == 1
+        assert scripts[0]["has_schedule"] is True
+        schedules = list_personal_script_schedules()
+        assert len(schedules) == 1
+        assert schedules[0]["cron_id"] == "backup"

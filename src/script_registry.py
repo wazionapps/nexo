@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import json
 import os
+import platform
+import plistlib
 import re
 import shutil
 import stat
@@ -22,6 +24,10 @@ _IGNORED_FILES = {
     ".watchdog-fails",
     ".watchdog-nexo-repair.lock",
     "nexo-cron-wrapper.sh",
+    "nexo-dashboard.sh",
+    "nexo-prevent-sleep.sh",
+    "nexo-proactive-dashboard.py",
+    "nexo-tcc-approve.sh",
 }
 _IGNORED_DIRS = {"deep-sleep", "__pycache__"}
 
@@ -39,6 +45,7 @@ _FORBIDDEN_PATTERNS = [
 ]
 
 METADATA_KEYS = {"name", "description", "runtime", "timeout", "requires", "tools", "hidden"}
+SUPPORTED_RUNTIMES = {"python", "shell", "node", "php", "unknown"}
 
 
 def get_nexo_home() -> Path:
@@ -67,7 +74,12 @@ def load_core_script_names() -> set[str]:
 
 
 def parse_inline_metadata(path: Path) -> dict:
-    """Parse # nexo: key=value metadata from first 25 lines."""
+    """Parse inline metadata from first 25 lines.
+
+    Supported comment prefixes:
+    - # nexo:
+    - // nexo:
+    """
     meta: dict[str, str] = {}
     try:
         lines = path.read_text(errors="ignore").splitlines()[:25]
@@ -76,9 +88,13 @@ def parse_inline_metadata(path: Path) -> dict:
 
     for line in lines:
         stripped = line.strip()
-        if not stripped.startswith("# nexo:"):
+        payload = ""
+        if stripped.startswith("# nexo:"):
+            payload = stripped[len("# nexo:"):].strip()
+        elif stripped.startswith("// nexo:"):
+            payload = stripped[len("// nexo:"):].strip()
+        else:
             continue
-        payload = stripped[len("# nexo:"):].strip()
         if "=" not in payload:
             continue
         key, value = payload.split("=", 1)
@@ -100,10 +116,10 @@ def _detect_shebang(path: Path) -> str | None:
 
 
 def classify_runtime(path: Path, metadata: dict) -> str:
-    """Detect script runtime: python, shell, or unknown."""
+    """Detect script runtime: python, shell, node, php, or unknown."""
     # 1. Metadata
     rt = metadata.get("runtime", "").lower()
-    if rt in ("python", "shell"):
+    if rt in ("python", "shell", "node", "php"):
         return rt
 
     # 2. Shebang
@@ -113,6 +129,10 @@ def classify_runtime(path: Path, metadata: dict) -> str:
             return "python"
         if "bash" in shebang or "/sh" in shebang:
             return "shell"
+        if "node" in shebang:
+            return "node"
+        if "php" in shebang:
+            return "php"
 
     # 3. Extension
     ext = path.suffix.lower()
@@ -120,6 +140,10 @@ def classify_runtime(path: Path, metadata: dict) -> str:
         return "python"
     if ext == ".sh":
         return "shell"
+    if ext == ".js":
+        return "node"
+    if ext == ".php":
+        return "php"
 
     return "unknown"
 
@@ -134,6 +158,19 @@ def _is_ignored(path: Path) -> bool:
         if parent.name in _IGNORED_DIRS:
             return True
     return False
+
+
+def _is_script_candidate(path: Path, metadata: dict | None = None) -> bool:
+    metadata = metadata or {}
+    runtime = classify_runtime(path, metadata)
+    if runtime != "unknown":
+        return True
+    if _detect_shebang(path):
+        return True
+    try:
+        return os.access(path, os.X_OK)
+    except Exception:
+        return False
 
 
 def list_scripts(include_core: bool = False) -> list[dict]:
@@ -154,11 +191,14 @@ def list_scripts(include_core: bool = False) -> list[dict]:
         if _is_ignored(f):
             continue
 
+        meta = parse_inline_metadata(f)
+        if not _is_script_candidate(f, meta):
+            continue
+
         is_core = f.name in core_names
         if is_core and not include_core:
             continue
 
-        meta = parse_inline_metadata(f)
         runtime = classify_runtime(f, meta)
         name = meta.get("name", f.stem)
         hidden = meta.get("hidden", "").lower() in ("true", "1", "yes")
@@ -178,6 +218,14 @@ def list_scripts(include_core: bool = False) -> list[dict]:
     return results
 
 
+def _within_scripts_dir(path: Path) -> bool:
+    try:
+        path.resolve().relative_to(get_scripts_dir().resolve())
+        return True
+    except Exception:
+        return False
+
+
 def resolve_script(name: str) -> dict | None:
     """Find a script by name (metadata name or filename stem)."""
     scripts_dir = get_scripts_dir()
@@ -188,6 +236,8 @@ def resolve_script(name: str) -> dict | None:
         if not f.is_file() or _is_ignored(f):
             continue
         meta = parse_inline_metadata(f)
+        if not _is_script_candidate(f, meta):
+            continue
         script_name = meta.get("name", f.stem)
         if script_name == name or f.stem == name:
             runtime = classify_runtime(f, meta)
@@ -216,6 +266,193 @@ def resolve_script_reference(ref: str) -> dict | None:
             "metadata": meta,
         }
     return resolve_script(ref)
+
+
+def _extract_script_path_from_program_args(program_args: list) -> Path | None:
+    candidates: list[Path] = []
+    for arg in program_args or []:
+        if not isinstance(arg, str):
+            continue
+        candidate = Path(arg).expanduser()
+        if not candidate.is_file():
+            continue
+        if not _within_scripts_dir(candidate):
+            continue
+        if _is_ignored(candidate):
+            continue
+        candidates.append(candidate)
+    if not candidates:
+        return None
+    return candidates[-1]
+
+
+def _format_schedule_from_plist(plist_data: dict) -> tuple[str, str, str]:
+    if plist_data.get("KeepAlive") is True:
+        return "keep_alive", "true", "keep alive"
+    if plist_data.get("RunAtLoad") is True and "StartInterval" not in plist_data and "StartCalendarInterval" not in plist_data:
+        return "run_at_load", "true", "run at load"
+
+    if "StartInterval" in plist_data:
+        interval = int(plist_data["StartInterval"])
+        return "interval", str(interval), f"every {interval}s"
+
+    cal = plist_data.get("StartCalendarInterval")
+    if cal:
+        if isinstance(cal, list):
+            value = json.dumps(cal, ensure_ascii=False)
+            return "calendar", value, "calendar"
+        hour = cal.get("Hour")
+        minute = cal.get("Minute")
+        weekday = cal.get("Weekday")
+        if weekday is not None and hour is not None and minute is not None:
+            return "calendar", json.dumps(cal, ensure_ascii=False), f"{hour:02d}:{minute:02d} weekday={weekday}"
+        if hour is not None and minute is not None:
+            return "calendar", json.dumps(cal, ensure_ascii=False), f"{hour:02d}:{minute:02d} daily"
+        return "calendar", json.dumps(cal, ensure_ascii=False), "calendar"
+
+    return "manual", "", ""
+
+
+def discover_personal_schedules() -> list[dict]:
+    """Inspect system schedulers and return personal schedules linked to scripts."""
+    if platform.system() != "Darwin":
+        return []
+
+    results = []
+    launch_agents_dir = Path.home() / "Library" / "LaunchAgents"
+    if not launch_agents_dir.is_dir():
+        return results
+
+    core_names = load_core_script_names()
+    for plist_path in sorted(launch_agents_dir.glob("com.nexo.*.plist")):
+        try:
+            with plist_path.open("rb") as fh:
+                plist_data = plistlib.load(fh)
+        except Exception:
+            continue
+
+        env = plist_data.get("EnvironmentVariables") or {}
+        if env.get("NEXO_MANAGED_CORE_CRON") == "1":
+            continue
+
+        program_args = plist_data.get("ProgramArguments") or []
+        script_path = _extract_script_path_from_program_args(program_args)
+        if script_path is None:
+            continue
+        if script_path.name in core_names:
+            continue
+
+        schedule_type, schedule_value, schedule_label = _format_schedule_from_plist(plist_data)
+        label = str(plist_data.get("Label", plist_path.stem))
+        cron_id = label.replace("com.nexo.", "", 1)
+        results.append({
+            "cron_id": cron_id,
+            "script_path": str(script_path),
+            "schedule_type": schedule_type,
+            "schedule_value": schedule_value,
+            "schedule_label": schedule_label,
+            "launchd_label": label,
+            "plist_path": str(plist_path),
+            "enabled": True,
+            "description": "",
+        })
+
+    return results
+
+
+def sync_personal_scripts(prune_missing: bool = True) -> dict:
+    """Sync filesystem + scheduler state into the DB-backed personal scripts registry."""
+    from db import init_db, sync_personal_scripts_registry
+
+    init_db()
+    scripts = list_scripts(include_core=False)
+    schedules = discover_personal_schedules()
+    return sync_personal_scripts_registry(scripts, schedules, prune_missing=prune_missing)
+
+
+def _template_path(filename: str) -> Path | None:
+    candidates = [
+        NEXO_HOME / "templates" / filename,
+        NEXO_CODE.parent / "templates" / filename,
+        NEXO_CODE / "templates" / filename,
+    ]
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _script_filename_from_name(name: str, runtime: str) -> str:
+    slug = []
+    for ch in name.strip().lower():
+        if ch.isalnum():
+            slug.append(ch)
+        elif ch in {" ", "-", "_"}:
+            slug.append("-")
+    stem = "".join(slug).strip("-") or "personal-script"
+    ext = {
+        "python": ".py",
+        "shell": ".sh",
+        "node": ".js",
+        "php": ".php",
+    }.get(runtime, ".py")
+    return stem + ext
+
+
+def create_script(name: str, *, description: str = "", runtime: str = "python", force: bool = False) -> dict:
+    runtime = runtime if runtime in SUPPORTED_RUNTIMES else "python"
+    if runtime == "unknown":
+        runtime = "python"
+
+    scripts_dir = get_scripts_dir()
+    scripts_dir.mkdir(parents=True, exist_ok=True)
+    filename = _script_filename_from_name(name, runtime)
+    path = scripts_dir / filename
+    if path.exists() and not force:
+        raise FileExistsError(f"Script already exists: {path}")
+
+    if runtime == "shell":
+        template_path = _template_path("script-template.sh")
+    else:
+        template_path = _template_path("script-template.py")
+
+    if template_path:
+        content = template_path.read_text()
+    elif runtime == "shell":
+        content = (
+            "#!/usr/bin/env bash\n"
+            "# nexo: name=example-script\n"
+            "# nexo: description=Example shell script using NEXO\n"
+            "# nexo: runtime=shell\n"
+            "set -euo pipefail\n"
+            "echo \"Hello from NEXO personal script\"\n"
+        )
+    else:
+        content = (
+            "#!/usr/bin/env python3\n"
+            "# nexo: name=example-script\n"
+            "# nexo: description=Example personal script using NEXO\n"
+            "# nexo: runtime=python\n"
+            "print('hello')\n"
+        )
+
+    script_name = Path(filename).stem
+    content = content.replace("example-script", script_name)
+    content = content.replace("Example personal script using the stable NEXO CLI", description or f"Personal script: {script_name}")
+    content = content.replace("Example shell script using NEXO", description or f"Personal script: {script_name}")
+
+    path.write_text(content)
+    if runtime in {"shell", "python"}:
+        path.chmod(0o755)
+    sync_result = sync_personal_scripts()
+    return {
+        "ok": True,
+        "name": script_name,
+        "path": str(path),
+        "runtime": runtime,
+        "description": description,
+        "sync": sync_result,
+    }
 
 
 def doctor_script(path_or_name: str) -> dict:
@@ -279,6 +516,11 @@ def doctor_script(path_or_name: str) -> dict:
             items.append({"level": "pass", "msg": f"Timeout: {timeout_str}s"})
         except ValueError:
             items.append({"level": "fail", "msg": f"Invalid timeout value: {timeout_str}"})
+
+    if runtime == "node" and not shutil.which("node"):
+        items.append({"level": "fail", "msg": "Node runtime not found in PATH"})
+    if runtime == "php" and not shutil.which("php"):
+        items.append({"level": "fail", "msg": "PHP runtime not found in PATH"})
 
     # Requires check
     requires = meta.get("requires", "")

@@ -6,7 +6,11 @@ import platform
 import subprocess
 from pathlib import Path
 
-from db import cron_runs_recent, cron_runs_summary
+from db import (
+    init_db, cron_runs_recent, cron_runs_summary,
+    upsert_personal_script, register_personal_script_schedule,
+)
+from script_registry import parse_inline_metadata, classify_runtime
 
 
 def handle_schedule_status(hours: int = 24, cron_id: str = '') -> str:
@@ -47,7 +51,7 @@ def handle_schedule_status(hours: int = 24, cron_id: str = '') -> str:
 
 def handle_schedule_add(cron_id: str, script: str, schedule: str = '',
                         interval_seconds: int = 0, description: str = '',
-                        script_type: str = 'python') -> str:
+                        script_type: str = 'auto') -> str:
     """Add a new personal cron job. Generates and installs the LaunchAgent (macOS) or systemd timer (Linux).
 
     Args:
@@ -56,7 +60,7 @@ def handle_schedule_add(cron_id: str, script: str, schedule: str = '',
         schedule: Time-based schedule as 'HH:MM' (daily) or 'HH:MM:weekday' (e.g. '08:00:1' for Monday 8AM). Mutually exclusive with interval_seconds.
         interval_seconds: Run every N seconds (e.g. 300 for every 5 min). Mutually exclusive with schedule.
         description: What this cron does (for logs and status).
-        script_type: 'python' (default) or 'shell'.
+        script_type: 'auto' (default), 'python', 'shell', 'node', or 'php'.
     """
     if not cron_id or not script:
         return "ERROR: cron_id and script are required."
@@ -70,6 +74,12 @@ def handle_schedule_add(cron_id: str, script: str, schedule: str = '',
     if not script_path.exists():
         return f"ERROR: script not found: {script_path}"
 
+    script_meta = parse_inline_metadata(script_path)
+    detected_runtime = classify_runtime(script_path, script_meta)
+    script_type = (script_type or "auto").strip().lower()
+    if script_type == "auto":
+        script_type = detected_runtime if detected_runtime != "unknown" else "python"
+
     wrapper_path = nexo_home / "scripts" / "nexo-cron-wrapper.sh"
     if not wrapper_path.exists():
         return f"ERROR: wrapper not found at {wrapper_path}. Run crons/sync.py first."
@@ -77,13 +87,82 @@ def handle_schedule_add(cron_id: str, script: str, schedule: str = '',
     system = platform.system()
 
     if system == "Darwin":
-        return _add_launchagent(cron_id, str(script_path), str(wrapper_path),
-                                schedule, interval_seconds, description, script_type, nexo_home)
+        return _add_launchagent(
+            cron_id,
+            str(script_path),
+            str(wrapper_path),
+            schedule,
+            interval_seconds,
+            description or script_meta.get("description", ""),
+            script_type,
+            nexo_home,
+        )
     elif system == "Linux":
-        return _add_systemd_timer(cron_id, str(script_path), str(wrapper_path),
-                                  schedule, interval_seconds, description, script_type, nexo_home)
+        return _add_systemd_timer(
+            cron_id,
+            str(script_path),
+            str(wrapper_path),
+            schedule,
+            interval_seconds,
+            description or script_meta.get("description", ""),
+            script_type,
+            nexo_home,
+        )
     else:
         return f"ERROR: unsupported platform: {system}"
+
+
+def _runtime_command(script_type: str) -> str:
+    if script_type == "shell":
+        return "/bin/bash"
+    if script_type == "node":
+        return "node"
+    if script_type == "php":
+        return "php"
+
+    for p in ["/opt/homebrew/bin/python3", "/usr/local/bin/python3", "/usr/bin/python3"]:
+        if Path(p).exists():
+            return p
+    return "python3"
+
+
+def _register_schedule_metadata(cron_id, script_path, schedule, interval_seconds, description, script_type, label="", plist_path=""):
+    init_db()
+    script_meta = parse_inline_metadata(Path(script_path))
+    runtime = classify_runtime(Path(script_path), script_meta)
+    upsert_personal_script(
+        name=script_meta.get("name", Path(script_path).stem),
+        path=str(Path(script_path)),
+        description=script_meta.get("description", description),
+        runtime=runtime,
+        metadata=script_meta,
+        created_by="schedule:add",
+        source="filesystem",
+        has_inline_metadata=bool(script_meta),
+    )
+    if interval_seconds:
+        schedule_type = "interval"
+        schedule_value = str(interval_seconds)
+        schedule_label = f"every {interval_seconds}s"
+    elif schedule:
+        schedule_type = "calendar"
+        schedule_value = schedule
+        schedule_label = schedule
+    else:
+        schedule_type = "manual"
+        schedule_value = ""
+        schedule_label = ""
+    register_personal_script_schedule(
+        script_path=str(Path(script_path)),
+        cron_id=cron_id,
+        schedule_type=schedule_type,
+        schedule_value=schedule_value,
+        schedule_label=schedule_label,
+        launchd_label=label,
+        plist_path=plist_path,
+        description=description,
+        enabled=True,
+    )
 
 
 def _add_launchagent(cron_id, script_path, wrapper_path, schedule, interval_seconds,
@@ -97,16 +176,8 @@ def _add_launchagent(cron_id, script_path, wrapper_path, schedule, interval_seco
     if plist_path.exists():
         return f"ERROR: cron '{cron_id}' already exists at {plist_path}. Use a different ID or remove it first."
 
-    python_bin = "/opt/homebrew/bin/python3"
-    for p in ["/opt/homebrew/bin/python3", "/usr/local/bin/python3", "/usr/bin/python3"]:
-        if Path(p).exists():
-            python_bin = p
-            break
-
-    if script_type == "shell":
-        program_args = ["/bin/bash", wrapper_path, cron_id, "/bin/bash", script_path]
-    else:
-        program_args = ["/bin/bash", wrapper_path, cron_id, python_bin, script_path]
+    runtime_cmd = _runtime_command(script_type)
+    program_args = ["/bin/bash", wrapper_path, cron_id, runtime_cmd, script_path]
 
     plist = {
         "Label": label,
@@ -134,6 +205,17 @@ def _add_launchagent(cron_id, script_path, wrapper_path, schedule, interval_seco
 
     subprocess.run(["launchctl", "bootstrap", f"gui/{os.getuid()}", str(plist_path)], capture_output=True)
 
+    _register_schedule_metadata(
+        cron_id,
+        script_path,
+        schedule,
+        interval_seconds,
+        description,
+        script_type,
+        label=label,
+        plist_path=str(plist_path),
+    )
+
     return f"Cron '{cron_id}' installed at {plist_path} and loaded.{' Schedule: ' + schedule if schedule else f' Interval: {interval_seconds}s'}"
 
 
@@ -143,16 +225,8 @@ def _add_systemd_timer(cron_id, script_path, wrapper_path, schedule, interval_se
     unit_dir = Path.home() / ".config" / "systemd" / "user"
     unit_dir.mkdir(parents=True, exist_ok=True)
 
-    python_bin = "/usr/bin/python3"
-    for p in ["/usr/bin/python3", "/usr/local/bin/python3"]:
-        if Path(p).exists():
-            python_bin = p
-            break
-
-    if script_type == "shell":
-        exec_cmd = f"/bin/bash {wrapper_path} {cron_id} /bin/bash {script_path}"
-    else:
-        exec_cmd = f"/bin/bash {wrapper_path} {cron_id} {python_bin} {script_path}"
+    runtime_cmd = _runtime_command(script_type)
+    exec_cmd = f"/bin/bash {wrapper_path} {cron_id} {runtime_cmd} {script_path}"
 
     # Service unit
     service_content = f"""[Unit]
@@ -197,6 +271,17 @@ WantedBy=timers.target
 
     subprocess.run(["systemctl", "--user", "daemon-reload"], capture_output=True)
     subprocess.run(["systemctl", "--user", "enable", "--now", f"nexo-{cron_id}.timer"], capture_output=True)
+
+    _register_schedule_metadata(
+        cron_id,
+        script_path,
+        schedule,
+        interval_seconds,
+        description,
+        script_type,
+        label=f"nexo-{cron_id}",
+        plist_path="",
+    )
 
     return f"Cron '{cron_id}' installed as systemd timer and enabled. Service: {service_path}, Timer: {timer_path}"
 

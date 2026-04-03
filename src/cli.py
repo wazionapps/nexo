@@ -3,6 +3,9 @@
 
 Entry points:
   nexo scripts list [--all] [--json]
+  nexo scripts create NAME [--runtime python|shell] [--description TEXT]
+  nexo scripts sync [--json]
+  nexo scripts schedules [--json]
   nexo scripts run NAME_OR_PATH [-- args...]
   nexo scripts doctor [NAME_OR_PATH] [--json]
   nexo scripts call TOOL --input JSON [--json-output]
@@ -47,8 +50,16 @@ if str(NEXO_CODE) not in sys.path:
 
 
 def _scripts_list(args):
-    from script_registry import list_scripts
-    scripts = list_scripts(include_core=args.all)
+    from db import init_db, list_personal_scripts
+    from script_registry import list_scripts, sync_personal_scripts
+
+    init_db()
+    sync_personal_scripts()
+    if args.all:
+        scripts = list_scripts(include_core=True)
+    else:
+        scripts = list_personal_scripts()
+
     if args.json:
         print(json.dumps(scripts, indent=2))
     else:
@@ -60,13 +71,82 @@ def _scripts_list(args):
         rt_w = max(len(s["runtime"]) for s in scripts)
         for s in scripts:
             tag = " [core]" if s.get("core") else ""
-            print(f"  {s['name']:<{name_w}}  {s['runtime']:<{rt_w}}  {s['description']}{tag}")
+            schedule_tag = ""
+            if s.get("has_schedule"):
+                schedule_labels = [sch.get("schedule_label", "") for sch in s.get("schedules", []) if sch.get("schedule_label")]
+                if schedule_labels:
+                    schedule_tag = f" [{'; '.join(schedule_labels[:2])}]"
+            print(f"  {s['name']:<{name_w}}  {s['runtime']:<{rt_w}}  {s.get('description', '')}{schedule_tag}{tag}")
+    return 0
+
+
+def _scripts_sync(args):
+    from db import init_db
+    from script_registry import sync_personal_scripts
+
+    init_db()
+    result = sync_personal_scripts()
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    else:
+        print(
+            f"Synced personal scripts: {result['scripts_upserted']} script(s), "
+            f"{result['schedules_upserted']} schedule(s), "
+            f"{result['scripts_pruned']} script(s) pruned, "
+            f"{result['schedules_pruned']} schedule(s) pruned."
+        )
+    return 0
+
+
+def _scripts_create(args):
+    from script_registry import create_script
+
+    try:
+        result = create_script(
+            args.name,
+            description=args.description,
+            runtime=args.runtime,
+            force=args.force,
+        )
+    except FileExistsError as e:
+        print(str(e), file=sys.stderr)
+        return 1
+
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    else:
+        print(f"Created personal script: {result['path']}")
+    return 0
+
+
+def _scripts_schedules(args):
+    from db import init_db, list_personal_script_schedules
+    from script_registry import sync_personal_scripts
+
+    init_db()
+    sync_personal_scripts()
+    schedules = list_personal_script_schedules()
+    if args.json:
+        print(json.dumps(schedules, indent=2, ensure_ascii=False))
+        return 0
+
+    if not schedules:
+        print("No personal script schedules registered.")
+        return 0
+
+    cron_w = max(len(s["cron_id"]) for s in schedules)
+    for schedule in schedules:
+        label = schedule.get("schedule_label") or schedule.get("schedule_value") or schedule.get("schedule_type")
+        print(f"  {schedule['cron_id']:<{cron_w}}  {label}")
     return 0
 
 
 def _scripts_run(args):
-    from script_registry import resolve_script_reference
+    from db import init_db, record_personal_script_run
+    from script_registry import resolve_script_reference, sync_personal_scripts
 
+    init_db()
+    sync_personal_scripts()
     info = resolve_script_reference(args.name)
     if not info:
         print(f"Script not found: {args.name}", file=sys.stderr)
@@ -106,23 +186,37 @@ def _scripts_run(args):
         cmd = [sys.executable, str(path)] + args.script_args
     elif runtime == "shell":
         cmd = ["bash", str(path)] + args.script_args
+    elif runtime == "node":
+        cmd = ["node", str(path)] + args.script_args
+    elif runtime == "php":
+        cmd = ["php", str(path)] + args.script_args
     else:
         # Try to execute directly
         cmd = [str(path)] + args.script_args
 
     try:
         result = subprocess.run(cmd, env=env, timeout=timeout)
+        if not is_core:
+            record_personal_script_run(str(path), result.returncode)
         return result.returncode
     except subprocess.TimeoutExpired:
+        if not is_core:
+            record_personal_script_run(str(path), 124)
         print(f"Script timed out after {timeout}s", file=sys.stderr)
         return 124
     except Exception as e:
+        if not is_core:
+            record_personal_script_run(str(path), 1)
         print(f"Error running script: {e}", file=sys.stderr)
         return 1
 
 
 def _scripts_doctor(args):
-    from script_registry import doctor_script, doctor_all_scripts
+    from db import init_db
+    from script_registry import doctor_script, doctor_all_scripts, sync_personal_scripts
+
+    init_db()
+    sync_personal_scripts()
 
     if args.name:
         results = [doctor_script(args.name)]
@@ -354,6 +448,15 @@ def _update(args):
     wrapper.write_text(wrapper_content)
     wrapper.chmod(0o755)
 
+    try:
+        from db import init_db
+        from script_registry import sync_personal_scripts
+
+        init_db()
+        sync_personal_scripts()
+    except Exception:
+        pass
+
     result = {
         "packages": copied_packages,
         "files": copied_files,
@@ -560,7 +663,8 @@ def _print_help():
 
 Commands:
   nexo doctor [--tier boot|runtime|deep|all] [--fix]   System diagnostics
-  nexo scripts list|run|doctor|call                    Personal scripts
+  nexo scripts list|create|sync|schedules|run|doctor|call
+                                                      Personal scripts
   nexo skills list|apply|sync|approve                  Executable skills
   nexo update                                          Sync repo to NEXO_HOME
   nexo dashboard on|off|status                         Web dashboard control
@@ -584,6 +688,22 @@ def main():
     list_p = scripts_sub.add_parser("list", help="List scripts")
     list_p.add_argument("--all", action="store_true", help="Include core/internal scripts")
     list_p.add_argument("--json", action="store_true", help="JSON output")
+
+    # scripts create
+    create_p = scripts_sub.add_parser("create", help="Create a personal script scaffold")
+    create_p.add_argument("name", help="Human/script name")
+    create_p.add_argument("--description", default="", help="One-line description")
+    create_p.add_argument("--runtime", default="python", choices=["python", "shell"], help="Script runtime")
+    create_p.add_argument("--force", action="store_true", help="Overwrite if the target file exists")
+    create_p.add_argument("--json", action="store_true", help="JSON output")
+
+    # scripts sync
+    sync_p = scripts_sub.add_parser("sync", help="Sync script registry from filesystem and personal LaunchAgents")
+    sync_p.add_argument("--json", action="store_true", help="JSON output")
+
+    # scripts schedules
+    schedules_p = scripts_sub.add_parser("schedules", help="List registered personal script schedules")
+    schedules_p.add_argument("--json", action="store_true", help="JSON output")
 
     # scripts run
     run_p = scripts_sub.add_parser("run", help="Run a script by name")
@@ -666,6 +786,12 @@ def main():
     if args.command == "scripts":
         if args.scripts_command == "list":
             return _scripts_list(args)
+        elif args.scripts_command == "create":
+            return _scripts_create(args)
+        elif args.scripts_command == "sync":
+            return _scripts_sync(args)
+        elif args.scripts_command == "schedules":
+            return _scripts_schedules(args)
         elif args.scripts_command == "run":
             return _scripts_run(args)
         elif args.scripts_command == "doctor":

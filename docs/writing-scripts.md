@@ -1,6 +1,6 @@
 # Writing Personal Scripts for NEXO
 
-Personal scripts extend NEXO with custom automation. They live in `NEXO_HOME/scripts/` and use the stable CLI as their interface.
+Personal scripts extend NEXO with custom automation. They live in `NEXO_HOME/scripts/`, use the stable CLI as their interface, and are registered in NEXO's personal script registry so updates and scheduling don't get confused with core jobs.
 
 ## Quick Start
 
@@ -20,6 +20,26 @@ Personal scripts extend NEXO with custom automation. They live in `NEXO_HOME/scr
    ```bash
    nexo scripts run my-script -- --query "something"
    ```
+
+5. Sync the registry:
+   ```bash
+   nexo scripts sync
+   ```
+
+## Registry Model
+
+NEXO now tracks personal scripts as first-class entities:
+
+- Filesystem remains the source of truth: `NEXO_HOME/scripts/`
+- SQLite stores the registry: what the script is, where it lives, what runtime it uses, and what schedules are attached
+- Personal schedules are discovered from personal LaunchAgents/systemd timers and linked back to the script
+
+This lets NEXO answer questions like:
+
+- Which personal scripts already exist?
+- Which ones were created by NEXO vs manually?
+- Which script has a cron attached?
+- Which personal schedules are stale or drifted?
 
 ## Metadata
 
@@ -42,7 +62,7 @@ All keys are optional. Without metadata, the script name defaults to the filenam
 |-----|-------------|
 | `name` | Script name (default: filename stem) |
 | `description` | One-line description |
-| `runtime` | `python` or `shell` (auto-detected from shebang/extension) |
+| `runtime` | `python`, `shell`, `node`, or `php` (auto-detected from shebang/extension) |
 | `timeout` | Max execution time in seconds |
 | `requires` | Comma-separated commands that must be in PATH |
 | `tools` | Comma-separated NEXO MCP tools this script uses |
@@ -100,6 +120,9 @@ The `nexo scripts doctor` command checks for these violations.
 nexo scripts list              # List personal scripts
 nexo scripts list --all        # Include core/internal scripts
 nexo scripts list --json       # JSON output
+nexo scripts create NAME       # Create scaffold in NEXO_HOME/scripts
+nexo scripts sync              # Sync registry from filesystem + personal LaunchAgents
+nexo scripts schedules         # List registered personal schedules
 nexo scripts run NAME          # Run a script
 nexo scripts run NAME -- args  # Run with arguments
 nexo scripts doctor            # Validate all personal scripts

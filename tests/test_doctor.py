@@ -5,6 +5,7 @@ import plistlib
 import sqlite3
 import sys
 import time
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -45,6 +46,7 @@ def nexo_home(tmp_path, monkeypatch):
     conn.close()
 
     monkeypatch.setenv("NEXO_HOME", str(home))
+    monkeypatch.setenv("HOME", str(home))
 
     # Patch module-level NEXO_HOME in all doctor modules
     from doctor.providers import boot, runtime, deep
@@ -255,7 +257,7 @@ class TestRuntimeChecks:
         from doctor.providers import runtime
 
         plist_path = nexo_home / "com.nexo.deep-sleep.plist"
-        protected_code = os.path.join(os.path.expanduser("~"), "Documents", "nexo", "src")
+        protected_code = "/Users/tester/Documents/nexo/src"
         with plist_path.open("wb") as fh:
             plistlib.dump({
                 "EnvironmentVariables": {
@@ -270,6 +272,7 @@ class TestRuntimeChecks:
         monkeypatch.setattr(runtime, "_managed_launchagent_plists", lambda: [("deep-sleep", plist_path)])
         monkeypatch.setattr(runtime, "_recent_permission_denial", lambda cron_id: cron_id == "deep-sleep")
         monkeypatch.setattr(runtime.os, "getuid", lambda: 501)
+        monkeypatch.setattr(runtime, "PROTECTED_MACOS_ROOTS", (Path("/Users/tester/Documents"),))
 
         def fake_run(args, **kwargs):
             return SimpleNamespace(
@@ -452,7 +455,7 @@ class TestRuntimeChecks:
         from doctor.providers import runtime
 
         plist_path = nexo_home / "com.nexo.tcc-approve.plist"
-        old_code = os.path.join(os.path.expanduser("~"), "Documents", "nexo", "src")
+        old_code = "/Users/tester/Documents/nexo/src"
         with plist_path.open("wb") as fh:
             plistlib.dump({
                 "EnvironmentVariables": {
@@ -468,6 +471,7 @@ class TestRuntimeChecks:
         monkeypatch.setattr(runtime, "_launchagent_schedule_expectations", lambda: {})
         monkeypatch.setattr(runtime, "_recent_permission_denial", lambda cron_id: False)
         monkeypatch.setattr(runtime.os, "getuid", lambda: 501)
+        monkeypatch.setattr(runtime, "PROTECTED_MACOS_ROOTS", (Path("/Users/tester/Documents"),))
 
         calls = {"print": 0}
 
