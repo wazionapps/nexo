@@ -754,6 +754,7 @@ fi
 # --- Immutable file integrity ---
 IMMUTABLE_STATUS="PASS"
 IMMUTABLE_DETAIL=""
+OBJECTIVE="$CORTEX_DIR/evolution-objective.json"
 if [ -f "$HASH_REGISTRY" ]; then
   TAMPERED=0
   while IFS='|' read -r filepath expected_hash; do
@@ -774,7 +775,6 @@ if [ -f "$HASH_REGISTRY" ]; then
     IMMUTABLE_STATUS="FAIL"
     IMMUTABLE_DETAIL="$TAMPERED immutable files tampered"
     TOTAL_FAIL=$((TOTAL_FAIL + 1))
-    OBJECTIVE="$CORTEX_DIR/evolution-objective.json"
     if [ -f "$OBJECTIVE" ]; then
       python3 -c "
 import json
@@ -788,6 +788,23 @@ with open('$OBJECTIVE', 'w') as f: json.dump(d, f, indent=2)
   else
     IMMUTABLE_DETAIL="All files intact"
     TOTAL_PASS=$((TOTAL_PASS + 1))
+    if [ -f "$OBJECTIVE" ]; then
+      python3 -c "
+import json
+from pathlib import Path
+obj = Path('$OBJECTIVE')
+try:
+    data = json.loads(obj.read_text())
+except Exception:
+    raise SystemExit(0)
+reason = data.get('disabled_reason', '') or ''
+if data.get('evolution_enabled') is False and 'watchdog disabled Evolution' in reason:
+    data['evolution_enabled'] = True
+    data.pop('disabled_reason', None)
+    obj.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+    print('REENABLED')
+" 2>/dev/null | grep -q "REENABLED" && log "REENABLED Evolution after immutable integrity recovered"
+    fi
   fi
 else
   IMMUTABLE_DETAIL="No hash registry (skipped)"
