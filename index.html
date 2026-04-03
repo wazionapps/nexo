@@ -618,35 +618,42 @@
 </section>
 
 <!-- v2.5.0 Runtime CLI, Unified Doctor & Skills v2 -->
-<section class="feature-section" style="padding:48px 24px;">
-    <div style="max-width:900px;margin:0 auto;">
+<section class="feature-section">
+    <div class="container">
         <div class="section-label">New in v2.5.0</div>
-        <h2 style="text-align:center;margin-bottom:32px;">Runtime CLI, Unified Doctor &amp; Skills v2</h2>
+        <h2 class="section-title">Runtime CLI, Unified Doctor &amp; Skills v2</h2>
+        <p class="section-subtitle">Six new capabilities that turn NEXO from a tool you use into a system that works for you.</p>
 
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:24px;">
-            <div class="card">
+        <div class="feature-grid">
+            <div class="feature-card">
+                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></div>
                 <h3>Runtime CLI</h3>
-                <p>The <code>nexo</code> command gives you direct terminal access to scripts, doctor diagnostics, skills, and updates. Manage your cognitive system without opening an MCP client. One binary, full control.</p>
+                <p>The <code>nexo</code> command gives you direct terminal access to scripts, doctor diagnostics, skills, and updates. One binary, full control — no MCP client needed.</p>
             </div>
-            <div class="card">
+            <div class="feature-card">
+                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
                 <h3>Unified Doctor</h3>
-                <p>Three-level diagnostic system: boot, runtime, and deep checks. The <code>--fix</code> mode auto-repairs common issues. Also available as an MCP tool for in-session diagnostics without leaving your workflow.</p>
+                <p>Three-level diagnostic system: boot, runtime, and deep checks. The <code>--fix</code> mode auto-repairs common issues. Also available as MCP tool for in-session diagnostics.</p>
             </div>
-            <div class="card">
+            <div class="feature-card">
+                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
                 <h3>Skills v2</h3>
-                <p>Executable skills with three modes: guide (step-by-step instructions), execute (autonomous run), and hybrid (guided with auto-execution). Security levels control what each skill can access and modify.</p>
+                <p>Executable skills with three modes: guide, execute, and hybrid. Security levels (read-only, local, remote) control what each skill can access. Deep Sleep auto-evolves skills over time.</p>
             </div>
-            <div class="card">
+            <div class="feature-card">
+                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
                 <h3>Day Orchestrator</h3>
-                <p>Autonomous NEXO operation every 15 minutes from 8:00 to 23:00. Handles routine maintenance, followup checks, and proactive tasks without manual intervention. Your agent works even when you don't.</p>
+                <p>Autonomous NEXO cycles every 15 minutes, 8:00 to 23:00. Checks followups, emails, infrastructure — acts on what it can, emails you only when needed. Your agent works even when you don't.</p>
             </div>
-            <div class="card">
+            <div class="feature-card">
+                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>
                 <h3>Dashboard Always-On</h3>
-                <p>The web dashboard at localhost:6174 now runs permanently with 23 modules. Auto-starts on boot, provides continuous monitoring of memory health, trust scores, sessions, and system processes.</p>
+                <p>Web dashboard at localhost:6174 with 23 modules. Runs permanently as a system service — auto-starts on boot, dark theme, real-time memory health and session monitoring.</p>
             </div>
-            <div class="card">
-                <h3>Personal Scripts Framework</h3>
-                <p>Auto-discovery of personal scripts in your NEXO home directory. Register, organize, and execute custom automation scripts directly from the CLI or MCP tools. Extends NEXO with your own workflows.</p>
+            <div class="feature-card">
+                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></div>
+                <h3>Personal Scripts</h3>
+                <p>Auto-discovery of scripts in your NEXO home directory. Inline metadata, runtime detection, forbidden-pattern validation. Extend NEXO with your own automation workflows.</p>
             </div>
         </div>
     </div>
