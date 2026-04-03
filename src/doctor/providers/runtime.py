@@ -667,10 +667,10 @@ def check_skill_health(fix: bool = False) -> DoctorCheck:
         evidence=evidence,
         repair_plan=[
             "Run nexo skills sync to reconcile filesystem definitions",
-            "Approve local/remote skills explicitly before execution",
+            "Auto-reconcile execution metadata for executable skills",
             "Fix or restore missing executable files for execute/hybrid skills",
         ],
-        escalation_prompt="Skill metadata and filesystem artifacts are out of sync or an executable skill is unsafe to run.",
+        escalation_prompt="Skill metadata and filesystem artifacts are out of sync or an executable skill is missing artifacts.",
     )
 
 

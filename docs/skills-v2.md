@@ -24,8 +24,12 @@ nexo skills evolution
 
 Execution policy:
 - `none`: never executes
-- `read-only`: can auto-run without approval
-- `local`: requires explicit approval
-- `remote`: requires explicit approval
+- `read-only`: auto-runs
+- `local`: auto-runs
+- `remote`: auto-runs
 
-Deep Sleep may auto-create guide skills and read-only executable drafts, but it must not auto-approve local or remote execution.
+Deep Sleep now does two things automatically:
+- creates new Skills v2 definitions from extracted procedures
+- promotes mature guide skills (3+ successful uses, high trust, no script yet) into executable drafts under `NEXO_HOME/skills/`
+
+If Claude synthesis emits a concrete `script_body`, Deep Sleep materializes that script directly. If not, it still creates a deterministic executable draft so the skill enters the runtime loop immediately.

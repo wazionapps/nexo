@@ -22,9 +22,11 @@ from db import (
     get_skill,
     get_skill_execution_spec,
     init_db,
+    materialize_personal_skill_definition,
     record_skill_usage,
     render_command_template,
     sync_skill_directories,
+    update_skill,
 )
 from script_registry import doctor_script
 
@@ -194,13 +196,13 @@ def apply_skill(skill_id: str, params=None, mode: str = "auto", dry_run: bool = 
             response["error"] = f"Skill {skill_id} has no executable script"
             return response
 
-        if exec_spec["execution_level"] in {"local", "remote"} and not skill.get("approved_at"):
-            response["ok"] = False
-            response["error"] = (
-                f"Skill {skill_id} requires approval before execution "
-                f"({exec_spec['execution_level']})"
-            )
-            return response
+        if exec_spec["execution_level"] in {"read-only", "local", "remote"} and not skill.get("approved_at"):
+            skill = approve_skill(skill_id, execution_level=exec_spec["execution_level"], approved_by="system:auto")
+            response["approval_state"] = {
+                "approval_required": bool(skill.get("approval_required", 0)),
+                "approved_at": skill.get("approved_at", ""),
+                "execution_level": skill.get("execution_level", exec_spec["execution_level"]),
+            }
 
         doctor = doctor_script(skill["file_path"])
         response["script_doctor"] = doctor
@@ -262,3 +264,84 @@ def list_evolution_candidates() -> dict:
         "scriptable": collect_scriptable_skill_candidates(),
         "improvements": collect_skill_improvement_candidates(),
     }
+
+
+def auto_promote_skill_evolution(approved_by: str = "system:auto") -> dict:
+    """Convert mature guide skills into executable drafts without manual approval."""
+    _ensure_ready()
+    sync_skill_directories()
+    promoted = []
+    skipped = []
+    for candidate in collect_scriptable_skill_candidates():
+        skill = get_skill(candidate["id"])
+        if not skill or skill.get("file_path"):
+            continue
+
+        steps = candidate.get("steps") or []
+        gotchas = candidate.get("gotchas") or []
+        description = candidate.get("description", "") or "Automated skill generated from repeated successful usage."
+        lines = [
+            "#!/usr/bin/env python3",
+            '"""Auto-generated executable skill draft."""',
+            "import json",
+            "import sys",
+            "",
+            "def main() -> int:",
+            "    payload = {",
+            f"        'skill_id': {json.dumps(candidate['id'])},",
+            f"        'skill_name': {json.dumps(candidate['name'])},",
+            f"        'description': {json.dumps(description)},",
+            f"        'steps': {json.dumps(steps, ensure_ascii=False)},",
+            f"        'gotchas': {json.dumps(gotchas, ensure_ascii=False)},",
+            "        'argv': sys.argv[1:],",
+            "    }",
+            "    print(json.dumps(payload, ensure_ascii=False))",
+            "    return 0",
+            "",
+            'if __name__ == "__main__":',
+            "    raise SystemExit(main())",
+            "",
+        ]
+        update = update_skill(
+            candidate["id"],
+            mode=candidate.get("suggested_mode", "hybrid"),
+            execution_level=candidate.get("suggested_execution_level", "read-only"),
+            approval_required=0,
+            approved_by=approved_by,
+        )
+        if "error" in update:
+            skipped.append({"id": candidate["id"], "reason": update["error"]})
+            continue
+
+        materialized = materialize_personal_skill_definition(
+            {
+                "id": candidate["id"],
+                "name": candidate["name"],
+                "description": description,
+                "level": skill.get("level", "published"),
+                "mode": candidate.get("suggested_mode", "hybrid"),
+                "execution_level": candidate.get("suggested_execution_level", "read-only"),
+                "approved_by": approved_by,
+                "tags": json.loads(skill.get("tags", "[]")) if skill.get("tags") else [],
+                "trigger_patterns": candidate.get("trigger_patterns", []),
+                "source_sessions": candidate.get("source_sessions", []),
+                "steps": steps,
+                "gotchas": gotchas,
+                "content": skill.get("content", ""),
+                "command_template": {"argv": ["{{file_path}}"]},
+                "executable_entry": "script.py",
+                "script_body": "\n".join(lines),
+            }
+        )
+        if "error" in materialized:
+            skipped.append({"id": candidate["id"], "reason": materialized["error"]})
+            continue
+
+        promoted.append(
+            {
+                "id": candidate["id"],
+                "mode": candidate.get("suggested_mode", "hybrid"),
+                "execution_level": candidate.get("suggested_execution_level", "read-only"),
+            }
+        )
+    return {"promoted": promoted, "skipped": skipped}

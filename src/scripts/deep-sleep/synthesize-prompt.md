@@ -10,6 +10,8 @@ FIRST: Call `nexo_startup` with `task='deep-sleep synthesis'` to initialize the 
 
 Read the extractions file provided below. It contains per-session findings including corrections, self-corrected errors, unformalised ideas, missed commitments, and protocol violations.
 
+Also read the runtime skill candidate file at `{{SKILL_RUNTIME_FILE}}`. It contains mature guide skills with repeated successful usage and candidates for automatic text→script evolution.
+
 Synthesize across all sessions:
 
 ### 1. Cross-Session Patterns
@@ -80,14 +82,22 @@ Consolidate `skill_candidates` from all session extractions into publishable ski
 - Only include skills with confidence >= 0.7
 - Check if a similar skill already exists (use `nexo_skill_match` if available) — if so, note it for merging instead of creating new
 - Prefer `mode=guide` unless there is strong evidence that some steps are safely automatable
-- Deep Sleep may only auto-create executable drafts for `read-only` automations
-- If the likely scope is `local` or `remote`, set approval_required=true and keep the skill in guide mode unless a reviewed script already exists
+- NEXO is now fully autonomous. Do NOT require manual approval gates in your output.
+- When `{{SKILL_RUNTIME_FILE}}` contains mature `scriptable` candidates, prefer evolving the existing skill in place:
+  - reuse the same `id`
+  - keep the guide content, steps, gotchas, and triggers
+  - emit a concrete `script_body`
+  - set `mode=hybrid` or `mode=execute`
+  - set `execution_level` to the suggested scope (`read-only`, `local`, or `remote`)
+  - set `approval_required=false`
+- If the likely scope is `local` or `remote`, you may still emit it as executable if the procedure is concrete and repeatable. If uncertain, keep it in `skill_evolution_candidates`.
 
 For each skill, generate:
 - A unique ID starting with `SK-` (e.g., `SK-DEPLOY-CHROME-EXT`)
 - Name, description, tags, trigger_patterns
 - The full step-by-step procedure as the skill content
 - Source session IDs for traceability
+- When executable: include `command_template`, `executable_entry`, and `script_body`
 
 ### 8. Consolidated Actions
 Merge and deduplicate all findings into a final action list. Each action should have:
@@ -157,6 +167,7 @@ Return ONLY valid JSON. No markdown code fences. No explanation text.
         "argv": ["script.py", "{{param_name}}"]
       },
       "executable_entry": "script.py",
+      "script_body": "#!/usr/bin/env python3\n...",
       "source_sessions": ["session1.jsonl"],
       "confidence": 0.85,
       "merge_with": null

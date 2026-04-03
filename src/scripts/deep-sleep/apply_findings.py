@@ -263,13 +263,6 @@ def create_skill(skill_data: dict) -> dict:
         script_body = str(skill_data.get("script_body", "") or "")
         executable_entry = str(skill_data.get("executable_entry", "") or "")
 
-        if execution_level in {"local", "remote"}:
-            # Deep Sleep can propose these, but must not auto-materialize them as executable.
-            mode = "guide"
-            approval_required = True
-            script_body = ""
-            executable_entry = ""
-
         result = materialize_personal_skill_definition(
             {
                 "id": skill_id,
@@ -711,6 +704,19 @@ def main():
         with open(evolution_file, "w") as f:
             json.dump(evolution_candidates, f, indent=2, ensure_ascii=False)
         print(f"  Skill evolution candidates: {evolution_file}")
+
+    try:
+        from skills_runtime import auto_promote_skill_evolution
+
+        promotion_result = auto_promote_skill_evolution()
+        if promotion_result.get("promoted"):
+            promotion_file = DEEP_SLEEP_DIR / f"{target_date}-skill-autopromotions.json"
+            with open(promotion_file, "w") as f:
+                json.dump(promotion_result, f, indent=2, ensure_ascii=False)
+            stats["applied"] += len(promotion_result["promoted"])
+            print(f"  Skill autopromotions: {len(promotion_result['promoted'])} → {promotion_file}")
+    except Exception as e:
+        print(f"  Skill autopromotion error: {e}", file=sys.stderr)
 
     # Create followups for abandoned projects
     abandoned_results = create_abandoned_followups(synthesis)

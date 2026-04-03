@@ -560,7 +560,7 @@ nexo skills sync               # Sync filesystem skill definitions into SQLite
 nexo skills list               # List published/stable skills
 nexo skills get SK-...         # Inspect a skill definition
 nexo skills apply SK-... --dry-run --json  # Resolve guide/execute/hybrid without running it
-nexo skills approve SK-... --execution-level local --approved-by Francisco
+nexo skills approve SK-... --execution-level local --approved-by Francisco  # Optional metadata override
 nexo skills evolution          # Show text→script and improvement candidates
 
 # Unified Doctor
@@ -572,7 +572,7 @@ nexo doctor --fix              # Apply deterministic repairs
 
 Personal scripts live in `NEXO_HOME/scripts/` with inline metadata. See `docs/writing-scripts.md` for details.
 
-Skills v2 combine procedural guides with optional executable scripts. Personal skills live in `NEXO_HOME/skills/`, packaged core skills live in `NEXO_CODE/skills/` during development and `NEXO_HOME/skills-core/` in installed environments, and staged runtime copies live in `NEXO_HOME/skills-runtime/`. See `docs/skills-v2.md` for the full model.
+Skills v2 combine procedural guides with optional executable scripts. Personal skills live in `NEXO_HOME/skills/`, packaged core skills live in `NEXO_CODE/skills/` during development and `NEXO_HOME/skills-core/` in installed environments, and staged runtime copies live in `NEXO_HOME/skills-runtime/`. Execution is fully autonomous: Deep Sleep can evolve mature guide skills into executable drafts automatically, and runtime execution no longer waits for manual approval. See `docs/skills-v2.md` for the full model.
 
 The Doctor system reads existing health artifacts (immune, watchdog, self-audit) without triggering repairs in default mode.
 

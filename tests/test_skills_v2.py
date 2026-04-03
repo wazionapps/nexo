@@ -121,7 +121,7 @@ class TestSkillsRuntime:
         assert result["script_command"][-1] == "runtime"
         assert result["script_doctor"]["status"] == "pass"
 
-    def test_local_skill_requires_explicit_approval(self, skills_env):
+    def test_local_skill_is_auto_approved(self, skills_env):
         db, skills_runtime, doctor_runtime, _ = _reload_skill_stack()
         db.init_db()
 
@@ -129,7 +129,7 @@ class TestSkillsRuntime:
             {
                 "id": "SK-LOCAL-EDIT",
                 "name": "Local Edit Skill",
-                "description": "Edits local files and therefore requires approval.",
+                "description": "Edits local files and is auto-approved by the autonomous runtime.",
                 "level": "published",
                 "mode": "execute",
                 "execution_level": "local",
@@ -142,13 +142,13 @@ class TestSkillsRuntime:
         )
         assert result["id"] == "SK-LOCAL-EDIT"
 
-        blocked = skills_runtime.apply_skill("SK-LOCAL-EDIT", dry_run=True)
-        assert blocked["ok"] is False
-        assert "requires approval" in blocked["error"]
+        allowed = skills_runtime.apply_skill("SK-LOCAL-EDIT", dry_run=True)
+        assert allowed["ok"] is True
+        assert allowed["approval_state"]["execution_level"] == "local"
+        assert allowed["approval_state"]["approved_at"]
 
         check = doctor_runtime.check_skill_health()
-        assert check.status == "degraded"
-        assert any("not approved" in item for item in check.evidence)
+        assert check.status == "healthy"
 
         approved = skills_runtime.approve_skill_execution(
             "SK-LOCAL-EDIT",
@@ -156,10 +156,6 @@ class TestSkillsRuntime:
             approved_by="Francisco",
         )
         assert approved["approved_by"] == "Francisco"
-
-        allowed = skills_runtime.apply_skill("SK-LOCAL-EDIT", dry_run=True)
-        assert allowed["ok"] is True
-        assert allowed["approval_state"]["execution_level"] == "local"
 
     def test_packaged_installs_keep_core_and_personal_skills_separate(self, tmp_path, monkeypatch):
         install_home = tmp_path / "installed-nexo"
@@ -210,6 +206,39 @@ class TestSkillsRuntime:
         assert core["source_kind"] == "core"
         assert personal["source_kind"] == "personal"
 
+    def test_scriptable_candidates_promote_to_executable_drafts(self, skills_env):
+        db, skills_runtime, _, _ = _reload_skill_stack()
+        db.init_db()
+
+        created = db.create_skill(
+            skill_id="SK-GUIDE-ONLY",
+            name="Guide Only Skill",
+            description="A repeated guide workflow.",
+            level="published",
+            content="# Guide Only Skill\n\n## Steps\n1. Do the thing\n",
+            steps=["Do the thing"],
+            gotchas=["Watch the logs"],
+            trigger_patterns=["do the thing"],
+        )
+        assert created["id"] == "SK-GUIDE-ONLY"
+
+        for context in ("ctx-1", "ctx-2", "ctx-3"):
+            db.record_skill_usage("SK-GUIDE-ONLY", success=True, context=context, notes="ok")
+
+        candidates = skills_runtime.list_evolution_candidates()
+        assert any(item["id"] == "SK-GUIDE-ONLY" for item in candidates["scriptable"])
+
+        promotion = skills_runtime.auto_promote_skill_evolution()
+        assert any(item["id"] == "SK-GUIDE-ONLY" for item in promotion["promoted"])
+
+        evolved = db.get_skill("SK-GUIDE-ONLY")
+        assert evolved["mode"] == "hybrid"
+        assert evolved["file_path"]
+        assert Path(evolved["file_path"]).is_file()
+        dry = skills_runtime.apply_skill("SK-GUIDE-ONLY", dry_run=True)
+        assert dry["ok"] is True
+        assert dry["resolved_mode"] == "hybrid"
+
 
 class TestSkillsCli:
     def test_cli_sync_list_get_and_featured(self, skills_env):
@@ -234,7 +263,7 @@ class TestSkillsCli:
         featured = json.loads(featured_result.stdout)
         assert any(skill["id"] == "SK-RUN-RUNTIME-DOCTOR" for skill in featured)
 
-    def test_cli_apply_and_approve_flow(self, skills_env):
+    def test_cli_apply_runs_without_manual_approval(self, skills_env):
         skill_dir = skills_env / "skills" / "local-release"
         skill_dir.mkdir(parents=True, exist_ok=True)
         (skill_dir / "skill.json").write_text(
@@ -262,10 +291,11 @@ class TestSkillsCli:
         sync_result = _run_cli(skills_env, "skills", "sync", "--json")
         assert sync_result.returncode == 0
 
-        blocked = _run_cli(skills_env, "skills", "apply", "SK-LOCAL-RELEASE", "--dry-run", "--json")
-        assert blocked.returncode == 1
-        blocked_data = json.loads(blocked.stdout)
-        assert "requires approval" in blocked_data["error"]
+        dry = _run_cli(skills_env, "skills", "apply", "SK-LOCAL-RELEASE", "--dry-run", "--json")
+        assert dry.returncode == 0
+        dry_data = json.loads(dry.stdout)
+        assert dry_data["ok"] is True
+        assert dry_data["approval_state"]["approved_at"]
 
         approved = _run_cli(
             skills_env,
@@ -281,16 +311,4 @@ class TestSkillsCli:
         assert approved.returncode == 0
         approved_data = json.loads(approved.stdout)
         assert approved_data["approved_by"] == "Francisco"
-
-        dry = _run_cli(
-            skills_env,
-            "skills",
-            "apply",
-            "SK-LOCAL-RELEASE",
-            "--dry-run",
-            "--json",
-        )
-        assert dry.returncode == 0
-        dry_data = json.loads(dry.stdout)
-        assert dry_data["ok"] is True
-        assert dry_data["resolved_mode"] == "execute"
+        assert approved_data["approved_at"]

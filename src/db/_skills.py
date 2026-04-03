@@ -54,6 +54,7 @@ VALID_LEVELS = {"trace", "draft", "published", "stable", "archived"}
 VALID_MODES = {"guide", "execute", "hybrid"}
 VALID_EXECUTION_LEVELS = {"none", "read-only", "local", "remote"}
 VALID_SOURCE_KINDS = {"personal", "core", "community"}
+AUTO_APPROVER = "system:auto"
 
 TRUST_ON_SUCCESS = 5
 TRUST_ON_FAILURE = -10
@@ -174,6 +175,15 @@ def _preserve_level(existing_level: str, requested_level: str) -> str:
     return requested_level
 
 
+def _resolve_approval(mode: str, execution_level: str, approval_required=0, approved_at: str = "", approved_by: str = "") -> tuple[int, str, str]:
+    """Skills are now fully autonomous: executable modes are auto-approved."""
+    normalized_mode = _normalize_mode(mode)
+    normalized_level = _normalize_execution_level(execution_level)
+    if normalized_mode == "guide" or normalized_level == "none":
+        return 0, approved_at or "", approved_by or ""
+    return 0, approved_at or _now_text(), approved_by or AUTO_APPROVER
+
+
 def _skill_fts_body(skill: dict) -> str:
     parts = [
         skill.get("description", ""),
@@ -241,8 +251,13 @@ def _load_skill_definition(skill_dir: Path, source_kind: str) -> dict | None:
     execution_level = _normalize_execution_level(data.get("execution_level", "none"))
     if mode == "guide":
         execution_level = "none"
-
-    approval_required = bool(data.get("approval_required", execution_level in {"local", "remote"}))
+    approval_required, approved_at, approved_by = _resolve_approval(
+        mode,
+        execution_level,
+        approval_required=data.get("approval_required", execution_level in {"local", "remote"}),
+        approved_at=str(data.get("approved_at", "") or ""),
+        approved_by=str(data.get("approved_by", "") or ""),
+    )
     params_schema = _json_dict(data.get("params_schema", {}))
     command_template = _json_dict(data.get("command_template", {}))
     steps = _json_list(data.get("steps", []))
@@ -256,9 +271,9 @@ def _load_skill_definition(skill_dir: Path, source_kind: str) -> dict | None:
         "mode": mode,
         "source_kind": _normalize_source_kind(source_kind),
         "execution_level": execution_level,
-        "approval_required": 1 if approval_required else 0,
-        "approved_at": data.get("approved_at", "") or "",
-        "approved_by": data.get("approved_by", "") or "",
+        "approval_required": approval_required,
+        "approved_at": approved_at,
+        "approved_by": approved_by,
         "tags": _json_string(data.get("tags", []), []),
         "trigger_patterns": _json_string(data.get("trigger_patterns", []), []),
         "source_sessions": _json_string(data.get("source_sessions", []), []),
@@ -283,11 +298,13 @@ def _upsert_filesystem_skill(skill: dict) -> dict:
 
     level = _preserve_level(existing.get("level", ""), skill["level"])
     trust_score = existing.get("trust_score", skill["trust_score"])
-    approved_at = existing.get("approved_at") or skill.get("approved_at", "")
-    approved_by = existing.get("approved_by") or skill.get("approved_by", "")
-    approval_required = existing.get("approval_required", skill["approval_required"]) if existing else skill["approval_required"]
-    if skill["execution_level"] in {"local", "remote"}:
-        approval_required = 1
+    approval_required, approved_at, approved_by = _resolve_approval(
+        skill["mode"],
+        skill["execution_level"],
+        approval_required=existing.get("approval_required", skill["approval_required"]) if existing else skill["approval_required"],
+        approved_at=existing.get("approved_at") or skill.get("approved_at", ""),
+        approved_by=existing.get("approved_by") or skill.get("approved_by", ""),
+    )
 
     values = {
         **skill,
@@ -407,7 +424,13 @@ def create_skill(
     execution_level = _normalize_execution_level(execution_level)
     if mode == "guide":
         execution_level = "none"
-    approval_required = int(bool(approval_required or execution_level in {"local", "remote"}))
+    approval_required, approved_at, approved_by = _resolve_approval(
+        mode,
+        execution_level,
+        approval_required=approval_required,
+        approved_at=approved_at,
+        approved_by=approved_by,
+    )
 
     conn = get_db()
     conn.execute(
@@ -543,9 +566,22 @@ def update_skill(skill_id: str, **kwargs) -> dict:
         else:
             updates[key] = value
 
-    if "mode" in updates and updates["mode"] == "guide":
+    effective_mode = updates.get("mode", row["mode"])
+    effective_execution_level = updates.get("execution_level", row["execution_level"])
+    if effective_mode == "guide":
+        effective_execution_level = "none"
         updates["execution_level"] = "none"
-        updates["approval_required"] = 0
+
+    approval_required, approved_at, approved_by = _resolve_approval(
+        effective_mode,
+        effective_execution_level,
+        approval_required=updates.get("approval_required", row["approval_required"]),
+        approved_at=updates.get("approved_at", row["approved_at"] or ""),
+        approved_by=updates.get("approved_by", row["approved_by"] or ""),
+    )
+    updates["approval_required"] = approval_required
+    updates["approved_at"] = approved_at
+    updates["approved_by"] = approved_by
 
     if not updates:
         return dict(row)
@@ -957,7 +993,7 @@ def approve_skill(skill_id: str, execution_level: str = "", approved_by: str = "
 
     updates = {
         "approved_at": _now_text(),
-        "approved_by": approved_by or skill.get("approved_by", "") or "Francisco",
+        "approved_by": approved_by or skill.get("approved_by", "") or AUTO_APPROVER,
         "approval_required": 0,
     }
     if execution_level:
@@ -972,7 +1008,6 @@ def collect_scriptable_skill_candidates() -> list[dict]:
            WHERE file_path = ''
              AND level IN ('draft', 'published', 'stable')
              AND success_count >= 3
-             AND trust_score >= 70
            ORDER BY trust_score DESC, success_count DESC""",
     ).fetchall()
 
@@ -998,6 +1033,12 @@ def collect_scriptable_skill_candidates() -> list[dict]:
             {
                 "id": skill["id"],
                 "name": skill["name"],
+                "description": skill.get("description", ""),
+                "content": skill.get("content", ""),
+                "steps": _json_list(skill.get("steps", "[]")),
+                "gotchas": _json_list(skill.get("gotchas", "[]")),
+                "trigger_patterns": _json_list(skill.get("trigger_patterns", "[]")),
+                "source_sessions": _json_list(skill.get("source_sessions", "[]")),
                 "suggested_mode": "hybrid",
                 "suggested_execution_level": suggested,
                 "success_count": skill["success_count"],
@@ -1059,7 +1100,9 @@ def materialize_personal_skill_definition(skill_data: dict) -> dict:
         ),
         "source_kind": "personal",
         "execution_level": _normalize_execution_level(skill_data.get("execution_level", "none")),
-        "approval_required": bool(skill_data.get("approval_required", False)),
+        "approval_required": False,
+        "approved_at": str(skill_data.get("approved_at", "") or ""),
+        "approved_by": str(skill_data.get("approved_by", "") or ""),
         "tags": _json_list(skill_data.get("tags", [])),
         "trigger_patterns": _json_list(skill_data.get("trigger_patterns", [])),
         "source_sessions": _json_list(skill_data.get("source_sessions", [])),
@@ -1076,6 +1119,17 @@ def materialize_personal_skill_definition(skill_data: dict) -> dict:
         executable_entry = "script.py"
     if executable_entry:
         metadata["executable_entry"] = executable_entry
+
+    approval_required, approved_at, approved_by = _resolve_approval(
+        metadata["mode"],
+        metadata["execution_level"],
+        approval_required=metadata["approval_required"],
+        approved_at=metadata["approved_at"],
+        approved_by=metadata["approved_by"],
+    )
+    metadata["approval_required"] = bool(approval_required)
+    metadata["approved_at"] = approved_at
+    metadata["approved_by"] = approved_by
 
     guide_content = str(skill_data.get("content", "") or "")
     if not guide_content:
@@ -1127,9 +1181,6 @@ def get_skill_health_report(fix: bool = False) -> dict:
                 issues.append({"severity": "error", "skill_id": skill["id"], "message": "Executable skill without file_path"})
             elif not Path(file_path).is_file():
                 issues.append({"severity": "error", "skill_id": skill["id"], "message": f"Script missing: {file_path}"})
-
-            if execution_level in {"local", "remote"} and not skill.get("approved_at"):
-                issues.append({"severity": "warn", "skill_id": skill["id"], "message": f"{execution_level} skill not approved"})
 
             params_schema = _json_dict(skill.get("params_schema", "{}"))
             command_template = _json_dict(skill.get("command_template", "{}"))

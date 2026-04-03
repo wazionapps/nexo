@@ -19,8 +19,12 @@ from datetime import datetime
 from pathlib import Path
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parents[2])))
 DEEP_SLEEP_DIR = NEXO_HOME / "operations" / "deep-sleep"
 PROMPT_FILE = Path(__file__).parent / "synthesize-prompt.md"
+
+if str(NEXO_CODE) not in sys.path:
+    sys.path.insert(0, str(NEXO_CODE))
 
 CLAUDE_TIMEOUT = 21600  # 3h safety net (prevents zombie processes)
 
@@ -71,6 +75,31 @@ def extract_json_from_response(text: str) -> dict | None:
     return None
 
 
+def collect_skill_runtime_candidates(target_date: str) -> tuple[Path, dict]:
+    """Collect mature skill candidates from DB usage so Deep Sleep can evolve them."""
+    output_file = DEEP_SLEEP_DIR / f"{target_date}-skill-runtime-candidates.json"
+    payload = {
+        "scriptable": [],
+        "improvements": [],
+    }
+    try:
+        from db import (
+            collect_scriptable_skill_candidates,
+            collect_skill_improvement_candidates,
+            init_db,
+        )
+
+        init_db()
+        payload["scriptable"] = collect_scriptable_skill_candidates()
+        payload["improvements"] = collect_skill_improvement_candidates()
+    except Exception as e:
+        payload["error"] = str(e)
+
+    with open(output_file, "w") as f:
+        json.dump(payload, f, indent=2, ensure_ascii=False)
+    return output_file, payload
+
+
 def main():
     target_date = sys.argv[1] if len(sys.argv) > 1 else datetime.now().strftime("%Y-%m-%d")
 
@@ -86,7 +115,10 @@ def main():
         extractions = json.load(f)
 
     total_findings = extractions.get("total_findings", 0)
-    if total_findings == 0:
+    runtime_candidates_file, runtime_candidates = collect_skill_runtime_candidates(target_date)
+    runtime_candidate_count = len(runtime_candidates.get("scriptable", [])) + len(runtime_candidates.get("improvements", []))
+
+    if total_findings == 0 and runtime_candidate_count == 0:
         print(f"[synthesize] No findings to synthesize for {target_date}.")
         # Write minimal synthesis
         output = {
@@ -95,6 +127,8 @@ def main():
             "cross_session_patterns": [],
             "morning_agenda": [],
             "context_packets": [],
+            "skills": [],
+            "skill_evolution_candidates": [],
             "actions": [],
             "summary": f"No significant findings for {target_date}."
         }
@@ -108,9 +142,11 @@ def main():
     prompt_template = PROMPT_FILE.read_text()
     prompt = prompt_template.replace("{{EXTRACTIONS_FILE}}", str(extractions_file))
     prompt = prompt.replace("{{CONTEXT_FILE}}", str(context_file))
+    prompt = prompt.replace("{{SKILL_RUNTIME_FILE}}", str(runtime_candidates_file))
 
     claude_bin = find_claude_cli()
     print(f"[synthesize] Phase 3: Synthesizing {total_findings} findings from {target_date}")
+    print(f"[synthesize] Skill runtime candidates: {runtime_candidate_count}")
     print(f"[synthesize] Claude CLI: {claude_bin}")
 
     try:
