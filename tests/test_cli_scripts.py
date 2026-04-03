@@ -126,6 +126,7 @@ class TestRuntimeUpdate:
         repo = tmp_path / "repo"
         src = repo / "src"
         src.mkdir(parents=True)
+        (src / "scripts").mkdir()
         (repo / "package.json").write_text(json.dumps({"version": "9.9.9"}))
 
         for dirname in ["db", "cognitive", "doctor", "dashboard", "rules", "crons", "hooks", "plugins"]:
@@ -141,9 +142,11 @@ class TestRuntimeUpdate:
             "tools_reminders.py", "tools_reminders_crud.py", "tools_learnings.py",
             "tools_credentials.py", "tools_task_history.py", "tools_menu.py",
             "cli.py", "script_registry.py", "skills_runtime.py", "user_context.py",
+            "cron_recovery.py",
             "requirements.txt",
         ]:
             (src / flat).write_text("x = 1\n")
+        (src / "scripts" / "nexo-watchdog.sh").write_text("#!/bin/bash\nexit 0\n")
 
         (runtime_home / "version.json").write_text(json.dumps({"version": "9.9.9", "source": str(repo)}))
 
@@ -163,6 +166,8 @@ class TestRuntimeUpdate:
         assert data["source"] == str(src)
         assert (runtime_home / "db").is_dir()
         assert (runtime_home / "db" / "__init__.py").read_text() == "x = 1\n"
+        assert (runtime_home / "cron_recovery.py").read_text() == "x = 1\n"
+        assert (runtime_home / "scripts" / "nexo-watchdog.sh").read_text() == "#!/bin/bash\nexit 0\n"
 
 
 class TestChatCommand:

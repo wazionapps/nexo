@@ -551,6 +551,7 @@ def _update(args):
         "tools_reminders.py", "tools_reminders_crud.py", "tools_learnings.py",
         "tools_credentials.py", "tools_task_history.py", "tools_menu.py",
         "cli.py", "script_registry.py", "skills_runtime.py", "user_context.py",
+        "cron_recovery.py",
         "requirements.txt",
     ]
     copied_files = 0
@@ -573,6 +574,7 @@ def _update(args):
     scripts_src = src_dir / "scripts"
     scripts_dest = dest / "scripts"
     if scripts_src.is_dir():
+        scripts_dest.mkdir(parents=True, exist_ok=True)
         for f in scripts_src.iterdir():
             if f.name == "__pycache__" or f.name.startswith("."):
                 continue

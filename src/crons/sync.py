@@ -25,6 +25,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+_CRONS_DIR = Path(__file__).resolve().parent
+_DEFAULT_RUNTIME_ROOT = _CRONS_DIR.parent
+_runtime_root = Path(os.environ.get("NEXO_CODE", str(_DEFAULT_RUNTIME_ROOT)))
+if str(_runtime_root) not in sys.path:
+    sys.path.insert(0, str(_runtime_root))
+
 from cron_recovery import should_run_at_load
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))

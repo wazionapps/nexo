@@ -1,9 +1,12 @@
 """Tests for shared cron recovery contract."""
 import json
 import os
+import shutil
 import sqlite3
+import subprocess
 import sys
 from datetime import datetime, timezone
+from pathlib import Path
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
@@ -99,3 +102,31 @@ def test_catchup_candidates_fall_back_to_legacy_state(tmp_path, monkeypatch):
 
     assert len(candidates) == 1
     assert candidates[0]["missed"] is False
+
+
+def test_catchup_script_runs_directly_from_runtime_root(tmp_path):
+    repo_src = Path(__file__).resolve().parent.parent / "src"
+    runtime_root = tmp_path / "runtime"
+    (runtime_root / "scripts").mkdir(parents=True)
+    (runtime_root / "crons").mkdir(parents=True)
+    shutil.copy2(repo_src / "cron_recovery.py", runtime_root / "cron_recovery.py")
+    shutil.copy2(repo_src / "scripts" / "nexo-catchup.py", runtime_root / "scripts" / "nexo-catchup.py")
+    (runtime_root / "crons" / "manifest.json").write_text('{"crons":[]}')
+
+    home = tmp_path / "home"
+    home.mkdir()
+    result = subprocess.run(
+        [sys.executable, str(runtime_root / "scripts" / "nexo-catchup.py")],
+        capture_output=True,
+        text=True,
+        timeout=10,
+        env={
+            **os.environ,
+            "HOME": str(home),
+            "NEXO_HOME": str(runtime_root),
+            "NEXO_CODE": str(runtime_root),
+        },
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "ModuleNotFoundError" not in result.stderr
