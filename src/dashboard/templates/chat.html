@@ -17,19 +17,19 @@
   <!-- Suggested prompts -->
   <div id="suggestions" class="flex items-center gap-2 px-2 py-3 overflow-x-auto flex-shrink-0">
     <button onclick="sendSuggestion(this)" class="suggestion-pill whitespace-nowrap px-3 py-1.5 rounded-lg text-xs transition-all">
-      ¿Que paso anoche?
+      What happened last night?
     </button>
     <button onclick="sendSuggestion(this)" class="suggestion-pill whitespace-nowrap px-3 py-1.5 rounded-lg text-xs transition-all">
-      Estado del trust
+      Trust status
     </button>
     <button onclick="sendSuggestion(this)" class="suggestion-pill whitespace-nowrap px-3 py-1.5 rounded-lg text-xs transition-all">
-      Skills activos
+      Active skills
     </button>
     <button onclick="sendSuggestion(this)" class="suggestion-pill whitespace-nowrap px-3 py-1.5 rounded-lg text-xs transition-all">
-      Crons recientes
+      Recent crons
     </button>
     <button onclick="sendSuggestion(this)" class="suggestion-pill whitespace-nowrap px-3 py-1.5 rounded-lg text-xs transition-all">
-      Followups pendientes
+      Pending followups
     </button>
   </div>
 
@@ -40,7 +40,7 @@
         <textarea
           id="chat-input"
           rows="1"
-          placeholder="Preguntame cualquier cosa..."
+          placeholder="Ask me anything..."
           class="w-full bg-slate-900/80 border border-slate-700/50 rounded-xl px-4 py-3 text-sm text-slate-200 placeholder-slate-600 resize-none focus:outline-none focus:border-nexo-500/50 focus:ring-1 focus:ring-nexo-500/20 transition-all"
           onkeydown="handleKeydown(event)"
           oninput="autoResize(this)"
@@ -275,8 +275,8 @@ function renderAllMessages() {
       <div class="flex items-start gap-2.5 chat-bubble">
         <div class="nexo-avatar">N</div>
         <div class="bubble-nexo px-4 py-3 max-w-xl">
-          <p class="text-sm text-slate-300 leading-relaxed">Soy <strong class="text-nexo-400">NEXO Chat</strong>. Preguntame cualquier cosa sobre el sistema.</p>
-          <p class="text-xs text-slate-500 mt-2">Puedo consultar diarios, crons, trust, skills, followups y mas.</p>
+          <p class="text-sm text-slate-300 leading-relaxed">I'm <strong class="text-nexo-400">NEXO Chat</strong>. Ask me anything about the system.</p>
+          <p class="text-xs text-slate-500 mt-2">I can query diaries, crons, trust, skills, followups, and more.</p>
         </div>
       </div>
     `;

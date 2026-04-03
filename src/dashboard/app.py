@@ -988,14 +988,14 @@ async def api_chat(body: ChatMessage):
         ).fetchall()
         if not rows:
             rows = conn.execute("SELECT * FROM session_diary ORDER BY created_at DESC LIMIT 3").fetchall()
-        return {"answer": "Actividad nocturna reciente:", "data": [dict(r) for r in rows], "query_type": "diary"}
+        return {"answer": "Recent overnight activity:", "data": [dict(r) for r in rows], "query_type": "diary"}
 
     elif any(w in msg for w in ["watchdog", "salud", "health", "status"]):
         nexo_home = os.environ.get("NEXO_HOME", str(Path.home() / ".nexo"))
         wp = Path(nexo_home) / "operations" / "watchdog-status.json"
         if wp.exists():
-            return {"answer": "Estado del watchdog:", "data": json.loads(wp.read_text()), "query_type": "watchdog"}
-        return {"answer": "Watchdog no disponible.", "data": [], "query_type": "watchdog"}
+            return {"answer": "Watchdog status:", "data": json.loads(wp.read_text()), "query_type": "watchdog"}
+        return {"answer": "Watchdog not available.", "data": [], "query_type": "watchdog"}
 
     elif any(w in msg for w in ["skill", "habilidad"]):
         rows = conn.execute(
@@ -1003,12 +1003,12 @@ async def api_chat(body: ChatMessage):
         ).fetchall()
         return {"answer": f"{len(rows)} skills:", "data": [dict(r) for r in rows], "query_type": "skills"}
 
-    elif any(w in msg for w in ["cron", "ejecut", "cycle"]):
+    elif any(w in msg for w in ["cron", "ejecut", "cycle", "recent cron"]):
         rows = conn.execute(
             "SELECT cron_id, started_at, exit_code, duration_secs, summary "
             "FROM cron_runs ORDER BY started_at DESC LIMIT 10"
         ).fetchall()
-        return {"answer": "Últimas ejecuciones:", "data": [dict(r) for r in rows], "query_type": "crons"}
+        return {"answer": "Recent cron runs:", "data": [dict(r) for r in rows], "query_type": "crons"}
 
     elif any(w in msg for w in ["trust", "confianza"]):
         cog = _cognitive()
@@ -1018,14 +1018,14 @@ async def api_chat(body: ChatMessage):
         rows = conn.execute(
             "SELECT domain, decision, confidence, created_at FROM decisions ORDER BY created_at DESC LIMIT 10"
         ).fetchall()
-        return {"answer": "Decisiones recientes:", "data": [dict(r) for r in rows], "query_type": "decisions"}
+        return {"answer": "Recent decisions:", "data": [dict(r) for r in rows], "query_type": "decisions"}
 
-    elif any(w in msg for w in ["followup", "pendiente", "overdue"]):
+    elif any(w in msg for w in ["followup", "pendiente", "overdue", "pending"]):
         rows = conn.execute(
             "SELECT id, description, date, status FROM followups "
             "WHERE status NOT IN ('completed','archived','deleted') ORDER BY date ASC LIMIT 20"
         ).fetchall()
-        return {"answer": f"{len(rows)} followups pendientes:", "data": [dict(r) for r in rows], "query_type": "followups"}
+        return {"answer": f"{len(rows)} pending followups:", "data": [dict(r) for r in rows], "query_type": "followups"}
 
     elif any(w in msg for w in ["learn", "aprend", "error"]):
         rows = conn.execute(
@@ -1039,13 +1039,13 @@ async def api_chat(body: ChatMessage):
 
     elif any(w in msg for w in ["memoria", "memory", "stm", "ltm"]):
         cog = _cognitive()
-        return {"answer": "Memoria cognitiva:", "data": cog.get_stats(), "query_type": "memory"}
+        return {"answer": "Cognitive memory:", "data": cog.get_stats(), "query_type": "memory"}
 
     elif any(w in msg for w in ["resumen", "summary", "semana", "week"]):
         rows = conn.execute(
             "SELECT domain, summary, mental_state, created_at FROM session_diary ORDER BY created_at DESC LIMIT 10"
         ).fetchall()
-        return {"answer": "Sesiones recientes:", "data": [dict(r) for r in rows], "query_type": "summary"}
+        return {"answer": "Recent sessions:", "data": [dict(r) for r in rows], "query_type": "summary"}
 
     elif any(w in msg for w in ["guard", "riesgo", "risk"]):
         rows = conn.execute(
@@ -1067,8 +1067,8 @@ async def api_chat(body: ChatMessage):
         ).fetchall()
         results.extend([dict(r) for r in diary])
         if results:
-            return {"answer": f"{len(results)} resultados:", "data": results, "query_type": "search"}
-        return {"answer": "Prueba: crons, trust, skills, memorias, decisiones, anoche, followups, learnings, guard, plugins, resumen.", "data": [], "query_type": "help"}
+            return {"answer": f"{len(results)} results:", "data": results, "query_type": "search"}
+        return {"answer": "Try: crons, trust, skills, memory, decisions, last night, followups, learnings, guard, plugins, summary.", "data": [], "query_type": "help"}
 
 
 # ---------------------------------------------------------------------------
