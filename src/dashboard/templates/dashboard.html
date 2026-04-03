@@ -374,10 +374,11 @@ async function loadDashboardData() {
 
   // --- Cognitive Memory ---
   if (statsData) {
-    const stm = statsData.stm_count ?? statsData.stm ?? 0;
-    const ltm = statsData.ltm_count ?? statsData.ltm ?? 0;
-    const strength = statsData.avg_strength ?? 0;
-    const stmCap = statsData.stm_capacity || 50;
+    const cog = statsData.cognitive || statsData;
+    const stm = cog.stm_total ?? cog.stm_active ?? cog.stm_count ?? cog.stm ?? 0;
+    const ltm = cog.ltm_active ?? cog.ltm_count ?? cog.ltm ?? 0;
+    const strength = cog.avg_stm_strength ?? cog.avg_strength ?? 0;
+    const stmCap = cog.stm_capacity || 500;
 
     document.getElementById('cog-stm').textContent = stm;
     document.getElementById('cog-ltm').textContent = ltm;
@@ -386,10 +387,11 @@ async function loadDashboardData() {
     document.getElementById('cog-ltm-bar').style.width = Math.min(100, ltm > 0 ? 60 : 0) + '%';
 
     // KG stats
-    if (statsData.kg) {
-      document.getElementById('kg-nodes').textContent = formatNumber(statsData.kg.nodes ?? statsData.kg.entities ?? 0);
-      document.getElementById('kg-edges').textContent = formatNumber(statsData.kg.edges ?? statsData.kg.relations ?? 0);
-      document.getElementById('kg-historical').textContent = formatNumber(statsData.kg.historical ?? 0);
+    const kg = statsData.knowledge_graph || statsData.kg || {};
+    if (kg.nodes !== undefined || kg.entities !== undefined || kg.total_nodes !== undefined) {
+      document.getElementById('kg-nodes').textContent = formatNumber(kg.nodes ?? kg.total_nodes ?? kg.entities ?? 0);
+      document.getElementById('kg-edges').textContent = formatNumber(kg.edges ?? kg.edges_active ?? kg.relations ?? 0);
+      document.getElementById('kg-historical').textContent = formatNumber(kg.historical ?? kg.edges_historical ?? 0);
     }
   }
 
