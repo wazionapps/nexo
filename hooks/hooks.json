@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "diff -q \"${CLAUDE_PLUGIN_ROOT}/src/requirements.txt\" \"${CLAUDE_PLUGIN_DATA}/requirements.txt\" >/dev/null 2>&1 || (python3 -m venv \"${CLAUDE_PLUGIN_DATA}/.venv\" 2>/dev/null; cp \"${CLAUDE_PLUGIN_ROOT}/src/requirements.txt\" \"${CLAUDE_PLUGIN_DATA}/requirements.txt\"; \"${CLAUDE_PLUGIN_DATA}/.venv/bin/pip\" install --quiet -r \"${CLAUDE_PLUGIN_DATA}/requirements.txt\") || rm -f \"${CLAUDE_PLUGIN_DATA}/requirements.txt\""
+          }
+        ]
+      }
+    ]
+  }
+}

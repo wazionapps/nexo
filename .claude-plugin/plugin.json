@@ -1,0 +1,33 @@
+{
+  "name": "nexo-brain",
+  "version": "2.5.1",
+  "description": "Cognitive co-operator — persistent memory, learning, autonomous processes, Deep Sleep overnight analysis, unified diagnostics, executable skills, day orchestrator, and web dashboard for AI agents.",
+  "author": {
+    "name": "NEXO Brain",
+    "email": "info@nexo-brain.com",
+    "url": "https://nexo-brain.com"
+  },
+  "homepage": "https://nexo-brain.com",
+  "repository": "https://github.com/wazionapps/nexo",
+  "license": "AGPL-3.0",
+  "keywords": [
+    "memory",
+    "cognitive",
+    "autonomous",
+    "deep-sleep",
+    "learning",
+    "mcp",
+    "work-continuity",
+    "skills",
+    "doctor",
+    "dashboard"
+  ],
+  "mcpServers": "./.mcp.json",
+  "hooks": "./hooks/hooks.json",
+  "userConfig": {
+    "operator_name": {
+      "description": "What should your AI co-operator call itself? (default: NEXO)",
+      "sensitive": false
+    }
+  }
+}

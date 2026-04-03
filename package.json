@@ -68,6 +68,9 @@
     "!src/**/*.pyc",
     "!src/**/*.pyo",
     "templates/",
+    ".claude-plugin/",
+    ".mcp.json",
+    "hooks/hooks.json",
     "README.md",
     "LICENSE"
   ]

@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "nexo": {
+      "command": "${CLAUDE_PLUGIN_DATA}/.venv/bin/python3",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/src/server.py"],
+      "env": {
+        "NEXO_HOME": "${CLAUDE_PLUGIN_DATA}",
+        "NEXO_CODE": "${CLAUDE_PLUGIN_ROOT}/src"
+      }
+    }
+  }
+}
