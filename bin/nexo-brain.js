@@ -95,6 +95,8 @@ const ALL_PROCESSES = [
     type: "keepAlive", purpose: "Keep machine awake for nocturnal processes" },
   { name: "dashboard", script: "nexo-dashboard.sh", interpreter: "bash", scriptDir: "scripts",
     type: "keepAlive", optional: "dashboard", purpose: "Web dashboard at localhost:6174" },
+  { name: "day-orchestrator", script: "nexo-day-orchestrator.sh", interpreter: "bash", scriptDir: "scripts",
+    type: "keepAlive", optional: "orchestrator", purpose: "Autonomous NEXO cycles every 15 min (8:00-23:00)" },
   // --- Daily (times from schedule.json) ---
   { name: "cognitive-decay", script: "nexo-cognitive-decay.py", interpreter: "python", scriptDir: "scripts",
     type: "daily", defaultHour: 3, defaultMinute: 0, purpose: "Memory decay" },
@@ -932,6 +934,9 @@ async function main() {
       dashboardQ: "  Enable web dashboard at localhost:6174?\n  (Always-on UI to explore memory, sessions, learnings, and system health)\n    1. Yes\n    2. No\n  > ",
       dashYes: "Dashboard enabled.",
       dashNo: "Dashboard disabled. You can start it manually: nexo dashboard",
+      orchestratorQ: "  Enable autonomous mode? (I'll work on my own every 15 min: check followups, emails, infra, and report by email)\n    1. Yes\n    2. No\n  > ",
+      orchYes: "Autonomous mode enabled. I'll be working for you 8:00-23:00.",
+      orchNo: "Autonomous mode disabled. I'll only work when you open a session.",
       autoInstallQ: "  Can I install tools automatically if I need them? (brew, pip, npm)\n    1. Yes, install whatever you need\n    2. Ask me before installing anything\n  > ",
       autoInstallYes: "Auto-install enabled.",
       autoInstallNo: "I'll ask before installing.",
@@ -964,6 +969,9 @@ async function main() {
       dashboardQ: "  ¿Activar el dashboard web en localhost:6174?\n  (UI siempre activa para explorar memoria, sesiones, learnings y salud del sistema)\n    1. Sí\n    2. No\n  > ",
       dashYes: "Dashboard activado.",
       dashNo: "Dashboard desactivado. Puedes iniciarlo manualmente: nexo dashboard",
+      orchestratorQ: "  ¿Activar modo autónomo? (Trabajo solo cada 15 min: reviso followups, emails, infra, y te informo por email)\n    1. Sí\n    2. No\n  > ",
+      orchYes: "Modo autónomo activado. Estaré trabajando para ti de 8:00 a 23:00.",
+      orchNo: "Modo autónomo desactivado. Solo trabajo cuando abras sesión.",
       autoInstallQ: "  ¿Puedo instalar herramientas automáticamente si las necesito? (brew, pip, npm)\n    1. Sí, instala lo que necesites\n    2. Pregúntame antes de instalar algo\n  > ",
       autoInstallYes: "Auto-instalación activada.",
       autoInstallNo: "Te preguntaré antes.",
@@ -996,6 +1004,9 @@ async function main() {
       dashboardQ: "  Activer le dashboard web sur localhost:6174 ?\n  (UI toujours active pour explorer mémoire, sessions et santé du système)\n    1. Oui\n    2. Non\n  > ",
       dashYes: "Dashboard activé.",
       dashNo: "Dashboard désactivé. Démarrage manuel : nexo dashboard",
+      orchestratorQ: "  Activer le mode autonome ? (Je travaille seul toutes les 15 min : followups, emails, infra, rapport par email)\n    1. Oui\n    2. Non\n  > ",
+      orchYes: "Mode autonome activé. Je travaille pour vous de 8h à 23h.",
+      orchNo: "Mode autonome désactivé. Je travaille uniquement en session.",
       autoInstallQ: "  Puis-je installer des outils automatiquement ? (brew, pip, npm)\n    1. Oui\n    2. Demande-moi avant\n  > ",
       autoInstallYes: "Auto-installation activée.",
       autoInstallNo: "Je demanderai avant.",
@@ -1028,6 +1039,9 @@ async function main() {
       dashboardQ: "  Web-Dashboard auf localhost:6174 aktivieren?\n  (Immer aktive UI für Speicher, Sitzungen und Systemgesundheit)\n    1. Ja\n    2. Nein\n  > ",
       dashYes: "Dashboard aktiviert.",
       dashNo: "Dashboard deaktiviert. Manuell starten: nexo dashboard",
+      orchestratorQ: "  Autonomen Modus aktivieren? (Ich arbeite alle 15 Min selbstständig: Followups, E-Mails, Infra, Bericht per E-Mail)\n    1. Ja\n    2. Nein\n  > ",
+      orchYes: "Autonomer Modus aktiviert. Ich arbeite für dich von 8:00 bis 23:00.",
+      orchNo: "Autonomer Modus deaktiviert. Ich arbeite nur in Sitzungen.",
       autoInstallQ: "  Darf ich Tools automatisch installieren? (brew, pip, npm)\n    1. Ja\n    2. Frag mich vorher\n  > ",
       autoInstallYes: "Auto-Installation aktiviert.",
       autoInstallNo: "Frage vorher.",
@@ -1060,6 +1074,9 @@ async function main() {
       dashboardQ: "  Attivare la dashboard web su localhost:6174?\n  (UI sempre attiva per esplorare memoria, sessioni e salute del sistema)\n    1. Sì\n    2. No\n  > ",
       dashYes: "Dashboard attivata.",
       dashNo: "Dashboard disattivata. Avvio manuale: nexo dashboard",
+      orchestratorQ: "  Attivare la modalità autonoma? (Lavoro da solo ogni 15 min: followup, email, infra, report via email)\n    1. Sì\n    2. No\n  > ",
+      orchYes: "Modalità autonoma attivata. Lavoro per te dalle 8:00 alle 23:00.",
+      orchNo: "Modalità autonoma disattivata. Lavoro solo nelle sessioni.",
       autoInstallQ: "  Posso installare strumenti automaticamente? (brew, pip, npm)\n    1. Sì\n    2. Chiedimi prima\n  > ",
       autoInstallYes: "Auto-installazione attivata.",
       autoInstallNo: "Chiederò prima.",
@@ -1092,6 +1109,9 @@ async function main() {
       dashboardQ: "  Ativar dashboard web em localhost:6174?\n  (UI sempre ativa para explorar memória, sessões e saúde do sistema)\n    1. Sim\n    2. Não\n  > ",
       dashYes: "Dashboard ativado.",
       dashNo: "Dashboard desativado. Iniciar manualmente: nexo dashboard",
+      orchestratorQ: "  Ativar modo autônomo? (Trabalho sozinho a cada 15 min: followups, emails, infra, relatório por email)\n    1. Sim\n    2. Não\n  > ",
+      orchYes: "Modo autônomo ativado. Trabalho para você das 8:00 às 23:00.",
+      orchNo: "Modo autônomo desativado. Trabalho apenas nas sessões.",
       autoInstallQ: "  Posso instalar ferramentas automaticamente? (brew, pip, npm)\n    1. Sim\n    2. Pergunta antes\n  > ",
       autoInstallYes: "Auto-instalação ativada.",
       autoInstallNo: "Perguntarei antes.",
@@ -1211,6 +1231,7 @@ async function main() {
   let doScan = false;
   let doCaffeinate = false;
   let doDashboard = false;
+  let doOrchestrator = false;
   let autoInstall = "ask";
   if (!useDefaults) {
     const scanAnswer = await ask(t.scanQ);
@@ -1229,6 +1250,12 @@ async function main() {
     const dashAnswer = await ask(t.dashboardQ);
     doDashboard = dashAnswer.trim() === "1" || dashAnswer.trim().toLowerCase().startsWith("y") || dashAnswer.trim().toLowerCase().startsWith("s");
     log(doDashboard ? `✓ ${t.dashYes}` : t.dashNo);
+    console.log("");
+
+    // Step 6c: Day Orchestrator — autonomous NEXO cycles
+    const orchAnswer = await ask(t.orchestratorQ);
+    doOrchestrator = orchAnswer.trim() === "1" || orchAnswer.trim().toLowerCase().startsWith("y") || orchAnswer.trim().toLowerCase().startsWith("s");
+    log(doOrchestrator ? `✓ ${t.orchYes}` : t.orchNo);
     console.log("");
 
     // Step 7: Auto-install permission (P11)
@@ -1960,7 +1987,7 @@ ${doScan ? `- Stack: ${Object.keys(profileData.code.languages || {}).slice(0, 5)
   // Step 7: Create schedule.json (only on fresh install) and install ALL 13 processes
   log("Setting up automated processes...");
   const schedule = loadOrCreateSchedule(NEXO_HOME);
-  const enabledOptionals = { dashboard: doDashboard };
+  const enabledOptionals = { dashboard: doDashboard, orchestrator: doOrchestrator };
   if (isEphemeralInstall(NEXO_HOME)) {
     log("Ephemeral HOME/NEXO_HOME detected — skipping LaunchAgents installation.");
   } else {
