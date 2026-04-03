@@ -87,7 +87,7 @@ const ALL_PROCESSES = [
   { name: "prevent-sleep", script: "nexo-prevent-sleep.sh", interpreter: "bash", scriptDir: "scripts",
     type: "keepAlive", purpose: "Keep machine awake for nocturnal processes" },
   { name: "dashboard", script: "nexo-dashboard.sh", interpreter: "bash", scriptDir: "scripts",
-    type: "keepAlive", purpose: "Web dashboard at localhost:6174" },
+    type: "keepAlive", optional: "dashboard", purpose: "Web dashboard at localhost:6174" },
   // --- Daily (times from schedule.json) ---
   { name: "cognitive-decay", script: "nexo-cognitive-decay.py", interpreter: "python", scriptDir: "scripts",
     type: "daily", defaultHour: 3, defaultMinute: 0, purpose: "Memory decay" },
@@ -264,7 +264,7 @@ const DAY_MAP = {
  * Linux+systemd: .service + .timer files
  * Linux fallback: crontab entries
  */
-function installAllProcesses(platform, pythonPath, nexoHome, schedule, launchAgentsDir) {
+function installAllProcesses(platform, pythonPath, nexoHome, schedule, launchAgentsDir, enabledOptionals = {}) {
   const home = require("os").homedir();
   const nexoCode = nexoHome;
   const logsDir = path.join(nexoHome, "logs");
@@ -300,6 +300,8 @@ function installAllProcesses(platform, pythonPath, nexoHome, schedule, launchAge
     for (const proc of ALL_PROCESSES) {
       // Skip macOnly processes on Linux
       if (proc.macOnly && platform !== "darwin") continue;
+      // Skip optional processes that weren't enabled
+      if (proc.optional && !enabledOptionals[proc.optional]) continue;
 
       const plistName = `com.nexo.${proc.name}.plist`;
       const plistPath = path.join(launchAgentsDir, plistName);
@@ -406,6 +408,7 @@ function installAllProcesses(platform, pythonPath, nexoHome, schedule, launchAge
 
       for (const proc of ALL_PROCESSES) {
         if (proc.macOnly) continue; // tcc-approve is macOS only
+        if (proc.optional && !enabledOptionals[proc.optional]) continue;
         const serviceName = `nexo-${proc.name}`;
         const serviceFile = path.join(systemdDir, `${serviceName}.service`);
         const timerFile = path.join(systemdDir, `${serviceName}.timer`);
@@ -483,6 +486,7 @@ WantedBy=timers.target
       const envLine2 = `NEXO_CODE=${nexoCode}`;
 
       for (const proc of ALL_PROCESSES) {
+        if (proc.optional && !enabledOptionals[proc.optional]) continue;
         const sPath = scriptPath(proc);
         const interp = interpreterPath(proc);
         const s = getSchedule(proc);
@@ -731,8 +735,13 @@ async function main() {
         // Regenerate ALL 13 LaunchAgents / systemd timers
         const migSchedule = loadOrCreateSchedule(NEXO_HOME);
         const migPython = findVenvPython(NEXO_HOME) || "python3";
-        installAllProcesses(platform, migPython, NEXO_HOME, migSchedule, LAUNCH_AGENTS);
-        log("  All 13 automated processes updated.");
+        let migOptionals = {};
+        try {
+          const optFile = path.join(NEXO_HOME, "config", "optionals.json");
+          if (fs.existsSync(optFile)) migOptionals = JSON.parse(fs.readFileSync(optFile, "utf8"));
+        } catch {}
+        installAllProcesses(platform, migPython, NEXO_HOME, migSchedule, LAUNCH_AGENTS, migOptionals);
+        log("  All automated processes updated.");
 
         // Update version file
         fs.writeFileSync(versionFile, JSON.stringify({
@@ -897,6 +906,9 @@ async function main() {
       caffeinateQ: "  Keep Mac awake for my cognitive processes at night?\n  (I consolidate memory, clean duplicates, and discover connections while you sleep)\n    1. Yes\n    2. No\n  > ",
       caffYes: "Nocturnal processes scheduled.",
       caffNo: "Ok, I'll run them when I can.",
+      dashboardQ: "  Enable web dashboard at localhost:6174?\n  (Always-on UI to explore memory, sessions, learnings, and system health)\n    1. Yes\n    2. No\n  > ",
+      dashYes: "Dashboard enabled.",
+      dashNo: "Dashboard disabled. You can start it manually: nexo dashboard",
       autoInstallQ: "  Can I install tools automatically if I need them? (brew, pip, npm)\n    1. Yes, install whatever you need\n    2. Ask me before installing anything\n  > ",
       autoInstallYes: "Auto-install enabled.",
       autoInstallNo: "I'll ask before installing.",
@@ -926,6 +938,9 @@ async function main() {
       caffeinateQ: "  ¿Mantengo el Mac despierto para mis procesos cognitivos nocturnos?\n  (Consolido memoria, limpio duplicados y descubro conexiones mientras duermes)\n    1. Sí\n    2. No\n  > ",
       caffYes: "Procesos nocturnos programados.",
       caffNo: "Ok, los ejecutaré cuando pueda.",
+      dashboardQ: "  ¿Activar el dashboard web en localhost:6174?\n  (UI siempre activa para explorar memoria, sesiones, learnings y salud del sistema)\n    1. Sí\n    2. No\n  > ",
+      dashYes: "Dashboard activado.",
+      dashNo: "Dashboard desactivado. Puedes iniciarlo manualmente: nexo dashboard",
       autoInstallQ: "  ¿Puedo instalar herramientas automáticamente si las necesito? (brew, pip, npm)\n    1. Sí, instala lo que necesites\n    2. Pregúntame antes de instalar algo\n  > ",
       autoInstallYes: "Auto-instalación activada.",
       autoInstallNo: "Te preguntaré antes.",
@@ -955,6 +970,9 @@ async function main() {
       caffeinateQ: "  Garder le Mac éveillé pour mes processus nocturnes ?\n    1. Oui\n    2. Non\n  > ",
       caffYes: "Processus nocturnes programmés.",
       caffNo: "Ok, je les exécuterai quand possible.",
+      dashboardQ: "  Activer le dashboard web sur localhost:6174 ?\n  (UI toujours active pour explorer mémoire, sessions et santé du système)\n    1. Oui\n    2. Non\n  > ",
+      dashYes: "Dashboard activé.",
+      dashNo: "Dashboard désactivé. Démarrage manuel : nexo dashboard",
       autoInstallQ: "  Puis-je installer des outils automatiquement ? (brew, pip, npm)\n    1. Oui\n    2. Demande-moi avant\n  > ",
       autoInstallYes: "Auto-installation activée.",
       autoInstallNo: "Je demanderai avant.",
@@ -984,6 +1002,9 @@ async function main() {
       caffeinateQ: "  Mac wach halten für nächtliche Prozesse?\n    1. Ja\n    2. Nein\n  > ",
       caffYes: "Nachtprozesse geplant.",
       caffNo: "Ok, führe sie aus wenn möglich.",
+      dashboardQ: "  Web-Dashboard auf localhost:6174 aktivieren?\n  (Immer aktive UI für Speicher, Sitzungen und Systemgesundheit)\n    1. Ja\n    2. Nein\n  > ",
+      dashYes: "Dashboard aktiviert.",
+      dashNo: "Dashboard deaktiviert. Manuell starten: nexo dashboard",
       autoInstallQ: "  Darf ich Tools automatisch installieren? (brew, pip, npm)\n    1. Ja\n    2. Frag mich vorher\n  > ",
       autoInstallYes: "Auto-Installation aktiviert.",
       autoInstallNo: "Frage vorher.",
@@ -1013,6 +1034,9 @@ async function main() {
       caffeinateQ: "  Tenere il Mac sveglio per i processi notturni?\n    1. Sì\n    2. No\n  > ",
       caffYes: "Processi notturni programmati.",
       caffNo: "Ok, li eseguirò quando possibile.",
+      dashboardQ: "  Attivare la dashboard web su localhost:6174?\n  (UI sempre attiva per esplorare memoria, sessioni e salute del sistema)\n    1. Sì\n    2. No\n  > ",
+      dashYes: "Dashboard attivata.",
+      dashNo: "Dashboard disattivata. Avvio manuale: nexo dashboard",
       autoInstallQ: "  Posso installare strumenti automaticamente? (brew, pip, npm)\n    1. Sì\n    2. Chiedimi prima\n  > ",
       autoInstallYes: "Auto-installazione attivata.",
       autoInstallNo: "Chiederò prima.",
@@ -1042,6 +1066,9 @@ async function main() {
       caffeinateQ: "  Manter o Mac acordado para processos noturnos?\n    1. Sim\n    2. Não\n  > ",
       caffYes: "Processos noturnos agendados.",
       caffNo: "Ok, executo quando possível.",
+      dashboardQ: "  Ativar dashboard web em localhost:6174?\n  (UI sempre ativa para explorar memória, sessões e saúde do sistema)\n    1. Sim\n    2. Não\n  > ",
+      dashYes: "Dashboard ativado.",
+      dashNo: "Dashboard desativado. Iniciar manualmente: nexo dashboard",
       autoInstallQ: "  Posso instalar ferramentas automaticamente? (brew, pip, npm)\n    1. Sim\n    2. Pergunta antes\n  > ",
       autoInstallYes: "Auto-instalação ativada.",
       autoInstallNo: "Perguntarei antes.",
@@ -1160,6 +1187,7 @@ async function main() {
   // Step 5: Deep scan (P9)
   let doScan = false;
   let doCaffeinate = false;
+  let doDashboard = false;
   let autoInstall = "ask";
   if (!useDefaults) {
     const scanAnswer = await ask(t.scanQ);
@@ -1173,6 +1201,12 @@ async function main() {
       log(doCaffeinate ? `✓ ${t.caffYes}` : t.caffNo);
       console.log("");
     }
+
+    // Step 6b: Dashboard — always-on web UI
+    const dashAnswer = await ask(t.dashboardQ);
+    doDashboard = dashAnswer.trim() === "1" || dashAnswer.trim().toLowerCase().startsWith("y") || dashAnswer.trim().toLowerCase().startsWith("s");
+    log(doDashboard ? `✓ ${t.dashYes}` : t.dashNo);
+    console.log("");
 
     // Step 7: Auto-install permission (P11)
     const autoInstallAnswer = await ask(t.autoInstallQ);
@@ -1879,7 +1913,16 @@ ${doScan ? `- Stack: ${Object.keys(profileData.code.languages || {}).slice(0, 5)
   // Step 7: Create schedule.json (only on fresh install) and install ALL 13 processes
   log("Setting up automated processes...");
   const schedule = loadOrCreateSchedule(NEXO_HOME);
-  installAllProcesses(platform, python, NEXO_HOME, schedule, LAUNCH_AGENTS);
+  const enabledOptionals = { dashboard: doDashboard };
+  installAllProcesses(platform, python, NEXO_HOME, schedule, LAUNCH_AGENTS, enabledOptionals);
+
+  // Persist optional process preferences for auto-update
+  try {
+    const configDir = path.join(NEXO_HOME, "config");
+    fs.mkdirSync(configDir, { recursive: true });
+    const optFile = path.join(configDir, "optionals.json");
+    fs.writeFileSync(optFile, JSON.stringify(enabledOptionals, null, 2));
+  } catch {}
 
   // Note: prevent-sleep and tcc-approve are now part of ALL_PROCESSES
   // and installed by installAllProcesses() above. No separate caffeinate block needed.
