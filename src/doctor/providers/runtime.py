@@ -7,6 +7,7 @@ import os
 import platform
 import plistlib
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -102,9 +103,60 @@ def _cron_expectations() -> dict[str, dict]:
     return {}
 
 
+def _run_at_load_cron_ids() -> set[str]:
+    return {
+        cron_id
+        for cron_id, expected in _launchagent_schedule_expectations().items()
+        if expected.get("RunAtLoad") is True
+    }
+
+
+def _launchagent_schedule_expectations() -> dict[str, dict]:
+    manifest_candidates = [
+        NEXO_HOME / "crons" / "manifest.json",
+        NEXO_CODE / "crons" / "manifest.json",
+    ]
+    for manifest_path in manifest_candidates:
+        if not manifest_path.is_file():
+            continue
+        try:
+            data = _load_json(manifest_path)
+        except Exception:
+            continue
+
+        expectations = {}
+        for cron in data.get("crons", []):
+            cron_id = cron.get("id")
+            if not cron_id:
+                continue
+
+            expected = {
+                "StartInterval": None,
+                "StartCalendarInterval": None,
+                "RunAtLoad": None,
+            }
+            if cron.get("run_at_load"):
+                expected["RunAtLoad"] = True
+            elif "interval_seconds" in cron:
+                expected["StartInterval"] = int(cron["interval_seconds"])
+            elif "schedule" in cron:
+                schedule = cron.get("schedule") or {}
+                cal = {}
+                if "hour" in schedule:
+                    cal["Hour"] = schedule["hour"]
+                if "minute" in schedule:
+                    cal["Minute"] = schedule["minute"]
+                if "weekday" in schedule:
+                    cal["Weekday"] = schedule["weekday"]
+                expected["StartCalendarInterval"] = cal
+            expectations[cron_id] = expected
+        return expectations
+    return {}
+
+
 def _managed_launchagent_plists() -> list[tuple[str, Path]]:
     ids = set(SPECIAL_LAUNCHAGENT_IDS)
-    for cron_id in _cron_expectations().keys():
+    for cron_id in _launchagent_schedule_expectations().keys():
         ids.add(cron_id)
 
     plists = []
@@ -145,6 +197,28 @@ def _repair_launchagents(items: list[tuple[str, Path]]) -> tuple[bool, list[str]
             ok = False
             evidence.append(f"{label}: {result.stderr.strip() or result.stdout.strip() or 'bootstrap failed'}")
     return ok, evidence
+
+
+def _sync_launchagents_from_manifest() -> tuple[bool, list[str]]:
+    sync_path = NEXO_CODE / "crons" / "sync.py"
+    if not sync_path.is_file():
+        return False, [f"cron sync script not found at {sync_path}"]
+
+    try:
+        result = subprocess.run(
+            [sys.executable, str(sync_path)],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            env={**os.environ, "NEXO_HOME": str(NEXO_HOME), "NEXO_CODE": str(NEXO_CODE)},
+        )
+    except Exception as e:
+        return False, [f"cron sync failed: {e}"]
+
+    if result.returncode != 0:
+        detail = result.stderr.strip() or result.stdout.strip() or "cron sync failed"
+        return False, [detail]
+    return True, []
 
 
 def check_immune_status() -> DoctorCheck:
@@ -381,9 +455,12 @@ def check_cron_freshness() -> DoctorCheck:
 
         stale = []
         expectations = _cron_expectations()
+        ignored_crons = _run_at_load_cron_ids()
         now = time.time()
         for row in rows:
             cron_id = row[0]
+            if cron_id in ignored_crons:
+                continue
             parsed = _parse_timestamp(row[1]) if row[1] else None
             if parsed is None:
                 stale.append(f"{cron_id}: unreadable timestamp {row[1]!r}")
@@ -443,9 +520,12 @@ def check_launchagent_integrity(fix: bool = False) -> DoctorCheck:
 
     uid = str(os.getuid())
     problems = []
+    problem_items: list[tuple[str, Path]] = []
     tmp_drift = False
+    schedule_expectations = _launchagent_schedule_expectations()
     for cron_id, plist_path in managed:
         label = f"com.nexo.{cron_id}"
+        had_problem = False
         try:
             result = subprocess.run(
                 ["launchctl", "print", f"gui/{uid}/{label}"],
@@ -460,12 +540,15 @@ def check_launchagent_integrity(fix: bool = False) -> DoctorCheck:
         output = (result.stdout or "") + (result.stderr or "")
         if result.returncode != 0 or "Could not find service" in output:
             problems.append(f"{label}: not loaded")
+            had_problem = True
+            problem_items.append((cron_id, plist_path))
             continue
 
         expected_path = str(plist_path)
         actual_path = _extract_launchctl_value(output, "path = ")
         if actual_path != expected_path:
             problems.append(f"{label}: loaded from {actual_path or 'unknown path'}")
+            had_problem = True
             if actual_path and "/tmp/" in actual_path:
                 tmp_drift = True
 
@@ -484,8 +567,26 @@ def check_launchagent_integrity(fix: bool = False) -> DoctorCheck:
             marker = f"{env_key} => {expected_value}"
             if marker not in output:
                 problems.append(f"{label}: {env_key} drift")
+                had_problem = True
                 if "/tmp/" in output:
                     tmp_drift = True
+
+        expected_schedule = schedule_expectations.get(cron_id)
+        if expected_schedule is not None:
+            actual_schedule = {
+                "StartInterval": plist_data.get("StartInterval"),
+                "StartCalendarInterval": plist_data.get("StartCalendarInterval"),
+                "RunAtLoad": plist_data.get("RunAtLoad"),
+            }
+            if actual_schedule != expected_schedule:
+                problems.append(
+                    f"{label}: schedule drift "
+                    f"(actual={actual_schedule}, expected={expected_schedule})"
+                )
+                had_problem = True
+
+        if had_problem:
+            problem_items.append((cron_id, plist_path))
 
     if not problems:
         return DoctorCheck(
@@ -505,21 +606,22 @@ def check_launchagent_integrity(fix: bool = False) -> DoctorCheck:
         evidence=problems[:10],
         repair_plan=[
             "Reload the affected LaunchAgents from ~/Library/LaunchAgents",
+            "Re-sync core cron plists from crons/manifest.json if the schedule drifted",
             "If any job is loaded from /tmp, boot it out before bootstrapping the real plist",
         ],
         escalation_prompt="Launchd is serving stale or drifted NEXO jobs. Compare loaded job paths with plist paths on disk.",
     )
 
     if fix:
-        repaired, repair_evidence = _repair_launchagents(managed)
-        if repaired:
-            check.fixed = True
-            check.status = "healthy"
-            check.severity = "info"
-            check.summary += " (fixed)"
-            check.evidence = []
-        else:
-            check.evidence.extend(repair_evidence[:10])
+        sync_ok, sync_evidence = _sync_launchagents_from_manifest()
+        repaired, repair_evidence = _repair_launchagents(problem_items)
+        if sync_ok and repaired:
+            post_check = check_launchagent_integrity(fix=False)
+            if post_check.status == "healthy":
+                post_check.fixed = True
+                post_check.summary += " (fixed)"
+                return post_check
+        check.evidence.extend((sync_evidence + repair_evidence)[:10])
     return check
 
 

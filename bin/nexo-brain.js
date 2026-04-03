@@ -794,7 +794,7 @@ async function main() {
       // Same version — backfill crons/ if missing (for installs before crons was shipped)
       const cronsDest = path.join(NEXO_HOME, "crons");
       const cronsSrc = path.join(__dirname, "..", "src", "crons");
-      if (!fs.existsSync(path.join(cronsDest, "manifest.json")) && fs.existsSync(cronsSrc)) {
+      if (fs.existsSync(cronsSrc)) {
         const copyDirRec2 = (src, dest) => {
           fs.mkdirSync(dest, { recursive: true });
           fs.readdirSync(src).forEach(item => {
@@ -806,7 +806,23 @@ async function main() {
           });
         };
         copyDirRec2(cronsSrc, cronsDest);
-        log("Backfilled crons/ directory (catchup & watchdog need it).");
+        log("Refreshed crons/ directory.");
+
+        const cronSyncPath = path.join(cronsSrc, "sync.py");
+        const syncPython = findVenvPython(NEXO_HOME) || run("which python3") || "python3";
+        if (fs.existsSync(cronSyncPath)) {
+          const syncResult = spawnSync(syncPython, [cronSyncPath], {
+            env: { ...process.env, NEXO_HOME, NEXO_CODE: path.join(__dirname, "..", "src") },
+            stdio: "pipe",
+            encoding: "utf8",
+          });
+          if (syncResult.status === 0) {
+            log("Core crons reconciled with manifest.");
+          } else {
+            const syncErr = (syncResult.stderr || syncResult.stdout || "").trim();
+            log(`Cron sync warning: ${syncErr || `exit ${syncResult.status}`}`);
+          }
+        }
       }
 
       log(`Already at v${currentVersion}. No migration needed.`);

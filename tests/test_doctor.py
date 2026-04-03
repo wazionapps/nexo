@@ -154,6 +154,25 @@ class TestRuntimeChecks:
         check = check_cron_freshness()
         assert check.status == "degraded"
 
+    def test_cron_freshness_ignores_run_at_load_jobs(self, nexo_home):
+        (nexo_home / "crons" / "manifest.json").write_text(json.dumps({
+            "crons": [
+                {"id": "catchup", "run_at_load": True},
+            ]
+        }))
+
+        conn = sqlite3.connect(str(nexo_home / "data" / "nexo.db"))
+        conn.execute(
+            "INSERT INTO cron_runs (cron_id, started_at) VALUES (?, ?)",
+            ("catchup", time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time() - 3 * 3600))),
+        )
+        conn.commit()
+        conn.close()
+
+        from doctor.providers.runtime import check_cron_freshness
+        check = check_cron_freshness()
+        assert check.status == "healthy"
+
     def test_launchagent_integrity_detects_tmp_drift(self, nexo_home, monkeypatch):
         from doctor.providers import runtime
 
@@ -163,7 +182,8 @@ class TestRuntimeChecks:
                 "EnvironmentVariables": {
                     "NEXO_HOME": str(nexo_home),
                     "NEXO_CODE": str(nexo_home / "src"),
-                }
+                },
+                "StartInterval": 1800,
             }, fh)
 
         monkeypatch.setattr(runtime.platform, "system", lambda: "Darwin")
@@ -188,6 +208,66 @@ class TestRuntimeChecks:
         assert check.status == "critical"
         assert any("/private/tmp/" in item or "/tmp/" in item for item in check.evidence)
 
+    def test_launchagent_integrity_detects_schedule_drift(self, nexo_home, monkeypatch):
+        from doctor.providers import runtime
+
+        plist_path = nexo_home / "com.nexo.catchup.plist"
+        with plist_path.open("wb") as fh:
+            plistlib.dump({
+                "EnvironmentVariables": {
+                    "NEXO_HOME": str(nexo_home),
+                    "NEXO_CODE": str(nexo_home / "src"),
+                },
+                "StartCalendarInterval": {"Hour": 8, "Minute": 30},
+            }, fh)
+
+        monkeypatch.setattr(runtime.platform, "system", lambda: "Darwin")
+        monkeypatch.setattr(runtime, "_managed_launchagent_plists", lambda: [("catchup", plist_path)])
+        monkeypatch.setattr(runtime, "_launchagent_schedule_expectations", lambda: {
+            "catchup": {
+                "StartInterval": None,
+                "StartCalendarInterval": None,
+                "RunAtLoad": True,
+            }
+        })
+        monkeypatch.setattr(runtime.os, "getuid", lambda: 501)
+
+        def fake_run(args, **kwargs):
+            return SimpleNamespace(
+                returncode=0,
+                stdout=(
+                    "gui/501/com.nexo.catchup = {\n"
+                    f"path = {plist_path}\n"
+                    f"NEXO_HOME => {nexo_home}\n"
+                    f"NEXO_CODE => {nexo_home / 'src'}\n"
+                    "}\n"
+                ),
+                stderr="",
+            )
+
+        monkeypatch.setattr(runtime.subprocess, "run", fake_run)
+        check = runtime.check_launchagent_integrity()
+        assert check.status == "degraded"
+        assert any("schedule drift" in item for item in check.evidence)
+
+    def test_managed_launchagents_include_run_at_load_jobs(self, nexo_home, monkeypatch):
+        from doctor.providers import runtime
+
+        launch_agents = nexo_home / "launchagents"
+        launch_agents.mkdir()
+        (launch_agents / "com.nexo.catchup.plist").write_text("<plist/>")
+
+        monkeypatch.setattr(runtime, "LAUNCH_AGENTS_DIR", launch_agents)
+        monkeypatch.setattr(runtime, "_launchagent_schedule_expectations", lambda: {
+            "catchup": {
+                "StartInterval": None,
+                "StartCalendarInterval": None,
+                "RunAtLoad": True,
+            }
+        })
+        managed = runtime._managed_launchagent_plists()
+        assert ("catchup", launch_agents / "com.nexo.catchup.plist") in managed
+
     def test_launchagent_integrity_fix_bootstraps_real_plist(self, nexo_home, monkeypatch):
         from doctor.providers import runtime
 
@@ -197,7 +277,8 @@ class TestRuntimeChecks:
                 "EnvironmentVariables": {
                     "NEXO_HOME": str(nexo_home),
                     "NEXO_CODE": str(nexo_home / "src"),
-                }
+                },
+                "StartInterval": 1800,
             }, fh)
 
         monkeypatch.setattr(runtime.platform, "system", lambda: "Darwin")
@@ -205,11 +286,28 @@ class TestRuntimeChecks:
         monkeypatch.setattr(runtime.os, "getuid", lambda: 501)
 
         calls = []
+        bootstrapped = {"done": False}
 
         def fake_run(args, **kwargs):
             calls.append(args)
+            if len(args) >= 2 and str(args[1]).endswith("sync.py"):
+                return SimpleNamespace(returncode=0, stdout="ok", stderr="")
             if args[1] == "print":
-                return SimpleNamespace(returncode=1, stdout="", stderr='Could not find service "com.nexo.watchdog"')
+                if not bootstrapped["done"]:
+                    return SimpleNamespace(returncode=1, stdout="", stderr='Could not find service "com.nexo.watchdog"')
+                return SimpleNamespace(
+                    returncode=0,
+                    stdout=(
+                        "gui/501/com.nexo.watchdog = {\n"
+                        f"path = {plist_path}\n"
+                        f"NEXO_HOME => {nexo_home}\n"
+                        f"NEXO_CODE => {nexo_home / 'src'}\n"
+                        "}\n"
+                    ),
+                    stderr="",
+                )
+            if args[1] == "bootstrap":
+                bootstrapped["done"] = True
             return SimpleNamespace(returncode=0, stdout="", stderr="")
 
         monkeypatch.setattr(runtime.subprocess, "run", fake_run)
