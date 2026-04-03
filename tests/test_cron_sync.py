@@ -71,7 +71,7 @@ def test_build_plist_supports_keep_alive_jobs(tmp_path, monkeypatch):
     (source_root / "scripts").mkdir(parents=True)
     (runtime_root / "logs").mkdir(parents=True)
 
-    script = source_root / "scripts" / "nexo-day-orchestrator.sh"
+    script = source_root / "scripts" / "nexo-personal-daemon.sh"
     script.write_text("#!/bin/bash\nwhile true; do sleep 60; done\n")
     script.chmod(0o755)
     wrapper = source_root / "scripts" / "nexo-cron-wrapper.sh"
@@ -84,12 +84,12 @@ def test_build_plist_supports_keep_alive_jobs(tmp_path, monkeypatch):
     monkeypatch.setattr(cron_sync, "LOG_DIR", runtime_root / "logs")
 
     plist = cron_sync.build_plist(
-        {"id": "day-orchestrator", "script": "scripts/nexo-day-orchestrator.sh", "type": "shell", "keep_alive": True}
+        {"id": "personal-daemon", "script": "scripts/nexo-personal-daemon.sh", "type": "shell", "keep_alive": True}
     )
 
     assert plist["RunAtLoad"] is True
     assert plist["KeepAlive"] is True
-    assert plist["ProgramArguments"][4] == str(runtime_root / "scripts" / "nexo-day-orchestrator.sh")
+    assert plist["ProgramArguments"][4] == str(runtime_root / "scripts" / "nexo-personal-daemon.sh")
 
 
 def test_load_manifest_skips_disabled_optionals(tmp_path, monkeypatch):
@@ -101,14 +101,14 @@ def test_load_manifest_skips_disabled_optionals(tmp_path, monkeypatch):
 {
   "crons": [
     {"id": "watchdog", "script": "scripts/nexo-watchdog.sh", "core": true},
-    {"id": "day-orchestrator", "script": "scripts/nexo-day-orchestrator.sh", "core": true, "optional": "orchestrator"}
+    {"id": "personal-daemon", "script": "scripts/nexo-personal-daemon.sh", "core": true, "optional": "autonomy"}
   ]
 }
 """.strip()
     )
     nexo_home = tmp_path / "nexo-home"
     (nexo_home / "config").mkdir(parents=True)
-    (nexo_home / "config" / "optionals.json").write_text('{"orchestrator": false}')
+    (nexo_home / "config" / "optionals.json").write_text('{"autonomy": false}')
 
     monkeypatch.setattr(cron_sync, "MANIFEST", manifest)
     monkeypatch.setattr(cron_sync, "NEXO_HOME", nexo_home)
@@ -181,3 +181,18 @@ def test_refresh_runtime_manifest_copies_source_manifest(tmp_path, monkeypatch):
     cron_sync._refresh_runtime_manifest()
 
     assert (runtime_root / "crons" / "manifest.json").read_text() == source_manifest.read_text()
+
+
+def test_cleanup_retired_core_files_removes_day_orchestrator_script(tmp_path, monkeypatch):
+    from crons import sync as cron_sync
+
+    runtime_root = tmp_path / "nexo-home"
+    retired = runtime_root / "scripts" / "nexo-day-orchestrator.sh"
+    retired.parent.mkdir(parents=True)
+    retired.write_text("#!/bin/bash\nexit 0\n")
+
+    monkeypatch.setattr(cron_sync, "RUNTIME_ROOT", runtime_root)
+
+    cron_sync._cleanup_retired_core_files()
+
+    assert not retired.exists()

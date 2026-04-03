@@ -33,6 +33,9 @@ LAUNCH_AGENTS_DIR = Path.home() / "Library" / "LaunchAgents"
 LABEL_PREFIX = "com.nexo."
 LOG_DIR = NEXO_HOME / "logs"
 OPTIONALS_FILE = NEXO_HOME / "config" / "optionals.json"
+RETIRED_CORE_FILES = (
+    Path("scripts") / "nexo-day-orchestrator.sh",
+)
 
 
 def log(msg: str):
@@ -71,6 +74,21 @@ def _refresh_runtime_manifest():
         shutil.copy2(MANIFEST, runtime_manifest)
     except Exception as e:
         log(f"WARNING: could not refresh runtime manifest: {e}")
+
+
+def _cleanup_retired_core_files():
+    """Remove retired core runtime files that should no longer survive updates."""
+    for rel_path in RETIRED_CORE_FILES:
+        try:
+            target = RUNTIME_ROOT / rel_path
+            if target.exists():
+                if target.is_dir():
+                    shutil.rmtree(target)
+                else:
+                    target.unlink()
+                log(f"  Removed retired core file: {rel_path}")
+        except Exception as e:
+            log(f"WARNING: could not remove retired core file {rel_path}: {e}")
 
 
 def load_manifest() -> list[dict]:
@@ -330,6 +348,7 @@ def sync(dry_run: bool = False):
             else:
                 log(f"  SKIP (personal): {cron_id}")
 
+    _cleanup_retired_core_files()
     _refresh_runtime_manifest()
     _sync_watchdog_hash_registry()
     log("Sync complete.")

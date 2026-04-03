@@ -253,6 +253,24 @@ def _refresh_installed_manifest():
         _log(f"Manifest refresh warning: {e}")
 
 
+def _cleanup_retired_runtime_files():
+    """Remove retired core files that should not survive updates."""
+    retired = [
+        NEXO_HOME / "scripts" / "nexo-day-orchestrator.sh",
+    ]
+    for target in retired:
+        try:
+            if target.exists():
+                if target.is_dir():
+                    import shutil
+                    shutil.rmtree(target)
+                else:
+                    target.unlink()
+                _log(f"Removed retired runtime file: {target.name}")
+        except Exception as e:
+            _log(f"Retired runtime cleanup warning ({target.name}): {e}")
+
+
 def _sync_crons():
     """Sync cron definitions with manifest after a git pull."""
     try:
@@ -267,6 +285,7 @@ def _sync_crons():
                 _log(f"Cron sync failed (exit {result.returncode}): {result.stderr or result.stdout}")
                 return  # Don't refresh manifest if timers weren't actually updated
             _log("Synced cron definitions with manifest")
+        _cleanup_retired_runtime_files()
         # Refresh the installed manifest only after successful sync
         _refresh_installed_manifest()
     except Exception as e:

@@ -429,10 +429,6 @@ def _dashboard(args):
     return _service_control("dashboard", args.action)
 
 
-def _orchestrator(args):
-    return _service_control("day-orchestrator", args.action)
-
-
 def _doctor(args):
     """Run unified doctor diagnostics."""
     try:
@@ -568,7 +564,6 @@ Commands:
   nexo skills list|apply|sync|approve                  Executable skills
   nexo update                                          Sync repo to NEXO_HOME
   nexo dashboard on|off|status                         Web dashboard control
-  nexo orchestrator on|off|status                      Autonomous mode control
 
 Run 'nexo <command> --help' for details.
 Homepage: https://nexo-brain.com
@@ -659,10 +654,6 @@ def main():
     dashboard_parser = sub.add_parser("dashboard", help="Web dashboard control")
     dashboard_parser.add_argument("action", choices=["on", "off", "status"], help="Start, stop, or check dashboard")
 
-    # -- orchestrator --
-    orchestrator_parser = sub.add_parser("orchestrator", help="Autonomous mode control")
-    orchestrator_parser.add_argument("action", choices=["on", "off", "status"], help="Start, stop, or check orchestrator")
-
     args = parser.parse_args()
 
     if args.help or (not args.command and not args.version):
@@ -708,8 +699,6 @@ def main():
             return 0
     elif args.command == "dashboard":
         return _dashboard(args)
-    elif args.command == "orchestrator":
-        return _orchestrator(args)
     else:
         _print_help()
         return 0

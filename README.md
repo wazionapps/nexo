@@ -535,18 +535,18 @@ That's it. No need to run `claude` manually. Your operator will greet you immedi
 | MCP server | 147+ tools for memory, cognition, learning, guard | NEXO_HOME/ |
 | Plugins | Guard, episodic memory, cognitive memory, entities, preferences, update, etc. | Code: src/plugins/, Personal: NEXO_HOME/plugins/ |
 | Hooks (7) | SessionStart, Stop, PostToolUse, PreCompact, PostCompact | NEXO_HOME/hooks/ |
-| Nervous system | 17 autonomous processes (decay, sleep, audit, evolution, watchdog, orchestrator, dashboard, etc.) | NEXO_HOME/scripts/ |
+| Nervous system | 16 autonomous processes (decay, sleep, audit, evolution, watchdog, dashboard, etc.) | NEXO_HOME/scripts/ |
 | Dashboard | Web UI at localhost:6174 (23 modules, dark theme) — opt-in, always-on | NEXO_HOME/dashboard/ |
 | Runtime CLI | `nexo` command: scripts, doctor, skills, update | NEXO_HOME/bin/ |
 | Doctor | Unified diagnostics: boot/runtime/deep tiers, `--fix` mode | src/doctor/ |
 | Skills v2 | Executable skills with guide/execute/hybrid modes, approval levels | NEXO_HOME/skills/ |
-| Day Orchestrator | Autonomous cycles every 15 min (8:00-23:00) — opt-in | LaunchAgent |
+| Personal automations | User-defined background routines live in `NEXO_HOME/scripts/` and stay outside the core product contract | NEXO_HOME/scripts/ |
 | CLAUDE.md | Complete operator instructions (Codex, hooks, guard, trust, memory) | ~/.claude/CLAUDE.md |
 | Schedule config | schedule.json with customizable process times and timezone | NEXO_HOME/config/ |
 | Auto-update | Non-blocking startup check (5s max), opt-out via schedule.json | Built into server startup |
 | CLAUDE.md tracker | Version-tracked core sections with safe updates preserving customizations | Built into auto-update |
 | Auto-diary | 3-layer system: PostToolUse every 10 calls, PreCompact emergency, heartbeat DIARY_OVERDUE | Built into hooks |
-| Claude Code config | MCP server + 7 hooks + 15 processes registered | ~/.claude/settings.json |
+| Claude Code config | MCP server + 7 hooks + core processes registered | ~/.claude/settings.json |
 
 ### Runtime CLI
 

@@ -28,7 +28,7 @@ IMMUNE_FRESHNESS = 3600  # 1 hour (runs every 30 min)
 WATCHDOG_FRESHNESS = 3600  # 1 hour (runs every 30 min)
 DEFAULT_CRON_THRESHOLD = 7200  # Fallback when manifest data is unavailable
 SPECIAL_LAUNCHAGENT_IDS = {"prevent-sleep", "tcc-approve"}
-SPECIAL_ENV_NORMALIZE_IDS = SPECIAL_LAUNCHAGENT_IDS | {"day-orchestrator"}
+SPECIAL_ENV_NORMALIZE_IDS = SPECIAL_LAUNCHAGENT_IDS
 OPTIONALS_FILE = NEXO_HOME / "config" / "optionals.json"
 
 
@@ -674,11 +674,6 @@ def check_launchagent_integrity(fix: bool = False) -> DoctorCheck:
             had_problem = True
 
         for env_key in ("NEXO_HOME", "NEXO_CODE"):
-            if cron_id == "day-orchestrator" and env_key == "NEXO_CODE":
-                # The orchestrator can still be served by a transitional wrapper
-                # outside the manifest-managed shell path. Don't block runtime
-                # health on that env mismatch alone.
-                continue
             expected_value = env.get(env_key)
             if not expected_value:
                 continue

@@ -312,11 +312,11 @@ class TestRuntimeChecks:
         from doctor.providers import runtime
 
         (nexo_home / "config").mkdir(parents=True, exist_ok=True)
-        (nexo_home / "config" / "optionals.json").write_text('{"orchestrator": false}')
+        (nexo_home / "config" / "optionals.json").write_text('{"autonomy": false}')
         (nexo_home / "crons" / "manifest.json").write_text(json.dumps({
             "crons": [
                 {"id": "watchdog", "interval_seconds": 1800, "core": True},
-                {"id": "day-orchestrator", "keep_alive": True, "optional": "orchestrator", "core": True},
+                {"id": "autonomy-daemon", "keep_alive": True, "optional": "autonomy", "core": True},
             ]
         }))
 
@@ -325,12 +325,12 @@ class TestRuntimeChecks:
 
         expectations = runtime._launchagent_schedule_expectations()
         assert "watchdog" in expectations
-        assert "day-orchestrator" not in expectations
+        assert "autonomy-daemon" not in expectations
 
     def test_launchagent_integrity_detects_keepalive_schedule_drift(self, nexo_home, monkeypatch):
         from doctor.providers import runtime
 
-        plist_path = nexo_home / "com.nexo.day-orchestrator.plist"
+        plist_path = nexo_home / "com.nexo.personal-daemon.plist"
         with plist_path.open("wb") as fh:
             plistlib.dump({
                 "EnvironmentVariables": {
@@ -341,9 +341,9 @@ class TestRuntimeChecks:
             }, fh)
 
         monkeypatch.setattr(runtime.platform, "system", lambda: "Darwin")
-        monkeypatch.setattr(runtime, "_managed_launchagent_plists", lambda: [("day-orchestrator", plist_path)])
+        monkeypatch.setattr(runtime, "_managed_launchagent_plists", lambda: [("personal-daemon", plist_path)])
         monkeypatch.setattr(runtime, "_launchagent_schedule_expectations", lambda: {
-            "day-orchestrator": {
+            "personal-daemon": {
                 "StartInterval": None,
                 "StartCalendarInterval": None,
                 "RunAtLoad": True,
@@ -357,7 +357,7 @@ class TestRuntimeChecks:
             return SimpleNamespace(
                 returncode=0,
                 stdout=(
-                    "gui/501/com.nexo.day-orchestrator = {\n"
+                    "gui/501/com.nexo.personal-daemon = {\n"
                     f"path = {plist_path}\n"
                     f"NEXO_HOME => {nexo_home}\n"
                     f"NEXO_CODE => {nexo_home}\n"
