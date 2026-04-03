@@ -142,6 +142,32 @@ class TestRuntimeUpdate:
         assert (runtime_home / "db" / "__init__.py").read_text() == "x = 1\n"
 
 
+class TestChatCommand:
+    def test_chat_launches_claude_with_current_path(self, nexo_home, tmp_path):
+        fake_claude = tmp_path / "claude"
+        out_file = tmp_path / "claude-invocation.json"
+        fake_claude.write_text(
+            "#!/usr/bin/env python3\n"
+            "import json, os, sys\n"
+            f"open({json.dumps(str(out_file))}, 'w').write(json.dumps(sys.argv[1:]))\n"
+        )
+        fake_claude.chmod(0o755)
+
+        env = {
+            **os.environ,
+            "NEXO_HOME": str(nexo_home),
+            "NEXO_CODE": os.path.join(os.path.dirname(__file__), "..", "src"),
+            "HOME": str(nexo_home),
+            "CLAUDE_BIN": str(fake_claude),
+        }
+        result = subprocess.run(
+            [sys.executable, CLI_PY, "chat", "."],
+            capture_output=True, text=True, timeout=10, env=env,
+        )
+        assert result.returncode == 0
+        assert json.loads(out_file.read_text()) == ["--dangerously-skip-permissions", "."]
+
+
 class TestScriptsRun:
     def test_run_python_script(self, nexo_home):
         script = nexo_home / "scripts" / "hello.py"

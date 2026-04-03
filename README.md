@@ -537,7 +537,7 @@ That's it. No need to run `claude` manually. Your operator will greet you immedi
 | Hooks (7) | SessionStart, Stop, PostToolUse, PreCompact, PostCompact | NEXO_HOME/hooks/ |
 | Nervous system | 16 autonomous processes (decay, sleep, audit, evolution, watchdog, dashboard, etc.) | NEXO_HOME/scripts/ |
 | Dashboard | Web UI at localhost:6174 (23 modules, dark theme) — opt-in, always-on | NEXO_HOME/dashboard/ |
-| Runtime CLI | `nexo` command: scripts, doctor, skills, update | NEXO_HOME/bin/ |
+| Runtime CLI | `nexo` command: chat, scripts, doctor, skills, update | NEXO_HOME/bin/ |
 | Doctor | Unified diagnostics: boot/runtime/deep tiers, `--fix` mode | src/doctor/ |
 | Skills v2 | Executable skills with guide/execute/hybrid modes, approval levels | NEXO_HOME/skills/ |
 | Personal automations | User-defined background routines live in `NEXO_HOME/scripts/` and stay outside the core product contract | NEXO_HOME/scripts/ |
@@ -553,6 +553,10 @@ That's it. No need to run `claude` manually. Your operator will greet you immedi
 After installation or auto-update, NEXO adds `NEXO_HOME/bin` to your shell `PATH`. Open a new terminal and the `nexo` command provides operational tools:
 
 ```bash
+# Claude Code
+nexo chat                    # Launch Claude Code in the current directory
+nexo chat ~/claude           # Launch Claude Code in a specific directory
+
 # Personal Scripts
 nexo scripts list              # List your personal scripts
 nexo scripts run my-script     # Run a script with injected NEXO env

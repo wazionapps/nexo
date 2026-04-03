@@ -2,6 +2,7 @@
 """NEXO Runtime CLI — operational commands for scripts and diagnostics.
 
 Entry points:
+  nexo chat [PATH]
   nexo scripts list [--all] [--json]
   nexo scripts create NAME [--runtime python|shell] [--description TEXT]
   nexo scripts sync [--json]
@@ -26,6 +27,7 @@ import contextlib
 import io
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -630,6 +632,20 @@ def _dashboard(args):
     return _service_control("dashboard", args.action)
 
 
+def _chat(args):
+    target = args.path or "."
+    claude_bin = os.environ.get("CLAUDE_BIN") or shutil.which("claude")
+    if not claude_bin:
+        print("Claude Code launcher not found in PATH. Install `claude` first.", file=sys.stderr)
+        return 1
+
+    result = subprocess.run(
+        [claude_bin, "--dangerously-skip-permissions", target],
+        env=os.environ.copy(),
+    )
+    return int(result.returncode)
+
+
 def _doctor(args):
     """Run unified doctor diagnostics."""
     try:
@@ -760,6 +776,7 @@ def _print_help():
     print(f"""NEXO Runtime CLI v{v}
 
 Commands:
+  nexo chat [path]                                    Launch Claude Code
   nexo doctor [--tier boot|runtime|deep|all] [--fix]   System diagnostics
   nexo scripts list|create|sync|schedules|run|doctor|call
                                                       Personal scripts
@@ -777,6 +794,10 @@ def main():
     parser.add_argument("-h", "--help", action="store_true", help="Show help")
     parser.add_argument("-v", "--version", action="store_true", help="Show version")
     sub = parser.add_subparsers(dest="command")
+
+    # -- chat --
+    chat_parser = sub.add_parser("chat", help="Launch Claude Code")
+    chat_parser.add_argument("path", nargs="?", default=".", help="Working directory (default: current directory)")
 
     # -- scripts --
     scripts_parser = sub.add_parser("scripts", help="Manage personal scripts")
@@ -899,6 +920,8 @@ def main():
         else:
             scripts_parser.print_help()
             return 0
+    elif args.command == "chat":
+        return _chat(args)
     elif args.command == "update":
         return _update(args)
     elif args.command == "doctor":
