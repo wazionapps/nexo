@@ -23,6 +23,14 @@ def handle_learning_add(category: str, title: str, content: str, reasoning: str 
     category = category.lower().strip()
     if not category:
         return "ERROR: Category cannot be empty."
+    # Dedup guard: block exact title duplicates in same category
+    conn = get_db()
+    existing = conn.execute(
+        "SELECT id, title FROM learnings WHERE LOWER(title) = LOWER(?) AND category = ? AND status = 'active'",
+        (title.strip(), category)
+    ).fetchone()
+    if existing:
+        return f"Learning #{existing['id']} already exists with same title in {category}: {existing['title']}. Use nexo_learning_update to modify it."
     result = create_learning(
         category, title, content, reasoning=reasoning
     )
