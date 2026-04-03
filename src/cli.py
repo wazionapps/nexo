@@ -377,8 +377,17 @@ def _update(args):
         return None
 
     def _resolve_sync_source() -> tuple[Path | None, Path | None]:
-        # Explicit dev mode: NEXO_CODE points at repo/src
-        if (NEXO_CODE / "db").is_dir() and (NEXO_CODE.parent / "package.json").is_file():
+        try:
+            same_as_runtime = NEXO_CODE.resolve() == dest.resolve()
+        except Exception:
+            same_as_runtime = NEXO_CODE == dest
+
+        # Explicit dev mode: NEXO_CODE points at repo/src, never the installed runtime itself.
+        if (
+            not same_as_runtime
+            and (NEXO_CODE / "db").is_dir()
+            and (NEXO_CODE.parent / "package.json").is_file()
+        ):
             return NEXO_CODE, NEXO_CODE.parent
 
         # Installed runtime linked back to a source checkout
@@ -389,6 +398,19 @@ def _update(args):
         return None, None
 
     src_dir, repo_dir = _resolve_sync_source()
+
+    if src_dir is not None:
+        try:
+            if src_dir.resolve() == dest.resolve():
+                version_source = _runtime_version_source()
+                if version_source:
+                    src_dir = version_source / "src"
+                    repo_dir = version_source
+                else:
+                    src_dir = None
+                    repo_dir = None
+        except Exception:
+            pass
 
     if src_dir is None or repo_dir is None:
         try:

@@ -98,6 +98,7 @@ class TestRuntimeUpdate:
         runtime_home = tmp_path / "runtime"
         runtime_home.mkdir()
         (runtime_home / "bin").mkdir()
+        (runtime_home / "db").mkdir()
 
         repo = tmp_path / "repo"
         src = repo / "src"
@@ -105,7 +106,10 @@ class TestRuntimeUpdate:
         (repo / "package.json").write_text(json.dumps({"version": "9.9.9"}))
 
         for dirname in ["db", "cognitive", "doctor", "dashboard", "rules", "crons", "hooks", "plugins"]:
-            (src / dirname).mkdir()
+            package_dir = src / dirname
+            package_dir.mkdir()
+            if dirname != "plugins":
+                (package_dir / "__init__.py").write_text("x = 1\n")
         for flat in [
             "server.py", "plugin_loader.py", "knowledge_graph.py", "kg_populate.py",
             "maintenance.py", "storage_router.py", "claim_graph.py", "hnsw_index.py",
@@ -135,6 +139,7 @@ class TestRuntimeUpdate:
         assert data["mode"] == "sync"
         assert data["source"] == str(src)
         assert (runtime_home / "db").is_dir()
+        assert (runtime_home / "db" / "__init__.py").read_text() == "x = 1\n"
 
 
 class TestScriptsRun:
