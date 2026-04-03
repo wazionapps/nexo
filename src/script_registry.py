@@ -60,6 +60,7 @@ METADATA_KEYS = {
     "schedule_required",
 }
 SUPPORTED_RUNTIMES = {"python", "shell", "node", "php", "unknown"}
+PERSONAL_SCHEDULE_MANAGED_ENV = "NEXO_MANAGED_PERSONAL_CRON"
 
 
 def get_nexo_home() -> Path:
@@ -206,10 +207,39 @@ def _safe_slug(value: str) -> str:
 
 def get_declared_schedule(metadata: dict, default_name: str = "") -> dict:
     """Parse desired schedule metadata from inline script metadata."""
-    cron_id = metadata.get("cron_id", "").strip() or _safe_slug(default_name or metadata.get("name", "script"))
+    explicit_name = metadata.get("name", "").strip()
+    explicit_runtime = metadata.get("runtime", "").strip().lower()
+    explicit_cron_id = metadata.get("cron_id", "").strip()
+    cron_id = explicit_cron_id or _safe_slug(default_name or explicit_name or "script")
     interval_raw = metadata.get("interval_seconds", "").strip()
     schedule_raw = metadata.get("schedule", "").strip()
-    required = _truthy(metadata.get("schedule_required")) or bool(interval_raw or schedule_raw)
+    schedule_required = _truthy(metadata.get("schedule_required"))
+    required = schedule_required or bool(interval_raw or schedule_raw)
+
+    if required:
+        missing = []
+        if not explicit_name:
+            missing.append("name")
+        if not explicit_runtime:
+            missing.append("runtime")
+        elif explicit_runtime not in SUPPORTED_RUNTIMES - {"unknown"}:
+            return {
+                "required": required,
+                "valid": False,
+                "error": f"Invalid runtime metadata for scheduled script: {explicit_runtime}",
+                "cron_id": cron_id,
+            }
+        if not explicit_cron_id:
+            missing.append("cron_id")
+        if not schedule_required:
+            missing.append("schedule_required=true")
+        if missing:
+            return {
+                "required": required,
+                "valid": False,
+                "error": f"Scheduled scripts must declare {', '.join(missing)}",
+                "cron_id": cron_id,
+            }
 
     if interval_raw and schedule_raw:
         return {
@@ -421,16 +451,25 @@ def resolve_script_reference(ref: str) -> dict | None:
 
 
 def _extract_script_path_from_program_args(program_args: list) -> Path | None:
+    candidate = _extract_script_path_candidate(program_args)
+    if candidate is None:
+        return None
+    if not candidate.is_file():
+        return None
+    if not _within_scripts_dir(candidate):
+        return None
+    if _is_ignored(candidate):
+        return None
+    return candidate
+
+
+def _extract_script_path_candidate(program_args: list) -> Path | None:
     candidates: list[Path] = []
     for arg in program_args or []:
         if not isinstance(arg, str):
             continue
         candidate = Path(arg).expanduser()
-        if not candidate.is_file():
-            continue
-        if not _within_scripts_dir(candidate):
-            continue
-        if _is_ignored(candidate):
+        if not str(candidate).startswith("/") and not str(arg).startswith("~"):
             continue
         candidates.append(candidate)
     if not candidates:
@@ -465,8 +504,43 @@ def _format_schedule_from_plist(plist_data: dict) -> tuple[str, str, str]:
     return "manual", "", ""
 
 
-def discover_personal_schedules() -> list[dict]:
-    """Inspect system schedulers and return personal schedules linked to scripts."""
+def _calendar_payload_from_declared(schedule_value: str) -> dict | list | None:
+    if not schedule_value:
+        return None
+    if schedule_value.lstrip().startswith("{") or schedule_value.lstrip().startswith("["):
+        try:
+            parsed = json.loads(schedule_value)
+        except Exception:
+            return None
+        return parsed if isinstance(parsed, (dict, list)) else None
+
+    parts = schedule_value.split(":")
+    if len(parts) not in {2, 3}:
+        return None
+    try:
+        hour = int(parts[0])
+        minute = int(parts[1])
+        weekday = int(parts[2]) if len(parts) == 3 else None
+    except ValueError:
+        return None
+
+    payload = {"Hour": hour, "Minute": minute}
+    if weekday is not None:
+        payload["Weekday"] = weekday
+    return payload
+
+
+def _canonical_schedule_value(schedule_type: str, schedule_value: str | dict | list) -> str:
+    if schedule_type == "calendar":
+        payload = _calendar_payload_from_declared(str(schedule_value)) if isinstance(schedule_value, str) else schedule_value
+        if payload is None:
+            return str(schedule_value or "")
+        return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return str(schedule_value or "")
+
+
+def _discover_personal_schedule_records() -> list[dict]:
+    """Inspect macOS LaunchAgents and return raw personal schedule records."""
     if platform.system() != "Darwin":
         return []
 
@@ -488,18 +562,21 @@ def discover_personal_schedules() -> list[dict]:
             continue
 
         program_args = plist_data.get("ProgramArguments") or []
-        script_path = _extract_script_path_from_program_args(program_args)
-        if script_path is None:
-            continue
-        if script_path.name in core_names:
+        candidate = _extract_script_path_candidate(program_args)
+        label = str(plist_data.get("Label", plist_path.stem))
+        cron_id = label.replace("com.nexo.", "", 1)
+        script_path = candidate.expanduser() if candidate is not None else None
+        in_scripts_dir = bool(script_path and _within_scripts_dir(script_path))
+        exists = bool(script_path and script_path.is_file())
+        ignored = bool(script_path and in_scripts_dir and _is_ignored(script_path))
+        is_core = bool(script_path and exists and script_path.name in core_names)
+        if is_core or ignored:
             continue
 
         schedule_type, schedule_value, schedule_label = _format_schedule_from_plist(plist_data)
-        label = str(plist_data.get("Label", plist_path.stem))
-        cron_id = label.replace("com.nexo.", "", 1)
         results.append({
             "cron_id": cron_id,
-            "script_path": str(script_path),
+            "script_path": str(script_path) if script_path else "",
             "schedule_type": schedule_type,
             "schedule_value": schedule_value,
             "schedule_label": schedule_label,
@@ -507,9 +584,129 @@ def discover_personal_schedules() -> list[dict]:
             "plist_path": str(plist_path),
             "enabled": True,
             "description": "",
+            "managed_marker": env.get(PERSONAL_SCHEDULE_MANAGED_ENV) == "1",
+            "script_exists": exists,
+            "script_within_scripts_dir": in_scripts_dir,
         })
 
     return results
+
+
+def audit_personal_schedules() -> dict:
+    """Return semantic schedule audit for personal LaunchAgents.
+
+    Only schedules created/repaired through the official flow count as managed.
+    Manual plists are discovered for visibility and repair, but never blessed.
+    """
+    classification = classify_scripts_dir()
+    personal_scripts = [entry for entry in classification["entries"] if entry["classification"] == "personal"]
+    scripts_by_path = {
+        str(Path(entry["path"]).expanduser().resolve(strict=False)): entry
+        for entry in personal_scripts
+    }
+
+    audited: list[dict] = []
+    summary = {
+        "declared_managed": 0,
+        "discovered_manual": 0,
+        "orphan_schedule": 0,
+        "healthy": 0,
+        "problems": 0,
+        "managed_registered": 0,
+    }
+
+    for record in _discover_personal_schedule_records():
+        script_path = record.get("script_path", "")
+        resolved_path = str(Path(script_path).expanduser().resolve(strict=False)) if script_path else ""
+        script = scripts_by_path.get(resolved_path)
+        declared = script.get("declared_schedule", {}) if script else {}
+        declared_valid = bool(script and declared.get("required") and declared.get("valid"))
+        matches = declared_valid and _schedule_matches(record, declared)
+
+        if record.get("managed_marker") and declared_valid:
+            schedule_origin = "declared_managed"
+        elif declared_valid:
+            schedule_origin = "discovered_manual"
+        else:
+            schedule_origin = "orphan_schedule"
+
+        problems: list[str] = []
+        if not record.get("script_within_scripts_dir"):
+            problems.append("schedule points outside NEXO_HOME/scripts")
+        elif not record.get("script_path"):
+            problems.append("schedule does not resolve a script path")
+        elif not record.get("script_exists"):
+            problems.append(f"scheduled script missing: {record['script_path']}")
+        elif not script:
+            problems.append("schedule points to a script that is not a registered personal script")
+
+        if script and not declared.get("required"):
+            problems.append("personal schedule exists without declared inline metadata")
+        elif script and declared.get("required") and not declared.get("valid"):
+            problems.append(declared.get("error", "invalid declared schedule metadata"))
+        elif declared_valid and not matches:
+            problems.append(
+                f"schedule drift: actual {record.get('schedule_label') or record.get('schedule_value') or record.get('schedule_type')} "
+                f"!= declared {declared.get('schedule_label') or declared.get('cron_id')}"
+            )
+
+        if declared_valid and not record.get("managed_marker"):
+            problems.append("schedule was discovered manually and must be recreated via nexo scripts reconcile")
+
+        schedule_managed = bool(schedule_origin == "declared_managed" and matches and not problems)
+        if schedule_managed:
+            schedule_state = "healthy"
+        elif schedule_origin == "declared_managed":
+            schedule_state = "drifted"
+        elif schedule_origin == "discovered_manual" and matches:
+            schedule_state = "manual_matching_declared"
+        elif schedule_origin == "discovered_manual":
+            schedule_state = "manual_drift"
+        else:
+            schedule_state = "orphaned"
+
+        audited_record = dict(record)
+        audited_record.update({
+            "schedule_origin": schedule_origin,
+            "schedule_declared": declared_valid,
+            "schedule_managed": schedule_managed,
+            "schedule_matches_declared": matches,
+            "schedule_state": schedule_state,
+            "problems": problems,
+            "script_name": script.get("name", "") if script else "",
+            "declared_schedule": declared if script else {},
+        })
+        audited.append(audited_record)
+        summary[schedule_origin] += 1
+        if schedule_managed:
+            summary["healthy"] += 1
+            summary["managed_registered"] += 1
+        else:
+            summary["problems"] += 1
+
+    return {
+        "schedules": audited,
+        "summary": summary,
+    }
+
+
+def discover_personal_schedules() -> list[dict]:
+    """Return only healthy managed personal schedules."""
+    managed: list[dict] = []
+    for record in audit_personal_schedules()["schedules"]:
+        if record.get("schedule_managed"):
+            managed.append({
+                "cron_id": record["cron_id"],
+                "script_path": record["script_path"],
+                "schedule_type": record["schedule_type"],
+                "schedule_value": record["schedule_value"],
+                "schedule_label": record["schedule_label"],
+                "launchd_label": record["launchd_label"],
+                "plist_path": record["plist_path"],
+                "enabled": record.get("enabled", True),
+                "description": record.get("description", ""),
+            })
+    return managed
 
 
 def sync_personal_scripts(prune_missing: bool = True) -> dict:
@@ -519,16 +716,23 @@ def sync_personal_scripts(prune_missing: bool = True) -> dict:
     init_db()
     classification = classify_scripts_dir()
     scripts = [entry for entry in classification["entries"] if entry["classification"] == "personal"]
-    schedules = discover_personal_schedules()
+    schedule_audit = audit_personal_schedules()
+    schedules = [record for record in schedule_audit["schedules"] if record.get("schedule_managed")]
     result = sync_personal_scripts_registry(scripts, schedules, prune_missing=prune_missing)
     result["classification"] = classification["summary"]
     missing_declared = []
-    schedules_by_path: dict[str, list[dict]] = {}
+    managed_by_path: dict[str, list[dict]] = {}
     for schedule in schedules:
+        managed_by_path.setdefault(schedule["script_path"], []).append(schedule)
+    schedules_by_path: dict[str, list[dict]] = {}
+    for schedule in schedule_audit["schedules"]:
         schedules_by_path.setdefault(schedule["script_path"], []).append(schedule)
     for script in scripts:
         declared = script.get("declared_schedule", {})
         if not declared.get("required"):
+            continue
+        healthy = managed_by_path.get(script["path"], [])
+        if healthy:
             continue
         attached = schedules_by_path.get(script["path"], [])
         if not attached:
@@ -536,7 +740,17 @@ def sync_personal_scripts(prune_missing: bool = True) -> dict:
                 "name": script["name"],
                 "path": script["path"],
                 "declared_schedule": declared,
+                "reason": "no schedule discovered",
             })
+            continue
+        attached_states = [item.get("schedule_state", item.get("schedule_origin", "unknown")) for item in attached]
+        missing_declared.append({
+            "name": script["name"],
+            "path": script["path"],
+            "declared_schedule": declared,
+            "reason": f"schedule discovered but not managed ({', '.join(attached_states)})",
+        })
+    result["schedule_audit"] = schedule_audit
     result["missing_declared_schedules"] = missing_declared
     return result
 
@@ -548,18 +762,38 @@ def _schedule_matches(existing: dict, declared: dict) -> bool:
         return False
     if existing.get("schedule_type") != declared.get("schedule_type"):
         return False
-    if str(existing.get("schedule_value", "")) != str(declared.get("schedule_value", "")):
+    existing_value = _canonical_schedule_value(existing.get("schedule_type", ""), existing.get("schedule_value", ""))
+    declared_value = _canonical_schedule_value(declared.get("schedule_type", ""), declared.get("schedule_value", ""))
+    if existing_value != declared_value:
         return False
     return True
+
+
+def _remove_schedule_file(*, cron_id: str, plist_path: str) -> dict:
+    removed = {
+        "cron_id": cron_id,
+        "plist_path": plist_path,
+        "deleted": False,
+    }
+    plist = Path(plist_path) if plist_path else None
+    if plist and platform.system() == "Darwin" and plist.exists():
+        subprocess.run(
+            ["launchctl", "bootout", f"gui/{os.getuid()}", str(plist)],
+            capture_output=True,
+        )
+        with contextlib.suppress(FileNotFoundError):
+            plist.unlink()
+            removed["deleted"] = True
+    return removed
 
 
 def ensure_personal_schedules(*, dry_run: bool = False) -> dict:
     """Create or repair personal schedules declared in inline script metadata."""
     classification = classify_scripts_dir()
     scripts = [entry for entry in classification["entries"] if entry["classification"] == "personal"]
-    discovered = discover_personal_schedules()
+    schedule_audit = audit_personal_schedules()
     schedules_by_path: dict[str, list[dict]] = {}
-    for schedule in discovered:
+    for schedule in schedule_audit["schedules"]:
         schedules_by_path.setdefault(schedule["script_path"], []).append(schedule)
 
     report = {
@@ -589,7 +823,7 @@ def ensure_personal_schedules(*, dry_run: bool = False) -> dict:
             continue
 
         existing = schedules_by_path.get(script["path"], [])
-        matching = next((item for item in existing if _schedule_matches(item, declared)), None)
+        matching = next((item for item in existing if item.get("schedule_managed") and _schedule_matches(item, declared)), None)
         if matching:
             report["already_present"].append({
                 "name": script["name"],
@@ -598,17 +832,25 @@ def ensure_personal_schedules(*, dry_run: bool = False) -> dict:
             })
             continue
 
+        repair_reasons = [item.get("schedule_state", item.get("schedule_origin", "unknown")) for item in existing]
         if dry_run:
             report["repaired" if existing else "created"].append({
                 "name": script["name"],
                 "cron_id": declared["cron_id"],
                 "schedule_label": declared["schedule_label"],
                 "dry_run": True,
+                "reason": ", ".join(repair_reasons) if repair_reasons else "missing schedule",
             })
             continue
 
+        removed = []
         if existing:
-            unschedule_personal_script(script["name"])
+            for item in existing:
+                removed.append(_remove_schedule_file(cron_id=item["cron_id"], plist_path=item.get("plist_path", "")))
+            from db import delete_personal_script_schedule
+
+            for item in existing:
+                delete_personal_script_schedule(item["cron_id"])
 
         from plugins.schedule import handle_schedule_add
 
@@ -625,6 +867,8 @@ def ensure_personal_schedules(*, dry_run: bool = False) -> dict:
             "name": script["name"],
             "cron_id": declared["cron_id"],
             "schedule_label": declared["schedule_label"],
+            "reason": ", ".join(repair_reasons) if repair_reasons else "missing schedule",
+            "removed": removed,
             "result": response,
         })
 
@@ -744,25 +988,28 @@ def unschedule_personal_script(name_or_path: str) -> dict:
     sync_personal_scripts()
     script = get_personal_script(name_or_path)
     if not script:
-        return {"ok": False, "error": f"Personal script not found: {name_or_path}"}
+        resolved = resolve_script(name_or_path)
+        if not resolved or resolved.get("core"):
+            return {"ok": False, "error": f"Personal script not found: {name_or_path}"}
+        script = resolved
 
     removed: list[dict] = []
+    audited = audit_personal_schedules()
+    discovered = [
+        item for item in audited["schedules"]
+        if item.get("script_path") == script.get("path")
+    ]
+    for schedule in discovered:
+        removed.append(_remove_schedule_file(cron_id=schedule["cron_id"], plist_path=schedule.get("plist_path", "")))
+
     for schedule in script.get("schedules", []):
-        plist_path = schedule.get("plist_path", "")
-        if plist_path:
-            plist = Path(plist_path)
-            if platform.system() == "Darwin" and plist.is_file():
-                subprocess.run(
-                    ["launchctl", "bootout", f"gui/{os.getuid()}", str(plist)],
-                    capture_output=True,
-                )
-                with contextlib.suppress(FileNotFoundError):
-                    plist.unlink()
         delete_personal_script_schedule(schedule["cron_id"])
-        removed.append({
-            "cron_id": schedule["cron_id"],
-            "plist_path": plist_path,
-        })
+        if not any(item["cron_id"] == schedule["cron_id"] for item in removed):
+            removed.append({
+                "cron_id": schedule["cron_id"],
+                "plist_path": schedule.get("plist_path", ""),
+                "deleted": False,
+            })
 
     sync_result = sync_personal_scripts()
     return {

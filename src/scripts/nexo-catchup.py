@@ -1,22 +1,19 @@
 #!/usr/bin/env python3
-"""
-NEXO Catch-Up — Runs at boot/wake to recover any missed scheduled tasks.
+"""NEXO Catch-Up — recover missed core cron windows after boot/wake.
 
-Tasks are loaded dynamically from crons/manifest.json (single source of truth).
-Only scheduled crons (with hour/minute) are recovered — interval-based crons
-(immune, watchdog, auto-close) restart automatically via launchd/systemd.
-
-Logic: For each scheduled task, check if its last successful run was before
-the most recent scheduled time. If so, run it now. Only marks success on exit 0.
-Uses cron/launchd weekday convention (0=Sunday) converted to Python (0=Monday).
+Recovery is driven by the explicit manifest contract plus cron_runs.
+Legacy .catchup-state.json is now only a fallback for pre-wrapper history.
 """
 
+import fcntl
 import json
 import os
 import subprocess
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
+
+from cron_recovery import catchup_candidates
 
 HOME = Path.home()
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(HOME / ".nexo")))
@@ -48,8 +45,10 @@ LOG_DIR = NEXO_HOME / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE = LOG_DIR / "catchup.log"
 STATE_FILE = NEXO_HOME / "operations" / ".catchup-state.json"
+LOCK_FILE = NEXO_HOME / "operations" / ".catchup.lock"
 
 SCRIPTS = NEXO_HOME / "scripts"
+WRAPPER = SCRIPTS / "nexo-cron-wrapper.sh"
 
 # Resolve Python: prefer NEXO's venv, then the same Python running this script
 def _resolve_python() -> str:
@@ -68,52 +67,6 @@ def _resolve_python() -> str:
     return sys.executable
 
 NEXO_PYTHON = _resolve_python()
-NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parent.parent)))
-# Look for manifest in NEXO_HOME first (packaged install), then NEXO_CODE (dev/repo)
-_manifest_home = NEXO_HOME / "crons" / "manifest.json"
-_manifest_code = NEXO_CODE / "crons" / "manifest.json"
-MANIFEST = _manifest_home if _manifest_home.exists() else _manifest_code
-
-
-def _load_tasks_from_manifest() -> list[tuple]:
-    """Read scheduled tasks from manifest.json — single source of truth.
-
-    Only includes crons with a schedule (hour/minute). Excludes interval-based
-    crons (immune, watchdog, auto-close) and run_at_load (catchup itself).
-    Returns: list of (name, hour, minute, python_or_bash, script, weekday)
-    """
-    if not MANIFEST.exists():
-        log(f"WARNING: manifest not found at {MANIFEST}, using empty task list")
-        return []
-
-    with open(MANIFEST) as f:
-        data = json.load(f)
-
-    tasks = []
-    for cron in data.get("crons", []):
-        schedule = cron.get("schedule")
-        if not schedule or "hour" not in schedule:
-            continue  # Skip interval-based and run_at_load crons
-        if cron["id"] == "catchup":
-            continue  # Don't catch up ourselves
-
-        script = cron["script"]
-        script_type = cron.get("type", "python")
-        interpreter = NEXO_PYTHON if script_type == "python" else "/bin/bash"
-        weekday = schedule.get("weekday")
-
-        tasks.append((
-            cron["id"],
-            schedule["hour"],
-            schedule["minute"],
-            interpreter,
-            Path(script).name,
-            weekday,
-        ))
-
-    # Sort by hour, minute for correct execution order
-    tasks.sort(key=lambda t: (t[1], t[2]))
-    return tasks
 
 
 def log(msg: str):
@@ -138,59 +91,48 @@ def save_state(state: dict):
     STATE_FILE.write_text(json.dumps(state, indent=2))
 
 
-def last_scheduled_time(hour: int, minute: int, weekday: int = None) -> datetime:
-    """Calculate the most recent time this task should have run."""
-    now = datetime.now()
-    today_at = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
-
-    if weekday is not None:
-        # Weekly task — find the most recent matching weekday
-        # Manifest uses cron/launchd convention: 0=Sunday, 6=Saturday
-        # Python datetime.weekday() uses: 0=Monday, 6=Sunday
-        # Convert: manifest 0 (Sun) -> python 6, manifest 1 (Mon) -> python 0, etc.
-        py_weekday = (weekday - 1) % 7
-        days_since = (now.weekday() - py_weekday) % 7
-        target = now - timedelta(days=days_since)
-        target = target.replace(hour=hour, minute=minute, second=0, microsecond=0)
-        if target > now:
-            target -= timedelta(weeks=1)
-        return target
-
-    # Daily task
-    if today_at <= now:
-        return today_at
-    else:
-        return today_at - timedelta(days=1)
+def _resolve_runtime_command(script_type: str) -> str:
+    if script_type == "shell":
+        return "/bin/bash"
+    if script_type == "node":
+        return "node"
+    if script_type == "php":
+        return "php"
+    return NEXO_PYTHON
 
 
-def should_run(task_name: str, hour: int, minute: int, state: dict, weekday: int = None) -> bool:
-    """Check if task needs catch-up: last run was before last scheduled time."""
-    last_run_str = state.get(task_name)
-    last_scheduled = last_scheduled_time(hour, minute, weekday)
-
-    if not last_run_str:
-        # Never ran — should run
-        return True
-
+def _acquire_lock():
+    LOCK_FILE.parent.mkdir(parents=True, exist_ok=True)
+    handle = LOCK_FILE.open("w")
     try:
-        last_run = datetime.fromisoformat(last_run_str)
-    except ValueError:
-        return True
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        handle.close()
+        return None
+    handle.write(str(os.getpid()))
+    handle.flush()
+    return handle
 
-    return last_run < last_scheduled
 
-
-def run_task(name: str, python: str, script: str, state: dict) -> bool:
+def run_task(candidate: dict, state: dict) -> bool:
     """Execute a task and update state."""
-    script_path = str(SCRIPTS / script)
+    name = candidate["cron_id"]
+    script_name = Path(candidate["script"]).name
+    script_path = str(SCRIPTS / script_name)
     if not Path(script_path).exists():
         log(f"  SKIP {name}: script not found ({script_path})")
         return False
 
-    log(f"  RUNNING {name}: {script}")
+    runtime_cmd = _resolve_runtime_command(candidate.get("type", "python"))
+    if WRAPPER.exists():
+        command = ["/bin/bash", str(WRAPPER), name, runtime_cmd, script_path]
+    else:
+        command = [runtime_cmd, script_path]
+
+    log(f"  RUNNING {name}: {script_name}")
     try:
         result = subprocess.run(
-            [python, script_path],
+            command,
             capture_output=True, text=True, timeout=21600,
             env={**os.environ, "HOME": str(HOME), "NEXO_CATCHUP": "1"}
         )
@@ -205,7 +147,7 @@ def run_task(name: str, python: str, script: str, state: dict) -> bool:
                 log(f"    stderr: {result.stderr[:300]}")
             return False
     except subprocess.TimeoutExpired:
-        log(f"  TIMEOUT {name} (300s)")
+        log(f"  TIMEOUT {name} (21600s)")
         return False
     except Exception as e:
         log(f"  ERROR {name}: {e}")
@@ -214,28 +156,45 @@ def run_task(name: str, python: str, script: str, state: dict) -> bool:
 
 def main():
     log("=== NEXO Catch-Up starting (boot/wake) ===")
-    state = load_state()
+    lock_handle = _acquire_lock()
+    if lock_handle is None:
+        log("Catch-Up already running; skipping overlapping invocation.")
+        return
 
-    # Read tasks from manifest — single source of truth
-    tasks = _load_tasks_from_manifest()
+    state = load_state()
+    tasks = catchup_candidates()
 
     ran = 0
     skipped = 0
-    for name, hour, minute, python, script, weekday in tasks:
-        if should_run(name, hour, minute, state, weekday):
-            log(f"  {name} — missed scheduled run, catching up...")
-            if run_task(name, python, script, state):
+    skipped_out_of_window = 0
+    try:
+        for candidate in tasks:
+            name = candidate["cron_id"]
+            if not candidate.get("missed"):
+                skipped += 1
+                continue
+            if not candidate.get("within_window"):
+                skipped_out_of_window += 1
+                log(
+                    f"  SKIP {name}: missed window is {candidate['age_seconds']}s old "
+                    f"(max_catchup_age={candidate['contract']['max_catchup_age']}s)"
+                )
+                continue
+            due_at = candidate["last_due_at"].astimezone().strftime("%Y-%m-%d %H:%M")
+            log(f"  {name} — missed scheduled run due at {due_at}, catching up...")
+            if run_task(candidate, state):
                 ran += 1
-        else:
-            skipped += 1
+    finally:
+        lock_handle.close()
 
-    if ran == 0:
+    if ran == 0 and skipped_out_of_window == 0:
         log("All tasks up to date, nothing to catch up.")
     elif ran >= 3:
         # Many tasks caught up — ask CLI to assess system state
         _cli_post_catchup_assessment(ran, skipped, state)
     else:
-        log(f"Caught up {ran} tasks, {skipped} already current.")
+        suffix = f", {skipped_out_of_window} outside recovery window" if skipped_out_of_window else ""
+        log(f"Caught up {ran} tasks, {skipped} already current{suffix}.")
 
     log("=== Catch-Up complete ===")
 

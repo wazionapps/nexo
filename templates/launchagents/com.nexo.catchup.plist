@@ -1,11 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- com.nexo.catchup
-     Runs nexo-catchup.py once at login (RunAtLoad, no recurring schedule)
-     to handle tasks that were missed while the computer was off or
-     sleeping. Processes any overdue followups, expired reminders, and
-     scheduled jobs that launchd could not fire during downtime. This
-     ensures NEXO's scheduled maintenance never falls through the cracks
-     after a reboot or prolonged sleep period.
+     Runs nexo-catchup.py at login and every 15 minutes so missed core
+     windows are recovered after boot, wake, or prolonged sleep.
+     Recovery is gated by cron_runs plus the manifest recovery contract,
+     so catchup only replays jobs that are safe and still inside their
+     allowed catch-up window.
 -->
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -19,6 +18,8 @@
     </array>
     <key>RunAtLoad</key>
     <true/>
+    <key>StartInterval</key>
+    <integer>900</integer>
     <key>StandardOutPath</key>
     <string>{{NEXO_HOME}}/logs/catchup-stdout.log</string>
     <key>StandardErrorPath</key>

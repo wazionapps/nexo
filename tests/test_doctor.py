@@ -175,6 +175,25 @@ class TestRuntimeChecks:
         check = check_cron_freshness()
         assert check.status == "healthy"
 
+    def test_cron_freshness_tracks_interval_jobs_even_if_run_at_load(self, nexo_home):
+        (nexo_home / "crons" / "manifest.json").write_text(json.dumps({
+            "crons": [
+                {"id": "catchup", "interval_seconds": 900, "run_at_load": True},
+            ]
+        }))
+
+        conn = sqlite3.connect(str(nexo_home / "data" / "nexo.db"))
+        conn.execute(
+            "INSERT INTO cron_runs (cron_id, started_at) VALUES (?, ?)",
+            ("catchup", time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time() - 3 * 3600))),
+        )
+        conn.commit()
+        conn.close()
+
+        from doctor.providers.runtime import check_cron_freshness
+        check = check_cron_freshness()
+        assert check.status == "degraded"
+
     def test_launchagent_integrity_detects_tmp_drift(self, nexo_home, monkeypatch):
         from doctor.providers import runtime
 

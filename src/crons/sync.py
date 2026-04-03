@@ -25,6 +25,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from cron_recovery import should_run_at_load
+
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 SOURCE_ROOT = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parent.parent)))
 RUNTIME_ROOT = NEXO_HOME
@@ -206,11 +208,12 @@ def build_plist(cron: dict) -> dict:
     if cron.get("keep_alive"):
         plist["RunAtLoad"] = True
         plist["KeepAlive"] = True
-    elif cron.get("run_at_load"):
-        plist["RunAtLoad"] = True
-    elif "interval_seconds" in cron:
+    else:
+        if should_run_at_load(cron):
+            plist["RunAtLoad"] = True
+    if "interval_seconds" in cron and not cron.get("keep_alive"):
         plist["StartInterval"] = cron["interval_seconds"]
-    elif "schedule" in cron:
+    elif "schedule" in cron and not cron.get("keep_alive"):
         cal = {}
         s = cron["schedule"]
         if "hour" in s:

@@ -96,6 +96,8 @@ class TestMetadataParsing:
         script = tmp_path / "test.py"
         script.write_text(
             "# nexo: name=monitor\n"
+            "# nexo: runtime=python\n"
+            "# nexo: cron_id=monitor\n"
             "# nexo: interval_seconds=300\n"
             "# nexo: schedule_required=true\n"
         )
@@ -265,11 +267,19 @@ class TestRegistrySync:
 
         init_db()
         script = scripts_dir / "backup.py"
-        script.write_text("# nexo: name=backup\n# nexo: description=Backup\nprint('ok')\n")
+        script.write_text(
+            "# nexo: name=backup\n"
+            "# nexo: description=Backup\n"
+            "# nexo: runtime=python\n"
+            "# nexo: cron_id=backup\n"
+            "# nexo: interval_seconds=300\n"
+            "# nexo: schedule_required=true\n"
+            "print('ok')\n"
+        )
 
         monkeypatch.setattr(
             script_registry,
-            "discover_personal_schedules",
+            "_discover_personal_schedule_records",
             lambda: [{
                 "cron_id": "backup",
                 "script_path": str(script),
@@ -280,6 +290,9 @@ class TestRegistrySync:
                 "plist_path": "/tmp/com.nexo.backup.plist",
                 "enabled": True,
                 "description": "Backup schedule",
+                "managed_marker": True,
+                "script_exists": True,
+                "script_within_scripts_dir": True,
             }],
         )
 
@@ -302,11 +315,13 @@ class TestRegistrySync:
         script.write_text(
             "# nexo: name=email-monitor\n"
             "# nexo: description=Monitor inbox\n"
+            "# nexo: runtime=python\n"
+            "# nexo: cron_id=email-monitor\n"
             "# nexo: interval_seconds=300\n"
             "# nexo: schedule_required=true\n"
             "print('ok')\n"
         )
-        monkeypatch.setattr(script_registry, "discover_personal_schedules", lambda: [])
+        monkeypatch.setattr(script_registry, "_discover_personal_schedule_records", lambda: [])
 
         result = ensure_personal_schedules(dry_run=True)
         assert result["created"][0]["cron_id"] == "email-monitor"
@@ -317,7 +332,14 @@ class TestRegistrySync:
 
         init_db()
         script = scripts_dir / "backup.py"
-        script.write_text("# nexo: name=backup\nprint('ok')\n")
+        script.write_text(
+            "# nexo: name=backup\n"
+            "# nexo: runtime=python\n"
+            "# nexo: cron_id=backup\n"
+            "# nexo: interval_seconds=300\n"
+            "# nexo: schedule_required=true\n"
+            "print('ok')\n"
+        )
         plist_path = scripts_dir / "com.nexo.backup.plist"
         plist_path.write_text("plist")
 
@@ -334,9 +356,12 @@ class TestRegistrySync:
                 "plist_path": str(plist_path),
                 "enabled": True,
                 "description": "Backup schedule",
+                "managed_marker": True,
+                "script_exists": True,
+                "script_within_scripts_dir": True,
             }]
 
-        monkeypatch.setattr(script_registry, "discover_personal_schedules", _discover)
+        monkeypatch.setattr(script_registry, "_discover_personal_schedule_records", _discover)
         monkeypatch.setattr(script_registry.platform, "system", lambda: "Darwin")
         monkeypatch.setattr(script_registry.subprocess, "run", lambda *args, **kwargs: None)
 
@@ -345,3 +370,41 @@ class TestRegistrySync:
         assert result["ok"] is True
         assert result["removed_schedules"][0]["cron_id"] == "backup"
         assert list_personal_script_schedules() == []
+
+    def test_sync_reports_manual_schedule_without_blessing_it(self, scripts_dir, monkeypatch):
+        import script_registry
+
+        init_db()
+        script = scripts_dir / "backup.py"
+        script.write_text(
+            "# nexo: name=backup\n"
+            "# nexo: runtime=python\n"
+            "# nexo: cron_id=backup\n"
+            "# nexo: interval_seconds=300\n"
+            "# nexo: schedule_required=true\n"
+            "print('ok')\n"
+        )
+
+        monkeypatch.setattr(
+            script_registry,
+            "_discover_personal_schedule_records",
+            lambda: [{
+                "cron_id": "backup",
+                "script_path": str(script),
+                "schedule_type": "interval",
+                "schedule_value": "300",
+                "schedule_label": "every 300s",
+                "launchd_label": "com.nexo.backup",
+                "plist_path": "/tmp/com.nexo.backup.plist",
+                "enabled": True,
+                "description": "Backup schedule",
+                "managed_marker": False,
+                "script_exists": True,
+                "script_within_scripts_dir": True,
+            }],
+        )
+
+        result = sync_personal_scripts()
+        assert result["schedules_upserted"] == 0
+        assert result["schedule_audit"]["summary"]["discovered_manual"] == 1
+        assert result["missing_declared_schedules"][0]["reason"].startswith("schedule discovered but not managed")

@@ -8,35 +8,60 @@
       "type": "shell",
       "schedule": {"hour": 4, "minute": 30},
       "description": "Overnight session analysis — 4 phases: collect, extract, synthesize, apply",
-      "core": true
+      "core": true,
+      "recovery_policy": "catchup",
+      "idempotent": true,
+      "max_catchup_age": 172800,
+      "run_on_boot": true,
+      "run_on_wake": true
     },
     {
       "id": "sleep",
       "script": "scripts/nexo-sleep.py",
       "schedule": {"hour": 4, "minute": 0},
       "description": "Nightly memory consolidation and dream cycle",
-      "core": true
+      "core": true,
+      "recovery_policy": "catchup",
+      "idempotent": true,
+      "max_catchup_age": 172800,
+      "run_on_boot": true,
+      "run_on_wake": true
     },
     {
       "id": "cognitive-decay",
       "script": "scripts/nexo-cognitive-decay.py",
       "schedule": {"hour": 3, "minute": 0},
       "description": "Memory decay — reduce strength of unaccessed memories",
-      "core": true
+      "core": true,
+      "recovery_policy": "catchup",
+      "idempotent": true,
+      "max_catchup_age": 172800,
+      "run_on_boot": true,
+      "run_on_wake": true
     },
     {
       "id": "learning-housekeep",
       "script": "scripts/nexo-learning-housekeep.py",
       "schedule": {"hour": 3, "minute": 15},
       "description": "Archive stale learnings, deduplicate, validate",
-      "core": true
+      "core": true,
+      "recovery_policy": "catchup",
+      "idempotent": true,
+      "max_catchup_age": 172800,
+      "run_on_boot": true,
+      "run_on_wake": true
     },
     {
       "id": "immune",
       "script": "scripts/nexo-immune.py",
       "interval_seconds": 1800,
       "description": "Health monitor — checks MCP, DB, services, auto-repairs",
-      "core": true
+      "core": true,
+      "recovery_policy": "restart",
+      "idempotent": true,
+      "max_catchup_age": 7200,
+      "run_on_boot": true,
+      "run_on_wake": true
     },
     {
       "id": "watchdog",
@@ -44,56 +69,97 @@
       "type": "shell",
       "interval_seconds": 1800,
       "description": "System health checks — snapshots, logs, alerts",
-      "core": true
+      "core": true,
+      "recovery_policy": "restart",
+      "idempotent": true,
+      "max_catchup_age": 7200,
+      "run_on_boot": true,
+      "run_on_wake": true
     },
     {
       "id": "self-audit",
       "script": "scripts/nexo-daily-self-audit.py",
       "schedule": {"hour": 7, "minute": 0},
       "description": "Daily self-audit — validates learnings, protocols, drift",
-      "core": true
+      "core": true,
+      "recovery_policy": "catchup",
+      "idempotent": true,
+      "max_catchup_age": 172800,
+      "run_on_boot": true,
+      "run_on_wake": true
     },
     {
       "id": "postmortem",
       "script": "scripts/nexo-postmortem-consolidator.py",
       "schedule": {"hour": 23, "minute": 30},
       "description": "Consolidate session post-mortems into patterns",
-      "core": true
+      "core": true,
+      "recovery_policy": "catchup",
+      "idempotent": true,
+      "max_catchup_age": 172800,
+      "run_on_boot": true,
+      "run_on_wake": true
     },
     {
       "id": "evolution",
       "script": "scripts/nexo-evolution-run.py",
       "schedule": {"hour": 5, "minute": 0, "weekday": 0},
       "description": "Weekly self-improvement cycle — propose and evaluate changes",
-      "core": true
+      "core": true,
+      "recovery_policy": "catchup",
+      "idempotent": true,
+      "max_catchup_age": 1209600,
+      "run_on_boot": true,
+      "run_on_wake": true
     },
     {
       "id": "followup-hygiene",
       "script": "scripts/nexo-followup-hygiene.py",
       "schedule": {"hour": 5, "minute": 0, "weekday": 0},
       "description": "Clean stale followups, archive completed, validate dates",
-      "core": true
+      "core": true,
+      "recovery_policy": "catchup",
+      "idempotent": true,
+      "max_catchup_age": 1209600,
+      "run_on_boot": true,
+      "run_on_wake": true
     },
     {
       "id": "synthesis",
       "script": "scripts/nexo-synthesis.py",
       "schedule": {"hour": 6, "minute": 0},
       "description": "Daily synthesis — cross-reference learnings, decisions, changes",
-      "core": true
+      "core": true,
+      "recovery_policy": "catchup",
+      "idempotent": true,
+      "max_catchup_age": 172800,
+      "run_on_boot": true,
+      "run_on_wake": true
     },
     {
       "id": "auto-close-sessions",
       "script": "auto_close_sessions.py",
       "interval_seconds": 300,
       "description": "Close stale sessions that lost their parent process",
-      "core": true
+      "core": true,
+      "recovery_policy": "restart",
+      "idempotent": true,
+      "max_catchup_age": 1800,
+      "run_on_boot": true,
+      "run_on_wake": true
     },
-{
+    {
       "id": "catchup",
       "script": "scripts/nexo-catchup.py",
+      "interval_seconds": 900,
       "run_at_load": true,
       "description": "Morning catchup briefing for the user",
-      "core": true
+      "core": true,
+      "recovery_policy": "none",
+      "idempotent": true,
+      "max_catchup_age": 0,
+      "run_on_boot": true,
+      "run_on_wake": true
     }
   ]
 }

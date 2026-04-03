@@ -11,6 +11,7 @@ import sys
 import time
 from pathlib import Path
 
+from cron_recovery import should_run_at_load
 from doctor.models import DoctorCheck
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
@@ -114,7 +115,9 @@ def _cron_expectations() -> dict[str, dict]:
     expectations = {}
     for cron in _enabled_manifest_crons():
         cron_id = cron.get("id")
-        if not cron_id or cron.get("run_at_load") or cron.get("keep_alive"):
+        if not cron_id or cron.get("keep_alive"):
+            continue
+        if cron.get("run_at_load") and not cron.get("interval_seconds") and not cron.get("schedule"):
             continue
 
         interval_seconds = cron.get("interval_seconds")
@@ -137,11 +140,14 @@ def _cron_expectations() -> dict[str, dict]:
 
 
 def _run_at_load_cron_ids() -> set[str]:
-    return {
-        cron_id
-        for cron_id, expected in _launchagent_schedule_expectations().items()
-        if expected.get("RunAtLoad") is True
-    }
+    ids: set[str] = set()
+    for cron_id, expected in _launchagent_schedule_expectations().items():
+        if expected.get("RunAtLoad") is not True:
+            continue
+        if expected.get("StartInterval") or expected.get("StartCalendarInterval") or expected.get("KeepAlive"):
+            continue
+        ids.add(cron_id)
+    return ids
 
 
 def _launchagent_schedule_expectations() -> dict[str, dict]:
@@ -162,11 +168,9 @@ def _launchagent_schedule_expectations() -> dict[str, dict]:
             expected["RunAtLoad"] = True
             expected["KeepAlive"] = True
             expected["schedule_configured"] = True
-        elif cron.get("run_at_load"):
-            expected["RunAtLoad"] = True
-            expected["schedule_configured"] = True
         elif "interval_seconds" in cron:
             expected["StartInterval"] = int(cron["interval_seconds"])
+            expected["RunAtLoad"] = True if should_run_at_load(cron) else None
             expected["schedule_configured"] = True
         elif "schedule" in cron:
             schedule = cron.get("schedule") or {}
@@ -178,6 +182,10 @@ def _launchagent_schedule_expectations() -> dict[str, dict]:
             if "weekday" in schedule:
                 cal["Weekday"] = schedule["weekday"]
             expected["StartCalendarInterval"] = cal
+            expected["RunAtLoad"] = True if should_run_at_load(cron) else None
+            expected["schedule_configured"] = True
+        elif should_run_at_load(cron):
+            expected["RunAtLoad"] = True
             expected["schedule_configured"] = True
         expectations[cron_id] = expected
     return expectations
@@ -823,9 +831,11 @@ def check_personal_script_registry(fix: bool = False) -> DoctorCheck:
 
     issues = report.get("issues", [])
     if not issues:
+        audit = report.get("schedule_audit", {}).get("summary", {})
         summary = (
             f"Personal scripts registered "
-            f"({report.get('scripts', 0)} scripts, {report.get('schedules', 0)} schedules)"
+            f"({report.get('scripts', 0)} scripts, {report.get('schedules', 0)} schedules"
+            f", {audit.get('healthy', report.get('schedules', 0))} managed)"
         )
         if fix:
             summary += " (fixed)"
@@ -849,7 +859,8 @@ def check_personal_script_registry(fix: bool = False) -> DoctorCheck:
         evidence=[issue["message"] for issue in issues[:10]],
         repair_plan=[
             "Run nexo scripts sync to reconcile filesystem scripts and personal LaunchAgents",
-            "Remove registry entries for deleted scripts or missing plists",
+            "Run nexo scripts reconcile so declared schedules are recreated through the official flow",
+            "Use nexo doctor --tier runtime --fix to apply the safe reconcile path for declared schedules",
             "Keep personal scripts in NEXO_HOME/scripts so updates do not collide with core",
         ],
         escalation_prompt=(

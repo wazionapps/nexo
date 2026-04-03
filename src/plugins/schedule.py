@@ -10,7 +10,7 @@ from db import (
     init_db, cron_runs_recent, cron_runs_summary,
     upsert_personal_script, register_personal_script_schedule,
 )
-from script_registry import parse_inline_metadata, classify_runtime
+from script_registry import PERSONAL_SCHEDULE_MANAGED_ENV, parse_inline_metadata, classify_runtime
 
 
 def handle_schedule_status(hours: int = 24, cron_id: str = '') -> str:
@@ -188,6 +188,8 @@ def _add_launchagent(cron_id, script_path, wrapper_path, schedule, interval_seco
             "HOME": str(Path.home()),
             "NEXO_HOME": str(nexo_home),
             "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:" + str(Path.home() / ".local/bin"),
+            PERSONAL_SCHEDULE_MANAGED_ENV: "1",
+            "NEXO_PERSONAL_CRON_ID": cron_id,
         },
     }
 
@@ -237,6 +239,8 @@ Type=oneshot
 ExecStart={exec_cmd}
 Environment=NEXO_HOME={nexo_home}
 Environment=HOME={Path.home()}
+Environment={PERSONAL_SCHEDULE_MANAGED_ENV}=1
+Environment=NEXO_PERSONAL_CRON_ID={cron_id}
 """
     service_path = unit_dir / f"nexo-{cron_id}.service"
     service_path.write_text(service_content)

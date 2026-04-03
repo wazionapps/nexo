@@ -91,15 +91,21 @@ for c in data.get('crons', []):
     stdout_log = nexo_home + '/logs/' + cid + '-stdout.log'
     stderr_log = nexo_home + '/logs/' + cid + '-stderr.log'
 
+    recovery_policy = c.get('recovery_policy')
+    if not recovery_policy:
+        if c.get('keep_alive') or 'interval_seconds' in c:
+            recovery_policy = 'restart'
+        elif 'schedule' in c:
+            recovery_policy = 'catchup'
+        else:
+            recovery_policy = 'none'
+    run_at_load = bool(c.get('run_at_load') or (c.get('run_on_boot') and 'interval_seconds' in c and not c.get('keep_alive')))
+
     # Derive max_stale_secs and schedule_desc from schedule config
     if c.get('keep_alive'):
         max_stale = 0
         schedule_desc = 'KeepAlive'
         proc_grep = c.get('script', '').split('/')[-1]
-    elif c.get('run_at_load'):
-        max_stale = 0
-        schedule_desc = 'RunAtLoad once'
-        proc_grep = ''
     elif 'interval_seconds' in c:
         iv = c['interval_seconds']
         # Allow 2x the interval before WARN
@@ -108,6 +114,8 @@ for c in data.get('crons', []):
             schedule_desc = f'Every {iv // 3600}h'
         else:
             schedule_desc = f'Every {iv // 60} min'
+        if run_at_load:
+            schedule_desc += ' + boot'
         proc_grep = ''
     elif 'schedule' in c:
         s = c['schedule']
@@ -121,6 +129,10 @@ for c in data.get('crons', []):
             schedule_desc = f'Daily {h}:{m:02d}'
             max_stale = 90000  # ~25h
         proc_grep = ''
+    elif run_at_load:
+        max_stale = 0
+        schedule_desc = 'RunAtLoad once'
+        proc_grep = ''
     else:
         max_stale = 0
         schedule_desc = 'unknown'
@@ -128,7 +140,7 @@ for c in data.get('crons', []):
 
     mon_type = 'core' if c.get('core') else 'personal'
 
-    print(f'{name}|{svc_id}|{stdout_log}|{stderr_log}|{max_stale}|{proc_grep}|{schedule_desc}|{mon_type}')
+    print(f'{name}|{svc_id}|{stdout_log}|{stderr_log}|{max_stale}|{proc_grep}|{schedule_desc}|{mon_type}|{recovery_policy}')
 " 2>/dev/null
 }
 
@@ -282,6 +294,24 @@ try_reexecute_missed_cron() {
       return 1
     fi
   fi
+}
+
+CATCHUP_REQUESTED=false
+try_request_catchup() {
+  if $CATCHUP_REQUESTED; then
+    return 0
+  fi
+  local catchup_svc
+  if $IS_MACOS; then
+    catchup_svc="com.nexo.catchup"
+  else
+    catchup_svc="nexo-catchup.timer"
+  fi
+  if try_reexecute_missed_cron "$catchup_svc"; then
+    CATCHUP_REQUESTED=true
+    return 0
+  fi
+  return 1
 }
 
 try_verify_repair() {
@@ -477,8 +507,9 @@ FAILED_MONITORS=()  # Track failed monitors for Level 2 repair
 for monitor in "${MONITORS[@]}"; do
   # Skip comment lines
   [[ "$monitor" =~ ^[[:space:]]*# ]] && continue
-  IFS='|' read -r name plist_id log_stdout log_stderr max_stale proc_grep schedule mon_type <<< "$monitor"
+  IFS='|' read -r name plist_id log_stdout log_stderr max_stale proc_grep schedule mon_type recovery_policy <<< "$monitor"
   mon_type="${mon_type:-core}"
+  recovery_policy="${recovery_policy:-restart}"
 
   status="PASS"
   details=""
@@ -559,13 +590,24 @@ for monitor in "${MONITORS[@]}"; do
         [ -n "$last_error" ] && details="${details}Error: ${last_error}. "
       fi
       if [ "$age" -gt $(( max_stale * 3 )) ]; then
-        if try_reexecute_missed_cron "$plist_id"; then
-          status="HEALED"
-          details="${details}Self-healed: re-executed missed cron (last run: $stale_age). "
-          TOTAL_HEALED=$((TOTAL_HEALED + 1))
+        if [ "$recovery_policy" = "catchup" ]; then
+          if try_request_catchup; then
+            status="HEALED"
+            details="${details}Self-healed: requested catchup for missed window (last run: $stale_age). "
+            TOTAL_HEALED=$((TOTAL_HEALED + 1))
+          else
+            status="FAIL"
+            details="${details}cron_runs stale: $stale_age (limit: $(format_age "$max_stale")). Catchup request failed. "
+          fi
         else
-          status="FAIL"
-          details="${details}cron_runs stale: $stale_age (limit: $(format_age "$max_stale")). Re-execute failed. "
+          if try_reexecute_missed_cron "$plist_id"; then
+            status="HEALED"
+            details="${details}Self-healed: re-executed missed cron (last run: $stale_age). "
+            TOTAL_HEALED=$((TOTAL_HEALED + 1))
+          else
+            status="FAIL"
+            details="${details}cron_runs stale: $stale_age (limit: $(format_age "$max_stale")). Re-execute failed. "
+          fi
         fi
       elif [ "$age" -gt "$max_stale" ]; then
         [ "$status" = "PASS" ] && status="WARN"
@@ -575,13 +617,24 @@ for monitor in "${MONITORS[@]}"; do
       fi
     else
       stale_age="no cron_runs entry"
-      if try_reexecute_missed_cron "$plist_id"; then
-        status="HEALED"
-        details="${details}Self-healed: executed missing cron for first run. "
-        TOTAL_HEALED=$((TOTAL_HEALED + 1))
+      if [ "$recovery_policy" = "catchup" ]; then
+        if try_request_catchup; then
+          status="HEALED"
+          details="${details}Self-healed: requested catchup for missing cron_runs entry. "
+          TOTAL_HEALED=$((TOTAL_HEALED + 1))
+        else
+          status="FAIL"
+          details="${details}No cron_runs entry recorded yet and catchup request failed. "
+        fi
       else
-        status="FAIL"
-        details="${details}No cron_runs entry recorded yet. "
+        if try_reexecute_missed_cron "$plist_id"; then
+          status="HEALED"
+          details="${details}Self-healed: executed missing cron for first run. "
+          TOTAL_HEALED=$((TOTAL_HEALED + 1))
+        else
+          status="FAIL"
+          details="${details}No cron_runs entry recorded yet. "
+        fi
       fi
     fi
   elif [ -n "$log_stdout" ] && [ "$max_stale" -gt 0 ]; then

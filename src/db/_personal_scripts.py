@@ -443,9 +443,24 @@ def sync_personal_scripts_registry(
 
 
 def get_personal_script_health_report(*, fix: bool = False) -> dict:
+    if fix:
+        from script_registry import reconcile_personal_scripts
+
+        reconcile_personal_scripts(dry_run=False)
+
+    from script_registry import classify_scripts_dir, audit_personal_schedules
+
     issues: list[dict] = []
     scripts = list_personal_scripts()
     checked = 0
+    audit = audit_personal_schedules()
+    audit_by_path: dict[str, list[dict]] = {}
+    for schedule in audit.get("schedules", []):
+        audit_by_path.setdefault(schedule.get("script_path", ""), []).append(schedule)
+
+    classified = classify_scripts_dir()
+    personal_entries = [entry for entry in classified.get("entries", []) if entry.get("classification") == "personal"]
+
     for script in scripts:
         checked += 1
         path = Path(script["path"])
@@ -462,43 +477,72 @@ def get_personal_script_health_report(*, fix: bool = False) -> dict:
                 issues.append({
                     "script_id": script["id"],
                     "severity": "warn",
-                    "message": f"missing plist for cron {schedule['cron_id']}: {plist_path}",
+                    "message": f"missing managed plist for cron {schedule['cron_id']}: {plist_path}",
                 })
-        try:
-            from script_registry import get_declared_schedule
 
-            declared = get_declared_schedule(script.get("metadata", {}), script.get("name", ""))
-            if declared.get("required"):
-                if not declared.get("valid"):
-                    issues.append({
-                        "script_id": script["id"],
-                        "severity": "error",
-                        "message": f"invalid declared schedule for {script['name']}: {declared.get('error', 'invalid metadata')}",
-                    })
-                elif not script.get("has_schedule"):
-                    issues.append({
-                        "script_id": script["id"],
-                        "severity": "warn",
-                        "message": f"missing declared schedule for {script['name']}: {declared.get('schedule_label', declared.get('cron_id', ''))}",
-                    })
-        except Exception:
-            pass
+    for entry in personal_entries:
+        checked += 1
+        declared = entry.get("declared_schedule", {})
+        if declared.get("required") and not declared.get("valid"):
+            issues.append({
+                "script_id": f"declared:{entry['name']}",
+                "severity": "error",
+                "message": f"invalid declared schedule for {entry['name']}: {declared.get('error', 'invalid metadata')}",
+            })
+            continue
 
-    if fix and issues:
-        existing_paths = [script["path"] for script in scripts if Path(script["path"]).is_file()]
-        delete_missing_personal_scripts(existing_paths)
-        active_cron_ids = []
-        for schedule in list_personal_script_schedules():
-            plist_path = schedule.get("plist_path", "")
-            if not plist_path or Path(plist_path).is_file():
-                active_cron_ids.append(schedule["cron_id"])
-        delete_missing_personal_schedules(active_cron_ids)
-        return get_personal_script_health_report(fix=False) | {"fixed": True}
+        if not declared.get("required"):
+            continue
+
+        managed = [
+            item for item in audit_by_path.get(entry["path"], [])
+            if item.get("schedule_managed")
+        ]
+        if managed:
+            continue
+
+        related = audit_by_path.get(entry["path"], [])
+        reason = "no schedule discovered"
+        if related:
+            states = ", ".join(item.get("schedule_state", item.get("schedule_origin", "unknown")) for item in related)
+            reason = f"discovered but not managed ({states})"
+        issues.append({
+            "script_id": f"declared:{entry['name']}",
+            "severity": "warn",
+            "message": (
+                f"missing declared managed schedule for {entry['name']}: "
+                f"{declared.get('schedule_label', declared.get('cron_id', ''))} [{reason}]"
+            ),
+        })
+
+    for schedule in audit.get("schedules", []):
+        checked += 1
+        if schedule.get("schedule_managed"):
+            continue
+
+        severity = "warn"
+        if schedule.get("schedule_origin") == "orphan_schedule":
+            severity = "error"
+        elif schedule.get("schedule_declared") and schedule.get("schedule_matches_declared") is False:
+            severity = "error"
+
+        label = schedule.get("schedule_label") or schedule.get("schedule_value") or schedule.get("schedule_type")
+        problems = "; ".join(schedule.get("problems", [])) or schedule.get("schedule_state", "schedule issue")
+        target = schedule.get("script_name") or schedule.get("script_path") or schedule.get("cron_id")
+        issues.append({
+            "script_id": target,
+            "severity": severity,
+            "message": (
+                f"{schedule.get('schedule_origin', 'schedule')} {schedule['cron_id']} "
+                f"({label}) for {target}: {problems}"
+            ),
+        })
 
     return {
         "checked": checked,
         "scripts": len(scripts),
         "schedules": sum(len(script.get("schedules", [])) for script in scripts),
         "issues": issues,
-        "fixed": False,
+        "fixed": bool(fix),
+        "schedule_audit": audit,
     }

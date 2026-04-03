@@ -104,6 +104,8 @@ class TestScriptsCreateAndSync:
     def test_reconcile_dry_run_json(self, nexo_home):
         (nexo_home / "scripts" / "monitor.py").write_text(
             "# nexo: name=email-monitor\n"
+            "# nexo: runtime=python\n"
+            "# nexo: cron_id=email-monitor\n"
             "# nexo: interval_seconds=300\n"
             "# nexo: schedule_required=true\n"
             "print('ok')\n"
