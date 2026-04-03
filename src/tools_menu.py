@@ -1,8 +1,9 @@
-"""Menu generator — NEXO operations center."""
+"""Menu generator — operations center."""
 
 from datetime import datetime, timedelta
 import json
 import subprocess
+from user_context import get_context as _get_ctx
 import sys
 from pathlib import Path
 from tools_sessions import handle_status
@@ -109,7 +110,7 @@ def handle_menu() -> str:
 
     lines = []
     lines.append("╔" + "═" * W + "╗")
-    lines.append("║" + "NEXO — OPERATIONS CENTER".center(W) + "║")
+    lines.append("║" + f"{_get_ctx().assistant_name} — OPERATIONS CENTER".center(W) + "║")
     lines.append("║" + date_str.center(W) + "║")
     lines.append("╠" + "═" * W + "╣")
 

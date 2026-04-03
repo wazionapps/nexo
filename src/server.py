@@ -8,6 +8,7 @@ import sys
 from fastmcp import FastMCP
 from db import init_db, rebuild_fts_index, get_db, close_db, fts_add_dir, fts_remove_dir, fts_list_dirs
 from tools_sessions import handle_startup, handle_heartbeat, handle_status, handle_context_packet, handle_smart_startup_query
+from user_context import get_context as _get_ctx
 from tools_coordination import (
     handle_track, handle_untrack, handle_files,
     handle_send, handle_ask, handle_answer, handle_check_answer,
@@ -154,7 +155,7 @@ def _server_init():
 mcp = FastMCP(
     name="nexo",
     instructions=(
-        "NEXO — cognitive co-operator. Save important info from tool results before they clear.\n\n"
+        f"{_get_ctx().assistant_name} — cognitive co-operator. Save important info from tool results before they clear.\n\n"
         "## CRITICAL — do these or you WILL get corrected\n"
         "- **Guard (MANDATORY before ANY code edit):** `nexo_guard_check(files='...', area='...')` BEFORE editing code. "
         "No exceptions. Blocking rules→resolve first. `nexo_track(sid=SID, paths=[...])` before shared files\n"

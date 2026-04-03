@@ -18,7 +18,8 @@ def handle_evolution_status() -> str:
         "agi": "AGI",
     }
 
-    lines = ["NEXO EVOLUTION STATUS:"]
+    from user_context import get_context
+    lines = [f"{get_context().assistant_name} EVOLUTION STATUS:"]
     for key, label in BARS.items():
         m = metrics.get(key)
         if m:

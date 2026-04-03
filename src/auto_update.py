@@ -402,7 +402,12 @@ def _check_npm_version() -> str | None:
         if not latest:
             return None
         if latest != current and not current.endswith(latest):
-            return f"NEXO update available: {current} -> {latest}. Run: npm update -g {pkg_name}"
+            try:
+                from user_context import get_context
+                _name = get_context().assistant_name
+            except Exception:
+                _name = "NEXO"
+            return f"{_name} update available: {current} -> {latest}. Run: npm update -g {pkg_name}"
     except Exception:
         pass
     return None
@@ -577,15 +582,12 @@ def _find_user_claude_md() -> Path | None:
 
 def _resolve_placeholders(template_text: str) -> str:
     """Fill {{NAME}} and {{NEXO_HOME}} from the user's existing CLAUDE.md or config."""
-    # Try to read operator name from version.json
-    name = "NEXO"
+    # Read operator name from calibration/version
     try:
-        vf = NEXO_HOME / "version.json"
-        if vf.exists():
-            data = json.loads(vf.read_text())
-            name = data.get("operator_name", name)
+        from user_context import get_context
+        name = get_context().assistant_name
     except Exception:
-        pass
+        name = "NEXO"
 
     return (
         template_text
