@@ -535,8 +535,12 @@ That's it. No need to run `claude` manually. Your operator will greet you immedi
 | MCP server | 147+ tools for memory, cognition, learning, guard | NEXO_HOME/ |
 | Plugins | Guard, episodic memory, cognitive memory, entities, preferences, update, etc. | Code: src/plugins/, Personal: NEXO_HOME/plugins/ |
 | Hooks (7) | SessionStart, Stop, PostToolUse, PreCompact, PostCompact | NEXO_HOME/hooks/ |
-| Nervous system | 15 autonomous processes (decay, sleep, audit, evolution, watchdog, etc.) | NEXO_HOME/scripts/ |
-| Dashboard | Web UI at localhost:6174 (6 pages) | NEXO_HOME/dashboard/ |
+| Nervous system | 17 autonomous processes (decay, sleep, audit, evolution, watchdog, orchestrator, dashboard, etc.) | NEXO_HOME/scripts/ |
+| Dashboard | Web UI at localhost:6174 (23 modules, dark theme) — opt-in, always-on | NEXO_HOME/dashboard/ |
+| Runtime CLI | `nexo` command: scripts, doctor, skills, update | NEXO_HOME/bin/ |
+| Doctor | Unified diagnostics: boot/runtime/deep tiers, `--fix` mode | src/doctor/ |
+| Skills v2 | Executable skills with guide/execute/hybrid modes, approval levels | NEXO_HOME/skills/ |
+| Day Orchestrator | Autonomous cycles every 15 min (8:00-23:00) — opt-in | LaunchAgent |
 | CLAUDE.md | Complete operator instructions (Codex, hooks, guard, trust, memory) | ~/.claude/CLAUDE.md |
 | Schedule config | schedule.json with customizable process times and timezone | NEXO_HOME/config/ |
 | Auto-update | Non-blocking startup check (5s max), opt-out via schedule.json | Built into server startup |
@@ -788,6 +792,15 @@ If NEXO Brain is useful to you, consider:
 | P0 | Database migrations are fail-open (errors logged but not blocking) | v2.1.0 |
 
 ## Changelog
+
+### v2.5.0 — Runtime CLI, Doctor, Skills v2, Day Orchestrator (2026-04-03)
+- **Runtime CLI** (`nexo`): New operational CLI separate from installer. `nexo scripts list/run/doctor/call` for personal scripts, `nexo doctor` for diagnostics, `nexo skills apply` for executable skills, `nexo update` for one-step sync.
+- **Unified Doctor**: Modular diagnostic system with boot/runtime/deep tiers. Report-only by default, deterministic `--fix` mode. MCP tool `nexo_doctor`. LaunchAgent schedule drift detection and reconciliation.
+- **Skills v2**: Executable skills with guide/execute/hybrid modes. Security levels (read-only/local/remote) with explicit approval. Core vs personal vs community directories. Deep Sleep auto-evolution integration.
+- **Day Orchestrator**: Autonomous NEXO cycles every 15 min (8:00-23:00). Launches Claude Code headless with full MCP. Checks followups, emails, infra — acts autonomously, emails user only when needed. Opt-in.
+- **Dashboard always-on**: Web UI at localhost:6174 as persistent LaunchAgent. 23 modules, Jinja2 templating, dark theme. Opt-in.
+- **Personal Scripts Framework**: Auto-discovery in NEXO_HOME/scripts/, inline metadata, runtime detection, forbidden-pattern validation, vendorable helper, template.
+- Configurable operator name (UserContext singleton), watchdog normalized to 30 min, LaunchAgent drift fix.
 
 ### v2.4.0 — Skills, Cron Scheduler, Security, Full Audit (2026-04-03)
 - **Skill Auto-Creation**: Deep Sleep extracts reusable procedures from sessions. Content stored as markdown with steps and gotchas. Trust pipeline with autonomous quality control.
