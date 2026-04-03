@@ -30,6 +30,17 @@ from pathlib import Path
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parent)))
 
+
+def _get_version() -> str:
+    """Read version from package.json automatically."""
+    for candidate in [NEXO_CODE.parent / "package.json", NEXO_HOME / "package.json"]:
+        try:
+            if candidate.is_file():
+                return json.loads(candidate.read_text()).get("version", "?")
+        except Exception:
+            continue
+    return "?"
+
 # Ensure src/ is on path for imports
 if str(NEXO_CODE) not in sys.path:
     sys.path.insert(0, str(NEXO_CODE))
@@ -357,6 +368,71 @@ def _update(args):
     return 0
 
 
+def _service_control(service_name: str, action: str) -> int:
+    """Control a LaunchAgent/systemd service: on, off, status."""
+    import platform as plat
+
+    label = f"com.nexo.{service_name}"
+
+    if plat.system() != "Darwin":
+        print(f"Service control only supported on macOS for now.", file=sys.stderr)
+        return 1
+
+    plist_path = Path.home() / "Library" / "LaunchAgents" / f"{label}.plist"
+    uid = os.getuid()
+
+    if action == "status":
+        result = subprocess.run(
+            ["launchctl", "list"],
+            capture_output=True, text=True,
+        )
+        running = label in (result.stdout or "")
+        if running:
+            print(f"{service_name}: running")
+        else:
+            print(f"{service_name}: stopped")
+        return 0
+
+    if action == "on":
+        if not plist_path.is_file():
+            print(f"LaunchAgent not found: {plist_path}", file=sys.stderr)
+            print(f"Run 'nexo-brain' to install it, or enable it during setup.", file=sys.stderr)
+            return 1
+        subprocess.run(
+            ["launchctl", "bootout", f"gui/{uid}", str(plist_path)],
+            capture_output=True,
+        )
+        result = subprocess.run(
+            ["launchctl", "bootstrap", f"gui/{uid}", str(plist_path)],
+            capture_output=True, text=True,
+        )
+        if result.returncode == 0:
+            print(f"{service_name}: started")
+        else:
+            print(f"Failed to start {service_name}: {result.stderr.strip()}", file=sys.stderr)
+            return 1
+        return 0
+
+    if action == "off":
+        result = subprocess.run(
+            ["launchctl", "bootout", f"gui/{uid}", str(plist_path)],
+            capture_output=True, text=True,
+        )
+        print(f"{service_name}: stopped")
+        return 0
+
+    print(f"Unknown action: {action}. Use on, off, or status.", file=sys.stderr)
+    return 1
+
+
+def _dashboard(args):
+    return _service_control("dashboard", args.action)
+
+
+def _orchestrator(args):
+    return _service_control("day-orchestrator", args.action)
+
+
 def _doctor(args):
     """Run unified doctor diagnostics."""
     try:
@@ -482,8 +558,27 @@ def _skills_evolution(args):
     return 0
 
 
+def _print_help():
+    v = _get_version()
+    print(f"""NEXO Runtime CLI v{v}
+
+Commands:
+  nexo doctor [--tier boot|runtime|deep|all] [--fix]   System diagnostics
+  nexo scripts list|run|doctor|call                    Personal scripts
+  nexo skills list|apply|sync|approve                  Executable skills
+  nexo update                                          Sync repo to NEXO_HOME
+  nexo dashboard on|off|status                         Web dashboard control
+  nexo orchestrator on|off|status                      Autonomous mode control
+
+Run 'nexo <command> --help' for details.
+Homepage: https://nexo-brain.com
+GitHub:   https://github.com/wazionapps/nexo""")
+
+
 def main():
-    parser = argparse.ArgumentParser(prog="nexo", description="NEXO Runtime CLI")
+    parser = argparse.ArgumentParser(prog="nexo", description="NEXO Runtime CLI", add_help=False)
+    parser.add_argument("-h", "--help", action="store_true", help="Show help")
+    parser.add_argument("-v", "--version", action="store_true", help="Show version")
     sub = parser.add_subparsers(dest="command")
 
     # -- scripts --
@@ -560,7 +655,22 @@ def main():
     skills_evolution_p = skills_sub.add_parser("evolution", help="Evolution candidates")
     skills_evolution_p.add_argument("--json", action="store_true", help="JSON output")
 
+    # -- dashboard --
+    dashboard_parser = sub.add_parser("dashboard", help="Web dashboard control")
+    dashboard_parser.add_argument("action", choices=["on", "off", "status"], help="Start, stop, or check dashboard")
+
+    # -- orchestrator --
+    orchestrator_parser = sub.add_parser("orchestrator", help="Autonomous mode control")
+    orchestrator_parser.add_argument("action", choices=["on", "off", "status"], help="Start, stop, or check orchestrator")
+
     args = parser.parse_args()
+
+    if args.help or (not args.command and not args.version):
+        _print_help()
+        return 0
+    if args.version:
+        print(f"nexo v{_get_version()}")
+        return 0
 
     if args.command == "scripts":
         if args.scripts_command == "list":
@@ -596,8 +706,12 @@ def main():
         else:
             skills_parser.print_help()
             return 0
+    elif args.command == "dashboard":
+        return _dashboard(args)
+    elif args.command == "orchestrator":
+        return _orchestrator(args)
     else:
-        parser.print_help()
+        _print_help()
         return 0
 
 
