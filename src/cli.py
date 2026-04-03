@@ -237,6 +237,126 @@ def _scripts_call(args):
         return 1
 
 
+def _update(args):
+    """Sync all repo files to NEXO_HOME."""
+    import shutil
+
+    src_dir = NEXO_CODE
+    repo_dir = NEXO_CODE.parent
+    dest = NEXO_HOME
+
+    # Packages (directories with __init__.py or known structure)
+    packages = ["db", "cognitive", "doctor", "dashboard", "rules", "crons", "hooks"]
+    copied_packages = 0
+    for pkg in packages:
+        pkg_src = src_dir / pkg
+        pkg_dest = dest / pkg
+        if pkg_src.is_dir():
+            if pkg_dest.exists():
+                shutil.rmtree(str(pkg_dest), ignore_errors=True)
+            shutil.copytree(
+                str(pkg_src), str(pkg_dest),
+                ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo", "*.db"),
+            )
+            copied_packages += 1
+
+    # Flat Python files
+    flat_files = [
+        "server.py", "plugin_loader.py", "knowledge_graph.py", "kg_populate.py",
+        "maintenance.py", "storage_router.py", "claim_graph.py", "hnsw_index.py",
+        "evolution_cycle.py", "migrate_embeddings.py", "auto_close_sessions.py",
+        "auto_update.py", "tools_sessions.py", "tools_coordination.py",
+        "tools_reminders.py", "tools_reminders_crud.py", "tools_learnings.py",
+        "tools_credentials.py", "tools_task_history.py", "tools_menu.py",
+        "cli.py", "script_registry.py", "skills_runtime.py", "user_context.py",
+        "requirements.txt",
+    ]
+    copied_files = 0
+    for f in flat_files:
+        src_f = src_dir / f
+        if src_f.is_file():
+            shutil.copy2(str(src_f), str(dest / f))
+            copied_files += 1
+
+    # Plugins
+    plugins_src = src_dir / "plugins"
+    plugins_dest = dest / "plugins"
+    if plugins_src.is_dir():
+        plugins_dest.mkdir(parents=True, exist_ok=True)
+        for f in plugins_src.iterdir():
+            if f.is_file() and f.suffix == ".py":
+                shutil.copy2(str(f), str(plugins_dest / f.name))
+
+    # Scripts
+    scripts_src = src_dir / "scripts"
+    scripts_dest = dest / "scripts"
+    if scripts_src.is_dir():
+        for f in scripts_src.iterdir():
+            if f.name == "__pycache__" or f.name.startswith("."):
+                continue
+            dst = scripts_dest / f.name
+            if f.is_dir():
+                if dst.exists():
+                    shutil.rmtree(str(dst), ignore_errors=True)
+                shutil.copytree(str(f), str(dst), ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+            elif f.is_file():
+                shutil.copy2(str(f), str(dst))
+                if f.suffix == ".sh":
+                    dst.chmod(0o755)
+
+    # Templates
+    templates_src = repo_dir / "templates"
+    templates_dest = dest / "templates"
+    if templates_src.is_dir():
+        templates_dest.mkdir(parents=True, exist_ok=True)
+        for f in templates_src.iterdir():
+            if f.is_file():
+                shutil.copy2(str(f), str(templates_dest / f.name))
+
+    # Core skills
+    skills_src = src_dir / "skills"
+    skills_dest = dest / "skills-core"
+    if skills_src.is_dir():
+        if skills_dest.exists():
+            shutil.rmtree(str(skills_dest), ignore_errors=True)
+        shutil.copytree(
+            str(skills_src), str(skills_dest),
+            ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+        )
+
+    # Runtime CLI wrapper
+    bin_dir = dest / "bin"
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    wrapper = bin_dir / "nexo"
+    wrapper_content = (
+        "#!/usr/bin/env bash\n"
+        "set -euo pipefail\n\n"
+        f'NEXO_HOME="{dest}"\n'
+        'PYTHON="$NEXO_HOME/.venv/bin/python3"\n'
+        'if [ ! -x "$PYTHON" ]; then\n'
+        '  if command -v python3 >/dev/null 2>&1; then PYTHON="python3"; else PYTHON="python"; fi\n'
+        'fi\n'
+        'export NEXO_HOME\n'
+        'export NEXO_CODE="$NEXO_HOME"\n'
+        'exec "$PYTHON" "$NEXO_HOME/cli.py" "$@"\n'
+    )
+    wrapper.write_text(wrapper_content)
+    wrapper.chmod(0o755)
+
+    result = {
+        "packages": copied_packages,
+        "files": copied_files,
+        "nexo_home": str(dest),
+        "source": str(src_dir),
+    }
+    if args.json:
+        print(json.dumps(result, indent=2))
+    else:
+        print(f"Updated NEXO_HOME ({dest})")
+        print(f"  {copied_packages} packages, {copied_files} files synced from {src_dir}")
+    return 0
+
+
 def _doctor(args):
     """Run unified doctor diagnostics."""
     try:
@@ -391,6 +511,10 @@ def main():
     call_p.add_argument("--input", default="{}", help="JSON input payload")
     call_p.add_argument("--json-output", action="store_true", help="Force JSON output")
 
+    # -- update --
+    update_parser = sub.add_parser("update", help="Sync all repo files to NEXO_HOME")
+    update_parser.add_argument("--json", action="store_true", help="JSON output")
+
     # -- doctor --
     doctor_parser = sub.add_parser("doctor", help="Unified diagnostics")
     doctor_parser.add_argument("--tier", default="boot", choices=["boot", "runtime", "deep", "all"],
@@ -450,6 +574,8 @@ def main():
         else:
             scripts_parser.print_help()
             return 0
+    elif args.command == "update":
+        return _update(args)
     elif args.command == "doctor":
         return _doctor(args)
     elif args.command == "skills":
