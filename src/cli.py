@@ -450,61 +450,13 @@ def _update(args):
     - Explicit dev env: sync from NEXO_CODE/src
     - Packaged/runtime-only install: delegate to plugins.update handle_update()
     """
-    import shutil
+    from auto_update import manual_sync_update, _resolve_sync_source
+    from runtime_power import ensure_power_policy_choice, apply_power_policy
+
+    interactive = sys.stdin.isatty() and sys.stdout.isatty()
 
     dest = NEXO_HOME
-
-    def _runtime_version_source() -> Path | None:
-        version_file = NEXO_HOME / "version.json"
-        if not version_file.is_file():
-            return None
-        try:
-            data = json.loads(version_file.read_text())
-        except Exception:
-            return None
-        source = str(data.get("source", "")).strip()
-        if not source:
-            return None
-        candidate = Path(source).expanduser()
-        if (candidate / "src").is_dir() and (candidate / "package.json").is_file():
-            return candidate
-        return None
-
-    def _resolve_sync_source() -> tuple[Path | None, Path | None]:
-        try:
-            same_as_runtime = NEXO_CODE.resolve() == dest.resolve()
-        except Exception:
-            same_as_runtime = NEXO_CODE == dest
-
-        # Explicit dev mode: NEXO_CODE points at repo/src, never the installed runtime itself.
-        if (
-            not same_as_runtime
-            and (NEXO_CODE / "db").is_dir()
-            and (NEXO_CODE.parent / "package.json").is_file()
-        ):
-            return NEXO_CODE, NEXO_CODE.parent
-
-        # Installed runtime linked back to a source checkout
-        version_source = _runtime_version_source()
-        if version_source:
-            return version_source / "src", version_source
-
-        return None, None
-
     src_dir, repo_dir = _resolve_sync_source()
-
-    if src_dir is not None:
-        try:
-            if src_dir.resolve() == dest.resolve():
-                version_source = _runtime_version_source()
-                if version_source:
-                    src_dir = version_source / "src"
-                    repo_dir = version_source
-                else:
-                    src_dir = None
-                    repo_dir = None
-        except Exception:
-            pass
 
     if src_dir is None or repo_dir is None:
         try:
@@ -518,151 +470,42 @@ def _update(args):
             return 1
 
         result = handle_update()
+        choice = ensure_power_policy_choice(interactive=interactive, reason="update")
+        power_result = apply_power_policy(choice.get("policy"))
         if args.json:
             print(json.dumps({
                 "mode": "packaged",
                 "message": result,
+                "power_policy": choice.get("policy"),
+                "power_action": power_result.get("action"),
             }, indent=2, ensure_ascii=False))
         else:
             print(result)
+            if choice.get("prompted"):
+                print(f"Power policy: {choice.get('policy')}")
         return 0 if "UPDATE SUCCESSFUL" in result or "Already up to date" in result else 1
 
-    # Packages (directories with __init__.py or known structure)
-    packages = ["db", "cognitive", "doctor", "dashboard", "rules", "crons", "hooks"]
-    copied_packages = 0
-    for pkg in packages:
-        pkg_src = src_dir / pkg
-        pkg_dest = dest / pkg
-        if pkg_src.is_dir():
-            if pkg_dest.exists():
-                shutil.rmtree(str(pkg_dest), ignore_errors=True)
-            shutil.copytree(
-                str(pkg_src), str(pkg_dest),
-                ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo", "*.db"),
-            )
-            copied_packages += 1
-
-    # Flat Python files
-    flat_files = [
-        "server.py", "plugin_loader.py", "knowledge_graph.py", "kg_populate.py",
-        "maintenance.py", "storage_router.py", "claim_graph.py", "hnsw_index.py",
-        "evolution_cycle.py", "migrate_embeddings.py", "auto_close_sessions.py",
-        "auto_update.py", "tools_sessions.py", "tools_coordination.py",
-        "tools_reminders.py", "tools_reminders_crud.py", "tools_learnings.py",
-        "tools_credentials.py", "tools_task_history.py", "tools_menu.py",
-        "cli.py", "script_registry.py", "skills_runtime.py", "user_context.py",
-        "cron_recovery.py",
-        "requirements.txt",
-    ]
-    copied_files = 0
-    for f in flat_files:
-        src_f = src_dir / f
-        if src_f.is_file():
-            shutil.copy2(str(src_f), str(dest / f))
-            copied_files += 1
-
-    # Plugins
-    plugins_src = src_dir / "plugins"
-    plugins_dest = dest / "plugins"
-    if plugins_src.is_dir():
-        plugins_dest.mkdir(parents=True, exist_ok=True)
-        for f in plugins_src.iterdir():
-            if f.is_file() and f.suffix == ".py":
-                shutil.copy2(str(f), str(plugins_dest / f.name))
-
-    # Scripts
-    scripts_src = src_dir / "scripts"
-    scripts_dest = dest / "scripts"
-    if scripts_src.is_dir():
-        scripts_dest.mkdir(parents=True, exist_ok=True)
-        for f in scripts_src.iterdir():
-            if f.name == "__pycache__" or f.name.startswith("."):
-                continue
-            dst = scripts_dest / f.name
-            if f.is_dir():
-                if dst.exists():
-                    shutil.rmtree(str(dst), ignore_errors=True)
-                shutil.copytree(str(f), str(dst), ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
-            elif f.is_file():
-                shutil.copy2(str(f), str(dst))
-                if f.suffix == ".sh":
-                    dst.chmod(0o755)
-
-    # Templates
-    templates_src = repo_dir / "templates"
-    templates_dest = dest / "templates"
-    if templates_src.is_dir():
-        templates_dest.mkdir(parents=True, exist_ok=True)
-        for f in templates_src.iterdir():
-            if f.is_file():
-                shutil.copy2(str(f), str(templates_dest / f.name))
-
-    # Runtime version metadata
-    package_json = repo_dir / "package.json"
-    if package_json.is_file():
-        shutil.copy2(str(package_json), str(dest / "package.json"))
-        try:
-            pkg = json.loads(package_json.read_text())
-            version_payload = {
-                "version": pkg.get("version", "?"),
-                "source": str(repo_dir),
-            }
-            (dest / "version.json").write_text(json.dumps(version_payload, indent=2))
-        except Exception:
-            pass
-
-    # Core skills
-    skills_src = src_dir / "skills"
-    skills_dest = dest / "skills-core"
-    if skills_src.is_dir():
-        if skills_dest.exists():
-            shutil.rmtree(str(skills_dest), ignore_errors=True)
-        shutil.copytree(
-            str(skills_src), str(skills_dest),
-            ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
-        )
-
-    # Runtime CLI wrapper
-    bin_dir = dest / "bin"
-    bin_dir.mkdir(parents=True, exist_ok=True)
-    wrapper = bin_dir / "nexo"
-    wrapper_content = (
-        "#!/usr/bin/env bash\n"
-        "set -euo pipefail\n\n"
-        f'NEXO_HOME="{dest}"\n'
-        'PYTHON="$NEXO_HOME/.venv/bin/python3"\n'
-        'if [ ! -x "$PYTHON" ]; then\n'
-        '  if command -v python3 >/dev/null 2>&1; then PYTHON="python3"; else PYTHON="python"; fi\n'
-        'fi\n'
-        'export NEXO_HOME\n'
-        'export NEXO_CODE="$NEXO_HOME"\n'
-        'exec "$PYTHON" "$NEXO_HOME/cli.py" "$@"\n'
-    )
-    wrapper.write_text(wrapper_content)
-    wrapper.chmod(0o755)
-
-    try:
-        from db import init_db
-        from script_registry import sync_personal_scripts
-
-        init_db()
-        sync_personal_scripts()
-    except Exception:
-        pass
-
-    result = {
-        "mode": "sync",
-        "packages": copied_packages,
-        "files": copied_files,
-        "nexo_home": str(dest),
-        "source": str(src_dir),
-    }
+    choice = ensure_power_policy_choice(interactive=interactive, reason="update")
+    power_result = apply_power_policy(choice.get("policy"))
+    result = manual_sync_update(interactive=interactive, allow_source_pull=True)
+    result["power_policy"] = choice.get("policy")
+    result["power_action"] = power_result.get("action")
     if args.json:
-        print(json.dumps(result, indent=2))
+        print(json.dumps(result, indent=2, ensure_ascii=False))
     else:
-        print(f"Updated NEXO_HOME ({dest})")
-        print(f"  {copied_packages} packages, {copied_files} files synced from {src_dir}")
-    return 0
+        if result.get("ok"):
+            print(f"Updated NEXO_HOME ({dest})")
+            print(
+                f"  {result.get('packages', 0)} packages, {result.get('files', 0)} files synced from "
+                f"{result.get('source', src_dir)}"
+            )
+            if result.get("pulled_source"):
+                print("  Source repo: pulled latest fast-forward before sync")
+            if choice.get("prompted"):
+                print(f"  Power policy: {choice.get('policy')}")
+        else:
+            print(f"UPDATE FAILED: {result.get('error', 'sync failed')}", file=sys.stderr)
+    return 0 if result.get("ok") else 1
 
 
 def _service_control(service_name: str, action: str) -> int:
@@ -732,6 +575,23 @@ def _chat(args):
     if not claude_bin:
         print("Claude Code launcher not found in PATH. Install `claude` first.", file=sys.stderr)
         return 1
+
+    try:
+        from auto_update import startup_preflight
+
+        preflight = startup_preflight(entrypoint="chat", interactive=False)
+        if preflight.get("updated"):
+            print("[NEXO] Startup update applied before chat.", file=sys.stderr)
+        elif preflight.get("deferred_reason"):
+            print(f"[NEXO] Update deferred: {preflight['deferred_reason']}", file=sys.stderr)
+        elif preflight.get("git_update"):
+            print(f"[NEXO] {preflight['git_update']}", file=sys.stderr)
+        elif preflight.get("npm_notice"):
+            print(f"[NEXO] {preflight['npm_notice']}", file=sys.stderr)
+        if preflight.get("error"):
+            print(f"[NEXO] Startup preflight warning: {preflight['error']}", file=sys.stderr)
+    except Exception:
+        pass
 
     result = subprocess.run(
         [claude_bin, "--dangerously-skip-permissions", target],

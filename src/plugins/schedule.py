@@ -10,7 +10,12 @@ from db import (
     init_db, cron_runs_recent, cron_runs_summary,
     upsert_personal_script, register_personal_script_schedule,
 )
-from script_registry import PERSONAL_SCHEDULE_MANAGED_ENV, parse_inline_metadata, classify_runtime
+from script_registry import (
+    PERSONAL_SCHEDULE_MANAGED_ENV,
+    parse_inline_metadata,
+    classify_runtime,
+    get_declared_schedule,
+)
 
 
 def handle_schedule_status(hours: int = 24, cron_id: str = '') -> str:
@@ -76,6 +81,7 @@ def handle_schedule_add(cron_id: str, script: str, schedule: str = '',
 
     script_meta = parse_inline_metadata(script_path)
     detected_runtime = classify_runtime(script_path, script_meta)
+    declared = get_declared_schedule(script_meta, script_meta.get("name", script_path.stem))
     script_type = (script_type or "auto").strip().lower()
     if script_type == "auto":
         script_type = detected_runtime if detected_runtime != "unknown" else "python"
@@ -96,6 +102,7 @@ def handle_schedule_add(cron_id: str, script: str, schedule: str = '',
             description or script_meta.get("description", ""),
             script_type,
             nexo_home,
+            declared=declared,
         )
     elif system == "Linux":
         return _add_systemd_timer(
@@ -107,6 +114,7 @@ def handle_schedule_add(cron_id: str, script: str, schedule: str = '',
             description or script_meta.get("description", ""),
             script_type,
             nexo_home,
+            declared=declared,
         )
     else:
         return f"ERROR: unsupported platform: {system}"
@@ -166,7 +174,7 @@ def _register_schedule_metadata(cron_id, script_path, schedule, interval_seconds
 
 
 def _add_launchagent(cron_id, script_path, wrapper_path, schedule, interval_seconds,
-                     description, script_type, nexo_home):
+                     description, script_type, nexo_home, *, declared: dict | None = None):
     """Create and load a macOS LaunchAgent."""
     import plistlib
 
@@ -202,6 +210,10 @@ def _add_launchagent(cron_id, script_path, wrapper_path, schedule, interval_seco
             cal["Weekday"] = int(parts[2])
         plist["StartCalendarInterval"] = cal
 
+    declared = declared or {}
+    if declared.get("run_on_boot"):
+        plist["RunAtLoad"] = True
+
     with open(plist_path, "wb") as f:
         plistlib.dump(plist, f)
 
@@ -222,7 +234,7 @@ def _add_launchagent(cron_id, script_path, wrapper_path, schedule, interval_seco
 
 
 def _add_systemd_timer(cron_id, script_path, wrapper_path, schedule, interval_seconds,
-                       description, script_type, nexo_home):
+                       description, script_type, nexo_home, *, declared: dict | None = None):
     """Create and enable a systemd user timer (Linux)."""
     unit_dir = Path.home() / ".config" / "systemd" / "user"
     unit_dir.mkdir(parents=True, exist_ok=True)
@@ -246,8 +258,12 @@ Environment=NEXO_PERSONAL_CRON_ID={cron_id}
     service_path.write_text(service_content)
 
     # Timer unit
+    declared = declared or {}
+
     if interval_seconds:
-        timer_spec = f"OnUnitActiveSec={interval_seconds}s\nOnBootSec=60s"
+        timer_spec = f"OnUnitActiveSec={interval_seconds}s"
+        if declared.get("run_on_boot") or not declared.get("required"):
+            timer_spec += "\nOnBootSec=60s"
     elif schedule:
         parts = schedule.split(":")
         hour, minute = int(parts[0]), int(parts[1])

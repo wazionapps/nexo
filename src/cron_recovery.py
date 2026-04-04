@@ -57,6 +57,60 @@ def load_enabled_crons() -> list[dict]:
     return []
 
 
+def _calendar_payload_from_declared(value: str) -> dict | None:
+    parts = str(value or "").split(":")
+    if len(parts) not in {2, 3}:
+        return None
+    try:
+        hour = int(parts[0])
+        minute = int(parts[1])
+        weekday = int(parts[2]) if len(parts) == 3 else None
+    except ValueError:
+        return None
+    payload = {"hour": hour, "minute": minute}
+    if weekday is not None:
+        payload["weekday"] = weekday
+    return payload
+
+
+def load_managed_personal_crons() -> list[dict]:
+    try:
+        from script_registry import classify_scripts_dir, discover_personal_schedules
+    except Exception:
+        return []
+
+    scripts_by_path: dict[str, dict] = {}
+    for entry in classify_scripts_dir().get("entries", []):
+        if entry.get("classification") != "personal":
+            continue
+        scripts_by_path[str(entry.get("path", ""))] = entry
+
+    personal: list[dict] = []
+    for schedule in discover_personal_schedules():
+        script = scripts_by_path.get(str(schedule.get("script_path", "")))
+        declared = (script or {}).get("declared_schedule", {})
+        if not script or not declared.get("valid"):
+            continue
+        schedule_type = declared.get("schedule_type")
+        if schedule_type not in {"calendar", "interval"}:
+            continue
+        personal.append({
+            "id": schedule["cron_id"],
+            "script": schedule["script_path"],
+            "type": script.get("runtime", "python"),
+            "schedule": declared.get("schedule", ""),
+            "interval_seconds": int(declared.get("interval_seconds", 0) or 0),
+            "schedule_type": schedule_type,
+            "recovery_policy": declared.get("recovery_policy", "none"),
+            "idempotent": bool(declared.get("idempotent", False)),
+            "max_catchup_age": int(declared.get("max_catchup_age", 0) or 0),
+            "run_on_boot": bool(declared.get("run_on_boot", False)),
+            "run_on_wake": bool(declared.get("run_on_wake", False)),
+            "personal_managed": True,
+        })
+    return personal
+
+
 def default_recovery_policy(cron: dict) -> str:
     if cron.get("keep_alive") or cron.get("interval_seconds"):
         return "restart"
@@ -122,6 +176,23 @@ def launchagent_schedule(cron_id: str) -> dict:
 
 
 def effective_schedule(cron: dict) -> dict:
+    if cron.get("personal_managed"):
+        if cron.get("schedule_type") == "interval":
+            return {
+                "source": "personal",
+                "schedule_type": "interval",
+                "interval_seconds": int(cron.get("interval_seconds", 0) or 0),
+                "run_at_load": bool(cron.get("run_on_boot")),
+            }
+        if cron.get("schedule_type") == "calendar":
+            calendar = _calendar_payload_from_declared(str(cron.get("schedule", ""))) or {}
+            return {
+                "source": "personal",
+                "schedule_type": "calendar",
+                "calendar": calendar,
+                "run_at_load": bool(cron.get("run_on_boot")),
+            }
+
     actual = launchagent_schedule(cron["id"])
     if actual.get("schedule_type"):
         return actual
@@ -241,7 +312,7 @@ def catchup_candidates(now: datetime | None = None) -> list[dict]:
     if now.tzinfo is None:
         now = now.replace(tzinfo=_local_timezone())
 
-    crons = load_enabled_crons()
+    crons = load_enabled_crons() + load_managed_personal_crons()
     contracts = {cron["id"]: recovery_contract(cron) for cron in crons if cron.get("id")}
     successes = latest_successful_runs(list(contracts), db_path=DB_PATH)
     legacy = legacy_state_runs(state_file=STATE_FILE)
@@ -253,14 +324,22 @@ def catchup_candidates(now: datetime | None = None) -> list[dict]:
             continue
         contract = contracts[cron_id]
         schedule = effective_schedule(cron)
-        if contract["recovery_policy"] != "catchup":
-            continue
-        if schedule.get("schedule_type") != "calendar":
+        schedule_type = schedule.get("schedule_type")
+        if schedule_type not in {"calendar", "interval"}:
             continue
         if not contract["idempotent"]:
             continue
-
-        due_at = last_scheduled_time(schedule["calendar"], now)
+        if schedule_type == "calendar":
+            if contract["recovery_policy"] != "catchup":
+                continue
+            due_at = last_scheduled_time(schedule["calendar"], now)
+        else:
+            if contract["recovery_policy"] not in {"catchup", "run_once_on_wake"}:
+                continue
+            interval_seconds = int(schedule.get("interval_seconds", 0) or 0)
+            if interval_seconds <= 0:
+                continue
+            due_at = now - timedelta(seconds=interval_seconds)
         last_success = successes.get(cron_id) or legacy.get(cron_id)
         age_seconds = max(int((now - due_at).total_seconds()), 0)
         missed = last_success is None or last_success < due_at
@@ -270,6 +349,7 @@ def catchup_candidates(now: datetime | None = None) -> list[dict]:
             "cron_id": cron_id,
             "script": cron.get("script", ""),
             "type": cron.get("type", "python"),
+            "personal_managed": bool(cron.get("personal_managed")),
             "contract": contract,
             "schedule": schedule,
             "last_due_at": due_at,

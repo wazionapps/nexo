@@ -58,9 +58,15 @@ METADATA_KEYS = {
     "schedule",
     "interval_seconds",
     "schedule_required",
+    "recovery_policy",
+    "run_on_boot",
+    "run_on_wake",
+    "idempotent",
+    "max_catchup_age",
 }
 SUPPORTED_RUNTIMES = {"python", "shell", "node", "php", "unknown"}
 PERSONAL_SCHEDULE_MANAGED_ENV = "NEXO_MANAGED_PERSONAL_CRON"
+SUPPORTED_RECOVERY_POLICIES = {"none", "run_once_on_wake", "catchup", "restart", "restart_daemon"}
 
 
 def get_nexo_home() -> Path:
@@ -214,7 +220,39 @@ def get_declared_schedule(metadata: dict, default_name: str = "") -> dict:
     interval_raw = metadata.get("interval_seconds", "").strip()
     schedule_raw = metadata.get("schedule", "").strip()
     schedule_required = _truthy(metadata.get("schedule_required"))
+    recovery_policy_raw = metadata.get("recovery_policy", "").strip().lower()
+    run_on_boot = _truthy(metadata.get("run_on_boot"))
+    run_on_wake = _truthy(metadata.get("run_on_wake"))
+    idempotent = _truthy(metadata.get("idempotent"))
+    max_catchup_age_raw = metadata.get("max_catchup_age", "").strip()
     required = schedule_required or bool(interval_raw or schedule_raw)
+
+    if recovery_policy_raw and recovery_policy_raw not in SUPPORTED_RECOVERY_POLICIES:
+        return {
+            "required": required,
+            "valid": False,
+            "error": f"Invalid recovery_policy: {recovery_policy_raw}",
+            "cron_id": cron_id,
+        }
+
+    max_catchup_age = 0
+    if max_catchup_age_raw:
+        try:
+            max_catchup_age = int(max_catchup_age_raw)
+        except ValueError:
+            return {
+                "required": required,
+                "valid": False,
+                "error": f"Invalid max_catchup_age: {max_catchup_age_raw}",
+                "cron_id": cron_id,
+            }
+        if max_catchup_age < 0:
+            return {
+                "required": required,
+                "valid": False,
+                "error": f"max_catchup_age must be >= 0 (got {max_catchup_age_raw})",
+                "cron_id": cron_id,
+            }
 
     if required:
         missing = []
@@ -240,6 +278,16 @@ def get_declared_schedule(metadata: dict, default_name: str = "") -> dict:
                 "error": f"Scheduled scripts must declare {', '.join(missing)}",
                 "cron_id": cron_id,
             }
+
+    def _effective_run_on_wake(policy: str) -> bool:
+        if "run_on_wake" in metadata:
+            return run_on_wake
+        return policy in {"catchup", "run_once_on_wake"}
+
+    def _effective_idempotent(policy: str) -> bool:
+        if "idempotent" in metadata:
+            return idempotent
+        return policy in {"catchup", "run_once_on_wake", "restart", "restart_daemon"}
 
     if interval_raw and schedule_raw:
         return {
@@ -275,6 +323,11 @@ def get_declared_schedule(metadata: dict, default_name: str = "") -> dict:
             "schedule_label": f"every {interval}s",
             "schedule": "",
             "interval_seconds": interval,
+            "recovery_policy": recovery_policy_raw or "run_once_on_wake",
+            "run_on_boot": run_on_boot,
+            "run_on_wake": _effective_run_on_wake(recovery_policy_raw or "run_once_on_wake"),
+            "idempotent": _effective_idempotent(recovery_policy_raw or "run_once_on_wake"),
+            "max_catchup_age": max_catchup_age or max(interval * 4, interval + 900),
         }
 
     if schedule_raw:
@@ -325,6 +378,11 @@ def get_declared_schedule(metadata: dict, default_name: str = "") -> dict:
             "schedule_label": label,
             "schedule": schedule_raw,
             "interval_seconds": 0,
+            "recovery_policy": recovery_policy_raw or "catchup",
+            "run_on_boot": run_on_boot,
+            "run_on_wake": _effective_run_on_wake(recovery_policy_raw or "catchup"),
+            "idempotent": _effective_idempotent(recovery_policy_raw or "catchup"),
+            "max_catchup_age": max_catchup_age or (14 * 86400 if weekday is not None else 48 * 3600),
         }
 
     return {
@@ -332,6 +390,11 @@ def get_declared_schedule(metadata: dict, default_name: str = "") -> dict:
         "valid": not required,
         "error": "" if not required else "schedule_required=true but no schedule metadata was provided.",
         "cron_id": cron_id,
+        "recovery_policy": recovery_policy_raw or "none",
+        "run_on_boot": run_on_boot,
+        "run_on_wake": run_on_wake,
+        "idempotent": idempotent,
+        "max_catchup_age": max_catchup_age,
     }
 
 
@@ -580,6 +643,7 @@ def _discover_personal_schedule_records() -> list[dict]:
             "schedule_type": schedule_type,
             "schedule_value": schedule_value,
             "schedule_label": schedule_label,
+            "run_at_load": bool(plist_data.get("RunAtLoad")),
             "launchd_label": label,
             "plist_path": str(plist_path),
             "enabled": True,
@@ -765,6 +829,8 @@ def _schedule_matches(existing: dict, declared: dict) -> bool:
     existing_value = _canonical_schedule_value(existing.get("schedule_type", ""), existing.get("schedule_value", ""))
     declared_value = _canonical_schedule_value(declared.get("schedule_type", ""), declared.get("schedule_value", ""))
     if existing_value != declared_value:
+        return False
+    if bool(existing.get("run_at_load")) != bool(declared.get("run_on_boot")):
         return False
     return True
 

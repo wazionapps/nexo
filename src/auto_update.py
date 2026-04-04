@@ -22,6 +22,7 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 # Repo root: go up from src/
 SRC_DIR = Path(__file__).resolve().parent
+NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(SRC_DIR)))
 REPO_DIR = SRC_DIR.parent
 
 LAST_CHECK_FILE = DATA_DIR / "auto_update_last_check.json"
@@ -1072,4 +1073,537 @@ def auto_update_check() -> dict:
         _log(error_msg)
         result["error"] = error_msg
 
+    return result
+
+
+UPDATE_SUMMARY_FILE = NEXO_HOME / "logs" / "update-last-summary.json"
+UPDATE_HISTORY_FILE = NEXO_HOME / "logs" / "update-history.jsonl"
+
+
+def _resolve_sync_source() -> tuple[Path | None, Path | None]:
+    dest = NEXO_HOME
+
+    def _runtime_version_source() -> Path | None:
+        version_file = NEXO_HOME / "version.json"
+        if not version_file.is_file():
+            return None
+        try:
+            data = json.loads(version_file.read_text())
+        except Exception:
+            return None
+        source = str(data.get("source", "")).strip()
+        if not source:
+            return None
+        candidate = Path(source).expanduser()
+        if (candidate / "src").is_dir() and (candidate / "package.json").is_file():
+            return candidate
+        return None
+
+    try:
+        same_as_runtime = NEXO_CODE.resolve() == dest.resolve()
+    except Exception:
+        same_as_runtime = NEXO_CODE == dest
+
+    if (
+        not same_as_runtime
+        and (NEXO_CODE / "db").is_dir()
+        and (NEXO_CODE.parent / "package.json").is_file()
+    ):
+        return NEXO_CODE, NEXO_CODE.parent
+
+    version_source = _runtime_version_source()
+    if version_source:
+        return version_source / "src", version_source
+    return None, None
+
+
+def _git_in_repo(repo_dir: Path, *args, timeout: int = 10) -> tuple[int, str, str]:
+    result = subprocess.run(
+        ["git"] + list(args),
+        cwd=str(repo_dir),
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
+    return result.returncode, result.stdout.strip(), result.stderr.strip()
+
+
+def _source_repo_status(repo_dir: Path) -> dict:
+    if not (repo_dir / ".git").exists() and not (repo_dir / ".git").is_file():
+        return {"is_git": False, "dirty": False, "behind": False, "diverged": False, "ahead": False}
+
+    rc, dirty_out, dirty_err = _git_in_repo(repo_dir, "status", "--porcelain")
+    dirty = rc == 0 and bool(dirty_out.strip())
+    if rc != 0:
+        return {
+            "is_git": True,
+            "dirty": True,
+            "behind": False,
+            "diverged": False,
+            "ahead": False,
+            "error": dirty_err or "git status failed",
+        }
+
+    rc, _, fetch_err = _git_in_repo(repo_dir, "fetch", "--quiet")
+    if rc != 0:
+        return {
+            "is_git": True,
+            "dirty": dirty,
+            "behind": False,
+            "diverged": False,
+            "ahead": False,
+            "error": fetch_err or "git fetch failed",
+        }
+
+    rc, local_head, _ = _git_in_repo(repo_dir, "rev-parse", "HEAD")
+    rc2, remote_head, remote_err = _git_in_repo(repo_dir, "rev-parse", "@{u}")
+    if rc != 0 or rc2 != 0:
+        return {
+            "is_git": True,
+            "dirty": dirty,
+            "behind": False,
+            "diverged": False,
+            "ahead": False,
+            "error": remote_err or "no upstream configured",
+        }
+    rc, merge_base, merge_err = _git_in_repo(repo_dir, "merge-base", "HEAD", "@{u}")
+    if rc != 0:
+        return {
+            "is_git": True,
+            "dirty": dirty,
+            "behind": False,
+            "diverged": False,
+            "ahead": False,
+            "error": merge_err or "merge-base failed",
+        }
+    return {
+        "is_git": True,
+        "dirty": dirty,
+        "behind": local_head != remote_head and merge_base == local_head,
+        "ahead": local_head != remote_head and merge_base == remote_head,
+        "diverged": merge_base not in {local_head, remote_head},
+        "local_head": local_head,
+        "remote_head": remote_head,
+    }
+
+
+def _backup_runtime_tree(dest: Path = NEXO_HOME) -> str:
+    timestamp = time.strftime("%Y-%m-%d-%H%M%S")
+    backup_dir = NEXO_HOME / "backups" / f"runtime-tree-{timestamp}"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+
+    code_dirs = ["hooks", "plugins", "db", "cognitive", "dashboard", "rules", "crons", "scripts", "doctor", "skills-core"]
+    flat_files = [
+        "server.py", "plugin_loader.py", "knowledge_graph.py", "kg_populate.py",
+        "maintenance.py", "storage_router.py", "claim_graph.py", "hnsw_index.py",
+        "evolution_cycle.py", "migrate_embeddings.py", "auto_close_sessions.py",
+        "auto_update.py", "tools_sessions.py", "tools_coordination.py",
+        "tools_reminders.py", "tools_reminders_crud.py", "tools_learnings.py",
+        "tools_credentials.py", "tools_task_history.py", "tools_menu.py",
+        "cli.py", "script_registry.py", "skills_runtime.py", "user_context.py",
+        "cron_recovery.py", "runtime_power.py", "requirements.txt", "package.json", "version.json",
+    ]
+    for name in code_dirs:
+        src = dest / name
+        if src.is_dir():
+            import shutil
+            shutil.copytree(str(src), str(backup_dir / name), dirs_exist_ok=True)
+    for name in flat_files:
+        src = dest / name
+        if src.is_file():
+            import shutil
+            shutil.copy2(str(src), str(backup_dir / name))
+    if (dest / "bin").is_dir():
+        import shutil
+        shutil.copytree(str(dest / "bin"), str(backup_dir / "bin"), dirs_exist_ok=True)
+    return str(backup_dir)
+
+
+def _restore_runtime_tree(backup_dir: str, dest: Path = NEXO_HOME) -> None:
+    import shutil
+
+    bdir = Path(backup_dir)
+    if not bdir.is_dir():
+        return
+    for item in bdir.iterdir():
+        target = dest / item.name
+        if item.is_dir():
+            if target.exists():
+                shutil.rmtree(target, ignore_errors=True)
+            shutil.copytree(str(item), str(target))
+        else:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(str(item), str(target))
+
+
+def _copy_runtime_from_source(src_dir: Path, repo_dir: Path, dest: Path = NEXO_HOME) -> dict:
+    import shutil
+
+    packages = ["db", "cognitive", "doctor", "dashboard", "rules", "crons", "hooks"]
+    flat_files = [
+        "server.py", "plugin_loader.py", "knowledge_graph.py", "kg_populate.py",
+        "maintenance.py", "storage_router.py", "claim_graph.py", "hnsw_index.py",
+        "evolution_cycle.py", "migrate_embeddings.py", "auto_close_sessions.py",
+        "auto_update.py", "tools_sessions.py", "tools_coordination.py",
+        "tools_reminders.py", "tools_reminders_crud.py", "tools_learnings.py",
+        "tools_credentials.py", "tools_task_history.py", "tools_menu.py",
+        "cli.py", "script_registry.py", "skills_runtime.py", "user_context.py",
+        "cron_recovery.py", "runtime_power.py", "requirements.txt",
+    ]
+    copied_packages = 0
+    copied_files = 0
+
+    for pkg in packages:
+        pkg_src = src_dir / pkg
+        pkg_dest = dest / pkg
+        if pkg_src.is_dir():
+            if pkg_dest.exists():
+                shutil.rmtree(str(pkg_dest), ignore_errors=True)
+            shutil.copytree(
+                str(pkg_src),
+                str(pkg_dest),
+                ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo", "*.db"),
+            )
+            copied_packages += 1
+
+    for name in flat_files:
+        src_file = src_dir / name
+        if src_file.is_file():
+            shutil.copy2(str(src_file), str(dest / name))
+            copied_files += 1
+
+    plugins_src = src_dir / "plugins"
+    plugins_dest = dest / "plugins"
+    if plugins_src.is_dir():
+        plugins_dest.mkdir(parents=True, exist_ok=True)
+        for item in plugins_src.iterdir():
+            if item.is_file() and item.suffix == ".py":
+                shutil.copy2(str(item), str(plugins_dest / item.name))
+
+    scripts_src = src_dir / "scripts"
+    scripts_dest = dest / "scripts"
+    if scripts_src.is_dir():
+        scripts_dest.mkdir(parents=True, exist_ok=True)
+        for item in scripts_src.iterdir():
+            if item.name == "__pycache__" or item.name.startswith("."):
+                continue
+            dst = scripts_dest / item.name
+            if item.is_dir():
+                if dst.exists():
+                    shutil.rmtree(str(dst), ignore_errors=True)
+                shutil.copytree(str(item), str(dst), ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+            elif item.is_file():
+                shutil.copy2(str(item), str(dst))
+                if item.suffix == ".sh":
+                    dst.chmod(0o755)
+
+    templates_src = repo_dir / "templates"
+    templates_dest = dest / "templates"
+    if templates_src.is_dir():
+        templates_dest.mkdir(parents=True, exist_ok=True)
+        for item in templates_src.iterdir():
+            if item.is_file():
+                shutil.copy2(str(item), str(templates_dest / item.name))
+
+    package_json = repo_dir / "package.json"
+    if package_json.is_file():
+        shutil.copy2(str(package_json), str(dest / "package.json"))
+        try:
+            pkg = json.loads(package_json.read_text())
+            (dest / "version.json").write_text(json.dumps({
+                "version": pkg.get("version", "?"),
+                "source": str(repo_dir),
+            }, indent=2))
+        except Exception:
+            pass
+
+    skills_src = src_dir / "skills"
+    skills_dest = dest / "skills-core"
+    if skills_src.is_dir():
+        if skills_dest.exists():
+            shutil.rmtree(str(skills_dest), ignore_errors=True)
+        shutil.copytree(str(skills_src), str(skills_dest), ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+
+    bin_dir = dest / "bin"
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    wrapper = bin_dir / "nexo"
+    wrapper.write_text(_runtime_cli_wrapper_text())
+    wrapper.chmod(0o755)
+
+    return {
+        "packages": copied_packages,
+        "files": copied_files,
+        "source": str(src_dir),
+        "repo": str(repo_dir),
+    }
+
+
+def _reinstall_runtime_pip_deps(runtime_root: Path = NEXO_HOME) -> bool:
+    req_file = runtime_root / "requirements.txt"
+    if not req_file.exists():
+        return True
+    venv_pip = runtime_root / ".venv" / "bin" / "pip"
+    if not venv_pip.exists():
+        venv_pip = runtime_root / ".venv" / "bin" / "pip3"
+    try:
+        if venv_pip.exists():
+            result = subprocess.run(
+                [str(venv_pip), "install", "--quiet", "-r", str(req_file)],
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+        else:
+            result = subprocess.run(
+                [sys.executable, "-m", "pip", "install", "--quiet", "-r", str(req_file), "--break-system-packages"],
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+        return result.returncode == 0
+    except Exception:
+        return False
+
+
+def _run_runtime_post_sync(dest: Path = NEXO_HOME) -> tuple[bool, list[str]]:
+    actions: list[str] = []
+    env = {**os.environ, "NEXO_HOME": str(dest), "NEXO_CODE": str(dest)}
+    try:
+        init_result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                (
+                    "import db; "
+                    "init_db = getattr(db, 'init_db', None); "
+                    "init_db() if callable(init_db) else None; "
+                    "import script_registry; "
+                    "sync_scripts = getattr(script_registry, 'sync_personal_scripts', None); "
+                    "sync_scripts() if callable(sync_scripts) else None"
+                ),
+            ],
+            cwd=str(dest),
+            capture_output=True,
+            text=True,
+            timeout=60,
+            env=env,
+        )
+        if init_result.returncode != 0:
+            return False, [init_result.stderr.strip() or init_result.stdout.strip() or "runtime init failed"]
+        actions.append("db+personal-sync")
+    except Exception as e:
+        return False, [f"runtime init error: {e}"]
+
+    if _reinstall_runtime_pip_deps(dest):
+        actions.append("pip-deps")
+    else:
+        actions.append("pip-deps-warning")
+
+    sync_path = dest / "crons" / "sync.py"
+    if sync_path.is_file():
+        try:
+            sync_result = subprocess.run(
+                [sys.executable, str(sync_path)],
+                cwd=str(dest),
+                capture_output=True,
+                text=True,
+                timeout=30,
+                env=env,
+            )
+            if sync_result.returncode != 0:
+                return False, [sync_result.stderr.strip() or sync_result.stdout.strip() or "cron sync failed"]
+            actions.append("cron-sync")
+        except Exception as e:
+            return False, [f"cron sync error: {e}"]
+
+    from runtime_power import apply_power_policy
+
+    power_result = apply_power_policy()
+    if power_result.get("ok"):
+        actions.append(f"power:{power_result.get('action')}")
+
+    verify = subprocess.run(
+        [sys.executable, "-c", "import server"],
+        cwd=str(dest),
+        capture_output=True,
+        text=True,
+        timeout=20,
+        env=env,
+    )
+    if verify.returncode != 0:
+        return False, [verify.stderr.strip() or verify.stdout.strip() or "import verify failed"]
+    actions.append("verify")
+    return True, actions
+
+
+def _runtime_busy_reason() -> str | None:
+    try:
+        from db import get_active_sessions
+        active = get_active_sessions()
+    except Exception:
+        return None
+    if active:
+        return f"active sessions: {len(active)}"
+    return None
+
+
+def _write_update_summary(summary: dict):
+    try:
+        logs_dir = NEXO_HOME / "logs"
+        logs_dir.mkdir(parents=True, exist_ok=True)
+        payload = dict(summary)
+        payload.setdefault("timestamp", time.strftime("%Y-%m-%dT%H:%M:%S"))
+        UPDATE_SUMMARY_FILE.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
+        with UPDATE_HISTORY_FILE.open("a") as fh:
+            fh.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    except Exception as e:
+        _log(f"Failed to write update summary: {e}")
+
+
+def manual_sync_update(*, interactive: bool = False, allow_source_pull: bool = True) -> dict:
+    src_dir, repo_dir = _resolve_sync_source()
+    if src_dir is None or repo_dir is None:
+        return {"ok": False, "mode": "sync", "error": "No source repo recorded for this runtime."}
+
+    source_status = _source_repo_status(repo_dir)
+    pulled = False
+    old_head = source_status.get("local_head")
+    if allow_source_pull and source_status.get("is_git"):
+        if source_status.get("dirty"):
+            _log("Source repo has local changes; syncing local tree without remote pull.")
+        elif source_status.get("diverged"):
+            _log("Source repo diverged; syncing local tree without remote pull.")
+        elif source_status.get("behind"):
+            rc, _, pull_err = _git_in_repo(repo_dir, "pull", "--ff-only", timeout=60)
+            if rc != 0:
+                return {"ok": False, "mode": "sync", "error": pull_err or "git pull failed"}
+            pulled = True
+
+    db_backup_dir = _backup_dbs()
+    tree_backup_dir = _backup_runtime_tree(NEXO_HOME)
+    sync_result = {"ok": False, "mode": "sync", "pulled_source": pulled, "backup_dir": db_backup_dir, "tree_backup": tree_backup_dir}
+    try:
+        copy_stats = _copy_runtime_from_source(src_dir, repo_dir, NEXO_HOME)
+        ok, actions = _run_runtime_post_sync(NEXO_HOME)
+        if not ok:
+            raise RuntimeError("; ".join(actions))
+        sync_result.update({
+            "ok": True,
+            "updated": True,
+            "packages": copy_stats["packages"],
+            "files": copy_stats["files"],
+            "actions": actions,
+            "source": copy_stats["source"],
+            "repo": copy_stats["repo"],
+        })
+    except Exception as e:
+        _restore_runtime_tree(tree_backup_dir, NEXO_HOME)
+        if db_backup_dir:
+            _restore_dbs(db_backup_dir)
+        _reinstall_runtime_pip_deps(NEXO_HOME)
+        if pulled and old_head:
+            _git_in_repo(repo_dir, "reset", "--hard", old_head, timeout=60)
+        sync_result.update({"error": str(e), "rolled_back": True})
+    _write_update_summary(sync_result)
+    return sync_result
+
+
+def startup_preflight(*, entrypoint: str, interactive: bool = False) -> dict:
+    result = {
+        "entrypoint": entrypoint,
+        "checked": False,
+        "updated": False,
+        "actions": [],
+        "skipped_reason": None,
+        "deferred_reason": None,
+        "git_update": None,
+        "npm_notice": None,
+        "claude_md_update": None,
+        "migrations": [],
+        "power_policy": None,
+        "error": None,
+    }
+
+    from runtime_power import apply_power_policy, ensure_power_policy_choice, get_power_policy
+
+    choice = ensure_power_policy_choice(interactive=interactive, reason=entrypoint)
+    power_result = apply_power_policy(choice.get("policy"))
+    result["power_policy"] = choice.get("policy") or get_power_policy()
+    if power_result.get("ok"):
+        result["actions"].append(f"power:{power_result.get('action')}")
+
+    src_dir, repo_dir = _resolve_sync_source()
+    if src_dir is not None and repo_dir is not None:
+        try:
+            from db import init_db
+            from script_registry import sync_personal_scripts
+
+            _run_db_migrations()
+            result["migrations"] = run_file_migrations()
+            result["claude_md_update"] = _migrate_claude_md()
+            _sync_watchdog_hash_registry()
+            _warn_protected_runtime_location()
+            _ensure_runtime_cli_wrapper()
+            _ensure_runtime_cli_in_shell()
+            init_db()
+            sync_personal_scripts()
+            result["actions"].append("db+personal-sync")
+        except Exception as e:
+            result["error"] = str(e)
+            _write_update_summary(result)
+            return result
+
+        try:
+            last_check = _read_last_check()
+            now = time.time()
+            schedule_data = json.loads((NEXO_HOME / "config" / "schedule.json").read_text()) if (NEXO_HOME / "config" / "schedule.json").exists() else {}
+            if not schedule_data.get("auto_update", True):
+                result["skipped_reason"] = "auto_update disabled in schedule.json"
+                _write_update_summary(result)
+                return result
+            if now - float(last_check.get("timestamp", 0) or 0) < CHECK_COOLDOWN_SECONDS:
+                result["skipped_reason"] = "cooldown"
+                _write_update_summary(result)
+                return result
+            busy_reason = _runtime_busy_reason()
+            if busy_reason:
+                result["deferred_reason"] = busy_reason
+                _write_last_check({"timestamp": now, "mode": "sync", "deferred_reason": busy_reason})
+                _write_update_summary(result)
+                return result
+
+            source_status = _source_repo_status(repo_dir)
+            if source_status.get("dirty"):
+                result["deferred_reason"] = "source repo has local changes"
+            elif source_status.get("diverged"):
+                result["deferred_reason"] = "source repo diverged from upstream"
+            elif source_status.get("behind"):
+                result["checked"] = True
+                sync_result = manual_sync_update(interactive=False, allow_source_pull=True)
+                result["updated"] = bool(sync_result.get("ok") and sync_result.get("updated"))
+                result["actions"].extend(sync_result.get("actions", []))
+                if sync_result.get("error"):
+                    result["error"] = sync_result["error"]
+            else:
+                result["checked"] = True
+
+            _write_last_check({
+                "timestamp": now,
+                "mode": "sync",
+                "updated": result["updated"],
+                "deferred_reason": result["deferred_reason"],
+            })
+        except Exception as e:
+            result["error"] = f"sync startup preflight failed: {e}"
+        _write_update_summary(result)
+        return result
+
+    result = auto_update_check()
+    result["entrypoint"] = entrypoint
+    result["power_policy"] = choice.get("policy") or get_power_policy()
+    if power_result.get("ok"):
+        actions = result.setdefault("actions", [])
+        actions.append(f"power:{power_result.get('action')}")
+    result["updated"] = bool(result.get("git_update"))
+    _write_update_summary(result)
     return result

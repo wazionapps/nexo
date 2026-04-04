@@ -280,7 +280,7 @@ NEXO Brain doesn't just respond — it runs 14 autonomous processes in the backg
 | **postmortem** | 23:30 daily | Session consolidation, extract patterns from day's events |
 | **catchup** | On boot | Runs any missed scheduled processes (Mac was off/asleep) |
 | **tcc-approve** | On boot (macOS) | Auto-approve macOS permissions for Claude Code updates |
-| **prevent-sleep** | Always (daemon) | Keeps machine awake for nocturnal processes (caffeinate/systemd-inhibit) |
+| **prevent-sleep** | Optional opt-in daemon | Keeps machine awake for nocturnal processes when `power_policy=always_on` (caffeinate/systemd-inhibit) |
 | **evolution** | Weekly (Sun) | Self-improvement proposals — NEXO suggests and applies enhancements |
 | **followup-hygiene** | Weekly (Sun) | Normalizes statuses, flags stale followups, cleans orphans |
 | **learning-housekeep** | 03:15 daily | Dedup learnings, adjust weights by usage, process overdue reviews, reconcile decision outcomes |
@@ -289,7 +289,7 @@ NEXO Brain doesn't just respond — it runs 14 autonomous processes in the backg
 | **watchdog** | Every 30 min | Monitors services, LaunchAgents, and infrastructure health |
 | **auto-close-sessions** | Every 5 min | Cleans stale sessions |
 
-Core processes are defined in `src/crons/manifest.json` and auto-synced to your system by `nexo_update`. On macOS they run via LaunchAgents; on Linux via systemd user timers. `tcc-approve`, `prevent-sleep`, and `backup` are platform/personal helpers — not in the manifest but listed above for completeness. Personal scripts (your own automations) are tracked separately in the Personal Scripts Registry and never touched by the core sync. If your Mac was asleep during a scheduled process, the catch-up script re-runs everything in order when it wakes.
+Core processes are defined in `src/crons/manifest.json` and auto-synced to your system by `nexo_update`. On macOS they run via LaunchAgents; on Linux via systemd user timers. `tcc-approve`, `prevent-sleep`, and `backup` are platform/personal helpers — not in the manifest but listed above for completeness. `prevent-sleep` is opt-in via the persisted power policy (`always_on` / `disabled` / `unset`). Personal scripts (your own automations) are tracked separately in the Personal Scripts Registry, can declare their own recovery policy inline, and are never touched by the core sync. If your Mac was asleep during a scheduled process, the catch-up system can now recover both core crons and managed personal schedules according to their recovery contract.
 
 ## Deep Sleep v2 — Overnight Learning (v2.1.0)
 

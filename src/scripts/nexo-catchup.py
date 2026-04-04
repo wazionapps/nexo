@@ -123,17 +123,22 @@ def _acquire_lock():
 def run_task(candidate: dict, state: dict) -> bool:
     """Execute a task and update state."""
     name = candidate["cron_id"]
-    script_name = Path(candidate["script"]).name
-    script_path = str(SCRIPTS / script_name)
-    if not Path(script_path).exists():
+    raw_script = str(candidate.get("script", ""))
+    script_candidate = Path(raw_script)
+    if script_candidate.is_absolute():
+        script_path = script_candidate
+    else:
+        script_path = SCRIPTS / script_candidate.name
+    script_name = script_path.name
+    if not script_path.exists():
         log(f"  SKIP {name}: script not found ({script_path})")
         return False
 
     runtime_cmd = _resolve_runtime_command(candidate.get("type", "python"))
     if WRAPPER.exists():
-        command = ["/bin/bash", str(WRAPPER), name, runtime_cmd, script_path]
+        command = ["/bin/bash", str(WRAPPER), name, runtime_cmd, str(script_path)]
     else:
-        command = [runtime_cmd, script_path]
+        command = [runtime_cmd, str(script_path)]
 
     log(f"  RUNNING {name}: {script_name}")
     try:

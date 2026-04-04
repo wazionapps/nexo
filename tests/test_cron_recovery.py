@@ -104,6 +104,53 @@ def test_catchup_candidates_fall_back_to_legacy_state(tmp_path, monkeypatch):
     assert candidates[0]["missed"] is False
 
 
+def test_catchup_candidates_include_managed_personal_interval(tmp_path, monkeypatch):
+    import cron_recovery
+
+    nexo_home = tmp_path / "nexo"
+    (nexo_home / "crons").mkdir(parents=True)
+    (nexo_home / "data").mkdir(parents=True)
+    (nexo_home / "crons" / "manifest.json").write_text('{"crons":[]}')
+
+    db_path = nexo_home / "data" / "nexo.db"
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        "CREATE TABLE cron_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, cron_id TEXT NOT NULL, started_at TEXT NOT NULL, ended_at TEXT, exit_code INTEGER, summary TEXT, error TEXT, duration_secs REAL)"
+    )
+    conn.execute(
+        "INSERT INTO cron_runs (cron_id, started_at, exit_code) VALUES (?, ?, ?)",
+        ("mail-poller", "2026-04-03 05:40:00", 0),
+    )
+    conn.commit()
+    conn.close()
+
+    monkeypatch.setattr(cron_recovery, "NEXO_HOME", nexo_home)
+    monkeypatch.setattr(cron_recovery, "DB_PATH", db_path)
+    monkeypatch.setattr(cron_recovery, "OPTIONALS_FILE", nexo_home / "config" / "optionals.json")
+    monkeypatch.setattr(cron_recovery, "LAUNCH_AGENTS_DIR", tmp_path / "launchagents")
+    monkeypatch.setattr(cron_recovery, "_local_timezone", lambda: timezone.utc)
+    monkeypatch.setattr(cron_recovery, "load_managed_personal_crons", lambda: [{
+        "id": "mail-poller",
+        "script": str(nexo_home / "scripts" / "mail-poller.py"),
+        "type": "python",
+        "schedule_type": "interval",
+        "interval_seconds": 300,
+        "recovery_policy": "run_once_on_wake",
+        "idempotent": True,
+        "max_catchup_age": 3600,
+        "run_on_boot": False,
+        "run_on_wake": True,
+        "personal_managed": True,
+    }])
+
+    candidates = cron_recovery.catchup_candidates(now=datetime(2026, 4, 3, 6, 0, tzinfo=timezone.utc))
+
+    assert len(candidates) == 1
+    assert candidates[0]["cron_id"] == "mail-poller"
+    assert candidates[0]["missed"] is True
+    assert candidates[0]["personal_managed"] is True
+
+
 def test_catchup_script_runs_directly_from_runtime_root(tmp_path):
     repo_src = Path(__file__).resolve().parent.parent / "src"
     runtime_root = tmp_path / "runtime"

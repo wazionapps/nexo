@@ -286,6 +286,8 @@ function getDefaultSchedule(timezone) {
   return {
     timezone: timezone || "UTC",
     auto_update: true,
+    power_policy: "unset",
+    power_policy_version: 1,
     processes: {
       "cognitive-decay": { hour: 3, minute: 0 },
       "postmortem": { hour: 23, minute: 30 },
@@ -296,6 +298,33 @@ function getDefaultSchedule(timezone) {
       "followup-hygiene": { day: "sunday", hour: 5, minute: 0 },
     },
   };
+}
+
+async function maybeConfigurePowerPolicy(schedule, useDefaults) {
+  const current = String((schedule && schedule.power_policy) || "unset").toLowerCase();
+  if (current && current !== "unset") {
+    return schedule;
+  }
+  if (useDefaults || !process.stdin.isTTY || !process.stdout.isTTY) {
+    schedule.power_policy = "unset";
+    schedule.power_policy_version = 1;
+    return schedule;
+  }
+
+  console.log("");
+  log("Optional power policy:");
+  log("If enabled, NEXO will try to keep the machine awake for background work.");
+  const answer = (await ask("  Keep this machine awake for background work? [y/N/later]: ")).trim().toLowerCase();
+  if (answer === "y" || answer === "yes") {
+    schedule.power_policy = "always_on";
+  } else if (answer === "later" || answer === "l") {
+    schedule.power_policy = "unset";
+  } else {
+    schedule.power_policy = "disabled";
+  }
+  schedule.power_policy_version = 1;
+  fs.writeFileSync(path.join(NEXO_HOME, "config", "schedule.json"), JSON.stringify(schedule, null, 2));
+  return schedule;
 }
 
 /**
@@ -370,6 +399,9 @@ function installAllProcesses(platform, pythonPath, nexoHome, schedule, launchAge
       const sPath = scriptPath(proc);
       const interp = interpreterPath(proc);
       const s = getSchedule(proc);
+      if (proc.name === "prevent-sleep" && (schedule.power_policy || "unset") !== "always_on") {
+        continue;
+      }
 
       let scheduleBlock = "";
       if (proc.type === "keepAlive") {
@@ -477,6 +509,7 @@ function installAllProcesses(platform, pythonPath, nexoHome, schedule, launchAge
         const sPath = scriptPath(proc);
         const interp = interpreterPath(proc);
         const s = getSchedule(proc);
+        if (proc.name === "prevent-sleep" && (schedule.power_policy || "unset") !== "always_on") continue;
 
         const serviceType = proc.type === "keepAlive" ? "simple" : "oneshot";
         const restartPolicy = proc.type === "keepAlive" ? "Restart=always\nRestartSec=5" : "";
@@ -795,7 +828,8 @@ async function main() {
         log("  All 8 core hooks registered in Claude Code settings.");
 
         // Regenerate all core LaunchAgents / systemd timers
-        const migSchedule = loadOrCreateSchedule(NEXO_HOME);
+        let migSchedule = loadOrCreateSchedule(NEXO_HOME);
+        migSchedule = await maybeConfigurePowerPolicy(migSchedule, useDefaults);
         const migPython = findVenvPython(NEXO_HOME) || "python3";
         let migOptionals = {};
         try {
@@ -2067,7 +2101,8 @@ ${doScan ? `- Stack: ${Object.keys(profileData.code.languages || {}).slice(0, 5)
 
   // Step 7: Create schedule.json (only on fresh install) and install core processes
   log("Setting up automated processes...");
-  const schedule = loadOrCreateSchedule(NEXO_HOME);
+  let schedule = loadOrCreateSchedule(NEXO_HOME);
+  schedule = await maybeConfigurePowerPolicy(schedule, useDefaults);
   const enabledOptionals = { dashboard: doDashboard };
   if (isEphemeralInstall(NEXO_HOME)) {
     log("Ephemeral HOME/NEXO_HOME detected — skipping LaunchAgents installation.");

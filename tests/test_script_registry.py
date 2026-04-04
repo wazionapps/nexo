@@ -107,6 +107,46 @@ class TestMetadataParsing:
         assert declared["schedule_type"] == "interval"
         assert declared["interval_seconds"] == 300
 
+    def test_schedule_metadata_defaults_recovery_policy(self, tmp_path):
+        script = tmp_path / "mail.py"
+        script.write_text(
+            "# nexo: name=mail-poller\n"
+            "# nexo: runtime=python\n"
+            "# nexo: cron_id=mail-poller\n"
+            "# nexo: interval_seconds=300\n"
+            "# nexo: schedule_required=true\n"
+        )
+        meta = parse_inline_metadata(script)
+        declared = get_declared_schedule(meta, "mail-poller")
+        assert declared["valid"] is True
+        assert declared["recovery_policy"] == "run_once_on_wake"
+        assert declared["run_on_wake"] is True
+        assert declared["idempotent"] is True
+        assert declared["max_catchup_age"] >= 1200
+
+    def test_schedule_metadata_accepts_explicit_recovery_contract(self, tmp_path):
+        script = tmp_path / "calendar.py"
+        script.write_text(
+            "# nexo: name=daily-review\n"
+            "# nexo: runtime=python\n"
+            "# nexo: cron_id=daily-review\n"
+            "# nexo: schedule=06:30\n"
+            "# nexo: schedule_required=true\n"
+            "# nexo: recovery_policy=catchup\n"
+            "# nexo: run_on_boot=true\n"
+            "# nexo: run_on_wake=false\n"
+            "# nexo: idempotent=true\n"
+            "# nexo: max_catchup_age=7200\n"
+        )
+        meta = parse_inline_metadata(script)
+        declared = get_declared_schedule(meta, "daily-review")
+        assert declared["valid"] is True
+        assert declared["recovery_policy"] == "catchup"
+        assert declared["run_on_boot"] is True
+        assert declared["run_on_wake"] is False
+        assert declared["idempotent"] is True
+        assert declared["max_catchup_age"] == 7200
+
 
 class TestRuntimeDetection:
     def test_metadata_runtime(self, tmp_path):

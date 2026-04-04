@@ -124,12 +124,16 @@ def _server_init():
 
     # ── Auto-update check (non-blocking, max 5s) ──────────────────
     try:
-        from auto_update import auto_update_check
+        from auto_update import startup_preflight
         import threading
 
         def _bg_update():
             try:
-                result = auto_update_check()
+                result = startup_preflight(entrypoint="server", interactive=False)
+                if result.get("updated"):
+                    print("[NEXO] Startup update applied.", file=sys.stderr)
+                if result.get("deferred_reason"):
+                    print(f"[NEXO] Startup update deferred: {result['deferred_reason']}", file=sys.stderr)
                 if result.get("git_update"):
                     print(f"[NEXO] {result['git_update']}", file=sys.stderr)
                 if result.get("npm_notice"):
