@@ -23,8 +23,8 @@ NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cogniti
 - Auto-Update: non-blocking update check on startup (5s max), opt-out via schedule.json
 - Auto-Diary: 3-layer system (PostToolUse every 10 calls, PreCompact emergency, heartbeat DIARY_OVERDUE)
 - schedule.json: customizable process schedules with timezone support
-- Nervous System: 14 autonomous processes (watchdog, immune, synthesis, backup, catchup, cognitive-decay, postmortem, self-audit, sleep, deep-sleep, evolution, followup-hygiene, prevent-sleep, tcc-approve, auto-close-sessions)
-- 14 auto-installed processes: LaunchAgent plists (macOS) + systemd user timers (Linux) + crontab fallback
+- Nervous System: 13 core recovery-aware background jobs (watchdog, immune, synthesis, backup, catchup, cognitive-decay, postmortem, self-audit, sleep, deep-sleep, evolution, followup-hygiene, auto-close-sessions) + optional helpers (prevent-sleep, tcc-approve, dashboard)
+- Auto-installed processes: LaunchAgent plists (macOS) + systemd user timers (Linux) + crontab fallback
 - Cross-Platform: macOS (LaunchAgents), Linux (systemd/crontab), Windows (WSL) with full automated processes
 - Modular architecture: db/ package (11 modules), cognitive/ package (6 modules)
 - Adaptive Learned Weights: signal weights learn from real feedback via Ridge regression
@@ -46,7 +46,7 @@ NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cogniti
 - Runtime CLI: `nexo` command for direct terminal access to scripts, doctor, skills, and updates
 - Unified Doctor: boot/runtime/deep diagnostics with --fix mode and MCP tool integration
 - Personal Scripts Registry: first-class SQLite tracking with 9 MCP tools for lifecycle management, scheduling, reconciliation, and classification
-- Claude Code Plugin: marketplace-ready plugin structure with plugin.json and entry point
+- Claude Code Plugin: submitted to Anthropic's official plugin marketplace (pending review)
 - Managed Evolution: can modify core behavior modules with rollback followups
 - nexo chat: official CLI command to launch Claude Code with NEXO as operator
 - Startup Preflight: safe local migrations and deferred remote updates before nexo chat or server start
