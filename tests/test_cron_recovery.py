@@ -56,6 +56,7 @@ def test_catchup_candidates_use_successful_cron_runs(tmp_path, monkeypatch):
     monkeypatch.setattr(cron_recovery, "LAUNCH_AGENTS_DIR", tmp_path / "launchagents")
     monkeypatch.setattr(cron_recovery, "STATE_FILE", nexo_home / "operations" / ".catchup-state.json")
     monkeypatch.setattr(cron_recovery, "_local_timezone", lambda: timezone.utc)
+    monkeypatch.setattr(cron_recovery, "load_managed_personal_crons", lambda: [])
 
     candidates = cron_recovery.catchup_candidates(now=datetime(2026, 4, 3, 6, 0, tzinfo=timezone.utc))
 
@@ -97,6 +98,7 @@ def test_catchup_candidates_fall_back_to_legacy_state(tmp_path, monkeypatch):
     monkeypatch.setattr(cron_recovery, "LAUNCH_AGENTS_DIR", tmp_path / "launchagents")
     monkeypatch.setattr(cron_recovery, "STATE_FILE", nexo_home / "operations" / ".catchup-state.json")
     monkeypatch.setattr(cron_recovery, "_local_timezone", lambda: timezone.utc)
+    monkeypatch.setattr(cron_recovery, "load_managed_personal_crons", lambda: [])
 
     candidates = cron_recovery.catchup_candidates(now=datetime(2026, 4, 3, 7, 0, tzinfo=timezone.utc))
 
