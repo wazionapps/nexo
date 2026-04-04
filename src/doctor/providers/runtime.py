@@ -747,6 +747,11 @@ def check_launchagent_integrity(fix: bool = False) -> DoctorCheck:
             "and treat recent 'Operation not permitted' against Documents/Desktop/Downloads as a TCC/runtime path issue."
         ),
     )
+    if tcc_risk:
+        check.repair_plan.append(
+            "On macOS, grant Full Disk Access manually if protected folders are required; "
+            "NEXO can only open the System Settings pane and verify best effort"
+        )
 
     if fix:
         sync_ok, sync_evidence = _sync_launchagents_from_manifest()

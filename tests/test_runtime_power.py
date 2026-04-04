@@ -103,3 +103,78 @@ def test_apply_macos_power_policy_reports_missing_helper(tmp_path, monkeypatch):
     assert result["ok"] is False
     assert result["action"] == "missing-helper"
     assert "caffeinate" in result["message"]
+
+
+def test_detect_full_disk_access_reasons_flags_protected_runtime(tmp_path, monkeypatch):
+    import runtime_power
+
+    nexo_home = tmp_path / "Documents" / "nexo"
+    nexo_home.mkdir(parents=True)
+    monkeypatch.setattr(runtime_power, "NEXO_HOME", nexo_home)
+    monkeypatch.setattr(runtime_power.platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(runtime_power, "_protected_macos_roots", lambda home=None: (tmp_path / "Documents",))
+
+    reasons = runtime_power.detect_full_disk_access_reasons(system="Darwin")
+
+    assert reasons
+    assert "protected macOS folder" in reasons[0]
+
+
+def test_ensure_full_disk_access_choice_prompts_and_marks_granted(tmp_path, monkeypatch):
+    import runtime_power
+
+    nexo_home = tmp_path / "nexo"
+    schedule_file = nexo_home / "config" / "schedule.json"
+    schedule_file.parent.mkdir(parents=True)
+    schedule_file.write_text('{"timezone":"UTC","auto_update":true,"processes":{}}')
+
+    monkeypatch.setattr(runtime_power, "NEXO_HOME", nexo_home)
+    monkeypatch.setattr(runtime_power, "CONFIG_DIR", nexo_home / "config")
+    monkeypatch.setattr(runtime_power, "SCHEDULE_FILE", schedule_file)
+    monkeypatch.setattr(runtime_power.platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(runtime_power, "detect_full_disk_access_reasons", lambda **kwargs: ["NEXO_HOME is inside a protected macOS folder"])
+
+    prompts = []
+    answers = iter(["y", ""])
+
+    def fake_input(prompt):
+        prompts.append(prompt)
+        return next(answers)
+
+    result = runtime_power.ensure_full_disk_access_choice(
+        interactive=True,
+        reason="update",
+        input_fn=fake_input,
+        output_fn=lambda msg: None,
+        open_fn=lambda: {"ok": True, "opened": True, "message": ""},
+        probe_fn=lambda: {"checked": True, "granted": True, "probe_path": "/tmp/probe", "message": ""},
+    )
+
+    assert prompts
+    assert result["status"] == "granted"
+    assert result["verified"] is True
+    assert runtime_power.load_schedule_config()["full_disk_access_status"] == "granted"
+
+
+def test_ensure_full_disk_access_choice_defers_when_grant_cannot_be_verified(tmp_path, monkeypatch):
+    import runtime_power
+
+    nexo_home = tmp_path / "nexo"
+    schedule_file = nexo_home / "config" / "schedule.json"
+    schedule_file.parent.mkdir(parents=True)
+    schedule_file.write_text('{"timezone":"UTC","auto_update":true,"full_disk_access_status":"granted","processes":{}}')
+
+    monkeypatch.setattr(runtime_power, "NEXO_HOME", nexo_home)
+    monkeypatch.setattr(runtime_power, "CONFIG_DIR", nexo_home / "config")
+    monkeypatch.setattr(runtime_power, "SCHEDULE_FILE", schedule_file)
+    monkeypatch.setattr(runtime_power.platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(runtime_power, "detect_full_disk_access_reasons", lambda **kwargs: ["Recent background job stderr hit 'Operation not permitted'"])
+
+    result = runtime_power.ensure_full_disk_access_choice(
+        interactive=False,
+        reason="update",
+        probe_fn=lambda: {"checked": True, "granted": False, "probe_path": "/tmp/probe", "message": "denied"},
+    )
+
+    assert result["status"] == "later"
+    assert runtime_power.load_schedule_config()["full_disk_access_status"] == "later"

@@ -31,6 +31,7 @@ const LAUNCH_AGENTS = path.join(
   "Library",
   "LaunchAgents"
 );
+const MACOS_FDA_SETTINGS_URL = "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles";
 
 function isEphemeralInstall(nexoHome) {
   const homeDir = require("os").homedir();
@@ -112,6 +113,139 @@ function logMacPermissionsNotice(nexoHome, pythonPath = "") {
     log(`  Python runtime: ${pythonPath}`);
   }
   log("  System Settings → Privacy & Security → Full Disk Access");
+}
+
+function getRuntimePythonTargets(pythonPath = "") {
+  const candidates = [];
+  const venvPy = path.join(NEXO_HOME, ".venv", "bin", "python3");
+  if (fs.existsSync(venvPy)) candidates.push(venvPy);
+  if (pythonPath) candidates.push(pythonPath);
+  const discovered = run("which python3") || run("which python") || "";
+  if (discovered) candidates.push(discovered);
+  return [...new Set(candidates.filter(Boolean))];
+}
+
+function detectFullDiskAccessReasons(nexoHome) {
+  if (process.platform !== "darwin") return [];
+  const reasons = [];
+  if (isProtectedMacPath(nexoHome)) {
+    reasons.push(`NEXO_HOME is inside a protected macOS folder: ${nexoHome}`);
+  }
+
+  const logsDir = path.join(nexoHome, "logs");
+  if (fs.existsSync(logsDir)) {
+    const candidates = fs.readdirSync(logsDir).filter((name) => name.endsWith("-stderr.log"));
+    for (const name of candidates) {
+      try {
+        const text = fs.readFileSync(path.join(logsDir, name), "utf8");
+        if (text.includes("Operation not permitted")) {
+          reasons.push(`Recent background job stderr hit 'Operation not permitted' (${name})`);
+          break;
+        }
+      } catch {}
+    }
+  }
+  return reasons;
+}
+
+function probeFullDiskAccess(nexoHome) {
+  if (process.platform !== "darwin") {
+    return { checked: false, granted: null, probePath: "", message: "macOS-only" };
+  }
+
+  const candidates = [
+    path.join(require("os").homedir(), "Library", "Application Support", "com.apple.TCC", "TCC.db"),
+    path.join(require("os").homedir(), "Library", "Mail"),
+    path.join(require("os").homedir(), "Library", "Messages"),
+    path.join(require("os").homedir(), "Library", "Safari"),
+    path.join(require("os").homedir(), "Library", "Application Support", "AddressBook"),
+  ].filter((item) => fs.existsSync(item));
+
+  if (isProtectedMacPath(nexoHome)) candidates.push(nexoHome);
+  if (!candidates.length) {
+    return { checked: false, granted: null, probePath: "", message: "No probe path available." };
+  }
+
+  const seen = new Set();
+  for (const candidate of candidates) {
+    if (!candidate || seen.has(candidate)) continue;
+    seen.add(candidate);
+    const result = spawnSync("/bin/bash", [
+      "-lc",
+      'TARGET="$1"; if [ -d "$TARGET" ]; then ls "$TARGET" >/dev/null 2>&1; else head -c 1 "$TARGET" >/dev/null 2>&1; fi',
+      "_",
+      candidate,
+    ], { encoding: "utf8" });
+    if (result.status === 0) {
+      return { checked: true, granted: true, probePath: candidate, message: "" };
+    }
+  }
+  return { checked: true, granted: false, probePath: candidates[0], message: "Could not verify Full Disk Access yet." };
+}
+
+async function maybeConfigureFullDiskAccess(schedule, useDefaults, pythonPath = "") {
+  const current = String((schedule && schedule.full_disk_access_status) || "unset").toLowerCase();
+  schedule.full_disk_access_status_version = 1;
+  const reasons = detectFullDiskAccessReasons(NEXO_HOME);
+  schedule.full_disk_access_reasons = reasons;
+
+  if (process.platform !== "darwin" || !reasons.length) {
+    fs.writeFileSync(path.join(NEXO_HOME, "config", "schedule.json"), JSON.stringify(schedule, null, 2));
+    return schedule;
+  }
+
+  if (current === "granted") {
+    const probe = probeFullDiskAccess(NEXO_HOME);
+    if (probe.granted) {
+      fs.writeFileSync(path.join(NEXO_HOME, "config", "schedule.json"), JSON.stringify(schedule, null, 2));
+      return schedule;
+    }
+    schedule.full_disk_access_status = "later";
+  } else if (current === "declined") {
+    fs.writeFileSync(path.join(NEXO_HOME, "config", "schedule.json"), JSON.stringify(schedule, null, 2));
+    return schedule;
+  }
+
+  if (useDefaults || !process.stdin.isTTY || !process.stdout.isTTY) {
+    schedule.full_disk_access_status = current === "granted" ? "later" : current || "unset";
+    fs.writeFileSync(path.join(NEXO_HOME, "config", "schedule.json"), JSON.stringify(schedule, null, 2));
+    return schedule;
+  }
+
+  console.log("");
+  log("Optional macOS Full Disk Access guidance:");
+  log("macOS does not allow granting this automatically. NEXO can only open the correct System Settings screen and verify best effort.");
+  log("Reason(s) detected:");
+  reasons.forEach((item) => log(`  - ${item}`));
+  log("If you proceed, add your terminal app and, if needed for background jobs, these binaries:");
+  log("  - /bin/bash");
+  getRuntimePythonTargets(pythonPath).forEach((item) => log(`  - ${item}`));
+
+  const answer = (await ask("  Open Full Disk Access setup now? [y/N/later]: ")).trim().toLowerCase();
+  if (answer === "y" || answer === "yes") {
+    spawnSync("open", [MACOS_FDA_SETTINGS_URL], { stdio: "ignore" });
+    log("Opened System Settings → Privacy & Security → Full Disk Access.");
+    const followUp = (await ask("  Press Enter after granting it, or type later to skip for now: ")).trim().toLowerCase();
+    if (followUp === "later" || followUp === "l") {
+      schedule.full_disk_access_status = "later";
+    } else {
+      const probe = probeFullDiskAccess(NEXO_HOME);
+      if (probe.granted) {
+        schedule.full_disk_access_status = "granted";
+        log(`Full Disk Access verified via ${probe.probePath}.`);
+      } else {
+        schedule.full_disk_access_status = "later";
+        log("Could not verify Full Disk Access yet. NEXO will remind you later if background jobs still hit TCC.");
+      }
+    }
+  } else if (answer === "later" || answer === "l" || answer === "") {
+    schedule.full_disk_access_status = "later";
+  } else {
+    schedule.full_disk_access_status = "declined";
+  }
+
+  fs.writeFileSync(path.join(NEXO_HOME, "config", "schedule.json"), JSON.stringify(schedule, null, 2));
+  return schedule;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -296,6 +430,9 @@ function getDefaultSchedule(timezone) {
     auto_update: true,
     power_policy: "unset",
     power_policy_version: 2,
+    full_disk_access_status: "unset",
+    full_disk_access_status_version: 1,
+    full_disk_access_reasons: [],
     processes: {
       "cognitive-decay": { hour: 3, minute: 0 },
       "postmortem": { hour: 23, minute: 30 },
@@ -844,6 +981,7 @@ async function main() {
         let migSchedule = loadOrCreateSchedule(NEXO_HOME);
         migSchedule = await maybeConfigurePowerPolicy(migSchedule, useDefaults);
         const migPython = findVenvPython(NEXO_HOME) || "python3";
+        migSchedule = await maybeConfigureFullDiskAccess(migSchedule, useDefaults, migPython);
         let migOptionals = {};
         try {
           const optFile = path.join(NEXO_HOME, "config", "optionals.json");
@@ -2116,6 +2254,7 @@ ${doScan ? `- Stack: ${Object.keys(profileData.code.languages || {}).slice(0, 5)
   log("Setting up automated processes...");
   let schedule = loadOrCreateSchedule(NEXO_HOME);
   schedule = await maybeConfigurePowerPolicy(schedule, useDefaults);
+  schedule = await maybeConfigureFullDiskAccess(schedule, useDefaults, python);
   const enabledOptionals = { dashboard: doDashboard };
   if (isEphemeralInstall(NEXO_HOME)) {
     log("Ephemeral HOME/NEXO_HOME detected — skipping LaunchAgents installation.");

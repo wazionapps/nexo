@@ -451,7 +451,13 @@ def _update(args):
     - Packaged/runtime-only install: delegate to plugins.update handle_update()
     """
     from auto_update import manual_sync_update, _resolve_sync_source
-    from runtime_power import ensure_power_policy_choice, apply_power_policy, format_power_policy_label
+    from runtime_power import (
+        ensure_power_policy_choice,
+        apply_power_policy,
+        format_power_policy_label,
+        ensure_full_disk_access_choice,
+        format_full_disk_access_label,
+    )
 
     interactive = sys.stdin.isatty() and sys.stdout.isatty()
 
@@ -472,6 +478,7 @@ def _update(args):
         result = handle_update()
         choice = ensure_power_policy_choice(interactive=interactive, reason="update")
         power_result = apply_power_policy(choice.get("policy"))
+        fda_choice = ensure_full_disk_access_choice(interactive=interactive, reason="update")
         if args.json:
             print(json.dumps({
                 "mode": "packaged",
@@ -479,6 +486,9 @@ def _update(args):
                 "power_policy": choice.get("policy"),
                 "power_action": power_result.get("action"),
                 "power_details": power_result.get("details"),
+                "full_disk_access_status": fda_choice.get("status"),
+                "full_disk_access_reasons": fda_choice.get("reasons"),
+                "full_disk_access_message": fda_choice.get("message"),
             }, indent=2, ensure_ascii=False))
         else:
             print(result)
@@ -486,16 +496,25 @@ def _update(args):
                 print(f"Power policy: {format_power_policy_label(choice.get('policy'))}")
             if power_result.get("message"):
                 print(f"Power helper: {power_result.get('message')}")
+            if fda_choice.get("prompted"):
+                print(f"Full Disk Access: {format_full_disk_access_label(fda_choice.get('status'))}")
+            if fda_choice.get("message"):
+                print(f"Full Disk Access: {fda_choice.get('message')}")
         return 0 if "UPDATE SUCCESSFUL" in result or "Already up to date" in result else 1
 
     choice = ensure_power_policy_choice(interactive=interactive, reason="update")
     power_result = apply_power_policy(choice.get("policy"))
+    fda_choice = ensure_full_disk_access_choice(interactive=interactive, reason="update")
     result = manual_sync_update(interactive=interactive, allow_source_pull=True)
     result["power_policy"] = choice.get("policy")
     result["power_action"] = power_result.get("action")
     result["power_details"] = power_result.get("details")
+    result["full_disk_access_status"] = fda_choice.get("status")
+    result["full_disk_access_reasons"] = fda_choice.get("reasons")
     if power_result.get("message"):
         result["power_message"] = power_result.get("message")
+    if fda_choice.get("message"):
+        result["full_disk_access_message"] = fda_choice.get("message")
     if args.json:
         print(json.dumps(result, indent=2, ensure_ascii=False))
     else:
@@ -511,6 +530,10 @@ def _update(args):
                 print(f"  Power policy: {format_power_policy_label(choice.get('policy'))}")
             if power_result.get("message"):
                 print(f"  Power helper: {power_result.get('message')}")
+            if fda_choice.get("prompted"):
+                print(f"  Full Disk Access: {format_full_disk_access_label(fda_choice.get('status'))}")
+            if fda_choice.get("message"):
+                print(f"  Full Disk Access: {fda_choice.get('message')}")
         else:
             print(f"UPDATE FAILED: {result.get('error', 'sync failed')}", file=sys.stderr)
     return 0 if result.get("ok") else 1

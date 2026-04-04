@@ -1522,15 +1522,26 @@ def startup_preflight(*, entrypoint: str, interactive: bool = False) -> dict:
         "migrations": [],
         "power_policy": None,
         "power_message": None,
+        "full_disk_access_status": None,
+        "full_disk_access_message": None,
         "error": None,
     }
 
-    from runtime_power import apply_power_policy, ensure_power_policy_choice, get_power_policy
+    from runtime_power import (
+        apply_power_policy,
+        ensure_power_policy_choice,
+        get_power_policy,
+        ensure_full_disk_access_choice,
+        get_full_disk_access_status,
+    )
 
     choice = ensure_power_policy_choice(interactive=interactive, reason=entrypoint)
     power_result = apply_power_policy(choice.get("policy"))
+    fda_choice = ensure_full_disk_access_choice(interactive=interactive, reason=entrypoint)
     result["power_policy"] = choice.get("policy") or get_power_policy()
     result["power_message"] = power_result.get("message")
+    result["full_disk_access_status"] = fda_choice.get("status") or get_full_disk_access_status()
+    result["full_disk_access_message"] = fda_choice.get("message")
     if power_result.get("ok"):
         result["actions"].append(f"power:{power_result.get('action')}")
 
@@ -1604,6 +1615,8 @@ def startup_preflight(*, entrypoint: str, interactive: bool = False) -> dict:
     result["entrypoint"] = entrypoint
     result["power_policy"] = choice.get("policy") or get_power_policy()
     result["power_message"] = power_result.get("message")
+    result["full_disk_access_status"] = fda_choice.get("status") or get_full_disk_access_status()
+    result["full_disk_access_message"] = fda_choice.get("message")
     if power_result.get("ok"):
         actions = result.setdefault("actions", [])
         actions.append(f"power:{power_result.get('action')}")

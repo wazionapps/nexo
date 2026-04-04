@@ -46,10 +46,12 @@ def test_startup_preflight_defers_sync_update_when_runtime_busy(tmp_path, monkey
     monkeypatch.setattr(auto_update, "_write_last_check", lambda data: None)
     monkeypatch.setattr(auto_update, "manual_sync_update", lambda **kwargs: {"ok": True, "updated": True, "actions": ["unexpected"]})
     monkeypatch.setattr(db, "init_db", lambda: None)
-    monkeypatch.setattr(script_registry, "sync_personal_scripts", lambda: {"ok": True})
+    monkeypatch.setattr(script_registry, "reconcile_personal_scripts", lambda dry_run=False: {"ok": True})
     monkeypatch.setattr(runtime_power, "ensure_power_policy_choice", lambda **kwargs: {"policy": "disabled", "prompted": False})
     monkeypatch.setattr(runtime_power, "apply_power_policy", lambda policy=None: {"ok": True, "action": "disabled"})
     monkeypatch.setattr(runtime_power, "get_power_policy", lambda schedule=None: "disabled")
+    monkeypatch.setattr(runtime_power, "ensure_full_disk_access_choice", lambda **kwargs: {"status": "unset", "prompted": False, "message": ""})
+    monkeypatch.setattr(runtime_power, "get_full_disk_access_status", lambda schedule=None: "unset")
 
     result = auto_update.startup_preflight(entrypoint="chat", interactive=False)
 
@@ -78,6 +80,8 @@ def test_run_runtime_post_sync_uses_reconcile_personal_scripts(tmp_path, monkeyp
     import runtime_power
 
     monkeypatch.setattr(runtime_power, "apply_power_policy", lambda policy=None: {"ok": True, "action": "enabled"})
+    monkeypatch.setattr(runtime_power, "ensure_full_disk_access_choice", lambda **kwargs: {"status": "unset", "prompted": False, "message": ""})
+    monkeypatch.setattr(runtime_power, "get_full_disk_access_status", lambda schedule=None: "unset")
 
     ok, actions = auto_update._run_runtime_post_sync(runtime_home)
 
