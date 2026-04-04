@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXO 2.6.7: Your Agent Can Now Contribute Back — and Build Its Own Tools</title>
+    <meta name="description" content="NEXO Brain 2.6.7 introduces opt-in contributor evolution, personal MCP plugin scaffolding, and better memory continuity. Your agent can now propose improvements back to the core.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-2-6-7-contributor-evolution-personal-plugins/">
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/blog/nexo-2-6-7-contributor-evolution-personal-plugins/">
+    <meta property="og:title" content="NEXO 2.6.7: Your Agent Can Now Contribute Back — and Build Its Own Tools">
+    <meta property="og:description" content="Opt-in contributor evolution, personal MCP plugins that survive updates, and smoother memory continuity.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
+    <meta property="og:image:width" content="1536">
+    <meta property="og:image:height" content="1024">
+    <meta property="article:published_time" content="2026-04-04">
+    <meta property="article:author" content="Francisco Cerd&agrave; Puigserver">
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO 2.6.7: Your Agent Can Now Contribute Back — and Build Its Own Tools">
+    <meta name="twitter:description" content="Opt-in contributor evolution, personal MCP plugins that survive updates, and smoother memory continuity.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
+
+    <!-- Google Analytics (GA4) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+
+    <link rel="stylesheet" href="/assets/style.css">
+
+    <!-- Schema.org BlogPosting -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "NEXO 2.6.7: Your Agent Can Now Contribute Back — and Build Its Own Tools",
+        "description": "NEXO Brain 2.6.7 introduces opt-in contributor evolution, personal MCP plugin scaffolding, and better memory continuity. Your agent can now propose improvements back to the core.",
+        "datePublished": "2026-04-04",
+        "dateModified": "2026-04-04",
+        "author": {
+            "@type": "Person",
+            "name": "Francisco Cerd\u00e0 Puigserver"
+        },
+        "publisher": {
+            "@type": "Organization",
+            "name": "WAzion",
+            "url": "https://www.wazion.com"
+        },
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https://nexo-brain.com/blog/nexo-2-6-7-contributor-evolution-personal-plugins/"
+        },
+        "url": "https://nexo-brain.com/blog/nexo-2-6-7-contributor-evolution-personal-plugins/",
+        "image": "https://nexo-brain.com/assets/social-preview.png",
+        "keywords": ["NEXO Brain 2.6.7", "AI agent self-improvement", "MCP personal plugins", "contributor evolution"]
+    }
+    </script>
+
+    <style>
+        .article-header { padding-top: 128px; padding-bottom: 40px; text-align: center; }
+        .article-meta { font-size: 14px; color: var(--text-muted); margin-bottom: 16px; }
+        .article-meta a { color: var(--purple-light); }
+        .article-body {
+            max-width: 720px; margin: 0 auto; padding: 0 24px 80px;
+            font-size: 17px; line-height: 1.8; color: var(--text);
+        }
+        .article-body h2 {
+            font-size: 28px; font-weight: 700; margin: 48px 0 16px;
+            letter-spacing: -0.01em;
+        }
+        .article-body h3 {
+            font-size: 22px; font-weight: 700; margin: 36px 0 12px;
+        }
+        .article-body p { margin-bottom: 20px; color: var(--text-muted); }
+        .article-body strong { color: var(--text); }
+        .article-body a { color: var(--purple-light); }
+        .article-body a:hover { color: var(--pink); }
+        .article-body ul, .article-body ol {
+            margin: 0 0 20px 24px; color: var(--text-muted);
+        }
+        .article-body li { margin-bottom: 8px; }
+        .article-body code {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 14px; color: var(--pink);
+            background: rgba(236, 72, 153, 0.1);
+            padding: 2px 8px; border-radius: 4px;
+        }
+        .article-body pre {
+            background: var(--dark-card);
+            border: 1px solid var(--dark-border);
+            border-radius: 12px;
+            padding: 24px;
+            overflow-x: auto;
+            margin-bottom: 24px;
+        }
+        .article-body pre code {
+            background: none; padding: 0;
+            font-size: 15px; color: #22C55E;
+        }
+        .article-back {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 14px; font-weight: 600; color: var(--text-muted);
+            margin-bottom: 24px;
+        }
+        .article-back:hover { color: var(--purple-light); }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-64.png" alt="NEXO Brain" width="32" height="32">
+            NEXO Brain
+        </a>
+        <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <div class="nav-links">
+            <a href="/features/">Features</a>
+            <a href="/compare/">Compare</a>
+            <a href="/blog/">Blog</a>
+            <a href="/changelog/">Changelog</a>
+            <a href="/docs/">Docs</a>
+>GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<article>
+    <header class="article-header">
+        <div class="container">
+            <a href="/blog/" class="article-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg> Back to Blog</a>
+            <div class="article-meta">April 4, 2026 &middot; 4 min read</div>
+            <h1 class="section-title" style="font-size:clamp(28px,4.5vw,48px);max-width:800px;margin:0 auto 16px;">NEXO 2.6.7: Your Agent Can Now Contribute Back &mdash; and Build Its Own Tools</h1>
+            <p class="section-subtitle">Opt-in contributor evolution, personal MCP plugins that survive updates, and the small improvements that make daily use noticeably better.</p>
+        </div>
+    </header>
+
+    <div class="article-body">
+
+        <p>Every release of NEXO Brain makes your agent a little more capable. Better memory retrieval, tighter security, smoother install. Incremental gains that compound over time. But v2.6.7 is different. This time, your agent can start <strong>giving back</strong>.</p>
+        <p>Two headline features define this release: a new contributor evolution system that lets any NEXO installation propose improvements to the core product, and personal MCP plugins that let you extend NEXO with custom tools that survive updates. Together, they represent a shift in how we think about the relationship between an individual NEXO instance and the project as a whole.</p>
+
+        <h2>Public Contributor Evolution</h2>
+
+        <p>Here is the idea: every NEXO installation runs on a real machine, solving real problems, every day. Your agent discovers workarounds, optimizes patterns, and builds up knowledge about what works and what does not. What if that experience could flow back to improve the product for everyone?</p>
+        <p>That is what contributor evolution does. It turns every NEXO instance into a <strong>proposal node</strong> &mdash; a machine that can think, prepare, and submit improvements, but never deploy them unilaterally.</p>
+
+        <h3>How it works</h3>
+        <p>Contributor evolution is <strong>strictly opt-in</strong>. You enable it during install or by running:</p>
+        <pre><code>nexo contributor on</code></pre>
+        <p>Once enabled, NEXO can prepare proposals in an <strong>isolated checkout</strong> of the public repository. This checkout is completely separate from your personal runtime &mdash; your data, your prompts, your logs, and your secrets are never part of any proposal. The isolation is enforced at the file-system level, not by convention.</p>
+        <p>When your agent identifies a potential improvement &mdash; a new utility function, a better default, a bug fix it discovered &mdash; it prepares the change in the isolated checkout and opens a single <strong>Draft Pull Request</strong> on GitHub. Then it pauses. No further proposals are submitted until the open one is resolved (merged or rejected).</p>
+        <p>This is deliberate. The gate is <strong>human review</strong>, not arbitrary size limits or frequency caps. Every proposal gets a pair of human eyes before it touches the codebase. Your machine can think freely, but a maintainer decides what ships.</p>
+
+        <h3>What is blocked</h3>
+        <p>The guardrails are explicit. Proposals cannot include:</p>
+        <ul>
+            <li>Personal runtime data (memories, diaries, session buffers)</li>
+            <li>System prompts or custom instructions</li>
+            <li>Log files or telemetry</li>
+            <li>Credentials, tokens, or secrets</li>
+            <li>Personal scripts from your <code>NEXO_HOME</code></li>
+        </ul>
+        <p>The philosophy is simple: proposals contain code, not context. Your agent contributes engineering, not surveillance.</p>
+
+        <h2>Personal MCP Plugins That Survive Updates</h2>
+
+        <p>This one comes directly from user feedback. People wanted to add custom MCP tools to NEXO &mdash; a tool to query their company's internal API, a shortcut for a project-specific workflow, an integration with a niche service. The problem: every time NEXO updated, custom tools in the core directory got overwritten.</p>
+        <p>The solution is a dedicated plugin system. Run:</p>
+        <pre><code>nexo_personal_plugin_create</code></pre>
+        <p>This scaffolds a new plugin inside <code>NEXO_HOME/plugins/</code> with a standard structure and an optional companion script. Plugins in this directory are <strong>loaded automatically</strong> at startup and are completely invisible to the update process. They persist across every <code>nexo update</code>, forever.</p>
+        <p>Personal plugins are intentionally kept separate from core. They never become part of the main NEXO distribution. If you build something that belongs in core, use the contributor evolution system to propose it. Otherwise, your plugin lives in your namespace, under your control, on your schedule.</p>
+
+        <h3>Example use cases</h3>
+        <ul>
+            <li><strong>Custom integrations:</strong> a tool that queries your company's inventory API and returns stock levels directly in the conversation.</li>
+            <li><strong>Project-specific tools:</strong> a plugin that runs your test suite with the exact flags and environment variables your project needs.</li>
+            <li><strong>Team workflows:</strong> a shared plugin that enforces your team's code review checklist before generating a PR description.</li>
+        </ul>
+
+        <h2>Smoother Install and Better Memory Continuity</h2>
+
+        <p>Not every change needs a headline. Some of the best improvements in 2.6.7 are the ones you feel more than you notice.</p>
+        <p><strong>Install and update progress:</strong> Previously, <code>npx nexo-brain</code> and <code>nexo update</code> could look frozen during longer operations. Now both show <strong>live progress indicators</strong> so you always know what is happening.</p>
+        <p><strong>Diary time window:</strong> <code>nexo_session_diary_read(last_day=true)</code> now returns a <strong>~36-hour window</strong> instead of truncating strictly at midnight. If you worked late last night and pick up early this morning, the context carries over seamlessly. No more losing the thread because a calendar day changed.</p>
+        <p><strong>Auto-close diary promotion:</strong> When a session ends without an explicit diary write, the auto-close handler now <strong>preserves more context</strong> &mdash; goals, next steps, and reasoning chains that previously got lost. The promoted diary entry is richer, so the next session starts with a better picture of where things left off.</p>
+        <p>These are small changes individually. Together, they make daily use noticeably better. The kind of polish that turns a tool you use into a tool you rely on.</p>
+
+        <h2>Install or update</h2>
+
+        <p>New install:</p>
+        <pre><code>npx nexo-brain</code></pre>
+        <p>Existing installation:</p>
+        <pre><code>nexo update</code></pre>
+        <p>Full changelog available on <a href="https://github.com/wazionapps/nexo/releases">GitHub Releases</a>.</p>
+
+    </div>
+</article>
+
+<!-- CTA -->
+<section class="cta-section">
+    <div class="container">
+        <h2 class="section-title">Give your agent a mind</h2>
+        <p class="section-subtitle" style="margin: 16px auto 48px;">
+            One command. Zero config. Persistent memory that actually works.
+        </p>
+        <div class="hero-actions">
+            <div class="install-block" style="margin:0 0 24px;">
+                <div><span class="prefix">$ </span><code>npx nexo-brain</code></div>
+            </div>
+        </div>
+        <div class="hero-actions">
+            <a href="https://github.com/wazionapps/nexo" class="btn btn-primary">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+                Star on GitHub
+            </a>
+            <a href="https://www.npmjs.com/package/nexo-brain" class="btn btn-secondary">
+                View on npm
+            </a>
+        </div>
+    </div>
+</section>
+
+<footer>
+    <div class="container">
+        <div class="footer-content">
+            <div class="footer-left">
+                Created by <strong>Francisco Cerd&agrave; Puigserver</strong> &amp; <strong>NEXO</strong> (Claude Opus) &bull; Built by <a href="https://www.wazion.com">WAzion</a> &bull; AGPL-3.0 License &bull; &copy; 2026
+            </div>
+            <div class="footer-links">
+                <a href="https://github.com/wazionapps/nexo">GitHub</a>
+                <a href="https://x.com/NEXOBRAIN">X / Twitter</a>
+                <a href="https://github.com/sponsors/wazionapps">Sponsor</a>
+                <a href="/docs/">Docs</a>
+                <a href="https://www.npmjs.com/package/nexo-brain">npm</a>
+                <a href="https://github.com/wazionapps/nexo/releases">Releases</a>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<!-- Cookie Consent (minimal, GDPR) -->
+<div id="cookie-consent" style="display:none;position:fixed;bottom:0;left:0;right:0;background:rgba(10,10,15,0.95);border-top:1px solid #1E1E2E;padding:12px 24px;z-index:200;font-size:13px;color:#94A3B8;text-align:center;">
+    This site uses analytics cookies to improve the experience. <a href="https://www.wazion.com/en/privacy" style="color:#A78BFA;">Privacy Policy</a>
+    <button onclick="document.getElementById('cookie-consent').style.display='none';localStorage.setItem('cc','1')" style="margin-left:16px;background:#7C3AED;color:#fff;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Accept</button>
+    <button onclick="document.getElementById('cookie-consent').style.display='none';localStorage.setItem('cc','0');window['ga-disable-G-1LNEMCJMS7']=true" style="margin-left:8px;background:transparent;color:#94A3B8;border:1px solid #333;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Decline</button>
+</div>
+<script>
+if(!localStorage.getItem('cc')){document.getElementById('cookie-consent').style.display='block';}
+else if(localStorage.getItem('cc')==='0'){window['ga-disable-G-1LNEMCJMS7']=true;}
+</script>
+
+<script>
+(function() {
+    var navLinks = document.querySelector('.nav-links');
+    var navToggle = document.querySelector('.nav-toggle');
+    navLinks.querySelectorAll('a').forEach(function(link) {
+        link.addEventListener('click', function() { navLinks.classList.remove('open'); });
+    });
+    document.addEventListener('click', function(e) {
+        if (navLinks.classList.contains('open') && !navLinks.contains(e.target) && !navToggle.contains(e.target)) {
+            navLinks.classList.remove('open');
+        }
+    });
+})();
+</script>
+
+</body>
+</html>
