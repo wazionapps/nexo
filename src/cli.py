@@ -451,7 +451,7 @@ def _update(args):
     - Packaged/runtime-only install: delegate to plugins.update handle_update()
     """
     from auto_update import manual_sync_update, _resolve_sync_source
-    from runtime_power import ensure_power_policy_choice, apply_power_policy
+    from runtime_power import ensure_power_policy_choice, apply_power_policy, format_power_policy_label
 
     interactive = sys.stdin.isatty() and sys.stdout.isatty()
 
@@ -478,11 +478,14 @@ def _update(args):
                 "message": result,
                 "power_policy": choice.get("policy"),
                 "power_action": power_result.get("action"),
+                "power_details": power_result.get("details"),
             }, indent=2, ensure_ascii=False))
         else:
             print(result)
             if choice.get("prompted"):
-                print(f"Power policy: {choice.get('policy')}")
+                print(f"Power policy: {format_power_policy_label(choice.get('policy'))}")
+            if power_result.get("message"):
+                print(f"Power helper: {power_result.get('message')}")
         return 0 if "UPDATE SUCCESSFUL" in result or "Already up to date" in result else 1
 
     choice = ensure_power_policy_choice(interactive=interactive, reason="update")
@@ -490,6 +493,9 @@ def _update(args):
     result = manual_sync_update(interactive=interactive, allow_source_pull=True)
     result["power_policy"] = choice.get("policy")
     result["power_action"] = power_result.get("action")
+    result["power_details"] = power_result.get("details")
+    if power_result.get("message"):
+        result["power_message"] = power_result.get("message")
     if args.json:
         print(json.dumps(result, indent=2, ensure_ascii=False))
     else:
@@ -502,7 +508,9 @@ def _update(args):
             if result.get("pulled_source"):
                 print("  Source repo: pulled latest fast-forward before sync")
             if choice.get("prompted"):
-                print(f"  Power policy: {choice.get('policy')}")
+                print(f"  Power policy: {format_power_policy_label(choice.get('policy'))}")
+            if power_result.get("message"):
+                print(f"  Power helper: {power_result.get('message')}")
         else:
             print(f"UPDATE FAILED: {result.get('error', 'sync failed')}", file=sys.stderr)
     return 0 if result.get("ok") else 1

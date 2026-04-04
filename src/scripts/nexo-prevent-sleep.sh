@@ -1,14 +1,20 @@
 #!/bin/bash
 # NEXO Prevent Sleep — keeps the machine awake so nocturnal processes run.
 #
-# macOS: uses caffeinate -s -i (prevent system + idle sleep)
+# macOS: uses native /usr/bin/caffeinate for best-effort background availability
 # Linux: uses systemd-inhibit or caffeine if available, otherwise no-op
 #
 # Run as LaunchAgent (KeepAlive) or systemd service.
 
 case "$(uname -s)" in
     Darwin)
-        exec caffeinate -s -i -w $$
+        if [[ ! -x /usr/bin/caffeinate ]]; then
+            echo "[NEXO] /usr/bin/caffeinate not found. macOS power helper unavailable."
+            exit 1
+        fi
+        # Keep the helper alive as long as this service runs. On laptops with the
+        # lid closed, actual behavior still depends on hardware and OS policy.
+        exec /usr/bin/caffeinate -d -i -m -s /bin/bash -lc 'while :; do sleep 3600; done'
         ;;
     Linux)
         if command -v systemd-inhibit &>/dev/null; then

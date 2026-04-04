@@ -295,7 +295,7 @@ function getDefaultSchedule(timezone) {
     timezone: timezone || "UTC",
     auto_update: true,
     power_policy: "unset",
-    power_policy_version: 1,
+    power_policy_version: 2,
     processes: {
       "cognitive-decay": { hour: 3, minute: 0 },
       "postmortem": { hour: 23, minute: 30 },
@@ -315,14 +315,19 @@ async function maybeConfigurePowerPolicy(schedule, useDefaults) {
   }
   if (useDefaults || !process.stdin.isTTY || !process.stdout.isTTY) {
     schedule.power_policy = "unset";
-    schedule.power_policy_version = 1;
+    schedule.power_policy_version = 2;
     return schedule;
   }
 
   console.log("");
   log("Optional power policy:");
-  log("If enabled, NEXO will try to keep the machine awake for background work.");
-  const answer = (await ask("  Keep this machine awake for background work? [y/N/later]: ")).trim().toLowerCase();
+  log("If enabled, NEXO will activate a platform power helper for background work.");
+  if (process.platform === "darwin") {
+    log("On macOS this uses the native caffeinate helper. Closed-lid operation depends on your setup, so wake recovery remains active.");
+  } else if (process.platform === "linux") {
+    log("On Linux this uses systemd-inhibit or caffeine when available. Closed-lid behavior depends on host power settings.");
+  }
+  const answer = (await ask("  Enable the background power helper for this machine? [y/N/later]: ")).trim().toLowerCase();
   if (answer === "y" || answer === "yes") {
     schedule.power_policy = "always_on";
   } else if (answer === "later" || answer === "l") {
@@ -330,7 +335,7 @@ async function maybeConfigurePowerPolicy(schedule, useDefaults) {
   } else {
     schedule.power_policy = "disabled";
   }
-  schedule.power_policy_version = 1;
+  schedule.power_policy_version = 2;
   fs.writeFileSync(path.join(NEXO_HOME, "config", "schedule.json"), JSON.stringify(schedule, null, 2));
   return schedule;
 }
@@ -1064,9 +1069,9 @@ async function main() {
       scanQ: "  Want me to analyze your environment to get to know you deeply?\n  Everything stays local, nothing leaves your machine.\n\n    1. Yes, analyze everything\n    2. No, I'll tell you over time\n  > ",
       scanStart: "Getting to know you... this takes 1-2 minutes.",
       scanDone: "Done.",
-      caffeinateQ: "  Keep Mac awake for my cognitive processes at night?\n  (I consolidate memory, clean duplicates, and discover connections while you sleep)\n    1. Yes\n    2. No\n  > ",
-      caffYes: "Nocturnal processes scheduled.",
-      caffNo: "Ok, I'll run them when I can.",
+      caffeinateQ: "  Enable the Mac power helper for my background processes?\n  (Uses caffeinate. Closed-lid operation depends on your setup; wake recovery stays active.)\n    1. Yes\n    2. No\n  > ",
+      caffYes: "Power helper enabled.",
+      caffNo: "Ok, wake recovery will cover missed windows.",
       dashboardQ: "  Enable web dashboard at localhost:6174?\n  (Always-on UI to explore memory, sessions, learnings, and system health)\n    1. Yes\n    2. No\n  > ",
       dashYes: "Dashboard enabled.",
       dashNo: "Dashboard disabled. You can start it manually: nexo dashboard",
@@ -1096,9 +1101,9 @@ async function main() {
       scanQ: "  ¿Quieres que analice tu entorno para conocerte a fondo?\n  Todo queda en local, nada sale de tu máquina.\n\n    1. Sí, analiza todo\n    2. No, ya te iré contando\n  > ",
       scanStart: "Conociéndote... esto toma 1-2 minutos.",
       scanDone: "Listo.",
-      caffeinateQ: "  ¿Mantengo el Mac despierto para mis procesos cognitivos nocturnos?\n  (Consolido memoria, limpio duplicados y descubro conexiones mientras duermes)\n    1. Sí\n    2. No\n  > ",
-      caffYes: "Procesos nocturnos programados.",
-      caffNo: "Ok, los ejecutaré cuando pueda.",
+      caffeinateQ: "  ¿Activo el helper de energía del Mac para mis procesos en segundo plano?\n  (Usa caffeinate. Con la tapa cerrada depende de tu setup; la recuperación al despertar sigue activa.)\n    1. Sí\n    2. No\n  > ",
+      caffYes: "Helper de energía activado.",
+      caffNo: "Ok, la recuperación al despertar cubrirá las ventanas perdidas.",
       dashboardQ: "  ¿Activar el dashboard web en localhost:6174?\n  (UI siempre activa para explorar memoria, sesiones, learnings y salud del sistema)\n    1. Sí\n    2. No\n  > ",
       dashYes: "Dashboard activado.",
       dashNo: "Dashboard desactivado. Puedes iniciarlo manualmente: nexo dashboard",
@@ -1128,9 +1133,9 @@ async function main() {
       scanQ: "  Veux-tu que j'analyse ton environnement pour te connaître en profondeur ?\n  Tout reste local.\n\n    1. Oui, analyse tout\n    2. Non, je te raconterai\n  > ",
       scanStart: "Je fais connaissance... ça prend 1-2 minutes.",
       scanDone: "Terminé.",
-      caffeinateQ: "  Garder le Mac éveillé pour mes processus nocturnes ?\n    1. Oui\n    2. Non\n  > ",
-      caffYes: "Processus nocturnes programmés.",
-      caffNo: "Ok, je les exécuterai quand possible.",
+      caffeinateQ: "  Activer l'aide énergie du Mac pour mes processus en arrière-plan ?\n  (Utilise caffeinate. Avec le capot fermé, cela dépend de votre configuration ; la reprise au réveil reste active.)\n    1. Oui\n    2. Non\n  > ",
+      caffYes: "Aide énergie activée.",
+      caffNo: "D'accord, la reprise au réveil couvrira les fenêtres manquées.",
       dashboardQ: "  Activer le dashboard web sur localhost:6174 ?\n  (UI toujours active pour explorer mémoire, sessions et santé du système)\n    1. Oui\n    2. Non\n  > ",
       dashYes: "Dashboard activé.",
       dashNo: "Dashboard désactivé. Démarrage manuel : nexo dashboard",
@@ -1160,9 +1165,9 @@ async function main() {
       scanQ: "  Soll ich deine Umgebung analysieren um dich kennenzulernen?\n  Alles bleibt lokal.\n\n    1. Ja, analysiere alles\n    2. Nein, ich erzähle dir mit der Zeit\n  > ",
       scanStart: "Lerne dich kennen... dauert 1-2 Minuten.",
       scanDone: "Fertig.",
-      caffeinateQ: "  Mac wach halten für nächtliche Prozesse?\n    1. Ja\n    2. Nein\n  > ",
-      caffYes: "Nachtprozesse geplant.",
-      caffNo: "Ok, führe sie aus wenn möglich.",
+      caffeinateQ: "  Den Mac-Energiehelfer für meine Hintergrundprozesse aktivieren?\n  (Nutzt caffeinate. Bei geschlossenem Deckel hängt das vom Setup ab; Wiederaufnahme beim Aufwachen bleibt aktiv.)\n    1. Ja\n    2. Nein\n  > ",
+      caffYes: "Energiehelfer aktiviert.",
+      caffNo: "Okay, die Wiederaufnahme beim Aufwachen deckt verpasste Fenster ab.",
       dashboardQ: "  Web-Dashboard auf localhost:6174 aktivieren?\n  (Immer aktive UI für Speicher, Sitzungen und Systemgesundheit)\n    1. Ja\n    2. Nein\n  > ",
       dashYes: "Dashboard aktiviert.",
       dashNo: "Dashboard deaktiviert. Manuell starten: nexo dashboard",
@@ -1192,9 +1197,9 @@ async function main() {
       scanQ: "  Vuoi che analizzi il tuo ambiente per conoscerti a fondo?\n  Tutto resta locale.\n\n    1. Sì, analizza tutto\n    2. No, ti racconterò col tempo\n  > ",
       scanStart: "Ti conosco... ci vogliono 1-2 minuti.",
       scanDone: "Fatto.",
-      caffeinateQ: "  Tenere il Mac sveglio per i processi notturni?\n    1. Sì\n    2. No\n  > ",
-      caffYes: "Processi notturni programmati.",
-      caffNo: "Ok, li eseguirò quando possibile.",
+      caffeinateQ: "  Attivare l'helper energetico del Mac per i processi in background?\n  (Usa caffeinate. Con il coperchio chiuso dipende dal setup; il recupero al risveglio resta attivo.)\n    1. Sì\n    2. No\n  > ",
+      caffYes: "Helper energetico attivato.",
+      caffNo: "Ok, il recupero al risveglio coprirà le finestre perse.",
       dashboardQ: "  Attivare la dashboard web su localhost:6174?\n  (UI sempre attiva per esplorare memoria, sessioni e salute del sistema)\n    1. Sì\n    2. No\n  > ",
       dashYes: "Dashboard attivata.",
       dashNo: "Dashboard disattivata. Avvio manuale: nexo dashboard",
@@ -1224,9 +1229,9 @@ async function main() {
       scanQ: "  Queres que analise o teu ambiente para te conhecer a fundo?\n  Tudo fica local.\n\n    1. Sim, analisa tudo\n    2. Não, vou-te contando\n  > ",
       scanStart: "A conhecer-te... demora 1-2 minutos.",
       scanDone: "Pronto.",
-      caffeinateQ: "  Manter o Mac acordado para processos noturnos?\n    1. Sim\n    2. Não\n  > ",
-      caffYes: "Processos noturnos agendados.",
-      caffNo: "Ok, executo quando possível.",
+      caffeinateQ: "  Ativar o helper de energia do Mac para processos em segundo plano?\n  (Usa caffeinate. Com a tampa fechada depende do teu setup; a recuperação ao despertar continua ativa.)\n    1. Sim\n    2. Não\n  > ",
+      caffYes: "Helper de energia ativado.",
+      caffNo: "Ok, a recuperação ao despertar cobrirá janelas perdidas.",
       dashboardQ: "  Ativar dashboard web em localhost:6174?\n  (UI sempre ativa para explorar memória, sessões e saúde do sistema)\n    1. Sim\n    2. Não\n  > ",
       dashYes: "Dashboard ativado.",
       dashNo: "Dashboard desativado. Iniciar manualmente: nexo dashboard",

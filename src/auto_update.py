@@ -1521,6 +1521,7 @@ def startup_preflight(*, entrypoint: str, interactive: bool = False) -> dict:
         "claude_md_update": None,
         "migrations": [],
         "power_policy": None,
+        "power_message": None,
         "error": None,
     }
 
@@ -1529,6 +1530,7 @@ def startup_preflight(*, entrypoint: str, interactive: bool = False) -> dict:
     choice = ensure_power_policy_choice(interactive=interactive, reason=entrypoint)
     power_result = apply_power_policy(choice.get("policy"))
     result["power_policy"] = choice.get("policy") or get_power_policy()
+    result["power_message"] = power_result.get("message")
     if power_result.get("ok"):
         result["actions"].append(f"power:{power_result.get('action')}")
 
@@ -1601,6 +1603,7 @@ def startup_preflight(*, entrypoint: str, interactive: bool = False) -> dict:
     result = auto_update_check()
     result["entrypoint"] = entrypoint
     result["power_policy"] = choice.get("policy") or get_power_policy()
+    result["power_message"] = power_result.get("message")
     if power_result.get("ok"):
         actions = result.setdefault("actions", [])
         actions.append(f"power:{power_result.get('action')}")

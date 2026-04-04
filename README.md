@@ -280,7 +280,7 @@ NEXO Brain doesn't just respond — it runs 14 autonomous processes in the backg
 | **postmortem** | 23:30 daily | Session consolidation, extract patterns from day's events |
 | **catchup** | On boot | Runs any missed scheduled processes (Mac was off/asleep) |
 | **tcc-approve** | On boot (macOS) | Auto-approve macOS permissions for Claude Code updates |
-| **prevent-sleep** | Optional opt-in daemon | Keeps machine awake for nocturnal processes when `power_policy=always_on` (caffeinate/systemd-inhibit) |
+| **prevent-sleep** | Optional opt-in daemon | Enables the platform power helper for best-effort background availability when `power_policy=always_on` (`caffeinate` on macOS, `systemd-inhibit`/`caffeine` on Linux) |
 | **evolution** | Weekly (Sun) | Self-improvement proposals — NEXO suggests and applies enhancements |
 | **followup-hygiene** | Weekly (Sun) | Normalizes statuses, flags stale followups, cleans orphans |
 | **learning-housekeep** | 03:15 daily | Dedup learnings, adjust weights by usage, process overdue reviews, reconcile decision outcomes |
@@ -289,7 +289,11 @@ NEXO Brain doesn't just respond — it runs 14 autonomous processes in the backg
 | **watchdog** | Every 30 min | Monitors services, LaunchAgents, and infrastructure health |
 | **auto-close-sessions** | Every 5 min | Cleans stale sessions |
 
-Core processes are defined in `src/crons/manifest.json` and auto-synced to your system by `nexo_update`. On macOS they run via LaunchAgents; on Linux via systemd user timers. `tcc-approve`, `prevent-sleep`, and `backup` are platform/personal helpers — not in the manifest but listed above for completeness. `prevent-sleep` is opt-in via the persisted power policy (`always_on` / `disabled` / `unset`). Personal scripts (your own automations) are tracked separately in the Personal Scripts Registry, can declare their own recovery policy inline, and are never touched by the core sync. If your Mac was asleep during a scheduled process, the catch-up system can now recover both core crons and managed personal schedules according to their recovery contract.
+Core processes are defined in `src/crons/manifest.json` and auto-synced to your system by `nexo_update`. On macOS they run via LaunchAgents; on Linux via systemd user timers. `tcc-approve`, `prevent-sleep`, and `backup` are platform/personal helpers — not in the manifest but listed above for completeness. `prevent-sleep` is opt-in via the persisted power policy (`always_on` / `disabled` / `unset`).
+
+`always_on` means "enable the platform power helper for best-effort background availability" — not "guaranteed 24/7 closed-lid operation on every laptop". On macOS, NEXO uses the native `caffeinate` helper. On Linux, NEXO uses `systemd-inhibit` or `caffeine` when available. In both cases, wake recovery and catch-up remain part of the contract, because host sleep, lid behavior, and power policy still depend on the machine and OS setup.
+
+Personal scripts (your own automations) are tracked separately in the Personal Scripts Registry, can declare their own recovery policy inline, and are never touched by the core sync. If your Mac was asleep during a scheduled process, the catch-up system can now recover both core crons and managed personal schedules according to their recovery contract.
 
 ## Deep Sleep v2 — Overnight Learning (v2.1.0)
 
@@ -492,7 +496,7 @@ The installer handles everything:
 
   Can I explore your workspace to learn about your projects? (y/n) > y
 
-  Keep Mac awake so my cognitive processes run on schedule? (y/n) > y
+  Enable the Mac power helper for my background processes? (y/n) > y
 
   Installing cognitive engine dependencies...
   Setting up NEXO home...
@@ -503,7 +507,7 @@ The installer handles everything:
   Setting up nervous system...
     14 autonomous processes configured.
     Dashboard configured at localhost:6174.
-  Caffeinate enabled.
+  Power helper enabled (macOS caffeinate, closed-lid best effort).
   Generating operator instructions...
 
   +----------------------------------------------------------+
