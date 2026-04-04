@@ -1,82 +1,77 @@
 # NEXO Brain
 
-> Open-source cognitive memory system for AI agents (v2.4.0)
+> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v2.6.13).
 
-NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It provides 147+ MCP tools across 23 categories including semantic RAG, knowledge graph-boosted search, HNSW vector indexing, trust scoring, episodic memory, claim graph, metacognitive error prevention, inter-terminal coordination, web dashboard v2, natural memory decay, a full nervous system of 15 autonomous processes, unified code/data architecture, auto-update on startup, auto-diary, skills system, cron scheduler, and external audit.
+NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It adds a local shared brain across supported clients, configurable terminal and automation backends, recovery-aware background jobs, a runtime CLI, self-healing schedules, and 150+ MCP tools.
+
+## Core Product Model
+
+- Shared brain is the baseline.
+- Interactive client and automation backend are configurable separately.
+- Claude Code is still the recommended path because it has the deepest hook and automation integration.
+- Codex is supported as both terminal client and automation backend.
+- Claude Desktop can share the same brain through MCP.
 
 ## Key Features
 
 - Three-store memory: Sensory Register, Short-Term Memory, Long-Term Memory
-- Semantic vector search with fastembed (BAAI/bge-base-en-v1.5, 768 dimensions)
-- Knowledge Graph-boosted search: structurally important memories rank higher
-- HNSW vector indexing: optional hnswlib acceleration, auto-activates at 10,000+ memories
-- Claim Graph: atomic verifiable claims with provenance, contradiction detection, verification status
-- Ebbinghaus forgetting curve for natural memory pruning
-- Discriminative sister memory fusion
-- Cognitive dissonance detection
-- Trust score (0-100) for internal rigor calibration
-- Metacognitive Guard: pre-edit checks with learnings and blocking rules
-- Episodic memory: change logs, decisions, session diaries with mental state continuity
-- Inter-terminal coordination: auto-inbox via PostToolUse hook, claude_session_id tracking
-- Web Dashboard v2: FastAPI with 6 pages (Overview, Operations, Calendar, Inbox), CRUD UI, sidebar nav, trust widget
-- Unified Architecture: code in repo, personal data in NEXO_HOME (~/.nexo/). Clean separation.
-- Auto-Update: non-blocking update check on startup (5s max), opt-out via schedule.json
-- Auto-Diary: 3-layer system (PostToolUse every 10 calls, PreCompact emergency, heartbeat DIARY_OVERDUE)
-- schedule.json: customizable process schedules with timezone support
-- Nervous System: 15 autonomous processes (watchdog, immune, synthesis, backup, catchup, cognitive-decay, postmortem, self-audit, sleep, deep-sleep, evolution, followup-hygiene, prevent-sleep, tcc-approve, auto-close-sessions)
-- 15 auto-installed processes: LaunchAgent plists (macOS) + systemd user timers (Linux) + crontab fallback
-- Cross-Platform: macOS (LaunchAgents), Linux (systemd/crontab), Windows (WSL) with full automated processes
-- Modular architecture: db/ package (11 modules), cognitive/ package (6 modules)
-- Adaptive Learned Weights: signal weights learn from real feedback via Ridge regression
-- Somatic Markers: pain memory per file/area with risk scoring and validated recovery
-- Adaptive Personality: 6 weighted signals (vibe, corrections, brevity, topic, tool errors, git diff)
-- Evolution System: weekly self-improvement cycle with snapshot/rollback and circuit breakers
-- Deep Sleep v2: 4-phase overnight pipeline (Collect→Extract→Synthesize→Apply) with 8 finding types including emotional signals, abandoned projects, and productivity patterns
-- Session Tone: emotional intelligence layer — adapts next-day behavior based on mood, mistakes, and productivity
-- Cron Manifest: declarative cron management (manifest.json + sync.py), auto-synced by nexo_update
-- Watchdog Level 3: auto-reexecutes missed crons, verifies repairs with post-fix checks
-- CLAUDE.md version tracker: section markers for safe core updates without losing customizations
-- Lambda decay fix: STM 7h to 7d, LTM 2.4d to 60d (was 24x too aggressive)
-- Skills System: reusable procedure library with match, create, merge, and result tracking for multi-step workflows
-- Cron Scheduler: built-in cron scheduling engine for autonomous processes via MCP tools
-- Deep Sleep Watermark & Checkpointing: resumable deep sleep with watermark-based progress tracking
-- External Audit System: structured framework for validating memory stores, cron health, trust calibration, and cognitive consistency
-- Security Fixes: hardened credential storage, sanitized MCP tool inputs, tightened file access permissions
-- Cognitive Quarantine: automated memories enter quarantine before promotion, with review/approve/reject workflow
-- 24 pytest tests with isolated databases
-- Plugin system with hot-reload
-- 100% local: SQLite + ONNX Runtime, zero cloud dependencies
+- Semantic search with local embeddings and optional HNSW acceleration
+- Claim graph, trust scoring, metacognitive guard, and cognitive dissonance detection
+- Episodic memory, followups, learnings, reminders, and session continuity
+- Context continuity across Claude Code compaction via hooks
+- Shared-brain client sync for Claude Code, Codex, and Claude Desktop
+- Configurable `nexo chat` terminal client
+- Configurable automation backend with client-specific model profiles
+- Self-healing runtime with `nexo doctor`, `nexo update`, and managed schedule reconciliation
+- Personal scripts registry with lifecycle tools and official `keep_alive` daemon support
+- Always-on local dashboard, recovery-aware crons, and overnight learning
+- Claude Code plugin packaging, OpenClaw package, and ClawHub skill
+
+## Recommended Defaults
+
+- Claude Code: recommended primary client
+- Claude Code model profile: Opus latest
+- Codex model profile: GPT-5.4 xhigh
+- Codex is supported, but Claude Code still has the richest integration depth
 
 ## Installation
 
+```bash
+npx nexo-brain
 ```
-npx nexo-brain@2.4.0
+
+## Update Existing Installations
+
+```bash
+nexo update
 ```
+
+## Re-sync Clients Later
+
+```bash
+nexo clients sync
+```
+
+## Main Commands
+
+- `nexo chat` — open the configured terminal client
+- `nexo update` — sync the installed runtime
+- `nexo doctor` — audit and repair runtime health
+- `nexo clients sync` — reconfigure shared-brain client integrations
 
 ## Documentation
 
 - Website: https://nexo-brain.com
 - Changelog: https://nexo-brain.com/changelog/
+- Blog: https://nexo-brain.com/blog/
 - Docs: https://nexo-brain.com/docs/
 - GitHub: https://github.com/wazionapps/nexo
-- Wiki: https://github.com/wazionapps/nexo/wiki
 - npm: https://www.npmjs.com/package/nexo-brain
 
-## Architecture
+## Compatibility
 
-Based on the Atkinson-Shiffrin model from cognitive psychology:
-1. Sensory Register captures raw input (30s TTL, attention filter)
-2. Short-Term Memory holds working context (rehearsal resets decay)
-3. Long-Term Memory consolidates via semantic similarity (permanent)
-
-Modular code: db/ package (11 modules: core, fts, schema, sessions, reminders, learnings, credentials, tasks, entities, episodic, evolution) and cognitive/ package (6 modules: core, search, ingest, decay, trust, memory).
-
-## API
-
-NEXO Brain exposes all functionality as MCP (Model Context Protocol) tools. Compatible with Claude Code, OpenClaw, and any MCP client.
-
-Tool categories: Cognitive (8), Cognitive Input (5), Cognitive Advanced (8), Guard (6), Episodic (12), Sessions (5), Coordination (7), Reminders (5), Followups (4), Learnings (5), Credentials (5), Task History (3), Menu (1), Entities (5), Preferences (4), Agents (5), Backup (3), Evolution (5), Adaptive & Somatic (4), Knowledge Graph (4), Claim Graph (6), Artifacts (6), Context Continuity (2), Cognitive Triggers (6), Index Management (3), Files (1), Update (1), Skills (6), and more via plugins.
+NEXO Brain exposes its capabilities as MCP tools. It is compatible with MCP-capable environments and currently has explicit shared-brain flows for Claude Code, Codex, and Claude Desktop.
 
 ## License
 
-AGPL-3.0 License. Built by WAzion (https://www.wazion.com).
+AGPL-3.0. Built by WAzion.

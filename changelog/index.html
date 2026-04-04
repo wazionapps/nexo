@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive memory system. Every feature, fix, and improvement from v0.8.10 to v2.6.9.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v2.6.13.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive memory system. Every feature, fix, and improvement from v0.8.10 to v2.6.9.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v2.6.13.">
     <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
     <meta property="og:image:width" content="1536">
     <meta property="og:image:height" content="1024">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive memory system. Every feature, fix, and improvement from v0.8.10 to v2.6.9.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v2.6.13.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
 
     <!-- Google Analytics (GA4) -->
@@ -67,6 +67,44 @@
         <div class="section-label">VERSION HISTORY</div>
         <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
         <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning.</p>
+    </div>
+</section>
+
+<!-- v2.6.13 Managed KeepAlive Personal Schedules -->
+<section id="v2613" class="section-compact" style="background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
+    <div class="container">
+        <div class="section-label">New in v2.6.13 <span style="opacity:.5;font-weight:400;">&mdash; April 4, 2026</span></div>
+        <h2 class="section-title">Managed KeepAlive Personal Schedules</h2>
+        <p class="section-subtitle">
+            NEXO now supports personal helper daemons as official managed schedules. Legacy wake-recovery installs are adopted automatically, which removes false criticals and improves runtime self-healing.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Official <code>keep_alive</code> Support</h4><p>Personal scripts can now be declared as official KeepAlive daemons instead of being limited to interval or calendar schedules.</p></div>
+                <div class="cognitive-card"><h4><code>restart_daemon</code> Recovery Policy</h4><p>New recovery contract for personal helpers that should stay alive continuously and restart automatically after sleep, wake, or process loss.</p></div>
+                <div class="cognitive-card"><h4>Legacy Wake Recovery Adopted</h4><p><code>nexo-wake-recovery</code> is backfilled with inline metadata automatically, then reconciled as a managed personal schedule instead of being treated as a strange orphan.</p></div>
+                <div class="cognitive-card"><h4>Doctor Output Matches Reality</h4><p><code>nexo doctor --tier runtime --fix</code> can now leave the runtime genuinely healthy in this scenario instead of stopping on a misleading personal-script critical.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v2.6.12 Shared Brain, Selectable Clients, Configurable Automation -->
+<section id="v2612" class="section-compact" style="background:linear-gradient(135deg,#1a0f2e 0%,#0F0A1A 100%);">
+    <div class="container">
+        <div class="section-label">New in v2.6.12 <span style="opacity:.5;font-weight:400;">&mdash; April 4, 2026</span></div>
+        <h2 class="section-title">Shared Brain Across Claude Code, Codex, and Claude Desktop</h2>
+        <p class="section-subtitle">
+            NEXO now separates shared brain, interactive client, and automation backend. Claude Code remains the recommended path, but Codex is now supported as both terminal client and background backend, and Claude Desktop can share the same brain.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4><code>nexo chat</code> No Longer Hardwired</h4><p>The runtime can open the configured terminal client instead of always launching Claude Code. Manual override also supported.</p></div>
+                <div class="cognitive-card"><h4>Client + Backend Preferences</h4><p>NEXO now persists interactive clients, default terminal client, automation backend, install preferences, and runtime model profiles.</p></div>
+                <div class="cognitive-card"><h4>Automation Runner</h4><p>Background jobs now go through a shared runner, so core agentic processes can execute under Claude Code or Codex without every script hardcoding provider-specific calls.</p></div>
+                <div class="cognitive-card"><h4>Recommended Profiles</h4><p>Current defaults: Claude Code with Opus latest, Codex with GPT-5.4 xhigh. Claude Code is still the most mature and hook-rich integration.</p></div>
+            </div>
+        </div>
     </div>
 </section>
 

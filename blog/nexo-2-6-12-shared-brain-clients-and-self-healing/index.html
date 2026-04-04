@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXO 2.6.12 + 2.6.13: Shared Brain Across Clients, Selectable Automation, and Better Self-Healing</title>
+    <meta name="description" content="NEXO Brain 2.6.12 and 2.6.13 add a shared brain across Claude Code, Codex, and Claude Desktop, selectable terminal and automation backends, client-specific model profiles, and stronger runtime self-healing.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-2-6-12-shared-brain-clients-and-self-healing/">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/blog/nexo-2-6-12-shared-brain-clients-and-self-healing/">
+    <meta property="og:title" content="NEXO 2.6.12 + 2.6.13: Shared Brain Across Clients, Selectable Automation, and Better Self-Healing">
+    <meta property="og:description" content="Claude Code, Codex, and Claude Desktop can now share one NEXO brain. Users can choose their terminal client, choose their automation backend, and benefit from stronger runtime recovery in real installations.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
+    <meta property="og:image:width" content="1536">
+    <meta property="og:image:height" content="1024">
+    <meta property="article:published_time" content="2026-04-04">
+    <meta property="article:author" content="Francisco Cerd&agrave; Puigserver">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO 2.6.12 + 2.6.13: Shared Brain Across Clients, Selectable Automation, and Better Self-Healing">
+    <meta name="twitter:description" content="Shared brain across Claude Code, Codex, and Claude Desktop, plus selectable automation backends and stronger runtime recovery.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "NEXO 2.6.12 + 2.6.13: Shared Brain Across Clients, Selectable Automation, and Better Self-Healing",
+        "description": "NEXO Brain 2.6.12 and 2.6.13 add a shared brain across Claude Code, Codex, and Claude Desktop, selectable terminal and automation backends, client-specific model profiles, and stronger runtime self-healing.",
+        "datePublished": "2026-04-04",
+        "dateModified": "2026-04-04",
+        "author": {
+            "@type": "Person",
+            "name": "Francisco Cerd\u00e0 Puigserver"
+        },
+        "publisher": {
+            "@type": "Organization",
+            "name": "WAzion",
+            "url": "https://www.wazion.com"
+        },
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https://nexo-brain.com/blog/nexo-2-6-12-shared-brain-clients-and-self-healing/"
+        },
+        "url": "https://nexo-brain.com/blog/nexo-2-6-12-shared-brain-clients-and-self-healing/",
+        "image": "https://nexo-brain.com/assets/social-preview.png",
+        "keywords": ["NEXO Brain 2.6.12", "NEXO Brain 2.6.13", "Claude Code", "Codex", "Claude Desktop", "shared brain", "automation backend", "self-healing runtime"]
+    }
+    </script>
+
+    <style>
+        .article-header { padding-top: 128px; padding-bottom: 40px; text-align: center; }
+        .article-meta { font-size: 14px; color: var(--text-muted); margin-bottom: 16px; }
+        .article-body {
+            max-width: 720px; margin: 0 auto; padding: 0 24px 80px;
+            font-size: 17px; line-height: 1.8; color: var(--text);
+        }
+        .article-body h2 { font-size: 28px; font-weight: 700; margin: 48px 0 16px; letter-spacing: -0.01em; }
+        .article-body h3 { font-size: 22px; font-weight: 700; margin: 36px 0 12px; }
+        .article-body p { margin-bottom: 20px; color: var(--text-muted); }
+        .article-body strong { color: var(--text); }
+        .article-body a { color: var(--purple-light); }
+        .article-body a:hover { color: var(--pink); }
+        .article-body ul, .article-body ol { margin: 0 0 20px 24px; color: var(--text-muted); }
+        .article-body li { margin-bottom: 8px; }
+        .article-body code {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 14px; color: var(--pink);
+            background: rgba(236, 72, 153, 0.1);
+            padding: 2px 8px; border-radius: 4px;
+        }
+        .article-body pre {
+            background: var(--dark-card);
+            border: 1px solid var(--dark-border);
+            border-radius: 12px;
+            padding: 24px;
+            overflow-x: auto;
+            margin-bottom: 24px;
+        }
+        .article-body pre code {
+            background: none; padding: 0;
+            font-size: 15px; color: #22C55E;
+        }
+        .article-back {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 14px; font-weight: 600; color: var(--text-muted);
+            margin-bottom: 24px;
+        }
+        .article-back:hover { color: var(--purple-light); }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-64.png" alt="NEXO Brain" width="32" height="32">
+            NEXO Brain
+        </a>
+        <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <div class="nav-links">
+            <a href="/features/">Features</a>
+            <a href="/compare/">Compare</a>
+            <a href="/blog/">Blog</a>
+            <a href="/changelog/">Changelog</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<article>
+    <header class="article-header">
+        <div class="container">
+            <a href="/blog/" class="article-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg> Back to Blog</a>
+            <div class="article-meta">April 4, 2026 &middot; 6 min read</div>
+            <h1 class="section-title" style="font-size:clamp(28px,4.5vw,48px);max-width:860px;margin:0 auto 16px;">NEXO 2.6.12 + 2.6.13: Shared Brain Across Clients, Selectable Automation, and Better Self-Healing</h1>
+            <p class="section-subtitle">One brain for Claude Code, Codex, and Claude Desktop. A configurable terminal client and automation backend. And a runtime that is now more honest and more self-healing in real installs.</p>
+        </div>
+    </header>
+
+    <div class="article-body">
+        <p>NEXO started as a memory layer around Claude Code. That was the right first move, because Claude Code had the deepest hooks and the most battle-tested headless automation path. But it also created a product limit: if users wanted to live in Codex or share the same memory with Claude Desktop, the brain was shared only partially and the operational story was still too Claude-centric.</p>
+        <p>Version <strong>2.6.12</strong> fixes that product model. Version <strong>2.6.13</strong> then closes an important runtime confidence gap discovered immediately after release: a false-critical scenario around legacy personal KeepAlive helpers.</p>
+
+        <h2>A Shared Brain Is Now the Baseline</h2>
+        <p>The key product decision is simple: <strong>shared brain is not optional anymore</strong>. NEXO is the brain. What users choose now is everything around it:</p>
+        <ul>
+            <li>Which interactive clients they want connected</li>
+            <li>Which client <code>nexo chat</code> should open by default</li>
+            <li>Whether they want autonomous background automation enabled</li>
+            <li>Which backend should execute that automation</li>
+        </ul>
+        <p>That means Claude Code, Codex, and Claude Desktop can now point at the same local NEXO runtime and memory system instead of behaving like disconnected islands.</p>
+
+        <h2><code>nexo chat</code> No Longer Assumes Claude Code</h2>
+        <p>Before this release, <code>nexo chat</code> effectively meant “open Claude Code.” That was fine when NEXO only had one deeply supported terminal path. It became wrong the moment users started wanting Codex as their day-to-day terminal.</p>
+        <p>Now <code>nexo chat</code> opens the terminal client the user configured during install. The runtime also keeps model profiles per client/backend, so the selected provider is not just cosmetic.</p>
+
+        <h2>Claude Code Is Still the Recommended Path</h2>
+        <p>This is important and should be communicated clearly: <strong>Claude Code remains the recommended experience</strong>. It still has the deepest hook integration, the most hardened headless execution path, and the most mature operational surface in NEXO.</p>
+        <p>Codex is now supported in two important ways:</p>
+        <ul>
+            <li>As an interactive terminal client for <code>nexo chat</code></li>
+            <li>As a configurable automation backend for background jobs</li>
+        </ul>
+        <p>Current recommended model profiles are:</p>
+        <ul>
+            <li><strong>Claude Code</strong>: Opus latest</li>
+            <li><strong>Codex</strong>: GPT-5.4 xhigh</li>
+        </ul>
+        <p>That said, Claude Code still has the richer native hook story, so the public-facing recommendation remains the same: if you want the most complete NEXO experience today, start with Claude Code.</p>
+
+        <h2>Background Jobs Now Use a Shared Automation Runner</h2>
+        <p>This is the architectural change that matters most under the surface. Core agentic jobs no longer need to inline provider-specific calls everywhere. They now route through a shared automation runner that reads the configured backend and model profile.</p>
+        <p>That means processes like synthesis, sleep, self-audit, postmortem, deep-sleep phases, immune triage, catch-up assessment, and watchdog repair can all execute under the selected backend instead of being permanently tied to Claude Code.</p>
+
+        <h2>2.6.13: Better Self-Healing in Real Installations</h2>
+        <p>Immediately after 2.6.12, a real-user runtime exposed an annoying gap: <code>nexo doctor --tier runtime --fix</code> could still leave a critical state even when the system was functionally okay. The culprit was a legacy personal daemon, <code>wake-recovery</code>, which lived as a manual KeepAlive helper outside the official personal-schedule model.</p>
+        <p>Version 2.6.13 fixes this the right way. Instead of ignoring the case, NEXO now supports personal <code>keep_alive</code> schedules officially, including the new <code>restart_daemon</code> recovery policy. Legacy <code>wake-recovery</code> installs are backfilled with official inline metadata and adopted into the normal reconcile flow.</p>
+        <p>The result is simple: fewer false criticals, more honest diagnostics, and less frustration for users who expect “doctor fixed it” to actually mean fixed.</p>
+
+        <h2>What This Means for Users</h2>
+        <ul>
+            <li>You can now keep the same brain across Claude Code, Codex, and Claude Desktop.</li>
+            <li>You can choose which terminal client <code>nexo chat</code> opens.</li>
+            <li>You can choose which backend runs NEXO's autonomous background work.</li>
+            <li>You get stronger runtime self-healing, especially around managed personal schedules.</li>
+            <li>You still get the most mature experience on Claude Code.</li>
+        </ul>
+
+        <h2>What This Means for Contributors</h2>
+        <p>NEXO is increasingly a product that needs real-world feedback from multiple ecosystems, not just one terminal. If you use Claude Code, Codex, Claude Desktop, OpenClaw, or another MCP client, this is a good moment to get involved:</p>
+        <ul>
+            <li>Open issues when a client flow feels asymmetric or misleading</li>
+            <li>Submit PRs for docs, install UX, compatibility testing, and site clarity</li>
+            <li>Help validate client/model combinations in real production workflows</li>
+        </ul>
+        <p>The project is still opinionated, but it is being built in the open and is much stronger when the public-facing copy, operational reality, and developer experience all match.</p>
+
+        <h2>Install or Update</h2>
+        <p>New install:</p>
+        <pre><code>npx nexo-brain</code></pre>
+        <p>Existing installation:</p>
+        <pre><code>nexo update</code></pre>
+        <p>Want to re-sync clients after adding a new one later?</p>
+        <pre><code>nexo clients sync</code></pre>
+        <p>Read the full release stream in the <a href="/changelog/">changelog</a> or join the discussion on <a href="https://github.com/wazionapps/nexo">GitHub</a>.</p>
+    </div>
+</article>
+
+<section class="cta-section">
+    <div class="container">
+        <h2 class="section-title">Give your agent a mind</h2>
+        <p class="section-subtitle" style="margin: 16px auto 48px;">
+            Install it, run it hard, and help improve it. Shared brain is only useful if it survives real workflows.
+        </p>
+        <div class="hero-actions">
+            <a href="https://github.com/wazionapps/nexo" class="btn btn-primary">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+                Star on GitHub
+            </a>
+            <a href="https://github.com/wazionapps/nexo/issues" class="btn btn-secondary">
+                Open an issue
+            </a>
+            <a href="https://www.npmjs.com/package/nexo-brain" class="btn btn-secondary">
+                View on npm
+            </a>
+        </div>
+    </div>
+</section>
+
+<footer>
+    <div class="container">
+        <div class="footer-content">
+            <div class="footer-left">
+                Created by <strong>Francisco Cerd&agrave; Puigserver</strong> &amp; <strong>NEXO</strong> (Claude Opus) &bull; Built by <a href="https://www.wazion.com">WAzion</a> &bull; AGPL-3.0 License &bull; &copy; 2026
+            </div>
+            <div class="footer-links">
+                <a href="https://github.com/wazionapps/nexo">GitHub</a>
+                <a href="https://x.com/NEXOBRAIN">X / Twitter</a>
+                <a href="https://github.com/sponsors/wazionapps">Sponsor</a>
+                <a href="/docs/">Docs</a>
+                <a href="/compare/">Compare</a>
+                <a href="/blog/">Blog</a>
+                <a href="https://www.npmjs.com/package/nexo-brain">npm</a>
+                <a href="https://github.com/wazionapps/nexo/releases">Releases</a>
+            </div>
+            <div style="text-align:center;margin-top:12px;color:#6b7280;font-size:12px;">Last updated: April 2026</div>
+        </div>
+    </div>
+</footer>
+
+<div id="cookie-consent" style="display:none;position:fixed;bottom:0;left:0;right:0;background:rgba(10,10,15,0.95);border-top:1px solid #1E1E2E;padding:12px 24px;z-index:200;font-size:13px;color:#94A3B8;text-align:center;">
+    This site uses analytics cookies to improve the experience. <a href="https://www.wazion.com/en/privacy" style="color:#A78BFA;">Privacy Policy</a>
+    <button onclick="document.getElementById('cookie-consent').style.display='none';localStorage.setItem('cc','1')" style="margin-left:16px;background:#7C3AED;color:#fff;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Accept</button>
+    <button onclick="document.getElementById('cookie-consent').style.display='none';localStorage.setItem('cc','0');window['ga-disable-G-1LNEMCJMS7']=true" style="margin-left:8px;background:transparent;color:#94A3B8;border:1px solid #333;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Decline</button>
+</div>
+<script>
+if(!localStorage.getItem('cc')){document.getElementById('cookie-consent').style.display='block';}
+else if(localStorage.getItem('cc')==='0'){window['ga-disable-G-1LNEMCJMS7']=true;}
+</script>
+
+<script>
+(function() {
+    var navLinks = document.querySelector('.nav-links');
+    var navToggle = document.querySelector('.nav-toggle');
+    navLinks.querySelectorAll('a').forEach(function(link) {
+        link.addEventListener('click', function() { navLinks.classList.remove('open'); });
+    });
+    document.addEventListener('click', function(e) {
+        if (navLinks.classList.contains('open') && !navLinks.contains(e.target) && !navToggle.contains(e.target)) {
+            navLinks.classList.remove('open');
+        }
+    });
+})();
+</script>
+
+</body>
+</html>
