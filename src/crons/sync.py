@@ -139,6 +139,14 @@ def _copy_into_runtime(src: Path) -> Path:
     dest = RUNTIME_ROOT / _runtime_relative_path(src)
     dest.parent.mkdir(parents=True, exist_ok=True)
 
+    try:
+        if dest.exists() and src.resolve() == dest.resolve():
+            if src.is_file() and (src.suffix in {".sh", ".py"} or os.access(src, os.X_OK)):
+                dest.chmod(0o755)
+            return dest
+    except Exception:
+        pass
+
     if src.is_dir():
         if dest.exists():
             shutil.rmtree(dest)

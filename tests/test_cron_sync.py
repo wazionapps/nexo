@@ -66,6 +66,34 @@ def test_build_plist_preserves_script_subdirectories(tmp_path, monkeypatch):
     assert (runtime_root / "scripts" / "deep-sleep" / "extract-prompt.md").is_file()
 
 
+def test_build_plist_reuses_runtime_script_when_source_already_matches_runtime(tmp_path, monkeypatch):
+    from crons import sync as cron_sync
+
+    runtime_root = tmp_path / "nexo-home"
+    scripts_dir = runtime_root / "scripts"
+    scripts_dir.mkdir(parents=True)
+    (runtime_root / "logs").mkdir(parents=True)
+
+    script = scripts_dir / "nexo-deep-sleep.sh"
+    script.write_text("#!/bin/bash\nexit 0\n")
+    script.chmod(0o755)
+    wrapper = scripts_dir / "nexo-cron-wrapper.sh"
+    wrapper.write_text("#!/bin/bash\nexit 0\n")
+    wrapper.chmod(0o755)
+    (scripts_dir / "deep-sleep").mkdir()
+    (scripts_dir / "deep-sleep" / "extract-prompt.md").write_text("prompt\n")
+
+    monkeypatch.setattr(cron_sync, "SOURCE_ROOT", runtime_root)
+    monkeypatch.setattr(cron_sync, "RUNTIME_ROOT", runtime_root)
+    monkeypatch.setattr(cron_sync, "NEXO_HOME", runtime_root)
+    monkeypatch.setattr(cron_sync, "LOG_DIR", runtime_root / "logs")
+
+    plist = cron_sync.build_plist({"id": "deep-sleep", "script": "scripts/nexo-deep-sleep.sh", "type": "shell"})
+
+    assert plist["ProgramArguments"][4] == str(script)
+    assert script.read_text() == "#!/bin/bash\nexit 0\n"
+
+
 def test_build_plist_supports_keep_alive_jobs(tmp_path, monkeypatch):
     from crons import sync as cron_sync
 
