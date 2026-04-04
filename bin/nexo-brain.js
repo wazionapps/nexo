@@ -89,6 +89,44 @@ function syncWatchdogHashRegistry(nexoHome) {
   }
 }
 
+function getCoreRuntimeFlatFiles() {
+  return [
+    "server.py",
+    "plugin_loader.py",
+    "knowledge_graph.py",
+    "kg_populate.py",
+    "maintenance.py",
+    "storage_router.py",
+    "claim_graph.py",
+    "hnsw_index.py",
+    "evolution_cycle.py",
+    "migrate_embeddings.py",
+    "auto_close_sessions.py",
+    "client_sync.py",
+    "auto_update.py",
+    "tools_sessions.py",
+    "tools_coordination.py",
+    "tools_reminders.py",
+    "tools_reminders_crud.py",
+    "tools_learnings.py",
+    "tools_credentials.py",
+    "tools_task_history.py",
+    "tools_menu.py",
+    "cli.py",
+    "script_registry.py",
+    "skills_runtime.py",
+    "user_context.py",
+    "public_contribution.py",
+    "cron_recovery.py",
+    "runtime_power.py",
+    "requirements.txt",
+  ];
+}
+
+function getCoreRuntimePackages() {
+  return ["db", "cognitive", "doctor"];
+}
+
 function isProtectedMacPath(candidate) {
   if (process.platform !== "darwin" || !candidate) return false;
   const homeDir = require("os").homedir();
@@ -981,16 +1019,7 @@ async function main() {
         log("  Hooks updated.");
 
         // Update core Python files (flat .py files in src/)
-        const coreFlatFiles = [
-          "server.py", "plugin_loader.py",
-          "knowledge_graph.py", "kg_populate.py", "maintenance.py", "storage_router.py",
-          "claim_graph.py", "hnsw_index.py", "evolution_cycle.py", "migrate_embeddings.py",
-          "auto_close_sessions.py", "auto_update.py",
-          "tools_sessions.py", "tools_coordination.py", "tools_reminders.py",
-          "tools_reminders_crud.py", "tools_learnings.py", "tools_credentials.py",
-          "tools_task_history.py", "tools_menu.py",
-          "requirements.txt",
-        ];
+        const coreFlatFiles = getCoreRuntimeFlatFiles();
         coreFlatFiles.forEach((f) => {
           const src = path.join(srcDir, f);
           if (fs.existsSync(src)) {
@@ -998,7 +1027,7 @@ async function main() {
           }
         });
         // Update core packages (db/, cognitive/) — full directory copy
-        ["db", "cognitive"].forEach(pkg => {
+        getCoreRuntimePackages().forEach(pkg => {
           const pkgSrc = path.join(srcDir, pkg);
           if (fs.existsSync(pkgSrc)) {
             copyDirRec(pkgSrc, path.join(NEXO_HOME, pkg));
@@ -1752,33 +1781,7 @@ async function main() {
   };
 
   // Core flat files (single .py files in src/)
-  const coreFiles = [
-    "server.py",
-    "plugin_loader.py",
-    "knowledge_graph.py",
-    "kg_populate.py",
-    "maintenance.py",
-    "storage_router.py",
-    "claim_graph.py",
-    "hnsw_index.py",
-    "evolution_cycle.py",
-    "migrate_embeddings.py",
-    "auto_close_sessions.py",
-    "client_sync.py",
-    "auto_update.py",
-    "tools_sessions.py",
-    "tools_coordination.py",
-    "tools_reminders.py",
-    "tools_reminders_crud.py",
-    "tools_learnings.py",
-    "tools_credentials.py",
-    "tools_task_history.py",
-    "tools_menu.py",
-    "requirements.txt",
-    "cli.py",
-    "script_registry.py",
-    "skills_runtime.py",
-  ];
+  const coreFiles = getCoreRuntimeFlatFiles();
   coreFiles.forEach((f) => {
     const src = path.join(srcDir, f);
     if (fs.existsSync(src)) {
@@ -1811,7 +1814,7 @@ async function main() {
 
   log("Copying core packages...");
   // Core packages (directories with __init__.py)
-  ["db", "cognitive", "doctor"].forEach(pkg => {
+  getCoreRuntimePackages().forEach(pkg => {
     const pkgSrc = path.join(srcDir, pkg);
     if (fs.existsSync(pkgSrc)) {
       copyDirRecursive(pkgSrc, path.join(NEXO_HOME, pkg));

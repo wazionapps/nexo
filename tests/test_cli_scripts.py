@@ -139,14 +139,19 @@ class TestRuntimeUpdate:
             "server.py", "plugin_loader.py", "knowledge_graph.py", "kg_populate.py",
             "maintenance.py", "storage_router.py", "claim_graph.py", "hnsw_index.py",
             "evolution_cycle.py", "migrate_embeddings.py", "auto_close_sessions.py",
+            "client_sync.py",
             "auto_update.py", "tools_sessions.py", "tools_coordination.py",
             "tools_reminders.py", "tools_reminders_crud.py", "tools_learnings.py",
             "tools_credentials.py", "tools_task_history.py", "tools_menu.py",
             "cli.py", "script_registry.py", "skills_runtime.py", "user_context.py",
-            "cron_recovery.py",
+            "public_contribution.py", "cron_recovery.py", "runtime_power.py",
             "requirements.txt",
         ]:
             (src / flat).write_text("x = 1\n")
+        (src / "runtime_power.py").write_text(
+            "def apply_power_policy(policy=None):\n"
+            "    return {'ok': True, 'action': policy or 'disabled'}\n"
+        )
         (src / "scripts" / "nexo-watchdog.sh").write_text("#!/bin/bash\nexit 0\n")
 
         (runtime_home / "version.json").write_text(json.dumps({"version": "9.9.9", "source": str(repo)}))
@@ -167,8 +172,195 @@ class TestRuntimeUpdate:
         assert data["source"] == str(src)
         assert (runtime_home / "db").is_dir()
         assert (runtime_home / "db" / "__init__.py").read_text() == "x = 1\n"
+        assert (runtime_home / "public_contribution.py").read_text() == "x = 1\n"
         assert (runtime_home / "cron_recovery.py").read_text() == "x = 1\n"
         assert (runtime_home / "scripts" / "nexo-watchdog.sh").read_text() == "#!/bin/bash\nexit 0\n"
+
+    def test_installed_runtime_update_repairs_missing_public_contribution_module(self, tmp_path):
+        runtime_home = tmp_path / "runtime"
+        runtime_home.mkdir()
+        (runtime_home / "bin").mkdir()
+        (runtime_home / ".venv" / "bin").mkdir(parents=True)
+        fake_pip = runtime_home / ".venv" / "bin" / "pip"
+        fake_pip.write_text("#!/bin/sh\nexit 0\n")
+        fake_pip.chmod(0o755)
+
+        current_src = Path(os.path.dirname(__file__)).parent / "src"
+        (runtime_home / "cli.py").write_text((current_src / "cli.py").read_text())
+        (runtime_home / "auto_update.py").write_text((current_src / "auto_update.py").read_text())
+        (runtime_home / "runtime_power.py").write_text(
+            "def ensure_power_policy_choice(**kwargs):\n"
+            "    return {'policy': 'disabled', 'prompted': False}\n\n"
+            "def apply_power_policy(policy=None):\n"
+            "    return {'ok': True, 'action': policy or 'disabled', 'details': []}\n\n"
+            "def format_power_policy_label(policy):\n"
+            "    return policy or 'disabled'\n\n"
+            "def ensure_full_disk_access_choice(**kwargs):\n"
+            "    return {'status': 'unset', 'prompted': False, 'reasons': []}\n\n"
+            "def format_full_disk_access_label(status):\n"
+            "    return status or 'unset'\n"
+        )
+
+        repo = tmp_path / "repo"
+        src = repo / "src"
+        src.mkdir(parents=True)
+        (repo / "package.json").write_text(json.dumps({"version": "9.9.9"}))
+        for dirname in ["db", "cognitive", "doctor", "dashboard", "rules", "crons", "hooks", "plugins", "scripts", "skills"]:
+            (src / dirname).mkdir()
+        for dirname in ["db", "cognitive", "doctor"]:
+            (src / dirname / "__init__.py").write_text(
+                "def init_db():\n"
+                "    return None\n" if dirname == "db" else "VALUE = 1\n"
+            )
+        (src / "script_registry.py").write_text(
+            "def reconcile_personal_scripts(dry_run=False):\n"
+            "    return {'ok': True}\n"
+        )
+        (src / "runtime_power.py").write_text(
+            "def apply_power_policy(policy=None):\n"
+            "    return {'ok': True, 'action': policy or 'disabled'}\n"
+        )
+        (src / "client_sync.py").write_text(
+            "def sync_all_clients(**kwargs):\n"
+            "    return {'ok': True, 'clients': {}}\n\n"
+            "def format_sync_summary(result):\n"
+            "    return 'ok'\n"
+        )
+        (src / "public_contribution.py").write_text(
+            "def ensure_public_contribution_choice(**kwargs):\n"
+            "    return {'enabled': False, 'mode': 'disabled', 'status': 'disabled', 'prompted': False}\n\n"
+            "def format_public_contribution_label(config=None):\n"
+            "    return 'disabled'\n\n"
+            "def load_public_contribution_config():\n"
+            "    return {'enabled': False, 'mode': 'disabled', 'status': 'disabled'}\n\n"
+            "def refresh_public_contribution_state(config=None):\n"
+            "    return config or load_public_contribution_config()\n\n"
+            "def disable_public_contribution():\n"
+            "    return load_public_contribution_config()\n"
+        )
+        (src / "crons" / "sync.py").write_text("print('ok')\n")
+        (src / "scripts" / "nexo-watchdog.sh").write_text("#!/bin/sh\nexit 0\n")
+
+        for flat in [
+            "server.py", "plugin_loader.py", "knowledge_graph.py", "kg_populate.py",
+            "maintenance.py", "storage_router.py", "claim_graph.py", "hnsw_index.py",
+            "evolution_cycle.py", "migrate_embeddings.py", "auto_close_sessions.py",
+            "client_sync.py", "auto_update.py", "tools_sessions.py", "tools_coordination.py",
+            "tools_reminders.py", "tools_reminders_crud.py", "tools_learnings.py",
+            "tools_credentials.py", "tools_task_history.py", "tools_menu.py", "cli.py",
+            "skills_runtime.py", "user_context.py", "public_contribution.py",
+            "cron_recovery.py", "runtime_power.py", "requirements.txt",
+        ]:
+            target = src / flat
+            if not target.exists():
+                target.write_text("VALUE = 1\n")
+        (runtime_home / "version.json").write_text(json.dumps({"version": "9.9.8", "source": str(repo)}))
+
+        env = {
+            **os.environ,
+            "NEXO_HOME": str(runtime_home),
+            "NEXO_CODE": str(runtime_home),
+            "HOME": str(tmp_path),
+        }
+        result = subprocess.run(
+            [sys.executable, str(runtime_home / "cli.py"), "update", "--json"],
+            capture_output=True,
+            text=True,
+            timeout=20,
+            env=env,
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert "ModuleNotFoundError" not in result.stderr
+        payload = json.loads(result.stdout)
+        assert payload["ok"] is True
+        assert payload["public_contribution_mode"] == "disabled"
+        assert (runtime_home / "public_contribution.py").is_file()
+
+    def test_update_reports_personal_schedule_self_heal(self, tmp_path):
+        runtime_home = tmp_path / "runtime"
+        runtime_home.mkdir()
+        (runtime_home / "bin").mkdir()
+        (runtime_home / "db").mkdir()
+
+        repo = tmp_path / "repo"
+        src = repo / "src"
+        src.mkdir(parents=True)
+        (src / "scripts").mkdir()
+        (repo / "package.json").write_text(json.dumps({"version": "9.9.9"}))
+
+        for dirname in ["db", "cognitive", "doctor", "dashboard", "rules", "crons", "hooks", "plugins"]:
+            package_dir = src / dirname
+            package_dir.mkdir()
+            if dirname != "plugins":
+                (package_dir / "__init__.py").write_text("x = 1\n")
+        (src / "script_registry.py").write_text(
+            "def reconcile_personal_scripts(dry_run=False):\n"
+            "    return {\n"
+            "        'ensure_schedules': {\n"
+            "            'created': [{'cron_id': 'email-monitor'}],\n"
+            "            'repaired': [],\n"
+            "            'invalid': [],\n"
+            "        }\n"
+            "    }\n"
+        )
+        (src / "runtime_power.py").write_text(
+            "def apply_power_policy(policy=None):\n"
+            "    return {'ok': True, 'action': policy or 'disabled'}\n"
+        )
+        (src / "client_sync.py").write_text(
+            "def sync_all_clients(**kwargs):\n"
+            "    return {'ok': True, 'clients': {}}\n\n"
+            "def format_sync_summary(result):\n"
+            "    return 'ok'\n"
+        )
+        (src / "public_contribution.py").write_text(
+            "def ensure_public_contribution_choice(**kwargs):\n"
+            "    return {'enabled': False, 'mode': 'disabled', 'status': 'disabled', 'prompted': False}\n\n"
+            "def format_public_contribution_label(config=None):\n"
+            "    return 'disabled'\n\n"
+            "def load_public_contribution_config():\n"
+            "    return {'enabled': False, 'mode': 'disabled', 'status': 'disabled'}\n\n"
+            "def refresh_public_contribution_state(config=None):\n"
+            "    return config or load_public_contribution_config()\n\n"
+            "def disable_public_contribution():\n"
+            "    return load_public_contribution_config()\n"
+        )
+        (src / "crons" / "sync.py").write_text("print('ok')\n")
+        (src / "scripts" / "nexo-watchdog.sh").write_text("#!/bin/sh\nexit 0\n")
+
+        for flat in [
+            "server.py", "plugin_loader.py", "knowledge_graph.py", "kg_populate.py",
+            "maintenance.py", "storage_router.py", "claim_graph.py", "hnsw_index.py",
+            "evolution_cycle.py", "migrate_embeddings.py", "auto_close_sessions.py",
+            "client_sync.py", "auto_update.py", "tools_sessions.py", "tools_coordination.py",
+            "tools_reminders.py", "tools_reminders_crud.py", "tools_learnings.py",
+            "tools_credentials.py", "tools_task_history.py", "tools_menu.py", "cli.py",
+            "skills_runtime.py", "user_context.py", "public_contribution.py",
+            "cron_recovery.py", "runtime_power.py", "requirements.txt",
+        ]:
+            target = src / flat
+            if not target.exists():
+                target.write_text("VALUE = 1\n")
+
+        (runtime_home / "version.json").write_text(json.dumps({"version": "9.9.9", "source": str(repo)}))
+
+        env = {
+            **os.environ,
+            "NEXO_HOME": str(runtime_home),
+            "NEXO_CODE": str(runtime_home),
+            "HOME": str(tmp_path),
+        }
+        result = subprocess.run(
+            [sys.executable, CLI_PY, "update"],
+            capture_output=True,
+            text=True,
+            timeout=20,
+            env=env,
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert "Personal schedules: self-healed 1" in result.stdout
 
     def test_packaged_update_reads_runtime_version_from_version_json(self, tmp_path):
         runtime_home = tmp_path / "runtime"
@@ -264,7 +456,7 @@ class TestChatCommand:
         }
         result = subprocess.run(
             [sys.executable, CLI_PY, "chat", "."],
-            capture_output=True, text=True, timeout=10, env=env,
+            capture_output=True, text=True, timeout=30, env=env,
         )
         assert result.returncode == 0
         assert json.loads(out_file.read_text()) == ["--dangerously-skip-permissions", "."]

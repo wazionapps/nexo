@@ -120,6 +120,30 @@ def _acquire_lock():
     return handle
 
 
+def _heal_personal_schedules() -> dict:
+    """Recreate declared personal schedules before catch-up checks missed windows."""
+    summary = {"created": 0, "repaired": 0, "invalid": 0, "error": ""}
+    try:
+        from script_registry import reconcile_personal_scripts
+
+        result = reconcile_personal_scripts(dry_run=False)
+        ensured = result.get("ensure_schedules", {})
+        summary["created"] = len(ensured.get("created", []))
+        summary["repaired"] = len(ensured.get("repaired", []))
+        summary["invalid"] = len(ensured.get("invalid", []))
+        if summary["created"] or summary["repaired"]:
+            log(
+                "Repaired declared personal schedules before catch-up: "
+                f"{summary['created']} created, {summary['repaired']} repaired."
+            )
+        if summary["invalid"]:
+            log(f"WARNING: {summary['invalid']} declared personal schedules are invalid.")
+    except Exception as e:
+        summary["error"] = str(e)
+        log(f"Personal schedule self-heal skipped: {e}")
+    return summary
+
+
 def run_task(candidate: dict, state: dict) -> bool:
     """Execute a task and update state."""
     name = candidate["cron_id"]
@@ -172,6 +196,7 @@ def main():
         log("Catch-Up already running; skipping overlapping invocation.")
         return
 
+    _heal_personal_schedules()
     state = load_state()
     tasks = catchup_candidates()
 

@@ -228,3 +228,40 @@ def test_catchup_script_runs_directly_from_runtime_root(tmp_path):
 
     assert result.returncode == 0, result.stderr
     assert "ModuleNotFoundError" not in result.stderr
+
+
+def test_catchup_script_self_heals_personal_schedules(tmp_path):
+    repo_src = Path(__file__).resolve().parent.parent / "src"
+    runtime_root = tmp_path / "runtime"
+    marker = tmp_path / "reconcile-called.txt"
+    (runtime_root / "scripts").mkdir(parents=True)
+    (runtime_root / "crons").mkdir(parents=True)
+    shutil.copy2(repo_src / "cron_recovery.py", runtime_root / "cron_recovery.py")
+    shutil.copy2(repo_src / "scripts" / "nexo-catchup.py", runtime_root / "scripts" / "nexo-catchup.py")
+    (runtime_root / "crons" / "manifest.json").write_text('{"crons":[]}')
+    (runtime_root / "script_registry.py").write_text(
+        "from pathlib import Path\n"
+        f"MARKER = Path({marker.as_posix()!r})\n"
+        "def reconcile_personal_scripts(dry_run=False):\n"
+        "    MARKER.write_text('called')\n"
+        "    return {'ensure_schedules': {'created': [{'cron_id': 'email-monitor'}], 'repaired': [], 'invalid': []}}\n"
+    )
+
+    home = tmp_path / "home"
+    home.mkdir()
+    result = subprocess.run(
+        [sys.executable, str(runtime_root / "scripts" / "nexo-catchup.py")],
+        capture_output=True,
+        text=True,
+        timeout=10,
+        env={
+            **os.environ,
+            "HOME": str(home),
+            "NEXO_HOME": str(runtime_root),
+            "NEXO_CODE": str(runtime_root),
+        },
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert marker.read_text() == "called"
+    assert "Repaired declared personal schedules before catch-up: 1 created, 0 repaired." in result.stdout

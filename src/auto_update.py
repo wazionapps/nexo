@@ -1202,6 +1202,7 @@ def _backup_runtime_tree(dest: Path = NEXO_HOME) -> str:
         "tools_reminders.py", "tools_reminders_crud.py", "tools_learnings.py",
         "tools_credentials.py", "tools_task_history.py", "tools_menu.py",
         "cli.py", "script_registry.py", "skills_runtime.py", "user_context.py",
+        "public_contribution.py",
         "cron_recovery.py", "runtime_power.py", "requirements.txt", "package.json", "version.json",
     ]
     for name in code_dirs:
@@ -1250,6 +1251,7 @@ def _copy_runtime_from_source(src_dir: Path, repo_dir: Path, dest: Path = NEXO_H
         "tools_reminders.py", "tools_reminders_crud.py", "tools_learnings.py",
         "tools_credentials.py", "tools_task_history.py", "tools_menu.py",
         "cli.py", "script_registry.py", "skills_runtime.py", "user_context.py",
+        "public_contribution.py",
         "cron_recovery.py", "runtime_power.py", "requirements.txt",
     ]
     copied_packages = 0
@@ -1383,12 +1385,14 @@ def _run_runtime_post_sync(dest: Path = NEXO_HOME, progress_fn=None) -> tuple[bo
                 sys.executable,
                 "-c",
                 (
+                    "import json; "
                     "import db; "
                     "init_db = getattr(db, 'init_db', None); "
                     "init_db() if callable(init_db) else None; "
                     "import script_registry; "
                     "reconcile_scripts = getattr(script_registry, 'reconcile_personal_scripts', None); "
-                    "reconcile_scripts(dry_run=False) if callable(reconcile_scripts) else None"
+                    "result = reconcile_scripts(dry_run=False) if callable(reconcile_scripts) else {}; "
+                    "print(json.dumps(result))"
                 ),
             ],
             cwd=str(dest),
@@ -1400,6 +1404,11 @@ def _run_runtime_post_sync(dest: Path = NEXO_HOME, progress_fn=None) -> tuple[bo
         if init_result.returncode != 0:
             return False, [init_result.stderr.strip() or init_result.stdout.strip() or "runtime init failed"]
         actions.append("db+personal-sync")
+        reconcile_payload = _parse_runtime_init_payload(init_result.stdout or "")
+        extra_actions, reconcile_message = _personal_schedule_reconcile_summary(reconcile_payload)
+        actions.extend(extra_actions)
+        if reconcile_message:
+            _emit_progress(progress_fn, reconcile_message)
     except Exception as e:
         return False, [f"runtime init error: {e}"]
 
@@ -1491,6 +1500,46 @@ def _emit_progress(progress_fn, message: str) -> None:
             progress_fn(message)
         except Exception:
             pass
+
+
+def _parse_runtime_init_payload(stdout: str) -> dict:
+    """Extract the JSON payload emitted by the runtime init helper."""
+    lines = [line.strip() for line in stdout.splitlines() if line.strip()]
+    for line in reversed(lines):
+        try:
+            payload = json.loads(line)
+        except Exception:
+            continue
+        if isinstance(payload, dict):
+            return payload
+    return {}
+
+
+def _personal_schedule_reconcile_summary(reconcile_result: dict) -> tuple[list[str], str | None]:
+    """Turn reconcile_personal_scripts() output into stable update actions."""
+    if not isinstance(reconcile_result, dict):
+        return [], None
+
+    ensured = reconcile_result.get("ensure_schedules", {})
+    if not isinstance(ensured, dict):
+        return [], None
+
+    created = len(ensured.get("created", []) or [])
+    repaired = len(ensured.get("repaired", []) or [])
+    invalid = len(ensured.get("invalid", []) or [])
+
+    actions: list[str] = []
+    parts: list[str] = []
+    if created or repaired:
+        actions.append(f"personal-schedules-healed:{created + repaired}")
+        parts.append(f"{created} created")
+        parts.append(f"{repaired} repaired")
+    if invalid:
+        actions.append(f"personal-schedules-invalid:{invalid}")
+        parts.append(f"{invalid} invalid")
+    if not parts:
+        return [], None
+    return actions, "Personal schedules: " + ", ".join(parts) + "."
 
 
 def manual_sync_update(*, interactive: bool = False, allow_source_pull: bool = True, progress_fn=None) -> dict:
@@ -1599,8 +1648,12 @@ def startup_preflight(*, entrypoint: str, interactive: bool = False) -> dict:
             _ensure_runtime_cli_wrapper()
             _ensure_runtime_cli_in_shell()
             init_db()
-            reconcile_personal_scripts(dry_run=False)
+            reconcile_result = reconcile_personal_scripts(dry_run=False)
             result["actions"].append("db+personal-sync")
+            extra_actions, reconcile_message = _personal_schedule_reconcile_summary(reconcile_result)
+            result["actions"].extend(extra_actions)
+            if reconcile_message:
+                _log(reconcile_message)
         except Exception as e:
             result["error"] = str(e)
             _write_update_summary(result)

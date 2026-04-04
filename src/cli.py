@@ -64,6 +64,123 @@ if str(NEXO_CODE) not in sys.path:
     sys.path.insert(0, str(NEXO_CODE))
 
 
+def _missing_runtime_module_message(module_name: str, exc: Exception) -> str:
+    missing = getattr(exc, "name", None) or module_name
+    return (
+        f"{module_name} is unavailable in the current runtime ({missing}). "
+        "Continuing with safe defaults so `nexo update` can repair the installation."
+    )
+
+
+def _load_runtime_power_support() -> dict:
+    try:
+        from runtime_power import (
+            ensure_power_policy_choice,
+            apply_power_policy,
+            format_power_policy_label,
+            ensure_full_disk_access_choice,
+            format_full_disk_access_label,
+        )
+        return {
+            "available": True,
+            "message": "",
+            "ensure_power_policy_choice": ensure_power_policy_choice,
+            "apply_power_policy": apply_power_policy,
+            "format_power_policy_label": format_power_policy_label,
+            "ensure_full_disk_access_choice": ensure_full_disk_access_choice,
+            "format_full_disk_access_label": format_full_disk_access_label,
+        }
+    except ImportError as exc:
+        message = _missing_runtime_module_message("runtime_power", exc)
+
+        def ensure_power_policy_choice(**kwargs):
+            return {"policy": "disabled", "prompted": False, "message": message}
+
+        def apply_power_policy(policy=None):
+            return {"ok": True, "action": "skipped", "details": [], "message": message}
+
+        def format_power_policy_label(policy):
+            return policy or "disabled"
+
+        def ensure_full_disk_access_choice(**kwargs):
+            return {"status": "unset", "prompted": False, "reasons": [], "message": message}
+
+        def format_full_disk_access_label(status):
+            return status or "unset"
+
+        return {
+            "available": False,
+            "message": message,
+            "ensure_power_policy_choice": ensure_power_policy_choice,
+            "apply_power_policy": apply_power_policy,
+            "format_power_policy_label": format_power_policy_label,
+            "ensure_full_disk_access_choice": ensure_full_disk_access_choice,
+            "format_full_disk_access_label": format_full_disk_access_label,
+        }
+
+
+def _load_public_contribution_support() -> dict:
+    try:
+        from public_contribution import (
+            ensure_public_contribution_choice,
+            format_public_contribution_label,
+            load_public_contribution_config,
+            refresh_public_contribution_state,
+            disable_public_contribution,
+        )
+        return {
+            "available": True,
+            "message": "",
+            "ensure_public_contribution_choice": ensure_public_contribution_choice,
+            "format_public_contribution_label": format_public_contribution_label,
+            "load_public_contribution_config": load_public_contribution_config,
+            "refresh_public_contribution_state": refresh_public_contribution_state,
+            "disable_public_contribution": disable_public_contribution,
+        }
+    except ImportError as exc:
+        message = _missing_runtime_module_message("public_contribution", exc)
+
+        def _default_config(config=None):
+            payload = {
+                "enabled": False,
+                "mode": "disabled",
+                "status": "unavailable",
+                "prompted": False,
+                "message": message,
+            }
+            if isinstance(config, dict):
+                payload.update(config)
+            return payload
+
+        def ensure_public_contribution_choice(**kwargs):
+            return _default_config()
+
+        def format_public_contribution_label(config=None):
+            cfg = _default_config(config)
+            if cfg.get("status") == "unavailable":
+                return "disabled (runtime repair needed)"
+            return cfg.get("mode") or "disabled"
+
+        def load_public_contribution_config():
+            return _default_config()
+
+        def refresh_public_contribution_state(config=None):
+            return _default_config(config)
+
+        def disable_public_contribution():
+            return _default_config()
+
+        return {
+            "available": False,
+            "message": message,
+            "ensure_public_contribution_choice": ensure_public_contribution_choice,
+            "format_public_contribution_label": format_public_contribution_label,
+            "load_public_contribution_config": load_public_contribution_config,
+            "refresh_public_contribution_state": refresh_public_contribution_state,
+            "disable_public_contribution": disable_public_contribution,
+        }
+
+
 def _scripts_list(args):
     from db import init_db, list_personal_scripts
     from script_registry import list_scripts, sync_personal_scripts
@@ -453,17 +570,6 @@ def _update(args):
     - Packaged/runtime-only install: delegate to plugins.update handle_update()
     """
     from auto_update import manual_sync_update, _resolve_sync_source
-    from runtime_power import (
-        ensure_power_policy_choice,
-        apply_power_policy,
-        format_power_policy_label,
-        ensure_full_disk_access_choice,
-        format_full_disk_access_label,
-    )
-    from public_contribution import (
-        ensure_public_contribution_choice,
-        format_public_contribution_label,
-    )
 
     interactive = sys.stdin.isatty() and sys.stdout.isatty()
     progress_messages: list[str] = []
@@ -488,10 +594,12 @@ def _update(args):
             return 1
 
         result = handle_update(progress_fn=progress)
-        choice = ensure_power_policy_choice(interactive=interactive, reason="update")
-        power_result = apply_power_policy(choice.get("policy"))
-        fda_choice = ensure_full_disk_access_choice(interactive=interactive, reason="update")
-        contrib_choice = ensure_public_contribution_choice(interactive=interactive, reason="update")
+        runtime_power = _load_runtime_power_support()
+        public_contribution = _load_public_contribution_support()
+        choice = runtime_power["ensure_power_policy_choice"](interactive=interactive, reason="update")
+        power_result = runtime_power["apply_power_policy"](choice.get("policy"))
+        fda_choice = runtime_power["ensure_full_disk_access_choice"](interactive=interactive, reason="update")
+        contrib_choice = public_contribution["ensure_public_contribution_choice"](interactive=interactive, reason="update")
         if args.json:
             print(json.dumps({
                 "mode": "packaged",
@@ -510,24 +618,26 @@ def _update(args):
         else:
             print(result)
             if choice.get("prompted"):
-                print(f"Power policy: {format_power_policy_label(choice.get('policy'))}")
+                print(f"Power policy: {runtime_power['format_power_policy_label'](choice.get('policy'))}")
             if power_result.get("message"):
                 print(f"Power helper: {power_result.get('message')}")
             if fda_choice.get("prompted"):
-                print(f"Full Disk Access: {format_full_disk_access_label(fda_choice.get('status'))}")
+                print(f"Full Disk Access: {runtime_power['format_full_disk_access_label'](fda_choice.get('status'))}")
             if fda_choice.get("message"):
                 print(f"Full Disk Access: {fda_choice.get('message')}")
             if contrib_choice.get("prompted"):
-                print(f"Contributor mode: {format_public_contribution_label(contrib_choice)}")
+                print(f"Contributor mode: {public_contribution['format_public_contribution_label'](contrib_choice)}")
             if contrib_choice.get("message"):
                 print(f"Contributor mode: {contrib_choice.get('message')}")
         return 0 if "UPDATE SUCCESSFUL" in result or "Already up to date" in result else 1
 
-    choice = ensure_power_policy_choice(interactive=interactive, reason="update")
-    power_result = apply_power_policy(choice.get("policy"))
-    fda_choice = ensure_full_disk_access_choice(interactive=interactive, reason="update")
-    contrib_choice = ensure_public_contribution_choice(interactive=interactive, reason="update")
     result = manual_sync_update(interactive=interactive, allow_source_pull=True, progress_fn=progress)
+    runtime_power = _load_runtime_power_support()
+    public_contribution = _load_public_contribution_support()
+    choice = runtime_power["ensure_power_policy_choice"](interactive=interactive, reason="update")
+    power_result = runtime_power["apply_power_policy"](choice.get("policy"))
+    fda_choice = runtime_power["ensure_full_disk_access_choice"](interactive=interactive, reason="update")
+    contrib_choice = public_contribution["ensure_public_contribution_choice"](interactive=interactive, reason="update")
     result["power_policy"] = choice.get("policy")
     result["power_action"] = power_result.get("action")
     result["power_details"] = power_result.get("details")
@@ -551,18 +661,35 @@ def _update(args):
                 f"  {result.get('packages', 0)} packages, {result.get('files', 0)} files synced from "
                 f"{result.get('source', src_dir)}"
             )
+            healed = 0
+            invalid = 0
+            for action in result.get("actions", []):
+                if action.startswith("personal-schedules-healed:"):
+                    try:
+                        healed += int(action.split(":", 1)[1])
+                    except ValueError:
+                        pass
+                elif action.startswith("personal-schedules-invalid:"):
+                    try:
+                        invalid += int(action.split(":", 1)[1])
+                    except ValueError:
+                        pass
+            if healed:
+                print(f"  Personal schedules: self-healed {healed}")
+            if invalid:
+                print(f"  Personal schedules: {invalid} declarations need review")
             if result.get("pulled_source"):
                 print("  Source repo: pulled latest fast-forward before sync")
             if choice.get("prompted"):
-                print(f"  Power policy: {format_power_policy_label(choice.get('policy'))}")
+                print(f"  Power policy: {runtime_power['format_power_policy_label'](choice.get('policy'))}")
             if power_result.get("message"):
                 print(f"  Power helper: {power_result.get('message')}")
             if fda_choice.get("prompted"):
-                print(f"  Full Disk Access: {format_full_disk_access_label(fda_choice.get('status'))}")
+                print(f"  Full Disk Access: {runtime_power['format_full_disk_access_label'](fda_choice.get('status'))}")
             if fda_choice.get("message"):
                 print(f"  Full Disk Access: {fda_choice.get('message')}")
             if contrib_choice.get("prompted"):
-                print(f"  Contributor mode: {format_public_contribution_label(contrib_choice)}")
+                print(f"  Contributor mode: {public_contribution['format_public_contribution_label'](contrib_choice)}")
             if contrib_choice.get("message"):
                 print(f"  Contributor mode: {contrib_choice.get('message')}")
         else:
@@ -582,29 +709,29 @@ def _clients_sync(args):
 
 
 def _contributor_status(args):
-    from public_contribution import (
-        format_public_contribution_label,
-        load_public_contribution_config,
-        refresh_public_contribution_state,
+    public_contribution = _load_public_contribution_support()
+    config = public_contribution["refresh_public_contribution_state"](
+        public_contribution["load_public_contribution_config"]()
     )
-
-    config = refresh_public_contribution_state(load_public_contribution_config())
     payload = {
         "enabled": bool(config.get("enabled")),
         "mode": config.get("mode"),
         "status": config.get("status"),
-        "label": format_public_contribution_label(config),
+        "label": public_contribution["format_public_contribution_label"](config),
         "github_user": config.get("github_user"),
         "fork_repo": config.get("fork_repo"),
         "active_pr_url": config.get("active_pr_url"),
         "active_branch": config.get("active_branch"),
         "cooldown_until": config.get("cooldown_until"),
         "last_result": config.get("last_result"),
+        "message": config.get("message") or public_contribution.get("message"),
     }
     if args.json:
         print(json.dumps(payload, indent=2, ensure_ascii=False))
     else:
         print(f"Contributor mode: {payload['label']}")
+        if payload["message"]:
+            print(f"  {payload['message']}")
         if payload["github_user"]:
             print(f"  GitHub user: {payload['github_user']}")
         if payload["fork_repo"]:
@@ -619,30 +746,40 @@ def _contributor_status(args):
 
 
 def _contributor_on(args):
-    from public_contribution import ensure_public_contribution_choice, format_public_contribution_label
+    public_contribution = _load_public_contribution_support()
 
     interactive = sys.stdin.isatty() and sys.stdout.isatty()
     if not interactive:
         print("Contributor mode requires an interactive terminal to confirm GitHub Draft PR consent.", file=sys.stderr)
         return 1
-    config = ensure_public_contribution_choice(interactive=True, reason="contributor", force_prompt=True)
+    if not public_contribution["available"]:
+        print(public_contribution["message"], file=sys.stderr)
+        return 1
+    config = public_contribution["ensure_public_contribution_choice"](
+        interactive=True,
+        reason="contributor",
+        force_prompt=True,
+    )
     if args.json:
         print(json.dumps(config, indent=2, ensure_ascii=False))
     else:
-        print(f"Contributor mode: {format_public_contribution_label(config)}")
+        print(f"Contributor mode: {public_contribution['format_public_contribution_label'](config)}")
         if config.get("message"):
             print(config.get("message"))
     return 0 if config.get("mode") == "draft_prs" else 1
 
 
 def _contributor_off(args):
-    from public_contribution import disable_public_contribution, format_public_contribution_label
+    public_contribution = _load_public_contribution_support()
 
-    config = disable_public_contribution()
+    if not public_contribution["available"]:
+        print(public_contribution["message"], file=sys.stderr)
+        return 1
+    config = public_contribution["disable_public_contribution"]()
     if args.json:
         print(json.dumps(config, indent=2, ensure_ascii=False))
     else:
-        print(f"Contributor mode: {format_public_contribution_label(config)}")
+        print(f"Contributor mode: {public_contribution['format_public_contribution_label'](config)}")
     return 0
 
 
