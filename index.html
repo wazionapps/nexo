@@ -286,7 +286,7 @@
                 "name": "Can I use NEXO Brain in production?",
                 "acceptedAnswer": {
                     "@type": "Answer",
-                    "text": "Yes. NEXO Brain is designed for continuous, production-grade operation. It runs 24/7 with 14 autonomous processes (nightly decay, deep sleep analysis, watchdog monitoring, immune system, synthesis, backup, prevent-sleep, and more), handles concurrent sessions, and includes backup/restore capabilities. It has been battle-tested in real daily operations."
+                    "text": "Yes. NEXO Brain is designed for continuous, production-grade operation. It runs 24/7 with 13 core recovery-aware jobs plus optional helpers, handles concurrent sessions, and includes backup and recovery tooling for runtime continuity. It has been battle-tested in real daily operations."
                 }
             },
             {
@@ -318,7 +318,7 @@
                 "name": "What is the nervous system?",
                 "acceptedAnswer": {
                     "@type": "Answer",
-                    "text": "The nervous system is a collection of 14 autonomous processes that run on schedule without user intervention: watchdog, immune system, daily synthesis, backup, catchup, cognitive decay, postmortem, self-audit, sleep, deep sleep, evolution, followup hygiene, prevent-sleep, tcc-approve, and auto-close-sessions."
+                    "text": "The nervous system is the set of 13 core recovery-aware jobs that keep NEXO healthy and learning in the background, plus optional helpers when needed. It covers watchdog, immune, synthesis, catch-up, decay, sleep, deep sleep, self-audit, postmortem, evolution, followup hygiene, auto-close-sessions, and related runtime recovery flows."
                 }
             },
             {
@@ -587,8 +587,8 @@
         </div>
         <div class="stat">
             <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg></div>
-            <div class="stat-value">25</div>
-            <div class="stat-label">Categories</div>
+            <div class="stat-value">23</div>
+            <div class="stat-label">Tool Categories</div>
         </div>
         <div class="stat">
             <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg></div>
@@ -597,8 +597,8 @@
         </div>
         <div class="stat">
             <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
-            <div class="stat-value">15</div>
-            <div class="stat-label">Autonomous Processes</div>
+            <div class="stat-value">13</div>
+            <div class="stat-label">Core Jobs</div>
         </div>
         <div class="stat">
             <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
@@ -1076,7 +1076,7 @@
                     <span>Can I use NEXO Brain in production?</span>
                     <svg class="faq-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                 </summary>
-                <div class="faq-answer">Yes. NEXO Brain is designed for continuous, production-grade operation. It runs 24/7 with 14 autonomous processes (nightly decay, deep sleep analysis, watchdog monitoring, immune system, synthesis, backup, prevent-sleep, and more), handles concurrent sessions, and includes backup/restore capabilities.</div>
+                <div class="faq-answer">Yes. NEXO Brain is designed for continuous, production-grade operation. It runs 24/7 with 13 core recovery-aware jobs plus optional helpers, handles concurrent sessions, and includes backup and recovery tooling for runtime continuity.</div>
             </details>
 
             <details class="faq-item">
@@ -1084,7 +1084,7 @@
                     <span>What are LaunchAgent templates?</span>
                     <svg class="faq-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                 </summary>
-                <div class="faq-answer">NEXO Brain v2.0.0 ships with 14 auto-installed processes via LaunchAgent plists on macOS and systemd timers on Linux. All processes (watchdog, cognitive decay, deep sleep, evolution, prevent-sleep, tcc-approve, backup, etc.) are configured automatically during installation. Customizable via schedule.json.</div>
+                <div class="faq-answer">NEXO Brain installs 13 core recovery-aware jobs and can also manage optional helper processes such as prevent-sleep and permission helpers depending on platform and configuration. Everything is reconciled through the runtime and customizable via schedule.json.</div>
             </details>
 
             <details class="faq-item">
@@ -1108,7 +1108,7 @@
                     <span>What is the nervous system?</span>
                     <svg class="faq-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                 </summary>
-                <div class="faq-answer">The nervous system is a collection of 14 autonomous processes that run on schedule without user intervention: watchdog, immune system, daily synthesis, backup, catchup, cognitive decay, postmortem, self-audit, sleep, deep sleep, evolution, followup hygiene, prevent-sleep, tcc-approve, and auto-close-sessions. All are auto-installed and customizable via schedule.json.</div>
+                <div class="faq-answer">The nervous system is the set of 13 core recovery-aware jobs that keep NEXO healthy and learning in the background, plus optional helpers when needed. It covers watchdog, immune, synthesis, catch-up, decay, sleep, deep sleep, self-audit, postmortem, evolution, followup hygiene, auto-close-sessions, and related runtime recovery flows.</div>
             </details>
 
             <details class="faq-item">
