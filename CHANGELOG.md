@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.6.9] - 2026-04-04
+
+### Release Workflow Fix
+- Fixed the integration release workflow YAML so the automated post-publish ClawHub verification runs correctly during tagged releases.
+
 ## [2.6.8] - 2026-04-04
 
 ### Integration Release Integrity

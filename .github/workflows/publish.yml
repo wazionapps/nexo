@@ -91,15 +91,15 @@ jobs:
           tmpdir="$(mktemp -d)"
           npx clawhub@latest install nexo-brain --dir "$tmpdir" --force
           python3 - "$tmpdir" "${GITHUB_REF_NAME#v}" <<'PY'
-import json, pathlib, sys
-root = pathlib.Path(sys.argv[1]) / "nexo-brain"
-expected_version = sys.argv[2]
-meta = json.loads((root / "_meta.json").read_text())
-skill = (root / "SKILL.md").read_text()
-assert meta["version"] == expected_version, f"ClawHub version mismatch: {meta['version']} != {expected_version}"
-assert "~/.nexo/server.py" in skill, "published ClawHub skill still points at the wrong server path"
-assert "~/.nexo/src/server.py" not in skill, "published ClawHub skill still uses obsolete src/server.py path"
-PY
+          import json, pathlib, sys
+          root = pathlib.Path(sys.argv[1]) / "nexo-brain"
+          expected_version = sys.argv[2]
+          meta = json.loads((root / "_meta.json").read_text())
+          skill = (root / "SKILL.md").read_text()
+          assert meta["version"] == expected_version, f"ClawHub version mismatch: {meta['version']} != {expected_version}"
+          assert "~/.nexo/server.py" in skill, "published ClawHub skill still points at the wrong server path"
+          assert "~/.nexo/src/server.py" not in skill, "published ClawHub skill still uses obsolete src/server.py path"
+          PY
 
       # 4. Create GitHub Release
       - name: Create GitHub Release

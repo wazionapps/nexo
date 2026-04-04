@@ -46,12 +46,12 @@ jobs:
           find "$tmpdir" -maxdepth 3 -type f | sort
           expected_version="$(git tag --list 'v*' --sort=-version:refname | head -n 1 | sed 's/^v//')"
           python3 - "$tmpdir" "$expected_version" <<'PY'
-import json, pathlib, sys
-root = pathlib.Path(sys.argv[1]) / "nexo-brain"
-expected_version = sys.argv[2]
-meta = json.loads((root / "_meta.json").read_text())
-skill = (root / "SKILL.md").read_text()
-assert meta["version"] == expected_version, f"ClawHub version mismatch: {meta['version']} != {expected_version}"
-assert "~/.nexo/server.py" in skill, "public ClawHub skill still points at the wrong server path"
-assert "~/.nexo/src/server.py" not in skill, "public ClawHub skill still uses obsolete src/server.py path"
-PY
+          import json, pathlib, sys
+          root = pathlib.Path(sys.argv[1]) / "nexo-brain"
+          expected_version = sys.argv[2]
+          meta = json.loads((root / "_meta.json").read_text())
+          skill = (root / "SKILL.md").read_text()
+          assert meta["version"] == expected_version, f"ClawHub version mismatch: {meta['version']} != {expected_version}"
+          assert "~/.nexo/server.py" in skill, "public ClawHub skill still points at the wrong server path"
+          assert "~/.nexo/src/server.py" not in skill, "public ClawHub skill still uses obsolete src/server.py path"
+          PY
