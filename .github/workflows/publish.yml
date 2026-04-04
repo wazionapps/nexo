@@ -109,8 +109,8 @@ jobs:
             echo "ClawHub listing not updated yet (attempt $attempt/8). Waiting 20s..."
             sleep 20
           done
-          echo "ClawHub verification timed out waiting for version ${expected}" >&2
-          exit 1
+          echo "::warning::ClawHub verification timed out waiting for version ${expected}. Publish step succeeded, but the public listing is still propagating."
+          exit 0
 
       # 4. Create GitHub Release
       - name: Create GitHub Release
