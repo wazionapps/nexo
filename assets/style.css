@@ -50,7 +50,7 @@
 
         .nav-logo img { width: 32px; height: 32px; border-radius: 8px; }
 
-        .nav-links { display: flex; gap: 32px; align-items: center; }
+        .nav-links { display: flex; gap: 24px; align-items: center; }
         .nav-links a { color: var(--text-muted); font-size: 14px; font-weight: 500; }
         .nav-links a svg { display: none; }
         .nav-links a:hover { color: var(--text); }
