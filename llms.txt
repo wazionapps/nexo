@@ -48,6 +48,7 @@ NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cogniti
 - Managed Evolution: can modify core behavior modules with rollback followups
 - 142+ pytest tests with isolated databases
 - Plugin system with hot-reload
+- Claude Code Plugin: submitted to Anthropic's official plugin marketplace (pending review)
 - 100% local: SQLite + ONNX Runtime, zero cloud dependencies
 
 ## Installation
