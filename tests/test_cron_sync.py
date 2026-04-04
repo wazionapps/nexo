@@ -268,6 +268,8 @@ def test_sync_script_runs_directly_from_runtime_root(tmp_path):
     shutil.copy2(repo_src / "cron_recovery.py", runtime_root / "cron_recovery.py")
     shutil.copy2(repo_src / "crons" / "sync.py", runtime_root / "crons" / "sync.py")
     (runtime_root / "crons" / "manifest.json").write_text('{"crons":[]}')
+    (runtime_root / "scripts").mkdir(parents=True, exist_ok=True)
+    shutil.copy2(repo_src / "scripts" / "nexo-cron-wrapper.sh", runtime_root / "scripts" / "nexo-cron-wrapper.sh")
 
     home = tmp_path / "home"
     home.mkdir()
