@@ -350,8 +350,147 @@
     </script>
 
     <link rel="stylesheet" href="/assets/style.css">
+
+    <style>
+    /* ===== Neural Canvas ===== */
+    #neural-canvas {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        z-index: 0; pointer-events: none;
+    }
+    .hero { position: relative; overflow: hidden; }
+    .hero .container { position: relative; z-index: 1; }
+
+    /* ===== Scroll Reveal Classes ===== */
+    .reveal-left { opacity: 0; transform: translateX(-60px); transition: all 0.8s cubic-bezier(0.16,1,0.3,1); }
+    .reveal-right { opacity: 0; transform: translateX(60px); transition: all 0.8s cubic-bezier(0.16,1,0.3,1); }
+    .reveal-up { opacity: 0; transform: translateY(40px); transition: all 0.7s cubic-bezier(0.16,1,0.3,1); }
+    .reveal-scale { opacity: 0; transform: scale(0.9); transition: all 0.6s cubic-bezier(0.16,1,0.3,1); }
+    .revealed { opacity: 1 !important; transform: none !important; }
+    .stagger-1 { transition-delay: 0.1s; }
+    .stagger-2 { transition-delay: 0.2s; }
+    .stagger-3 { transition-delay: 0.3s; }
+    .stagger-4 { transition-delay: 0.4s; }
+    .stagger-5 { transition-delay: 0.5s; }
+    .stagger-6 { transition-delay: 0.6s; }
+
+    /* ===== Brain SVG Divider ===== */
+    .brain-divider {
+        text-align: center; padding: 40px 0 20px; position: relative;
+    }
+    .brain-svg {
+        width: 200px; height: 200px; margin: 0 auto; display: block;
+        filter: drop-shadow(0 0 20px rgba(124,58,237,0.3));
+    }
+    .brain-svg path {
+        fill: none; stroke: var(--purple-light); stroke-width: 1.5;
+        stroke-dasharray: 300; stroke-dashoffset: 300;
+        transition: stroke-dashoffset 1.2s cubic-bezier(0.16,1,0.3,1);
+    }
+    .brain-svg.active path {
+        stroke-dashoffset: 0;
+    }
+    .brain-svg .right-paths path {
+        stroke: var(--pink); transition-delay: 0.3s;
+    }
+    .brain-svg .stem path {
+        stroke: url(#brain-grad); transition-delay: 0.6s;
+    }
+    .brain-glow {
+        position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        width: 250px; height: 250px; border-radius: 50%;
+        background: radial-gradient(circle, rgba(124,58,237,0.12) 0%, transparent 70%);
+        pointer-events: none; animation: brain-pulse 3s ease-in-out infinite;
+    }
+    @keyframes brain-pulse {
+        0%, 100% { opacity: 0.5; transform: translate(-50%,-50%) scale(1); }
+        50% { opacity: 1; transform: translate(-50%,-50%) scale(1.1); }
+    }
+
+    /* ===== Floating Particles ===== */
+    .particles-layer {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        pointer-events: none; z-index: 0; overflow: hidden;
+    }
+    .particle {
+        position: absolute; border-radius: 50%;
+        animation: float-up linear infinite;
+        will-change: transform, opacity;
+    }
+    @keyframes float-up {
+        0% { transform: translateY(100vh) translateX(0); opacity: 0; }
+        10% { opacity: var(--p-opacity); }
+        90% { opacity: var(--p-opacity); }
+        100% { transform: translateY(-20px) translateX(var(--p-drift)); opacity: 0; }
+    }
+
+    /* ===== Glowing Section Headers ===== */
+    .section-title {
+        transition: text-shadow 0.5s ease;
+    }
+    .section-title.glow {
+        text-shadow: 0 0 30px rgba(124,58,237,0.4), 0 0 60px rgba(124,58,237,0.15);
+    }
+    .section-label {
+        transition: all 0.4s ease;
+    }
+    .section-label.pulse-badge {
+        animation: badge-pulse 0.6s ease-out;
+    }
+    @keyframes badge-pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.15); text-shadow: 0 0 12px rgba(124,58,237,0.6); }
+        100% { transform: scale(1); }
+    }
+
+    /* ===== Install Block Terminal Effect ===== */
+    .install-block.terminal-glow {
+        box-shadow: 0 0 30px rgba(34,197,94,0.1), 0 0 60px rgba(34,197,94,0.05);
+        border-color: rgba(34,197,94,0.3);
+    }
+    .typing-cursor {
+        display: inline-block; width: 8px; height: 18px; background: var(--purple-light);
+        margin-left: 2px; vertical-align: middle;
+        animation: blink-cursor 1s step-end infinite;
+    }
+    @keyframes blink-cursor {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0; }
+    }
+
+    /* ===== Stat Counter ===== */
+    .stat-icon {
+        transition: all 0.3s ease;
+    }
+    .stat.counted .stat-icon {
+        color: var(--purple-light);
+    }
+
+    /* ===== FAQ Smooth Accordion ===== */
+    .faq-answer {
+        overflow: hidden; max-height: 0; transition: max-height 0.4s cubic-bezier(0.16,1,0.3,1), padding 0.3s ease;
+        padding: 0 16px;
+    }
+    .faq-item[open] .faq-answer {
+        max-height: 500px; padding: 0 16px 16px;
+    }
+
+    /* ===== Mobile ===== */
+    @media (max-width: 768px) {
+        .particles-layer { display: none; }
+        .reveal-left, .reveal-right {
+            transform: translateY(30px) !important;
+        }
+        .reveal-left.revealed, .reveal-right.revealed {
+            transform: none !important;
+        }
+        .brain-svg { width: 140px; height: 140px; }
+    }
+    </style>
 </head>
 <body>
+
+<!-- Floating Particles Background -->
+<div class="particles-layer" id="particles-layer" aria-hidden="true"></div>
 
 <!-- Skip to content -->
 <a href="#main" class="sr-only" style="position:absolute;left:-9999px;">Skip to content</a>
@@ -379,6 +518,7 @@
 
 <!-- Hero -->
 <section class="hero">
+    <canvas id="neural-canvas"></canvas>
     <div class="container">
         <div class="hero-badge fade-up">
             <span class="dot"></span>
@@ -427,6 +567,42 @@
     </div>
 </section>
 
+<!-- Brain SVG Divider -->
+<div class="brain-divider">
+    <div class="brain-glow"></div>
+    <svg class="brain-svg" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+            <linearGradient id="brain-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color:#7C3AED"/>
+                <stop offset="100%" style="stop-color:#EC4899"/>
+            </linearGradient>
+        </defs>
+        <g class="left-paths">
+            <path d="M95 40 C70 35, 40 50, 35 75"/>
+            <path d="M95 50 C75 48, 50 55, 38 80"/>
+            <path d="M95 65 C78 60, 55 65, 40 90"/>
+            <path d="M95 80 C75 78, 52 82, 42 105"/>
+            <path d="M95 95 C72 93, 50 100, 45 120"/>
+            <path d="M95 110 C78 108, 55 115, 50 135"/>
+            <path d="M95 125 C80 122, 60 128, 55 145"/>
+        </g>
+        <g class="right-paths">
+            <path d="M105 40 C130 35, 160 50, 165 75"/>
+            <path d="M105 50 C125 48, 150 55, 162 80"/>
+            <path d="M105 65 C122 60, 145 65, 160 90"/>
+            <path d="M105 80 C125 78, 148 82, 158 105"/>
+            <path d="M105 95 C128 93, 150 100, 155 120"/>
+            <path d="M105 110 C122 108, 145 115, 150 135"/>
+            <path d="M105 125 C120 122, 140 128, 145 145"/>
+        </g>
+        <g class="stem">
+            <path d="M100 30 L100 170"/>
+            <path d="M100 170 C90 180, 85 190, 88 198"/>
+            <path d="M100 170 C110 180, 115 190, 112 198"/>
+        </g>
+    </svg>
+</div>
+
 <!-- Stats -->
 <div class="container">
     <div class="stats">
@@ -461,8 +637,8 @@
 <!-- Integrations -->
 <section id="integrations">
     <div class="container">
-        <div class="section-label">Integrations</div>
-        <h2 class="section-title">Works where you work</h2>
+        <div class="section-label reveal-up">Integrations</div>
+        <h2 class="section-title reveal-up">Works where you work</h2>
         <p class="section-subtitle">
             Three ways to connect NEXO Brain to your AI workflow. Same cognitive engine, different entry points.
         </p>
@@ -493,8 +669,8 @@
 <!-- Features -->
 <section id="features">
     <div class="container">
-        <div class="section-label">Features</div>
-        <h2 class="section-title">Everything an AI agent needs to think</h2>
+        <div class="section-label reveal-up">Features</div>
+        <h2 class="section-title reveal-up">Everything an AI agent needs to think</h2>
         <p class="section-subtitle">
             Not just storage &mdash; a complete cognitive architecture that learns, forgets naturally, detects conflicts, and prevents repeated mistakes.
         </p>
@@ -659,8 +835,8 @@
 <!-- v2.6.7 Contributor Evolution, Personal Plugins, Memory Continuity -->
 <section class="feature-section">
     <div class="container">
-        <div class="section-label">New in v2.6.7</div>
-        <h2 class="section-title">Contributor Evolution, Personal Plugins &amp; Memory Continuity</h2>
+        <div class="section-label reveal-up">New in v2.6.7</div>
+        <h2 class="section-title reveal-up">Contributor Evolution, Personal Plugins &amp; Memory Continuity</h2>
         <p class="section-subtitle">Opt-in public contribution mode, personal MCP plugin scaffolding, smoother install/update UX, and wider diary continuity windows.</p>
 
         <div class="features-grid">
@@ -704,8 +880,8 @@
 <!-- Quick Start -->
 <section id="quick-start">
     <div class="container">
-        <div class="section-label">Quick Start</div>
-        <h2 class="section-title">Up and running in 60 seconds</h2>
+        <div class="section-label reveal-up">Quick Start</div>
+        <h2 class="section-title reveal-up">Up and running in 60 seconds</h2>
         <p class="section-subtitle">
             One command to install. NEXO Brain sets up the MCP server, SQLite databases, and cognitive engine automatically. A 5-question personality calibration creates your agent's unique voice.
         </p>
@@ -737,8 +913,8 @@
 <!-- Listed On -->
 <section>
     <div class="container" style="text-align:center;">
-        <div class="section-label">Listed On</div>
-        <h2 class="section-title">Find NEXO Brain everywhere</h2>
+        <div class="section-label reveal-up">Listed On</div>
+        <h2 class="section-title reveal-up">Find NEXO Brain everywhere</h2>
         <p class="section-subtitle" style="margin-left:auto;margin-right:auto;">
             Available on major MCP directories and package registries.
         </p>
@@ -769,8 +945,8 @@
 <!-- FAQ -->
 <section id="faq">
     <div class="container">
-        <div class="section-label">Frequently Asked Questions</div>
-        <h2 class="section-title">Everything you need to know</h2>
+        <div class="section-label reveal-up">Frequently Asked Questions</div>
+        <h2 class="section-title reveal-up">Everything you need to know</h2>
         <p class="section-subtitle">Common questions about NEXO Brain, how it works, and how to get started.</p>
 
         <div class="faq-list">
@@ -988,7 +1164,7 @@
 <!-- CTA -->
 <section class="cta-section">
     <div class="container">
-        <h2 class="section-title">Give your agent a mind</h2>
+        <h2 class="section-title reveal-scale">Give your agent a mind</h2>
         <p class="section-subtitle" style="margin: 16px auto 48px;">
             Open source, AGPL-3.0 licensed, and built for builders who want their AI to actually remember.
         </p>
@@ -1047,24 +1223,294 @@ function copyInstall(btn) {
     }, 2000);
 }
 
-// Intersection Observer for scroll animations
-const observer = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-        if (entry.isIntersecting) {
-            entry.target.style.opacity = '1';
-            entry.target.style.transform = 'translateY(0)';
+// ===== Neural Network Canvas =====
+(function() {
+    var canvas = document.getElementById('neural-canvas');
+    if (!canvas) return;
+    var ctx = canvas.getContext('2d');
+    var isMobile = window.innerWidth < 768;
+    var nodeCount = isMobile ? 40 : 90;
+    var PROXIMITY = 150;
+    var nodes = [];
+    var mouseX = -1000, mouseY = -1000;
+    var hero = canvas.parentElement;
+
+    function resize() {
+        canvas.width = hero.offsetWidth;
+        canvas.height = hero.offsetHeight;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    for (var i = 0; i < nodeCount; i++) {
+        nodes.push({
+            x: Math.random() * canvas.width,
+            y: Math.random() * canvas.height,
+            vx: (Math.random() - 0.5) * 0.5,
+            vy: (Math.random() - 0.5) * 0.5,
+            r: Math.random() * 2 + 1
+        });
+    }
+
+    hero.addEventListener('mousemove', function(e) {
+        var rect = canvas.getBoundingClientRect();
+        mouseX = e.clientX - rect.left;
+        mouseY = e.clientY - rect.top;
+    });
+    hero.addEventListener('mouseleave', function() { mouseX = -1000; mouseY = -1000; });
+
+    function drawNet() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        var w = canvas.width, h = canvas.height;
+
+        for (var i = 0; i < nodes.length; i++) {
+            var n = nodes[i];
+            n.x += n.vx; n.y += n.vy;
+            if (n.x < 0 || n.x > w) n.vx *= -1;
+            if (n.y < 0 || n.y > h) n.vy *= -1;
+
+            // Mouse attraction
+            var dx = mouseX - n.x, dy = mouseY - n.y;
+            var dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < 200 && dist > 0) {
+                n.x += dx * 0.005;
+                n.y += dy * 0.005;
+            }
+        }
+
+        // Connections
+        for (var i = 0; i < nodes.length; i++) {
+            for (var j = i + 1; j < nodes.length; j++) {
+                var dx = nodes[i].x - nodes[j].x;
+                var dy = nodes[i].y - nodes[j].y;
+                var d = Math.sqrt(dx * dx + dy * dy);
+                if (d < PROXIMITY) {
+                    var alpha = (1 - d / PROXIMITY) * 0.35;
+                    // Brighten near mouse
+                    var mx = (nodes[i].x + nodes[j].x) / 2;
+                    var my = (nodes[i].y + nodes[j].y) / 2;
+                    var md = Math.sqrt((mouseX - mx) * (mouseX - mx) + (mouseY - my) * (mouseY - my));
+                    if (md < 200) alpha += (1 - md / 200) * 0.3;
+
+                    var grad = ctx.createLinearGradient(nodes[i].x, nodes[i].y, nodes[j].x, nodes[j].y);
+                    grad.addColorStop(0, 'rgba(124,58,237,' + alpha + ')');
+                    grad.addColorStop(1, 'rgba(236,72,153,' + alpha + ')');
+                    ctx.beginPath();
+                    ctx.moveTo(nodes[i].x, nodes[i].y);
+                    ctx.lineTo(nodes[j].x, nodes[j].y);
+                    ctx.strokeStyle = grad;
+                    ctx.lineWidth = 0.6;
+                    ctx.stroke();
+                }
+            }
+        }
+
+        // Nodes
+        for (var i = 0; i < nodes.length; i++) {
+            var n = nodes[i];
+            var dx = mouseX - n.x, dy = mouseY - n.y;
+            var dist = Math.sqrt(dx * dx + dy * dy);
+            var glow = dist < 200 ? (1 - dist / 200) * 0.5 : 0;
+            ctx.beginPath();
+            ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(124,58,237,' + (0.6 + glow) + ')';
+            ctx.fill();
+        }
+
+        requestAnimationFrame(drawNet);
+    }
+    requestAnimationFrame(drawNet);
+})();
+
+// ===== Floating Particles =====
+(function() {
+    var layer = document.getElementById('particles-layer');
+    if (!layer || window.innerWidth < 768) return;
+    var colors = ['#7C3AED', '#EC4899', '#A78BFA'];
+    for (var i = 0; i < 25; i++) {
+        var p = document.createElement('div');
+        p.className = 'particle';
+        var size = Math.random() * 2 + 1.5;
+        var opacity = Math.random() * 0.12 + 0.06;
+        var duration = Math.random() * 20 + 15;
+        var delay = Math.random() * 20;
+        var left = Math.random() * 100;
+        var drift = (Math.random() - 0.5) * 60;
+        p.style.cssText = 'width:' + size + 'px;height:' + size + 'px;left:' + left + '%;background:' + colors[i % 3] + ';--p-opacity:' + opacity + ';--p-drift:' + drift + 'px;animation-duration:' + duration + 's;animation-delay:' + delay + 's;';
+        layer.appendChild(p);
+    }
+})();
+
+// ===== Scroll Reveal Observer =====
+(function() {
+    // Enhanced observer for reveal classes
+    var revealObs = new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) {
+            if (entry.isIntersecting) {
+                entry.target.classList.add('revealed');
+                // Section title glow
+                if (entry.target.classList.contains('section-title')) {
+                    entry.target.classList.add('glow');
+                }
+                // Section label pulse
+                if (entry.target.classList.contains('section-label')) {
+                    entry.target.classList.add('pulse-badge');
+                }
+            }
+        });
+    }, { threshold: 0.1 });
+
+    document.querySelectorAll('.reveal-left, .reveal-right, .reveal-up, .reveal-scale').forEach(function(el) {
+        revealObs.observe(el);
+    });
+
+    // Cards with stagger (feature cards, integration cards, listed badges, faq items)
+    var cardObs = new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) {
+            if (entry.isIntersecting) {
+                entry.target.style.opacity = '1';
+                entry.target.style.transform = 'translateY(0)';
+            }
+        });
+    }, { threshold: 0.05 });
+
+    var cardSelectors = '.feature-card, .tool-card, .integration-card, .process-card, .hook-card, .listed-badge, .cognitive-card, .inspired-card, .benchmark-stat-card, .faq-item';
+    var allCards = document.querySelectorAll(cardSelectors);
+    var grids = document.querySelectorAll('.features-grid, .integrations-grid, .faq-list, .listed-grid');
+
+    grids.forEach(function(grid) {
+        var cards = grid.querySelectorAll('.feature-card, .integration-card, .listed-badge, .faq-item');
+        cards.forEach(function(card, idx) {
+            card.style.opacity = '0';
+            card.style.transform = 'translateY(30px)';
+            card.style.transition = 'all 0.6s cubic-bezier(0.16,1,0.3,1) ' + (idx % 6) * 0.1 + 's';
+            cardObs.observe(card);
+        });
+    });
+
+    // Catch any remaining cards not in a tracked grid
+    allCards.forEach(function(el) {
+        if (el.style.opacity !== '0') {
+            el.style.opacity = '0';
+            el.style.transform = 'translateY(20px)';
+            el.style.transition = 'all 0.5s ease';
+            cardObs.observe(el);
         }
     });
-}, { threshold: 0.1 });
 
-document.querySelectorAll('.feature-card, .tool-card, .integration-card, .process-card, .hook-card, .listed-badge, .cognitive-card, .inspired-card, .benchmark-stat-card, .faq-item').forEach(el => {
-    el.style.opacity = '0';
-    el.style.transform = 'translateY(20px)';
-    el.style.transition = 'all 0.5s ease';
-    observer.observe(el);
-});
+    // Brain SVG activation
+    var brainSvg = document.querySelector('.brain-svg');
+    if (brainSvg) {
+        var brainObs = new IntersectionObserver(function(entries) {
+            entries.forEach(function(entry) {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('active');
+                }
+            });
+        }, { threshold: 0.3 });
+        brainObs.observe(brainSvg);
+    }
+})();
 
-// Fetch live version from npm
+// ===== Stats Counter Animation =====
+(function() {
+    var counted = false;
+    var statValues = document.querySelectorAll('.stat-value');
+    var statsObs = new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) {
+            if (entry.isIntersecting && !counted) {
+                counted = true;
+                statValues.forEach(function(el) {
+                    var text = el.textContent.trim();
+                    var suffix = '';
+                    var target = 0;
+
+                    if (text.indexOf('+') !== -1) {
+                        suffix = '+';
+                        target = parseInt(text.replace('+', ''));
+                    } else if (text.indexOf('.') !== -1) {
+                        target = parseFloat(text);
+                        animateFloat(el, target, suffix);
+                        el.closest('.stat').classList.add('counted');
+                        return;
+                    } else {
+                        target = parseInt(text);
+                    }
+
+                    if (isNaN(target)) return;
+                    animateInt(el, target, suffix);
+                    el.closest('.stat').classList.add('counted');
+                });
+            }
+        });
+    }, { threshold: 0.3 });
+
+    var statsContainer = document.querySelector('.stats');
+    if (statsContainer) statsObs.observe(statsContainer);
+
+    function animateInt(el, target, suffix) {
+        var start = 0;
+        var duration = 1500;
+        var startTime = null;
+        function step(ts) {
+            if (!startTime) startTime = ts;
+            var progress = Math.min((ts - startTime) / duration, 1);
+            var eased = 1 - Math.pow(1 - progress, 3);
+            el.textContent = Math.floor(eased * target) + suffix;
+            if (progress < 1) requestAnimationFrame(step);
+            else el.textContent = target + suffix;
+        }
+        requestAnimationFrame(step);
+    }
+
+    function animateFloat(el, target, suffix) {
+        var duration = 1500;
+        var startTime = null;
+        function step(ts) {
+            if (!startTime) startTime = ts;
+            var progress = Math.min((ts - startTime) / duration, 1);
+            var eased = 1 - Math.pow(1 - progress, 3);
+            el.textContent = (eased * target).toFixed(3) + suffix;
+            if (progress < 1) requestAnimationFrame(step);
+            else el.textContent = target + suffix;
+        }
+        requestAnimationFrame(step);
+    }
+})();
+
+// ===== Install Block Terminal Typing =====
+(function() {
+    var installBlock = document.querySelector('.install-block');
+    if (!installBlock) return;
+    var typed = false;
+    var obs = new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) {
+            if (entry.isIntersecting && !typed) {
+                typed = true;
+                installBlock.classList.add('terminal-glow');
+                var codeEl = installBlock.querySelector('code');
+                var fullText = codeEl.innerHTML;
+                codeEl.innerHTML = '<span class="prefix">$</span> ';
+                var cmd = 'npx nexo-brain init';
+                var i = 0;
+                var cursor = document.createElement('span');
+                cursor.className = 'typing-cursor';
+                codeEl.appendChild(cursor);
+                function typeChar() {
+                    if (i < cmd.length) {
+                        codeEl.insertBefore(document.createTextNode(cmd[i]), cursor);
+                        i++;
+                        setTimeout(typeChar, 50 + Math.random() * 40);
+                    }
+                }
+                typeChar();
+            }
+        });
+    }, { threshold: 0.5 });
+    obs.observe(installBlock);
+})();
+
+// ===== Fetch live version from npm =====
 fetch('https://registry.npmjs.org/nexo-brain/latest')
   .then(r => r.json())
   .then(d => {
