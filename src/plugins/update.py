@@ -9,24 +9,22 @@ import sys
 import time
 from pathlib import Path
 
-# Repo root: go up from src/plugins/ -> src/ -> repo/
+# Code root is the parent of plugins/:
+# - source checkout: <repo>/src
+# - packaged runtime: <NEXO_HOME>
 _THIS_DIR = Path(__file__).resolve().parent
-REPO_DIR = _THIS_DIR.parent.parent
-PACKAGE_JSON = REPO_DIR / "package.json"
+CODE_ROOT = _THIS_DIR.parent
+_REPO_CANDIDATE = CODE_ROOT.parent
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 DATA_DIR = NEXO_HOME / "data"
 BACKUP_BASE = NEXO_HOME / "backups"
 
-# In packaged installs, update.py lives at ~/.nexo/plugins/update.py
-# so REPO_DIR would be ~/ (wrong). Detect this and fix paths.
-_PACKAGED_INSTALL = not (REPO_DIR / ".git").exists() and not (REPO_DIR / ".git").is_file()
-
-if _PACKAGED_INSTALL:
-    # In packaged mode, core .py files live directly in NEXO_HOME
-    SRC_DIR = NEXO_HOME
-else:
-    SRC_DIR = REPO_DIR / "src"
+# In packaged installs, update.py lives at <NEXO_HOME>/plugins/update.py.
+_PACKAGED_INSTALL = not (_REPO_CANDIDATE / ".git").exists() and not (_REPO_CANDIDATE / ".git").is_file()
+REPO_DIR = CODE_ROOT if _PACKAGED_INSTALL else _REPO_CANDIDATE
+SRC_DIR = CODE_ROOT
+PACKAGE_JSON = REPO_DIR / "package.json"
 
 
 def _find_npm_pkg_src() -> Path | None:
@@ -64,13 +62,27 @@ def _refresh_installed_manifest():
 
 
 def _read_version() -> str:
-    """Read version from package.json or NEXO_HOME/version.json (packaged installs)."""
+    """Read the installed/runtime version."""
+    if _PACKAGED_INSTALL:
+        # version.json is the runtime truth for packaged installs.
+        try:
+            version_file = NEXO_HOME / "version.json"
+            if version_file.exists():
+                return json.loads(version_file.read_text()).get("version", "unknown")
+        except Exception:
+            pass
+        try:
+            package_file = NEXO_HOME / "package.json"
+            if package_file.exists():
+                return json.loads(package_file.read_text()).get("version", "unknown")
+        except Exception:
+            pass
+
     try:
         if PACKAGE_JSON.exists():
             return json.loads(PACKAGE_JSON.read_text()).get("version", "unknown")
     except Exception:
         pass
-    # Packaged installs don't ship package.json — check version.json in NEXO_HOME
     try:
         version_file = NEXO_HOME / "version.json"
         if version_file.exists():

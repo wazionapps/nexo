@@ -3,6 +3,7 @@ import json
 import os
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -168,6 +169,45 @@ class TestRuntimeUpdate:
         assert (runtime_home / "db" / "__init__.py").read_text() == "x = 1\n"
         assert (runtime_home / "cron_recovery.py").read_text() == "x = 1\n"
         assert (runtime_home / "scripts" / "nexo-watchdog.sh").read_text() == "#!/bin/bash\nexit 0\n"
+
+    def test_packaged_update_reads_runtime_version_from_version_json(self, tmp_path):
+        runtime_home = tmp_path / "runtime"
+        plugins_dir = runtime_home / "plugins"
+        plugins_dir.mkdir(parents=True)
+        (runtime_home / "version.json").write_text(json.dumps({"version": "2.6.0"}))
+        (runtime_home / "package.json").write_text(json.dumps({"version": "2.5.1"}))
+
+        src_update = Path(os.path.dirname(__file__)).parent / "src" / "plugins" / "update.py"
+        update_copy = plugins_dir / "update.py"
+        update_copy.write_text(src_update.read_text())
+
+        probe = (
+            "import importlib.util, json, pathlib; "
+            f"p = pathlib.Path({json.dumps(str(update_copy))}); "
+            "spec = importlib.util.spec_from_file_location('upd', p); "
+            "m = importlib.util.module_from_spec(spec); "
+            "spec.loader.exec_module(m); "
+            "print(json.dumps({'repo_dir': str(m.REPO_DIR), 'packaged': m._PACKAGED_INSTALL, 'version': m._read_version()}))"
+        )
+        env = {
+            **os.environ,
+            "NEXO_HOME": str(runtime_home),
+            "NEXO_CODE": str(runtime_home),
+            "HOME": str(tmp_path),
+        }
+        result = subprocess.run(
+            [sys.executable, "-c", probe],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            env=env,
+        )
+
+        assert result.returncode == 0, result.stderr
+        data = json.loads(result.stdout)
+        assert data["packaged"] is True
+        assert data["repo_dir"] == str(runtime_home)
+        assert data["version"] == "2.6.0"
 
 
 class TestChatCommand:
