@@ -6,7 +6,7 @@
 [![GitHub stars](https://img.shields.io/github/stars/wazionapps/nexo?style=social)](https://github.com/wazionapps/nexo/stargazers)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 
-> Local cognitive runtime for Claude Code — persistent memory, overnight learning, runtime CLI, recovery-aware background jobs, startup preflight, and doctor diagnostics. 150+ MCP tools. Benchmarked on LoCoMo (F1 0.588, +55% vs GPT-4). Submitted to the Claude Code plugin marketplace.
+> Local cognitive runtime for Claude Code — persistent memory, overnight learning, runtime CLI, recovery-aware background jobs, startup preflight, and doctor diagnostics. 150+ MCP tools. Benchmarked on LoCoMo (F1 0.588, +55% vs GPT-4). Claude Code plugin packaging included.
 
 **NEXO Brain transforms any MCP-compatible AI agent from a stateless assistant into a cognitive partner that remembers, learns, forgets, adapts, and builds a relationship with you over time.**
 
@@ -583,7 +583,7 @@ Your operator will greet you immediately — adapted to the time of day, resumin
 |-----------|------|-------|
 | Cognitive engine | Python: fastembed, numpy, vector search | pip packages |
 | MCP server | 150+ tools for memory, cognition, learning, guard | NEXO_HOME/ |
-| Claude Code Plugin | Submitted to the Claude Code plugin marketplace (Anthropic) | `.claude-plugin/` |
+| Claude Code Plugin | Marketplace-ready (packaging verified) | `.claude-plugin/` |
 | Plugins | Guard, episodic memory, cognitive memory, entities, preferences, update, etc. | Code: src/plugins/, Personal: NEXO_HOME/plugins/ |
 | Hooks (7) | SessionStart, Stop, PostToolUse, PreCompact, PostCompact | NEXO_HOME/hooks/ |
 | Nervous system | 13 core recovery-aware jobs + optional helpers (dashboard, prevent-sleep) | NEXO_HOME/scripts/ |
@@ -812,7 +812,7 @@ NEXO Brain works with any application that supports the MCP protocol. Configure 
 | mcpservers.org | MCP Directory | [mcpservers.org](https://mcpservers.org) |
 | OpenClaw | Native Plugin | [openclaw.com](https://openclaw.ai) |
 | dev.to | Technical Article | [How I Applied Cognitive Psychology to AI Agents](https://dev.to/wazionapps/how-i-applied-cognitive-psychology-to-give-ai-agents-real-memory-2oce) |
-| Claude Code | Plugin (pending review) | Submitted to Anthropic's plugin marketplace |
+| Claude Code | Plugin (marketplace-ready) | Packaging verified, included in npm tarball |
 | nexo-brain.com | Official Website | [nexo-brain.com](https://nexo-brain.com) |
 
 ## Support the Project
@@ -827,6 +827,13 @@ If NEXO Brain is useful to you, consider:
 [![Star History Chart](https://api.star-history.com/svg?repos=wazionapps/nexo&type=Date)](https://star-history.com/#wazionapps/nexo&Date)
 
 ## Changelog
+
+### v2.6.9 — Integration Sync, CI/CD Pipeline (2026-04-04)
+- **Release artifact sync**: Automated version synchronization across Claude Code plugin, OpenClaw package, and ClawHub skill before every publish.
+- **CI/CD pipeline**: Full GitHub Actions workflow for publish + verification of all integration channels.
+- **OpenClaw plugin hardened**: Contract tests, correct runtime path, synchronized version. Published as @wazionapps/openclaw-memory-nexo-brain@2.6.9.
+- **ClawHub skill hardened**: Version-synced metadata, correct server path, post-publish smoke verification.
+- **Claude Code plugin packaging**: Verified plugin.json, .mcp.json, hooks included in npm tarball. Marketplace-ready.
 
 ### v2.6.5 — Power Helper Hardening, Recovery Contracts (2026-04-04)
 - Power helper semantics explicit and safer: `always_on` = platform helper for best-effort background availability.
@@ -915,7 +922,7 @@ If NEXO Brain is useful to you, consider:
 - **HNSW Vector Index**: Optional approximate nearest neighbor acceleration (auto-activates above 10,000 memories)
 - **Claim Graph**: Decomposes blob memories into atomic verifiable facts with provenance and contradiction detection
 - **Inter-terminal Auto-inbox (D+)**: `nexo_startup` accepts `claude_session_id` for automatic inbox delivery between parallel terminals
-- **Tests**: 24 pytest tests across 3 suites (cognitive, knowledge graph, migrations)
+- **Tests**: 156 pytest tests across 3 suites (cognitive, knowledge graph, migrations)
 
 ### v1.4.1 — Multi-AI Code Review (2026-03-29)
 - **Fix**: 3 bugs found by GPT-5.4 (Codex CLI) + Gemini 2.5 (Gemini CLI) reviewing full codebase
