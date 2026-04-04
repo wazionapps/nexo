@@ -453,7 +453,7 @@
     /* ===== Mobile ===== */
     @media (max-width: 768px) {
         .particles-layer { display: none; }
-.brain-svg { width: 140px; height: 140px; }
+.brain-svg { width: 220px; height: 180px; }
     }
     </style>
 </head>
@@ -540,35 +540,49 @@
 <!-- Brain SVG Divider -->
 <div class="brain-divider">
     <div class="brain-glow"></div>
-    <svg class="brain-svg" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+    <svg class="brain-svg" viewBox="0 0 300 240" xmlns="http://www.w3.org/2000/svg">
         <defs>
             <linearGradient id="brain-grad" x1="0%" y1="0%" x2="100%" y2="100%">
                 <stop offset="0%" style="stop-color:#7C3AED"/>
                 <stop offset="100%" style="stop-color:#EC4899"/>
             </linearGradient>
         </defs>
+        <!-- Brain outline (lateral view) -->
         <g class="left-paths">
-            <path d="M95 40 C70 35, 40 50, 35 75"/>
-            <path d="M95 50 C75 48, 50 55, 38 80"/>
-            <path d="M95 65 C78 60, 55 65, 40 90"/>
-            <path d="M95 80 C75 78, 52 82, 42 105"/>
-            <path d="M95 95 C72 93, 50 100, 45 120"/>
-            <path d="M95 110 C78 108, 55 115, 50 135"/>
-            <path d="M95 125 C80 122, 60 128, 55 145"/>
+            <!-- Frontal lobe -->
+            <path d="M70 120 C65 90, 75 55, 105 35 C130 20, 160 18, 185 28"/>
+            <!-- Parietal lobe top -->
+            <path d="M185 28 C210 38, 228 55, 235 80"/>
+            <!-- Occipital lobe -->
+            <path d="M235 80 C240 105, 238 130, 225 150 C215 165, 200 172, 185 175"/>
+            <!-- Temporal lobe bottom -->
+            <path d="M185 175 C165 178, 135 175, 110 168 C85 160, 68 145, 70 120"/>
         </g>
+        <!-- Sulci (brain folds) -->
         <g class="right-paths">
-            <path d="M105 40 C130 35, 160 50, 165 75"/>
-            <path d="M105 50 C125 48, 150 55, 162 80"/>
-            <path d="M105 65 C122 60, 145 65, 160 90"/>
-            <path d="M105 80 C125 78, 148 82, 158 105"/>
-            <path d="M105 95 C128 93, 150 100, 155 120"/>
-            <path d="M105 110 C122 108, 145 115, 150 135"/>
-            <path d="M105 125 C120 122, 140 128, 145 145"/>
+            <!-- Central sulcus -->
+            <path d="M165 30 C160 55, 155 80, 158 110"/>
+            <!-- Lateral sulcus -->
+            <path d="M95 115 C120 100, 145 95, 175 105"/>
+            <!-- Frontal folds -->
+            <path d="M80 95 C95 80, 115 72, 140 68"/>
+            <path d="M85 110 C105 100, 125 95, 148 92"/>
+            <!-- Parietal folds -->
+            <path d="M175 45 C195 55, 210 70, 218 90"/>
+            <path d="M170 65 C190 72, 205 85, 215 105"/>
+            <!-- Temporal folds -->
+            <path d="M100 140 C125 135, 150 138, 175 145"/>
+            <path d="M110 158 C135 155, 160 158, 180 165"/>
         </g>
+        <!-- Brain stem & cerebellum -->
         <g class="stem">
-            <path d="M100 30 L100 170"/>
-            <path d="M100 170 C90 180, 85 190, 88 198"/>
-            <path d="M100 170 C110 180, 115 190, 112 198"/>
+            <!-- Cerebellum -->
+            <path d="M210 155 C225 165, 235 180, 230 195 C225 210, 210 218, 195 215 C185 213, 180 205, 182 195"/>
+            <!-- Cerebellum folds -->
+            <path d="M195 170 C210 175, 220 185, 218 198"/>
+            <path d="M190 180 C205 183, 215 192, 212 205"/>
+            <!-- Brain stem -->
+            <path d="M182 195 C178 210, 175 225, 178 235"/>
         </g>
     </svg>
 </div>
@@ -798,7 +812,8 @@
 <!-- Infographic -->
 <section style="background:rgba(18,18,26,0.3);">
     <div class="container" style="text-align:center;">
-        <img src="/assets/nexo-brain-infographic-v5.png" alt="NEXO Brain Architecture Infographic" style="max-width:800px;width:100%;border-radius:16px;box-shadow:0 8px 32px rgba(124,58,237,0.15);" class="fade-up">
+        <img src="/assets/nexo-brain-infographic-v5.png" alt="NEXO Brain Architecture Infographic" style="max-width:800px;width:100%;border-radius:16px;box-shadow:0 8px 32px rgba(124,58,237,0.15);cursor:pointer;" class="fade-up" onclick="document.getElementById('infographic-modal').style.display='flex'" title="Click to enlarge">
+        <p style="margin-top:12px;color:var(--gray);font-size:13px;">Click to view full size</p>
     </div>
 </section>
 
@@ -1476,6 +1491,12 @@ function googleTranslateElementInit() {
     });
 })();
 </script>
+
+<!-- Infographic Modal -->
+<div id="infographic-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;background:rgba(0,0,0,0.92);align-items:center;justify-content:center;padding:24px;cursor:pointer;" onclick="this.style.display='none'">
+    <button onclick="document.getElementById('infographic-modal').style.display='none'" style="position:fixed;top:20px;right:24px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#fff;width:44px;height:44px;border-radius:50%;font-size:24px;cursor:pointer;z-index:10000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px);">&times;</button>
+    <img src="/assets/nexo-brain-infographic-v5.png" alt="NEXO Brain Architecture Infographic" style="max-width:95vw;max-height:92vh;object-fit:contain;border-radius:8px;" onclick="event.stopPropagation()">
+</div>
 
 </body>
 </html>
