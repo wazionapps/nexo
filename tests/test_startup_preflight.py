@@ -1,6 +1,7 @@
 """Tests for startup preflight orchestration."""
 import json
 import os
+import subprocess
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
@@ -54,3 +55,33 @@ def test_startup_preflight_defers_sync_update_when_runtime_busy(tmp_path, monkey
 
     assert result["deferred_reason"] == "active sessions: 1"
     assert result["updated"] is False
+
+
+def test_run_runtime_post_sync_uses_reconcile_personal_scripts(tmp_path, monkeypatch):
+    import auto_update
+
+    runtime_home = tmp_path / "runtime"
+    (runtime_home / "logs").mkdir(parents=True)
+    (runtime_home / "crons").mkdir(parents=True)
+    (runtime_home / "crons" / "sync.py").write_text("print('ok')\n")
+
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(auto_update, "NEXO_HOME", runtime_home)
+    monkeypatch.setattr(auto_update, "_reinstall_runtime_pip_deps", lambda dest: True)
+    monkeypatch.setattr(auto_update.subprocess, "run", fake_run)
+
+    import runtime_power
+
+    monkeypatch.setattr(runtime_power, "apply_power_policy", lambda policy=None: {"ok": True, "action": "enabled"})
+
+    ok, actions = auto_update._run_runtime_post_sync(runtime_home)
+
+    assert ok is True
+    assert "db+personal-sync" in actions
+    init_call = next(cmd for cmd in calls if isinstance(cmd, list) and len(cmd) >= 3 and cmd[1] == "-c")
+    assert "reconcile_personal_scripts" in init_call[2]

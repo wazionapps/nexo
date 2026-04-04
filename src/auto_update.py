@@ -1378,8 +1378,8 @@ def _run_runtime_post_sync(dest: Path = NEXO_HOME) -> tuple[bool, list[str]]:
                     "init_db = getattr(db, 'init_db', None); "
                     "init_db() if callable(init_db) else None; "
                     "import script_registry; "
-                    "sync_scripts = getattr(script_registry, 'sync_personal_scripts', None); "
-                    "sync_scripts() if callable(sync_scripts) else None"
+                    "reconcile_scripts = getattr(script_registry, 'reconcile_personal_scripts', None); "
+                    "reconcile_scripts(dry_run=False) if callable(reconcile_scripts) else None"
                 ),
             ],
             cwd=str(dest),
@@ -1538,7 +1538,7 @@ def startup_preflight(*, entrypoint: str, interactive: bool = False) -> dict:
     if src_dir is not None and repo_dir is not None:
         try:
             from db import init_db
-            from script_registry import sync_personal_scripts
+            from script_registry import reconcile_personal_scripts
 
             _run_db_migrations()
             result["migrations"] = run_file_migrations()
@@ -1548,7 +1548,7 @@ def startup_preflight(*, entrypoint: str, interactive: bool = False) -> dict:
             _ensure_runtime_cli_wrapper()
             _ensure_runtime_cli_in_shell()
             init_db()
-            sync_personal_scripts()
+            reconcile_personal_scripts(dry_run=False)
             result["actions"].append("db+personal-sync")
         except Exception as e:
             result["error"] = str(e)
