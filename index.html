@@ -360,18 +360,6 @@
     .hero { position: relative; overflow: hidden; }
     .hero .container { position: relative; z-index: 1; }
 
-    /* ===== Scroll Reveal Classes ===== */
-    .reveal-left { opacity: 0; transform: translateX(-60px); transition: all 0.8s cubic-bezier(0.16,1,0.3,1); }
-    .reveal-right { opacity: 0; transform: translateX(60px); transition: all 0.8s cubic-bezier(0.16,1,0.3,1); }
-    .reveal-up { opacity: 0; transform: translateY(40px); transition: all 0.7s cubic-bezier(0.16,1,0.3,1); }
-    .reveal-scale { opacity: 0; transform: scale(0.9); transition: all 0.6s cubic-bezier(0.16,1,0.3,1); }
-    .revealed { opacity: 1 !important; transform: none !important; }
-    .stagger-1 { transition-delay: 0.1s; }
-    .stagger-2 { transition-delay: 0.2s; }
-    .stagger-3 { transition-delay: 0.3s; }
-    .stagger-4 { transition-delay: 0.4s; }
-    .stagger-5 { transition-delay: 0.5s; }
-    .stagger-6 { transition-delay: 0.6s; }
 
     /* ===== Brain SVG Divider ===== */
     .brain-divider {
@@ -399,11 +387,7 @@
         position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
         width: 250px; height: 250px; border-radius: 50%;
         background: radial-gradient(circle, rgba(124,58,237,0.12) 0%, transparent 70%);
-        pointer-events: none; animation: brain-pulse 3s ease-in-out infinite;
-    }
-    @keyframes brain-pulse {
-        0%, 100% { opacity: 0.5; transform: translate(-50%,-50%) scale(1); }
-        50% { opacity: 1; transform: translate(-50%,-50%) scale(1.1); }
+        pointer-events: none;
     }
 
     /* ===== Floating Particles ===== */
@@ -432,14 +416,6 @@
     }
     .section-label {
         transition: all 0.4s ease;
-    }
-    .section-label.pulse-badge {
-        animation: badge-pulse 0.6s ease-out;
-    }
-    @keyframes badge-pulse {
-        0% { transform: scale(1); }
-        50% { transform: scale(1.15); text-shadow: 0 0 12px rgba(124,58,237,0.6); }
-        100% { transform: scale(1); }
     }
 
     /* ===== Install Block Terminal Effect ===== */
@@ -477,13 +453,7 @@
     /* ===== Mobile ===== */
     @media (max-width: 768px) {
         .particles-layer { display: none; }
-        .reveal-left, .reveal-right {
-            transform: translateY(30px) !important;
-        }
-        .reveal-left.revealed, .reveal-right.revealed {
-            transform: none !important;
-        }
-        .brain-svg { width: 140px; height: 140px; }
+.brain-svg { width: 140px; height: 140px; }
     }
     </style>
 </head>
@@ -637,8 +607,8 @@
 <!-- Integrations -->
 <section id="integrations">
     <div class="container">
-        <div class="section-label reveal-up">Integrations</div>
-        <h2 class="section-title reveal-up">Works where you work</h2>
+        <div class="section-label">Integrations</div>
+        <h2 class="section-title">Works where you work</h2>
         <p class="section-subtitle">
             Three ways to connect NEXO Brain to your AI workflow. Same cognitive engine, different entry points.
         </p>
@@ -669,8 +639,8 @@
 <!-- Features -->
 <section id="features">
     <div class="container">
-        <div class="section-label reveal-up">Features</div>
-        <h2 class="section-title reveal-up">Everything an AI agent needs to think</h2>
+        <div class="section-label">Features</div>
+        <h2 class="section-title">Everything an AI agent needs to think</h2>
         <p class="section-subtitle">
             Not just storage &mdash; a complete cognitive architecture that learns, forgets naturally, detects conflicts, and prevents repeated mistakes.
         </p>
@@ -835,8 +805,8 @@
 <!-- v2.6.7 Contributor Evolution, Personal Plugins, Memory Continuity -->
 <section class="feature-section">
     <div class="container">
-        <div class="section-label reveal-up">New in v2.6.7</div>
-        <h2 class="section-title reveal-up">Contributor Evolution, Personal Plugins &amp; Memory Continuity</h2>
+        <div class="section-label">New in v2.6.7</div>
+        <h2 class="section-title">Contributor Evolution, Personal Plugins &amp; Memory Continuity</h2>
         <p class="section-subtitle">Opt-in public contribution mode, personal MCP plugin scaffolding, smoother install/update UX, and wider diary continuity windows.</p>
 
         <div class="features-grid">
@@ -880,8 +850,8 @@
 <!-- Quick Start -->
 <section id="quick-start">
     <div class="container">
-        <div class="section-label reveal-up">Quick Start</div>
-        <h2 class="section-title reveal-up">Up and running in 60 seconds</h2>
+        <div class="section-label">Quick Start</div>
+        <h2 class="section-title">Up and running in 60 seconds</h2>
         <p class="section-subtitle">
             One command to install. NEXO Brain sets up the MCP server, SQLite databases, and cognitive engine automatically. A 5-question personality calibration creates your agent's unique voice.
         </p>
@@ -913,8 +883,8 @@
 <!-- Listed On -->
 <section>
     <div class="container" style="text-align:center;">
-        <div class="section-label reveal-up">Listed On</div>
-        <h2 class="section-title reveal-up">Find NEXO Brain everywhere</h2>
+        <div class="section-label">Listed On</div>
+        <h2 class="section-title">Find NEXO Brain everywhere</h2>
         <p class="section-subtitle" style="margin-left:auto;margin-right:auto;">
             Available on major MCP directories and package registries.
         </p>
@@ -945,8 +915,8 @@
 <!-- FAQ -->
 <section id="faq">
     <div class="container">
-        <div class="section-label reveal-up">Frequently Asked Questions</div>
-        <h2 class="section-title reveal-up">Everything you need to know</h2>
+        <div class="section-label">Frequently Asked Questions</div>
+        <h2 class="section-title">Everything you need to know</h2>
         <p class="section-subtitle">Common questions about NEXO Brain, how it works, and how to get started.</p>
 
         <div class="faq-list">
@@ -1164,7 +1134,7 @@
 <!-- CTA -->
 <section class="cta-section">
     <div class="container">
-        <h2 class="section-title reveal-scale">Give your agent a mind</h2>
+        <h2 class="section-title">Give your agent a mind</h2>
         <p class="section-subtitle" style="margin: 16px auto 48px;">
             Open source, AGPL-3.0 licensed, and built for builders who want their AI to actually remember.
         </p>
@@ -1341,64 +1311,8 @@ function copyInstall(btn) {
     }
 })();
 
-// ===== Scroll Reveal Observer =====
+// ===== Brain SVG Activation =====
 (function() {
-    // Enhanced observer for reveal classes
-    var revealObs = new IntersectionObserver(function(entries) {
-        entries.forEach(function(entry) {
-            if (entry.isIntersecting) {
-                entry.target.classList.add('revealed');
-                // Section title glow
-                if (entry.target.classList.contains('section-title')) {
-                    entry.target.classList.add('glow');
-                }
-                // Section label pulse
-                if (entry.target.classList.contains('section-label')) {
-                    entry.target.classList.add('pulse-badge');
-                }
-            }
-        });
-    }, { threshold: 0.1 });
-
-    document.querySelectorAll('.reveal-left, .reveal-right, .reveal-up, .reveal-scale').forEach(function(el) {
-        revealObs.observe(el);
-    });
-
-    // Cards with stagger (feature cards, integration cards, listed badges, faq items)
-    var cardObs = new IntersectionObserver(function(entries) {
-        entries.forEach(function(entry) {
-            if (entry.isIntersecting) {
-                entry.target.style.opacity = '1';
-                entry.target.style.transform = 'translateY(0)';
-            }
-        });
-    }, { threshold: 0.05 });
-
-    var cardSelectors = '.feature-card, .tool-card, .integration-card, .process-card, .hook-card, .listed-badge, .cognitive-card, .inspired-card, .benchmark-stat-card, .faq-item';
-    var allCards = document.querySelectorAll(cardSelectors);
-    var grids = document.querySelectorAll('.features-grid, .integrations-grid, .faq-list, .listed-grid');
-
-    grids.forEach(function(grid) {
-        var cards = grid.querySelectorAll('.feature-card, .integration-card, .listed-badge, .faq-item');
-        cards.forEach(function(card, idx) {
-            card.style.opacity = '0';
-            card.style.transform = 'translateY(30px)';
-            card.style.transition = 'all 0.6s cubic-bezier(0.16,1,0.3,1) ' + (idx % 6) * 0.1 + 's';
-            cardObs.observe(card);
-        });
-    });
-
-    // Catch any remaining cards not in a tracked grid
-    allCards.forEach(function(el) {
-        if (el.style.opacity !== '0') {
-            el.style.opacity = '0';
-            el.style.transform = 'translateY(20px)';
-            el.style.transition = 'all 0.5s ease';
-            cardObs.observe(el);
-        }
-    });
-
-    // Brain SVG activation
     var brainSvg = document.querySelector('.brain-svg');
     if (brainSvg) {
         var brainObs = new IntersectionObserver(function(entries) {
