@@ -107,20 +107,3 @@ jobs:
         with:
           generate_release_notes: true
           tag_name: ${{ github.ref_name }}
-
-      # 5. Update version on nexo-brain.com (gh-pages)
-      - name: Update landing page version
-        run: |
-          VERSION=${GITHUB_REF_NAME#v}
-          git fetch origin gh-pages
-          git checkout gh-pages
-          sed -i "s/\"softwareVersion\": \"[^\"]*\"/\"softwareVersion\": \"${VERSION}\"/" index.html
-          if git diff --quiet; then
-            echo "No version change needed"
-          else
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add index.html
-            git commit -m "chore: update version to ${VERSION} on landing page"
-            git push origin gh-pages
-          fi

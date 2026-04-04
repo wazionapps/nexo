@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [2.6.10] - 2026-04-04
 
 ### Shared Brain
 - Added shared client config sync so Claude Code, Claude Desktop, and Codex can point at the same local `nexo` MCP runtime and `NEXO_HOME`.
