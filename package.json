@@ -2,7 +2,8 @@
   "name": "nexo-brain",
   "version": "2.6.13",
   "mcpName": "io.github.wazionapps/nexo",
-  "description": "NEXO — local cognitive runtime for Claude Code. Persistent memory, overnight learning, recovery-aware crons, personal scripts, doctor diagnostics, startup preflight, and optional power helper.",
+  "description": "NEXO Brain — Shared brain for AI agents. Persistent memory, semantic RAG, natural forgetting, metacognitive guard, trust scoring, 150+ MCP tools. Works with Claude Code, Codex, Claude Desktop & any MCP client. 100% local, free.",
+  "homepage": "https://nexo-brain.com",
   "bin": {
     "nexo-brain": "./bin/nexo-brain.js",
     "nexo": "./bin/nexo.js"
