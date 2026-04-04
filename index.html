@@ -1140,8 +1140,8 @@
 <section style="border-top:1px solid rgba(124,58,237,0.1);padding:80px 0 60px;">
     <div class="container" style="max-width:860px;">
         <p style="color:var(--purple-light);font-size:13px;text-transform:uppercase;letter-spacing:2px;margin-bottom:40px;text-align:center;">Why NEXO exists</p>
-        <div style="display:flex;gap:48px;align-items:flex-start;">
-            <img src="/assets/francisco-cerda.webp" alt="Francisco Cerd&agrave; Puigserver, creator of NEXO Brain" style="width:200px;min-width:200px;border-radius:16px;box-shadow:0 8px 32px rgba(124,58,237,0.2);object-fit:cover;">
+        <div class="origin-layout">
+            <img src="/assets/francisco-cerda.webp" alt="Francisco Cerd&agrave; Puigserver, creator of NEXO Brain" class="origin-photo">
             <div>
                 <p style="color:var(--gray);font-size:16px;line-height:1.8;margin-bottom:20px;">
                     NEXO Brain was born out of necessity. I was building <a href="https://www.wazion.com" style="color:var(--purple-light);">WAzion</a> &mdash; a WhatsApp marketing SaaS &mdash; as a solo founder, working with AI agents every day. But every time I closed a session, the agent forgot everything. The same corrections, the same mistakes, starting from zero every morning.
@@ -1160,7 +1160,14 @@
             </div>
         </div>
     </div>
-    <style>@media(max-width:768px){.container [style*="display:flex;gap:48px"]{flex-direction:column;align-items:center;text-align:center;} .container [style*="display:flex;gap:48px"] img{width:160px !important;min-width:auto !important;}}</style>
+    <style>
+    .origin-layout{display:flex;gap:48px;align-items:flex-start;}
+    .origin-photo{width:200px;min-width:200px;border-radius:16px;box-shadow:0 8px 32px rgba(124,58,237,0.2);object-fit:cover;}
+    @media(max-width:768px){
+        .origin-layout{flex-direction:column;align-items:center;text-align:center;gap:32px;}
+        .origin-photo{width:160px;min-width:auto;margin:0 auto;}
+    }
+    </style>
 </section>
 
 <!-- CTA -->
