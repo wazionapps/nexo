@@ -272,6 +272,48 @@ def latest_successful_runs(cron_ids: list[str], *, db_path: Path = DB_PATH) -> d
     return result
 
 
+def active_started_runs(cron_ids: list[str], *, db_path: Path = DB_PATH) -> dict[str, datetime]:
+    """Return currently open cron_runs keyed by cron_id.
+
+    A run is considered active if it has started but not yet recorded a final
+    exit/ended timestamp. Catchup uses this to avoid relaunching the same cron
+    window while another invocation is already in flight.
+    """
+    if not cron_ids or not db_path.is_file():
+        return {}
+    conn = None
+    try:
+        conn = sqlite3.connect(str(db_path), timeout=2)
+        conn.row_factory = sqlite3.Row
+        placeholders = ",".join("?" for _ in cron_ids)
+        rows = conn.execute(
+            f"""
+            SELECT c1.cron_id, c1.started_at
+            FROM cron_runs c1
+            JOIN (
+                SELECT cron_id, MAX(id) AS max_id
+                FROM cron_runs
+                WHERE cron_id IN ({placeholders})
+                  AND (exit_code IS NULL OR ended_at IS NULL)
+                GROUP BY cron_id
+            ) latest ON latest.max_id = c1.id
+            """,
+            tuple(cron_ids),
+        ).fetchall()
+    except Exception:
+        return {}
+    finally:
+        with contextlib.suppress(Exception):
+            conn.close()
+
+    result: dict[str, datetime] = {}
+    for row in rows:
+        parsed = _parse_timestamp(row["started_at"], assume_utc=True)
+        if parsed is not None:
+            result[row["cron_id"]] = parsed
+    return result
+
+
 def legacy_state_runs(*, state_file: Path = STATE_FILE) -> dict[str, datetime]:
     state = _load_json(state_file, {})
     if not isinstance(state, dict):
@@ -315,6 +357,7 @@ def catchup_candidates(now: datetime | None = None) -> list[dict]:
     crons = load_enabled_crons() + load_managed_personal_crons()
     contracts = {cron["id"]: recovery_contract(cron) for cron in crons if cron.get("id")}
     successes = latest_successful_runs(list(contracts), db_path=DB_PATH)
+    active_runs = active_started_runs(list(contracts), db_path=DB_PATH)
     legacy = legacy_state_runs(state_file=STATE_FILE)
     candidates: list[dict] = []
 
@@ -341,8 +384,10 @@ def catchup_candidates(now: datetime | None = None) -> list[dict]:
                 continue
             due_at = now - timedelta(seconds=interval_seconds)
         last_success = successes.get(cron_id) or legacy.get(cron_id)
+        active_started = active_runs.get(cron_id)
         age_seconds = max(int((now - due_at).total_seconds()), 0)
-        missed = last_success is None or last_success < due_at
+        is_inflight = active_started is not None and active_started >= due_at
+        missed = (last_success is None or last_success < due_at) and not is_inflight
         within_window = contract["max_catchup_age"] <= 0 or age_seconds <= contract["max_catchup_age"]
 
         candidates.append({
@@ -354,8 +399,10 @@ def catchup_candidates(now: datetime | None = None) -> list[dict]:
             "schedule": schedule,
             "last_due_at": due_at,
             "last_success_at": last_success,
+            "active_started_at": active_started,
             "age_seconds": age_seconds,
             "missed": missed,
+            "inflight": is_inflight,
             "within_window": within_window,
         })
 
