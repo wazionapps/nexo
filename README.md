@@ -618,7 +618,7 @@ The project still recommends Claude Code as the primary path, but contributions 
 | Shared client sync | Same `nexo` MCP entry wired into Claude Code, Claude Desktop, and Codex | User config dirs |
 | Client/backend preferences | Selected interactive clients, default terminal client, automation backend, and model/reasoning profiles per client | `NEXO_HOME/config/schedule.json` |
 | Auto-diary | 3-layer system: PostToolUse every 10 calls, PreCompact emergency, heartbeat DIARY_OVERDUE | Built into hooks |
-| Claude Code config | MCP server + 7 hooks + 15 processes registered | ~/.claude/settings.json |
+| Claude Code config | MCP server + 7 hooks + 15 managed processes registered | ~/.claude/settings.json |
 
 ### Runtime CLI
 
@@ -677,7 +677,7 @@ NEXO Brain separates **code** (immutable, in the repo or npm package) from **dat
 The plugin loader scans `src/plugins/` first (base), then `NEXO_HOME/plugins/` (personal override by filename). This dual-directory approach lets you extend NEXO without forking the repo.
 The client sync layer points Claude Code, Claude Desktop, and Codex at the same runtime and `NEXO_HOME`, so all three clients share one brain instead of drifting into separate local memories.
 
-### 150+ MCP Tools across 21+ Categories
+### 150+ MCP Tools across 23 Categories
 
 | Category | Count | Tools | Purpose |
 |----------|-------|-------|---------|
