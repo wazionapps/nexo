@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.6.2] - 2026-04-04
+
+### Startup Preflight & Recovery
+- Startup preflight now runs before `nexo chat` and server startup, applying safe local migrations/backfills and deferring remote updates when the runtime is busy.
+- Dev-linked runtime updates now use backup + rollback around source-pull + runtime sync instead of a blind copy.
+- Personal managed schedules can now declare recovery contracts (`run_once_on_wake`, `catchup`, boot/wake flags, catchup window) and are included in catchup recovery.
+
+### Power Policy
+- Added persisted runtime power policy (`always_on` / `disabled` / `unset`) in `schedule.json`.
+- Installer and interactive `nexo update` now prompt once for the optional prevent-sleep policy.
+- `prevent-sleep` is now opt-in instead of being installed implicitly.
+
+### Fixes
+- Packaged/runtime installs now resolve their update root correctly and read the installed version from `version.json`, avoiding `Already up to date (vunknown)`.
+- Catchup now accepts managed personal script paths directly, not just core runtime-relative scripts.
+
 ## [2.6.0] - 2026-04-03
 
 ### Personal Scripts — First-Class Citizen

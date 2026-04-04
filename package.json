@@ -1,6 +1,6 @@
 {
   "name": "nexo-brain",
-  "version": "2.6.1",
+  "version": "2.6.2",
   "mcpName": "io.github.wazionapps/nexo",
   "description": "NEXO — Cognitive co-operator for Claude Code. Memory, emotional intelligence, overnight learning (Deep Sleep), personal scripts registry, cron management, trust scoring, managed evolution, and adaptive calibration.",
   "bin": {
