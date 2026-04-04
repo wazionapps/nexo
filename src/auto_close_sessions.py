@@ -17,7 +17,7 @@ os.environ["NEXO_SKIP_FS_INDEX"] = "1"  # Skip FTS rebuild on import
 
 from db import (
     init_db, get_db, get_diary_draft, delete_diary_draft,
-    get_orphan_sessions, write_session_diary, now_epoch,
+    get_orphan_sessions, read_checkpoint, write_session_diary, now_epoch,
     SESSION_STALE_SECONDS,
 )
 
@@ -67,9 +67,18 @@ def promote_draft_to_diary(sid: str, draft: dict, task: str = ""):
     context_hint = draft.get("last_context_hint", "")
     hb_count = draft.get("heartbeat_count", 0)
 
+    checkpoint = read_checkpoint(sid) or {}
     summary_parts = []
     if draft.get("summary_draft"):
         summary_parts.append(draft["summary_draft"])
+    if task and task not in " ".join(summary_parts):
+        summary_parts.append(f"Final task: {task}")
+    if context_hint:
+        summary_parts.append(f"Latest context: {context_hint[:300]}")
+    if checkpoint.get("current_goal"):
+        summary_parts.append(f"Current goal: {str(checkpoint['current_goal'])[:300]}")
+    if checkpoint.get("next_step"):
+        summary_parts.append(f"Next step was: {str(checkpoint['next_step'])[:240]}")
 
     tool_summary = get_tool_log_summary(sid)
     if tool_summary:
@@ -98,6 +107,10 @@ def promote_draft_to_diary(sid: str, draft: dict, task: str = ""):
         context_next = f"Last topic: {context_hint}"
     if tasks:
         context_next += f" | Tasks: {', '.join(tasks[-5:])}"
+    if checkpoint.get("reasoning_thread"):
+        context_next += f" | Reasoning: {str(checkpoint['reasoning_thread'])[:240]}"
+    if checkpoint.get("active_files"):
+        context_next += f" | Active files: {str(checkpoint['active_files'])[:180]}"
 
     write_session_diary(
         session_id=sid,
@@ -131,12 +144,19 @@ def main():
         if draft:
             promote_draft_to_diary(sid, draft, task=session.get("task", ""))
         else:
+            checkpoint = read_checkpoint(sid) or {}
+            tool_summary = get_tool_log_summary(sid)
+            summary_parts = [f"Auto-closed session. Task: {session.get('task', 'unknown')}"]
+            if checkpoint.get("current_goal"):
+                summary_parts.append(f"Current goal: {str(checkpoint['current_goal'])[:300]}")
+            if tool_summary:
+                summary_parts.append(tool_summary)
             write_session_diary(
                 session_id=sid,
                 decisions="No decisions logged",
-                summary=f"Auto-closed session. Task: {session.get('task', 'unknown')}",
-                context_next="",
-                mental_state="[auto-close] No draft available. Minimal diary.",
+                summary=" | ".join(summary_parts),
+                context_next=str(checkpoint.get("next_step") or ""),
+                mental_state="[auto-close] No draft available. Diary reconstructed from task/checkpoint/tool logs.",
                 self_critique="[auto-close] Session terminated without diary or draft.",
                 source="auto-close",
             )

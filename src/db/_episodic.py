@@ -573,7 +573,7 @@ def read_session_diary(session_id: str = '', last_n: int = 3, last_day: bool = F
     """Read session diary entries.
 
     - session_id: returns entries for that specific session
-    - last_day: returns ALL entries from the most recent day (multi-terminal aware)
+    - last_day: returns the recent continuity window (~36h), including the previous evening
     - last_n: returns last N entries (default)
     - domain: filter by project context (nexo, other)
     - include_automated: if False (default), excludes automated sessions (auto-close,
@@ -605,21 +605,11 @@ def read_session_diary(session_id: str = '', last_n: int = 3, last_day: bool = F
             (session_id,) + domain_params
         ).fetchall()
     elif last_day:
-        # Get all entries from the most recent calendar day (human sessions only)
-        if domain:
-            latest = conn.execute(
-                f"SELECT date(created_at) as day FROM session_diary WHERE domain = ?{source_clause} ORDER BY created_at DESC LIMIT 1",
-                (domain,)
-            ).fetchone()
-        else:
-            latest = conn.execute(
-                f"SELECT date(created_at) as day FROM session_diary WHERE 1=1{source_clause} ORDER BY created_at DESC LIMIT 1"
-            ).fetchone()
-        if not latest:
-            return []
         rows = conn.execute(
-            f"SELECT * FROM session_diary WHERE date(created_at) = ?{domain_clause}{source_clause} ORDER BY created_at DESC",
-            (latest['day'],) + domain_params
+            f"SELECT * FROM session_diary "
+            f"WHERE created_at >= datetime('now', '-36 hours'){domain_clause}{source_clause} "
+            f"ORDER BY created_at DESC",
+            domain_params
         ).fetchall()
     else:
         rows = conn.execute(
@@ -769,5 +759,4 @@ def recall(query: str, days: int = 30) -> list[dict]:
 
     results.sort(key=lambda r: r.get('created_at', ''), reverse=True)
     return results[:20]
-
 

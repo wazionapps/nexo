@@ -22,6 +22,7 @@ Entry points:
   nexo skills approve ID [--execution-level ...] [--approved-by ...] [--json]
   nexo skills featured [--limit N] [--json]
   nexo skills evolution [--json]
+  nexo contributor status|on|off [--json]
   nexo doctor [--tier boot|runtime|deep|all] [--json] [--fix]
 """
 from __future__ import annotations
@@ -458,8 +459,18 @@ def _update(args):
         ensure_full_disk_access_choice,
         format_full_disk_access_label,
     )
+    from public_contribution import (
+        ensure_public_contribution_choice,
+        format_public_contribution_label,
+    )
 
     interactive = sys.stdin.isatty() and sys.stdout.isatty()
+    progress_messages: list[str] = []
+
+    def progress(message: str) -> None:
+        progress_messages.append(message)
+        if not args.json:
+            print(f"[NEXO] {message}", flush=True)
 
     dest = NEXO_HOME
     src_dir, repo_dir = _resolve_sync_source()
@@ -475,20 +486,25 @@ def _update(args):
             )
             return 1
 
-        result = handle_update()
+        result = handle_update(progress_fn=progress)
         choice = ensure_power_policy_choice(interactive=interactive, reason="update")
         power_result = apply_power_policy(choice.get("policy"))
         fda_choice = ensure_full_disk_access_choice(interactive=interactive, reason="update")
+        contrib_choice = ensure_public_contribution_choice(interactive=interactive, reason="update")
         if args.json:
             print(json.dumps({
                 "mode": "packaged",
                 "message": result,
+                "progress": progress_messages,
                 "power_policy": choice.get("policy"),
                 "power_action": power_result.get("action"),
                 "power_details": power_result.get("details"),
                 "full_disk_access_status": fda_choice.get("status"),
                 "full_disk_access_reasons": fda_choice.get("reasons"),
                 "full_disk_access_message": fda_choice.get("message"),
+                "public_contribution_mode": contrib_choice.get("mode"),
+                "public_contribution_status": contrib_choice.get("status"),
+                "public_contribution_message": contrib_choice.get("message"),
             }, indent=2, ensure_ascii=False))
         else:
             print(result)
@@ -500,21 +516,31 @@ def _update(args):
                 print(f"Full Disk Access: {format_full_disk_access_label(fda_choice.get('status'))}")
             if fda_choice.get("message"):
                 print(f"Full Disk Access: {fda_choice.get('message')}")
+            if contrib_choice.get("prompted"):
+                print(f"Contributor mode: {format_public_contribution_label(contrib_choice)}")
+            if contrib_choice.get("message"):
+                print(f"Contributor mode: {contrib_choice.get('message')}")
         return 0 if "UPDATE SUCCESSFUL" in result or "Already up to date" in result else 1
 
     choice = ensure_power_policy_choice(interactive=interactive, reason="update")
     power_result = apply_power_policy(choice.get("policy"))
     fda_choice = ensure_full_disk_access_choice(interactive=interactive, reason="update")
-    result = manual_sync_update(interactive=interactive, allow_source_pull=True)
+    contrib_choice = ensure_public_contribution_choice(interactive=interactive, reason="update")
+    result = manual_sync_update(interactive=interactive, allow_source_pull=True, progress_fn=progress)
     result["power_policy"] = choice.get("policy")
     result["power_action"] = power_result.get("action")
     result["power_details"] = power_result.get("details")
     result["full_disk_access_status"] = fda_choice.get("status")
     result["full_disk_access_reasons"] = fda_choice.get("reasons")
+    result["public_contribution_mode"] = contrib_choice.get("mode")
+    result["public_contribution_status"] = contrib_choice.get("status")
+    result["progress"] = progress_messages
     if power_result.get("message"):
         result["power_message"] = power_result.get("message")
     if fda_choice.get("message"):
         result["full_disk_access_message"] = fda_choice.get("message")
+    if contrib_choice.get("message"):
+        result["public_contribution_message"] = contrib_choice.get("message")
     if args.json:
         print(json.dumps(result, indent=2, ensure_ascii=False))
     else:
@@ -534,9 +560,78 @@ def _update(args):
                 print(f"  Full Disk Access: {format_full_disk_access_label(fda_choice.get('status'))}")
             if fda_choice.get("message"):
                 print(f"  Full Disk Access: {fda_choice.get('message')}")
+            if contrib_choice.get("prompted"):
+                print(f"  Contributor mode: {format_public_contribution_label(contrib_choice)}")
+            if contrib_choice.get("message"):
+                print(f"  Contributor mode: {contrib_choice.get('message')}")
         else:
             print(f"UPDATE FAILED: {result.get('error', 'sync failed')}", file=sys.stderr)
     return 0 if result.get("ok") else 1
+
+
+def _contributor_status(args):
+    from public_contribution import (
+        format_public_contribution_label,
+        load_public_contribution_config,
+        refresh_public_contribution_state,
+    )
+
+    config = refresh_public_contribution_state(load_public_contribution_config())
+    payload = {
+        "enabled": bool(config.get("enabled")),
+        "mode": config.get("mode"),
+        "status": config.get("status"),
+        "label": format_public_contribution_label(config),
+        "github_user": config.get("github_user"),
+        "fork_repo": config.get("fork_repo"),
+        "active_pr_url": config.get("active_pr_url"),
+        "active_branch": config.get("active_branch"),
+        "cooldown_until": config.get("cooldown_until"),
+        "last_result": config.get("last_result"),
+    }
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+    else:
+        print(f"Contributor mode: {payload['label']}")
+        if payload["github_user"]:
+            print(f"  GitHub user: {payload['github_user']}")
+        if payload["fork_repo"]:
+            print(f"  Fork: {payload['fork_repo']}")
+        if payload["active_pr_url"]:
+            print(f"  Active Draft PR: {payload['active_pr_url']}")
+        if payload["cooldown_until"]:
+            print(f"  Cooldown until: {payload['cooldown_until']}")
+        if payload["last_result"]:
+            print(f"  Last result: {payload['last_result']}")
+    return 0
+
+
+def _contributor_on(args):
+    from public_contribution import ensure_public_contribution_choice, format_public_contribution_label
+
+    interactive = sys.stdin.isatty() and sys.stdout.isatty()
+    if not interactive:
+        print("Contributor mode requires an interactive terminal to confirm GitHub Draft PR consent.", file=sys.stderr)
+        return 1
+    config = ensure_public_contribution_choice(interactive=True, reason="contributor", force_prompt=True)
+    if args.json:
+        print(json.dumps(config, indent=2, ensure_ascii=False))
+    else:
+        print(f"Contributor mode: {format_public_contribution_label(config)}")
+        if config.get("message"):
+            print(config.get("message"))
+    return 0 if config.get("mode") == "draft_prs" else 1
+
+
+def _contributor_off(args):
+    from public_contribution import disable_public_contribution, format_public_contribution_label
+
+    config = disable_public_contribution()
+    if args.json:
+        print(json.dumps(config, indent=2, ensure_ascii=False))
+    else:
+        print(f"Contributor mode: {format_public_contribution_label(config)}")
+    return 0
 
 
 def _service_control(service_name: str, action: str) -> int:
@@ -767,6 +862,7 @@ Commands:
                                                       Personal scripts
   nexo skills list|apply|sync|approve                  Executable skills
   nexo update                                          Update installed runtime
+  nexo contributor status|on|off                       Public Draft PR contribution mode
   nexo dashboard on|off|status                         Web dashboard control
 
 Run 'nexo <command> --help' for details.
@@ -861,6 +957,11 @@ def main():
     doctor_parser.add_argument("--json", action="store_true", help="JSON output")
     doctor_parser.add_argument("--fix", action="store_true", help="Apply deterministic fixes")
 
+    # -- contributor --
+    contributor_parser = sub.add_parser("contributor", help="Public Draft PR contribution mode")
+    contributor_parser.add_argument("action", choices=["status", "on", "off"], help="Manage contributor mode")
+    contributor_parser.add_argument("--json", action="store_true", help="JSON output")
+
     # -- skills --
     skills_parser = sub.add_parser("skills", help="Skills v2 runtime")
     skills_sub = skills_parser.add_subparsers(dest="skills_command")
@@ -946,6 +1047,15 @@ def main():
         return _update(args)
     elif args.command == "doctor":
         return _doctor(args)
+    elif args.command == "contributor":
+        if args.action == "status":
+            return _contributor_status(args)
+        elif args.action == "on":
+            return _contributor_on(args)
+        elif args.action == "off":
+            return _contributor_off(args)
+        contributor_parser.print_help()
+        return 0
     elif args.command == "skills":
         if args.skills_command == "list":
             return _skills_list(args)

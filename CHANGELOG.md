@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.6.7] - 2026-04-04
+
+### Public Contributor Evolution
+- Added an opt-in public contribution mode for install/update on GitHub-authenticated machines.
+- Public contribution runs now work from an isolated checkout, use a dedicated `public_core` evolution policy, and can open a single Draft PR against the public repository before pausing that machine.
+- Added contributor lifecycle controls via `nexo contributor status|on|off`, persisted contributor state in `schedule.json`, and guardrails that prevent personal runtime data, local prompts, secrets, or personal scripts from reaching public proposals.
+
+### Personal MCP Scaffolding
+- Added `nexo_personal_plugin_create`, a core tool that scaffolds persistent personal MCP plugins in `NEXO_HOME/plugins` with an optional companion script in `NEXO_HOME/scripts`.
+- Added a reusable personal plugin template so user-specific capabilities can survive updates without being promoted to core.
+
+### Operator Experience & Memory Continuity
+- Install/update now emit clearer progress messages while copying files, pulling changes, running migrations, reconciling schedules, and verifying the runtime.
+- `nexo_session_diary_read(last_day=true)` now returns a recent continuity window (~36h) instead of truncating to the latest calendar day.
+- Auto-close diary promotion now uses checkpoint/tool-log context so reconstructed diaries keep more of the session goal, next step, and reasoning thread.
+
 ## [2.6.6] - 2026-04-04
 
 ### macOS Permissions

@@ -341,11 +341,20 @@ def _rollback_npm_package(target_version: str) -> str | None:
     return None
 
 
-def _handle_packaged_update() -> str:
+def _emit_progress(progress_fn, message: str) -> None:
+    if callable(progress_fn):
+        try:
+            progress_fn(message)
+        except Exception:
+            pass
+
+
+def _handle_packaged_update(progress_fn=None) -> str:
     """Update a packaged (npm) install — no git repo available."""
     old_version = _read_version()
 
     # 1. Backup databases BEFORE any changes
+    _emit_progress(progress_fn, "Backing up runtime databases...")
     backup_dir, backup_err = _backup_databases()
     if backup_err:
         return f"ABORTED at backup: {backup_err}"
@@ -353,12 +362,14 @@ def _handle_packaged_update() -> str:
     # 2. Backup NEXO_HOME code tree BEFORE npm update
     #    postinstall copies hooks/core/plugins/scripts into NEXO_HOME,
     #    so we need a full snapshot to restore on failure.
+    _emit_progress(progress_fn, "Backing up runtime files...")
     code_backup_dir, code_err = _backup_code_tree()
     if code_err:
         return f"ABORTED at code tree backup: {code_err}"
 
     # 3. Run npm update (postinstall.js will migrate NEXO_HOME in-place)
     try:
+        _emit_progress(progress_fn, "Downloading and applying the latest npm package...")
         result = subprocess.run(
             ["npm", "update", "-g", "nexo-brain"],
             capture_output=True, text=True, timeout=120,
@@ -402,16 +413,19 @@ def _handle_packaged_update() -> str:
     errors = []
 
     # Reinstall pip deps for new version
+    _emit_progress(progress_fn, "Reconciling Python dependencies...")
     pip_err = _reinstall_pip_deps()
     if pip_err:
         errors.append(f"pip deps: {pip_err}")
 
     # Run migrations
+    _emit_progress(progress_fn, "Running runtime migrations...")
     mig_err = _run_migrations()
     if mig_err:
         errors.append(f"migrations: {mig_err}")
 
     # Verify server can still import
+    _emit_progress(progress_fn, "Verifying runtime import health...")
     verify_err = _verify_import()
     if verify_err:
         errors.append(f"verification: {verify_err}")
@@ -457,7 +471,7 @@ def _handle_packaged_update() -> str:
     return "\n".join(lines)
 
 
-def handle_update(remote: str = "origin", branch: str = "main") -> str:
+def handle_update(remote: str = "origin", branch: str = "main", progress_fn=None) -> str:
     """Pull latest NEXO code, backup databases, run migrations, and verify.
 
     Supports both git checkouts and packaged (npm) installs.
@@ -477,7 +491,7 @@ def handle_update(remote: str = "origin", branch: str = "main") -> str:
     """
     # Packaged install — no git repo
     if not _is_git_repo():
-        return _handle_packaged_update()
+        return _handle_packaged_update(progress_fn=progress_fn)
 
     steps_done = []
     old_commit = None
@@ -485,6 +499,7 @@ def handle_update(remote: str = "origin", branch: str = "main") -> str:
 
     try:
         # Step 1: Check dirty (full worktree)
+        _emit_progress(progress_fn, "Checking repository state...")
         dirty_err = _check_dirty()
         if dirty_err:
             return f"ABORTED: {dirty_err}"
@@ -498,12 +513,14 @@ def handle_update(remote: str = "origin", branch: str = "main") -> str:
             return "ABORTED: Not a git repository or git not available."
 
         # Step 2: Backup databases
+        _emit_progress(progress_fn, "Backing up runtime databases...")
         backup_dir, backup_err = _backup_databases()
         if backup_err:
             return f"ABORTED at backup: {backup_err}"
         steps_done.append("backup")
 
         # Step 3: git pull
+        _emit_progress(progress_fn, "Pulling latest source changes...")
         rc, pull_out, pull_err = _git("pull", remote, branch)
         if rc != 0:
             return f"ABORTED at git pull: {pull_err or pull_out}"
@@ -517,6 +534,7 @@ def handle_update(remote: str = "origin", branch: str = "main") -> str:
 
         # Step 5: Reinstall pip dependencies if requirements.txt changed
         if deps_changed or version_changed:
+            _emit_progress(progress_fn, "Reconciling Python dependencies...")
             pip_err = _reinstall_pip_deps()
             if pip_err:
                 raise RuntimeError(f"Pip install failed: {pip_err}")
@@ -524,12 +542,14 @@ def handle_update(remote: str = "origin", branch: str = "main") -> str:
 
         # Step 6: Run migrations if version changed
         if version_changed:
+            _emit_progress(progress_fn, "Running runtime migrations...")
             mig_err = _run_migrations()
             if mig_err:
                 raise RuntimeError(f"Migration failed: {mig_err}")
             steps_done.append("migrations")
 
         # Step 7: Verify import
+        _emit_progress(progress_fn, "Verifying runtime import health...")
         verify_err = _verify_import()
         if verify_err:
             raise RuntimeError(f"Verification failed: {verify_err}")
@@ -540,6 +560,7 @@ def handle_update(remote: str = "origin", branch: str = "main") -> str:
         try:
             cron_sync_path = SRC_DIR / "crons" / "sync.py"
             if cron_sync_path.exists():
+                _emit_progress(progress_fn, "Syncing core cron definitions...")
                 r = subprocess.run(
                     [sys.executable, str(cron_sync_path)],
                     capture_output=True, text=True, timeout=30,
@@ -557,6 +578,7 @@ def handle_update(remote: str = "origin", branch: str = "main") -> str:
 
         # Step 9: Sync hooks to NEXO_HOME
         try:
+            _emit_progress(progress_fn, "Syncing core Claude hooks...")
             _sync_hooks_to_home()
             steps_done.append("hook-sync")
         except Exception as e:

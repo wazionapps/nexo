@@ -1236,7 +1236,7 @@ def _restore_runtime_tree(backup_dir: str, dest: Path = NEXO_HOME) -> None:
             shutil.copy2(str(item), str(target))
 
 
-def _copy_runtime_from_source(src_dir: Path, repo_dir: Path, dest: Path = NEXO_HOME) -> dict:
+def _copy_runtime_from_source(src_dir: Path, repo_dir: Path, dest: Path = NEXO_HOME, progress_fn=None) -> dict:
     import shutil
 
     packages = ["db", "cognitive", "doctor", "dashboard", "rules", "crons", "hooks"]
@@ -1253,6 +1253,7 @@ def _copy_runtime_from_source(src_dir: Path, repo_dir: Path, dest: Path = NEXO_H
     copied_packages = 0
     copied_files = 0
 
+    _emit_progress(progress_fn, "Copying core packages...")
     for pkg in packages:
         pkg_src = src_dir / pkg
         pkg_dest = dest / pkg
@@ -1266,12 +1267,14 @@ def _copy_runtime_from_source(src_dir: Path, repo_dir: Path, dest: Path = NEXO_H
             )
             copied_packages += 1
 
+    _emit_progress(progress_fn, "Copying core modules...")
     for name in flat_files:
         src_file = src_dir / name
         if src_file.is_file():
             shutil.copy2(str(src_file), str(dest / name))
             copied_files += 1
 
+    _emit_progress(progress_fn, "Copying plugin modules...")
     plugins_src = src_dir / "plugins"
     plugins_dest = dest / "plugins"
     if plugins_src.is_dir():
@@ -1280,6 +1283,7 @@ def _copy_runtime_from_source(src_dir: Path, repo_dir: Path, dest: Path = NEXO_H
             if item.is_file() and item.suffix == ".py":
                 shutil.copy2(str(item), str(plugins_dest / item.name))
 
+    _emit_progress(progress_fn, "Copying scripts...")
     scripts_src = src_dir / "scripts"
     scripts_dest = dest / "scripts"
     if scripts_src.is_dir():
@@ -1297,6 +1301,7 @@ def _copy_runtime_from_source(src_dir: Path, repo_dir: Path, dest: Path = NEXO_H
                 if item.suffix == ".sh":
                     dst.chmod(0o755)
 
+    _emit_progress(progress_fn, "Copying templates and version metadata...")
     templates_src = repo_dir / "templates"
     templates_dest = dest / "templates"
     if templates_src.is_dir():
@@ -1317,6 +1322,7 @@ def _copy_runtime_from_source(src_dir: Path, repo_dir: Path, dest: Path = NEXO_H
         except Exception:
             pass
 
+    _emit_progress(progress_fn, "Copying core skills and runtime wrapper...")
     skills_src = src_dir / "skills"
     skills_dest = dest / "skills-core"
     if skills_src.is_dir():
@@ -1365,10 +1371,11 @@ def _reinstall_runtime_pip_deps(runtime_root: Path = NEXO_HOME) -> bool:
         return False
 
 
-def _run_runtime_post_sync(dest: Path = NEXO_HOME) -> tuple[bool, list[str]]:
+def _run_runtime_post_sync(dest: Path = NEXO_HOME, progress_fn=None) -> tuple[bool, list[str]]:
     actions: list[str] = []
     env = {**os.environ, "NEXO_HOME": str(dest), "NEXO_CODE": str(dest)}
     try:
+        _emit_progress(progress_fn, "Initializing database and reconciling personal schedules...")
         init_result = subprocess.run(
             [
                 sys.executable,
@@ -1394,6 +1401,7 @@ def _run_runtime_post_sync(dest: Path = NEXO_HOME) -> tuple[bool, list[str]]:
     except Exception as e:
         return False, [f"runtime init error: {e}"]
 
+    _emit_progress(progress_fn, "Reconciling Python dependencies...")
     if _reinstall_runtime_pip_deps(dest):
         actions.append("pip-deps")
     else:
@@ -1402,6 +1410,7 @@ def _run_runtime_post_sync(dest: Path = NEXO_HOME) -> tuple[bool, list[str]]:
     sync_path = dest / "crons" / "sync.py"
     if sync_path.is_file():
         try:
+            _emit_progress(progress_fn, "Syncing core cron definitions...")
             sync_result = subprocess.run(
                 [sys.executable, str(sync_path)],
                 cwd=str(dest),
@@ -1418,10 +1427,12 @@ def _run_runtime_post_sync(dest: Path = NEXO_HOME) -> tuple[bool, list[str]]:
 
     from runtime_power import apply_power_policy
 
+    _emit_progress(progress_fn, "Refreshing runtime power helper...")
     power_result = apply_power_policy()
     if power_result.get("ok"):
         actions.append(f"power:{power_result.get('action')}")
 
+    _emit_progress(progress_fn, "Verifying runtime imports...")
     verify = subprocess.run(
         [sys.executable, "-c", "import server"],
         cwd=str(dest),
@@ -1460,11 +1471,20 @@ def _write_update_summary(summary: dict):
         _log(f"Failed to write update summary: {e}")
 
 
-def manual_sync_update(*, interactive: bool = False, allow_source_pull: bool = True) -> dict:
+def _emit_progress(progress_fn, message: str) -> None:
+    if callable(progress_fn):
+        try:
+            progress_fn(message)
+        except Exception:
+            pass
+
+
+def manual_sync_update(*, interactive: bool = False, allow_source_pull: bool = True, progress_fn=None) -> dict:
     src_dir, repo_dir = _resolve_sync_source()
     if src_dir is None or repo_dir is None:
         return {"ok": False, "mode": "sync", "error": "No source repo recorded for this runtime."}
 
+    _emit_progress(progress_fn, "Checking recorded source repository...")
     source_status = _source_repo_status(repo_dir)
     pulled = False
     old_head = source_status.get("local_head")
@@ -1474,17 +1494,21 @@ def manual_sync_update(*, interactive: bool = False, allow_source_pull: bool = T
         elif source_status.get("diverged"):
             _log("Source repo diverged; syncing local tree without remote pull.")
         elif source_status.get("behind"):
+            _emit_progress(progress_fn, "Pulling latest source changes...")
             rc, _, pull_err = _git_in_repo(repo_dir, "pull", "--ff-only", timeout=60)
             if rc != 0:
                 return {"ok": False, "mode": "sync", "error": pull_err or "git pull failed"}
             pulled = True
 
+    _emit_progress(progress_fn, "Creating runtime backups...")
     db_backup_dir = _backup_dbs()
     tree_backup_dir = _backup_runtime_tree(NEXO_HOME)
     sync_result = {"ok": False, "mode": "sync", "pulled_source": pulled, "backup_dir": db_backup_dir, "tree_backup": tree_backup_dir}
     try:
-        copy_stats = _copy_runtime_from_source(src_dir, repo_dir, NEXO_HOME)
-        ok, actions = _run_runtime_post_sync(NEXO_HOME)
+        _emit_progress(progress_fn, "Syncing runtime files...")
+        copy_stats = _copy_runtime_from_source(src_dir, repo_dir, NEXO_HOME, progress_fn=progress_fn)
+        _emit_progress(progress_fn, "Reconciling runtime state...")
+        ok, actions = _run_runtime_post_sync(NEXO_HOME, progress_fn=progress_fn)
         if not ok:
             raise RuntimeError("; ".join(actions))
         sync_result.update({
@@ -1496,7 +1520,9 @@ def manual_sync_update(*, interactive: bool = False, allow_source_pull: bool = T
             "source": copy_stats["source"],
             "repo": copy_stats["repo"],
         })
+        _emit_progress(progress_fn, "Runtime update completed.")
     except Exception as e:
+        _emit_progress(progress_fn, "Update failed; restoring previous runtime state...")
         _restore_runtime_tree(tree_backup_dir, NEXO_HOME)
         if db_backup_dir:
             _restore_dbs(db_backup_dir)

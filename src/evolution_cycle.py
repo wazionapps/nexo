@@ -57,16 +57,20 @@ def normalize_objective(obj: dict | None) -> dict:
 
     if "evolution_mode" in source:
         mode = str(source.get("evolution_mode") or "auto").strip().lower()
+        if mode in {"public", "public_core", "contributor", "draft_prs"}:
+            mode = "public_core"
     else:
         legacy_mode = str(source.get("review_mode") or "").strip().lower()
         if legacy_mode in {"manual", "review"}:
             mode = "review"
         elif legacy_mode in {"managed", "hybrid", "owner", "core"}:
             mode = "managed"
+        elif legacy_mode in {"public", "public_core", "contributor", "draft_prs"}:
+            mode = "public_core"
         else:
             mode = "auto"
 
-    if mode not in {"auto", "review", "managed"}:
+    if mode not in {"auto", "review", "managed", "public_core"}:
         mode = "auto"
 
     dimensions = source.get("dimensions")
@@ -276,6 +280,10 @@ def build_evolution_prompt(week_data: dict, objective: dict) -> str:
         mode_desc = f"owner-managed, max {max_auto} auto-applied changes with rollback and followups"
         safe_zones = "~/.nexo/scripts/, ~/.nexo/plugins/, ~/.nexo/brain/, NEXO_CODE/src, repo bin/docs/templates/tests"
         immutable_files = "db.py, server.py, plugin_loader.py, storage_router.py, nexo-watchdog.sh, evolution_cycle.py, CLAUDE.md, personality.md, user-profile.md"
+    elif mode == "public_core":
+        mode_desc = "public core contribution via isolated checkout and Draft PR"
+        safe_zones = "isolated public repo checkout only"
+        immutable_files = "personal runtime, ~/.nexo/**, local DBs/logs, CLAUDE.md, user-profile.md"
     else:
         mode_desc = f"public auto, max {max_auto} auto-applied changes in personal safe zones"
         safe_zones = "~/.nexo/scripts/, ~/.nexo/plugins/"
@@ -338,6 +346,48 @@ OUTPUT FORMAT (JSON):
 Max 3 proposals. Quality over quantity. If nothing needs improving, say so."""
 
     return prompt
+
+
+def build_public_contribution_prompt(*, repo_root: str, cycle_number: int) -> str:
+    """Prompt for the public-core contributor mode.
+
+    This prompt must never rely on private runtime state. It should inspect only
+    the isolated public repo checkout, make one coherent improvement, and end
+    by returning machine-readable summary JSON.
+    """
+
+    return f"""You are NEXO Public Evolution.
+
+You are running inside an isolated checkout of the public NEXO repository.
+Your job is to make one technically coherent improvement to the public core and
+prepare it for a Draft PR.
+
+STRICT RULES:
+- Work only inside this repository checkout: {repo_root}
+- You may modify only public core surfaces: src/, bin/, tests/, templates/, hooks/, migrations/, .claude-plugin/
+- Do not read or use ~/.nexo, local DBs, personal scripts, emails, logs, prompts, secrets, or any user-identifying paths
+- Do not push, open PRs, or change git remotes yourself
+- Do not touch README, website, gh-pages, changelog, or release metadata in this mode
+- Focus on one concrete improvement only
+- Run validation for the files you touched
+
+What to do:
+1. Inspect the repo and find a real, self-contained improvement in reliability, install/update behavior, cron recovery, diagnostics, hooks, tests, or other core infrastructure.
+2. Implement the change directly in this checkout.
+3. Run the smallest relevant validation commands.
+4. Return ONLY valid JSON with this shape:
+
+{{
+  "title": "type: short title",
+  "problem": "what was wrong",
+  "summary": "what you changed",
+  "tests": ["command 1", "command 2"],
+  "risks": ["risk 1", "risk 2"]
+}}
+
+Cycle: #{cycle_number}
+Quality over quantity. One strong improvement is better than three weak ones.
+"""
 
 
 def max_auto_changes(total_evolutions: int) -> int:

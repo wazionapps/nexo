@@ -25,8 +25,12 @@ def _load_runner_module(monkeypatch, nexo_home: Path):
     monkeypatch.setenv("NEXO_CODE", str(REPO_SRC))
 
     import evolution_cycle
+    import runtime_power
+    import public_contribution
 
     importlib.reload(evolution_cycle)
+    importlib.reload(runtime_power)
+    importlib.reload(public_contribution)
     sys.modules.pop("nexo_evolution_run_test", None)
     spec = importlib.util.spec_from_file_location("nexo_evolution_run_test", EVOLUTION_RUN)
     module = importlib.util.module_from_spec(spec)
@@ -120,6 +124,22 @@ class TestEvolutionObjective:
         assert "review_mode" not in objective
         assert "cycles_completed" not in objective
 
+    def test_load_objective_normalizes_public_contribution_alias(self, evolution_env, monkeypatch):
+        objective_file = evolution_env / "brain" / "evolution-objective.json"
+        objective_file.write_text(json.dumps({
+            "objective": "Improve public core reliability",
+            "focus_areas": ["error_prevention"],
+            "evolution_enabled": True,
+            "evolution_mode": "draft_prs",
+            "dimensions": {"autonomy": {"current": 0, "target": 80}},
+            "total_evolutions": 0,
+        }, indent=2))
+
+        evolution_cycle, _ = _load_runner_module(monkeypatch, evolution_env)
+        objective = evolution_cycle.load_objective()
+
+        assert objective["evolution_mode"] == "public_core"
+
 
 class TestEvolutionModes:
     def test_managed_mode_allows_core_paths_but_auto_does_not(self, evolution_env, monkeypatch):
@@ -195,3 +215,41 @@ class TestManagedExecution:
         assert followup[0].startswith("NF-EVO-L")
         assert "Patch repair.py" in followup[1]
         assert target_file.read_text() == "print('original')\n"
+
+
+class TestPublicContributionExecution:
+    def test_run_short_circuits_into_public_contribution_mode(self, evolution_env, monkeypatch):
+        objective_file = evolution_env / "brain" / "evolution-objective.json"
+        objective_file.write_text(json.dumps({
+            "objective": "Improve public core reliability",
+            "focus_areas": ["error_prevention"],
+            "evolution_enabled": True,
+            "evolution_mode": "public_core",
+            "dimensions": {"autonomy": {"current": 0, "target": 80}},
+            "total_evolutions": 0,
+            "consecutive_failures": 0,
+        }, indent=2))
+
+        schedule_file = evolution_env / "config" / "schedule.json"
+        schedule_file.parent.mkdir(parents=True, exist_ok=True)
+        schedule_file.write_text(json.dumps({
+            "timezone": "UTC",
+            "auto_update": True,
+            "public_contribution": {
+                "enabled": True,
+                "mode": "draft_prs",
+                "status": "active",
+                "github_user": "alice",
+                "fork_repo": "alice/nexo",
+            },
+            "processes": {},
+        }, indent=2))
+
+        _, runner = _load_runner_module(monkeypatch, evolution_env)
+        called = []
+        runner.run_public_contribution_cycle = lambda **kwargs: called.append(kwargs["cycle_num"])
+        runner.dry_run_restore_test = lambda: (_ for _ in ()).throw(AssertionError("local restore test should not run"))
+
+        runner.run()
+
+        assert called == [1]

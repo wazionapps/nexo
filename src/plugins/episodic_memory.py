@@ -236,7 +236,7 @@ def handle_session_diary_read(session_id: str = '', last_n: int = 3, last_day: b
     Args:
         session_id: Specific session ID to read (optional)
         last_n: Number of recent entries to return (default 3)
-        last_day: If true, returns ALL entries from the most recent day (multi-terminal aware). Use this at startup.
+        last_day: If true, returns the recent continuity window (~36h), including the previous evening. Use this at startup.
         domain: Filter by project context: ecommerce, project-a, nexo, project-b, server, other
         brief: If true, returns ONLY the last diary entry with summary + mental_state + context_next.
                Use this at startup for fast context loading (~1K chars instead of full dump).

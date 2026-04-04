@@ -32,6 +32,7 @@ const LAUNCH_AGENTS = path.join(
   "LaunchAgents"
 );
 const MACOS_FDA_SETTINGS_URL = "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles";
+const PUBLIC_CONTRIBUTION_UPSTREAM = "wazionapps/nexo";
 
 function isEphemeralInstall(nexoHome) {
   const homeDir = require("os").homedir();
@@ -433,6 +434,22 @@ function getDefaultSchedule(timezone) {
     full_disk_access_status: "unset",
     full_disk_access_status_version: 1,
     full_disk_access_reasons: [],
+    public_contribution: {
+      enabled: false,
+      mode: "unset",
+      consent_version: 1,
+      github_user: "",
+      upstream_repo: PUBLIC_CONTRIBUTION_UPSTREAM,
+      fork_repo: "",
+      machine_id: crypto.createHash("sha1").update(require("os").hostname()).digest("hex").slice(0, 12),
+      active_pr_url: "",
+      active_pr_number: null,
+      active_branch: "",
+      status: "unset",
+      cooldown_until: "",
+      last_run_at: "",
+      last_result: "",
+    },
     processes: {
       "cognitive-decay": { hour: 3, minute: 0 },
       "postmortem": { hour: 23, minute: 30 },
@@ -443,6 +460,23 @@ function getDefaultSchedule(timezone) {
       "followup-hygiene": { day: "sunday", hour: 5, minute: 0 },
     },
   };
+}
+
+function normalizePublicContributionConfig(config = {}) {
+  const base = getDefaultSchedule().public_contribution;
+  const merged = { ...base, ...(config || {}) };
+  merged.enabled = Boolean(merged.enabled);
+  merged.mode = String(merged.mode || "unset").toLowerCase();
+  merged.status = String(merged.status || "unset").toLowerCase();
+  merged.github_user = String(merged.github_user || "").trim();
+  merged.fork_repo = String(merged.fork_repo || "").trim();
+  merged.upstream_repo = String(merged.upstream_repo || PUBLIC_CONTRIBUTION_UPSTREAM).trim() || PUBLIC_CONTRIBUTION_UPSTREAM;
+  merged.active_pr_url = String(merged.active_pr_url || "").trim();
+  merged.active_branch = String(merged.active_branch || "").trim();
+  merged.cooldown_until = String(merged.cooldown_until || "").trim();
+  merged.last_run_at = String(merged.last_run_at || "").trim();
+  merged.last_result = String(merged.last_result || "").trim();
+  return merged;
 }
 
 async function maybeConfigurePowerPolicy(schedule, useDefaults) {
@@ -473,6 +507,84 @@ async function maybeConfigurePowerPolicy(schedule, useDefaults) {
     schedule.power_policy = "disabled";
   }
   schedule.power_policy_version = 2;
+  fs.writeFileSync(path.join(NEXO_HOME, "config", "schedule.json"), JSON.stringify(schedule, null, 2));
+  return schedule;
+}
+
+function ghLogin() {
+  const login = run("gh api user --jq .login 2>/dev/null");
+  return (login || "").trim();
+}
+
+function ensureFork(login) {
+  if (!login) return { ok: false, message: "Missing GitHub login.", forkRepo: "" };
+  const forkRepo = `${login}/nexo`;
+  const existing = run(`gh repo view "${forkRepo}" --json nameWithOwner 2>/dev/null`);
+  if (existing) return { ok: true, message: "", forkRepo };
+  const created = run(`gh repo fork "${PUBLIC_CONTRIBUTION_UPSTREAM}" --clone=false --remote=false 2>/dev/null`);
+  if (created !== null) return { ok: true, message: "", forkRepo };
+  return { ok: false, message: `Could not ensure fork ${forkRepo}.`, forkRepo: "" };
+}
+
+async function maybeConfigurePublicContribution(schedule, useDefaults) {
+  const current = normalizePublicContributionConfig((schedule && schedule.public_contribution) || {});
+  if (current.mode && current.mode !== "unset") {
+    schedule.public_contribution = current;
+    fs.writeFileSync(path.join(NEXO_HOME, "config", "schedule.json"), JSON.stringify(schedule, null, 2));
+    return schedule;
+  }
+
+  if (useDefaults || !process.stdin.isTTY || !process.stdout.isTTY) {
+    schedule.public_contribution = current;
+    fs.writeFileSync(path.join(NEXO_HOME, "config", "schedule.json"), JSON.stringify(schedule, null, 2));
+    return schedule;
+  }
+
+  console.log("");
+  log("Optional public contribution mode:");
+  log("If enabled, this machine may prepare core NEXO improvements from an isolated checkout and open a Draft PR to the public repository.");
+  log("NEXO never auto-merges, and it pauses public evolution on this machine while that Draft PR stays open.");
+  log("Public contribution must never publish personal scripts, runtime data, local prompts, logs, or secrets.");
+  const answer = (await ask("  Enable public contribution via Draft PRs on this machine? [y/N/later]: ")).trim().toLowerCase();
+  if (answer === "y" || answer === "yes") {
+    const login = ghLogin();
+    if (!login) {
+      current.enabled = false;
+      current.mode = "pending_auth";
+      current.status = "pending_auth";
+      current.github_user = "";
+      current.fork_repo = "";
+      log("GitHub CLI authentication is missing. Contributor mode is pending until 'gh auth login' succeeds.");
+    } else {
+      const fork = ensureFork(login);
+      if (!fork.ok) {
+        current.enabled = false;
+        current.mode = "pending_auth";
+        current.status = "pending_auth";
+        current.github_user = login;
+        current.fork_repo = "";
+        log(fork.message || "Could not ensure a GitHub fork.");
+      } else {
+        current.enabled = true;
+        current.mode = "draft_prs";
+        current.status = "active";
+        current.github_user = login;
+        current.fork_repo = fork.forkRepo;
+      }
+    }
+  } else if (answer === "later" || answer === "l" || answer === "") {
+    current.enabled = false;
+    current.mode = "unset";
+    current.status = "unset";
+  } else {
+    current.enabled = false;
+    current.mode = "off";
+    current.status = "off";
+    current.github_user = "";
+    current.fork_repo = "";
+  }
+
+  schedule.public_contribution = current;
   fs.writeFileSync(path.join(NEXO_HOME, "config", "schedule.json"), JSON.stringify(schedule, null, 2));
   return schedule;
 }
@@ -980,6 +1092,7 @@ async function main() {
         // Regenerate all core LaunchAgents / systemd timers
         let migSchedule = loadOrCreateSchedule(NEXO_HOME);
         migSchedule = await maybeConfigurePowerPolicy(migSchedule, useDefaults);
+        migSchedule = await maybeConfigurePublicContribution(migSchedule, useDefaults);
         const migPython = findVenvPython(NEXO_HOME) || "python3";
         migSchedule = await maybeConfigureFullDiskAccess(migSchedule, useDefaults, migPython);
         let migOptionals = {};
@@ -1616,6 +1729,7 @@ async function main() {
   );
 
   // Copy source files
+  log("Copying core runtime files...");
   const srcDir = path.join(__dirname, "..", "src");
   const pluginsSrcDir = path.join(srcDir, "plugins");
   const scriptsSrcDir = path.join(srcDir, "scripts");
@@ -1694,6 +1808,7 @@ async function main() {
   fs.writeFileSync(runtimeCliPath, runtimeCli);
   fs.chmodSync(runtimeCliPath, 0o755);
 
+  log("Copying core packages...");
   // Core packages (directories with __init__.py)
   ["db", "cognitive", "doctor"].forEach(pkg => {
     const pkgSrc = path.join(srcDir, pkg);
@@ -1702,6 +1817,7 @@ async function main() {
     }
   });
 
+  log("Copying plugins, scripts, and templates...");
   // Plugins (all .py files in plugins/)
   fs.mkdirSync(path.join(NEXO_HOME, "plugins"), { recursive: true });
   if (fs.existsSync(pluginsSrcDir)) {
@@ -2254,6 +2370,7 @@ ${doScan ? `- Stack: ${Object.keys(profileData.code.languages || {}).slice(0, 5)
   log("Setting up automated processes...");
   let schedule = loadOrCreateSchedule(NEXO_HOME);
   schedule = await maybeConfigurePowerPolicy(schedule, useDefaults);
+  schedule = await maybeConfigurePublicContribution(schedule, useDefaults);
   schedule = await maybeConfigureFullDiskAccess(schedule, useDefaults, python);
   const enabledOptionals = { dashboard: doDashboard };
   if (isEphemeralInstall(NEXO_HOME)) {

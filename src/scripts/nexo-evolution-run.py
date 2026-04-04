@@ -13,6 +13,7 @@ PROPOSE proposals are logged for the user's review.
 import json
 import os
 import py_compile
+import re
 import sqlite3
 import subprocess
 import sys
@@ -108,8 +109,11 @@ def _normalize_mode(mode: str) -> str:
         "core": "managed",
         "hybrid": "managed",
         "manual": "review",
+        "public": "public_core",
+        "contributor": "public_core",
+        "draft_prs": "public_core",
     }
-    return aliases.get(value, value if value in {"auto", "review", "managed"} else "auto")
+    return aliases.get(value, value if value in {"auto", "review", "managed", "public_core"} else "auto")
 
 
 def _immutable_files_for_mode(mode: str) -> set[str]:
@@ -140,6 +144,15 @@ def _resolve_claude_cli() -> Path:
     return Path.home() / ".local" / "bin" / "claude"
 
 CLAUDE_CLI = _resolve_claude_cli()
+PUBLIC_ALLOWED_PREFIXES = (
+    "src/",
+    "bin/",
+    "tests/",
+    "templates/",
+    "hooks/",
+    "migrations/",
+    ".claude-plugin/",
+)
 
 # ── Logging ──────────────────────────────────────────────────────────────
 LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -158,7 +171,17 @@ def log(msg: str):
 sys.path.insert(0, str(NEXO_CODE))
 from evolution_cycle import (
     load_objective, save_objective, get_week_data, build_evolution_prompt,
-    dry_run_restore_test, max_auto_changes, create_snapshot
+    dry_run_restore_test, max_auto_changes, create_snapshot, build_public_contribution_prompt
+)
+from public_contribution import (
+    CONTRIB_ARTIFACTS_DIR,
+    CONTRIB_REPO_DIR,
+    CONTRIB_WORKTREES_DIR,
+    UPSTREAM_REPO,
+    can_run_public_contribution,
+    load_public_contribution_config,
+    mark_active_pr,
+    mark_public_contribution_result,
 )
 
 
@@ -211,6 +234,364 @@ def call_claude_cli(prompt: str) -> str:
     if result.returncode != 0:
         raise RuntimeError(f"claude CLI exited {result.returncode}: {result.stderr[:500]}")
     return result.stdout
+
+
+def call_public_claude_cli(prompt: str, *, cwd: Path) -> str:
+    """Run Claude CLI in an isolated public repo checkout."""
+    env = os.environ.copy()
+    env["NEXO_HEADLESS"] = "1"
+    env["NEXO_PUBLIC_CONTRIBUTION"] = "1"
+    env.pop("CLAUDECODE", None)
+    env.pop("CLAUDE_CODE", None)
+
+    result = subprocess.run(
+        [
+            str(CLAUDE_CLI),
+            "-p",
+            prompt,
+            "--model",
+            "opus",
+            "--output-format",
+            "text",
+            "--allowedTools",
+            "Read,Write,Edit,Glob,Grep,Bash",
+        ],
+        cwd=str(cwd),
+        capture_output=True,
+        text=True,
+        timeout=CLI_TIMEOUT,
+        env=env,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"claude CLI exited {result.returncode}: {result.stderr[:500]}")
+    return result.stdout
+
+
+def _git(cwd: Path, *args: str, timeout: int = 60) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["git", *args],
+        cwd=str(cwd),
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
+
+
+def _gh(*args: str, cwd: Path | None = None, timeout: int = 60) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["gh", *args],
+        cwd=str(cwd) if cwd else None,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
+
+
+def _branch_slug(text: str) -> str:
+    raw = re.sub(r"[^a-z0-9._-]+", "-", text.lower()).strip("-")
+    return raw[:48] or "proposal"
+
+
+def _ensure_public_repo_cache(config: dict) -> None:
+    CONTRIB_REPO_DIR.parent.mkdir(parents=True, exist_ok=True)
+    if not (CONTRIB_REPO_DIR / ".git").exists():
+        clone = _git(CONTRIB_REPO_DIR.parent, "clone", f"https://github.com/{config['upstream_repo']}.git", str(CONTRIB_REPO_DIR), timeout=180)
+        if clone.returncode != 0:
+            raise RuntimeError(clone.stderr.strip() or clone.stdout.strip() or "git clone failed")
+    fetch = _git(CONTRIB_REPO_DIR, "fetch", "origin", timeout=120)
+    if fetch.returncode != 0:
+        raise RuntimeError(fetch.stderr.strip() or fetch.stdout.strip() or "git fetch failed")
+
+    remote_url = f"https://github.com/{config['fork_repo']}.git"
+    current = _git(CONTRIB_REPO_DIR, "remote", "get-url", "fork", timeout=10)
+    if current.returncode != 0:
+        add = _git(CONTRIB_REPO_DIR, "remote", "add", "fork", remote_url, timeout=10)
+        if add.returncode != 0:
+            raise RuntimeError(add.stderr.strip() or add.stdout.strip() or "git remote add fork failed")
+    elif current.stdout.strip() != remote_url:
+        set_url = _git(CONTRIB_REPO_DIR, "remote", "set-url", "fork", remote_url, timeout=10)
+        if set_url.returncode != 0:
+            raise RuntimeError(set_url.stderr.strip() or set_url.stdout.strip() or "git remote set-url failed")
+
+
+def _prepare_public_worktree(config: dict, title_hint: str = "evolution") -> tuple[Path, str]:
+    _ensure_public_repo_cache(config)
+    CONTRIB_WORKTREES_DIR.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    branch_name = f"contrib/{config['machine_id']}/{timestamp}-{_branch_slug(title_hint)}"
+    worktree_dir = CONTRIB_WORKTREES_DIR / f"{timestamp}-{_branch_slug(title_hint)}"
+    add = _git(CONTRIB_REPO_DIR, "worktree", "add", "--detach", str(worktree_dir), "origin/main", timeout=120)
+    if add.returncode != 0:
+        raise RuntimeError(add.stderr.strip() or add.stdout.strip() or "git worktree add failed")
+    return worktree_dir, branch_name
+
+
+def _prime_public_git_identity(worktree_dir: Path, config: dict) -> None:
+    github_user = str(config.get("github_user") or "nexo-public-evolution").strip() or "nexo-public-evolution"
+    email = f"{github_user}@users.noreply.github.com"
+    name = f"{github_user} via NEXO Public Evolution"
+    for key, value in (("user.name", name), ("user.email", email)):
+        result = _git(worktree_dir, "config", key, value, timeout=15)
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr.strip() or result.stdout.strip() or f"git config {key} failed")
+
+
+def _remove_public_worktree(worktree_dir: Path) -> None:
+    if not worktree_dir.exists():
+        return
+    _git(CONTRIB_REPO_DIR, "worktree", "remove", str(worktree_dir), "--force", timeout=60)
+
+
+def _parse_summary_json(text: str) -> dict:
+    payload = text.strip()
+    if "```json" in payload:
+        payload = payload.split("```json", 1)[1].split("```", 1)[0]
+    elif "```" in payload:
+        payload = payload.split("```", 1)[1].split("```", 1)[0]
+    try:
+        summary = json.loads(payload.strip())
+        if isinstance(summary, dict):
+            return summary
+    except Exception:
+        pass
+    return {}
+
+
+def _changed_public_files(worktree_dir: Path) -> list[str]:
+    result = _git(worktree_dir, "status", "--porcelain", timeout=30)
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.strip() or result.stdout.strip() or "git status failed")
+    changed: list[str] = []
+    for line in result.stdout.splitlines():
+        if not line:
+            continue
+        path_text = line[3:].strip()
+        if " -> " in path_text:
+            path_text = path_text.split(" -> ", 1)[1].strip()
+        if path_text:
+            changed.append(path_text)
+    return changed
+
+
+def _is_allowed_public_path(rel_path: str) -> bool:
+    return any(rel_path.startswith(prefix) for prefix in PUBLIC_ALLOWED_PREFIXES)
+
+
+def _sanitize_public_diff(worktree_dir: Path, changed_files: list[str]) -> tuple[bool, str]:
+    if not changed_files:
+        return False, "No repository changes were produced."
+    for rel_path in changed_files:
+        if not _is_allowed_public_path(rel_path):
+            return False, f"Changed path is not allowed for public contribution: {rel_path}"
+
+    diff = _git(worktree_dir, "diff", "--no-ext-diff", "--", *changed_files, timeout=60)
+    if diff.returncode != 0:
+        return False, diff.stderr.strip() or diff.stdout.strip() or "git diff failed"
+    diff_text = diff.stdout
+    private_markers = [
+        str(Path.home()),
+        str(NEXO_HOME),
+        "/Users/",
+        "/home/",
+        "CLAUDE.md",
+        ".nexo/",
+    ]
+    for marker in private_markers:
+        if marker and marker in diff_text:
+            return False, f"Sanitization blocked private marker in diff: {marker}"
+    return True, ""
+
+
+def _run_public_validation(worktree_dir: Path, changed_files: list[str]) -> list[str]:
+    validations: list[str] = []
+    py_files = [str(worktree_dir / rel_path) for rel_path in changed_files if rel_path.endswith(".py")]
+    if py_files:
+        result = subprocess.run(
+            [sys.executable, "-m", "py_compile", *py_files],
+            cwd=str(worktree_dir),
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr.strip() or result.stdout.strip() or "py_compile failed")
+        validations.append("python3 -m py_compile " + " ".join(changed_files))
+
+    js_files = [str(worktree_dir / rel_path) for rel_path in changed_files if rel_path.endswith(".js")]
+    for js_file in js_files:
+        result = subprocess.run(
+            ["node", "--check", js_file],
+            cwd=str(worktree_dir),
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr.strip() or result.stdout.strip() or f"node --check failed for {js_file}")
+    if js_files:
+        validations.append("node --check " + " ".join(changed_files))
+
+    tests = subprocess.run(
+        ["pytest", "-q", "tests"],
+        cwd=str(worktree_dir),
+        capture_output=True,
+        text=True,
+        timeout=900,
+        env={**os.environ, "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1"},
+    )
+    if tests.returncode != 0:
+        raise RuntimeError(tests.stderr.strip() or tests.stdout.strip() or "pytest failed")
+    validations.append("PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest -q tests")
+    return validations
+
+
+def _write_public_artifacts(worktree_dir: Path, branch_name: str, summary: dict) -> Path:
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    artifact_dir = CONTRIB_ARTIFACTS_DIR / timestamp
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    diff = _git(worktree_dir, "diff", "--no-ext-diff", "origin/main...HEAD", timeout=60)
+    patch_text = diff.stdout if diff.returncode == 0 else ""
+    (artifact_dir / "summary.json").write_text(json.dumps(summary, indent=2, ensure_ascii=False) + "\n")
+    (artifact_dir / "branch.txt").write_text(branch_name + "\n")
+    (artifact_dir / "diff.patch").write_text(patch_text)
+    return artifact_dir
+
+
+def _create_draft_pr(worktree_dir: Path, config: dict, branch_name: str, summary: dict) -> tuple[str, int | None]:
+    title = str(summary.get("title") or "chore: public evolution contribution").strip()
+    body_lines = [
+        summary.get("problem", "Problem: see diff."),
+        "",
+        "Summary:",
+        str(summary.get("summary") or "See diff."),
+        "",
+        "Tests:",
+    ]
+    tests = summary.get("tests") or []
+    if isinstance(tests, list) and tests:
+        body_lines.extend(f"- {item}" for item in tests)
+    else:
+        body_lines.append("- See CI / local validation")
+    risks = summary.get("risks") or []
+    if isinstance(risks, list) and risks:
+        body_lines.extend(["", "Risks:"])
+        body_lines.extend(f"- {item}" for item in risks)
+    body_lines.extend(["", "Source: automated public core evolution from an opt-in machine."])
+    body_file = worktree_dir / ".nexo-public-pr-body.md"
+    body_file.write_text("\n".join(body_lines) + "\n")
+    head = f"{config['github_user']}:{branch_name}"
+    result = _gh(
+        "pr",
+        "create",
+        "--repo",
+        config["upstream_repo"],
+        "--head",
+        head,
+        "--base",
+        "main",
+        "--title",
+        title,
+        "--body-file",
+        str(body_file),
+        "--draft",
+        cwd=worktree_dir,
+        timeout=120,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.strip() or result.stdout.strip() or "gh pr create failed")
+    pr_url = (result.stdout or "").strip().splitlines()[-1].strip()
+    match = re.search(r"/pull/(\d+)", pr_url)
+    pr_number = int(match.group(1)) if match else None
+    return pr_url, pr_number
+
+
+def run_public_contribution_cycle(*, objective: dict, cycle_num: int) -> None:
+    config = load_public_contribution_config()
+    ready, reason, config = can_run_public_contribution(config)
+    if not ready:
+        log(f"Public core contribution paused: {reason}")
+        mark_public_contribution_result(result=f"skipped:{reason}", config=config)
+        return
+
+    if not verify_claude_cli():
+        log("Claude CLI not available or not authenticated. Skipping public contribution run.")
+        mark_public_contribution_result(result="skipped:claude_cli_unavailable", config=config)
+        return
+
+    worktree_dir: Path | None = None
+    branch_name = ""
+    summary: dict = {}
+    conn = sqlite3.connect(str(NEXO_DB), timeout=10)
+    try:
+        worktree_dir, branch_name = _prepare_public_worktree(config, title_hint="public-core")
+        _prime_public_git_identity(worktree_dir, config)
+        prompt = build_public_contribution_prompt(repo_root=str(worktree_dir), cycle_number=cycle_num)
+        raw_response = call_public_claude_cli(prompt, cwd=worktree_dir)
+        summary = _parse_summary_json(raw_response)
+        changed_files = _changed_public_files(worktree_dir)
+        ok, reason = _sanitize_public_diff(worktree_dir, changed_files)
+        if not ok:
+            raise RuntimeError(reason)
+
+        tests_run = _run_public_validation(worktree_dir, changed_files)
+        existing_tests = summary.get("tests")
+        summary["tests"] = existing_tests if isinstance(existing_tests, list) and existing_tests else tests_run
+        commit_title = str(summary.get("title") or "chore: public evolution contribution").strip()
+
+        add = _git(worktree_dir, "add", "--", *changed_files, timeout=60)
+        if add.returncode != 0:
+            raise RuntimeError(add.stderr.strip() or add.stdout.strip() or "git add failed")
+        commit = _git(worktree_dir, "commit", "-m", commit_title, timeout=120)
+        if commit.returncode != 0:
+            raise RuntimeError(commit.stderr.strip() or commit.stdout.strip() or "git commit failed")
+        push = _git(worktree_dir, "push", "fork", f"HEAD:refs/heads/{branch_name}", "--force-with-lease", timeout=180)
+        if push.returncode != 0:
+            raise RuntimeError(push.stderr.strip() or push.stdout.strip() or "git push failed")
+
+        pr_url, pr_number = _create_draft_pr(worktree_dir, config, branch_name, summary)
+        artifact_dir = _write_public_artifacts(worktree_dir, branch_name, summary)
+        mark_active_pr(pr_url=pr_url, pr_number=pr_number, branch=branch_name, config=config)
+
+        conn.execute(
+            "INSERT INTO evolution_log (cycle_number, dimension, proposal, classification, reasoning, status, files_changed, test_result) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                cycle_num,
+                "public_core",
+                commit_title,
+                "draft_pr",
+                summary.get("problem", "Public core contribution"),
+                "draft_pr_created",
+                json.dumps(changed_files),
+                json.dumps({"tests": summary.get("tests", []), "pr_url": pr_url, "artifact_dir": str(artifact_dir)}),
+            ),
+        )
+        conn.commit()
+
+        objective["last_evolution"] = str(date.today())
+        objective["total_evolutions"] = cycle_num
+        objective["total_proposals_made"] = objective.get("total_proposals_made", 0) + 1
+        objective.setdefault("history", []).insert(0, {
+            "cycle": cycle_num,
+            "date": str(date.today()),
+            "mode": "public_core",
+            "proposals": 1,
+            "auto_count": 0,
+            "auto_applied": 0,
+            "analysis": (summary.get("summary") or commit_title)[:200],
+            "pr_url": pr_url,
+        })
+        objective["history"] = objective["history"][:12]
+        save_objective(objective)
+        mark_public_contribution_result(result=f"draft_pr_created:{pr_url}", config=config)
+        log(f"Public core contribution complete: Draft PR created at {pr_url}")
+    except Exception as exc:
+        mark_public_contribution_result(result=f"failed:{exc}", config=config)
+        raise
+    finally:
+        conn.close()
+        if worktree_dir is not None:
+            _remove_public_worktree(worktree_dir)
 
 
 # ── File safety validation ───────────────────────────────────────────────
@@ -516,6 +897,17 @@ def run():
         objective["evolution_enabled"] = False
         objective["disabled_reason"] = f"Circuit breaker: {failures} consecutive failures at {datetime.now().isoformat()}"
         save_objective(objective)
+        return
+
+    public_config = load_public_contribution_config()
+    if str(public_config.get("mode") or "").strip().lower() in {"draft_prs", "pending_auth"}:
+        cycle_num = objective.get("total_evolutions", 0) + 1
+        try:
+            run_public_contribution_cycle(objective=objective, cycle_num=cycle_num)
+            set_consecutive_failures(0)
+        except Exception as e:
+            log(f"Public core contribution failed: {e}")
+            set_consecutive_failures(failures + 1)
         return
 
     # Dry-run restore test
