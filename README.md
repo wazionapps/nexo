@@ -793,6 +793,29 @@ If NEXO Brain is useful to you, consider:
 
 ## Changelog
 
+### v2.6.5 — Power Helper Hardening, Recovery Contracts (2026-04-04)
+- Power helper semantics explicit and safer: `always_on` = platform helper for best-effort background availability.
+- Catch-up recovery suppresses duplicate relaunches for in-flight `cron_runs`.
+- Runtime update/startup reconciles declared personal schedules automatically.
+
+### v2.6.3 — Cron Sync Fix, Hook Migration (2026-04-04)
+- Runtime cron sync skips same-file copies, avoiding `SameFileError` on synced runtimes.
+- Core hook migration normalizes legacy flat entries into Claude Code's required `matcher + hooks[]` format.
+
+### v2.6.2 — Startup Preflight, Personal Recovery, Power Policy (2026-04-04)
+- Startup preflight before `nexo chat` and server — safe local migrations, deferred remote updates.
+- Personal managed schedules can declare recovery contracts (wake/boot/catchup).
+- Persisted runtime power policy (`always_on`/`disabled`/`unset`). Installer and `nexo update` prompt once.
+- Packaged installs resolve update root correctly (fixes `vunknown`).
+
+### v2.6.0 — Personal Scripts Registry, Plugin Marketplace, Managed Evolution (2026-04-03)
+- **Personal scripts registry**: Scripts in `NEXO_HOME/scripts/` tracked in SQLite with metadata, categories, schedules. Full lifecycle: create, sync, reconcile, schedule, unschedule, remove.
+- **Orchestrator removed from core** (breaking): Was opt-in personal automation adding complexity for all users. Existing users keep their setup in `NEXO_HOME/scripts/`.
+- **Claude Code plugin structure**: `plugin.json`, entry point, packaging for marketplace submission.
+- **`nexo chat`**: Official command to launch Claude Code with NEXO as operator.
+- **Managed Evolution hardening**: Can modify core behavior modules with rollback followups.
+- Cron recovery hardened: TCC diagnostics, keepalive sync, personal schedule catchup.
+
 ### v2.5.0 — Runtime CLI, Doctor, Skills v2, Day Orchestrator (2026-04-03)
 - **Runtime CLI** (`nexo`): New operational CLI separate from installer. `nexo scripts list/run/doctor/call` for personal scripts, `nexo doctor` for diagnostics, `nexo skills apply` for executable skills, `nexo update` for one-step sync.
 - **Unified Doctor**: Modular diagnostic system with boot/runtime/deep tiers. Report-only by default, deterministic `--fix` mode. MCP tool `nexo_doctor`. LaunchAgent schedule drift detection and reconciliation.
