@@ -6,7 +6,7 @@
 [![GitHub stars](https://img.shields.io/github/stars/wazionapps/nexo?style=social)](https://github.com/wazionapps/nexo/stargazers)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 
-> Local cognitive runtime for Claude Code — persistent memory, overnight learning, runtime CLI, recovery-aware background jobs, startup preflight, and doctor diagnostics. 150+ MCP tools. Benchmarked on LoCoMo (F1 0.588, +55% vs GPT-4). Claude Code plugin packaging included.
+> Local cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Persistent memory, selectable terminal and automation backends, overnight learning, self-healing background jobs, startup preflight, and doctor diagnostics. 150+ MCP tools. Benchmarked on LoCoMo (F1 0.588, +55% vs GPT-4).
 
 **NEXO Brain transforms any MCP-compatible AI agent from a stateless assistant into a cognitive partner that remembers, learns, forgets, adapts, and builds a relationship with you over time.**
 
@@ -585,6 +585,16 @@ Recommended defaults:
 Or use the shell alias created during install (e.g. `atlas`), which now runs `nexo chat .` so it opens whichever terminal client you selected as default.
 
 Your operator will greet you immediately — adapted to the time of day, resuming from where you left off. No cold starts.
+
+### Contributing
+
+NEXO is being hardened in public, and the best contributions now are not only code changes but also real workflow feedback:
+
+- Open issues when a client flow feels asymmetric across Claude Code, Codex, Claude Desktop, OpenClaw, or other MCP environments.
+- Send PRs for docs, install UX, tests, compatibility checks, and public-facing copy.
+- If you use NEXO in production-like daily work, include exact runtime symptoms and commands in bug reports. This project improves fastest when the operational reality is concrete.
+
+The project still recommends Claude Code as the primary path, but contributions that improve Codex, client parity, installer clarity, and ecosystem integrations are especially valuable.
 
 ### What Gets Installed
 
