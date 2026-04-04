@@ -2,7 +2,6 @@ User-agent: *
 Allow: /
 
 Sitemap: https://nexo-brain.com/sitemap.xml
-Host: nexo-brain.com
 
 User-agent: GPTBot
 Allow: /

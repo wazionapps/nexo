@@ -2,184 +2,21 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="refresh" content="2;url=https://github.com/wazionapps/nexo/wiki">
     <title>Docs — NEXO Brain</title>
-    <meta name="description" content="Quick docs for NEXO Brain: install, operate, update, diagnose, power policy, personal scripts, and where to find deeper reference material.">
-    <meta name="robots" content="index, follow">
-    <link rel="canonical" href="https://nexo-brain.com/docs/">
-
-    <meta property="og:type" content="website">
-    <meta property="og:url" content="https://nexo-brain.com/docs/">
-    <meta property="og:title" content="Docs — NEXO Brain">
-    <meta property="og:description" content="Install, operate, update, diagnose, and automate NEXO Brain.">
-    <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
-
-    <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Docs — NEXO Brain">
-    <meta name="twitter:description" content="Install, operate, update, diagnose, and automate NEXO Brain.">
-    <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
-
+    <link rel="canonical" href="https://github.com/wazionapps/nexo/wiki">
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
-    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
-    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
     <link rel="stylesheet" href="/assets/style.css">
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-      gtag('config', 'G-1LNEMCJMS7');
-    </script>
 </head>
-<body>
-
-<nav>
-    <div class="container">
-        <a href="/" class="nav-logo"><img src="/assets/logo-64.png" alt="NEXO Brain" width="32" height="32">NEXO Brain</a>
-        <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-        </button>
-        <div class="nav-links">
-            <a href="/features/">Features</a>
-            <a href="/features/benchmark/">Benchmark</a>
-            <a href="/docs/" style="color:var(--purple-light)">Docs</a>
-            <a href="/changelog/">Changelog</a>
-            <a href="https://github.com/wazionapps/nexo" class="nav-cta">GitHub</a>
-        </div>
+<body style="display:flex;align-items:center;justify-content:center;min-height:100vh;text-align:center;">
+    <div>
+        <img src="/assets/logo-64.png" alt="NEXO Brain" style="width:48px;height:48px;border-radius:12px;margin-bottom:24px;">
+        <h1 style="font-size:24px;font-weight:700;margin-bottom:12px;">Redirecting to Documentation</h1>
+        <p style="color:var(--text-muted);font-size:16px;margin-bottom:24px;">Taking you to the NEXO Brain Wiki on GitHub...</p>
+        <div style="width:40px;height:40px;border:3px solid var(--dark-border);border-top-color:var(--purple);border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 24px;"></div>
+        <a href="https://github.com/wazionapps/nexo/wiki" style="font-size:14px;">Click here if not redirected</a>
     </div>
-</nav>
-
-<section class="pt-nav" style="text-align:center;">
-    <div class="container">
-        <div class="section-label">Operator Docs</div>
-        <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Fastest path from install to real use</h1>
-        <p class="section-subtitle">
-            These are the commands and concepts that matter first. Use the repo wiki for deeper reference afterwards.
-        </p>
-    </div>
-</section>
-
-<section>
-    <div class="container">
-        <div class="doc-grid">
-            <div class="doc-card">
-                <span class="eyebrow">1. Install</span>
-                <h3>Install the runtime</h3>
-                <p>Use npm once. The installer sets up the local runtime, MCP wiring, and the core background jobs.</p>
-                <div class="command-block">$ npx nexo-brain</div>
-            </div>
-            <div class="doc-card">
-                <span class="eyebrow">2. Launch</span>
-                <h3>Start Claude Code through NEXO</h3>
-                <p>Use the runtime entrypoint instead of a manual shell setup.</p>
-                <div class="command-block">$ nexo chat</div>
-            </div>
-            <div class="doc-card">
-                <span class="eyebrow">3. Inspect</span>
-                <h3>Check runtime health</h3>
-                <p>Doctor is the main operational entrypoint for health, drift, and deterministic repairs.</p>
-                <div class="command-block">$ nexo doctor --tier runtime --json</div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<section>
-    <div class="container">
-        <div class="section-label">Daily Operations</div>
-        <h2 class="section-title">The commands worth remembering</h2>
-        <div class="timeline">
-            <div class="timeline-item">
-                <div class="timeline-label">Launch</div>
-                <h3><code>nexo chat</code></h3>
-                <p>Open Claude Code through the NEXO runtime in the current directory or a target path.</p>
-            </div>
-            <div class="timeline-item">
-                <div class="timeline-label">Update</div>
-                <h3><code>nexo update</code></h3>
-                <p>Sync the installed runtime and run the official post-sync path. Newer builds now reconcile declared personal schedules automatically.</p>
-            </div>
-            <div class="timeline-item">
-                <div class="timeline-label">Diagnose</div>
-                <h3><code>nexo doctor</code></h3>
-                <p>Inspect boot/runtime/deep health. Use <code>--fix</code> for deterministic repairs when the doctor says it is safe.</p>
-            </div>
-            <div class="timeline-item">
-                <div class="timeline-label">Automate</div>
-                <h3><code>nexo scripts</code></h3>
-                <p>Manage personal scripts: list, classify, reconcile, schedule, unschedule, and validate them through the supported flow.</p>
-            </div>
-        </div>
-    </div>
-</section>
-
-<section>
-    <div class="container">
-        <div class="section-label">Sleep, Wake, Power</div>
-        <h2 class="section-title">What to expect on a laptop</h2>
-        <div class="callout">
-            <p>
-                NEXO now supports wake-aware recovery contracts for core jobs and managed personal scripts. The optional <code>always_on</code> policy enables the platform power helper for best-effort background availability, but wake recovery and catch-up remain part of the design.
-            </p>
-        </div>
-        <div class="mini-grid" style="margin-top:18px;">
-            <div class="mini-card">
-                <h3>Core jobs</h3>
-                <p>13 core recovery-aware jobs are declared in the runtime manifest and synced by the official installer/update flow.</p>
-            </div>
-            <div class="mini-card">
-                <h3>Personal scripts</h3>
-                <p>Managed scripts can declare <code>run_once_on_wake</code>, <code>catchup</code>, restart, idempotency, and catch-up windows.</p>
-            </div>
-            <div class="mini-card">
-                <h3>Power helper</h3>
-                <p>On macOS, NEXO uses native <code>caffeinate</code>. This helps availability, but it is not sold as a blanket closed-lid guarantee.</p>
-            </div>
-        </div>
-    </div>
-</section>
-
-<section class="cta-section">
-    <div class="container">
-        <h2 class="section-title">Need deeper reference?</h2>
-        <p class="section-subtitle" style="margin:16px auto 48px;">
-            Use the public docs surface for orientation, then jump into the repo for exact commands, changelog, and implementation detail.
-        </p>
-        <div class="link-row" style="justify-content:center;">
-            <a class="link-chip" href="https://github.com/wazionapps/nexo">GitHub repo</a>
-            <a class="link-chip" href="https://github.com/wazionapps/nexo/wiki">Wiki</a>
-            <a class="link-chip" href="/changelog/">Changelog</a>
-            <a class="link-chip" href="/features/benchmark/">Benchmark</a>
-        </div>
-    </div>
-</section>
-
-<footer>
-    <div class="container">
-        <div class="footer-content">
-            <div class="footer-left">NEXO Brain docs · quick operator path</div>
-            <div class="footer-links">
-                <a href="/">Home</a>
-                <a href="/features/">Features</a>
-                <a href="/changelog/">Changelog</a>
-            </div>
-        </div>
-    </div>
-</footer>
-
-<script>
-(function() {
-    var navLinks = document.querySelector('.nav-links');
-    var navToggle = document.querySelector('.nav-toggle');
-    navLinks.querySelectorAll('a').forEach(function(link) {
-        link.addEventListener('click', function() { navLinks.classList.remove('open'); });
-    });
-    document.addEventListener('click', function(e) {
-        if (navLinks.classList.contains('open') && !navLinks.contains(e.target) && !navToggle.contains(e.target)) {
-            navLinks.classList.remove('open');
-        }
-    });
-})();
-</script>
+    <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
 </body>
 </html>
