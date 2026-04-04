@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Why Your AI Agent Needs to Forget: The Case for Memory Decay — NEXO Brain</title>
+    <meta name="description" content="Storing everything forever makes AI agents slower and noisier. Learn how Ebbinghaus forgetting curves, memory decay, and rehearsal keep agent memory clean, fast, and relevant.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/blog/why-ai-agents-need-to-forget/">
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/blog/why-ai-agents-need-to-forget/">
+    <meta property="og:title" content="Why Your AI Agent Needs to Forget: The Case for Memory Decay">
+    <meta property="og:description" content="Storing everything forever makes AI agents slower and noisier. Learn how Ebbinghaus forgetting curves keep agent memory clean and relevant.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
+    <meta property="og:image:width" content="1536">
+    <meta property="og:image:height" content="1024">
+    <meta property="article:published_time" content="2026-04-04">
+    <meta property="article:author" content="Francisco Cerd&agrave; Puigserver">
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Why Your AI Agent Needs to Forget: The Case for Memory Decay">
+    <meta name="twitter:description" content="Storing everything forever makes AI agents slower and noisier. Learn how Ebbinghaus forgetting curves keep agent memory clean and relevant.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
+
+    <!-- Google Analytics (GA4) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+
+    <link rel="stylesheet" href="/assets/style.css">
+
+    <!-- Schema.org BlogPosting -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "Why Your AI Agent Needs to Forget: The Case for Memory Decay",
+        "description": "Storing everything forever makes AI agents slower and noisier. Learn how Ebbinghaus forgetting curves, memory decay, and rehearsal keep agent memory clean, fast, and relevant.",
+        "datePublished": "2026-04-04",
+        "dateModified": "2026-04-04",
+        "author": {
+            "@type": "Person",
+            "name": "Francisco Cerd\u00e0 Puigserver"
+        },
+        "publisher": {
+            "@type": "Organization",
+            "name": "WAzion",
+            "url": "https://www.wazion.com"
+        },
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https://nexo-brain.com/blog/why-ai-agents-need-to-forget/"
+        },
+        "url": "https://nexo-brain.com/blog/why-ai-agents-need-to-forget/",
+        "image": "https://nexo-brain.com/assets/social-preview.png",
+        "keywords": ["AI memory decay", "why AI should forget", "Ebbinghaus forgetting curve AI", "AI agent memory management"]
+    }
+    </script>
+
+    <style>
+        .article-header { padding-top: 128px; padding-bottom: 40px; text-align: center; }
+        .article-meta { font-size: 14px; color: var(--text-muted); margin-bottom: 16px; }
+        .article-meta a { color: var(--purple-light); }
+        .article-body {
+            max-width: 720px; margin: 0 auto; padding: 0 24px 80px;
+            font-size: 17px; line-height: 1.8; color: var(--text);
+        }
+        .article-body h2 {
+            font-size: 28px; font-weight: 700; margin: 48px 0 16px;
+            letter-spacing: -0.01em;
+        }
+        .article-body h3 {
+            font-size: 22px; font-weight: 700; margin: 36px 0 12px;
+        }
+        .article-body p { margin-bottom: 20px; color: var(--text-muted); }
+        .article-body strong { color: var(--text); }
+        .article-body a { color: var(--purple-light); }
+        .article-body a:hover { color: var(--pink); }
+        .article-body ul, .article-body ol {
+            margin: 0 0 20px 24px; color: var(--text-muted);
+        }
+        .article-body li { margin-bottom: 8px; }
+        .article-body code {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 14px; color: var(--pink);
+            background: rgba(236, 72, 153, 0.1);
+            padding: 2px 8px; border-radius: 4px;
+        }
+        .article-body pre {
+            background: var(--dark-card);
+            border: 1px solid var(--dark-border);
+            border-radius: 12px;
+            padding: 24px;
+            overflow-x: auto;
+            margin-bottom: 24px;
+        }
+        .article-body pre code {
+            background: none; padding: 0;
+            font-size: 15px; color: #22C55E;
+        }
+        .article-back {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 14px; font-weight: 600; color: var(--text-muted);
+            margin-bottom: 24px;
+        }
+        .article-back:hover { color: var(--purple-light); }
+        .comparison-table {
+            width: 100%; border-collapse: collapse; margin: 24px 0;
+        }
+        .comparison-table th, .comparison-table td {
+            padding: 12px 16px; text-align: left;
+            border-bottom: 1px solid var(--dark-border); font-size: 14px;
+        }
+        .comparison-table th {
+            color: var(--purple-light); font-weight: 700; font-size: 13px;
+            text-transform: uppercase; letter-spacing: 0.05em;
+        }
+        .comparison-table td:first-child { font-weight: 600; color: var(--text); }
+        .comparison-table td { color: var(--text-muted); }
+        .comparison-table tr:hover { background: rgba(124, 58, 237, 0.04); }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-64.png" alt="NEXO Brain" width="32" height="32">
+            NEXO Brain
+        </a>
+        <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <div class="nav-links">
+            <a href="/features/">Features</a>
+            <a href="/features/cognitive/">Cognitive</a>
+            <a href="/features/architecture/">Architecture</a>
+            <a href="/features/tools/">Tools</a>
+            <a href="/features/benchmark/">Benchmark</a>
+            <a href="/blog/" style="color:var(--purple-light)">Blog</a>
+            <a href="/changelog/">Changelog</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta">GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<article>
+    <header class="article-header">
+        <div class="container">
+            <a href="/blog/" class="article-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg> Back to Blog</a>
+            <div class="article-meta">April 4, 2026 &middot; 5 min read</div>
+            <h1 class="section-title" style="font-size:clamp(28px,4.5vw,48px);max-width:800px;margin:0 auto 16px;">Why Your AI Agent Needs to Forget: The Case for Memory Decay</h1>
+            <p class="section-subtitle">The counterintuitive argument: an agent that forgets is smarter than one that remembers everything.</p>
+        </div>
+    </header>
+
+    <div class="article-body">
+
+        <h2>The elephant that never forgets (and why you should not want that)</h2>
+        <p>The instinct is natural: if memory is good, more memory must be better. Store everything. Delete nothing. Build the largest possible knowledge base and let the agent search through it all.</p>
+        <p>This instinct is wrong.</p>
+        <p>An AI agent that stores everything forever faces three compounding problems that get worse with every session:</p>
+        <ul>
+            <li><strong>Memory bloat.</strong> After hundreds of sessions, the knowledge base accumulates thousands of entries. Many are outdated. The deployment process you documented three months ago has changed twice since then. Your team switched from Slack to Discord. The staging URL moved. The old information is still there, competing with the current information for attention.</li>
+            <li><strong>Irrelevant context.</strong> When the agent retrieves memories for a query, stale entries pollute the results. Instead of getting the three most relevant memories, you get two relevant ones and five that were relevant last quarter. The agent has to work through all of them, and its responses reflect the confusion.</li>
+            <li><strong>Slower retrieval.</strong> Vector similarity search is fast, but not free. At 10,000 memories, brute-force cosine similarity starts taking noticeable time. At 100,000, it becomes a bottleneck. And most of those 100,000 memories are dead weight.</li>
+        </ul>
+        <p>The solution is not better search. The solution is <strong>fewer, better memories</strong>.</p>
+
+        <h2>How Ebbinghaus forgetting curves work</h2>
+        <p>In 1885, German psychologist Hermann Ebbinghaus published the first systematic study of memory decay. His finding was remarkably clean: memory strength decreases exponentially over time when there is no reinforcement. The rate of decay follows a predictable curve.</p>
+        <p>The mathematical model is simple:</p>
+        <pre><code>strength = e^(-t / half_life)</code></pre>
+        <p>Where <code>t</code> is time since the last access and <code>half_life</code> controls how quickly the memory fades. A shorter half-life means faster decay. A longer one means the memory persists.</p>
+        <p>Ebbinghaus also discovered something equally important: <strong>rehearsal resets the curve</strong>. Every time you actively recall information, the decay clock restarts. This is why spaced repetition works for learning: each retrieval strengthens the memory and extends its lifespan.</p>
+        <p>These two properties &mdash; exponential decay and rehearsal-based reinforcement &mdash; create a self-organizing system. Important information (which gets accessed regularly) stays alive. Unimportant information (which nobody retrieves) fades out. No manual curation required.</p>
+
+        <h2>How NEXO Brain implements decay</h2>
+        <p>NEXO applies Ebbinghaus forgetting curves to both of its active memory stores:</p>
+        <ul>
+            <li><strong>Short-Term Memory:</strong> 7-day half-life. A memory at full strength (1.0) drops to 0.5 after one week without access, 0.25 after two weeks, and so on. This store holds recently important information that needs to prove its worth.</li>
+            <li><strong>Long-Term Memory:</strong> 60-day half-life. Memories that have been promoted through repeated access or explicit importance get the slower decay curve. Two months without access before strength halves.</li>
+        </ul>
+        <p>When a memory's strength falls below the <strong>retrieval threshold</strong> (configurable, default 0.1), it is no longer returned in search results. It is not deleted &mdash; it enters a <strong>dormant state</strong>. The data is still in the database. If a future query has very high semantic similarity to a dormant memory, that memory can be reactivated.</p>
+        <p>This is the "oh wait, I remember this" moment. You ask about something the agent has not thought about in months, and a dormant memory fires because the semantic match is strong enough to overcome the low strength score. The memory is reactivated, its strength resets, and it re-enters the active pool.</p>
+
+        <h2>Rehearsal resets strength</h2>
+        <p>Every time a memory is retrieved through <code>nexo_recall</code> or surfaces in a <code>nexo_heartbeat</code> context injection, its <code>last_accessed</code> timestamp updates and its strength resets toward 1.0. This is the rehearsal mechanism.</p>
+        <p>The practical effect: memories you actually use stay alive indefinitely. The deployment process you reference every week? Permanent. The debugging trick you used once in February? Gone by April, unless you need it again.</p>
+        <p>For critical knowledge that must never decay, NEXO provides a <strong>pin</strong> mechanism. Pinned memories are exempt from forgetting curves entirely. Their strength is always 1.0. Use this for genuinely permanent facts: company name, server addresses, architectural decisions that will not change.</p>
+
+        <h2>Comparison: decay vs. store-everything</h2>
+
+        <table class="comparison-table">
+            <thead>
+                <tr>
+                    <th>Aspect</th>
+                    <th>Store Everything</th>
+                    <th>Forgetting Curves</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Memory size after 6 months</td>
+                    <td>Thousands of entries, growing linearly</td>
+                    <td>Hundreds of active entries, self-regulating</td>
+                </tr>
+                <tr>
+                    <td>Retrieval relevance</td>
+                    <td>Degrades over time as stale entries accumulate</td>
+                    <td>Stays high; stale entries decay out of results</td>
+                </tr>
+                <tr>
+                    <td>Maintenance required</td>
+                    <td>Manual cleanup or ever-growing storage</td>
+                    <td>Automatic; no human intervention needed</td>
+                </tr>
+                <tr>
+                    <td>Contradictions</td>
+                    <td>Old and new facts coexist, causing confusion</td>
+                    <td>Old facts decay; newest version dominates</td>
+                </tr>
+                <tr>
+                    <td>Search performance</td>
+                    <td>Slows as corpus grows</td>
+                    <td>Stable; active set stays bounded</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <p>Systems like Mem0 and Basic Memory take the store-everything approach. They provide excellent write and retrieval mechanisms, but no decay model. Over months of heavy use, the difference becomes significant. NEXO's approach keeps the active memory set lean &mdash; typically a few hundred items after 100+ sessions &mdash; while still maintaining the ability to reactivate dormant memories when they become relevant again.</p>
+
+        <h2>The "oh wait, I remember this" moment</h2>
+        <p>The most compelling behavior we have observed in production is spontaneous reactivation. A user asks about a project they have not discussed in two months. The relevant memories have decayed to dormant status. But the semantic similarity between the query and those dormant memories is high enough to pull them back.</p>
+        <p>The agent surfaces the memory with full context: when it was originally created, what session it came from, and why it was stored. The user sees something like: "Based on our discussion on February 3rd, you mentioned that this service requires a specific auth header."</p>
+        <p>This is not magic. It is the forgetting curve working as designed. The memory was not deleted &mdash; it was dormant. The right query brought it back. And now, with a fresh access timestamp, it will stay active as long as it remains relevant.</p>
+        <p>Forgetting is not the opposite of remembering. It is how remembering stays useful. An AI agent that implements principled memory decay will outperform one with a perfect archive, because intelligence is not about how much you store. It is about how quickly you surface what matters right now.</p>
+
+    </div>
+</article>
+
+<!-- CTA -->
+<section class="cta-section">
+    <div class="container">
+        <h2 class="section-title">Give your agent a mind</h2>
+        <p class="section-subtitle" style="margin: 16px auto 48px;">
+            Memory that knows when to hold on and when to let go. One command to install.
+        </p>
+        <div class="hero-actions">
+            <div class="install-block" style="margin:0 0 24px;">
+                <div><span class="prefix">$ </span><code>npx nexo-brain</code></div>
+            </div>
+        </div>
+        <div class="hero-actions">
+            <a href="https://github.com/wazionapps/nexo" class="btn btn-primary">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+                Star on GitHub
+            </a>
+            <a href="https://www.npmjs.com/package/nexo-brain" class="btn btn-secondary">
+                View on npm
+            </a>
+        </div>
+    </div>
+</section>
+
+<footer>
+    <div class="container">
+        <div class="footer-content">
+            <div class="footer-left">
+                Created by <strong>Francisco Cerd&agrave; Puigserver</strong> &amp; <strong>NEXO</strong> (Claude Opus) &bull; Built by <a href="https://www.wazion.com">WAzion</a> &bull; AGPL-3.0 License &bull; &copy; 2026
+            </div>
+            <div class="footer-links">
+                <a href="https://github.com/wazionapps/nexo">GitHub</a>
+                <a href="https://x.com/NEXOBRAIN">X / Twitter</a>
+                <a href="https://github.com/sponsors/wazionapps">Sponsor</a>
+                <a href="/docs/">Docs</a>
+                <a href="https://www.npmjs.com/package/nexo-brain">npm</a>
+                <a href="https://github.com/wazionapps/nexo/releases">Releases</a>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<!-- Cookie Consent (minimal, GDPR) -->
+<div id="cookie-consent" style="display:none;position:fixed;bottom:0;left:0;right:0;background:rgba(10,10,15,0.95);border-top:1px solid #1E1E2E;padding:12px 24px;z-index:200;font-size:13px;color:#94A3B8;text-align:center;">
+    This site uses analytics cookies to improve the experience. <a href="https://www.wazion.com/en/privacy" style="color:#A78BFA;">Privacy Policy</a>
+    <button onclick="document.getElementById('cookie-consent').style.display='none';localStorage.setItem('cc','1')" style="margin-left:16px;background:#7C3AED;color:#fff;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Accept</button>
+    <button onclick="document.getElementById('cookie-consent').style.display='none';localStorage.setItem('cc','0');window['ga-disable-G-1LNEMCJMS7']=true" style="margin-left:8px;background:transparent;color:#94A3B8;border:1px solid #333;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Decline</button>
+</div>
+<script>
+if(!localStorage.getItem('cc')){document.getElementById('cookie-consent').style.display='block';}
+else if(localStorage.getItem('cc')==='0'){window['ga-disable-G-1LNEMCJMS7']=true;}
+</script>
+
+<script>
+(function() {
+    var navLinks = document.querySelector('.nav-links');
+    var navToggle = document.querySelector('.nav-toggle');
+    navLinks.querySelectorAll('a').forEach(function(link) {
+        link.addEventListener('click', function() { navLinks.classList.remove('open'); });
+    });
+    document.addEventListener('click', function(e) {
+        if (navLinks.classList.contains('open') && !navLinks.contains(e.target) && !navToggle.contains(e.target)) {
+            navLinks.classList.remove('open');
+        }
+    });
+})();
+</script>
+
+</body>
+</html>

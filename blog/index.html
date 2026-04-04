@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Blog — NEXO Brain</title>
+    <meta name="description" content="Articles on AI agent memory, cognitive architectures, and the science behind persistent AI systems. By the creators of NEXO Brain.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/blog/">
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://nexo-brain.com/blog/">
+    <meta property="og:title" content="Blog — NEXO Brain">
+    <meta property="og:description" content="Articles on AI agent memory, cognitive architectures, and the science behind persistent AI systems.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
+    <meta property="og:image:width" content="1536">
+    <meta property="og:image:height" content="1024">
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Blog — NEXO Brain">
+    <meta name="twitter:description" content="Articles on AI agent memory, cognitive architectures, and the science behind persistent AI systems.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
+
+    <!-- Google Analytics (GA4) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+
+    <link rel="stylesheet" href="/assets/style.css">
+    <style>
+        .blog-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 24px;
+            margin-top: 48px;
+        }
+        .blog-card {
+            background: var(--dark-card);
+            border: 1px solid var(--dark-border);
+            border-radius: 16px;
+            padding: 32px;
+            transition: all 0.3s;
+            display: flex;
+            flex-direction: column;
+        }
+        .blog-card:hover {
+            border-color: rgba(124, 58, 237, 0.3);
+            box-shadow: var(--glow);
+            transform: translateY(-4px);
+        }
+        .blog-card-date {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+            font-weight: 500;
+        }
+        .blog-card h2 {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 12px;
+            line-height: 1.3;
+        }
+        .blog-card h2 a {
+            color: var(--text);
+            transition: color 0.2s;
+        }
+        .blog-card h2 a:hover {
+            color: var(--purple-light);
+        }
+        .blog-card p {
+            font-size: 15px;
+            color: var(--text-muted);
+            line-height: 1.6;
+            flex: 1;
+        }
+        .blog-card .read-more {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--purple-light);
+        }
+        .blog-card .read-more:hover {
+            color: var(--pink);
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-64.png" alt="NEXO Brain" width="32" height="32">
+            NEXO Brain
+        </a>
+        <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <div class="nav-links">
+            <a href="/features/">Features</a>
+            <a href="/features/cognitive/">Cognitive</a>
+            <a href="/features/architecture/">Architecture</a>
+            <a href="/features/tools/">Tools</a>
+            <a href="/features/benchmark/">Benchmark</a>
+            <a href="/blog/" style="color:var(--purple-light)">Blog</a>
+            <a href="/changelog/">Changelog</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta">GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<!-- Header -->
+<section class="pt-nav" style="text-align:center;">
+    <div class="container">
+        <div class="section-label">Insights</div>
+        <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Blog</h1>
+        <p class="section-subtitle">
+            The science behind AI memory. Cognitive architectures, forgetting curves, and building agents that actually remember.
+        </p>
+    </div>
+</section>
+
+<!-- Blog Cards -->
+<section class="section-flush-top">
+    <div class="container">
+        <div class="blog-grid">
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 4, 2026</div>
+                <h2><a href="/blog/how-to-give-ai-persistent-memory/">How to Give Your AI Agent Persistent Memory</a></h2>
+                <p>Every AI agent starts each conversation from zero. Here is how persistent memory works, why context windows are not enough, and how NEXO Brain solves the problem with a cognitive architecture inspired by human psychology.</p>
+                <a href="/blog/how-to-give-ai-persistent-memory/" class="read-more">Read article <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></a>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 4, 2026</div>
+                <h2><a href="/blog/atkinson-shiffrin-model-for-ai-agents/">The Atkinson-Shiffrin Model: Why We Built AI Memory Like Human Memory</a></h2>
+                <p>In 1968 Atkinson and Shiffrin described how human memory flows through three stores. We applied their model to AI agents. Here is why cognitive psychology holds the key to building agents that learn over time.</p>
+                <a href="/blog/atkinson-shiffrin-model-for-ai-agents/" class="read-more">Read article <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></a>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 4, 2026</div>
+                <h2><a href="/blog/why-ai-agents-need-to-forget/">Why Your AI Agent Needs to Forget: The Case for Memory Decay</a></h2>
+                <p>Storing everything forever sounds smart until your agent drowns in irrelevant context. Memory decay is not a bug. Here is how Ebbinghaus forgetting curves keep AI memory clean, fast, and relevant.</p>
+                <a href="/blog/why-ai-agents-need-to-forget/" class="read-more">Read article <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></a>
+            </div>
+
+        </div>
+    </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section">
+    <div class="container">
+        <h2 class="section-title">Give your agent a mind</h2>
+        <p class="section-subtitle" style="margin: 16px auto 48px;">
+            Open source, AGPL-3.0 licensed, and built for builders who want their AI to actually remember.
+        </p>
+        <div class="hero-actions">
+            <a href="https://github.com/wazionapps/nexo" class="btn btn-primary">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+                Star on GitHub
+            </a>
+            <a href="https://www.npmjs.com/package/nexo-brain" class="btn btn-secondary">
+                View on npm
+            </a>
+        </div>
+    </div>
+</section>
+
+<footer>
+    <div class="container">
+        <div class="footer-content">
+            <div class="footer-left">
+                Created by <strong>Francisco Cerd&agrave; Puigserver</strong> &amp; <strong>NEXO</strong> (Claude Opus) &bull; Built by <a href="https://www.wazion.com">WAzion</a> &bull; AGPL-3.0 License &bull; &copy; 2026
+            </div>
+            <div class="footer-links">
+                <a href="https://github.com/wazionapps/nexo">GitHub</a>
+                <a href="https://x.com/NEXOBRAIN">X / Twitter</a>
+                <a href="https://github.com/sponsors/wazionapps">Sponsor</a>
+                <a href="/docs/">Docs</a>
+                <a href="https://www.npmjs.com/package/nexo-brain">npm</a>
+                <a href="https://github.com/wazionapps/nexo/releases">Releases</a>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<!-- Cookie Consent (minimal, GDPR) -->
+<div id="cookie-consent" style="display:none;position:fixed;bottom:0;left:0;right:0;background:rgba(10,10,15,0.95);border-top:1px solid #1E1E2E;padding:12px 24px;z-index:200;font-size:13px;color:#94A3B8;text-align:center;">
+    This site uses analytics cookies to improve the experience. <a href="https://www.wazion.com/en/privacy" style="color:#A78BFA;">Privacy Policy</a>
+    <button onclick="document.getElementById('cookie-consent').style.display='none';localStorage.setItem('cc','1')" style="margin-left:16px;background:#7C3AED;color:#fff;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Accept</button>
+    <button onclick="document.getElementById('cookie-consent').style.display='none';localStorage.setItem('cc','0');window['ga-disable-G-1LNEMCJMS7']=true" style="margin-left:8px;background:transparent;color:#94A3B8;border:1px solid #333;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Decline</button>
+</div>
+<script>
+if(!localStorage.getItem('cc')){document.getElementById('cookie-consent').style.display='block';}
+else if(localStorage.getItem('cc')==='0'){window['ga-disable-G-1LNEMCJMS7']=true;}
+</script>
+
+<script>
+(function() {
+    var navLinks = document.querySelector('.nav-links');
+    var navToggle = document.querySelector('.nav-toggle');
+    navLinks.querySelectorAll('a').forEach(function(link) {
+        link.addEventListener('click', function() { navLinks.classList.remove('open'); });
+    });
+    document.addEventListener('click', function(e) {
+        if (navLinks.classList.contains('open') && !navLinks.contains(e.target) && !navToggle.contains(e.target)) {
+            navLinks.classList.remove('open');
+        }
+    });
+})();
+</script>
+
+</body>
+</html>
