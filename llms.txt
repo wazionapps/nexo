@@ -1,8 +1,8 @@
 # NEXO Brain
 
-> Open-source cognitive memory system for AI agents (v2.6.0)
+> Open-source cognitive runtime for Claude Code and MCP clients (v2.6.5)
 
-NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It provides 144+ MCP tools across 21+ categories including semantic RAG, knowledge graph-boosted search, HNSW vector indexing, trust scoring, episodic memory, claim graph, metacognitive error prevention, inter-terminal coordination, always-on web dashboard with 23 modules, natural memory decay, a full nervous system of 14 autonomous processes, unified code/data architecture, auto-update on startup, auto-diary, Skills v2 with executable modes, cron scheduler, external audit, runtime CLI, unified doctor diagnostics, personal scripts registry with 9 lifecycle tools, Claude Code plugin marketplace structure, and managed evolution with core module modification.
+NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It provides 150+ MCP tools across 21+ categories including semantic RAG, knowledge graph-boosted search, HNSW vector indexing, trust scoring, episodic memory, claim graph, metacognitive error prevention, inter-terminal coordination, always-on web dashboard with 23 modules, natural memory decay, a full nervous system of 13 core recovery-aware background jobs, unified code/data architecture, startup preflight with safe migrations, auto-diary, Skills v2 with executable modes, cron scheduler with recovery contracts, external audit, runtime CLI, unified doctor diagnostics, personal scripts registry with 9 lifecycle tools, Claude Code plugin marketplace structure, managed evolution with core module modification, and platform-aware power policy.
 
 ## Key Features
 
@@ -49,14 +49,18 @@ NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cogniti
 - Claude Code Plugin: marketplace-ready plugin structure with plugin.json and entry point
 - Managed Evolution: can modify core behavior modules with rollback followups
 - nexo chat: official CLI command to launch Claude Code with NEXO as operator
-- 24 pytest tests with isolated databases
+- Startup Preflight: safe local migrations and deferred remote updates before nexo chat or server start
+- Recovery Contracts: core and personal jobs declare catchup, restart, boot/wake behavior, idempotency, and max catchup age
+- Power Policy: persisted platform-aware power helper (caffeinate on macOS, systemd-inhibit on Linux), opt-in via install or nexo update
+- Catch-up Recovery: boot and wake recovery for both core and personal managed schedules, stale-window detection, single-run recovery for interval jobs
+- 142+ pytest tests with isolated databases
 - Plugin system with hot-reload
 - 100% local: SQLite + ONNX Runtime, zero cloud dependencies
 
 ## Installation
 
 ```
-npx nexo-brain@2.6.0
+npx nexo-brain@2.6.5
 ```
 
 ## Documentation
