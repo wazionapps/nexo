@@ -1,0 +1,79 @@
+name: Verify integrations
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+      - beta
+  pull_request:
+
+jobs:
+  verify-claude-plugin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Check release artifact sync
+        run: python3 scripts/sync_release_artifacts.py --check
+
+      - name: Verify Claude Code plugin packaging
+        run: python3 scripts/verify_claude_plugin.py
+
+      - name: Check Claude Code plugin tarball contents
+        run: |
+          npm pack --dry-run 2>&1 | tee /tmp/nexo-root-pack.txt
+          grep -Fq '.claude-plugin/plugin.json' /tmp/nexo-root-pack.txt
+          grep -Fq '.mcp.json' /tmp/nexo-root-pack.txt
+          grep -Fq 'hooks/hooks.json' /tmp/nexo-root-pack.txt
+          grep -Fq 'src/server.py' /tmp/nexo-root-pack.txt
+
+  verify-openclaw-plugin:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: openclaw-plugin
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Check release artifact sync
+        run: python3 ../scripts/sync_release_artifacts.py --check
+
+      - name: Install OpenClaw plugin dependencies
+        run: npm install
+
+      - name: Build OpenClaw plugin
+        run: npm run build
+
+      - name: Run OpenClaw plugin contract tests
+        run: npm test
+
+      - name: Check OpenClaw plugin tarball
+        run: npm pack --dry-run
+
+  verify-clawhub-skill:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check release artifact sync
+        run: python3 scripts/sync_release_artifacts.py --check
+
+      - name: Verify ClawHub skill metadata
+        run: python3 scripts/verify_clawhub_skill.py

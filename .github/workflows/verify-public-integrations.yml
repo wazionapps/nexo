@@ -1,0 +1,57 @@
+name: Verify public integrations
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 6 * * *"
+
+jobs:
+  verify-public-listings:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Check published npm packages
+        run: |
+          expected_version="$(git tag --list 'v*' --sort=-version:refname | head -n 1 | sed 's/^v//')"
+          test -n "$expected_version"
+          root_version="$(npm view nexo-brain version)"
+          openclaw_version="$(npm view @wazionapps/openclaw-memory-nexo-brain version)"
+          echo "expected=$expected_version root=$root_version openclaw=$openclaw_version"
+          test "$root_version" = "$expected_version"
+          test "$openclaw_version" = "$expected_version"
+
+      - name: Inspect published OpenClaw plugin tarball
+        run: |
+          tmpdir="$(mktemp -d)"
+          cd "$tmpdir"
+          npm pack @wazionapps/openclaw-memory-nexo-brain@latest >/dev/null
+          tar -tzf *.tgz | tee /tmp/openclaw-plugin-pack.txt
+          grep -q 'package/dist/index.js' /tmp/openclaw-plugin-pack.txt
+          grep -q 'package/openclaw.plugin.json' /tmp/openclaw-plugin-pack.txt
+
+      - name: Check ClawHub listing
+        run: npx clawhub@latest search nexo-brain
+
+      - name: Smoke-install ClawHub skill
+        run: |
+          tmpdir="$(mktemp -d)"
+          npx clawhub@latest install nexo-brain --dir "$tmpdir" --force
+          find "$tmpdir" -maxdepth 3 -type f | sort
+          expected_version="$(git tag --list 'v*' --sort=-version:refname | head -n 1 | sed 's/^v//')"
+          python3 - "$tmpdir" "$expected_version" <<'PY'
+import json, pathlib, sys
+root = pathlib.Path(sys.argv[1]) / "nexo-brain"
+expected_version = sys.argv[2]
+meta = json.loads((root / "_meta.json").read_text())
+skill = (root / "SKILL.md").read_text()
+assert meta["version"] == expected_version, f"ClawHub version mismatch: {meta['version']} != {expected_version}"
+assert "~/.nexo/server.py" in skill, "public ClawHub skill still points at the wrong server path"
+assert "~/.nexo/src/server.py" not in skill, "public ClawHub skill still uses obsolete src/server.py path"
+PY

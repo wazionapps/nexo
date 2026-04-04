@@ -1,15 +1,25 @@
 ---
 name: nexo-brain
 description: Cognitive memory system for AI agents — Atkinson-Shiffrin memory model, semantic RAG, trust scoring, and metacognitive error prevention. Gives your agent persistent memory that learns, forgets, and adapts.
-version: 1.0.0
+version: 2.6.7
 metadata:
   openclaw:
     requires:
       bins:
         - python3
-    emoji: "\U0001F9E0"
+    emoji: "🧠"
     homepage: https://github.com/wazionapps/nexo
-    os: ["macos"]
+    os:
+      - darwin
+      - linux
+    install:
+      - id: npm
+        kind: node
+        package: nexo-brain
+        bins:
+          - nexo
+          - nexo-brain
+        label: Install NEXO Brain (npm)
 ---
 
 # NEXO Brain — Cognitive Memory for Your Agent
@@ -18,13 +28,15 @@ NEXO Brain gives your agent persistent memory modeled after human cognition. It 
 
 ## Setup
 
-First, install the cognitive engine:
+If your OpenClaw client shows an install action for this skill, use that first. It installs the `nexo-brain` package via your configured Node package manager.
+
+If you are setting it up manually, install the cognitive engine:
 
 ```bash
 npx nexo-brain
 ```
 
-Then add the MCP server to your OpenClaw config (`~/.openclaw/openclaw.json`):
+After NEXO Brain is installed, add the MCP server to your OpenClaw config (`~/.openclaw/openclaw.json`):
 
 ```json
 {
@@ -46,7 +58,7 @@ Restart the gateway: `openclaw gateway restart`
 
 ## What You Get
 
-105+ MCP tools across 18 categories:
+Key MCP capabilities include:
 
 - **Cognitive Memory** — RAG-powered semantic search, trust scoring, sentiment detection, cognitive dissonance resolution
 - **Guard System** — Checks "have I made this mistake before?" before every code change

@@ -49,7 +49,7 @@ export class McpBridge {
   async start(): Promise<void> {
     if (this.process) return;
 
-    const serverPath = resolve(this.config.nexoHome, "src", "server.py");
+    const serverPath = resolve(this.config.nexoHome, "server.py");
 
     const nodeProcess = globalThis.process;
     this.process = spawn(this.config.pythonPath, [serverPath], {
@@ -82,7 +82,7 @@ export class McpBridge {
     await this.send("initialize", {
       protocolVersion: "2024-11-05",
       capabilities: {},
-      clientInfo: { name: "openclaw-memory-nexo-brain", version: "1.0.0" },
+      clientInfo: { name: "openclaw-memory-nexo-brain", version: "2.6.7" },
     });
 
     await this.send("notifications/initialized", {});

@@ -30,10 +30,31 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
           registry-url: 'https://registry.npmjs.org'
+
+      - name: Sync release artifacts
+        run: python3 scripts/sync_release_artifacts.py --release-version "${GITHUB_REF_NAME#v}"
+
+      - name: Verify Claude Code plugin packaging
+        run: python3 scripts/verify_claude_plugin.py
+
+      - name: Verify ClawHub skill metadata
+        run: python3 scripts/verify_clawhub_skill.py
+
+      - name: Check Claude Code plugin tarball contents
+        run: |
+          npm pack --dry-run 2>&1 | tee /tmp/nexo-root-pack.txt
+          grep -Fq '.claude-plugin/plugin.json' /tmp/nexo-root-pack.txt
+          grep -Fq '.mcp.json' /tmp/nexo-root-pack.txt
+          grep -Fq 'hooks/hooks.json' /tmp/nexo-root-pack.txt
+          grep -Fq 'src/server.py' /tmp/nexo-root-pack.txt
 
       # 1. Publish nexo-brain to npm
       - name: Publish nexo-brain to npm
@@ -47,6 +68,7 @@ jobs:
         run: |
           npm install --legacy-peer-deps
           npm run build
+          npm test
           npm publish --access public || echo "Version already exists"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -63,6 +85,21 @@ jobs:
             --no-input || echo "ClawHub publish failed (may need auth)"
         env:
           CLAWHUB_TOKEN: ${{ secrets.CLAWHUB_TOKEN }}
+
+      - name: Verify published ClawHub skill
+        run: |
+          tmpdir="$(mktemp -d)"
+          npx clawhub@latest install nexo-brain --dir "$tmpdir" --force
+          python3 - "$tmpdir" "${GITHUB_REF_NAME#v}" <<'PY'
+import json, pathlib, sys
+root = pathlib.Path(sys.argv[1]) / "nexo-brain"
+expected_version = sys.argv[2]
+meta = json.loads((root / "_meta.json").read_text())
+skill = (root / "SKILL.md").read_text()
+assert meta["version"] == expected_version, f"ClawHub version mismatch: {meta['version']} != {expected_version}"
+assert "~/.nexo/server.py" in skill, "published ClawHub skill still points at the wrong server path"
+assert "~/.nexo/src/server.py" not in skill, "published ClawHub skill still uses obsolete src/server.py path"
+PY
 
       # 4. Create GitHub Release
       - name: Create GitHub Release
