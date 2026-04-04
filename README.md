@@ -198,7 +198,7 @@ This means long sessions (8+ hours) feel like one continuous conversation instea
 
 ## Cognitive Features
 
-NEXO Brain provides **150+ MCP tools** across 20+ categories. These features implement cognitive science concepts that go beyond basic memory:
+NEXO Brain provides **150+ MCP tools** across 23 categories. These features implement cognitive science concepts that go beyond basic memory:
 
 ### Input Pipeline
 
