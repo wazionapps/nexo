@@ -370,7 +370,7 @@ def sync_linux(dry_run: bool = False):
     LOG_DIR.mkdir(parents=True, exist_ok=True)
 
     manifest_crons = load_manifest()
-    wrapper_src = NEXO_CODE / "scripts" / "nexo-cron-wrapper.sh"
+    wrapper_src = SOURCE_ROOT / "scripts" / "nexo-cron-wrapper.sh"
     wrapper_dest = _copy_script_to_nexo_home(wrapper_src)
 
     log(f"Manifest: {len(manifest_crons)} core crons")
@@ -383,13 +383,13 @@ def sync_linux(dry_run: bool = False):
 
     for cron in manifest_crons:
         cron_id = cron["id"]
-        script_src = NEXO_CODE / cron["script"]
+        script_src = SOURCE_ROOT / cron["script"]
         script_dest = _copy_script_to_nexo_home(script_src)
         script_type = cron.get("type", "python")
 
         # Copy subdirectories
         subdir_name = script_src.stem.replace("nexo-", "")
-        subdir_src = NEXO_CODE / "scripts" / subdir_name
+        subdir_src = SOURCE_ROOT / "scripts" / subdir_name
         if subdir_src.is_dir():
             _copy_script_to_nexo_home(subdir_src)
 
@@ -411,7 +411,7 @@ Description=NEXO: {cron.get('description', cron_id)}
 Type=oneshot
 ExecStart={exec_cmd}
 Environment=NEXO_HOME={NEXO_HOME}
-Environment=NEXO_CODE={NEXO_CODE}
+Environment=NEXO_CODE={SOURCE_ROOT}
 Environment=HOME={Path.home()}
 StandardOutput=append:{stdout_log}
 StandardError=append:{stderr_log}
