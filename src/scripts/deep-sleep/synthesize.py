@@ -12,7 +12,6 @@ Environment variables:
 """
 import json
 import os
-import shutil
 import subprocess
 import sys
 from datetime import datetime
@@ -26,22 +25,9 @@ PROMPT_FILE = Path(__file__).parent / "synthesize-prompt.md"
 if str(NEXO_CODE) not in sys.path:
     sys.path.insert(0, str(NEXO_CODE))
 
+from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
+
 CLAUDE_TIMEOUT = 21600  # 3h safety net (prevents zombie processes)
-
-
-def find_claude_cli() -> str:
-    """Find the Claude CLI binary."""
-    candidates = [
-        Path.home() / ".local" / "bin" / "claude",
-        Path("/usr/local/bin/claude"),
-    ]
-    for c in candidates:
-        if c.exists():
-            return str(c)
-    which = shutil.which("claude")
-    if which:
-        return which
-    return "claude"
 
 
 def extract_json_from_response(text: str) -> dict | None:
@@ -144,30 +130,17 @@ def main():
     prompt = prompt.replace("{{CONTEXT_FILE}}", str(context_file))
     prompt = prompt.replace("{{SKILL_RUNTIME_FILE}}", str(runtime_candidates_file))
 
-    claude_bin = find_claude_cli()
     print(f"[synthesize] Phase 3: Synthesizing {total_findings} findings from {target_date}")
     print(f"[synthesize] Skill runtime candidates: {runtime_candidate_count}")
-    print(f"[synthesize] Claude CLI: {claude_bin}")
+    print("[synthesize] Automation backend: schedule-configured")
 
     try:
-        env = os.environ.copy()
-        env["NEXO_HEADLESS"] = "1"  # Skip stop hook post-mortem
-        env.pop("CLAUDECODE", None)
-        env.pop("CLAUDE_CODE", None)
-
-        result = subprocess.run(
-            [
-                claude_bin,
-                "-p", prompt,
-                "--model", "opus",
-                "--output-format", "text",
-                "--allowedTools",
-                "Read,Grep,Bash"
-            ],
-            capture_output=True,
-            text=True,
+        result = run_automation_prompt(
+            prompt,
+            model="opus",
             timeout=CLAUDE_TIMEOUT,
-            env=env
+            output_format="text",
+            allowed_tools="Read,Grep,Bash",
         )
 
         if result.returncode != 0:
@@ -218,8 +191,11 @@ def main():
         print(f"  Context packets: {n_packets}")
         print(f"[synthesize] Output: {output_file}")
 
+    except AutomationBackendUnavailableError as exc:
+        print(f"[synthesize] Automation backend unavailable: {exc}", file=sys.stderr)
+        sys.exit(1)
     except subprocess.TimeoutExpired:
-        print(f"[synthesize] Claude CLI timeout ({CLAUDE_TIMEOUT}s)", file=sys.stderr)
+        print(f"[synthesize] Automation backend timeout ({CLAUDE_TIMEOUT}s)", file=sys.stderr)
         sys.exit(1)
     except FileNotFoundError:
         print(f"[synthesize] Claude CLI not found at: {claude_bin}", file=sys.stderr)

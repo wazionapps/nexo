@@ -208,6 +208,9 @@ def test_catchup_script_runs_directly_from_runtime_root(tmp_path):
     (runtime_root / "scripts").mkdir(parents=True)
     (runtime_root / "crons").mkdir(parents=True)
     shutil.copy2(repo_src / "cron_recovery.py", runtime_root / "cron_recovery.py")
+    shutil.copy2(repo_src / "runtime_power.py", runtime_root / "runtime_power.py")
+    shutil.copy2(repo_src / "client_preferences.py", runtime_root / "client_preferences.py")
+    shutil.copy2(repo_src / "agent_runner.py", runtime_root / "agent_runner.py")
     shutil.copy2(repo_src / "scripts" / "nexo-catchup.py", runtime_root / "scripts" / "nexo-catchup.py")
     (runtime_root / "crons" / "manifest.json").write_text('{"crons":[]}')
 
@@ -237,6 +240,9 @@ def test_catchup_script_self_heals_personal_schedules(tmp_path):
     (runtime_root / "scripts").mkdir(parents=True)
     (runtime_root / "crons").mkdir(parents=True)
     shutil.copy2(repo_src / "cron_recovery.py", runtime_root / "cron_recovery.py")
+    shutil.copy2(repo_src / "runtime_power.py", runtime_root / "runtime_power.py")
+    shutil.copy2(repo_src / "client_preferences.py", runtime_root / "client_preferences.py")
+    shutil.copy2(repo_src / "agent_runner.py", runtime_root / "agent_runner.py")
     shutil.copy2(repo_src / "scripts" / "nexo-catchup.py", runtime_root / "scripts" / "nexo-catchup.py")
     (runtime_root / "crons" / "manifest.json").write_text('{"crons":[]}')
     (runtime_root / "script_registry.py").write_text(

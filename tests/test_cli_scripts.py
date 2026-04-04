@@ -140,6 +140,7 @@ class TestRuntimeUpdate:
             "maintenance.py", "storage_router.py", "claim_graph.py", "hnsw_index.py",
             "evolution_cycle.py", "migrate_embeddings.py", "auto_close_sessions.py",
             "client_sync.py",
+            "client_preferences.py", "agent_runner.py",
             "auto_update.py", "tools_sessions.py", "tools_coordination.py",
             "tools_reminders.py", "tools_reminders_crud.py", "tools_learnings.py",
             "tools_credentials.py", "tools_task_history.py", "tools_menu.py",
@@ -245,7 +246,7 @@ class TestRuntimeUpdate:
             "server.py", "plugin_loader.py", "knowledge_graph.py", "kg_populate.py",
             "maintenance.py", "storage_router.py", "claim_graph.py", "hnsw_index.py",
             "evolution_cycle.py", "migrate_embeddings.py", "auto_close_sessions.py",
-            "client_sync.py", "auto_update.py", "tools_sessions.py", "tools_coordination.py",
+            "client_sync.py", "client_preferences.py", "agent_runner.py", "auto_update.py", "tools_sessions.py", "tools_coordination.py",
             "tools_reminders.py", "tools_reminders_crud.py", "tools_learnings.py",
             "tools_credentials.py", "tools_task_history.py", "tools_menu.py", "cli.py",
             "skills_runtime.py", "user_context.py", "public_contribution.py",
@@ -333,7 +334,7 @@ class TestRuntimeUpdate:
             "server.py", "plugin_loader.py", "knowledge_graph.py", "kg_populate.py",
             "maintenance.py", "storage_router.py", "claim_graph.py", "hnsw_index.py",
             "evolution_cycle.py", "migrate_embeddings.py", "auto_close_sessions.py",
-            "client_sync.py", "auto_update.py", "tools_sessions.py", "tools_coordination.py",
+            "client_sync.py", "client_preferences.py", "agent_runner.py", "auto_update.py", "tools_sessions.py", "tools_coordination.py",
             "tools_reminders.py", "tools_reminders_crud.py", "tools_learnings.py",
             "tools_credentials.py", "tools_task_history.py", "tools_menu.py", "cli.py",
             "skills_runtime.py", "user_context.py", "public_contribution.py",
@@ -460,6 +461,44 @@ class TestChatCommand:
         )
         assert result.returncode == 0
         assert json.loads(out_file.read_text()) == ["--dangerously-skip-permissions", "."]
+
+    def test_chat_uses_configured_codex_client(self, nexo_home, tmp_path):
+        fake_codex = tmp_path / "codex"
+        out_file = tmp_path / "codex-invocation.json"
+        fake_codex.write_text(
+            "#!/usr/bin/env python3\n"
+            "import json, sys\n"
+            f"open({json.dumps(str(out_file))}, 'w').write(json.dumps(sys.argv[1:]))\n"
+        )
+        fake_codex.chmod(0o755)
+        (nexo_home / "config").mkdir(exist_ok=True)
+        (nexo_home / "config" / "schedule.json").write_text(json.dumps({
+            "timezone": "UTC",
+            "auto_update": True,
+            "interactive_clients": {
+                "claude_code": False,
+                "codex": True,
+                "claude_desktop": False,
+            },
+            "default_terminal_client": "codex",
+            "automation_enabled": True,
+            "automation_backend": "claude_code",
+            "processes": {},
+        }))
+
+        env = {
+            **os.environ,
+            "NEXO_HOME": str(nexo_home),
+            "NEXO_CODE": os.path.join(os.path.dirname(__file__), "..", "src"),
+            "HOME": str(nexo_home),
+            "PATH": f"{tmp_path}:{os.environ.get('PATH', '')}",
+        }
+        result = subprocess.run(
+            [sys.executable, CLI_PY, "chat", "."],
+            capture_output=True, text=True, timeout=30, env=env,
+        )
+        assert result.returncode == 0
+        assert json.loads(out_file.read_text()) == ["-C", "."]
 
 
 class TestScriptsRun:

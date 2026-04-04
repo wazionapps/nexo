@@ -20,6 +20,14 @@ from pathlib import Path
 
 HOME = Path.home()
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+_script_dir = Path(__file__).resolve().parent
+_repo_src = _script_dir.parent
+NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(_repo_src) if (_repo_src / "server.py").exists() else str(NEXO_HOME)))
+if str(NEXO_CODE) not in sys.path:
+    sys.path.insert(0, str(NEXO_CODE))
+
+from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
+
 CLAUDE_DIR = NEXO_HOME
 COORD_DIR = CLAUDE_DIR / "coordination"
 NEXO_DB = NEXO_HOME / "data" / "nexo.db"
@@ -205,17 +213,13 @@ not what merely happened. If a section has nothing, write "Nothing notable."
 Execute without asking."""
 
     log("Invoking Claude CLI (opus) for synthesis...")
-    env = os.environ.copy()
-    env["NEXO_HEADLESS"] = "1"  # Skip stop hook post-mortem
-    env.pop("CLAUDECODE", None)
-    env.pop("CLAUDE_CODE", None)
-
     try:
-        result = subprocess.run(
-            [str(CLAUDE_CLI), "-p", prompt, "--model", "opus",
-             "--output-format", "text",
-             "--allowedTools", "Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__*"],
-            capture_output=True, text=True, timeout=21600, env=env
+        result = run_automation_prompt(
+            prompt,
+            model="opus",
+            timeout=21600,
+            output_format="text",
+            allowed_tools="Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__*",
         )
 
         if result.returncode != 0:
@@ -225,6 +229,9 @@ Execute without asking."""
         log(f"Synthesis complete. Output: {len(result.stdout or '')} chars")
         return True
 
+    except AutomationBackendUnavailableError as e:
+        log(f"Automation backend unavailable: {e}")
+        return False
     except subprocess.TimeoutExpired:
         log("CLI timed out (180s)")
         return False

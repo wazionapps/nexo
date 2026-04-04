@@ -169,6 +169,7 @@ def log(msg: str):
 
 # ── Import from evolution_cycle.py (lives in NEXO_CODE, i.e. src/) ──────
 sys.path.insert(0, str(NEXO_CODE))
+from agent_runner import probe_automation_backend, run_automation_prompt
 from evolution_cycle import (
     load_objective, save_objective, get_week_data, build_evolution_prompt,
     dry_run_restore_test, max_auto_changes, create_snapshot, build_public_contribution_prompt
@@ -202,34 +203,18 @@ CLI_TIMEOUT = 21600  # 3h safety net (prevents zombie processes)
 
 
 def verify_claude_cli() -> bool:
-    """Check Claude CLI is available and authenticated."""
-    if not CLAUDE_CLI.exists():
-        return False
-    try:
-        result = subprocess.run(
-            [str(CLAUDE_CLI), "-p", "reply OK", "--output-format", "text"],
-            capture_output=True, text=True, timeout=30
-        )
-        return result.returncode == 0
-    except Exception:
-        return False
+    """Check the configured automation backend is available and authenticated."""
+    return bool(probe_automation_backend(timeout=30).get("ok"))
 
 
 def call_claude_cli(prompt: str) -> str:
-    """Call claude -p prompt --model opus via subprocess. Returns stdout text."""
-    env = os.environ.copy()
-    env["NEXO_HEADLESS"] = "1"  # Skip stop hook post-mortem
-    env.pop("CLAUDECODE", None)
-    env.pop("CLAUDE_CODE", None)
-
-    result = subprocess.run(
-        [str(CLAUDE_CLI), "-p", prompt, "--model", "opus",
-         "--output-format", "text",
-         "--allowedTools", "Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__*"],
-        capture_output=True,
-        text=True,
+    """Call the configured automation backend for the managed evolution prompt."""
+    result = run_automation_prompt(
+        prompt,
+        model="opus",
         timeout=CLI_TIMEOUT,
-        env=env,
+        output_format="text",
+        allowed_tools="Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__*",
     )
     if result.returncode != 0:
         raise RuntimeError(f"claude CLI exited {result.returncode}: {result.stderr[:500]}")
@@ -237,30 +222,15 @@ def call_claude_cli(prompt: str) -> str:
 
 
 def call_public_claude_cli(prompt: str, *, cwd: Path) -> str:
-    """Run Claude CLI in an isolated public repo checkout."""
-    env = os.environ.copy()
-    env["NEXO_HEADLESS"] = "1"
-    env["NEXO_PUBLIC_CONTRIBUTION"] = "1"
-    env.pop("CLAUDECODE", None)
-    env.pop("CLAUDE_CODE", None)
-
-    result = subprocess.run(
-        [
-            str(CLAUDE_CLI),
-            "-p",
-            prompt,
-            "--model",
-            "opus",
-            "--output-format",
-            "text",
-            "--allowedTools",
-            "Read,Write,Edit,Glob,Grep,Bash",
-        ],
-        cwd=str(cwd),
-        capture_output=True,
-        text=True,
+    """Run the configured automation backend in an isolated public repo checkout."""
+    result = run_automation_prompt(
+        prompt,
+        cwd=cwd,
+        env={"NEXO_PUBLIC_CONTRIBUTION": "1"},
+        model="opus",
         timeout=CLI_TIMEOUT,
-        env=env,
+        output_format="text",
+        allowed_tools="Read,Write,Edit,Glob,Grep,Bash",
     )
     if result.returncode != 0:
         raise RuntimeError(f"claude CLI exited {result.returncode}: {result.stderr[:500]}")

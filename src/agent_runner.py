@@ -1,0 +1,284 @@
+from __future__ import annotations
+
+"""Terminal client launchers and headless automation backend runner."""
+
+import os
+import shutil
+import subprocess
+import tempfile
+from pathlib import Path
+
+from client_preferences import (
+    BACKEND_NONE,
+    CLIENT_CLAUDE_CODE,
+    CLIENT_CODEX,
+    TERMINAL_CLIENT_KEYS,
+    load_client_preferences,
+    resolve_automation_backend,
+    resolve_terminal_client,
+)
+
+
+NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+
+
+class AgentRunnerError(RuntimeError):
+    """Base exception for runner failures."""
+
+
+class TerminalClientUnavailableError(AgentRunnerError):
+    """Raised when the requested interactive client cannot be launched."""
+
+
+class AutomationBackendUnavailableError(AgentRunnerError):
+    """Raised when the configured automation backend is unavailable."""
+
+
+def _resolve_claude_cli() -> str:
+    saved = NEXO_HOME / "config" / "claude-cli-path"
+    if saved.exists():
+        candidate = saved.read_text().strip()
+        if candidate and Path(candidate).exists():
+            return candidate
+    env_path = os.environ.get("CLAUDE_BIN", "").strip()
+    if env_path and Path(env_path).exists():
+        return env_path
+    discovered = shutil.which("claude")
+    if discovered:
+        return discovered
+    for candidate in (
+        Path.home() / ".local" / "bin" / "claude",
+        Path.home() / ".npm-global" / "bin" / "claude",
+        Path("/usr/local/bin/claude"),
+    ):
+        if candidate.exists():
+            return str(candidate)
+    return ""
+
+
+def _resolve_codex_cli() -> str:
+    env_path = os.environ.get("CODEX_BIN", "").strip()
+    if env_path and Path(env_path).exists():
+        return env_path
+    return shutil.which("codex") or ""
+
+
+def _headless_env(env: dict | None = None) -> dict:
+    merged = os.environ.copy()
+    if env:
+        merged.update(env)
+    merged["NEXO_HEADLESS"] = "1"
+    merged.pop("CLAUDECODE", None)
+    merged.pop("CLAUDE_CODE", None)
+    return merged
+
+
+def build_interactive_client_command(
+    *,
+    target: str | os.PathLike[str],
+    client: str | None = None,
+    preferences: dict | None = None,
+) -> tuple[str, list[str]]:
+    prefs = preferences or load_client_preferences()
+    selected = resolve_terminal_client(client, preferences=prefs)
+    target_path = str(Path(target).expanduser())
+
+    if selected == CLIENT_CLAUDE_CODE:
+        claude_bin = _resolve_claude_cli()
+        if not claude_bin:
+            raise TerminalClientUnavailableError(
+                "Claude Code launcher not found in PATH. Install `claude` first."
+            )
+        return selected, [claude_bin, "--dangerously-skip-permissions", target_path]
+
+    if selected == CLIENT_CODEX:
+        codex_bin = _resolve_codex_cli()
+        if not codex_bin:
+            raise TerminalClientUnavailableError(
+                "Codex launcher not found in PATH. Install `codex` first or reconfigure NEXO."
+            )
+        return selected, [codex_bin, "-C", target_path]
+
+    raise TerminalClientUnavailableError(f"Unsupported terminal client: {selected}")
+
+
+def launch_interactive_client(
+    *,
+    target: str | os.PathLike[str],
+    client: str | None = None,
+    env: dict | None = None,
+    preferences: dict | None = None,
+) -> subprocess.CompletedProcess:
+    _, cmd = build_interactive_client_command(target=target, client=client, preferences=preferences)
+    launch_env = os.environ.copy()
+    if env:
+        launch_env.update(env)
+    return subprocess.run(cmd, env=launch_env)
+
+
+def _normalize_codex_model(model: str | None) -> str:
+    candidate = str(model or "").strip()
+    if not candidate:
+        return ""
+    lowered = candidate.lower()
+    if lowered in {"opus", "sonnet"}:
+        return ""
+    return candidate
+
+
+def _build_codex_prompt(
+    prompt: str,
+    *,
+    output_format: str = "",
+    append_system_prompt: str = "",
+    allowed_tools: str = "",
+) -> str:
+    instructions: list[str] = []
+    if append_system_prompt:
+        instructions.append(f"SYSTEM INSTRUCTIONS:\n{append_system_prompt}")
+    if output_format and output_format.lower() == "text":
+        instructions.append("FINAL RESPONSE FORMAT: plain text only.")
+    elif output_format:
+        instructions.append(f"FINAL RESPONSE FORMAT: {output_format}.")
+    if allowed_tools:
+        instructions.append(
+            "TOOLING SCOPE: Prefer to stay within capabilities equivalent to "
+            f"{allowed_tools} unless that would make the task fail."
+        )
+    if instructions:
+        return "\n\n".join([*instructions, prompt])
+    return prompt
+
+
+def run_automation_prompt(
+    prompt: str,
+    *,
+    backend: str | None = None,
+    cwd: str | os.PathLike[str] | None = None,
+    env: dict | None = None,
+    model: str = "",
+    timeout: int = 300,
+    output_format: str = "",
+    append_system_prompt: str = "",
+    allowed_tools: str = "",
+    extra_args: list[str] | tuple[str, ...] | None = None,
+) -> subprocess.CompletedProcess:
+    prefs = load_client_preferences()
+    selected_backend = backend or resolve_automation_backend(preferences=prefs)
+    if selected_backend == BACKEND_NONE:
+        raise AutomationBackendUnavailableError("Automation backend is disabled in config.")
+
+    cwd_path = Path(cwd).expanduser().resolve() if cwd else Path.cwd()
+    run_env = _headless_env(env)
+    extra_args = list(extra_args or [])
+
+    if selected_backend == CLIENT_CLAUDE_CODE:
+        claude_bin = _resolve_claude_cli()
+        if not claude_bin:
+            raise AutomationBackendUnavailableError(
+                "Claude Code automation backend selected but `claude` is not installed."
+            )
+        cmd = [claude_bin, "-p", prompt]
+        if model:
+            cmd.extend(["--model", model])
+        if output_format:
+            cmd.extend(["--output-format", output_format])
+        if append_system_prompt:
+            cmd.extend(["--append-system-prompt", append_system_prompt])
+        if allowed_tools:
+            cmd.extend(["--allowedTools", allowed_tools])
+        cmd.extend(extra_args)
+        return subprocess.run(
+            cmd,
+            cwd=str(cwd_path),
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            env=run_env,
+        )
+
+    if selected_backend == CLIENT_CODEX:
+        codex_bin = _resolve_codex_cli()
+        if not codex_bin:
+            raise AutomationBackendUnavailableError(
+                "Codex automation backend selected but `codex` is not installed."
+            )
+        with tempfile.TemporaryDirectory(prefix="nexo-codex-") as tmpdir:
+            output_path = Path(tmpdir) / "last-message.txt"
+            cmd = [
+                codex_bin,
+                "exec",
+                "--skip-git-repo-check",
+                "--dangerously-bypass-approvals-and-sandbox",
+                "--ephemeral",
+                "-C",
+                str(cwd_path),
+                "-o",
+                str(output_path),
+            ]
+            codex_model = _normalize_codex_model(model)
+            if codex_model:
+                cmd.extend(["-m", codex_model])
+            cmd.extend(extra_args)
+            cmd.append(
+                _build_codex_prompt(
+                    prompt,
+                    output_format=output_format,
+                    append_system_prompt=append_system_prompt,
+                    allowed_tools=allowed_tools,
+                )
+            )
+            result = subprocess.run(
+                cmd,
+                cwd=str(cwd_path),
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                env=run_env,
+            )
+            stdout = output_path.read_text() if output_path.exists() else (result.stdout or "")
+            return subprocess.CompletedProcess(
+                cmd,
+                result.returncode,
+                stdout,
+                result.stderr,
+            )
+
+    raise AutomationBackendUnavailableError(f"Unsupported automation backend: {selected_backend}")
+
+
+def probe_automation_backend(
+    *,
+    backend: str | None = None,
+    cwd: str | os.PathLike[str] | None = None,
+    timeout: int = 60,
+) -> dict:
+    selected_backend = backend or resolve_automation_backend()
+    if selected_backend == BACKEND_NONE:
+        return {
+            "ok": False,
+            "backend": BACKEND_NONE,
+            "reason": "automation disabled in config",
+        }
+    try:
+        result = run_automation_prompt(
+            "Reply exactly OK.",
+            backend=selected_backend,
+            cwd=cwd,
+            timeout=timeout,
+            output_format="text",
+        )
+    except AutomationBackendUnavailableError as exc:
+        return {
+            "ok": False,
+            "backend": selected_backend,
+            "reason": str(exc),
+        }
+    output = (result.stdout or "").strip()
+    return {
+        "ok": result.returncode == 0 and "OK" in output,
+        "backend": selected_backend,
+        "returncode": result.returncode,
+        "stdout": output,
+        "stderr": (result.stderr or "").strip(),
+    }

@@ -13,6 +13,7 @@ NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parent)))
 LAUNCH_AGENTS_DIR = Path.home() / "Library" / "LaunchAgents"
 OPTIONALS_FILE = NEXO_HOME / "config" / "optionals.json"
+SCHEDULE_FILE = NEXO_HOME / "config" / "schedule.json"
 DB_PATH = NEXO_HOME / "data" / "nexo.db"
 STATE_FILE = NEXO_HOME / "operations" / ".catchup-state.json"
 
@@ -38,6 +39,8 @@ def load_enabled_crons() -> list[dict]:
     optionals = _load_json(OPTIONALS_FILE, {})
     if not isinstance(optionals, dict):
         optionals = {}
+    schedule_data = _load_json(SCHEDULE_FILE, {})
+    automation_default = bool(schedule_data.get("automation_enabled", True)) if isinstance(schedule_data, dict) else True
 
     for manifest_path in manifest_candidates:
         if not manifest_path.is_file():
@@ -50,7 +53,11 @@ def load_enabled_crons() -> list[dict]:
         enabled = []
         for cron in data.get("crons", []):
             optional_key = cron.get("optional")
-            if optional_key and not optionals.get(optional_key, False):
+            if optional_key == "automation":
+                optional_enabled = optionals.get(optional_key, automation_default)
+            else:
+                optional_enabled = optionals.get(optional_key, False)
+            if optional_key and not optional_enabled:
                 continue
             enabled.append(dict(cron))
         return enabled

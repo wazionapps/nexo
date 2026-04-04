@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.6.12] - 2026-04-04
+
+### Clients & Installer
+- Installer now persists explicit client preferences in `schedule.json`: connected interactive clients, default terminal client, background automation enabled/disabled, and selected automation backend.
+- `nexo chat` no longer assumes Claude Code. It now opens the configured default terminal client and supports `nexo chat --client claude_code|codex`.
+- Install now detects Claude Code, Codex, and Claude Desktop up front and can offer installation of the required terminal client/backend when missing.
+- Shell alias generation now targets `nexo chat .` instead of hardcoding a Claude Code launch command.
+
+### Automation Backend
+- Added a shared `agent_runner` abstraction so core background jobs can run through the configured automation backend instead of calling Claude Code directly.
+- Core agentic jobs now route through that runner, preserving the existing hardened Claude Code flags when `claude_code` remains the backend.
+- Added a small `nexo-agent-run.py` wrapper so shell-based flows such as watchdog repair can use the configured backend while keeping the old Claude fallback for partial/older runtimes.
+- Added persisted client/backend defaults to runtime schedule handling and cron/doctor logic so older installs keep automation enabled unless the user explicitly turns it off.
+
+### Runtime Health
+- Doctor runtime checks now surface mismatches between the configured default terminal client / automation backend and what is actually installed on the machine.
+- Auto-update/runtime sync now backfill the new client/backend support modules so existing installs can migrate without manual repair.
+
 ## [2.6.11] - 2026-04-04
 
 ### Reliability

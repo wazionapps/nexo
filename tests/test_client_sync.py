@@ -124,3 +124,34 @@ def test_sync_all_clients_treats_missing_codex_as_non_fatal(tmp_path, monkeypatc
     assert result["ok"] is True
     assert result["clients"]["codex"]["skipped"] is True
     assert "codex binary not found" in result["clients"]["codex"]["reason"]
+
+
+def test_sync_all_clients_can_limit_to_configured_clients(tmp_path, monkeypatch):
+    import client_sync
+
+    runtime = _make_runtime(tmp_path)
+    home = tmp_path / "home"
+
+    monkeypatch.setattr(client_sync.shutil, "which", lambda name: None)
+
+    result = client_sync.sync_all_clients(
+        nexo_home=runtime,
+        runtime_root=runtime,
+        operator_name="Atlas",
+        user_home=home,
+        preferences={
+            "interactive_clients": {
+                "claude_code": False,
+                "codex": True,
+                "claude_desktop": False,
+            },
+            "default_terminal_client": "codex",
+            "automation_enabled": False,
+            "automation_backend": "none",
+        },
+    )
+
+    assert result["enabled_clients"] == ["codex"]
+    assert result["clients"]["claude_code"]["reason"] == "disabled in client preferences"
+    assert result["clients"]["claude_desktop"]["reason"] == "disabled in client preferences"
+    assert result["clients"]["codex"]["skipped"] is True

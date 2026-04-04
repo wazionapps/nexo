@@ -250,8 +250,34 @@ fi
 # --- Step 9: Sync shared client configs ---
 CLIENT_SYNC="$SRC_DIR/scripts/nexo-sync-clients.py"
 if [ -f "$CLIENT_SYNC" ]; then
-    log "Syncing Claude Code, Claude Desktop, and Codex configs..."
-    if NEXO_HOME="$NEXO_HOME" NEXO_CODE="$SRC_DIR" python3 "$CLIENT_SYNC" --nexo-home "$NEXO_HOME" --runtime-root "$SRC_DIR" --json >/dev/null 2>&1; then
+    log "Syncing shared client configs..."
+    CLIENT_SYNC_ARGS=()
+    if [ -f "$NEXO_HOME/config/schedule.json" ]; then
+        while IFS= read -r line; do
+            [ -n "$line" ] && CLIENT_SYNC_ARGS+=("--enabled-client" "$line")
+        done < <(
+            NEXO_HOME="$NEXO_HOME" NEXO_CODE="$SRC_DIR" python3 - <<'PY'
+import json
+import os
+import sys
+from pathlib import Path
+
+sys.path.insert(0, os.environ["NEXO_CODE"])
+from client_preferences import normalize_client_preferences
+
+schedule_file = Path(os.environ["NEXO_HOME"]) / "config" / "schedule.json"
+prefs = normalize_client_preferences(json.loads(schedule_file.read_text())) if schedule_file.exists() else normalize_client_preferences({})
+enabled = [key for key, value in prefs.get("interactive_clients", {}).items() if value]
+if prefs.get("automation_enabled", True):
+    backend = prefs.get("automation_backend")
+    if backend and backend != "none" and backend not in enabled:
+        enabled.append(backend)
+for item in enabled:
+    print(item)
+PY
+        )
+    fi
+    if NEXO_HOME="$NEXO_HOME" NEXO_CODE="$SRC_DIR" python3 "$CLIENT_SYNC" --nexo-home "$NEXO_HOME" --runtime-root "$SRC_DIR" "${CLIENT_SYNC_ARGS[@]}" --json >/dev/null 2>&1; then
         log "Shared client configs synced."
     else
         warn "Client config sync failed (non-fatal). Run 'nexo clients sync' later."

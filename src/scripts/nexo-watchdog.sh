@@ -64,7 +64,9 @@ import json, sys, platform
 nexo_home = '$NEXO_HOME'
 is_mac = platform.system() == 'Darwin'
 optionals_file = '$NEXO_HOME/config/optionals.json'
+schedule_file = '$NEXO_HOME/config/schedule.json'
 optionals = {}
+automation_default = True
 
 with open('$MANIFEST_FILE') as f:
     data = json.load(f)
@@ -77,10 +79,22 @@ try:
 except Exception:
     optionals = {}
 
+try:
+    with open(schedule_file) as f:
+        schedule = json.load(f)
+        if isinstance(schedule, dict):
+            automation_default = bool(schedule.get('automation_enabled', True))
+except Exception:
+    automation_default = True
+
 for c in data.get('crons', []):
     cid = c['id']
     optional_key = c.get('optional')
-    if optional_key and not optionals.get(optional_key, False):
+    if optional_key == 'automation':
+        optional_enabled = optionals.get(optional_key, automation_default)
+    else:
+        optional_enabled = optionals.get(optional_key, False)
+    if optional_key and not optional_enabled:
         continue
     name = cid.replace('-', ' ').title()
     # Use the right service identifier per platform
@@ -1126,18 +1140,28 @@ CONSTRAINTS:
 - Log what you did to $NEXO_HOME/logs/watchdog-repair-result.log
 NEXOPROMPT
 
-      # Launch NEXO in background with repair task
-      # Ensure claude CLI is in PATH (cron/LaunchAgent may have minimal PATH)
-      CLAUDE_BIN=$(command -v claude 2>/dev/null || echo "$HOME_DIR/.claude/local/bin/claude")
-      if [ ! -x "$CLAUDE_BIN" ]; then
-        CLAUDE_BIN=$(find /usr/local/bin /opt/homebrew/bin "$HOME_DIR/.local/bin" "$HOME_DIR/.npm-global/bin" -name claude -type f 2>/dev/null | head -1)
+      # Launch NEXO in background with the configured automation backend.
+      # Keep the hardened Claude fallback for older runtimes or partial installs.
+      AGENT_RUNNER="$NEXO_HOME/scripts/nexo-agent-run.py"
+      NEXO_PYTHON="$NEXO_HOME/.venv/bin/python3"
+      if [ ! -x "$NEXO_PYTHON" ]; then
+        NEXO_PYTHON=$(command -v python3 2>/dev/null || echo "python3")
       fi
 
-      if [ -n "$CLAUDE_BIN" ] && [ -x "$CLAUDE_BIN" ]; then
-        nohup bash -c "\"$CLAUDE_BIN\" --print --dangerously-skip-permissions -p \"\$(cat '$REPAIR_PROMPT_FILE')\" >> '$LOG_DIR/watchdog-nexo-repair.log' 2>&1; rm -f '$REPAIR_PROMPT_FILE'" &
+      if [ -f "$AGENT_RUNNER" ]; then
+        nohup bash -c "\"$NEXO_PYTHON\" \"$AGENT_RUNNER\" --prompt-file '$REPAIR_PROMPT_FILE' >> '$LOG_DIR/watchdog-nexo-repair.log' 2>&1; rm -f '$REPAIR_PROMPT_FILE'" &
       else
-        log "NEXO repair ABORTED: claude CLI not found in PATH"
-        rm -f "$REPAIR_PROMPT_FILE"
+        CLAUDE_BIN=$(command -v claude 2>/dev/null || echo "$HOME_DIR/.claude/local/bin/claude")
+        if [ ! -x "$CLAUDE_BIN" ]; then
+          CLAUDE_BIN=$(find /usr/local/bin /opt/homebrew/bin "$HOME_DIR/.local/bin" "$HOME_DIR/.npm-global/bin" -name claude -type f 2>/dev/null | head -1)
+        fi
+
+        if [ -n "$CLAUDE_BIN" ] && [ -x "$CLAUDE_BIN" ]; then
+          nohup bash -c "\"$CLAUDE_BIN\" --print --dangerously-skip-permissions -p \"\$(cat '$REPAIR_PROMPT_FILE')\" >> '$LOG_DIR/watchdog-nexo-repair.log' 2>&1; rm -f '$REPAIR_PROMPT_FILE'" &
+        else
+          log "NEXO repair ABORTED: no automation backend wrapper and no claude CLI fallback found"
+          rm -f "$REPAIR_PROMPT_FILE"
+        fi
       fi
 
       REPAIR_PID=$!

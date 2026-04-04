@@ -10,6 +10,46 @@ import subprocess
 import sys
 from pathlib import Path
 
+try:
+    from client_preferences import (
+        BACKEND_NONE,
+        INTERACTIVE_CLIENT_KEYS,
+        normalize_backend_key,
+        normalize_client_key,
+        normalize_client_preferences,
+    )
+except Exception:
+    BACKEND_NONE = "none"
+    INTERACTIVE_CLIENT_KEYS = ("claude_code", "codex", "claude_desktop")
+
+    def normalize_client_key(value: str | None) -> str:
+        candidate = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+        aliases = {
+            "claude": "claude_code",
+            "claude_code": "claude_code",
+            "codex": "codex",
+            "claude_desktop": "claude_desktop",
+            "desktop": "claude_desktop",
+        }
+        return aliases.get(candidate, "")
+
+    def normalize_backend_key(value: str | None) -> str:
+        candidate = normalize_client_key(value)
+        return candidate or (BACKEND_NONE if str(value or "").strip().lower() in {"none", "off", "disabled"} else "")
+
+    def normalize_client_preferences(schedule: dict | None = None) -> dict:
+        return {
+            "interactive_clients": {
+                "claude_code": True,
+                "codex": False,
+                "claude_desktop": False,
+            },
+            "default_terminal_client": "claude_code",
+            "automation_enabled": True,
+            "automation_backend": "claude_code",
+        }
+
+
 
 def _user_home() -> Path:
     return Path(os.environ.get("HOME", str(Path.home()))).expanduser()
@@ -252,8 +292,37 @@ def sync_all_clients(
     python_path: str = "",
     operator_name: str = "",
     user_home: str | os.PathLike[str] | None = None,
+    enabled_clients: list[str] | tuple[str, ...] | set[str] | None = None,
+    preferences: dict | None = None,
 ) -> dict:
+    if enabled_clients is None:
+        if preferences is None:
+            enabled_set = set(INTERACTIVE_CLIENT_KEYS)
+        else:
+            active_preferences = normalize_client_preferences(preferences)
+            enabled_set = {
+                key
+                for key in INTERACTIVE_CLIENT_KEYS
+                if active_preferences.get("interactive_clients", {}).get(key, False)
+            }
+            backend_key = normalize_backend_key(active_preferences.get("automation_backend"))
+            if active_preferences.get("automation_enabled", True) and backend_key and backend_key != BACKEND_NONE:
+                enabled_set.add(backend_key)
+            if not enabled_set:
+                enabled_set.add("claude_code")
+    else:
+        enabled_set = {normalize_client_key(item) for item in enabled_clients if normalize_client_key(item)}
+        if not enabled_set:
+            enabled_set = {"claude_code"}
+
     def _safe(label: str, fn) -> dict:
+        if label not in enabled_set:
+            return {
+                "ok": True,
+                "client": label,
+                "skipped": True,
+                "reason": "disabled in client preferences",
+            }
         try:
             return fn(
                 nexo_home=nexo_home,
@@ -278,6 +347,7 @@ def sync_all_clients(
             Path(nexo_home).expanduser() if nexo_home else _default_nexo_home(),
             runtime_root,
         )),
+        "enabled_clients": sorted(enabled_set),
         "clients": results,
     }
 
@@ -307,6 +377,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--runtime-root", default="")
     parser.add_argument("--python", dest="python_path", default="")
     parser.add_argument("--operator-name", default="")
+    parser.add_argument(
+        "--enabled-client",
+        action="append",
+        dest="enabled_clients",
+        choices=["claude_code", "claude_desktop", "codex"],
+        help="Sync only the specified client(s). Repeat for multiple values.",
+    )
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
 
@@ -315,6 +392,7 @@ def main(argv: list[str] | None = None) -> int:
         runtime_root=args.runtime_root or None,
         python_path=args.python_path,
         operator_name=args.operator_name,
+        enabled_clients=args.enabled_clients,
     )
     if args.json:
         print(json.dumps(result, indent=2, ensure_ascii=False))

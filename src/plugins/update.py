@@ -588,11 +588,15 @@ def handle_update(remote: str = "origin", branch: str = "main", progress_fn=None
         try:
             _emit_progress(progress_fn, "Refreshing shared client configs...")
             from client_sync import sync_all_clients
+            from client_preferences import normalize_client_preferences
 
+            schedule_path = NEXO_HOME / "config" / "schedule.json"
+            schedule_payload = json.loads(schedule_path.read_text()) if schedule_path.exists() else {}
             client_sync_result = sync_all_clients(
                 nexo_home=NEXO_HOME,
                 runtime_root=SRC_DIR,
                 operator_name=os.environ.get("NEXO_NAME", ""),
+                preferences=normalize_client_preferences(schedule_payload),
             )
             if client_sync_result.get("ok"):
                 steps_done.append("client-sync")
@@ -619,7 +623,7 @@ def handle_update(remote: str = "origin", branch: str = "main", progress_fn=None
         if "hook-sync" in steps_done:
             lines.append("  Hooks: synced to NEXO_HOME")
         if "client-sync" in steps_done:
-            lines.append("  Clients: Claude Code/Desktop/Codex synced")
+            lines.append("  Clients: configured client targets synced")
         lines.append("")
         lines.append("MCP server restart needed to load new code.")
         return "\n".join(lines)

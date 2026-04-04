@@ -36,6 +36,8 @@ _repo_src = _script_dir.parent  # src/scripts/ -> src/
 NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(_repo_src) if (_repo_src / "server.py").exists() else str(NEXO_HOME)))
 sys.path.insert(0, str(NEXO_CODE))
 
+from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
+
 NEXO_DB = NEXO_HOME / "data" / "nexo.db"
 # Memory directory — adjust to match your project's memory location
 MEMORY_DIR = NEXO_HOME / "memory"
@@ -207,17 +209,13 @@ INSTRUCTIONS:
 Execute without asking."""
 
     log(f"Stage 2: Invoking Claude CLI (opus) with {len(diaries_with_critique)} critiques...")
-    env = os.environ.copy()
-    env["NEXO_HEADLESS"] = "1"  # Skip stop hook post-mortem
-    env.pop("CLAUDECODE", None)
-    env.pop("CLAUDE_CODE", None)
-
     try:
-        result = subprocess.run(
-            [str(CLAUDE_CLI), "-p", prompt, "--model", "opus",
-             "--output-format", "text",
-             "--allowedTools", "Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__*"],
-            capture_output=True, text=True, timeout=21600, env=env
+        result = run_automation_prompt(
+            prompt,
+            model="opus",
+            timeout=21600,
+            output_format="text",
+            allowed_tools="Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__*",
         )
 
         if result.returncode != 0:
@@ -230,6 +228,9 @@ Execute without asking."""
             log(f"Stage 2 output tail: {result.stdout[-500:]}")
         return True
 
+    except AutomationBackendUnavailableError as e:
+        log(f"Stage 2: automation backend unavailable: {e}")
+        return False
     except subprocess.TimeoutExpired:
         log("Stage 2: CLI timed out (300s)")
         return False

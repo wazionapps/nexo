@@ -30,6 +30,13 @@ from datetime import datetime, date, timedelta
 from pathlib import Path
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+_script_dir = Path(__file__).resolve().parent
+_repo_src = _script_dir.parent
+NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(_repo_src) if (_repo_src / "server.py").exists() else str(NEXO_HOME)))
+if str(NEXO_CODE) not in sys.path:
+    sys.path.insert(0, str(NEXO_CODE))
+
+from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
 
 # ─── Paths ────────────────────────────────────────────────────────────────────
 CLAUDE_DIR = NEXO_HOME
@@ -429,17 +436,13 @@ Write a summary to {COORD_DIR}/sleep-report.md when done.
 Execute without asking."""
 
     log("Stage B: Invoking Claude CLI (opus) — dreaming...")
-    env = os.environ.copy()
-    env["NEXO_HEADLESS"] = "1"  # Skip stop hook post-mortem
-    env.pop("CLAUDECODE", None)
-    env.pop("CLAUDE_CODE", None)
-
     try:
-        result = subprocess.run(
-            [str(CLAUDE_CLI), "-p", prompt, "--model", "opus",
-             "--output-format", "text",
-             "--allowedTools", "Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__*"],
-            capture_output=True, text=True, timeout=21600, env=env
+        result = run_automation_prompt(
+            prompt,
+            model="opus",
+            timeout=21600,
+            output_format="text",
+            allowed_tools="Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__*",
         )
 
         if result.returncode != 0:
@@ -449,6 +452,9 @@ Execute without asking."""
         log(f"Stage B: Dreaming complete. Output: {len(result.stdout or '')} chars")
         return {"ok": True, "output_len": len(result.stdout or "")}
 
+    except AutomationBackendUnavailableError as e:
+        log(f"Stage B: automation backend unavailable: {e}")
+        return {"error": "backend-unavailable"}
     except subprocess.TimeoutExpired:
         log("Stage B: CLI timed out (600s)")
         return {"error": "timeout"}

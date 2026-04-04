@@ -933,7 +933,7 @@ def auto_update_check() -> dict:
 
     # Backfill runtime CLI modules for existing installs
     try:
-        for fname in ("cli.py", "script_registry.py", "skills_runtime.py", "cron_recovery.py"):
+        for fname in ("cli.py", "script_registry.py", "skills_runtime.py", "cron_recovery.py", "client_preferences.py", "agent_runner.py"):
             src_file = SRC_DIR / fname
             dest_file = NEXO_HOME / fname
             if src_file.is_file() and (not dest_file.exists() or src_file.stat().st_mtime > dest_file.stat().st_mtime):
@@ -1198,6 +1198,7 @@ def _backup_runtime_tree(dest: Path = NEXO_HOME) -> str:
         "maintenance.py", "storage_router.py", "claim_graph.py", "hnsw_index.py",
         "evolution_cycle.py", "migrate_embeddings.py", "auto_close_sessions.py",
         "client_sync.py",
+        "client_preferences.py", "agent_runner.py",
         "auto_update.py", "tools_sessions.py", "tools_coordination.py",
         "tools_reminders.py", "tools_reminders_crud.py", "tools_learnings.py",
         "tools_credentials.py", "tools_task_history.py", "tools_menu.py",
@@ -1247,6 +1248,7 @@ def _copy_runtime_from_source(src_dir: Path, repo_dir: Path, dest: Path = NEXO_H
         "maintenance.py", "storage_router.py", "claim_graph.py", "hnsw_index.py",
         "evolution_cycle.py", "migrate_embeddings.py", "auto_close_sessions.py",
         "client_sync.py",
+        "client_preferences.py", "agent_runner.py",
         "auto_update.py", "tools_sessions.py", "tools_coordination.py",
         "tools_reminders.py", "tools_reminders_crud.py", "tools_learnings.py",
         "tools_credentials.py", "tools_task_history.py", "tools_menu.py",
@@ -1446,8 +1448,15 @@ def _run_runtime_post_sync(dest: Path = NEXO_HOME, progress_fn=None) -> tuple[bo
     _emit_progress(progress_fn, "Refreshing shared client configs...")
     try:
         from client_sync import sync_all_clients
+        from client_preferences import normalize_client_preferences
 
-        client_sync_result = sync_all_clients(nexo_home=dest, runtime_root=dest)
+        schedule_path = dest / "config" / "schedule.json"
+        schedule_payload = json.loads(schedule_path.read_text()) if schedule_path.exists() else {}
+        client_sync_result = sync_all_clients(
+            nexo_home=dest,
+            runtime_root=dest,
+            preferences=normalize_client_preferences(schedule_payload),
+        )
         if client_sync_result.get("ok"):
             actions.append("client-sync")
         else:

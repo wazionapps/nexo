@@ -103,6 +103,8 @@ function getCoreRuntimeFlatFiles() {
     "migrate_embeddings.py",
     "auto_close_sessions.py",
     "client_sync.py",
+    "client_preferences.py",
+    "agent_runner.py",
     "auto_update.py",
     "tools_sessions.py",
     "tools_coordination.py",
@@ -308,7 +310,7 @@ const ALL_PROCESSES = [
     type: "interval", intervalMinutes: 30, purpose: "System immunity checks" },
   // --- Every 2 hours ---
   { name: "synthesis", script: "nexo-synthesis.py", interpreter: "python", scriptDir: "scripts",
-    type: "interval", intervalMinutes: 120, purpose: "Memory synthesis" },
+    type: "interval", intervalMinutes: 120, optional: "automation", purpose: "Memory synthesis" },
   // --- Every hour ---
   { name: "backup", script: "nexo-backup.sh", interpreter: "bash", scriptDir: "scripts",
     type: "interval", intervalMinutes: 60, purpose: "DB backups" },
@@ -327,16 +329,16 @@ const ALL_PROCESSES = [
   { name: "cognitive-decay", script: "nexo-cognitive-decay.py", interpreter: "python", scriptDir: "scripts",
     type: "daily", defaultHour: 3, defaultMinute: 0, purpose: "Memory decay" },
   { name: "postmortem", script: "nexo-postmortem-consolidator.py", interpreter: "python", scriptDir: "scripts",
-    type: "daily", defaultHour: 23, defaultMinute: 30, purpose: "Session consolidation" },
+    type: "daily", defaultHour: 23, defaultMinute: 30, optional: "automation", purpose: "Session consolidation" },
   { name: "self-audit", script: "nexo-daily-self-audit.py", interpreter: "python", scriptDir: "scripts",
-    type: "daily", defaultHour: 7, defaultMinute: 0, purpose: "Self-diagnostic" },
+    type: "daily", defaultHour: 7, defaultMinute: 0, optional: "automation", purpose: "Self-diagnostic" },
   { name: "sleep", script: "nexo-sleep.py", interpreter: "python", scriptDir: "scripts",
-    type: "daily", defaultHour: 4, defaultMinute: 0, purpose: "Sleep cycle" },
+    type: "daily", defaultHour: 4, defaultMinute: 0, optional: "automation", purpose: "Sleep cycle" },
   { name: "deep-sleep", script: "nexo-deep-sleep.sh", interpreter: "bash", scriptDir: "scripts",
-    type: "daily", defaultHour: 4, defaultMinute: 30, purpose: "Deep sleep analysis" },
+    type: "daily", defaultHour: 4, defaultMinute: 30, optional: "automation", purpose: "Deep sleep analysis" },
   // --- Weekly (day + time from schedule.json) ---
   { name: "evolution", script: "nexo-evolution-run.py", interpreter: "python", scriptDir: "scripts",
-    type: "weekly", defaultDay: "sunday", defaultHour: 3, defaultMinute: 0, purpose: "Self-evolution" },
+    type: "weekly", defaultDay: "sunday", defaultHour: 3, defaultMinute: 0, optional: "automation", purpose: "Self-evolution" },
   { name: "followup-hygiene", script: "nexo-followup-hygiene.py", interpreter: "python", scriptDir: "scripts",
     type: "weekly", defaultDay: "sunday", defaultHour: 5, defaultMinute: 0, purpose: "Cleanup stale followups" },
 ];
@@ -467,6 +469,19 @@ function getDefaultSchedule(timezone) {
   return {
     timezone: timezone || "UTC",
     auto_update: true,
+    interactive_clients: {
+      claude_code: true,
+      codex: false,
+      claude_desktop: false,
+    },
+    default_terminal_client: "claude_code",
+    automation_enabled: true,
+    automation_backend: "claude_code",
+    client_install_preferences: {
+      claude_code: "ask",
+      codex: "ask",
+      claude_desktop: "manual",
+    },
     power_policy: "unset",
     power_policy_version: 2,
     full_disk_access_status: "unset",
@@ -515,6 +530,277 @@ function normalizePublicContributionConfig(config = {}) {
   merged.last_run_at = String(merged.last_run_at || "").trim();
   merged.last_result = String(merged.last_result || "").trim();
   return merged;
+}
+
+function detectInstalledClients() {
+  const homeDir = require("os").homedir();
+  const desktopConfig = process.platform === "darwin"
+    ? path.join(homeDir, "Library", "Application Support", "Claude", "claude_desktop_config.json")
+    : process.platform === "win32"
+      ? path.join(homeDir, "AppData", "Roaming", "Claude", "claude_desktop_config.json")
+      : path.join(homeDir, ".config", "Claude", "claude_desktop_config.json");
+  const desktopApps = process.platform === "darwin"
+    ? [path.join(homeDir, "Applications", "Claude.app"), "/Applications/Claude.app"]
+    : [];
+  const desktopAppPath = desktopApps.find((candidate) => fs.existsSync(candidate)) || "";
+  const claudeBin = run("which claude") || "";
+  const codexBin = run("which codex") || "";
+  return {
+    claude_code: {
+      installed: Boolean(claudeBin),
+      path: claudeBin,
+      detectedBy: claudeBin ? "binary" : "missing",
+    },
+    codex: {
+      installed: Boolean(codexBin),
+      path: codexBin,
+      detectedBy: codexBin ? "binary" : "missing",
+    },
+    claude_desktop: {
+      installed: Boolean(desktopAppPath || fs.existsSync(desktopConfig)),
+      path: desktopAppPath || desktopConfig,
+      detectedBy: desktopAppPath ? "app" : (fs.existsSync(desktopConfig) ? "config" : "missing"),
+    },
+  };
+}
+
+function clientSetupStrings(lang) {
+  if (lang === "es") {
+    return {
+      title: "Shared brain siempre activo. Ahora elige clientes y backend de automatización.",
+      detected: "Clientes detectados",
+      yes: "sí",
+      no: "no",
+      useClaudeCodeQ: "  ¿Quieres usar Claude Code como cliente interactivo?",
+      useCodexQ: "  ¿Quieres usar Codex como cliente interactivo?",
+      useDesktopQ: "  ¿Quieres conectar Claude Desktop al mismo brain?",
+      defaultTerminalQ: "  ¿Qué cliente debe abrir `nexo chat` por defecto?",
+      automationQ: "  ¿Quieres automatización en background? (sleep, deep-sleep, synthesis, self-audit, evolution, postmortem)",
+      automationBackendQ: "  ¿Qué backend debe ejecutar esa automatización?",
+      installClaudeQ: "  Claude Code no está instalado. ¿Quieres instalarlo ahora?",
+      installCodexQ: "  Codex no está instalado. ¿Quieres instalarlo ahora?",
+      installingClaude: "Instalando Claude Code...",
+      installingCodex: "Instalando Codex...",
+      desktopManual: "Claude Desktop no se instala desde NEXO. Cuando exista, se conectará con la sync de clientes.",
+      terminalFallback: (label) => `El cliente terminal elegido no está disponible. \`nexo chat\` quedará pendiente hasta instalar ${label}.`,
+      automationDisabled: (label) => `El backend ${label} sigue sin estar disponible. Se desactiva la automatización por ahora.`,
+      summary: (defaultClient, backend, automationEnabled) =>
+        `Configuración clientes: chat=${defaultClient}, automation=${automationEnabled ? backend : "none"}`,
+    };
+  }
+  return {
+    title: "Shared brain is always on. Now choose your clients and automation backend.",
+    detected: "Detected clients",
+    yes: "yes",
+    no: "no",
+    useClaudeCodeQ: "  Use Claude Code as an interactive client?",
+    useCodexQ: "  Use Codex as an interactive client?",
+    useDesktopQ: "  Connect Claude Desktop to the same brain?",
+    defaultTerminalQ: "  Which client should `nexo chat` open by default?",
+    automationQ: "  Enable background automation? (sleep, deep-sleep, synthesis, self-audit, evolution, postmortem)",
+    automationBackendQ: "  Which backend should run that automation?",
+    installClaudeQ: "  Claude Code is not installed. Install it now?",
+    installCodexQ: "  Codex is not installed. Install it now?",
+    installingClaude: "Installing Claude Code...",
+    installingCodex: "Installing Codex...",
+    desktopManual: "Claude Desktop is not installed by NEXO. When it appears, client sync will connect it.",
+    terminalFallback: (label) => `The selected terminal client is still unavailable. \`nexo chat\` will stay pending until ${label} is installed.`,
+    automationDisabled: (label) => `${label} is still unavailable. Disabling background automation for now.`,
+    summary: (defaultClient, backend, automationEnabled) =>
+      `Client setup: chat=${defaultClient}, automation=${automationEnabled ? backend : "none"}`,
+  };
+}
+
+function _yn(answer, defaultValue) {
+  const value = String(answer || "").trim().toLowerCase();
+  if (!value) return defaultValue;
+  if (["y", "yes", "s", "si", "sí", "1"].includes(value)) return true;
+  if (["n", "no", "0"].includes(value)) return false;
+  return defaultValue;
+}
+
+async function askYesNo(question, defaultValue) {
+  const suffix = defaultValue ? " [Y/n]: " : " [y/N]: ";
+  const answer = await ask(question + suffix);
+  return _yn(answer, defaultValue);
+}
+
+async function askChoice(question, options, defaultValue) {
+  let prompt = `${question}\n`;
+  options.forEach((option, idx) => {
+    const marker = option.value === defaultValue ? " (default)" : "";
+    prompt += `    ${idx + 1}. ${option.label}${marker}\n`;
+  });
+  prompt += "  > ";
+  const answer = (await ask(prompt)).trim().toLowerCase();
+  if (!answer) return defaultValue;
+  const asIndex = parseInt(answer, 10);
+  if (!Number.isNaN(asIndex) && asIndex >= 1 && asIndex <= options.length) {
+    return options[asIndex - 1].value;
+  }
+  const byValue = options.find((option) => option.value === answer);
+  return byValue ? byValue.value : defaultValue;
+}
+
+function defaultClientSetup(detected) {
+  return {
+    interactive_clients: {
+      claude_code: true,
+      codex: Boolean(detected.codex.installed),
+      claude_desktop: Boolean(detected.claude_desktop.installed),
+    },
+    default_terminal_client: "claude_code",
+    automation_enabled: true,
+    automation_backend: "claude_code",
+    client_install_preferences: {
+      claude_code: "ask",
+      codex: "ask",
+      claude_desktop: "manual",
+    },
+  };
+}
+
+function applyClientSetupToSchedule(schedule, setup) {
+  schedule.interactive_clients = {
+    claude_code: Boolean(setup.interactive_clients.claude_code),
+    codex: Boolean(setup.interactive_clients.codex),
+    claude_desktop: Boolean(setup.interactive_clients.claude_desktop),
+  };
+  schedule.default_terminal_client = setup.default_terminal_client;
+  schedule.automation_enabled = Boolean(setup.automation_enabled);
+  schedule.automation_backend = schedule.automation_enabled ? setup.automation_backend : "none";
+  schedule.client_install_preferences = { ...(setup.client_install_preferences || {}) };
+  return schedule;
+}
+
+function requiredCliClients(setup) {
+  const required = new Set();
+  if (setup.interactive_clients.claude_code || setup.default_terminal_client === "claude_code" || setup.automation_backend === "claude_code") {
+    required.add("claude_code");
+  }
+  if (setup.interactive_clients.codex || setup.default_terminal_client === "codex" || setup.automation_backend === "codex") {
+    required.add("codex");
+  }
+  return Array.from(required);
+}
+
+function installClaudeCodeCli(platform) {
+  let claudeInstalled = run("which claude");
+  if (claudeInstalled) return { installed: true, path: claudeInstalled };
+
+  spawnSync("npx", ["-y", "@anthropic-ai/claude-code", "--version"], { stdio: "pipe", timeout: 60000 });
+  claudeInstalled = run("which claude");
+  if (!claudeInstalled) {
+    const npmCmd = platform === "linux" ? "sudo" : "npm";
+    const npmArgs = platform === "linux" ? ["npm", "install", "-g", "@anthropic-ai/claude-code"] : ["install", "-g", "@anthropic-ai/claude-code"];
+    spawnSync(npmCmd, npmArgs, { stdio: "inherit" });
+    claudeInstalled = run("which claude");
+  }
+  return { installed: Boolean(claudeInstalled), path: claudeInstalled || "" };
+}
+
+function installCodexCli() {
+  const before = run("which codex");
+  if (before) return { installed: true, path: before };
+  spawnSync("npm", ["install", "-g", "@openai/codex"], { stdio: "inherit" });
+  const codexInstalled = run("which codex") || "";
+  return { installed: Boolean(codexInstalled), path: codexInstalled };
+}
+
+async function configureClientSetup({ lang, useDefaults, autoInstall, detected }) {
+  const strings = clientSetupStrings(lang);
+  const setup = defaultClientSetup(detected);
+  setup.client_install_preferences = {
+    claude_code: autoInstall === "auto" ? "auto" : "ask",
+    codex: autoInstall === "auto" ? "auto" : "ask",
+    claude_desktop: "manual",
+  };
+
+  if (!useDefaults) {
+    console.log("");
+    log(strings.title);
+    log(`${strings.detected}: Claude Code=${detected.claude_code.installed ? strings.yes : strings.no}, Codex=${detected.codex.installed ? strings.yes : strings.no}, Claude Desktop=${detected.claude_desktop.installed ? strings.yes : strings.no}`);
+    setup.interactive_clients.claude_code = await askYesNo(strings.useClaudeCodeQ, detected.claude_code.installed || true);
+    setup.interactive_clients.codex = await askYesNo(strings.useCodexQ, detected.codex.installed);
+    setup.interactive_clients.claude_desktop = await askYesNo(strings.useDesktopQ, detected.claude_desktop.installed);
+
+    const defaultTerminalChoices = [
+      { value: "claude_code", label: "Claude Code" },
+      { value: "codex", label: "Codex" },
+    ].filter((item) => setup.interactive_clients[item.value]);
+
+    if (defaultTerminalChoices.length === 1) {
+      setup.default_terminal_client = defaultTerminalChoices[0].value;
+    } else if (defaultTerminalChoices.length > 1) {
+      setup.default_terminal_client = await askChoice(
+        strings.defaultTerminalQ,
+        defaultTerminalChoices,
+        setup.interactive_clients.codex && !setup.interactive_clients.claude_code ? "codex" : "claude_code",
+      );
+    }
+
+    setup.automation_enabled = await askYesNo(strings.automationQ, true);
+    if (setup.automation_enabled) {
+      const backendDefault = setup.interactive_clients.codex && !setup.interactive_clients.claude_code ? "codex" : "claude_code";
+      setup.automation_backend = await askChoice(
+        strings.automationBackendQ,
+        [
+          { value: "claude_code", label: "Claude Code" },
+          { value: "codex", label: "Codex" },
+        ],
+        backendDefault,
+      );
+    } else {
+      setup.automation_backend = "none";
+    }
+    console.log("");
+  } else if (detected.codex.installed) {
+    setup.interactive_clients.codex = true;
+  }
+
+  const required = requiredCliClients(setup);
+  for (const client of required) {
+    if (detected[client] && detected[client].installed) continue;
+    let shouldInstall = useDefaults || autoInstall === "auto";
+    if (!shouldInstall && process.stdin.isTTY && process.stdout.isTTY) {
+      const question = client === "claude_code" ? strings.installClaudeQ : strings.installCodexQ;
+      shouldInstall = await askYesNo(question, true);
+    }
+    if (!shouldInstall) continue;
+    log(client === "claude_code" ? strings.installingClaude : strings.installingCodex);
+    const outcome = client === "claude_code" ? installClaudeCodeCli(process.platform) : installCodexCli();
+    detected = detectInstalledClients();
+    if (outcome.installed && client === "claude_code") {
+      log("Claude Code installed successfully.");
+    } else if (outcome.installed && client === "codex") {
+      log("Codex installed successfully.");
+    }
+  }
+
+  if (setup.default_terminal_client && !detected[setup.default_terminal_client]?.installed) {
+    const fallback = ["claude_code", "codex"].find((key) => key !== setup.default_terminal_client && detected[key]?.installed && setup.interactive_clients[key]);
+    if (fallback) {
+      setup.default_terminal_client = fallback;
+      log(`Default terminal client fallback: ${fallback}`);
+    } else {
+      const label = setup.default_terminal_client === "claude_code" ? "Claude Code" : "Codex";
+      log(strings.terminalFallback(label));
+    }
+  }
+
+  if (setup.automation_enabled && setup.automation_backend !== "none" && !detected[setup.automation_backend]?.installed) {
+    const label = setup.automation_backend === "claude_code" ? "Claude Code" : "Codex";
+    log(strings.automationDisabled(label));
+    setup.automation_enabled = false;
+    setup.automation_backend = "none";
+  }
+
+  if (!detected.claude_desktop.installed && setup.interactive_clients.claude_desktop) {
+    log(strings.desktopManual);
+  }
+
+  log(strings.summary(setup.default_terminal_client, setup.automation_backend, setup.automation_enabled));
+  return { setup, detected };
 }
 
 async function maybeConfigurePowerPolicy(schedule, useDefaults) {
@@ -1293,39 +1579,12 @@ async function main() {
   log(`Found ${pyVersion} at ${python}`);
   logMacPermissionsNotice(NEXO_HOME, python);
 
-  // Find or install Claude Code
-  let claudeInstalled = run("which claude");
-  if (!claudeInstalled) {
-    log("Claude Code not found. Installing...");
-    // Try npx first (no sudo needed), then npm -g as fallback
-    spawnSync("npx", ["-y", "@anthropic-ai/claude-code", "--version"], { stdio: "pipe", timeout: 60000 });
-    claudeInstalled = run("which claude");
-    if (!claudeInstalled) {
-      // Fallback: npm -g (may need sudo on Linux)
-      const npmCmd = platform === "linux" ? "sudo" : "npm";
-      const npmArgs = platform === "linux" ? ["npm", "install", "-g", "@anthropic-ai/claude-code"] : ["install", "-g", "@anthropic-ai/claude-code"];
-      spawnSync(npmCmd, npmArgs, { stdio: "inherit" });
-      claudeInstalled = run("which claude");
-    }
-    if (!claudeInstalled) {
-      log("Could not install Claude Code automatically.");
-      log("Install it manually: npm install -g @anthropic-ai/claude-code");
-      log("(On Linux you may need: sudo npm install -g @anthropic-ai/claude-code)");
-      process.exit(1);
-    }
-    log("Claude Code installed successfully.");
-  } else {
-    log("Claude Code detected.");
-  }
-
-  // Persist the discovered claude CLI path for scheduled scripts
-  const claudeCliPath = run("which claude") || "";
-  if (claudeCliPath) {
-    const cliPathFile = path.join(NEXO_HOME, "config", "claude-cli-path");
-    fs.mkdirSync(path.join(NEXO_HOME, "config"), { recursive: true });
-    fs.writeFileSync(cliPathFile, claudeCliPath.trim());
-    log(`Claude CLI path saved: ${claudeCliPath.trim()}`);
-  }
+  let detectedClients = detectInstalledClients();
+  log(
+    `Client detection: Claude Code=${detectedClients.claude_code.installed ? "yes" : "no"}, `
+    + `Codex=${detectedClients.codex.installed ? "yes" : "no"}, `
+    + `Claude Desktop=${detectedClients.claude_desktop.installed ? "yes" : "no"}`
+  );
   console.log("");
 
   // Step 1: Language (P1)
@@ -1634,7 +1893,7 @@ async function main() {
   let doScan = false;
   let doCaffeinate = false;
   let doDashboard = false;
-  let autoInstall = "ask";
+  let autoInstall = useDefaults ? "auto" : "ask";
   if (!useDefaults) {
     const scanAnswer = await ask(t.scanQ);
     doScan = scanAnswer.trim() === "1" || scanAnswer.trim().toLowerCase().startsWith("y") || scanAnswer.trim().toLowerCase().startsWith("s");
@@ -1664,6 +1923,15 @@ async function main() {
     log("Skipping interactive setup (non-interactive mode).");
     console.log("");
   }
+
+  const clientConfig = await configureClientSetup({
+    lang,
+    useDefaults,
+    autoInstall,
+    detected: detectedClients,
+  });
+  const clientSetup = clientConfig.setup;
+  detectedClients = clientConfig.detected;
 
   // Step 3: Install Python dependencies (use venv to avoid PEP 668 on modern Linux)
   log("Installing cognitive engine dependencies...");
@@ -2372,16 +2640,28 @@ ${doScan ? `- Stack: ${Object.keys(profileData.code.languages || {}).slice(0, 5)
 
   const syncClientsScript = path.join(NEXO_HOME, "scripts", "nexo-sync-clients.py");
   if (fs.existsSync(syncClientsScript)) {
+    const syncArgs = [
+      syncClientsScript,
+      "--nexo-home", NEXO_HOME,
+      "--runtime-root", NEXO_HOME,
+      "--python", python,
+      "--operator-name", operatorName,
+    ];
+    const enabledSyncClients = Array.from(new Set([
+      ...Object.entries(clientSetup.interactive_clients)
+        .filter(([, enabled]) => Boolean(enabled))
+        .map(([key]) => key),
+      ...(clientSetup.automation_enabled && clientSetup.automation_backend !== "none"
+        ? [clientSetup.automation_backend]
+        : []),
+    ]));
+    enabledSyncClients.forEach((client) => {
+      syncArgs.push("--enabled-client", client);
+    });
+    syncArgs.push("--json");
     const syncResult = spawnSync(
       python,
-      [
-        syncClientsScript,
-        "--nexo-home", NEXO_HOME,
-        "--runtime-root", NEXO_HOME,
-        "--python", python,
-        "--operator-name", operatorName,
-        "--json",
-      ],
+      syncArgs,
       { encoding: "utf8" }
     );
     if (syncResult.status === 0) {
@@ -2404,13 +2684,23 @@ ${doScan ? `- Stack: ${Object.keys(profileData.code.languages || {}).slice(0, 5)
     }
   }
 
+  const claudeCliPath = run("which claude") || "";
+  if (claudeCliPath) {
+    const cliPathFile = path.join(NEXO_HOME, "config", "claude-cli-path");
+    fs.mkdirSync(path.dirname(cliPathFile), { recursive: true });
+    fs.writeFileSync(cliPathFile, claudeCliPath.trim());
+    log(`Claude CLI path saved: ${claudeCliPath.trim()}`);
+  }
+
   // Step 7: Create schedule.json (only on fresh install) and install core processes
   log("Setting up automated processes...");
   let schedule = loadOrCreateSchedule(NEXO_HOME);
+  schedule = applyClientSetupToSchedule(schedule, clientSetup);
+  fs.writeFileSync(path.join(NEXO_HOME, "config", "schedule.json"), JSON.stringify(schedule, null, 2));
   schedule = await maybeConfigurePowerPolicy(schedule, useDefaults);
   schedule = await maybeConfigurePublicContribution(schedule, useDefaults);
   schedule = await maybeConfigureFullDiskAccess(schedule, useDefaults, python);
-  const enabledOptionals = { dashboard: doDashboard };
+  const enabledOptionals = { dashboard: doDashboard, automation: schedule.automation_enabled !== false };
   if (isEphemeralInstall(NEXO_HOME)) {
     log("Ephemeral HOME/NEXO_HOME detected — skipping LaunchAgents installation.");
   } else {
@@ -2431,13 +2721,8 @@ ${doScan ? `- Stack: ${Object.keys(profileData.code.languages || {}).slice(0, 5)
   // Step 8: Create shell alias and add runtime CLI to PATH
   log("Creating shell alias...");
   const aliasName = operatorName.toLowerCase();
-  const savedCliPath = (() => {
-    const p = path.join(NEXO_HOME, "config", "claude-cli-path");
-    try { return fs.readFileSync(p, "utf8").trim(); } catch { return ""; }
-  })();
-  const claudeBin = savedCliPath || run("which claude") || "claude";
-  const aliasLine = `alias ${aliasName}='${claudeBin} --dangerously-skip-permissions "."'`;
-  const aliasComment = `# ${operatorName} — start Claude Code with ${operatorName} speaking first`;
+  const aliasLine = `alias ${aliasName}='nexo chat .'`;
+  const aliasComment = `# ${operatorName} — open the configured NEXO terminal client`;
   const nexoPathLine = `export PATH="${path.join(NEXO_HOME, "bin")}:$PATH"`;
   const nexoPathComment = "# NEXO runtime CLI";
 

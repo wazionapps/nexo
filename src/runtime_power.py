@@ -71,6 +71,19 @@ def _schedule_defaults() -> dict:
     return {
         "timezone": "UTC",
         "auto_update": True,
+        "interactive_clients": {
+            "claude_code": True,
+            "codex": False,
+            "claude_desktop": False,
+        },
+        "default_terminal_client": "claude_code",
+        "automation_enabled": True,
+        "automation_backend": "claude_code",
+        "client_install_preferences": {
+            "claude_code": "ask",
+            "codex": "ask",
+            "claude_desktop": "manual",
+        },
         POWER_POLICY_KEY: POWER_POLICY_UNSET,
         POWER_POLICY_VERSION_KEY: POWER_POLICY_VERSION,
         FULL_DISK_ACCESS_STATUS_KEY: FULL_DISK_ACCESS_UNSET,

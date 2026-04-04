@@ -11,6 +11,7 @@ import sys
 import time
 from pathlib import Path
 
+from client_preferences import detect_installed_clients, normalize_client_preferences
 from cron_recovery import should_run_at_load
 from doctor.models import DoctorCheck
 
@@ -31,6 +32,7 @@ DEFAULT_CRON_THRESHOLD = 7200  # Fallback when manifest data is unavailable
 SPECIAL_LAUNCHAGENT_IDS = {"prevent-sleep", "tcc-approve"}
 SPECIAL_ENV_NORMALIZE_IDS = SPECIAL_LAUNCHAGENT_IDS
 OPTIONALS_FILE = NEXO_HOME / "config" / "optionals.json"
+SCHEDULE_FILE = NEXO_HOME / "config" / "schedule.json"
 
 
 def _file_age_seconds(path: Path) -> float | None:
@@ -90,6 +92,14 @@ def _enabled_manifest_crons() -> list[dict]:
         NEXO_CODE / "crons" / "manifest.json",
     ]
     optionals = _enabled_optionals()
+    automation_default = True
+    try:
+        if SCHEDULE_FILE.is_file():
+            schedule = _load_json(SCHEDULE_FILE)
+            if isinstance(schedule, dict):
+                automation_default = bool(schedule.get("automation_enabled", True))
+    except Exception:
+        pass
     for manifest_path in manifest_candidates:
         if not manifest_path.is_file():
             continue
@@ -104,7 +114,11 @@ def _enabled_manifest_crons() -> list[dict]:
             if not cron_id:
                 continue
             optional_key = cron.get("optional")
-            if optional_key and not optionals.get(optional_key, False):
+            if optional_key == "automation":
+                optional_enabled = optionals.get(optional_key, automation_default)
+            else:
+                optional_enabled = optionals.get(optional_key, False)
+            if optional_key and not optional_enabled:
                 continue
             enabled.append(cron)
         return enabled
@@ -875,6 +889,77 @@ def check_personal_script_registry(fix: bool = False) -> DoctorCheck:
     )
 
 
+def check_client_backend_preferences() -> DoctorCheck:
+    schedule = {}
+    try:
+        if SCHEDULE_FILE.is_file():
+            schedule = _load_json(SCHEDULE_FILE)
+    except Exception:
+        schedule = {}
+
+    prefs = normalize_client_preferences(schedule)
+    detected = detect_installed_clients()
+
+    default_terminal = prefs["default_terminal_client"]
+    automation_enabled = bool(prefs["automation_enabled"])
+    automation_backend = prefs["automation_backend"]
+
+    evidence: list[str] = []
+    repair_plan: list[str] = []
+    severity = "info"
+    status = "healthy"
+
+    default_info = detected.get(default_terminal, {})
+    if not default_info.get("installed"):
+        status = "degraded"
+        severity = "warn"
+        evidence.append(f"default terminal client `{default_terminal}` is selected but not installed")
+        repair_plan.append(f"Install {default_terminal} or switch the default terminal client in schedule.json")
+
+    for client_key, enabled in prefs.get("interactive_clients", {}).items():
+        if not enabled:
+            continue
+        info = detected.get(client_key, {})
+        if not info.get("installed"):
+            status = "degraded"
+            severity = "warn"
+            evidence.append(f"interactive client `{client_key}` is enabled but not installed")
+
+    if automation_enabled:
+        backend_info = detected.get(automation_backend, {})
+        if automation_backend == "none":
+            status = "degraded"
+            severity = "warn"
+            evidence.append("automation is enabled but no automation backend is configured")
+        elif not backend_info.get("installed"):
+            status = "degraded"
+            severity = "warn"
+            evidence.append(f"automation backend `{automation_backend}` is enabled but not installed")
+            repair_plan.append(f"Install {automation_backend} or disable automation in schedule.json")
+
+    if not repair_plan and status != "healthy":
+        repair_plan.append("Run `nexo update` or `nexo clients sync` after installing the selected client/backend")
+
+    terminal_label = f"chat={default_terminal}"
+    automation_label = f"automation={automation_backend if automation_enabled else 'none'}"
+    return DoctorCheck(
+        id="runtime.clients",
+        tier="runtime",
+        status=status,
+        severity=severity,
+        summary=f"Client/backend preferences OK ({terminal_label}, {automation_label})" if status == "healthy" else f"Client/backend preferences need attention ({terminal_label}, {automation_label})",
+        evidence=evidence or [
+            f"default terminal client: {default_terminal}",
+            f"automation backend: {automation_backend if automation_enabled else 'none'}",
+        ],
+        repair_plan=repair_plan,
+        escalation_prompt=(
+            "The configured interactive client or automation backend is missing. "
+            "Align installed clients with schedule.json so `nexo chat` and background automation use the intended tools."
+        ) if status != "healthy" else "",
+    )
+
+
 def run_runtime_checks(fix: bool = False) -> list[DoctorCheck]:
     """Run all runtime-tier checks. Read-only by default."""
     return [
@@ -882,6 +967,7 @@ def run_runtime_checks(fix: bool = False) -> list[DoctorCheck]:
         check_watchdog_status(),
         check_stale_sessions(),
         check_cron_freshness(),
+        check_client_backend_preferences(),
         check_launchagent_integrity(fix=fix),
         check_personal_script_registry(fix=fix),
         check_skill_health(fix=fix),

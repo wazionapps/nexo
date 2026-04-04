@@ -846,10 +846,6 @@ def _dashboard(args):
 
 def _chat(args):
     target = args.path or "."
-    claude_bin = os.environ.get("CLAUDE_BIN") or shutil.which("claude")
-    if not claude_bin:
-        print("Claude Code launcher not found in PATH. Install `claude` first.", file=sys.stderr)
-        return 1
 
     try:
         from auto_update import startup_preflight
@@ -868,10 +864,21 @@ def _chat(args):
     except Exception:
         pass
 
-    result = subprocess.run(
-        [claude_bin, "--dangerously-skip-permissions", target],
-        env=os.environ.copy(),
-    )
+    try:
+        from agent_runner import TerminalClientUnavailableError, launch_interactive_client
+    except ImportError:
+        print("Agent runner module not found. Ensure NEXO is properly installed.", file=sys.stderr)
+        return 1
+
+    try:
+        result = launch_interactive_client(
+            target=target,
+            client=getattr(args, "client", None),
+            env=os.environ.copy(),
+        )
+    except TerminalClientUnavailableError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
     return int(result.returncode)
 
 
@@ -1005,7 +1012,7 @@ def _print_help():
     print(f"""NEXO Runtime CLI v{v}
 
 Commands:
-  nexo chat [path]                                    Launch Claude Code
+  nexo chat [path] [--client claude_code|codex]      Launch the selected terminal client
   nexo doctor [--tier boot|runtime|deep|all] [--fix]   System diagnostics
   nexo scripts list|create|classify|sync|reconcile|ensure-schedules|schedules|run|doctor|call|unschedule|remove
                                                       Personal scripts
@@ -1027,8 +1034,13 @@ def main():
     sub = parser.add_subparsers(dest="command")
 
     # -- chat --
-    chat_parser = sub.add_parser("chat", help="Launch Claude Code")
+    chat_parser = sub.add_parser("chat", help="Launch the selected terminal client")
     chat_parser.add_argument("path", nargs="?", default=".", help="Working directory (default: current directory)")
+    chat_parser.add_argument(
+        "--client",
+        choices=["claude_code", "codex"],
+        help="Override the configured default terminal client",
+    )
 
     # -- scripts --
     scripts_parser = sub.add_parser("scripts", help="Manage personal scripts")

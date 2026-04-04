@@ -19,6 +19,7 @@ _runtime_root = Path(os.environ.get("NEXO_CODE", str(_DEFAULT_RUNTIME_ROOT)))
 if str(_runtime_root) not in sys.path:
     sys.path.insert(0, str(_runtime_root))
 
+from agent_runner import AutomationBackendUnavailableError, probe_automation_backend, run_automation_prompt
 from cron_recovery import catchup_candidates
 
 HOME = Path.home()
@@ -237,16 +238,12 @@ def main():
 
 def _cli_post_catchup_assessment(ran: int, skipped: int, state: dict):
     """When 3+ tasks were missed, use CLI to assess if there are concerns."""
-    if not CLAUDE_CLI.exists():
-        log(f"Caught up {ran} tasks, {skipped} already current. (CLI unavailable for assessment)")
-        return
-    auth_check = subprocess.run(
-        [str(CLAUDE_CLI), "-p", "reply OK", "--output-format", "text"],
-        capture_output=True, text=True, timeout=30
-    )
-    if auth_check.returncode != 0:
-        # CLI not authenticated, skip gracefully
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] Claude CLI not authenticated. Skipping CLI analysis.")
+    probe = probe_automation_backend(timeout=30)
+    if not probe.get("ok"):
+        print(
+            f"[{datetime.now().strftime('%H:%M:%S')}] "
+            f"Automation backend unavailable. Skipping CLI analysis. ({probe.get('reason') or probe.get('stderr') or 'not ready'})"
+        )
         return
 
     assessment_file = LOG_DIR / "catchup-assessment.md"
@@ -273,21 +270,20 @@ Format:
 - Recommendation: ..."""
 
     log(f"Caught up {ran} tasks — running CLI assessment...")
-    env = os.environ.copy()
-    env["NEXO_HEADLESS"] = "1"  # Skip stop hook post-mortem
-    env.pop("CLAUDECODE", None)
-    env.pop("CLAUDE_CODE", None)
-
     try:
-        result = subprocess.run(
-            [str(CLAUDE_CLI), "-p", prompt, "--model", "opus", "--output-format", "text",
-             "--allowedTools", "Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__*"],
-            capture_output=True, text=True, timeout=21600, env=env
+        result = run_automation_prompt(
+            prompt,
+            model="opus",
+            timeout=21600,
+            output_format="text",
+            allowed_tools="Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__*",
         )
         if result.returncode == 0:
             log(f"Assessment written to {assessment_file}")
         else:
             log(f"CLI assessment exited {result.returncode}")
+    except AutomationBackendUnavailableError as e:
+        log(f"CLI assessment skipped: {e}")
     except subprocess.TimeoutExpired:
         log("CLI assessment timed out (90s)")
     except Exception as e:

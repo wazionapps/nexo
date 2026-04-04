@@ -24,6 +24,14 @@ from datetime import datetime, date, timedelta
 from pathlib import Path
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+_script_dir = Path(__file__).resolve().parent
+_repo_src = _script_dir.parent
+NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(_repo_src) if (_repo_src / "server.py").exists() else str(NEXO_HOME)))
+if str(NEXO_CODE) not in sys.path:
+    sys.path.insert(0, str(NEXO_CODE))
+
+from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
+
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
 
@@ -856,10 +864,6 @@ def _run_checks(lock_fd):
 
 def _run_cli_triage(all_results: dict, repairs: list, counts: dict):
     """Pass all findings to Claude CLI for intelligent triage and recommendations."""
-    if not CLAUDE_CLI.exists():
-        print("[SKIP] Claude CLI not found, skipping triage")
-        return
-
     triage_file = COORD_DIR / "immune-triage.md"
     findings_json = json.dumps({
         "timestamp": NOW.strftime("%Y-%m-%d %H:%M"),
@@ -901,22 +905,20 @@ Raw findings:
 Write the report. Be concise — max 40 lines."""
 
     print("\n[TRIAGE] Running CLI interpretation...")
-    env = os.environ.copy()
-    env["NEXO_HEADLESS"] = "1"  # Skip stop hook post-mortem
-    env.pop("CLAUDECODE", None)
-    env.pop("CLAUDE_CODE", None)
-
     try:
-        result = subprocess.run(
-            [str(CLAUDE_CLI), "-p", prompt, "--model", "opus",
-             "--output-format", "text",
-             "--allowedTools", "Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__*"],
-            capture_output=True, text=True, timeout=21600, env=env
+        result = run_automation_prompt(
+            prompt,
+            model="opus",
+            timeout=21600,
+            output_format="text",
+            allowed_tools="Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__*",
         )
         if result.returncode == 0:
             print(f"[TRIAGE] Report written to {triage_file}")
         else:
             print(f"[TRIAGE] CLI exited {result.returncode}: {result.stderr[:200]}")
+    except AutomationBackendUnavailableError as e:
+        print(f"[TRIAGE] Skipping triage: {e}")
     except subprocess.TimeoutExpired:
         print("[TRIAGE] CLI timed out (120s)")
     except Exception as e:

@@ -422,6 +422,35 @@ class TestRuntimeChecks:
         check = runtime.check_cron_freshness()
         assert check.status == "healthy"
 
+    def test_client_backend_preferences_warns_when_selected_client_missing(self, nexo_home, monkeypatch):
+        from doctor.providers import runtime
+
+        schedule_file = nexo_home / "config" / "schedule.json"
+        schedule_file.parent.mkdir(parents=True, exist_ok=True)
+        schedule_file.write_text(json.dumps({
+            "interactive_clients": {
+                "claude_code": False,
+                "codex": True,
+                "claude_desktop": False,
+            },
+            "default_terminal_client": "codex",
+            "automation_enabled": True,
+            "automation_backend": "codex",
+        }))
+
+        monkeypatch.setattr(runtime, "SCHEDULE_FILE", schedule_file)
+        monkeypatch.setattr(runtime, "detect_installed_clients", lambda user_home=None: {
+            "claude_code": {"installed": True},
+            "codex": {"installed": False},
+            "claude_desktop": {"installed": False},
+        })
+
+        check = runtime.check_client_backend_preferences()
+
+        assert check.status == "degraded"
+        assert any("default terminal client `codex`" in item for item in check.evidence)
+        assert any("automation backend `codex`" in item for item in check.evidence)
+
     def test_launchagent_integrity_fix_bootstraps_real_plist(self, nexo_home, monkeypatch):
         from doctor.providers import runtime
 

@@ -41,6 +41,7 @@ LAUNCH_AGENTS_DIR = Path.home() / "Library" / "LaunchAgents"
 LABEL_PREFIX = "com.nexo."
 LOG_DIR = NEXO_HOME / "logs"
 OPTIONALS_FILE = NEXO_HOME / "config" / "optionals.json"
+SCHEDULE_FILE = NEXO_HOME / "config" / "schedule.json"
 RETIRED_CORE_FILES = (
     Path("scripts") / "nexo-day-orchestrator.sh",
 )
@@ -111,10 +112,22 @@ def load_manifest() -> list[dict]:
         except Exception as e:
             log(f"WARNING: could not read optionals.json: {e}")
 
+    automation_default = True
+    if SCHEDULE_FILE.is_file():
+        try:
+            schedule_data = json.loads(SCHEDULE_FILE.read_text())
+            automation_default = bool(schedule_data.get("automation_enabled", True))
+        except Exception:
+            pass
+
     filtered = []
     for cron in crons:
         optional_key = cron.get("optional")
-        if optional_key and not enabled_optionals.get(optional_key, False):
+        if optional_key == "automation":
+            enabled = enabled_optionals.get(optional_key, automation_default)
+        else:
+            enabled = enabled_optionals.get(optional_key, False)
+        if optional_key and not enabled:
             continue
         filtered.append(cron)
     return filtered

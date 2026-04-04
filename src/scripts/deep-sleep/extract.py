@@ -12,35 +12,23 @@ Environment variables:
 """
 import json
 import os
-import shutil
 import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parents[2])))
 DEEP_SLEEP_DIR = NEXO_HOME / "operations" / "deep-sleep"
 PROMPT_FILE = Path(__file__).parent / "extract-prompt.md"
 
-# No timeout -- user pays unlimited Claude Code, sessions can take as long as needed
+if str(NEXO_CODE) not in sys.path:
+    sys.path.insert(0, str(NEXO_CODE))
+
+from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
+
+# No timeout -- headless automation can take as long as needed
 CLAUDE_TIMEOUT = 21600  # 3h safety net (prevents zombie processes)
-
-
-def find_claude_cli() -> str:
-    """Find the Claude CLI binary."""
-    # Check common locations
-    candidates = [
-        Path.home() / ".local" / "bin" / "claude",
-        Path("/usr/local/bin/claude"),
-    ]
-    for c in candidates:
-        if c.exists():
-            return str(c)
-    # Try PATH
-    which = shutil.which("claude")
-    if which:
-        return which
-    return "claude"  # Fallback, let it fail with a clear error
 
 
 def extract_json_from_response(text: str) -> dict | None:
@@ -88,7 +76,7 @@ def find_session_file(session_id: str, date_dir: Path) -> Path | None:
     return None
 
 
-def analyze_session(session_id: str, date_dir: Path, shared_context_file: Path | None, claude_bin: str) -> dict | None:
+def analyze_session(session_id: str, date_dir: Path, shared_context_file: Path | None) -> dict | None:
     """Send a session to Claude CLI for extraction analysis.
 
     Claude CLI reads the small per-session file + shared context file.
@@ -112,31 +100,19 @@ def analyze_session(session_id: str, date_dir: Path, shared_context_file: Path |
     prompt += shared_ctx_instruction
 
     try:
-        env = os.environ.copy()
-        env["NEXO_HEADLESS"] = "1"  # Skip stop hook post-mortem
-        env.pop("CLAUDECODE", None)
-        env.pop("CLAUDE_CODE", None)
-
         JSON_SYSTEM_PROMPT = (
             "You are a JSON-only analyst. Your ENTIRE response must be a single valid JSON object. "
             "No text before it. No text after it. No markdown fences. No explanations. "
             "If you want to summarize, put it inside the JSON fields. Start with { and end with }."
         )
 
-        result = subprocess.run(
-            [
-                claude_bin,
-                "-p", prompt,
-                "--model", "opus",
-                "--output-format", "text",
-                "--append-system-prompt", JSON_SYSTEM_PROMPT,
-                "--allowedTools",
-                "Read,Grep,Bash"
-            ],
-            capture_output=True,
-            text=True,
+        result = run_automation_prompt(
+            prompt,
+            model="opus",
             timeout=CLAUDE_TIMEOUT,
-            env=env
+            output_format="text",
+            append_system_prompt=JSON_SYSTEM_PROMPT,
+            allowed_tools="Read,Grep,Bash",
         )
 
         if result.returncode != 0:
@@ -160,11 +136,12 @@ def analyze_session(session_id: str, date_dir: Path, shared_context_file: Path |
                 f"Required schema: session_id, findings[], emotional_timeline[], "
                 f"abandoned_projects[], skill_candidates[], productivity_score, protocol_summary"
             )
-            convert_result = subprocess.run(
-                [claude_bin, "-p", convert_prompt, "--model", "sonnet",
-                 "--output-format", "text",
-                 "--append-system-prompt", JSON_SYSTEM_PROMPT],
-                capture_output=True, text=True, timeout=120, env=env
+            convert_result = run_automation_prompt(
+                convert_prompt,
+                model="sonnet",
+                timeout=120,
+                output_format="text",
+                append_system_prompt=JSON_SYSTEM_PROMPT,
             )
             if convert_result.returncode == 0:
                 parsed = extract_json_from_response(convert_result.stdout)
@@ -180,13 +157,12 @@ def analyze_session(session_id: str, date_dir: Path, shared_context_file: Path |
 
         return parsed
 
-    except subprocess.TimeoutExpired:
-        print(f"    Claude CLI timeout ({CLAUDE_TIMEOUT}s)", file=sys.stderr)
+    except AutomationBackendUnavailableError as exc:
+        print(f"    Automation backend unavailable: {exc}", file=sys.stderr)
         return None
-    except FileNotFoundError:
-        print(f"    Claude CLI not found at: {claude_bin}", file=sys.stderr)
-        print("    Install: npm install -g @anthropic-ai/claude-code", file=sys.stderr)
-        sys.exit(1)
+    except subprocess.TimeoutExpired:
+        print(f"    Automation backend timeout ({CLAUDE_TIMEOUT}s)", file=sys.stderr)
+        return None
 
 
 def main():
@@ -235,9 +211,8 @@ def main():
         shared_context_file = None
         print("[extract] No shared context file")
 
-    claude_bin = find_claude_cli()
     print(f"[extract] Phase 2: Analyzing {len(session_files)} sessions for {target_date}")
-    print(f"[extract] Claude CLI: {claude_bin}")
+    print("[extract] Automation backend: schedule-configured")
 
     # Checkpoint directory: one JSON per session, survives crashes
     checkpoint_dir = date_dir / "checkpoints"
@@ -271,7 +246,7 @@ def main():
         # Retry loop
         result = None
         for attempt in range(1, MAX_RETRIES + 1):
-            result = analyze_session(session_id, date_dir, shared_context_file, claude_bin)
+            result = analyze_session(session_id, date_dir, shared_context_file)
             if result:
                 break
             if attempt < MAX_RETRIES:

@@ -567,14 +567,16 @@ The installer handles everything and syncs the same `nexo` MCP brain into Claude
 After install, use the runtime CLI:
 
 ```bash
-nexo chat          # Launch Claude Code with NEXO as operator
+nexo chat          # Launch the configured terminal client (Claude Code or Codex)
 nexo doctor        # Check runtime health
 nexo update        # Pull latest version and sync
 nexo clients sync  # Re-sync Claude Code/Desktop/Codex to the same brain
 nexo scripts list  # See your personal scripts
 ```
 
-Or use the shell alias created during install (e.g. `atlas`), which runs `claude --dangerously-skip-permissions "."` — launching Claude Code with tool-use permissions pre-approved so the operator can act autonomously.
+During install, NEXO now asks which interactive clients you want to connect, which one `nexo chat` should open by default, whether to enable background automation, and which backend should run that automation. Shared brain stays on in every mode.
+
+Or use the shell alias created during install (e.g. `atlas`), which now runs `nexo chat .` so it opens whichever terminal client you selected as default.
 
 Your operator will greet you immediately — adapted to the time of day, resuming from where you left off. No cold starts.
 
@@ -598,6 +600,7 @@ Your operator will greet you immediately — adapted to the time of day, resumin
 | Auto-update | Non-blocking startup check (5s max), opt-out via schedule.json | Built into server startup |
 | CLAUDE.md tracker | Version-tracked core sections with safe updates preserving customizations | Built into auto-update |
 | Shared client sync | Same `nexo` MCP entry wired into Claude Code, Claude Desktop, and Codex | User config dirs |
+| Client/backend preferences | Selected interactive clients, default terminal client, automation backend | `NEXO_HOME/config/schedule.json` |
 | Auto-diary | 3-layer system: PostToolUse every 10 calls, PreCompact emergency, heartbeat DIARY_OVERDUE | Built into hooks |
 | Claude Code config | MCP server + 7 hooks + 15 processes registered | ~/.claude/settings.json |
 
