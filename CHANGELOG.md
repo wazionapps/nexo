@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.6.8] - 2026-04-04
+
+### Integration Release Integrity
+- Release automation now synchronizes the public integration artifacts before publishing, so the Claude Code plugin packaging, ClawHub skill metadata, and OpenClaw plugin package stay aligned with the tagged version.
+- Added hard validation for Claude Code packaging, ClawHub skill metadata, and OpenClaw plugin contract/packaging both in CI and in the release workflow.
+- Release automation now smoke-verifies the published ClawHub listing after publish instead of assuming it updated correctly.
+
+### OpenClaw & ClawHub
+- The native OpenClaw plugin now targets the packaged `~/.nexo/server.py` entrypoint instead of the obsolete `~/.nexo/src/server.py` path.
+- The OpenClaw bridge now reports a client version synchronized with the published release version.
+- The repository ClawHub skill definition is now version-aligned and ready to be republished automatically during release.
+
 ## [2.6.7] - 2026-04-04
 
 ### Public Contributor Evolution
