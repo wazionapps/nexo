@@ -75,6 +75,7 @@ All keys are optional. Without metadata, the script name defaults to the filenam
 | `schedule` | Calendar schedule: `HH:MM` or `HH:MM:weekday` |
 | `interval_seconds` | Interval schedule in seconds |
 | `schedule_required` | `true` if the script must have a schedule |
+| `recovery_policy` | Recovery contract such as `catchup` or `restart_daemon` |
 
 ### Declaring Personal Schedules
 
@@ -97,6 +98,20 @@ Or for a calendar schedule:
 # nexo: schedule=08:00
 # nexo: schedule_required=true
 ```
+
+Or for a daemon-style `KeepAlive` helper:
+
+```bash
+# nexo: name=wake-recovery
+# nexo: description=Repair interval LaunchAgents after sleep/wake gaps
+# nexo: runtime=shell
+# nexo: cron_id=wake-recovery
+# nexo: schedule_required=true
+# nexo: recovery_policy=restart_daemon
+# nexo: run_on_boot=true
+```
+
+`restart_daemon` is the official way to declare a personal `KeepAlive` service. NEXO will reconcile it as a managed daemon instead of treating it as an unmanaged manual LaunchAgent.
 
 Then run:
 

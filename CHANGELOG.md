@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.6.13] - 2026-04-04
+
+### Personal KeepAlive Schedules
+- Personal scripts can now declare official daemon-style schedules via `schedule_required=true` + `recovery_policy=restart_daemon`, which reconciles to a managed `KeepAlive` service instead of an unmanaged manual LaunchAgent.
+- `nexo doctor --tier runtime --fix`, `nexo update`, and personal script reconciliation now adopt and repair matching legacy `KeepAlive` daemons instead of leaving them as orphan criticals.
+- Added a targeted legacy backfill for the historical `nexo-wake-recovery.sh` helper so existing installs migrate to the managed schedule model automatically.
+
 ## [2.6.12] - 2026-04-04
 
 ### Clients & Installer

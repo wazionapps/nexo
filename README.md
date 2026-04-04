@@ -484,13 +484,15 @@ Core and personal jobs now declare explicit recovery contracts in `crons/manifes
 
 | Field | Purpose |
 |-------|---------|
-| `recovery_policy` | `catchup`, `restart`, or `skip` |
+| `recovery_policy` | `catchup`, `restart`, `restart_daemon`, or `skip` |
 | `run_on_boot` | Re-run when the machine starts |
 | `run_on_wake` | Re-run after sleep/resume |
 | `idempotent` | Safe to re-run without side effects |
 | `max_catchup_age` | Maximum age of a missed window to still catch up |
 
 If the Mac was asleep during a scheduled window, `catchup` detects the gap from `cron_runs` (not a state file) and re-executes eligible jobs once. Interval-based personal scripts get a single recovery run, not repeated ticks.
+
+For personal daemon-style helpers, `recovery_policy=restart_daemon` plus `schedule_required=true` declares an official `KeepAlive` schedule. NEXO can now reconcile and repair those daemons instead of treating them as unmanaged legacy LaunchAgents.
 
 ## Startup Preflight (v2.6.2)
 

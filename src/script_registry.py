@@ -32,6 +32,16 @@ _IGNORED_FILES = {
 }
 _IGNORED_DIRS = {"deep-sleep", "__pycache__"}
 
+_LEGACY_WAKE_RECOVERY_METADATA = [
+    "# nexo: name=nexo-wake-recovery",
+    "# nexo: description=Recover interval LaunchAgents after macOS sleep/wake gaps",
+    "# nexo: runtime=shell",
+    "# nexo: cron_id=wake-recovery",
+    "# nexo: schedule_required=true",
+    "# nexo: recovery_policy=restart_daemon",
+    "# nexo: run_on_boot=true",
+]
+
 # Forbidden patterns — direct DB access from personal scripts
 _FORBIDDEN_PATTERNS = [
     re.compile(r"\bsqlite3\b"),
@@ -75,6 +85,33 @@ def get_nexo_home() -> Path:
 
 def get_scripts_dir() -> Path:
     return NEXO_HOME / "scripts"
+
+
+def _apply_legacy_personal_script_backfills() -> None:
+    """Backfill metadata for known legacy personal scripts shipped before the registry existed."""
+    scripts_dir = get_scripts_dir()
+    wake_recovery = scripts_dir / "nexo-wake-recovery.sh"
+    if not wake_recovery.is_file():
+        return
+
+    try:
+        text = wake_recovery.read_text()
+    except Exception:
+        return
+
+    if "# nexo:" in "\n".join(text.splitlines()[:25]):
+        return
+    if "Wake Recovery" not in text:
+        return
+
+    lines = text.splitlines(keepends=True)
+    head: list[str] = []
+    start = 0
+    if lines and lines[0].startswith("#!"):
+        head.append(lines[0])
+        start = 1
+    head.extend([line + "\n" for line in _LEGACY_WAKE_RECOVERY_METADATA])
+    wake_recovery.write_text("".join(head + lines[start:]))
 
 
 def load_core_script_names() -> set[str]:
@@ -279,6 +316,11 @@ def get_declared_schedule(metadata: dict, default_name: str = "") -> dict:
                 "cron_id": cron_id,
             }
 
+    def _effective_run_on_boot(policy: str) -> bool:
+        if "run_on_boot" in metadata:
+            return run_on_boot
+        return policy == "restart_daemon"
+
     def _effective_run_on_wake(policy: str) -> bool:
         if "run_on_wake" in metadata:
             return run_on_wake
@@ -379,10 +421,27 @@ def get_declared_schedule(metadata: dict, default_name: str = "") -> dict:
             "schedule": schedule_raw,
             "interval_seconds": 0,
             "recovery_policy": recovery_policy_raw or "catchup",
-            "run_on_boot": run_on_boot,
+            "run_on_boot": _effective_run_on_boot(recovery_policy_raw or "catchup"),
             "run_on_wake": _effective_run_on_wake(recovery_policy_raw or "catchup"),
             "idempotent": _effective_idempotent(recovery_policy_raw or "catchup"),
             "max_catchup_age": max_catchup_age or (14 * 86400 if weekday is not None else 48 * 3600),
+        }
+
+    if required and recovery_policy_raw == "restart_daemon":
+        return {
+            "required": required,
+            "valid": True,
+            "cron_id": cron_id,
+            "schedule_type": "keep_alive",
+            "schedule_value": "true",
+            "schedule_label": "keep alive",
+            "schedule": "",
+            "interval_seconds": 0,
+            "recovery_policy": "restart_daemon",
+            "run_on_boot": _effective_run_on_boot("restart_daemon"),
+            "run_on_wake": _effective_run_on_wake("restart_daemon"),
+            "idempotent": _effective_idempotent("restart_daemon"),
+            "max_catchup_age": max_catchup_age,
         }
 
     return {
@@ -416,6 +475,7 @@ def _script_entry(path: Path, meta: dict, *, is_core: bool, classification: str,
 
 def classify_scripts_dir() -> dict:
     """Classify every file in NEXO_HOME/scripts into personal/core/ignored/non-script buckets."""
+    _apply_legacy_personal_script_backfills()
     scripts_dir = get_scripts_dir()
     if not scripts_dir.is_dir():
         return {"scripts_dir": str(scripts_dir), "entries": [], "summary": {}}
@@ -927,6 +987,7 @@ def ensure_personal_schedules(*, dry_run: bool = False) -> dict:
             interval_seconds=declared.get("interval_seconds", 0),
             description=script.get("description", ""),
             script_type=script.get("runtime", "auto"),
+            keep_alive=declared.get("schedule_type") == "keep_alive",
         )
         target = report["repaired" if existing else "created"]
         target.append({

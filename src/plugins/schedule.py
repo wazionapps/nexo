@@ -56,21 +56,20 @@ def handle_schedule_status(hours: int = 24, cron_id: str = '') -> str:
 
 def handle_schedule_add(cron_id: str, script: str, schedule: str = '',
                         interval_seconds: int = 0, description: str = '',
-                        script_type: str = 'auto') -> str:
+                        script_type: str = 'auto', keep_alive: bool = False) -> str:
     """Add a new personal cron job. Generates and installs the LaunchAgent (macOS) or systemd timer (Linux).
 
     Args:
         cron_id: Unique ID for this cron (e.g. 'my-backup', 'report-daily'). Must be lowercase with hyphens.
         script: Path to the script to run (absolute or relative to NEXO_HOME/scripts/).
         schedule: Time-based schedule as 'HH:MM' (daily) or 'HH:MM:weekday' (e.g. '08:00:1' for Monday 8AM). Mutually exclusive with interval_seconds.
-        interval_seconds: Run every N seconds (e.g. 300 for every 5 min). Mutually exclusive with schedule.
+        interval_seconds: Run every N seconds (e.g. 300 for every 5 min). Mutually exclusive with schedule/keep_alive.
         description: What this cron does (for logs and status).
         script_type: 'auto' (default), 'python', 'shell', 'node', or 'php'.
+        keep_alive: Run as a daemon/keep-alive service instead of a timer.
     """
     if not cron_id or not script:
         return "ERROR: cron_id and script are required."
-    if not schedule and not interval_seconds:
-        return "ERROR: either schedule (e.g. '08:00') or interval_seconds (e.g. 300) is required."
 
     nexo_home = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
     script_path = Path(script)
@@ -82,6 +81,11 @@ def handle_schedule_add(cron_id: str, script: str, schedule: str = '',
     script_meta = parse_inline_metadata(script_path)
     detected_runtime = classify_runtime(script_path, script_meta)
     declared = get_declared_schedule(script_meta, script_meta.get("name", script_path.stem))
+    keep_alive = bool(keep_alive or declared.get("schedule_type") == "keep_alive")
+
+    if sum(bool(value) for value in [schedule, interval_seconds, keep_alive]) != 1:
+        return "ERROR: choose exactly one schedule mode: schedule, interval_seconds, or keep_alive."
+
     script_type = (script_type or "auto").strip().lower()
     if script_type == "auto":
         script_type = detected_runtime if detected_runtime != "unknown" else "python"
@@ -102,6 +106,7 @@ def handle_schedule_add(cron_id: str, script: str, schedule: str = '',
             description or script_meta.get("description", ""),
             script_type,
             nexo_home,
+            keep_alive=keep_alive,
             declared=declared,
         )
     elif system == "Linux":
@@ -114,6 +119,7 @@ def handle_schedule_add(cron_id: str, script: str, schedule: str = '',
             description or script_meta.get("description", ""),
             script_type,
             nexo_home,
+            keep_alive=keep_alive,
             declared=declared,
         )
     else:
@@ -134,7 +140,7 @@ def _runtime_command(script_type: str) -> str:
     return "python3"
 
 
-def _register_schedule_metadata(cron_id, script_path, schedule, interval_seconds, description, script_type, label="", plist_path=""):
+def _register_schedule_metadata(cron_id, script_path, schedule, interval_seconds, description, script_type, label="", plist_path="", keep_alive: bool = False):
     init_db()
     script_meta = parse_inline_metadata(Path(script_path))
     runtime = classify_runtime(Path(script_path), script_meta)
@@ -148,7 +154,11 @@ def _register_schedule_metadata(cron_id, script_path, schedule, interval_seconds
         source="filesystem",
         has_inline_metadata=bool(script_meta),
     )
-    if interval_seconds:
+    if keep_alive:
+        schedule_type = "keep_alive"
+        schedule_value = "true"
+        schedule_label = "keep alive"
+    elif interval_seconds:
         schedule_type = "interval"
         schedule_value = str(interval_seconds)
         schedule_label = f"every {interval_seconds}s"
@@ -174,7 +184,7 @@ def _register_schedule_metadata(cron_id, script_path, schedule, interval_seconds
 
 
 def _add_launchagent(cron_id, script_path, wrapper_path, schedule, interval_seconds,
-                     description, script_type, nexo_home, *, declared: dict | None = None):
+                     description, script_type, nexo_home, *, keep_alive: bool = False, declared: dict | None = None):
     """Create and load a macOS LaunchAgent."""
     import plistlib
 
@@ -201,7 +211,9 @@ def _add_launchagent(cron_id, script_path, wrapper_path, schedule, interval_seco
         },
     }
 
-    if interval_seconds:
+    if keep_alive:
+        plist["KeepAlive"] = True
+    elif interval_seconds:
         plist["StartInterval"] = interval_seconds
     elif schedule:
         parts = schedule.split(":")
@@ -211,7 +223,7 @@ def _add_launchagent(cron_id, script_path, wrapper_path, schedule, interval_seco
         plist["StartCalendarInterval"] = cal
 
     declared = declared or {}
-    if declared.get("run_on_boot"):
+    if declared.get("run_on_boot") or (keep_alive and "run_on_boot" not in declared):
         plist["RunAtLoad"] = True
 
     with open(plist_path, "wb") as f:
@@ -228,13 +240,20 @@ def _add_launchagent(cron_id, script_path, wrapper_path, schedule, interval_seco
         script_type,
         label=label,
         plist_path=str(plist_path),
+        keep_alive=keep_alive,
     )
 
-    return f"Cron '{cron_id}' installed at {plist_path} and loaded.{' Schedule: ' + schedule if schedule else f' Interval: {interval_seconds}s'}"
+    if keep_alive:
+        detail = " KeepAlive daemon"
+    elif schedule:
+        detail = f" Schedule: {schedule}"
+    else:
+        detail = f" Interval: {interval_seconds}s"
+    return f"Cron '{cron_id}' installed at {plist_path} and loaded.{detail}"
 
 
 def _add_systemd_timer(cron_id, script_path, wrapper_path, schedule, interval_seconds,
-                       description, script_type, nexo_home, *, declared: dict | None = None):
+                       description, script_type, nexo_home, *, keep_alive: bool = False, declared: dict | None = None):
     """Create and enable a systemd user timer (Linux)."""
     unit_dir = Path.home() / ".config" / "systemd" / "user"
     unit_dir.mkdir(parents=True, exist_ok=True)
@@ -257,9 +276,46 @@ Environment=NEXO_PERSONAL_CRON_ID={cron_id}
     service_path = unit_dir / f"nexo-{cron_id}.service"
     service_path.write_text(service_content)
 
-    # Timer unit
     declared = declared or {}
 
+    if keep_alive:
+        service_content = f"""[Unit]
+Description=NEXO daemon: {description or cron_id}
+
+[Service]
+Type=simple
+ExecStart={exec_cmd}
+Restart=always
+RestartSec=10
+Environment=NEXO_HOME={nexo_home}
+Environment=HOME={Path.home()}
+Environment={PERSONAL_SCHEDULE_MANAGED_ENV}=1
+Environment=NEXO_PERSONAL_CRON_ID={cron_id}
+
+[Install]
+WantedBy=default.target
+"""
+        service_path = unit_dir / f"nexo-{cron_id}.service"
+        service_path.write_text(service_content)
+
+        subprocess.run(["systemctl", "--user", "daemon-reload"], capture_output=True)
+        subprocess.run(["systemctl", "--user", "enable", "--now", f"nexo-{cron_id}.service"], capture_output=True)
+
+        _register_schedule_metadata(
+            cron_id,
+            script_path,
+            schedule,
+            interval_seconds,
+            description,
+            script_type,
+            label=f"nexo-{cron_id}",
+            plist_path="",
+            keep_alive=True,
+        )
+
+        return f"Cron '{cron_id}' installed as KeepAlive systemd service and enabled. Service: {service_path}"
+
+    # Timer unit
     if interval_seconds:
         timer_spec = f"OnUnitActiveSec={interval_seconds}s"
         if declared.get("run_on_boot") or not declared.get("required"):
@@ -301,6 +357,7 @@ WantedBy=timers.target
         script_type,
         label=f"nexo-{cron_id}",
         plist_path="",
+        keep_alive=False,
     )
 
     return f"Cron '{cron_id}' installed as systemd timer and enabled. Service: {service_path}, Timer: {timer_path}"

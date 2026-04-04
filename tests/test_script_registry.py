@@ -147,6 +147,25 @@ class TestMetadataParsing:
         assert declared["idempotent"] is True
         assert declared["max_catchup_age"] == 7200
 
+    def test_schedule_metadata_supports_keep_alive_restart_daemon(self, tmp_path):
+        script = tmp_path / "wake.sh"
+        script.write_text(
+            "# nexo: name=nexo-wake-recovery\n"
+            "# nexo: runtime=shell\n"
+            "# nexo: cron_id=wake-recovery\n"
+            "# nexo: schedule_required=true\n"
+            "# nexo: recovery_policy=restart_daemon\n"
+            "# nexo: run_on_boot=true\n"
+            "echo ok\n"
+        )
+        meta = parse_inline_metadata(script)
+        declared = get_declared_schedule(meta, "nexo-wake-recovery")
+        assert declared["valid"] is True
+        assert declared["schedule_type"] == "keep_alive"
+        assert declared["schedule_label"] == "keep alive"
+        assert declared["run_on_boot"] is True
+        assert declared["recovery_policy"] == "restart_daemon"
+
 
 class TestRuntimeDetection:
     def test_metadata_runtime(self, tmp_path):
@@ -233,6 +252,22 @@ class TestCoreFiltering:
         assert classes["my-tool"] == "personal"
         assert classes["notes"] == "non-script"
         assert classes["nexo-dashboard"] == "ignored"
+
+    def test_classify_backfills_legacy_wake_recovery_metadata(self, scripts_dir):
+        script = scripts_dir / "nexo-wake-recovery.sh"
+        script.write_text(
+            "#!/bin/bash\n"
+            "# NEXO Wake Recovery — Detects sleep/wake gaps and reloads StartInterval LaunchAgents.\n"
+            "# Runs as KeepAlive daemon.\n"
+            "echo ok\n"
+        )
+
+        report = classify_scripts_dir()
+        wake_entry = next(entry for entry in report["entries"] if entry["name"] == "nexo-wake-recovery")
+        assert wake_entry["classification"] == "personal"
+        assert wake_entry["declared_schedule"]["schedule_type"] == "keep_alive"
+        text = script.read_text()
+        assert "# nexo: cron_id=wake-recovery" in text
 
 
 class TestResolveScript:
@@ -366,6 +401,56 @@ class TestRegistrySync:
         result = ensure_personal_schedules(dry_run=True)
         assert result["created"][0]["cron_id"] == "email-monitor"
         assert result["sync"]["missing_declared_schedules"][0]["name"] == "email-monitor"
+
+    def test_ensure_personal_keep_alive_schedule_repairs_manual_daemon(self, scripts_dir, monkeypatch):
+        import script_registry
+        from plugins import schedule as schedule_plugin
+
+        init_db()
+        script = scripts_dir / "nexo-wake-recovery.sh"
+        script.write_text(
+            "#!/bin/bash\n"
+            "# nexo: name=nexo-wake-recovery\n"
+            "# nexo: runtime=shell\n"
+            "# nexo: cron_id=wake-recovery\n"
+            "# nexo: schedule_required=true\n"
+            "# nexo: recovery_policy=restart_daemon\n"
+            "# nexo: run_on_boot=true\n"
+            "echo ok\n"
+        )
+
+        plist_path = scripts_dir / "com.nexo.wake-recovery.plist"
+        plist_path.write_text("plist")
+
+        monkeypatch.setattr(
+            script_registry,
+            "_discover_personal_schedule_records",
+            lambda: [{
+                "cron_id": "wake-recovery",
+                "script_path": str(script),
+                "schedule_type": "keep_alive",
+                "schedule_value": "true",
+                "schedule_label": "keep alive",
+                "launchd_label": "com.nexo.wake-recovery",
+                "plist_path": str(plist_path),
+                "enabled": True,
+                "description": "Wake recovery",
+                "managed_marker": False,
+                "script_exists": True,
+                "script_within_scripts_dir": True,
+                "run_at_load": True,
+            }],
+        )
+        monkeypatch.setattr(script_registry, "_remove_schedule_file", lambda **kwargs: {"cron_id": kwargs["cron_id"], "deleted": True})
+        monkeypatch.setattr(
+            schedule_plugin,
+            "handle_schedule_add",
+            lambda **kwargs: f"keep_alive={kwargs.get('keep_alive')} cron_id={kwargs.get('cron_id')}",
+        )
+
+        result = ensure_personal_schedules(dry_run=False)
+        assert result["repaired"][0]["cron_id"] == "wake-recovery"
+        assert "keep_alive=True" in result["repaired"][0]["result"]
 
     def test_unschedule_personal_script_prunes_schedule(self, scripts_dir, monkeypatch):
         import script_registry
