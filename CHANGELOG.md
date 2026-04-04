@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.6.3] - 2026-04-04
+
+### Fixes
+- Runtime cron sync now skips same-file copies when core scripts already live under `NEXO_HOME`, avoiding `SameFileError` during `nexo update` on synced runtimes.
+- Core hook migration now normalizes legacy flat hook entries into Claude Code's required `matcher + hooks[]` format instead of re-emitting invalid `PostToolUse` entries.
+- Plugin metadata version is aligned again with the published package version.
+
 ## [2.6.2] - 2026-04-04
 
 ### Startup Preflight & Recovery
