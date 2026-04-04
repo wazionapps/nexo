@@ -1,6 +1,6 @@
 # NEXO Brain
 
-> Open-source cognitive runtime for Claude Code and MCP clients (v2.6.5)
+> Open-source cognitive runtime for Claude Code and MCP clients (v2.6.7)
 
 NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It provides 150+ MCP tools across 21+ categories including semantic RAG, knowledge graph-boosted search, HNSW vector indexing, trust scoring, episodic memory, claim graph, metacognitive error prevention, inter-terminal coordination, always-on web dashboard with 23 modules, natural memory decay, a full nervous system of 13 core recovery-aware background jobs, unified code/data architecture, startup preflight with safe migrations, auto-diary, Skills v2 with executable modes, cron scheduler with recovery contracts, external audit, runtime CLI, unified doctor diagnostics, personal scripts registry with 9 lifecycle tools, Claude Code plugin marketplace structure, managed evolution with core module modification, and platform-aware power policy.
 
@@ -60,7 +60,7 @@ NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cogniti
 ## Installation
 
 ```
-npx nexo-brain@2.6.5
+npx nexo-brain@2.6.7
 ```
 
 ## Documentation

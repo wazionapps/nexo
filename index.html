@@ -328,6 +328,22 @@
                     "@type": "Answer",
                     "text": "Yes. You can find the community on GitHub (github.com/wazionapps/nexo) for issues, discussions, and contributions. Follow @NEXOBRAIN on X/Twitter for updates, releases, and development insights. The project welcomes contributions and sponsorships."
                 }
+            },
+            {
+                "@type": "Question",
+                "name": "Can NEXO contribute improvements back to its own codebase?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Yes. With opt-in contributor mode, NEXO can propose improvements to the public repo via Draft PRs on GitHub. Contributions run in an isolated checkout, never touch your personal data, and pause after one open PR. Enable with 'nexo contributor on'."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "Can I create my own MCP tools that survive updates?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Yes. Use nexo_personal_plugin_create to scaffold a personal MCP plugin in NEXO_HOME/plugins/. Personal plugins persist across updates and never become part of the core product."
+                }
             }
         ]
     }
@@ -366,7 +382,7 @@
     <div class="container">
         <div class="hero-badge fade-up">
             <span class="dot"></span>
-            <span id="version-badge">v2.6.5</span> &mdash; Personal Scripts, Runtime CLI, Recovery Contracts &amp; Power Policy
+            <span id="version-badge">v2.6.7</span> &mdash; Contributor Evolution, Personal Plugins, Memory Continuity
         </div>
         <div class="fade-up" style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;">
             <img src="https://img.shields.io/npm/v/nexo-brain?color=7C3AED&label=npm" alt="npm version">
@@ -634,43 +650,43 @@
     </div>
 </section>
 
-<!-- v2.6.0 Personal Scripts Registry, Plugin Marketplace, Managed Evolution -->
+<!-- v2.6.7 Contributor Evolution, Personal Plugins, Memory Continuity -->
 <section class="feature-section">
     <div class="container">
-        <div class="section-label">New in v2.6.5</div>
-        <h2 class="section-title">Personal Scripts, Runtime CLI, Recovery Contracts &amp; Power Policy</h2>
-        <p class="section-subtitle">Your scripts become first-class citizens. A real CLI binary controls the cognitive engine. Recovery contracts ensure nothing is lost on sleep or restart.</p>
+        <div class="section-label">New in v2.6.7</div>
+        <h2 class="section-title">Contributor Evolution, Personal Plugins &amp; Memory Continuity</h2>
+        <p class="section-subtitle">Opt-in public contribution mode, personal MCP plugin scaffolding, smoother install/update UX, and wider diary continuity windows.</p>
 
         <div class="features-grid">
             <div class="feature-card">
-                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></div>
-                <h3>Runtime CLI</h3>
-                <p><code>nexo chat</code> to launch Claude Code with NEXO as operator, <code>nexo update</code> to sync the engine, <code>nexo doctor</code> for unified diagnostics. One binary, full control from any terminal.</p>
+                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg></div>
+                <h3>Public Contributor Mode</h3>
+                <p>Opt-in contribution mode for GitHub-authenticated machines. Isolated checkout, dedicated <code>public_core</code> evolution policy, single Draft PR before pausing. Enable with <code>nexo contributor on</code>.</p>
             </div>
             <div class="feature-card">
-                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></div>
-                <h3>Personal Scripts Registry</h3>
-                <p>Scripts tracked in a first-class SQLite registry with 9 MCP tools for full lifecycle: create, schedule, reconcile, sync, classify. Your automations are now managed entities, not loose files.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg></div>
-                <h3>Recovery Contracts</h3>
-                <p>Boot and wake catch-up with explicit contracts for core and personal jobs. Every background process declares its recovery behavior — no silent failures after sleep or restart.</p>
+                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8v8m-4-4h8"/></svg></div>
+                <h3>Personal MCP Plugins</h3>
+                <p><code>nexo_personal_plugin_create</code> scaffolds persistent personal MCP plugins in <code>NEXO_HOME/plugins</code> with optional companion scripts. Survive updates without becoming core.</p>
             </div>
             <div class="feature-card">
                 <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
-                <h3>Startup Preflight</h3>
-                <p>Health checks and safe migrations before every interactive session. Dependency verification and environment validation ensure the cognitive engine starts clean.</p>
+                <h3>Install/Update UX</h3>
+                <p>Clearer progress reporting: file copy, migrations, schedule reconciliation, and verification steps are now visible. No more guessing what the installer is doing.</p>
             </div>
             <div class="feature-card">
                 <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
-                <h3>Platform-Aware Power Policy</h3>
-                <p>macOS power assertions, sleep inhibit on Linux, and intelligent scheduling that adapts to battery state. Background processes respect the platform's power constraints.</p>
+                <h3>Diary Continuity Window</h3>
+                <p><code>nexo_session_diary_read(last_day=true)</code> now returns a ~36h continuity window instead of truncating to the calendar day. More context survives across overnight boundaries.</p>
             </div>
             <div class="feature-card">
                 <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
-                <h3>Managed Evolution Hardening</h3>
-                <p>Evolution can now modify core behavior modules with automatic rollback followups. Fixed false-positive watchdog tamper detection. Safe self-improvement of the cognitive engine.</p>
+                <h3>Auto-Close Diary Promotion</h3>
+                <p>Auto-close diary promotion preserves more goal, next-step, and reasoning context. Less information lost when sessions end without an explicit diary write.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+                <h3>Contributor Guardrails</h3>
+                <p>Personal data, prompts, logs, and secrets are blocked from contribution proposals. <code>nexo contributor status</code> shows current state and lifecycle.</p>
             </div>
         </div>
     </div>
@@ -942,6 +958,22 @@
                     <svg class="faq-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                 </summary>
                 <div class="faq-answer">Yes! Find us on <a href="https://github.com/wazionapps/nexo">GitHub</a> for issues, discussions, and contributions. Follow <a href="https://x.com/NEXOBRAIN">@NEXOBRAIN on X/Twitter</a> for updates, releases, and development insights. The project welcomes contributions and sponsorships.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary class="faq-question">
+                    <span>Can NEXO contribute improvements back to its own codebase?</span>
+                    <svg class="faq-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </summary>
+                <div class="faq-answer">Yes. With opt-in contributor mode, NEXO can propose improvements to the public repo via Draft PRs on GitHub. Contributions run in an isolated checkout, never touch your personal data, and pause after one open PR. Enable with <code>nexo contributor on</code>.</div>
+            </details>
+
+            <details class="faq-item">
+                <summary class="faq-question">
+                    <span>Can I create my own MCP tools that survive updates?</span>
+                    <svg class="faq-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </summary>
+                <div class="faq-answer">Yes. Use <code>nexo_personal_plugin_create</code> to scaffold a personal MCP plugin in <code>NEXO_HOME/plugins/</code>. Personal plugins persist across updates and never become part of the core product.</div>
             </details>
         </div>
     </div>
