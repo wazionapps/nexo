@@ -226,9 +226,11 @@ function registerAllCoreHooks(settings, hooksDir, nexoHome) {
     // We need to search and update in both formats.
     let found = false;
 
-    for (const entry of settings.hooks[hook.event]) {
+    for (let idx = 0; idx < settings.hooks[hook.event].length; idx++) {
+      const entry = settings.hooks[hook.event][idx];
       if (entry.hooks && Array.isArray(entry.hooks)) {
         // Nested format: {matcher, hooks: [...]}
+        if (!entry.matcher) entry.matcher = "*";
         const subIdx = entry.hooks.findIndex(
           (h) => h.command && h.command.includes(hook.key)
         );
@@ -240,19 +242,25 @@ function registerAllCoreHooks(settings, hooksDir, nexoHome) {
           break;
         }
       } else if (entry.command && entry.command.includes(hook.key)) {
-        // Flat format: {type:"command", command:"..."}
-        if (entry.command !== command) entry.command = command;
-        if (hook.timeout && !entry.timeout) entry.timeout = hook.timeout;
+        // Legacy flat format: migrate to nested matcher+hooks.
+        const migrated = { type: "command", command };
+        if (hook.timeout) migrated.timeout = hook.timeout;
+        settings.hooks[hook.event][idx] = {
+          matcher: "*",
+          hooks: [migrated],
+        };
         found = true;
         break;
       }
     }
 
     if (!found) {
-      // Hook missing — add it in flat format (Claude Code accepts both)
-      const newEntry = { type: "command", command };
-      if (hook.timeout) newEntry.timeout = hook.timeout;
-      settings.hooks[hook.event].push(newEntry);
+      const newHook = { type: "command", command };
+      if (hook.timeout) newHook.timeout = hook.timeout;
+      settings.hooks[hook.event].push({
+        matcher: "*",
+        hooks: [newHook],
+      });
     }
   }
 }
