@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.6.11] - 2026-04-04
+
+### Reliability
+- Declared personal schedules now self-heal during startup preflight, `nexo update`, and catch-up recovery, so personal services like the email monitor do not silently stop after schedule drift.
+- `nexo update` now surfaces when it repaired personal schedules, making runtime recovery visible instead of silent.
+- Installed runtimes can now recover safely even when newly introduced support modules such as `public_contribution.py` were missing from older synced installs.
+- Runtime sync/install file coverage was tightened again so shared-brain support files and contributor/runtime helpers arrive consistently in existing `NEXO_HOME` installs.
+
 ## [2.6.10] - 2026-04-04
 
 ### Shared Brain

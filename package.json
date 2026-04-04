@@ -1,6 +1,6 @@
 {
   "name": "nexo-brain",
-  "version": "2.6.10",
+  "version": "2.6.11",
   "mcpName": "io.github.wazionapps/nexo",
   "description": "NEXO — local cognitive runtime for Claude Code. Persistent memory, overnight learning, recovery-aware crons, personal scripts, doctor diagnostics, startup preflight, and optional power helper.",
   "bin": {
