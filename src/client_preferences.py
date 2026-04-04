@@ -35,6 +35,16 @@ INSTALL_PREFERENCE_KEYS = {
     "skip",
     "manual",
 }
+DEFAULT_CLIENT_RUNTIME_PROFILES = {
+    CLIENT_CLAUDE_CODE: {
+        "model": "opus",
+        "reasoning_effort": "",
+    },
+    CLIENT_CODEX: {
+        "model": "gpt-5.4",
+        "reasoning_effort": "xhigh",
+    },
+}
 
 
 def _user_home() -> Path:
@@ -64,6 +74,7 @@ def default_client_preferences() -> dict:
         "default_terminal_client": CLIENT_CLAUDE_CODE,
         "automation_enabled": True,
         "automation_backend": CLIENT_CLAUDE_CODE,
+        "client_runtime_profiles": default_client_runtime_profiles(),
         "client_install_preferences": {
             CLIENT_CLAUDE_CODE: "ask",
             CLIENT_CODEX: "ask",
@@ -153,6 +164,52 @@ def normalize_client_install_preferences(value) -> dict[str, str]:
     return normalized
 
 
+def default_client_runtime_profiles() -> dict[str, dict[str, str]]:
+    return {
+        client_key: dict(profile)
+        for client_key, profile in DEFAULT_CLIENT_RUNTIME_PROFILES.items()
+    }
+
+
+def _normalize_runtime_model(value, *, default: str) -> str:
+    candidate = str(value or "").strip()
+    return candidate or default
+
+
+def _normalize_runtime_reasoning_effort(value, *, default: str) -> str:
+    candidate = str(value or "").strip().lower()
+    return candidate or default
+
+
+def normalize_client_runtime_profiles(value) -> dict[str, dict[str, str]]:
+    defaults = default_client_runtime_profiles()
+    normalized = default_client_runtime_profiles()
+    if not isinstance(value, dict):
+        return normalized
+
+    for raw_client, raw_profile in value.items():
+        client_key = normalize_client_key(raw_client)
+        if client_key not in TERMINAL_CLIENT_KEYS:
+            continue
+        if isinstance(raw_profile, dict):
+            normalized[client_key] = {
+                "model": _normalize_runtime_model(
+                    raw_profile.get("model"),
+                    default=defaults[client_key]["model"],
+                ),
+                "reasoning_effort": _normalize_runtime_reasoning_effort(
+                    raw_profile.get("reasoning_effort"),
+                    default=defaults[client_key]["reasoning_effort"],
+                ),
+            }
+            continue
+        normalized[client_key] = {
+            "model": _normalize_runtime_model(raw_profile, default=defaults[client_key]["model"]),
+            "reasoning_effort": defaults[client_key]["reasoning_effort"],
+        }
+    return normalized
+
+
 def normalize_client_preferences(schedule: dict | None = None) -> dict:
     schedule = dict(schedule or {})
     interactive_clients = normalize_interactive_clients(schedule.get("interactive_clients"))
@@ -168,11 +225,15 @@ def normalize_client_preferences(schedule: dict | None = None) -> dict:
     install_preferences = normalize_client_install_preferences(
         schedule.get("client_install_preferences")
     )
+    runtime_profiles = normalize_client_runtime_profiles(
+        schedule.get("client_runtime_profiles")
+    )
     return {
         "interactive_clients": interactive_clients,
         "default_terminal_client": default_terminal_client,
         "automation_enabled": automation_enabled,
         "automation_backend": automation_backend,
+        "client_runtime_profiles": runtime_profiles,
         "client_install_preferences": install_preferences,
     }
 
@@ -184,6 +245,7 @@ def apply_client_preferences(
     default_terminal_client: str | None = None,
     automation_enabled=None,
     automation_backend: str | None = None,
+    client_runtime_profiles: dict | None = None,
     client_install_preferences: dict | None = None,
 ) -> dict:
     merged = dict(schedule or {})
@@ -201,6 +263,11 @@ def apply_client_preferences(
     merged["automation_backend"] = normalize_automation_backend(
         automation_backend if automation_backend is not None else current["automation_backend"],
         automation_enabled=merged["automation_enabled"],
+    )
+    merged["client_runtime_profiles"] = normalize_client_runtime_profiles(
+        client_runtime_profiles
+        if client_runtime_profiles is not None
+        else current["client_runtime_profiles"]
     )
     merged["client_install_preferences"] = normalize_client_install_preferences(
         client_install_preferences
@@ -220,6 +287,7 @@ def save_client_preferences(
     default_terminal_client: str | None = None,
     automation_enabled=None,
     automation_backend: str | None = None,
+    client_runtime_profiles: dict | None = None,
     client_install_preferences: dict | None = None,
 ) -> Path:
     schedule = apply_client_preferences(
@@ -228,6 +296,7 @@ def save_client_preferences(
         default_terminal_client=default_terminal_client,
         automation_enabled=automation_enabled,
         automation_backend=automation_backend,
+        client_runtime_profiles=client_runtime_profiles,
         client_install_preferences=client_install_preferences,
     )
     return save_schedule_config(schedule)
@@ -299,3 +368,27 @@ def resolve_automation_backend(preferences: dict | None = None) -> str:
         normalized["automation_backend"],
         automation_enabled=normalized["automation_enabled"],
     )
+
+
+def resolve_client_runtime_profile(
+    client: str | None,
+    *,
+    preferences: dict | None = None,
+) -> dict[str, str]:
+    normalized = preferences or load_client_preferences()
+    client_key = normalize_client_key(client)
+    defaults = default_client_runtime_profiles()
+    if client_key not in TERMINAL_CLIENT_KEYS:
+        client_key = CLIENT_CLAUDE_CODE
+    profiles = normalize_client_runtime_profiles(normalized.get("client_runtime_profiles"))
+    profile = profiles.get(client_key) or defaults[client_key]
+    return {
+        "model": _normalize_runtime_model(
+            profile.get("model"),
+            default=defaults[client_key]["model"],
+        ),
+        "reasoning_effort": _normalize_runtime_reasoning_effort(
+            profile.get("reasoning_effort"),
+            default=defaults[client_key]["reasoning_effort"],
+        ),
+    }

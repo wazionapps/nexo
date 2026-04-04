@@ -13,6 +13,7 @@
 This template demonstrates:
 - Inline metadata for auto-discovery
 - Safe CLI calls through nexo_helper
+- Optional agent calls through the configured automation backend
 - Timeout handling (via metadata)
 - argparse for user arguments
 - No direct DB access
@@ -25,11 +26,21 @@ import sys
 # nexo_helper.py is in NEXO_HOME/templates/ — copy it next to your script
 # or add the templates dir to your path
 try:
-    from nexo_helper import call_tool_text
+    from nexo_helper import call_tool_text, run_automation_text
 except ImportError:
     import os
     sys.path.insert(0, os.path.join(os.environ.get("NEXO_HOME", "~/.nexo"), "templates"))
-    from nexo_helper import call_tool_text
+    from nexo_helper import call_tool_text, run_automation_text
+
+# If this script ever needs an autonomous model call:
+#   1. use run_automation_text(...)
+#   2. pass a legacy task profile like model="opus" when useful
+#   3. DO NOT hardcode `claude -p` or provider-specific model defaults
+# Example:
+#   result = run_automation_text(
+#       "Summarize pending issues",
+#       model="opus",  # legacy task profile; NEXO maps it per backend
+#   )
 
 
 def main():

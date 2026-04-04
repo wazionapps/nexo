@@ -30,6 +30,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--prompt-file", default="", help="Read prompt text from a file")
     parser.add_argument("--cwd", default="", help="Working directory for the backend")
     parser.add_argument("--model", default="", help="Backend model hint")
+    parser.add_argument("--reasoning-effort", default="", help="Backend reasoning effort/profile")
     parser.add_argument("--timeout", type=int, default=21600, help="Timeout in seconds")
     parser.add_argument("--output-format", default="text", help="Requested output format")
     parser.add_argument("--allowed-tools", default="", help="Claude-style allowed tools contract")
@@ -51,6 +52,7 @@ def main(argv: list[str] | None = None) -> int:
             prompt,
             cwd=args.cwd or None,
             model=args.model,
+            reasoning_effort=args.reasoning_effort,
             timeout=args.timeout,
             output_format=args.output_format,
             append_system_prompt=append_system_prompt,

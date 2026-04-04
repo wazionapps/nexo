@@ -460,7 +460,7 @@ class TestChatCommand:
             capture_output=True, text=True, timeout=30, env=env,
         )
         assert result.returncode == 0
-        assert json.loads(out_file.read_text()) == ["--dangerously-skip-permissions", "."]
+        assert json.loads(out_file.read_text()) == ["--model", "opus", "--dangerously-skip-permissions", "."]
 
     def test_chat_uses_configured_codex_client(self, nexo_home, tmp_path):
         fake_codex = tmp_path / "codex"
@@ -483,6 +483,16 @@ class TestChatCommand:
             "default_terminal_client": "codex",
             "automation_enabled": True,
             "automation_backend": "claude_code",
+            "client_runtime_profiles": {
+                "claude_code": {
+                    "model": "opus",
+                    "reasoning_effort": "",
+                },
+                "codex": {
+                    "model": "gpt-5.4",
+                    "reasoning_effort": "xhigh",
+                },
+            },
             "processes": {},
         }))
 
@@ -498,7 +508,7 @@ class TestChatCommand:
             capture_output=True, text=True, timeout=30, env=env,
         )
         assert result.returncode == 0
-        assert json.loads(out_file.read_text()) == ["-C", "."]
+        assert json.loads(out_file.read_text()) == ["-m", "gpt-5.4", "-c", 'model_reasoning_effort="xhigh"', "-C", "."]
 
 
 class TestScriptsRun:

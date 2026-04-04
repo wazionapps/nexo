@@ -15,11 +15,13 @@ from client_preferences import (
     TERMINAL_CLIENT_KEYS,
     load_client_preferences,
     resolve_automation_backend,
+    resolve_client_runtime_profile,
     resolve_terminal_client,
 )
 
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+CLAUDE_LEGACY_MODEL_HINTS = {"opus", "sonnet"}
 
 
 class AgentRunnerError(RuntimeError):
@@ -82,6 +84,7 @@ def build_interactive_client_command(
     prefs = preferences or load_client_preferences()
     selected = resolve_terminal_client(client, preferences=prefs)
     target_path = str(Path(target).expanduser())
+    profile = resolve_client_runtime_profile(selected, preferences=prefs)
 
     if selected == CLIENT_CLAUDE_CODE:
         claude_bin = _resolve_claude_cli()
@@ -89,7 +92,13 @@ def build_interactive_client_command(
             raise TerminalClientUnavailableError(
                 "Claude Code launcher not found in PATH. Install `claude` first."
             )
-        return selected, [claude_bin, "--dangerously-skip-permissions", target_path]
+        cmd = [claude_bin]
+        if profile["model"]:
+            cmd.extend(["--model", profile["model"]])
+        if profile["reasoning_effort"]:
+            cmd.extend(["--effort", profile["reasoning_effort"]])
+        cmd.extend(["--dangerously-skip-permissions", target_path])
+        return selected, cmd
 
     if selected == CLIENT_CODEX:
         codex_bin = _resolve_codex_cli()
@@ -97,7 +106,13 @@ def build_interactive_client_command(
             raise TerminalClientUnavailableError(
                 "Codex launcher not found in PATH. Install `codex` first or reconfigure NEXO."
             )
-        return selected, [codex_bin, "-C", target_path]
+        cmd = [codex_bin]
+        if profile["model"]:
+            cmd.extend(["-m", profile["model"]])
+        if profile["reasoning_effort"]:
+            cmd.extend(["-c", f'model_reasoning_effort="{profile["reasoning_effort"]}"'])
+        cmd.extend(["-C", target_path])
+        return selected, cmd
 
     raise TerminalClientUnavailableError(f"Unsupported terminal client: {selected}")
 
@@ -116,14 +131,27 @@ def launch_interactive_client(
     return subprocess.run(cmd, env=launch_env)
 
 
-def _normalize_codex_model(model: str | None) -> str:
-    candidate = str(model or "").strip()
-    if not candidate:
-        return ""
-    lowered = candidate.lower()
-    if lowered in {"opus", "sonnet"}:
-        return ""
-    return candidate
+def _resolve_runtime_model_and_effort(
+    client: str,
+    *,
+    model: str | None = None,
+    reasoning_effort: str | None = None,
+    preferences: dict | None = None,
+) -> tuple[str, str]:
+    profile = resolve_client_runtime_profile(client, preferences=preferences)
+    requested_model = str(model or "").strip()
+    requested_effort = str(reasoning_effort or "").strip().lower()
+
+    if client == CLIENT_CODEX:
+        if not requested_model or requested_model.lower() in CLAUDE_LEGACY_MODEL_HINTS:
+            requested_model = profile["model"]
+    elif not requested_model:
+        requested_model = profile["model"]
+
+    if not requested_effort:
+        requested_effort = profile["reasoning_effort"]
+
+    return requested_model, requested_effort
 
 
 def _build_codex_prompt(
@@ -157,6 +185,7 @@ def run_automation_prompt(
     cwd: str | os.PathLike[str] | None = None,
     env: dict | None = None,
     model: str = "",
+    reasoning_effort: str = "",
     timeout: int = 300,
     output_format: str = "",
     append_system_prompt: str = "",
@@ -171,6 +200,12 @@ def run_automation_prompt(
     cwd_path = Path(cwd).expanduser().resolve() if cwd else Path.cwd()
     run_env = _headless_env(env)
     extra_args = list(extra_args or [])
+    resolved_model, resolved_effort = _resolve_runtime_model_and_effort(
+        selected_backend,
+        model=model,
+        reasoning_effort=reasoning_effort,
+        preferences=prefs,
+    )
 
     if selected_backend == CLIENT_CLAUDE_CODE:
         claude_bin = _resolve_claude_cli()
@@ -179,8 +214,10 @@ def run_automation_prompt(
                 "Claude Code automation backend selected but `claude` is not installed."
             )
         cmd = [claude_bin, "-p", prompt]
-        if model:
-            cmd.extend(["--model", model])
+        if resolved_model:
+            cmd.extend(["--model", resolved_model])
+        if resolved_effort:
+            cmd.extend(["--effort", resolved_effort])
         if output_format:
             cmd.extend(["--output-format", output_format])
         if append_system_prompt:
@@ -216,9 +253,10 @@ def run_automation_prompt(
                 "-o",
                 str(output_path),
             ]
-            codex_model = _normalize_codex_model(model)
-            if codex_model:
-                cmd.extend(["-m", codex_model])
+            if resolved_model:
+                cmd.extend(["-m", resolved_model])
+            if resolved_effort:
+                cmd.extend(["-c", f'model_reasoning_effort="{resolved_effort}"'])
             cmd.extend(extra_args)
             cmd.append(
                 _build_codex_prompt(

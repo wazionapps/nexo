@@ -863,7 +863,7 @@ def _run_checks(lock_fd):
 
 
 def _run_cli_triage(all_results: dict, repairs: list, counts: dict):
-    """Pass all findings to Claude CLI for intelligent triage and recommendations."""
+    """Pass all findings to the configured automation backend for intelligent triage and recommendations."""
     triage_file = COORD_DIR / "immune-triage.md"
     findings_json = json.dumps({
         "timestamp": NOW.strftime("%Y-%m-%d %H:%M"),

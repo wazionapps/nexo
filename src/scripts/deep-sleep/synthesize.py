@@ -144,7 +144,7 @@ def main():
         )
 
         if result.returncode != 0:
-            print(f"[synthesize] Claude CLI error (exit {result.returncode}): {result.stderr[:300]}", file=sys.stderr)
+            print(f"[synthesize] Automation backend error (exit {result.returncode}): {result.stderr[:300]}", file=sys.stderr)
             sys.exit(1)
 
         # Filter hook contamination
@@ -198,7 +198,7 @@ def main():
         print(f"[synthesize] Automation backend timeout ({CLAUDE_TIMEOUT}s)", file=sys.stderr)
         sys.exit(1)
     except FileNotFoundError:
-        print(f"[synthesize] Claude CLI not found at: {claude_bin}", file=sys.stderr)
+        print("[synthesize] Automation backend binary not found.", file=sys.stderr)
         sys.exit(1)
 
 

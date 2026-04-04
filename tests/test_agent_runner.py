@@ -18,11 +18,23 @@ def test_build_interactive_client_command_uses_codex_when_selected(tmp_path, mon
             "default_terminal_client": "codex",
             "automation_enabled": True,
             "automation_backend": "claude_code",
+            "client_runtime_profiles": {
+                "claude_code": {"model": "opus", "reasoning_effort": ""},
+                "codex": {"model": "gpt-5.4", "reasoning_effort": "xhigh"},
+            },
         },
     )
 
     assert client == "codex"
-    assert cmd == ["/tmp/fake-codex", "-C", str(tmp_path)]
+    assert cmd == [
+        "/tmp/fake-codex",
+        "-m",
+        "gpt-5.4",
+        "-c",
+        'model_reasoning_effort="xhigh"',
+        "-C",
+        str(tmp_path),
+    ]
 
 
 def test_build_interactive_client_command_preserves_claude_flags(tmp_path, monkeypatch):
@@ -37,11 +49,15 @@ def test_build_interactive_client_command_preserves_claude_flags(tmp_path, monke
             "default_terminal_client": "claude_code",
             "automation_enabled": True,
             "automation_backend": "claude_code",
+            "client_runtime_profiles": {
+                "claude_code": {"model": "opus", "reasoning_effort": ""},
+                "codex": {"model": "gpt-5.4", "reasoning_effort": "xhigh"},
+            },
         },
     )
 
     assert client == "claude_code"
-    assert cmd == ["/tmp/fake-claude", "--dangerously-skip-permissions", str(tmp_path)]
+    assert cmd == ["/tmp/fake-claude", "--model", "opus", "--dangerously-skip-permissions", str(tmp_path)]
 
 
 def test_run_automation_prompt_uses_claude_backend_command(monkeypatch, tmp_path):
@@ -54,6 +70,10 @@ def test_run_automation_prompt_uses_claude_backend_command(monkeypatch, tmp_path
         "default_terminal_client": "claude_code",
         "automation_enabled": True,
         "automation_backend": "claude_code",
+        "client_runtime_profiles": {
+            "claude_code": {"model": "opus", "reasoning_effort": ""},
+            "codex": {"model": "gpt-5.4", "reasoning_effort": "xhigh"},
+        },
     })
 
     def fake_run(cmd, **kwargs):
@@ -101,6 +121,10 @@ def test_run_automation_prompt_uses_codex_exec_output_file(monkeypatch, tmp_path
         "default_terminal_client": "codex",
         "automation_enabled": True,
         "automation_backend": "codex",
+        "client_runtime_profiles": {
+            "claude_code": {"model": "opus", "reasoning_effort": ""},
+            "codex": {"model": "gpt-5.4", "reasoning_effort": "xhigh"},
+        },
     })
 
     captured = {}
@@ -134,7 +158,11 @@ def test_run_automation_prompt_uses_codex_exec_output_file(monkeypatch, tmp_path
         "--ephemeral",
         "-C",
     ]
-    assert "-m" not in captured["cmd"]
+    assert "-m" in captured["cmd"]
+    model_idx = captured["cmd"].index("-m") + 1
+    assert captured["cmd"][model_idx] == "gpt-5.4"
+    config_idx = captured["cmd"].index("-c") + 1
+    assert captured["cmd"][config_idx] == 'model_reasoning_effort="xhigh"'
     prompt = captured["cmd"][-1]
     assert "SYSTEM INSTRUCTIONS" in prompt
     assert "TOOLING SCOPE" in prompt
@@ -150,3 +178,40 @@ def test_probe_automation_backend_reports_disabled(monkeypatch):
 
     assert result["ok"] is False
     assert result["backend"] == "none"
+
+
+def test_codex_backend_maps_legacy_opus_hint_to_configured_profile(monkeypatch, tmp_path):
+    import agent_runner
+
+    monkeypatch.setattr(agent_runner, "_resolve_codex_cli", lambda: "/tmp/fake-codex")
+    monkeypatch.setattr(agent_runner, "load_client_preferences", lambda: {
+        "interactive_clients": {"claude_code": True, "codex": True, "claude_desktop": False},
+        "default_terminal_client": "codex",
+        "automation_enabled": True,
+        "automation_backend": "codex",
+        "client_runtime_profiles": {
+            "claude_code": {"model": "opus", "reasoning_effort": ""},
+            "codex": {"model": "gpt-5.4-mini", "reasoning_effort": "high"},
+        },
+    })
+
+    captured = {}
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        out_idx = cmd.index("-o") + 1
+        with open(cmd[out_idx], "w", encoding="utf-8") as fh:
+            fh.write("OK")
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(agent_runner.subprocess, "run", fake_run)
+
+    agent_runner.run_automation_prompt(
+        "Do it",
+        cwd=tmp_path,
+        model="opus",
+        output_format="text",
+    )
+
+    assert captured["cmd"][captured["cmd"].index("-m") + 1] == "gpt-5.4-mini"
+    assert captured["cmd"][captured["cmd"].index("-c") + 1] == 'model_reasoning_effort="high"'

@@ -79,6 +79,16 @@ def _schedule_defaults() -> dict:
         "default_terminal_client": "claude_code",
         "automation_enabled": True,
         "automation_backend": "claude_code",
+        "client_runtime_profiles": {
+            "claude_code": {
+                "model": "opus",
+                "reasoning_effort": "",
+            },
+            "codex": {
+                "model": "gpt-5.4",
+                "reasoning_effort": "xhigh",
+            },
+        },
         "client_install_preferences": {
             "claude_code": "ask",
             "codex": "ask",

@@ -2,6 +2,10 @@
 
 This file lives in NEXO_HOME/plugins/ and is loaded by the NEXO MCP server.
 Edit the handler below to implement your personal capability.
+
+If this plugin ever needs an autonomous model call, route it through the
+configured NEXO automation backend instead of hardcoding `claude -p` or
+provider-specific model names directly inside the plugin.
 """
 
 from __future__ import annotations

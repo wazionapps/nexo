@@ -4,7 +4,7 @@ NEXO Sleep System v2 — The brain dreams.
 
 Before: 834 lines with word-overlap "intelligence" for learning consolidation.
 Now: Stage A (mechanical cleanup) stays pure Python. Stage B (dreaming) uses
-Claude CLI (opus) to understand, deduplicate, and prune with real intelligence.
+the configured automation backend to understand, deduplicate, and prune with real intelligence.
 
 Triggered hourly via LaunchAgent. Runs ONCE per day, first time Mac is awake.
 If interrupted (power loss, crash), resumes on next trigger.
@@ -12,7 +12,7 @@ If interrupted (power loss, crash), resumes on next trigger.
 Stage A — Housekeeping (Python pure):
   Delete old logs, rotate files, trim JSON. No intelligence needed.
 
-Stage B — Dreaming (Claude CLI opus):
+Stage B — Dreaming (automation backend):
   Review learnings for duplicates and contradictions with UNDERSTANDING.
   Prune MEMORY.md if over limit. Clean preferences. Compress old observations.
   One CLI call that does what 500 lines of word-overlap couldn't.
@@ -300,7 +300,7 @@ def stage_a_cleanup() -> dict:
     return stats
 
 
-# ─── Stage B: Dreaming (Claude CLI) ─────────────────────────────────────────
+# ─── Stage B: Dreaming (automation backend) ─────────────────────────────────
 
 def collect_brain_state() -> dict:
     """Collect all data the CLI needs to dream."""
@@ -435,7 +435,7 @@ ABSOLUTE RULES:
 Write a summary to {COORD_DIR}/sleep-report.md when done.
 Execute without asking."""
 
-    log("Stage B: Invoking Claude CLI (opus) — dreaming...")
+    log("Stage B: Invoking automation backend — dreaming...")
     try:
         result = run_automation_prompt(
             prompt,

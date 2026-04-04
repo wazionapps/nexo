@@ -477,6 +477,16 @@ function getDefaultSchedule(timezone) {
     default_terminal_client: "claude_code",
     automation_enabled: true,
     automation_backend: "claude_code",
+    client_runtime_profiles: {
+      claude_code: {
+        model: "opus",
+        reasoning_effort: "",
+      },
+      codex: {
+        model: "gpt-5.4",
+        reasoning_effort: "xhigh",
+      },
+    },
     client_install_preferences: {
       claude_code: "ask",
       codex: "ask",
@@ -571,7 +581,7 @@ function clientSetupStrings(lang) {
       detected: "Clientes detectados",
       yes: "sí",
       no: "no",
-      useClaudeCodeQ: "  ¿Quieres usar Claude Code como cliente interactivo?",
+      useClaudeCodeQ: "  ¿Quieres usar Claude Code como cliente interactivo? (recomendado)",
       useCodexQ: "  ¿Quieres usar Codex como cliente interactivo?",
       useDesktopQ: "  ¿Quieres conectar Claude Desktop al mismo brain?",
       defaultTerminalQ: "  ¿Qué cliente debe abrir `nexo chat` por defecto?",
@@ -584,8 +594,8 @@ function clientSetupStrings(lang) {
       desktopManual: "Claude Desktop no se instala desde NEXO. Cuando exista, se conectará con la sync de clientes.",
       terminalFallback: (label) => `El cliente terminal elegido no está disponible. \`nexo chat\` quedará pendiente hasta instalar ${label}.`,
       automationDisabled: (label) => `El backend ${label} sigue sin estar disponible. Se desactiva la automatización por ahora.`,
-      summary: (defaultClient, backend, automationEnabled) =>
-        `Configuración clientes: chat=${defaultClient}, automation=${automationEnabled ? backend : "none"}`,
+      summary: (defaultClient, defaultProfile, backend, backendProfile, automationEnabled) =>
+        `Configuración clientes: chat=${defaultClient}(${defaultProfile}), automation=${automationEnabled ? `${backend}(${backendProfile})` : "none"}`,
     };
   }
   return {
@@ -593,7 +603,7 @@ function clientSetupStrings(lang) {
     detected: "Detected clients",
     yes: "yes",
     no: "no",
-    useClaudeCodeQ: "  Use Claude Code as an interactive client?",
+    useClaudeCodeQ: "  Use Claude Code as an interactive client? (recommended)",
     useCodexQ: "  Use Codex as an interactive client?",
     useDesktopQ: "  Connect Claude Desktop to the same brain?",
     defaultTerminalQ: "  Which client should `nexo chat` open by default?",
@@ -606,8 +616,8 @@ function clientSetupStrings(lang) {
     desktopManual: "Claude Desktop is not installed by NEXO. When it appears, client sync will connect it.",
     terminalFallback: (label) => `The selected terminal client is still unavailable. \`nexo chat\` will stay pending until ${label} is installed.`,
     automationDisabled: (label) => `${label} is still unavailable. Disabling background automation for now.`,
-    summary: (defaultClient, backend, automationEnabled) =>
-      `Client setup: chat=${defaultClient}, automation=${automationEnabled ? backend : "none"}`,
+    summary: (defaultClient, defaultProfile, backend, backendProfile, automationEnabled) =>
+      `Client setup: chat=${defaultClient}(${defaultProfile}), automation=${automationEnabled ? `${backend}(${backendProfile})` : "none"}`,
   };
 }
 
@@ -642,6 +652,111 @@ async function askChoice(question, options, defaultValue) {
   return byValue ? byValue.value : defaultValue;
 }
 
+function defaultClientRuntimeProfiles() {
+  return {
+    claude_code: {
+      model: "opus",
+      reasoning_effort: "",
+    },
+    codex: {
+      model: "gpt-5.4",
+      reasoning_effort: "xhigh",
+    },
+  };
+}
+
+function runtimeClientLabel(client) {
+  if (client === "claude_code") return "Claude Code";
+  if (client === "codex") return "Codex";
+  return client;
+}
+
+function formatRuntimeProfile(profile = {}) {
+  const model = String(profile.model || "").trim();
+  const effort = String(profile.reasoning_effort || "").trim();
+  return effort ? `${model}/${effort}` : model;
+}
+
+function runtimeProfileCatalog(lang, client) {
+  const recommended = lang === "es" ? " (recomendado)" : " (recommended)";
+  if (client === "claude_code") {
+    return {
+      modelQuestion: `  ¿Qué modelo debe usar ${runtimeClientLabel(client)} para chat y background cuando sea el cliente/backend activo?`,
+      modelQuestionEn: `  Which model should ${runtimeClientLabel(client)} use for chat and background when it is the active client/backend?`,
+      effortQuestion: `  ¿Qué nivel de esfuerzo debe usar ${runtimeClientLabel(client)}?`,
+      effortQuestionEn: `  Which effort level should ${runtimeClientLabel(client)} use?`,
+      customModelQuestion: `  Escribe el alias/nombre de modelo para ${runtimeClientLabel(client)} > `,
+      customModelQuestionEn: `  Enter the model alias/name for ${runtimeClientLabel(client)} > `,
+      customEffortQuestion: `  Escribe el effort para ${runtimeClientLabel(client)} (vacío = default) > `,
+      customEffortQuestionEn: `  Enter the effort for ${runtimeClientLabel(client)} (blank = default) > `,
+      modelDefault: "opus",
+      effortDefault: "",
+      modelOptions: [
+        { value: "opus", label: `Opus latest${recommended}` },
+        { value: "sonnet", label: "Sonnet latest" },
+        { value: "custom", label: lang === "es" ? "Modelo personalizado" : "Custom model" },
+      ],
+      effortOptions: [
+        { value: "", label: lang === "es" ? `Effort por defecto${recommended}` : `Default effort${recommended}` },
+        { value: "high", label: "high" },
+        { value: "max", label: "max" },
+        { value: "custom", label: lang === "es" ? "Effort personalizado" : "Custom effort" },
+      ],
+    };
+  }
+
+  return {
+    modelQuestion: `  ¿Qué modelo debe usar ${runtimeClientLabel(client)} para chat y background cuando sea el cliente/backend activo?`,
+    modelQuestionEn: `  Which model should ${runtimeClientLabel(client)} use for chat and background when it is the active client/backend?`,
+    effortQuestion: `  ¿Qué razonamiento debe usar ${runtimeClientLabel(client)}?`,
+    effortQuestionEn: `  Which reasoning effort should ${runtimeClientLabel(client)} use?`,
+    customModelQuestion: `  Escribe el nombre del modelo para ${runtimeClientLabel(client)} > `,
+    customModelQuestionEn: `  Enter the model name for ${runtimeClientLabel(client)} > `,
+    customEffortQuestion: `  Escribe el reasoning effort para ${runtimeClientLabel(client)} > `,
+    customEffortQuestionEn: `  Enter the reasoning effort for ${runtimeClientLabel(client)} > `,
+    modelDefault: "gpt-5.4",
+    effortDefault: "xhigh",
+    modelOptions: [
+      { value: "gpt-5.4", label: `GPT-5.4${recommended}` },
+      { value: "gpt-5.4-pro", label: "GPT-5.4 Pro" },
+      { value: "gpt-5.4-mini", label: "GPT-5.4 mini" },
+      { value: "custom", label: lang === "es" ? "Modelo personalizado" : "Custom model" },
+    ],
+    effortOptions: [
+      { value: "xhigh", label: `xhigh${recommended}` },
+      { value: "high", label: "high" },
+      { value: "medium", label: "medium" },
+      { value: "low", label: "low" },
+      { value: "none", label: "none" },
+      { value: "custom", label: lang === "es" ? "Effort personalizado" : "Custom effort" },
+    ],
+  };
+}
+
+async function askClientRuntimeProfile({ lang, client, currentProfile }) {
+  const catalog = runtimeProfileCatalog(lang, client);
+  const modelQuestion = lang === "es" ? catalog.modelQuestion : catalog.modelQuestionEn;
+  const effortQuestion = lang === "es" ? catalog.effortQuestion : catalog.effortQuestionEn;
+  const customModelQuestion = lang === "es" ? catalog.customModelQuestion : catalog.customModelQuestionEn;
+  const customEffortQuestion = lang === "es" ? catalog.customEffortQuestion : catalog.customEffortQuestionEn;
+  let model = await askChoice(modelQuestion, catalog.modelOptions, currentProfile.model || catalog.modelDefault);
+  if (model === "custom") {
+    model = (await ask(customModelQuestion)).trim() || catalog.modelDefault;
+  }
+  let reasoningEffort = await askChoice(
+    effortQuestion,
+    catalog.effortOptions,
+    currentProfile.reasoning_effort ?? catalog.effortDefault,
+  );
+  if (reasoningEffort === "custom") {
+    reasoningEffort = (await ask(customEffortQuestion)).trim();
+  }
+  return {
+    model,
+    reasoning_effort: reasoningEffort,
+  };
+}
+
 function defaultClientSetup(detected) {
   return {
     interactive_clients: {
@@ -652,6 +767,7 @@ function defaultClientSetup(detected) {
     default_terminal_client: "claude_code",
     automation_enabled: true,
     automation_backend: "claude_code",
+    client_runtime_profiles: defaultClientRuntimeProfiles(),
     client_install_preferences: {
       claude_code: "ask",
       codex: "ask",
@@ -669,6 +785,10 @@ function applyClientSetupToSchedule(schedule, setup) {
   schedule.default_terminal_client = setup.default_terminal_client;
   schedule.automation_enabled = Boolean(setup.automation_enabled);
   schedule.automation_backend = schedule.automation_enabled ? setup.automation_backend : "none";
+  schedule.client_runtime_profiles = {
+    ...defaultClientRuntimeProfiles(),
+    ...(setup.client_runtime_profiles || {}),
+  };
   schedule.client_install_preferences = { ...(setup.client_install_preferences || {}) };
   return schedule;
 }
@@ -725,7 +845,7 @@ async function configureClientSetup({ lang, useDefaults, autoInstall, detected }
     setup.interactive_clients.claude_desktop = await askYesNo(strings.useDesktopQ, detected.claude_desktop.installed);
 
     const defaultTerminalChoices = [
-      { value: "claude_code", label: "Claude Code" },
+      { value: "claude_code", label: lang === "es" ? "Claude Code (recomendado)" : "Claude Code (recommended)" },
       { value: "codex", label: "Codex" },
     ].filter((item) => setup.interactive_clients[item.value]);
 
@@ -745,7 +865,7 @@ async function configureClientSetup({ lang, useDefaults, autoInstall, detected }
       setup.automation_backend = await askChoice(
         strings.automationBackendQ,
         [
-          { value: "claude_code", label: "Claude Code" },
+          { value: "claude_code", label: lang === "es" ? "Claude Code (recomendado)" : "Claude Code (recommended)" },
           { value: "codex", label: "Codex" },
         ],
         backendDefault,
@@ -799,7 +919,29 @@ async function configureClientSetup({ lang, useDefaults, autoInstall, detected }
     log(strings.desktopManual);
   }
 
-  log(strings.summary(setup.default_terminal_client, setup.automation_backend, setup.automation_enabled));
+  if (!useDefaults) {
+    const activeRuntimeClients = Array.from(new Set([
+      setup.default_terminal_client,
+      ...(setup.automation_enabled && setup.automation_backend !== "none" ? [setup.automation_backend] : []),
+    ].filter(Boolean)));
+    for (const client of activeRuntimeClients) {
+      setup.client_runtime_profiles[client] = await askClientRuntimeProfile({
+        lang,
+        client,
+        currentProfile: setup.client_runtime_profiles[client] || defaultClientRuntimeProfiles()[client] || {},
+      });
+    }
+  }
+
+  const defaultProfile = formatRuntimeProfile(
+    setup.client_runtime_profiles[setup.default_terminal_client] || defaultClientRuntimeProfiles()[setup.default_terminal_client] || {}
+  );
+  const backendProfile = setup.automation_enabled && setup.automation_backend !== "none"
+    ? formatRuntimeProfile(
+      setup.client_runtime_profiles[setup.automation_backend] || defaultClientRuntimeProfiles()[setup.automation_backend] || {}
+    )
+    : "";
+  log(strings.summary(setup.default_terminal_client, defaultProfile, setup.automation_backend, backendProfile, setup.automation_enabled));
   return { setup, detected };
 }
 

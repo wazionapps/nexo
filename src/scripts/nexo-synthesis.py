@@ -3,7 +3,7 @@
 NEXO Synthesis Engine v2 — Daily intelligence brief.
 
 Before: ~400 lines of Python concatenating SQL results into markdown sections.
-Now: Collects raw data, passes to Claude CLI (sonnet) which synthesizes
+Now: Collects raw data, passes to the configured automation backend which synthesizes
 with real understanding of what matters for tomorrow.
 
 Runs daily at 06:00 via LaunchAgent.
@@ -212,7 +212,7 @@ not what merely happened. If a section has nothing, write "Nothing notable."
 
 Execute without asking."""
 
-    log("Invoking Claude CLI (opus) for synthesis...")
+    log("Invoking automation backend for synthesis...")
     try:
         result = run_automation_prompt(
             prompt,

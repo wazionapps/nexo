@@ -3,6 +3,8 @@
 
 This script is meant to be referenced by a Skill v2 definition.
 It should use the stable NEXO CLI rather than importing internal DB modules.
+If it needs an agentic model call, route it through NEXO's configured
+automation backend instead of hardcoding `claude -p` or a provider model.
 """
 
 import argparse
@@ -33,6 +35,12 @@ def main() -> int:
     ]
     result = subprocess.run(cmd, text=True)
     return result.returncode
+
+
+# Agentic example for future edits:
+#   from nexo_helper import run_automation_text
+#   result = run_automation_text("Analyze this", model="opus")
+#   print(result)
 
 
 if __name__ == "__main__":

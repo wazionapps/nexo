@@ -6,12 +6,12 @@ Before: 595 lines of word-overlap at 50% to detect "patterns".
 Now: Collects data, passes them to CLI which UNDERSTANDS what it reads.
 
 Runs daily at 23:30 via LaunchAgent. Reads session diaries from today,
-passes them to Claude CLI (opus) which decides what deserves permanent memory.
+passes them to the configured automation backend, which decides what deserves permanent memory.
 
 Stage 1 — Data collection (Pure Python):
   Query session diaries, existing feedbacks, history.
 
-Stage 2 — Intelligence (Claude CLI opus):
+Stage 2 — Intelligence (automation backend):
   Read diaries, understand patterns, decide what to promote.
 
 Stage 3 — Sensory Register + Force analysis (Pure Python):
@@ -128,7 +128,7 @@ def collect_data() -> dict:
     return data
 
 
-# ─── Stage 2: Intelligence (Claude CLI opus) ────────────────────────────────
+# ─── Stage 2: Intelligence (automation backend) ─────────────────────────────
 
 def consolidate_with_cli(data: dict) -> bool:
     """The brain consolidates — CLI decides what to promote."""
@@ -208,7 +208,7 @@ INSTRUCTIONS:
 
 Execute without asking."""
 
-    log(f"Stage 2: Invoking Claude CLI (opus) with {len(diaries_with_critique)} critiques...")
+    log(f"Stage 2: Invoking automation backend with {len(diaries_with_critique)} critiques...")
     try:
         result = run_automation_prompt(
             prompt,

@@ -6,7 +6,7 @@ Stage A — Mechanical checks (Python pure, unchanged):
   18 checks: overdue reminders, disk space, DB size, stale sessions, guard stats,
   cognitive health, snapshot drift, etc. All pure queries, no intelligence needed.
 
-Stage B — Interpretation (Claude CLI opus):
+Stage B — Interpretation (automation backend):
   Takes the raw findings from Stage A and UNDERSTANDS them:
   - Groups related findings
   - Identifies root causes
@@ -436,7 +436,7 @@ def check_cognitive_health():
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Stage B: Interpretation (Claude CLI opus) — NEW in v2
+# Stage B: Interpretation (automation backend) — NEW in v2
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def interpret_findings(raw_findings: list) -> bool:
@@ -485,7 +485,7 @@ Also write the machine-readable summary to {LOG_DIR}/self-audit-summary.json.
 
     Execute without asking."""
 
-    log("Stage B: Invoking Claude CLI (opus) for interpretation...")
+    log("Stage B: Invoking automation backend for interpretation...")
     try:
         result = run_automation_prompt(
             prompt,

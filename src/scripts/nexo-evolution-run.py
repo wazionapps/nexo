@@ -122,7 +122,7 @@ def _immutable_files_for_mode(mode: str) -> set[str]:
         return set(GLOBAL_IMMUTABLE_FILES)
     return set(GLOBAL_IMMUTABLE_FILES) | set(STANDARD_MODE_IMMUTABLE_FILES)
 
-# ── Claude CLI path ──────────────────────────────────────────────────────
+# ── Automation backend pathing ───────────────────────────────────────────
 def _resolve_claude_cli() -> Path:
     """Find claude CLI: saved path > PATH > common locations."""
     import shutil as _shutil
@@ -198,7 +198,7 @@ def set_consecutive_failures(count: int):
     save_objective(obj)
 
 
-# ── Claude CLI call ──────────────────────────────────────────────────────
+# ── Automation backend call ──────────────────────────────────────────────
 CLI_TIMEOUT = 21600  # 3h safety net (prevents zombie processes)
 
 
@@ -484,7 +484,7 @@ def run_public_contribution_cycle(*, objective: dict, cycle_num: int) -> None:
         return
 
     if not verify_claude_cli():
-        log("Claude CLI not available or not authenticated. Skipping public contribution run.")
+        log("Automation backend not available or not authenticated. Skipping public contribution run.")
         mark_public_contribution_result(result="skipped:claude_cli_unavailable", config=config)
         return
 
@@ -900,17 +900,17 @@ def run():
     prompt = build_evolution_prompt(week_data, objective)
     log(f"Prompt built: {len(prompt)} chars")
 
-    # Verify Claude CLI is authenticated before calling
+    # Verify the configured automation backend is available before calling
     if not verify_claude_cli():
-        log("Claude CLI not available or not authenticated. Skipping evolution run.")
+        log("Automation backend not available or not authenticated. Skipping evolution run.")
         return
 
-    # Call Opus via claude -p
-    log("Calling claude -p --model opus...")
+    # Call the configured automation backend with the legacy opus task profile
+    log("Calling automation backend with the opus task profile...")
     try:
         raw_response = call_claude_cli(prompt)
     except Exception as e:
-        log(f"claude CLI call failed: {e}")
+        log(f"Automation backend call failed: {e}")
         set_consecutive_failures(failures + 1)
         return
 

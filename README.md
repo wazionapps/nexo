@@ -454,9 +454,9 @@ npx nexo-brain  # detects current version, migrates automatically
 
 ## Runtime CLI (v2.6.0)
 
-NEXO Brain includes a local CLI that runs independently of Claude Code:
+NEXO Brain includes a local CLI that runs independently of any single terminal client:
 
-- `nexo chat` — launch Claude Code with NEXO as the operator
+- `nexo chat` — launch the configured terminal client with NEXO as the operator
 - `nexo update` — sync runtime from source, run migrations, reconcile schedules
 - `nexo doctor --tier runtime` — boot/runtime/deep diagnostics with `--fix` mode
 - `nexo scripts list` — list all personal scripts and their status
@@ -574,7 +574,11 @@ nexo clients sync  # Re-sync Claude Code/Desktop/Codex to the same brain
 nexo scripts list  # See your personal scripts
 ```
 
-During install, NEXO now asks which interactive clients you want to connect, which one `nexo chat` should open by default, whether to enable background automation, and which backend should run that automation. Shared brain stays on in every mode.
+During install, NEXO now asks which interactive clients you want to connect, which one `nexo chat` should open by default, whether to enable background automation, which backend should run that automation, and which model profile each active terminal/backend should use. Shared brain stays on in every mode.
+
+Recommended defaults:
+- Claude Code: `Opus latest`
+- Codex: `gpt-5.4` with `xhigh` reasoning
 
 Or use the shell alias created during install (e.g. `atlas`), which now runs `nexo chat .` so it opens whichever terminal client you selected as default.
 
@@ -600,7 +604,7 @@ Your operator will greet you immediately — adapted to the time of day, resumin
 | Auto-update | Non-blocking startup check (5s max), opt-out via schedule.json | Built into server startup |
 | CLAUDE.md tracker | Version-tracked core sections with safe updates preserving customizations | Built into auto-update |
 | Shared client sync | Same `nexo` MCP entry wired into Claude Code, Claude Desktop, and Codex | User config dirs |
-| Client/backend preferences | Selected interactive clients, default terminal client, automation backend | `NEXO_HOME/config/schedule.json` |
+| Client/backend preferences | Selected interactive clients, default terminal client, automation backend, and model/reasoning profiles per client | `NEXO_HOME/config/schedule.json` |
 | Auto-diary | 3-layer system: PostToolUse every 10 calls, PreCompact emergency, heartbeat DIARY_OVERDUE | Built into hooks |
 | Claude Code config | MCP server + 7 hooks + 15 processes registered | ~/.claude/settings.json |
 
@@ -630,7 +634,7 @@ nexo doctor --tier runtime --json  # Machine-readable health report
 nexo doctor --fix              # Apply deterministic repairs
 ```
 
-Personal scripts live in `NEXO_HOME/scripts/` with inline metadata. See `docs/writing-scripts.md` for details.
+Personal scripts live in `NEXO_HOME/scripts/` with inline metadata. Their Python templates now include `run_automation_text(...)`, which routes work through the configured NEXO automation backend instead of hardcoding `claude -p` or provider-specific model names. See `docs/writing-scripts.md` for details.
 
 Skills v2 combine procedural guides with optional executable scripts. Personal skills live in `NEXO_HOME/skills/`, packaged core skills live in `NEXO_CODE/skills/` during development and `NEXO_HOME/skills-core/` in installed environments, and staged runtime copies live in `NEXO_HOME/skills-runtime/`. Execution is fully autonomous: Deep Sleep can evolve mature guide skills into executable drafts automatically, and runtime execution no longer waits for manual approval. See `docs/skills-v2.md` for the full model.
 
@@ -640,8 +644,9 @@ The Doctor system reads existing health artifacts (immune, watchdog, self-audit)
 
 - **macOS or Linux** (Windows via [WSL](https://learn.microsoft.com/en-us/windows/wsl/install))
 - **Node.js 18+** (for the installer)
-- **Claude Opus (latest version) strongly recommended.** NEXO Brain provides 150+ MCP tools across 20+ categories. This cognitive load requires a top-tier model with large context window. Smaller models (Haiku, Sonnet) may struggle with tool selection and produce inconsistent results. Opus handles all 150+ tools without hesitation.
-- Python 3, Homebrew, and Claude Code are installed automatically if missing.
+- **Claude Code is the primary recommended client.** It remains the most mature NEXO path: native hooks, the most battle-tested automation contract, and the clearest parity with historical production behavior.
+- **Recommended profiles:** Claude Code + `Opus latest`; Codex + `gpt-5.4` with `xhigh` reasoning if you prefer Codex as your terminal or automation backend.
+- Python 3, Homebrew, and the selected required client/backend can be installed automatically when NEXO has a supported installer path for that dependency.
 
 ## Architecture
 
@@ -741,13 +746,13 @@ NEXO Brain isn't just engineering — it's applied cognitive psychology:
 
 ### Claude Code (Primary)
 
-NEXO Brain is designed as an MCP server. Claude Code is the primary supported client:
+NEXO Brain is designed as an MCP server. Claude Code remains the primary recommended client and the most complete integration path:
 
 ```bash
 npx nexo-brain
 ```
 
-All 150+ tools are available immediately after installation. The installer configures Claude Code's `~/.claude/settings.json` automatically.
+All 150+ tools are available immediately after installation. The installer configures Claude Code's `~/.claude/settings.json` automatically. The recommended Claude profile is `Opus latest`.
 
 ### Claude Desktop
 
@@ -755,7 +760,7 @@ When Claude Desktop is installed, `nexo-brain`, `nexo update`, and `nexo clients
 
 ### Codex
 
-When Codex CLI is available, `nexo-brain`, `nexo update`, and `nexo clients sync` register the same `nexo` MCP server via `codex mcp add`, so Codex uses the same local memory store as Claude Code and Claude Desktop.
+When Codex CLI is available, `nexo-brain`, `nexo update`, and `nexo clients sync` register the same `nexo` MCP server via `codex mcp add`, so Codex uses the same local memory store as Claude Code and Claude Desktop. If selected during install, `nexo chat` can open Codex directly and background automation can also run through Codex. The current recommended Codex profile is `gpt-5.4` with `xhigh` reasoning.
 
 ### OpenClaw
 
@@ -868,7 +873,7 @@ If NEXO Brain is useful to you, consider:
 - **Personal scripts registry**: Scripts in `NEXO_HOME/scripts/` tracked in SQLite with metadata, categories, schedules. Full lifecycle: create, sync, reconcile, schedule, unschedule, remove.
 - **Orchestrator removed from core** (breaking): Was opt-in personal automation adding complexity for all users. Existing users keep their setup in `NEXO_HOME/scripts/`.
 - **Claude Code plugin structure**: `plugin.json`, entry point, packaging for marketplace submission.
-- **`nexo chat`**: Official command to launch Claude Code with NEXO as operator.
+- **`nexo chat`**: Official command to launch the configured terminal client with NEXO as operator.
 - **Managed Evolution hardening**: Can modify core behavior modules with rollback followups.
 - Cron recovery hardened: TCC diagnostics, keepalive sync, personal schedule catchup.
 

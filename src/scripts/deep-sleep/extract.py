@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 """
-Deep Sleep v2 -- Phase 2: Extract findings from each session using Claude CLI.
+Deep Sleep v2 -- Phase 2: Extract findings from each session using the configured automation backend.
 
 For each session in the context file, sends the extract-prompt.md to Claude
 and collects structured findings. Merges all per-session results into
@@ -77,9 +77,9 @@ def find_session_file(session_id: str, date_dir: Path) -> Path | None:
 
 
 def analyze_session(session_id: str, date_dir: Path, shared_context_file: Path | None) -> dict | None:
-    """Send a session to Claude CLI for extraction analysis.
+    """Send a session to the automation backend for extraction analysis.
 
-    Claude CLI reads the small per-session file + shared context file.
+    The backend reads the small per-session file + shared context file.
     Prompt is short — the heavy lifting is in the Read tool calls.
     """
     session_file = find_session_file(session_id, date_dir)
@@ -116,7 +116,7 @@ def analyze_session(session_id: str, date_dir: Path, shared_context_file: Path |
         )
 
         if result.returncode != 0:
-            print(f"    Claude CLI error (exit {result.returncode}): {result.stderr[:300]}", file=sys.stderr)
+            print(f"    Automation backend error (exit {result.returncode}): {result.stderr[:300]}", file=sys.stderr)
             return None
 
         # Filter out stop hook contamination (e.g. "Post-mortem completo.")

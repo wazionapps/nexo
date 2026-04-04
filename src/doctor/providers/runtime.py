@@ -11,7 +11,11 @@ import sys
 import time
 from pathlib import Path
 
-from client_preferences import detect_installed_clients, normalize_client_preferences
+from client_preferences import (
+    detect_installed_clients,
+    normalize_client_preferences,
+    resolve_client_runtime_profile,
+)
 from cron_recovery import should_run_at_load
 from doctor.models import DoctorCheck
 
@@ -903,6 +907,12 @@ def check_client_backend_preferences() -> DoctorCheck:
     default_terminal = prefs["default_terminal_client"]
     automation_enabled = bool(prefs["automation_enabled"])
     automation_backend = prefs["automation_backend"]
+    default_profile = resolve_client_runtime_profile(default_terminal, preferences=prefs)
+    automation_profile = (
+        resolve_client_runtime_profile(automation_backend, preferences=prefs)
+        if automation_enabled and automation_backend != "none"
+        else {"model": "", "reasoning_effort": ""}
+    )
 
     evidence: list[str] = []
     repair_plan: list[str] = []
@@ -940,8 +950,20 @@ def check_client_backend_preferences() -> DoctorCheck:
     if not repair_plan and status != "healthy":
         repair_plan.append("Run `nexo update` or `nexo clients sync` after installing the selected client/backend")
 
-    terminal_label = f"chat={default_terminal}"
-    automation_label = f"automation={automation_backend if automation_enabled else 'none'}"
+    def _profile_label(client_key: str, profile: dict[str, str]) -> str:
+        bits = [client_key]
+        if profile.get("model"):
+            bits.append(profile["model"])
+        if profile.get("reasoning_effort"):
+            bits.append(profile["reasoning_effort"])
+        return "/".join(bits)
+
+    terminal_label = f"chat={_profile_label(default_terminal, default_profile)}"
+    automation_label = (
+        f"automation={_profile_label(automation_backend, automation_profile)}"
+        if automation_enabled and automation_backend != "none"
+        else "automation=none"
+    )
     return DoctorCheck(
         id="runtime.clients",
         tier="runtime",
@@ -949,8 +971,8 @@ def check_client_backend_preferences() -> DoctorCheck:
         severity=severity,
         summary=f"Client/backend preferences OK ({terminal_label}, {automation_label})" if status == "healthy" else f"Client/backend preferences need attention ({terminal_label}, {automation_label})",
         evidence=evidence or [
-            f"default terminal client: {default_terminal}",
-            f"automation backend: {automation_backend if automation_enabled else 'none'}",
+            f"default terminal client: {_profile_label(default_terminal, default_profile)}",
+            f"automation backend: {_profile_label(automation_backend, automation_profile) if automation_enabled and automation_backend != 'none' else 'none'}",
         ],
         repair_plan=repair_plan,
         escalation_prompt=(

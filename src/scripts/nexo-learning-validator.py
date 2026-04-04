@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-NEXO Learning Validator — Cross-checks findings against existing learnings.
+NEXO Learning Validator — Cross-check findings against existing learnings.
 
-Wrapper collects the finding + all learnings from SQLite, then passes
-to Claude CLI (opus) to make an intelligent determination of whether
-the finding is known, related, or genuinely new.
+The wrapper collects the finding + current learnings from SQLite, then asks the
+configured automation backend whether the finding is already known, related, or
+genuinely new. If the backend is unavailable, it falls back to mechanical
+similarity matching.
 
 Usage as CLI:
     python3 nexo-learning-validator.py "finding text to validate"
@@ -21,27 +22,36 @@ Exit codes:
     1 = Finding is KNOWN (matches existing learning)
 """
 
+from __future__ import annotations
+
 import json
 import os
 import sqlite3
-import subprocess
 import sys
 from pathlib import Path
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parents[1])))
+if str(NEXO_CODE) not in sys.path:
+    sys.path.insert(0, str(NEXO_CODE))
+
+from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
+
 
 NEXO_DB = NEXO_HOME / "data" / "nexo.db"
-CLAUDE_CLI = Path.home() / ".local" / "bin" / "claude"
+JSON_ONLY_SYSTEM_PROMPT = (
+    "Return exactly one valid JSON object. No markdown fences. No prose outside JSON."
+)
 
 
-def get_all_learnings(category: str = None) -> list[dict]:
+def get_all_learnings(category: str | None = None) -> list[dict]:
     """Fetch all learnings from nexo.db."""
     conn = sqlite3.connect(str(NEXO_DB), timeout=10)
     conn.row_factory = sqlite3.Row
     if category:
         rows = conn.execute(
             "SELECT id, category, title, content FROM learnings WHERE category = ?",
-            (category,)
+            (category,),
         ).fetchall()
     else:
         rows = conn.execute(
@@ -51,9 +61,38 @@ def get_all_learnings(category: str = None) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def validate_finding(finding: str, category: str = None) -> dict:
+def _extract_json(text: str) -> dict | None:
+    text = (text or "").strip()
+    if not text:
+        return None
+    if text.startswith("```"):
+        lines = text.splitlines()
+        end = len(lines)
+        for idx in range(len(lines) - 1, 0, -1):
+            if lines[idx].strip() == "```":
+                end = idx
+                break
+        text = "\n".join(lines[1:end]).strip()
+    brace_start = text.find("{")
+    if brace_start < 0:
+        return None
+    depth = 0
+    for idx in range(brace_start, len(text)):
+        if text[idx] == "{":
+            depth += 1
+        elif text[idx] == "}":
+            depth -= 1
+            if depth == 0:
+                try:
+                    return json.loads(text[brace_start:idx + 1])
+                except json.JSONDecodeError:
+                    return None
+    return None
+
+
+def validate_finding(finding: str, category: str | None = None) -> dict:
     """
-    Validate a finding against existing learnings using Claude CLI.
+    Validate a finding against existing learnings.
 
     Returns:
         {
@@ -70,18 +109,18 @@ def validate_finding(finding: str, category: str = None) -> dict:
             "known": False,
             "confidence": 0,
             "matching_learnings": [],
-            "recommendation": "No learnings in DB — finding is new by default"
+            "recommendation": "No learnings in DB — finding is new by default",
         }
 
-    # Build compact learnings reference for CLI
-    learnings_ref = []
-    for l in learnings:
-        learnings_ref.append({
+    learnings_ref = [
+        {
             "id": l["id"],
             "cat": l["category"],
             "title": l["title"],
             "content": (l["content"] or "")[:300],
-        })
+        }
+        for l in learnings
+    ]
 
     prompt = f"""You are a finding deduplication engine. Compare a new finding against existing learnings and determine if it's already known.
 
@@ -89,9 +128,9 @@ NEW FINDING:
 {finding}
 
 EXISTING LEARNINGS ({len(learnings_ref)} total):
-{json.dumps(learnings_ref, indent=1)}
+{json.dumps(learnings_ref, indent=1, ensure_ascii=False)}
 
-Respond with ONLY valid JSON (no markdown, no code fences):
+Respond with ONLY valid JSON:
 {{
   "known": true/false,
   "confidence": 0.0-1.0,
@@ -109,33 +148,27 @@ Rules:
 - If the finding describes the SAME bug/issue/pattern as a learning, it's known even if worded differently
 - Be strict: different symptoms of different bugs are NOT the same even if they mention the same file"""
 
-    # Try CLI first, fall back to mechanical similarity
-    if CLAUDE_CLI.exists():
-        try:
-            env = os.environ.copy()
-            env["NEXO_HEADLESS"] = "1"
-            env.pop("CLAUDECODE", None)
-            env.pop("CLAUDE_CODE", None)
-            learnings_text = "\n".join(
-                f"[#{l.get('id','')}] {l.get('title','')}: {l.get('content','')[:200]}"
-                for l in learnings[:20]
-            )
-            prompt = f"{VALIDATE_PROMPT}\n\nFinding:\n{finding}\n\nExisting learnings:\n{learnings_text}"
-            result = subprocess.run(
-                [str(CLAUDE_CLI), "-p", prompt, "--model", "sonnet", "--output-format", "text"],
-                capture_output=True, text=True, timeout=60, env=env
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                parsed = json.loads(result.stdout.strip())
-                return parsed
-        except Exception:
-            pass
-    # Fallback: mechanical SequenceMatcher (original logic)
+    try:
+        result = run_automation_prompt(
+            prompt,
+            model="sonnet",
+            timeout=60,
+            output_format="text",
+            append_system_prompt=JSON_ONLY_SYSTEM_PROMPT,
+        )
+        parsed = _extract_json(result.stdout)
+        if result.returncode == 0 and parsed:
+            return parsed
+    except AutomationBackendUnavailableError:
+        pass
+    except Exception:
+        pass
+
     return _mechanical_validate(finding, learnings)
 
 
 def _mechanical_validate(finding: str, learnings: list[dict]) -> dict:
-    """Fallback validation using SequenceMatcher when CLI is unavailable."""
+    """Fallback validation using SequenceMatcher when backend is unavailable."""
     from difflib import SequenceMatcher
 
     threshold = 0.45
@@ -170,28 +203,27 @@ def _mechanical_validate(finding: str, learnings: list[dict]) -> dict:
     if best >= 0.7:
         return {"known": True, "confidence": best, "matching_learnings": top,
                 "recommendation": f"KNOWN issue (learning #{top[0]['id']})"}
-    elif best >= 0.55:
+    if best >= 0.55:
         return {"known": True, "confidence": best, "matching_learnings": top,
                 "recommendation": f"LIKELY KNOWN (learning #{top[0]['id']})"}
-    else:
-        return {"known": False, "confidence": best, "matching_learnings": top,
-                "recommendation": "POSSIBLY RELATED but different enough to report"}
+    return {"known": False, "confidence": best, "matching_learnings": top,
+            "recommendation": "POSSIBLY RELATED but different enough to report"}
 
 
 def _extract_keywords(text: str) -> set:
     """Extract meaningful keywords from text."""
     stop_words = {
-        'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
-        'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
-        'should', 'may', 'might', 'must', 'shall', 'can', 'need', 'dare',
-        'to', 'of', 'in', 'for', 'on', 'with', 'at', 'by', 'from', 'as',
-        'and', 'but', 'or', 'nor', 'not', 'so', 'yet', 'both', 'either',
-        'error', 'critical', 'warning', 'bug', 'issue', 'problem', 'fix',
-        'el', 'la', 'los', 'las', 'un', 'una', 'de', 'en', 'que', 'por',
+        "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
+        "have", "has", "had", "do", "does", "did", "will", "would", "could",
+        "should", "may", "might", "must", "shall", "can", "need", "dare",
+        "to", "of", "in", "for", "on", "with", "at", "by", "from", "as",
+        "and", "but", "or", "nor", "not", "so", "yet", "both", "either",
+        "error", "critical", "warning", "bug", "issue", "problem", "fix",
+        "el", "la", "los", "las", "un", "una", "de", "en", "que", "por",
     }
     words = set()
     for word in text.lower().split():
-        clean = ''.join(c for c in word if c.isalnum() or c == '_')
+        clean = "".join(c for c in word if c.isalnum() or c == "_")
         if clean and len(clean) > 2 and clean not in stop_words:
             words.add(clean)
     return words
@@ -208,16 +240,16 @@ def main():
     result = validate_finding(args.finding, args.category)
 
     if args.json:
-        print(json.dumps(result, indent=2))
+        print(json.dumps(result, indent=2, ensure_ascii=False))
     else:
         status = "KNOWN" if result["known"] else "NEW"
         print(f"Status: {status} (confidence: {result['confidence']:.0%})")
         print(f"Recommendation: {result['recommendation']}")
         if result["matching_learnings"]:
-            print(f"Related learnings:")
-            for m in result["matching_learnings"]:
-                cat = m.get('category', '?')
-                print(f"  #{m['id']} [{cat}] {m['title']} ({m['similarity']:.0%})")
+            print("Related learnings:")
+            for match in result["matching_learnings"]:
+                cat = match.get("category", "?")
+                print(f"  #{match['id']} [{cat}] {match['title']} ({match['similarity']:.0%})")
 
     sys.exit(1 if result["known"] else 0)
 
