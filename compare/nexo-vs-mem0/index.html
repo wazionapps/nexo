@@ -61,6 +61,7 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
 
     <link rel="stylesheet" href="/assets/style.css">
+    <style>@media(max-width:768px){.strengths-grid{grid-template-columns:1fr !important;}}</style>
 </head>
 <body>
 
@@ -136,28 +137,64 @@
         <div class="section-label">Analysis</div>
         <h2 class="section-title">Where each tool excels</h2>
 
-        <div class="architecture">
-            <div class="arch-text" style="flex:1;">
-                <h3>NEXO Brain strengths</h3>
-                <ul class="arch-list">
-                    <li><strong>Zero cloud dependency.</strong> Your data never leaves your machine. No accounts, no API keys for memory, no vendor lock-in.</li>
-                    <li><strong>Cognitive architecture.</strong> Based on the Atkinson-Shiffrin model from cognitive psychology &mdash; sensory register, STM, and LTM with distinct retention rules and Ebbinghaus forgetting curves.</li>
-                    <li><strong>150+ MCP tools.</strong> Not just memory &mdash; email, credentials management, entity tracking, personal scripts, decision logging, and more.</li>
-                    <li><strong>Trust scoring.</strong> Tracks source reliability so high-confidence memories rank higher in retrieval.</li>
-                    <li><strong>Recovery-aware background jobs.</strong> Deep Sleep consolidation, overnight learning, and synaptic pruning that survive system restarts.</li>
-                    <li><strong>Published benchmark.</strong> LoCoMo F1 0.588 &mdash; a 55% improvement over baseline GPT-4 on long-conversation memory tasks.</li>
-                </ul>
+        <div class="strengths-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-top:32px;">
+            <div>
+                <h3 style="color:var(--purple-light);margin-bottom:20px;font-size:20px;">&#10003; NEXO Brain advantages</h3>
+                <div style="display:flex;flex-direction:column;gap:16px;">
+                    <div style="background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">Zero cloud dependency</strong>
+                        <span style="color:var(--gray);font-size:14px;">Your data never leaves your machine. No accounts, no API keys for memory, no vendor lock-in.</span>
+                    </div>
+                    <div style="background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">Cognitive architecture</strong>
+                        <span style="color:var(--gray);font-size:14px;">Based on the Atkinson-Shiffrin model from cognitive psychology &mdash; sensory register, STM, and LTM with distinct retention rules and Ebbinghaus forgetting curves.</span>
+                    </div>
+                    <div style="background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">150+ MCP tools</strong>
+                        <span style="color:var(--gray);font-size:14px;">Not just memory &mdash; email, credentials management, entity tracking, personal scripts, decision logging, and more.</span>
+                    </div>
+                    <div style="background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">Trust scoring</strong>
+                        <span style="color:var(--gray);font-size:14px;">Tracks source reliability so high-confidence memories rank higher in retrieval.</span>
+                    </div>
+                    <div style="background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">Recovery-aware background jobs</strong>
+                        <span style="color:var(--gray);font-size:14px;">Deep Sleep consolidation, overnight learning, and synaptic pruning that survive system restarts.</span>
+                    </div>
+                    <div style="background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">Published benchmark</strong>
+                        <span style="color:var(--gray);font-size:14px;">LoCoMo F1 0.588 &mdash; a 55% improvement over baseline GPT-4 on long-conversation memory tasks.</span>
+                    </div>
+                </div>
             </div>
-            <div class="arch-text" style="flex:1;">
-                <h3>Mem0 strengths</h3>
-                <ul class="arch-list">
-                    <li><strong>Large community.</strong> Extensive ecosystem with community support, examples, and integrations across multiple platforms.</li>
-                    <li><strong>Cross-platform SDKs.</strong> Python, JavaScript, Go, and REST API. Works with any LLM provider &mdash; OpenAI, Anthropic, Google, Cohere, and more.</li>
-                    <li><strong>Managed cloud option.</strong> Mem0 Platform handles infrastructure so you don&rsquo;t have to manage databases or embeddings yourself.</li>
-                    <li><strong>Browser extension.</strong> Capture context from web browsing sessions automatically.</li>
-                    <li><strong>Auto memory extraction.</strong> Automatically identifies and stores important information from conversations without explicit prompting.</li>
-                    <li><strong>Graph memory.</strong> Built-in knowledge graph support for understanding relationships between entities.</li>
-                </ul>
+            <div>
+                <h3 style="color:var(--gray);margin-bottom:20px;font-size:20px;">&#9878; Mem0 advantages</h3>
+                <div style="display:flex;flex-direction:column;gap:16px;">
+                    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">Large community</strong>
+                        <span style="color:var(--gray);font-size:14px;">Extensive ecosystem with community support, examples, and integrations across multiple platforms.</span>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">Cross-platform SDKs</strong>
+                        <span style="color:var(--gray);font-size:14px;">Python, JavaScript, Go, and REST API. Works with any LLM provider &mdash; OpenAI, Anthropic, Google, Cohere, and more.</span>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">Managed cloud option</strong>
+                        <span style="color:var(--gray);font-size:14px;">Mem0 Platform handles infrastructure so you don&rsquo;t have to manage databases or embeddings yourself.</span>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">Browser extension</strong>
+                        <span style="color:var(--gray);font-size:14px;">Capture context from web browsing sessions automatically.</span>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">Auto memory extraction</strong>
+                        <span style="color:var(--gray);font-size:14px;">Automatically identifies and stores important information from conversations without explicit prompting.</span>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">Graph memory</strong>
+                        <span style="color:var(--gray);font-size:14px;">Built-in knowledge graph support for understanding relationships between entities.</span>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

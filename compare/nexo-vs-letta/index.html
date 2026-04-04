@@ -53,6 +53,7 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
 
     <link rel="stylesheet" href="/assets/style.css">
+    <style>@media(max-width:768px){.strengths-grid{grid-template-columns:1fr !important;}}</style>
 </head>
 <body>
 
@@ -132,28 +133,64 @@
             NEXO Brain and Letta solve fundamentally different problems. NEXO is a cognitive layer for a single human-agent pair. Letta is an infrastructure platform for deploying fleets of stateful agents.
         </p>
 
-        <div class="architecture">
-            <div class="arch-text" style="flex:1;">
-                <h3>NEXO Brain strengths</h3>
-                <ul class="arch-list">
-                    <li><strong>Local-only, zero cloud.</strong> Your data never leaves your machine. No accounts, no API keys for memory, no cloud bills.</li>
-                    <li><strong>MCP-native.</strong> Plug into Claude Code instantly &mdash; no API integration required. Just add the MCP server and go.</li>
-                    <li><strong>Simpler for single-user use.</strong> Designed as a cognitive co-operator for one human + one agent, not a multi-agent platform.</li>
-                    <li><strong>150+ MCP tools.</strong> Operational tools go far beyond memory &mdash; email, credentials, entity management, decision logging, personal scripts.</li>
-                    <li><strong>Runtime CLI.</strong> A full command-line interface for managing your agent&rsquo;s brain, scripts, and state.</li>
-                    <li><strong>No API keys for memory.</strong> Memory is free. No token costs for storing and retrieving information.</li>
-                </ul>
+        <div class="strengths-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-top:32px;">
+            <div>
+                <h3 style="color:var(--purple-light);margin-bottom:20px;font-size:20px;">&#10003; NEXO Brain advantages</h3>
+                <div style="display:flex;flex-direction:column;gap:16px;">
+                    <div style="background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">Local-only, zero cloud</strong>
+                        <span style="color:var(--gray);font-size:14px;">Your data never leaves your machine. No accounts, no API keys for memory, no cloud bills.</span>
+                    </div>
+                    <div style="background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">MCP-native</strong>
+                        <span style="color:var(--gray);font-size:14px;">Plug into Claude Code instantly &mdash; no API integration required. Just add the MCP server and go.</span>
+                    </div>
+                    <div style="background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">Simpler for single-user use</strong>
+                        <span style="color:var(--gray);font-size:14px;">Designed as a cognitive co-operator for one human + one agent, not a multi-agent platform.</span>
+                    </div>
+                    <div style="background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">150+ MCP tools</strong>
+                        <span style="color:var(--gray);font-size:14px;">Operational tools go far beyond memory &mdash; email, credentials, entity management, decision logging, personal scripts.</span>
+                    </div>
+                    <div style="background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">Runtime CLI</strong>
+                        <span style="color:var(--gray);font-size:14px;">A full command-line interface for managing your agent&rsquo;s brain, scripts, and state.</span>
+                    </div>
+                    <div style="background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">No API keys for memory</strong>
+                        <span style="color:var(--gray);font-size:14px;">Memory is free. No token costs for storing and retrieving information.</span>
+                    </div>
+                </div>
             </div>
-            <div class="arch-text" style="flex:1;">
-                <h3>Letta (MemGPT) strengths</h3>
-                <ul class="arch-list">
-                    <li><strong>Full agent orchestration.</strong> Build, deploy, and manage multiple stateful agents that collaborate and share context.</li>
-                    <li><strong>Model-agnostic.</strong> Works with OpenAI, Anthropic, Google, and local models. Switch providers without changing your code.</li>
-                    <li><strong>TypeScript and Python SDKs.</strong> First-class support for building agent applications in the languages you already use.</li>
-                    <li><strong>Agent marketplace.</strong> Share and discover pre-built agents for common tasks.</li>
-                    <li><strong>Enterprise features.</strong> Teams, permissions, audit logging, and managed cloud infrastructure for production deployments.</li>
-                    <li><strong>Self-editing memory.</strong> Agents can modify their own memory and create new tools to improve their capabilities over time.</li>
-                </ul>
+            <div>
+                <h3 style="color:var(--gray);margin-bottom:20px;font-size:20px;">&#9878; Letta (MemGPT) advantages</h3>
+                <div style="display:flex;flex-direction:column;gap:16px;">
+                    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">Full agent orchestration</strong>
+                        <span style="color:var(--gray);font-size:14px;">Build, deploy, and manage multiple stateful agents that collaborate and share context.</span>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">Model-agnostic</strong>
+                        <span style="color:var(--gray);font-size:14px;">Works with OpenAI, Anthropic, Google, and local models. Switch providers without changing your code.</span>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">TypeScript and Python SDKs</strong>
+                        <span style="color:var(--gray);font-size:14px;">First-class support for building agent applications in the languages you already use.</span>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">Agent marketplace</strong>
+                        <span style="color:var(--gray);font-size:14px;">Share and discover pre-built agents for common tasks.</span>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">Enterprise features</strong>
+                        <span style="color:var(--gray);font-size:14px;">Teams, permissions, audit logging, and managed cloud infrastructure for production deployments.</span>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">Self-editing memory</strong>
+                        <span style="color:var(--gray);font-size:14px;">Agents can modify their own memory and create new tools to improve their capabilities over time.</span>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

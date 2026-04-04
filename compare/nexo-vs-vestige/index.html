@@ -53,6 +53,7 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
 
     <link rel="stylesheet" href="/assets/style.css">
+    <style>@media(max-width:768px){.strengths-grid{grid-template-columns:1fr !important;}}</style>
 </head>
 <body>
 
@@ -126,28 +127,64 @@
         <div class="section-label">Analysis</div>
         <h2 class="section-title">Where each tool excels</h2>
 
-        <div class="architecture">
-            <div class="arch-text" style="flex:1;">
-                <h3>NEXO Brain strengths</h3>
-                <ul class="arch-list">
-                    <li><strong>150+ MCP tools.</strong> Far beyond memory &mdash; email, credentials, entity tracking, decision logging, personal scripts, and operational workflows.</li>
-                    <li><strong>Personal scripts registry.</strong> 80+ personal scripts and 13 core scripts managed through a registry database with scheduling and recovery.</li>
-                    <li><strong>Trust scoring.</strong> Sources are scored for reliability, ensuring high-confidence memories surface first.</li>
-                    <li><strong>Knowledge Graph.</strong> Associative memory graph enables spreading activation and relationship-aware retrieval.</li>
-                    <li><strong>Recovery-aware background jobs.</strong> Deep Sleep consolidation and overnight learning survive system restarts gracefully.</li>
-                    <li><strong>Published benchmark.</strong> LoCoMo F1 0.588 (+55% vs GPT-4) &mdash; independently verifiable retrieval quality.</li>
-                </ul>
+        <div class="strengths-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-top:32px;">
+            <div>
+                <h3 style="color:var(--purple-light);margin-bottom:20px;font-size:20px;">&#10003; NEXO Brain advantages</h3>
+                <div style="display:flex;flex-direction:column;gap:16px;">
+                    <div style="background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">150+ MCP tools</strong>
+                        <span style="color:var(--gray);font-size:14px;">Far beyond memory &mdash; email, credentials, entity tracking, decision logging, personal scripts, and operational workflows.</span>
+                    </div>
+                    <div style="background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">Personal scripts registry</strong>
+                        <span style="color:var(--gray);font-size:14px;">80+ personal scripts and 13 core scripts managed through a registry database with scheduling and recovery.</span>
+                    </div>
+                    <div style="background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">Trust scoring</strong>
+                        <span style="color:var(--gray);font-size:14px;">Sources are scored for reliability, ensuring high-confidence memories surface first.</span>
+                    </div>
+                    <div style="background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">Knowledge Graph</strong>
+                        <span style="color:var(--gray);font-size:14px;">Associative memory graph enables spreading activation and relationship-aware retrieval.</span>
+                    </div>
+                    <div style="background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">Recovery-aware background jobs</strong>
+                        <span style="color:var(--gray);font-size:14px;">Deep Sleep consolidation and overnight learning survive system restarts gracefully.</span>
+                    </div>
+                    <div style="background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">Published benchmark</strong>
+                        <span style="color:var(--gray);font-size:14px;">LoCoMo F1 0.588 (+55% vs GPT-4) &mdash; independently verifiable retrieval quality.</span>
+                    </div>
+                </div>
             </div>
-            <div class="arch-text" style="flex:1;">
-                <h3>Vestige strengths</h3>
-                <ul class="arch-list">
-                    <li><strong>Rust performance.</strong> A 22 MB single binary with native speed. No interpreter overhead, no dependency management.</li>
-                    <li><strong>FSRS-6.</strong> The Free Spaced Repetition Scheduler is a more modern approach to memory retention than classical Ebbinghaus, with machine learning-optimized intervals.</li>
-                    <li><strong>3D neural dashboard.</strong> A visual interface for exploring your agent&rsquo;s memory state &mdash; something no other tool in this space offers.</li>
-                    <li><strong>29 brain modules.</strong> A highly modular architecture with dedicated modules for different cognitive functions.</li>
-                    <li><strong>MIT license.</strong> More permissive licensing for commercial and proprietary use.</li>
-                    <li><strong>Potentially faster retrieval.</strong> Rust&rsquo;s performance characteristics may benefit latency-sensitive applications.</li>
-                </ul>
+            <div>
+                <h3 style="color:var(--gray);margin-bottom:20px;font-size:20px;">&#9878; Vestige advantages</h3>
+                <div style="display:flex;flex-direction:column;gap:16px;">
+                    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">Rust performance</strong>
+                        <span style="color:var(--gray);font-size:14px;">A 22 MB single binary with native speed. No interpreter overhead, no dependency management.</span>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">FSRS-6</strong>
+                        <span style="color:var(--gray);font-size:14px;">The Free Spaced Repetition Scheduler is a more modern approach to memory retention than classical Ebbinghaus, with machine learning-optimized intervals.</span>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">3D neural dashboard</strong>
+                        <span style="color:var(--gray);font-size:14px;">A visual interface for exploring your agent&rsquo;s memory state &mdash; something no other tool in this space offers.</span>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">29 brain modules</strong>
+                        <span style="color:var(--gray);font-size:14px;">A highly modular architecture with dedicated modules for different cognitive functions.</span>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">MIT license</strong>
+                        <span style="color:var(--gray);font-size:14px;">More permissive licensing for commercial and proprietary use.</span>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">Potentially faster retrieval</strong>
+                        <span style="color:var(--gray);font-size:14px;">Rust&rsquo;s performance characteristics may benefit latency-sensitive applications.</span>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

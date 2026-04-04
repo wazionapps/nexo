@@ -53,6 +53,7 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
 
     <link rel="stylesheet" href="/assets/style.css">
+    <style>@media(max-width:768px){.strengths-grid{grid-template-columns:1fr !important;}}</style>
 </head>
 <body>
 
@@ -126,28 +127,64 @@
         <div class="section-label">Analysis</div>
         <h2 class="section-title">Where each tool excels</h2>
 
-        <div class="architecture">
-            <div class="arch-text" style="flex:1;">
-                <h3>NEXO Brain strengths</h3>
-                <ul class="arch-list">
-                    <li><strong>Semantic RAG.</strong> Finds memories by meaning, not just keyword matching. Vector embeddings combined with Knowledge Graph boost deliver more relevant results.</li>
-                    <li><strong>Forgetting curves.</strong> Ebbinghaus-based decay naturally prunes stale memories, keeping the knowledge base clean without manual maintenance.</li>
-                    <li><strong>150+ MCP tools.</strong> Goes far beyond memory &mdash; includes operational tools for email, credentials, entity tracking, decision logging, and personal scripts.</li>
-                    <li><strong>Trust scoring.</strong> Tracks the reliability of information sources so high-confidence memories surface first.</li>
-                    <li><strong>Deep Sleep &amp; overnight learning.</strong> Background consolidation discovers hidden connections between memories during idle time.</li>
-                    <li><strong>Published benchmark.</strong> Verifiable LoCoMo F1 0.588 score demonstrates real-world retrieval quality.</li>
-                </ul>
+        <div class="strengths-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-top:32px;">
+            <div>
+                <h3 style="color:var(--purple-light);margin-bottom:20px;font-size:20px;">&#10003; NEXO Brain advantages</h3>
+                <div style="display:flex;flex-direction:column;gap:16px;">
+                    <div style="background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">Semantic RAG</strong>
+                        <span style="color:var(--gray);font-size:14px;">Finds memories by meaning, not just keyword matching. Vector embeddings combined with Knowledge Graph boost deliver more relevant results.</span>
+                    </div>
+                    <div style="background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">Forgetting curves</strong>
+                        <span style="color:var(--gray);font-size:14px;">Ebbinghaus-based decay naturally prunes stale memories, keeping the knowledge base clean without manual maintenance.</span>
+                    </div>
+                    <div style="background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">150+ MCP tools</strong>
+                        <span style="color:var(--gray);font-size:14px;">Goes far beyond memory &mdash; includes operational tools for email, credentials, entity tracking, decision logging, and personal scripts.</span>
+                    </div>
+                    <div style="background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">Trust scoring</strong>
+                        <span style="color:var(--gray);font-size:14px;">Tracks the reliability of information sources so high-confidence memories surface first.</span>
+                    </div>
+                    <div style="background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">Deep Sleep &amp; overnight learning</strong>
+                        <span style="color:var(--gray);font-size:14px;">Background consolidation discovers hidden connections between memories during idle time.</span>
+                    </div>
+                    <div style="background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">Published benchmark</strong>
+                        <span style="color:var(--gray);font-size:14px;">Verifiable LoCoMo F1 0.588 score demonstrates real-world retrieval quality.</span>
+                    </div>
+                </div>
             </div>
-            <div class="arch-text" style="flex:1;">
-                <h3>Engram strengths</h3>
-                <ul class="arch-list">
-                    <li><strong>Zero dependencies.</strong> A single Go binary &mdash; download and run. No Python, no pip, no virtual environments. As simple as it gets.</li>
-                    <li><strong>Agent-agnostic.</strong> Works with Gemini CLI, Codex, Cursor, Claude Code, and any MCP-compatible client out of the box.</li>
-                    <li><strong>Lighter footprint.</strong> Minimal resource usage, fast startup, and small install size make it ideal for constrained environments.</li>
-                    <li><strong>SQLite + FTS5.</strong> Battle-tested full-text search that&rsquo;s fast and reliable for keyword-based retrieval.</li>
-                    <li><strong>MIT license.</strong> More permissive licensing for commercial projects.</li>
-                    <li><strong>Simple mental model.</strong> Store and retrieve memories. No cognitive pipelines to understand &mdash; just persistent memory that works.</li>
-                </ul>
+            <div>
+                <h3 style="color:var(--gray);margin-bottom:20px;font-size:20px;">&#9878; Engram advantages</h3>
+                <div style="display:flex;flex-direction:column;gap:16px;">
+                    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">Zero dependencies</strong>
+                        <span style="color:var(--gray);font-size:14px;">A single Go binary &mdash; download and run. No Python, no pip, no virtual environments. As simple as it gets.</span>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">Agent-agnostic</strong>
+                        <span style="color:var(--gray);font-size:14px;">Works with Gemini CLI, Codex, Cursor, Claude Code, and any MCP-compatible client out of the box.</span>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">Lighter footprint</strong>
+                        <span style="color:var(--gray);font-size:14px;">Minimal resource usage, fast startup, and small install size make it ideal for constrained environments.</span>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">SQLite + FTS5</strong>
+                        <span style="color:var(--gray);font-size:14px;">Battle-tested full-text search that&rsquo;s fast and reliable for keyword-based retrieval.</span>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">MIT license</strong>
+                        <span style="color:var(--gray);font-size:14px;">More permissive licensing for commercial projects.</span>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">Simple mental model</strong>
+                        <span style="color:var(--gray);font-size:14px;">Store and retrieve memories. No cognitive pipelines to understand &mdash; just persistent memory that works.</span>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

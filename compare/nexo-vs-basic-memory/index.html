@@ -53,6 +53,7 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
 
     <link rel="stylesheet" href="/assets/style.css">
+    <style>@media(max-width:768px){.strengths-grid{grid-template-columns:1fr !important;}}</style>
 </head>
 <body>
 
@@ -130,28 +131,64 @@
             Basic Memory bets on transparency and simplicity: if you can see it, you can trust it. NEXO Brain bets on intelligence: memory should manage itself so you don&rsquo;t have to.
         </p>
 
-        <div class="architecture">
-            <div class="arch-text" style="flex:1;">
-                <h3>NEXO Brain strengths</h3>
-                <ul class="arch-list">
-                    <li><strong>Semantic search.</strong> Finds memories by meaning, not just keywords. &ldquo;How did we fix the authentication bug?&rdquo; works even if you never used the word &ldquo;authentication&rdquo; in your notes.</li>
-                    <li><strong>Self-managing memory.</strong> Forgetting curves automatically prune stale information. Consolidation promotes important memories. You never manually clean up.</li>
-                    <li><strong>150+ MCP tools.</strong> Goes far beyond memory into operational territory &mdash; email, credentials, entity tracking, decision logging, personal scripts.</li>
-                    <li><strong>Knowledge Graph.</strong> Understands relationships between concepts, not just isolated facts.</li>
-                    <li><strong>Recovery-aware jobs.</strong> Background processes (Deep Sleep, synaptic pruning) survive system restarts and pick up where they left off.</li>
-                    <li><strong>Trust scoring.</strong> Information from reliable sources ranks higher than unverified claims.</li>
-                </ul>
+        <div class="strengths-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-top:32px;">
+            <div>
+                <h3 style="color:var(--purple-light);margin-bottom:20px;font-size:20px;">&#10003; NEXO Brain advantages</h3>
+                <div style="display:flex;flex-direction:column;gap:16px;">
+                    <div style="background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">Semantic search</strong>
+                        <span style="color:var(--gray);font-size:14px;">Finds memories by meaning, not just keywords. &ldquo;How did we fix the authentication bug?&rdquo; works even if you never used the word &ldquo;authentication&rdquo; in your notes.</span>
+                    </div>
+                    <div style="background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">Self-managing memory</strong>
+                        <span style="color:var(--gray);font-size:14px;">Forgetting curves automatically prune stale information. Consolidation promotes important memories. You never manually clean up.</span>
+                    </div>
+                    <div style="background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">150+ MCP tools</strong>
+                        <span style="color:var(--gray);font-size:14px;">Goes far beyond memory into operational territory &mdash; email, credentials, entity tracking, decision logging, personal scripts.</span>
+                    </div>
+                    <div style="background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">Knowledge Graph</strong>
+                        <span style="color:var(--gray);font-size:14px;">Understands relationships between concepts, not just isolated facts.</span>
+                    </div>
+                    <div style="background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">Recovery-aware jobs</strong>
+                        <span style="color:var(--gray);font-size:14px;">Background processes (Deep Sleep, synaptic pruning) survive system restarts and pick up where they left off.</span>
+                    </div>
+                    <div style="background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">Trust scoring</strong>
+                        <span style="color:var(--gray);font-size:14px;">Information from reliable sources ranks higher than unverified claims.</span>
+                    </div>
+                </div>
             </div>
-            <div class="arch-text" style="flex:1;">
-                <h3>Basic Memory strengths</h3>
-                <ul class="arch-list">
-                    <li><strong>Human-readable Markdown.</strong> Every memory is a file you can open, read, and edit in any text editor. No database to query &mdash; just files.</li>
-                    <li><strong>Git-friendly.</strong> Because memories are plain text files, you get version history, diffs, blame, and branching for free with git.</li>
-                    <li><strong>Dead simple concept.</strong> &ldquo;Never re-explain your project.&rdquo; Store context as Markdown, retrieve it later. No cognitive architecture to understand.</li>
-                    <li><strong>Easy to inspect.</strong> Want to know what your AI remembers? Open the folder. No CLI needed, no tools to learn.</li>
-                    <li><strong>Easy to edit.</strong> Wrong memory? Open the file, fix it, save. No commands or API calls required.</li>
-                    <li><strong>MIT license.</strong> Maximally permissive for commercial and proprietary use.</li>
-                </ul>
+            <div>
+                <h3 style="color:var(--gray);margin-bottom:20px;font-size:20px;">&#9878; Basic Memory advantages</h3>
+                <div style="display:flex;flex-direction:column;gap:16px;">
+                    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">Human-readable Markdown</strong>
+                        <span style="color:var(--gray);font-size:14px;">Every memory is a file you can open, read, and edit in any text editor. No database to query &mdash; just files.</span>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">Git-friendly</strong>
+                        <span style="color:var(--gray);font-size:14px;">Because memories are plain text files, you get version history, diffs, blame, and branching for free with git.</span>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">Dead simple concept</strong>
+                        <span style="color:var(--gray);font-size:14px;">&ldquo;Never re-explain your project.&rdquo; Store context as Markdown, retrieve it later. No cognitive architecture to understand.</span>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">Easy to inspect</strong>
+                        <span style="color:var(--gray);font-size:14px;">Want to know what your AI remembers? Open the folder. No CLI needed, no tools to learn.</span>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">Easy to edit</strong>
+                        <span style="color:var(--gray);font-size:14px;">Wrong memory? Open the file, fix it, save. No commands or API calls required.</span>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;">
+                        <strong style="color:#fff;display:block;margin-bottom:4px;">MIT license</strong>
+                        <span style="color:var(--gray);font-size:14px;">Maximally permissive for commercial and proprietary use.</span>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
