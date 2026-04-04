@@ -1,6 +1,6 @@
 # NEXO Brain
 
-> Open-source cognitive runtime for Claude Code and MCP clients (v2.6.7)
+> Open-source cognitive runtime for Claude Code and MCP clients (v2.6.9)
 
 NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It provides 150+ MCP tools across 21+ categories including semantic RAG, knowledge graph-boosted search, HNSW vector indexing, trust scoring, episodic memory, claim graph, metacognitive error prevention, inter-terminal coordination, always-on web dashboard with 23 modules, natural memory decay, a full nervous system of 13 core recovery-aware background jobs, unified code/data architecture, startup preflight with safe migrations, auto-diary, Skills v2 with executable modes, cron scheduler with recovery contracts, external audit, runtime CLI, unified doctor diagnostics, personal scripts registry with 9 lifecycle tools, Claude Code plugin marketplace structure, managed evolution with core module modification, and platform-aware power policy.
 
@@ -46,7 +46,8 @@ NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cogniti
 - Runtime CLI: `nexo` command for direct terminal access to scripts, doctor, skills, and updates
 - Unified Doctor: boot/runtime/deep diagnostics with --fix mode and MCP tool integration
 - Personal Scripts Registry: first-class SQLite tracking with 9 MCP tools for lifecycle management, scheduling, reconciliation, and classification
-- Claude Code Plugin: submitted to Anthropic's official plugin marketplace (pending review)
+- Claude Code Plugin: marketplace-ready packaging included (plugin.json, .mcp.json, hooks, server.py verified in npm tarball)
+- Integration Artifact Sync: automated version synchronization across Claude Code plugin, OpenClaw package, and ClawHub skill with full GitHub Actions CI/CD pipeline
 - Managed Evolution: can modify core behavior modules with rollback followups
 - nexo chat: official CLI command to launch Claude Code with NEXO as operator
 - Startup Preflight: safe local migrations and deferred remote updates before nexo chat or server start
@@ -60,7 +61,7 @@ NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cogniti
 ## Installation
 
 ```
-npx nexo-brain@2.6.7
+npx nexo-brain@2.6.9
 ```
 
 ## Documentation
