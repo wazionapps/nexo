@@ -212,6 +212,8 @@ class TestRuntimeUpdate:
 
 class TestClientsCommand:
     def test_clients_sync_writes_shared_configs(self, nexo_home, tmp_path):
+        import client_sync
+
         fake_codex = tmp_path / "codex"
         fake_codex.write_text(
             "#!/usr/bin/env python3\n"
@@ -239,7 +241,7 @@ class TestClientsCommand:
         assert payload["clients"]["claude_desktop"]["ok"] is True
         assert payload["clients"]["codex"]["ok"] is True
         assert (nexo_home / ".claude" / "settings.json").is_file()
-        assert (nexo_home / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json").is_file()
+        assert client_sync._claude_desktop_config_path(nexo_home).is_file()
 
 
 class TestChatCommand:

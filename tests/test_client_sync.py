@@ -53,7 +53,7 @@ def test_sync_claude_desktop_preserves_preferences(tmp_path):
 
     runtime = _make_runtime(tmp_path)
     home = tmp_path / "home"
-    desktop_path = home / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json"
+    desktop_path = client_sync._claude_desktop_config_path(home)
     desktop_path.parent.mkdir(parents=True)
     desktop_path.write_text(json.dumps({
         "preferences": {"sidebarMode": "chat"},
