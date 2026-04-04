@@ -247,6 +247,17 @@ if $CRON_SYNC_OK && [ -d "$SRC_DIR/crons" ]; then
     log "Refreshed installed crons manifest."
 fi
 
+# --- Step 9: Sync shared client configs ---
+CLIENT_SYNC="$SRC_DIR/scripts/nexo-sync-clients.py"
+if [ -f "$CLIENT_SYNC" ]; then
+    log "Syncing Claude Code, Claude Desktop, and Codex configs..."
+    if NEXO_HOME="$NEXO_HOME" NEXO_CODE="$SRC_DIR" python3 "$CLIENT_SYNC" --nexo-home "$NEXO_HOME" --runtime-root "$SRC_DIR" --json >/dev/null 2>&1; then
+        log "Shared client configs synced."
+    else
+        warn "Client config sync failed (non-fatal). Run 'nexo clients sync' later."
+    fi
+fi
+
 # --- Done ---
 echo ""
 log "========================================="

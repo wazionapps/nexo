@@ -61,6 +61,7 @@ def test_startup_preflight_defers_sync_update_when_runtime_busy(tmp_path, monkey
 
 def test_run_runtime_post_sync_uses_reconcile_personal_scripts(tmp_path, monkeypatch):
     import auto_update
+    import client_sync
 
     runtime_home = tmp_path / "runtime"
     (runtime_home / "logs").mkdir(parents=True)
@@ -76,6 +77,7 @@ def test_run_runtime_post_sync_uses_reconcile_personal_scripts(tmp_path, monkeyp
     monkeypatch.setattr(auto_update, "NEXO_HOME", runtime_home)
     monkeypatch.setattr(auto_update, "_reinstall_runtime_pip_deps", lambda dest: True)
     monkeypatch.setattr(auto_update.subprocess, "run", fake_run)
+    monkeypatch.setattr(client_sync, "sync_all_clients", lambda **kwargs: {"ok": True, "clients": {}})
 
     import runtime_power
 
@@ -87,5 +89,6 @@ def test_run_runtime_post_sync_uses_reconcile_personal_scripts(tmp_path, monkeyp
 
     assert ok is True
     assert "db+personal-sync" in actions
+    assert "client-sync" in actions
     init_call = next(cmd for cmd in calls if isinstance(cmd, list) and len(cmd) >= 3 and cmd[1] == "-c")
     assert "reconcile_personal_scripts" in init_call[2]

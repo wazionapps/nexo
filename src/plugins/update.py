@@ -584,6 +584,21 @@ def handle_update(remote: str = "origin", branch: str = "main", progress_fn=None
         except Exception as e:
             pass  # Non-critical, log in function
 
+        # Step 10: Sync shared client configs
+        try:
+            _emit_progress(progress_fn, "Refreshing shared client configs...")
+            from client_sync import sync_all_clients
+
+            client_sync_result = sync_all_clients(
+                nexo_home=NEXO_HOME,
+                runtime_root=SRC_DIR,
+                operator_name=os.environ.get("NEXO_NAME", ""),
+            )
+            if client_sync_result.get("ok"):
+                steps_done.append("client-sync")
+        except Exception:
+            pass  # Non-critical, configs can be re-synced later
+
         # Build result
         if pull_out == "Already up to date.":
             return f"Already up to date (v{old_version}). No changes pulled."
@@ -603,6 +618,8 @@ def handle_update(remote: str = "origin", branch: str = "main", progress_fn=None
             lines.append("  Crons: synced with manifest")
         if "hook-sync" in steps_done:
             lines.append("  Hooks: synced to NEXO_HOME")
+        if "client-sync" in steps_done:
+            lines.append("  Clients: Claude Code/Desktop/Codex synced")
         lines.append("")
         lines.append("MCP server restart needed to load new code.")
         return "\n".join(lines)

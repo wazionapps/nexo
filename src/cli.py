@@ -22,6 +22,7 @@ Entry points:
   nexo skills approve ID [--execution-level ...] [--approved-by ...] [--json]
   nexo skills featured [--limit N] [--json]
   nexo skills evolution [--json]
+  nexo clients sync [--json]
   nexo contributor status|on|off [--json]
   nexo doctor [--tier boot|runtime|deep|all] [--json] [--fix]
 """
@@ -569,6 +570,17 @@ def _update(args):
     return 0 if result.get("ok") else 1
 
 
+def _clients_sync(args):
+    from client_sync import format_sync_summary, sync_all_clients
+
+    result = sync_all_clients(nexo_home=NEXO_HOME, runtime_root=NEXO_CODE)
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    else:
+        print(format_sync_summary(result))
+    return 0 if result.get("ok") else 1
+
+
 def _contributor_status(args):
     from public_contribution import (
         format_public_contribution_label,
@@ -861,6 +873,7 @@ Commands:
   nexo scripts list|create|classify|sync|reconcile|ensure-schedules|schedules|run|doctor|call|unschedule|remove
                                                       Personal scripts
   nexo skills list|apply|sync|approve                  Executable skills
+  nexo clients sync                                    Sync Claude Code/Desktop/Codex MCP configs
   nexo update                                          Update installed runtime
   nexo contributor status|on|off                       Public Draft PR contribution mode
   nexo dashboard on|off|status                         Web dashboard control
@@ -949,6 +962,12 @@ def main():
     # -- update --
     update_parser = sub.add_parser("update", help="Update installed runtime")
     update_parser.add_argument("--json", action="store_true", help="JSON output")
+
+    # -- clients --
+    clients_parser = sub.add_parser("clients", help="Shared client config management")
+    clients_sub = clients_parser.add_subparsers(dest="clients_command")
+    clients_sync_p = clients_sub.add_parser("sync", help="Sync Claude Code, Claude Desktop, and Codex to the same NEXO brain")
+    clients_sync_p.add_argument("--json", action="store_true", help="JSON output")
 
     # -- doctor --
     doctor_parser = sub.add_parser("doctor", help="Unified diagnostics")
@@ -1045,6 +1064,11 @@ def main():
         return _chat(args)
     elif args.command == "update":
         return _update(args)
+    elif args.command == "clients":
+        if args.clients_command == "sync":
+            return _clients_sync(args)
+        clients_parser.print_help()
+        return 0
     elif args.command == "doctor":
         return _doctor(args)
     elif args.command == "contributor":

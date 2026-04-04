@@ -536,7 +536,7 @@ Files and areas that cause repeated errors accumulate a risk score (0.0–1.0). 
 npx nexo-brain
 ```
 
-The installer handles everything:
+The installer handles everything and syncs the same `nexo` MCP brain into Claude Code, Claude Desktop, and Codex when those clients are present:
 
 ```
   How should I call myself? (default: NEXO) > Atlas
@@ -570,6 +570,7 @@ After install, use the runtime CLI:
 nexo chat          # Launch Claude Code with NEXO as operator
 nexo doctor        # Check runtime health
 nexo update        # Pull latest version and sync
+nexo clients sync  # Re-sync Claude Code/Desktop/Codex to the same brain
 nexo scripts list  # See your personal scripts
 ```
 
@@ -596,6 +597,7 @@ Your operator will greet you immediately — adapted to the time of day, resumin
 | Schedule config | schedule.json with customizable process times and timezone | NEXO_HOME/config/ |
 | Auto-update | Non-blocking startup check (5s max), opt-out via schedule.json | Built into server startup |
 | CLAUDE.md tracker | Version-tracked core sections with safe updates preserving customizations | Built into auto-update |
+| Shared client sync | Same `nexo` MCP entry wired into Claude Code, Claude Desktop, and Codex | User config dirs |
 | Auto-diary | 3-layer system: PostToolUse every 10 calls, PreCompact emergency, heartbeat DIARY_OVERDUE | Built into hooks |
 | Claude Code config | MCP server + 7 hooks + 15 processes registered | ~/.claude/settings.json |
 
@@ -653,6 +655,7 @@ NEXO Brain separates **code** (immutable, in the repo or npm package) from **dat
 | `NEXO_HOME/data/` | SQLite databases (nexo.db, cognitive.db), migration state |
 
 The plugin loader scans `src/plugins/` first (base), then `NEXO_HOME/plugins/` (personal override by filename). This dual-directory approach lets you extend NEXO without forking the repo.
+The client sync layer points Claude Code, Claude Desktop, and Codex at the same runtime and `NEXO_HOME`, so all three clients share one brain instead of drifting into separate local memories.
 
 ### 150+ MCP Tools across 21+ Categories
 
@@ -742,6 +745,14 @@ npx nexo-brain
 ```
 
 All 150+ tools are available immediately after installation. The installer configures Claude Code's `~/.claude/settings.json` automatically.
+
+### Claude Desktop
+
+When Claude Desktop is installed, `nexo-brain`, `nexo update`, and `nexo clients sync` keep `claude_desktop_config.json` pointed at the same local NEXO runtime and `NEXO_HOME`.
+
+### Codex
+
+When Codex CLI is available, `nexo-brain`, `nexo update`, and `nexo clients sync` register the same `nexo` MCP server via `codex mcp add`, so Codex uses the same local memory store as Claude Code and Claude Desktop.
 
 ### OpenClaw
 

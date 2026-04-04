@@ -1197,6 +1197,7 @@ def _backup_runtime_tree(dest: Path = NEXO_HOME) -> str:
         "server.py", "plugin_loader.py", "knowledge_graph.py", "kg_populate.py",
         "maintenance.py", "storage_router.py", "claim_graph.py", "hnsw_index.py",
         "evolution_cycle.py", "migrate_embeddings.py", "auto_close_sessions.py",
+        "client_sync.py",
         "auto_update.py", "tools_sessions.py", "tools_coordination.py",
         "tools_reminders.py", "tools_reminders_crud.py", "tools_learnings.py",
         "tools_credentials.py", "tools_task_history.py", "tools_menu.py",
@@ -1244,6 +1245,7 @@ def _copy_runtime_from_source(src_dir: Path, repo_dir: Path, dest: Path = NEXO_H
         "server.py", "plugin_loader.py", "knowledge_graph.py", "kg_populate.py",
         "maintenance.py", "storage_router.py", "claim_graph.py", "hnsw_index.py",
         "evolution_cycle.py", "migrate_embeddings.py", "auto_close_sessions.py",
+        "client_sync.py",
         "auto_update.py", "tools_sessions.py", "tools_coordination.py",
         "tools_reminders.py", "tools_reminders_crud.py", "tools_learnings.py",
         "tools_credentials.py", "tools_task_history.py", "tools_menu.py",
@@ -1431,6 +1433,18 @@ def _run_runtime_post_sync(dest: Path = NEXO_HOME, progress_fn=None) -> tuple[bo
     power_result = apply_power_policy()
     if power_result.get("ok"):
         actions.append(f"power:{power_result.get('action')}")
+
+    _emit_progress(progress_fn, "Refreshing shared client configs...")
+    try:
+        from client_sync import sync_all_clients
+
+        client_sync_result = sync_all_clients(nexo_home=dest, runtime_root=dest)
+        if client_sync_result.get("ok"):
+            actions.append("client-sync")
+        else:
+            actions.append("client-sync-warning")
+    except Exception as e:
+        actions.append(f"client-sync-warning:{e}")
 
     _emit_progress(progress_fn, "Verifying runtime imports...")
     verify = subprocess.run(

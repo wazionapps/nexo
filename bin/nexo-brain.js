@@ -1764,6 +1764,7 @@ async function main() {
     "evolution_cycle.py",
     "migrate_embeddings.py",
     "auto_close_sessions.py",
+    "client_sync.py",
     "auto_update.py",
     "tools_sessions.py",
     "tools_coordination.py",
@@ -2365,6 +2366,40 @@ ${doScan ? `- Stack: ${Object.keys(profileData.code.languages || {}).slice(0, 5)
   fs.mkdirSync(settingsDir, { recursive: true });
   fs.writeFileSync(CLAUDE_SETTINGS, JSON.stringify(settings, null, 2));
   log("MCP server + 8 core hooks configured in Claude Code settings.");
+
+  const syncClientsScript = path.join(NEXO_HOME, "scripts", "nexo-sync-clients.py");
+  if (fs.existsSync(syncClientsScript)) {
+    const syncResult = spawnSync(
+      python,
+      [
+        syncClientsScript,
+        "--nexo-home", NEXO_HOME,
+        "--runtime-root", NEXO_HOME,
+        "--python", python,
+        "--operator-name", operatorName,
+        "--json",
+      ],
+      { encoding: "utf8" }
+    );
+    if (syncResult.status === 0) {
+      try {
+        const payload = JSON.parse(syncResult.stdout || "{}");
+        const clients = payload.clients || {};
+        const fmt = (name, key) => {
+          const item = clients[key] || {};
+          if (item.skipped) return `${name}: skipped`;
+          if (item.ok) return `${name}: synced`;
+          return `${name}: warning`;
+        };
+        log(`Shared brain client sync complete (${fmt("Claude Code", "claude_code")}, ${fmt("Claude Desktop", "claude_desktop")}, ${fmt("Codex", "codex")}).`);
+      } catch {
+        log("Shared brain client sync complete.");
+      }
+    } else {
+      const errMsg = (syncResult.stderr || syncResult.stdout || "").trim();
+      log(`WARN: shared brain client sync failed: ${errMsg || "unknown error"}`);
+    }
+  }
 
   // Step 7: Create schedule.json (only on fresh install) and install core processes
   log("Setting up automated processes...");

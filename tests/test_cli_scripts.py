@@ -210,6 +210,38 @@ class TestRuntimeUpdate:
         assert data["version"] == "2.6.0"
 
 
+class TestClientsCommand:
+    def test_clients_sync_writes_shared_configs(self, nexo_home, tmp_path):
+        fake_codex = tmp_path / "codex"
+        fake_codex.write_text(
+            "#!/usr/bin/env python3\n"
+            "import json, os, sys\n"
+            f"open({json.dumps(str(tmp_path / 'codex-invocation.json'))}, 'w').write(json.dumps(sys.argv[1:]))\n"
+        )
+        fake_codex.chmod(0o755)
+
+        env = {
+            **os.environ,
+            "NEXO_HOME": str(nexo_home),
+            "NEXO_CODE": os.path.join(os.path.dirname(__file__), "..", "src"),
+            "HOME": str(nexo_home),
+            "PATH": f"{tmp_path}:{os.environ.get('PATH', '')}",
+        }
+        result = subprocess.run(
+            [sys.executable, CLI_PY, "clients", "sync", "--json"],
+            capture_output=True, text=True, timeout=10, env=env,
+        )
+
+        assert result.returncode == 0, result.stderr
+        payload = json.loads(result.stdout)
+        assert payload["ok"] is True
+        assert payload["clients"]["claude_code"]["ok"] is True
+        assert payload["clients"]["claude_desktop"]["ok"] is True
+        assert payload["clients"]["codex"]["ok"] is True
+        assert (nexo_home / ".claude" / "settings.json").is_file()
+        assert (nexo_home / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json").is_file()
+
+
 class TestChatCommand:
     def test_chat_launches_claude_with_current_path(self, nexo_home, tmp_path):
         fake_claude = tmp_path / "claude"
