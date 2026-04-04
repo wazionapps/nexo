@@ -4,26 +4,25 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive memory system. Every feature, fix, and improvement from v0.8.10 to v2.6.0.">
+    <meta name="description" content="Recent NEXO Brain releases: runtime recovery, safer updates, power helper semantics, personal script lifecycle, startup preflight, and public product surface changes.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
-    <!-- Open Graph -->
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive memory system. Every feature, fix, and improvement from v0.8.10 to v2.6.0.">
+    <meta property="og:description" content="Recent releases for NEXO Brain, from runtime hardening to startup preflight and personal script lifecycle.">
     <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
-    <meta property="og:image:width" content="1536">
-    <meta property="og:image:height" content="1024">
 
-    <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive memory system. Every feature, fix, and improvement from v0.8.10 to v2.6.0.">
+    <meta name="twitter:description" content="Recent releases for NEXO Brain, from runtime hardening to startup preflight and personal script lifecycle.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
 
-    <!-- Google Analytics (GA4) -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
     <script>
       window.dataLayer = window.dataLayer || [];
@@ -31,485 +30,75 @@
       gtag('js', new Date());
       gtag('config', 'G-1LNEMCJMS7');
     </script>
-
-    <!-- Favicon -->
-    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
-    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
-    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
-
-    <link rel="stylesheet" href="/assets/style.css">
 </head>
 <body>
 
 <nav>
     <div class="container">
-        <a href="/" class="nav-logo">
-            <img src="/assets/logo-64.png" alt="NEXO Brain" width="32" height="32">
-            NEXO Brain
-        </a>
+        <a href="/" class="nav-logo"><img src="/assets/logo-64.png" alt="NEXO Brain" width="32" height="32">NEXO Brain</a>
         <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
         </button>
         <div class="nav-links">
-            <a href="/features/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>Features</a>
-            <a href="/features/cognitive/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a8 8 0 0 1 8 8c0 3.5-2 6-4 7.5V19H8v-1.5C6 16 4 13.5 4 10a8 8 0 0 1 8-8z"/><path d="M9 22h6"/><path d="M10 19v-2.5"/><path d="M14 19v-2.5"/></svg>Cognitive</a>
-            <a href="/features/architecture/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Architecture</a>
-            <a href="/features/tools/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>Tools</a>
-            <a href="/features/benchmark/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>Benchmark</a>
-            <a href="/changelog/" style="color:var(--purple-light)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/></svg>Changelog</a>
-            <a href="/docs/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>Docs</a>
-            <a href="https://github.com/wazionapps/nexo" class="nav-cta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>GitHub</a>
+            <a href="/features/">Features</a>
+            <a href="/docs/">Docs</a>
+            <a href="/changelog/" style="color:var(--purple-light)">Changelog</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta">GitHub</a>
         </div>
     </div>
 </nav>
 
-<!-- Header -->
 <section class="pt-nav" style="text-align:center;">
     <div class="container">
-        <div class="section-label">VERSION HISTORY</div>
-        <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
-        <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning.</p>
+        <div class="section-label">Release History</div>
+        <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">The last releases that actually changed the runtime</h1>
+        <p class="section-subtitle">
+            Short, public-facing highlights. The full engineering history remains in the repository changelog.
+        </p>
     </div>
 </section>
 
-<!-- v2.6.0 Personal Scripts Registry, Plugin Marketplace, Managed Evolution -->
-<section id="v260" class="section-compact" style="background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
+<section>
     <div class="container">
-        <div class="section-label">New in v2.6.0</div>
-        <h2 class="section-title">Personal Scripts Registry, Plugin Marketplace &amp; Managed Evolution</h2>
-        <p class="section-subtitle">
-            Your scripts become first-class citizens with 9 MCP tools for lifecycle management. NEXO Brain is now structured as a Claude Code plugin. The Day Orchestrator has been decoupled from core to reduce complexity.
-        </p>
-        <div class="cognitive-group">
-            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
-                <div class="cognitive-card"><h4>Personal Scripts Registry</h4><p>Scripts in NEXO_HOME/scripts/ are tracked in SQLite with metadata, categories, and schedule associations. 9 MCP tools: list, create, remove, reconcile, sync, classify, schedule, unschedule, ensure_schedules. Full lifecycle management.</p></div>
-                <div class="cognitive-card"><h4>Claude Code Plugin</h4><p>Added <code>plugin.json</code>, entry point, and packaging structure for the Anthropic Claude Code plugin marketplace. NEXO Brain can now be discovered and installed as a first-class Claude Code extension.</p></div>
-                <div class="cognitive-card"><h4>Managed Evolution</h4><p>Evolution can now modify core behavior modules (not just config) when running in managed mode. Automatic rollback followups ensure safe self-improvement. Fixed false-positive watchdog tamper detection.</p></div>
-                <div class="cognitive-card"><h4><code>nexo chat</code></h4><p>Official CLI command to launch Claude Code with NEXO as operator. Supports directory arguments. Runtime version now correctly surfaces in installed environments.</p></div>
-                <div class="cognitive-card"><h4>Orchestrator Decoupled</h4><p>The Day Orchestrator (autonomous headless cycles every 15 min) has been removed from the core product. Reduces complexity for standard installs. Power users can keep it as a personal script.</p></div>
-                <div class="cognitive-card"><h4>Cron Reliability</h4><p>Hardened cron runtime recovery with TCC diagnostics. Keepalive sync alignment. Disabled optional crons correctly respected. Personal schedules handled during boot recovery. Duplicate learning prevention.</p></div>
+        <div class="timeline">
+            <div class="timeline-item">
+                <div class="timeline-label">2.6.5 · 2026-04-04</div>
+                <h3>Safer wake/update behavior and public surface cleanup</h3>
+                <p>Clarified power-helper semantics, suppressed duplicate catch-up relaunches for in-flight cron windows, and made runtime updates reconcile declared personal schedules automatically.</p>
             </div>
-        </div>
-    </div>
-</section>
-
-<!-- v2.4.0 Skills, Cron Scheduler, Security -->
-<section id="v240" class="section-compact" style="background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
-    <div class="container">
-        <div class="section-label">New in v2.4.0</div>
-        <h2 class="section-title">Skills, Cron Scheduler &amp; Security</h2>
-        <p class="section-subtitle">
-            Deep Sleep now creates reusable skills automatically, every cron execution is tracked, and the system passed a 5-phase automated audit covering product, failure handling, security, packaging, and UX.
-        </p>
-        <div class="cognitive-group">
-            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
-                <div class="cognitive-card"><h4>Skill Auto-Creation</h4><p>Deep Sleep extracts multi-step procedures from sessions and stores them as skills with full content (steps, gotchas, markdown). Trust pipeline: trace&rarr;draft&rarr;published&rarr;archived. 7 MCP tools for skill management.</p></div>
-                <div class="cognitive-card"><h4>Cron Scheduler</h4><p>Every cron execution tracked in <code>cron_runs</code> table. <code>nexo_schedule_status</code> shows what ran overnight. <code>nexo_schedule_add</code> creates new crons from conversation. Universal wrapper for all processes.</p></div>
-                <div class="cognitive-card"><h4>Deep Sleep v2.4</h4><p>Watermark-based collection (late-night sessions never missed). Per-session checkpointing (crash-safe resume). Retry x3 on failure. Auto-calibration of personality settings from emotional analysis.</p></div>
-                <div class="cognitive-card"><h4>Security Fixes</h4><p>Credential redaction in tool logs. Transcript sanitization in Deep Sleep. Command injection fix in dashboard. Path traversal protection in plugin loader. 5-phase audit passed.</p></div>
-                <div class="cognitive-card"><h4>Diary Filter</h4><p>Startup only shows human-interactive sessions. Automated cron diaries filtered out. Email sessions preserved as real interactions. Auto-closed sessions with heartbeats kept.</p></div>
-                <div class="cognitive-card"><h4>Python 3.9 + Linux</h4><p><code>from __future__ import annotations</code> across 18 files for Python 3.9 compat. Full systemd timer support. Bash alias written to <code>.bashrc</code> for Linux users.</p></div>
+            <div class="timeline-item">
+                <div class="timeline-label">2.6.3 · 2026-04-04</div>
+                <h3>Fix runtime update gaps</h3>
+                <p>Fixed same-file sync issues during runtime update, normalized Claude Code hook migration, and realigned packaged runtime version detection.</p>
+            </div>
+            <div class="timeline-item">
+                <div class="timeline-label">2.6.2 · 2026-04-04</div>
+                <h3>Startup preflight, power policy, personal recovery</h3>
+                <p>Added startup preflight before chat/server startup, persisted the optional power policy, and brought managed personal schedules into the wake/catch-up recovery path.</p>
+            </div>
+            <div class="timeline-item">
+                <div class="timeline-label">2.6.0 · 2026-04-03</div>
+                <h3>Personal scripts become first-class</h3>
+                <p>Introduced the personal scripts registry, schedule lifecycle, plugin structure for Claude Code, and removed the old day orchestrator from core.</p>
+            </div>
+            <div class="timeline-item">
+                <div class="timeline-label">2.5.0 · 2026-04-03</div>
+                <h3>Runtime CLI and unified doctor</h3>
+                <p>Shipped the <code>nexo</code> CLI, modular diagnostics, runtime update flow, executable skills, and operational entrypoints that define the modern product surface.</p>
             </div>
         </div>
     </div>
 </section>
 
-<!-- v2.1.0 Deep Sleep v2 & Emotional Intelligence -->
-<section id="v210" class="section-compact" style="background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
+<section>
     <div class="container">
-        <div class="section-label">New in v2.1.0</div>
-        <h2 class="section-title">Deep Sleep v2 &amp; Emotional Intelligence</h2>
-        <p class="section-subtitle">
-            A 4-phase overnight pipeline with emotional analysis, abandoned project detection, and declarative cron management. The agent now adapts its personality based on yesterday's emotional signals.
-        </p>
-        <div class="cognitive-group">
-            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
-                <div class="cognitive-card"><h4>Deep Sleep v2: 4-Phase Pipeline</h4><p>Complete rewrite of the overnight analysis system. Collect splits transcripts into individual session files. Extract runs Claude per session to find uncaptured findings. Synthesize merges cross-session patterns. Brief generates a structured morning briefing with priorities.</p></div>
-                <div class="cognitive-card"><h4>Session Tone (Emotional Intelligence)</h4><p>Each session's emotional profile (frustration, flow, urgency, satisfaction) is analyzed and stored in <code>session-tone.json</code>. On startup, <code>smart_startup</code> reads tone data and adapts the agent's next-day behavior automatically.</p></div>
-                <div class="cognitive-card"><h4>8 Finding Types</h4><p>Deep Sleep extracts: uncaptured corrections, protocol violations, missed commitments, user preferences, recurring patterns, emotional signals, abandoned projects, and productivity insights. Each with severity scoring and recommended actions.</p></div>
-                <div class="cognitive-card"><h4>Cron Manifest</h4><p>All autonomous processes declared in <code>cron-manifest.json</code> with schedules, descriptions, and platform configs. <code>nexo_update</code> automatically syncs LaunchAgents/systemd timers after code updates. No manual plist editing.</p></div>
-                <div class="cognitive-card"><h4>Abandoned Project Detection</h4><p>Deep Sleep identifies projects mentioned in sessions that have gone silent &mdash; no commits, no mentions, no followups. Surfaces them in the morning briefing with context.</p></div>
-                <div class="cognitive-card"><h4>Unified CLI Timeouts</h4><p>All Claude CLI calls unified to 6h (21600s) safety net. Fixes premature termination of long-running processes like deep-sleep, immune, and synthesis. Added <code>NEXO_HEADLESS=1</code> to all background scripts.</p></div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- v2.0.0 Unified Architecture -->
-<section id="v200" class="section-compact" style="background:linear-gradient(135deg,#1a0f2e 0%,#0F0A1A 100%);">
-    <div class="container">
-        <div class="section-label">v2.0.0</div>
-        <h2 class="section-title">Unified Architecture</h2>
-        <p class="section-subtitle">
-            Code and data fully separated. 14 autonomous processes auto-installed. Auto-update on startup. Auto-diary captures everything. 144+ MCP tools. 12 rounds of external audit with ~60 findings resolved.
-        </p>
-        <div class="cognitive-group">
-            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
-                <div class="cognitive-card"><h4>Unified Architecture</h4><p>Code lives in the repo, personal data in NEXO_HOME (~/.nexo/). Clean separation means updates never touch your data and multiple agents can share the same codebase.</p></div>
-                <div class="cognitive-card"><h4>14 Autonomous Processes</h4><p>All processes auto-installed: watchdog, immune, synthesis, backup, catchup, cognitive-decay, postmortem, self-audit, sleep, deep-sleep, evolution, followup-hygiene, prevent-sleep, tcc-approve, auto-close-sessions. Plus 7 hooks.</p></div>
-                <div class="cognitive-card"><h4>Auto-Update on Startup</h4><p>Non-blocking update check (5s max) on every server start. Resilient to network failures. Opt-out via schedule.json. No more manual npm updates.</p></div>
-                <div class="cognitive-card"><h4>Auto-Diary</h4><p>3-layer diary system: PostToolUse writes every 10 calls, PreCompact catches emergencies before context eviction, heartbeat triggers on DIARY_OVERDUE. Never lose session context again.</p></div>
-                <div class="cognitive-card"><h4>schedule.json</h4><p>Customizable process schedules with timezone support. Control when each autonomous process runs. Override defaults without editing plist/timer files.</p></div>
-                <div class="cognitive-card"><h4>Lambda Decay Fix</h4><p>Memory decay was 24x too aggressive. STM half-life corrected from 7 hours to 7 days, LTM from 2.4 days to 60 days. Memories now persist as intended.</p></div>
-                <div class="cognitive-card"><h4>CLAUDE.md Version Tracker</h4><p>Section markers for safe core updates without losing user customizations. The installer updates its own sections and preserves everything else.</p></div>
-                <div class="cognitive-card"><h4>External Audit</h4><p>12 rounds of audit by GPT-5.4, Gemini 2.5, and Claude Opus. ~60 findings resolved: guard noise, MCP truncation, decay values, import errors, legacy paths, and more.</p></div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- v1.7.0 Full Internationalization + Linux Support -->
-<section id="v170" class="section-compact" style="background:linear-gradient(135deg,#1a0f2e 0%,#0F0A1A 100%);">
-    <div class="container">
-        <div class="section-label">v1.7.0</div>
-        <h2 class="section-title">Full Internationalization + Linux Support</h2>
-
-        <p class="section-subtitle">
-            NEXO Brain is now fully English, fully cross-platform, and ready for any user. All UI strings, DB status values, and paths are internationalized. Linux gets first-class automated processes via systemd or crontab.
-        </p>
-        <div class="cognitive-group">
-            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
-                <div class="cognitive-card"><h4>Full Internationalization</h4><p>All 39 source files translated to English. DB status values: PENDING, COMPLETED, DELETED. Zero Spanish in user-facing output. Onboarding still supports 7 languages.</p></div>
-                <div class="cognitive-card"><h4>Linux Support</h4><p>systemd user timers (preferred) or crontab fallback. Same 4 automated processes as macOS: cognitive decay, postmortem, sleep, self-audit. Platform auto-detected during install.</p></div>
-                <div class="cognitive-card"><h4>Auto-Resolve Followups</h4><p>Change log entries automatically cross-reference open followups by file overlap, keyword similarity, and ID reference. Matching followups are completed automatically.</p></div>
-                <div class="cognitive-card"><h4>Free-Form Categories</h4><p>Learning categories are no longer hardcoded. Use any category name that makes sense for your project: backend, frontend, devops, or anything else.</p></div>
-                <div class="cognitive-card"><h4>CLAUDE.md Template Rewrite</h4><p>494 to 127 lines. Same capabilities, compact procedural format. Heartbeat signal reactions, Cortex modes, and Adaptive personality all documented.</p></div>
-                <div class="cognitive-card"><h4>Complete Sanitization</h4><p>All hardcoded paths replaced with NEXO_HOME env var. Zero personal data in the codebase. 48 macOS Finder duplicate files deleted.</p></div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- v1.6.0 Nervous System + Dashboard v2 + LaunchAgent Templates -->
-<section id="v160" class="section-compact" style="background:linear-gradient(135deg,#1a0f2e 0%,#0F0A1A 100%);">
-    <div class="container">
-        <div class="section-label">v1.6.0</div>
-        <h2 class="section-title">Nervous System + Dashboard v2 + LaunchAgent Templates</h2>
-        <p class="section-subtitle">
-            NEXO Brain now ships with a complete autonomous nervous system of 11 background scripts, a redesigned visual dashboard, 13 LaunchAgent templates for zero-config setup, and a full migration script from v1.5.
-        </p>
-        <div class="cognitive-group">
-            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
-                <div class="cognitive-card"><h4>Nervous System (11 scripts)</h4><p>Immune system, daily synthesis, self-audit, postmortem consolidator, proactive dashboard, followup hygiene, GitHub monitor, catch-up. Updated: watchdog, evolution, cognitive decay, deep sleep.</p></div>
-                <div class="cognitive-card"><h4>Dashboard v2</h4><p>FastAPI-powered visual interface with 6 pages: dashboard overview, operations, calendar, inbox. CRUD UI for managing memories. Sidebar navigation, trust widget, static assets.</p></div>
-                <div class="cognitive-card"><h4>13 LaunchAgent Templates</h4><p>Ready-to-install macOS plists: watchdog, immune, synthesis, self-audit, cognitive decay, evolution, deep sleep, followup hygiene, auto-close, dashboard, catch-up, postmortem, GitHub monitor. Includes README install guide.</p></div>
-                <div class="cognitive-card"><h4>5 Hooks Updated</h4><p>Session-stop v7 (post-mortem), session-start (semantic context), inter-terminal inbox hook, capture-tool-logs (JSONL), daily-briefing-check.</p></div>
-                <div class="cognitive-card"><h4>Migration Script</h4><p>Automated v1.5 to v1.6 migration: 13 nexo.db schema migrations, cognitive.db tables, full i18n (Spanish to English), logo optimized 1.4MB to 28KB.</p></div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- v1.5.2 Deep Sleep + Watchdog Auto-Repair -->
-<section id="v152" class="section-compact" style="background:linear-gradient(135deg,#1a0f2e 0%,#0F0A1A 100%);">
-    <div class="container">
-        <div class="section-label">v1.5.2</div>
-        <h2 class="section-title">Deep Sleep + Watchdog Auto-Repair</h2>
-        <p class="section-subtitle">
-            NEXO Brain now reads your complete session transcripts overnight, finding what the agent missed during the day. Plus: the watchdog can re-execute missed crons and verify its own repairs.
-        </p>
-        <div class="cognitive-group">
-            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
-                <div class="cognitive-card"><h4>Deep Sleep Analyzer</h4><p>Reads every message, tool call, and correction from the day's sessions. Finds uncaptured corrections, protocol violations, missed commitments, and quality issues. Applies findings as learnings, feedback memories, followups, and trust adjustments.</p></div>
-                <div class="cognitive-card"><h4>Transcript Analysis</h4><p>Uses Claude CLI in bare mode to analyze each session independently. No hooks, no CLAUDE.md interference. Processes 10+ sessions per night with catch-up for missed days.</p></div>
-                <div class="cognitive-card"><h4>Watchdog Level 3</h4><p>When a scheduled cron misses its run (Mac was asleep), the watchdog extracts ProgramArguments from the plist and re-executes it directly. No more lost nightly jobs.</p></div>
-                <div class="cognitive-card"><h4>Post-Repair Verification</h4><p>After Level 2 Claude CLI repair, the watchdog waits and verifies the fix actually worked — checks loaded state, process running, and log freshness. No more silent failures.</p></div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- v1.5.0 Modular Architecture + KG Search + HNSW + Claim Graph + D+ Inbox -->
-<section id="v150" class="section-compact" style="background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
-    <div class="container">
-        <div class="section-label">New in v1.5.0</div>
-        <h2 class="section-title">Modular Architecture + KG Search + HNSW</h2>
-        <p class="section-subtitle">
-            The two largest files are now modular packages. Search is smarter with Knowledge Graph boosting. Vector indexing scales to 10K+ memories. Claims decompose blobs into verifiable atomic facts. Terminals talk to each other automatically.
-        </p>
-        <div class="cognitive-group">
-            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
-                <div class="cognitive-card"><h4>Modular Packages</h4><p>db.py (2,900 lines) &rarr; db/ package with 11 modules. cognitive.py (3,900 lines) &rarr; cognitive/ package with 6 modules. All imports unchanged &mdash; zero breaking changes.</p></div>
-                <div class="cognitive-card"><h4>KG-Boosted Search</h4><p>Memories connected to more Knowledge Graph nodes rank higher. Logarithmic boost based on structural importance bridges semantic and graph retrieval.</p></div>
-                <div class="cognitive-card"><h4>HNSW Vector Indexing</h4><p>Optional hnswlib integration for approximate nearest neighbor search. Auto-activates when memory count exceeds 10,000. Hooks into ingest, search, and GC.</p></div>
-                <div class="cognitive-card"><h4>Claim Graph</h4><p>Decompose blob memories into atomic verifiable claims with provenance, contradiction detection, and verification status. Each fact tracked individually.</p></div>
-                <div class="cognitive-card"><h4>Inter-Terminal Auto-Inbox</h4><p>PostToolUse hook checks inbox automatically via sqlite3. 2-second debounce, skips read-only tools. Zero tokens consumed when no messages waiting.</p></div>
-                <div class="cognitive-card"><h4>Test Suite</h4><p>24 pytest tests covering migrations, CRUD, cosine similarity, KG boost, knowledge graph traversal, and temporal boost. Isolated temp databases per test.</p></div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- v1.4.1 The Brain Dreams + Multi-AI Review -->
-<section id="v141" class="section-compact" style="background:linear-gradient(135deg,#1a0f2e 0%,#0F0A1A 100%);">
-    <div class="container">
-        <div class="section-label">New in v1.4.1</div>
-        <h2 class="section-title">The Brain Dreams + Multi-AI Code Review</h2>
-        <p class="section-subtitle">
-            All 9 nightly processes now use Claude CLI (opus) for intelligent decisions instead of Python word-matching. Plus: 3 bugs found by giving GPT-5.4 and Gemini 2.5 full access to the codebase.
-        </p>
-        <div class="cognitive-group">
-            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
-                <div class="cognitive-card"><h4>CLI Wrapper Pattern</h4><p>Pure Python collects data, then Claude CLI opus makes intelligent decisions. The brain uses its own intelligence to dream &mdash; not a calculator.</p></div>
-                <div class="cognitive-card"><h4>Multi-AI Code Review</h4><p>GPT-5.4 (Codex CLI) + Gemini 2.5 (Gemini CLI) + Claude Opus reviewed the full codebase simultaneously. Found 3 real bugs with exact file:line references.</p></div>
-                <div class="cognitive-card"><h4>Memory Sanitization</h4><p>Retrieved memories are now sanitized to prevent prompt injection. Stored content is treated as quoted evidence, not executable instructions.</p></div>
-                <div class="cognitive-card"><h4>Quarantine Fix</h4><p>The quarantine system now distinguishes confirmation from contradiction. Similar memories that reinforce each other are no longer rejected as conflicts.</p></div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- v1.3.0 Evolution System -->
-<section id="v130" class="section-compact" style="background:linear-gradient(135deg,#1a0f2e 0%,#0F0A1A 100%);">
-    <div class="container">
-        <div class="section-label">New in v1.3.0</div>
-        <h2 class="section-title">Evolution System</h2>
-        <p class="section-subtitle">
-            NEXO can now evolve its own configuration autonomously through a structured proposal &rarr; review &rarr; implement cycle. Dual-mode operation ensures safety: auto mode for low-risk changes, review mode requiring explicit approval.
-        </p>
-        <div class="cognitive-group">
-            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
-                <div class="cognitive-card"><h4>Dual-Mode Evolution</h4><p>Auto mode applies low-risk improvements (nightly job tuning, threshold adjustments) without intervention. Review mode stages proposals for human approval before execution.</p></div>
-                <div class="cognitive-card"><h4>Proposal Pipeline</h4><p>Evolution proposals are generated from session patterns, guard stats, and cognitive metrics. Each proposal includes rationale, risk assessment, and rollback plan.</p></div>
-                <div class="cognitive-card"><h4>Claude CLI Integration</h4><p>Proposals are executed via Claude CLI for safe, auditable implementation. Every change is logged and reversible.</p></div>
-                <div class="cognitive-card"><h4>Nightly Auto-Dedup</h4><p>Nightly jobs now detect and merge duplicate learnings automatically. Test/debug STM memories are purged during cognitive decay.</p></div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- v1.2.3 AGPL-3.0 License -->
-<section id="v123" class="section-compact" style="background:linear-gradient(135deg,#1a0f2e 0%,#0F0A1A 100%);">
-    <div class="container">
-        <div class="section-label">New in v1.2.3</div>
-        <h2 class="section-title">License: AGPL-3.0</h2>
-        <p class="section-subtitle">
-            NEXO Brain is now licensed under AGPL-3.0. This ensures that any modifications to the cognitive memory system remain open-source when deployed as a service.
-        </p>
-    </div>
-</section>
-
-<!-- v1.2.2 Phantom Farewell Fix -->
-<section id="v122" class="section-compact" style="background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
-    <div class="container">
-        <div class="section-label">New in v1.2.2</div>
-        <h2 class="section-title">Phantom Farewell Fix</h2>
-        <p class="section-subtitle">
-            The Stop hook no longer says goodbye when a session ends. Farewell messages were a side-effect of the post-mortem enforcement hook, creating confusing output on every session close.
-        </p>
-        <div class="cognitive-group">
-            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
-                <div class="cognitive-card"><h4>Fix: Phantom Farewell Messages</h4><p>Stop hook no longer says goodbye when session ends. The farewell was an unintended side-effect of the post-mortem enforcement block — removed cleanly without affecting diary write behavior.</p></div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- v1.2.1 Hotfix / v1.2.0 Stop Hook Post-Mortem -->
-<section id="v120" class="section-compact" style="background:linear-gradient(135deg,#1a0f2e 0%,#0F0A1A 100%);">
-    <div class="container">
-        <div class="section-label">New in v1.2.0 &mdash; Hotfix v1.2.1</div>
-        <h2 class="section-title">Stop Hook Post-Mortem Enforcement</h2>
-        <p class="section-subtitle">
-            The Stop hook now uses <code>decision:block</code> instead of <code>approve</code> to enforce post-mortem execution. This ensures the session diary is always written before Claude exits &mdash; no more lost context on abrupt stops.
-        </p>
-        <div class="cognitive-group">
-            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
-                <div class="cognitive-card"><h4>Fix: decision:block</h4><p>Stop hook changed from <code>approve</code> to <code>decision:block</code> so post-mortem writing is enforced architecturally, not just suggested.</p></div>
-                <div class="cognitive-card"><h4>v1.2.1 Hotfix</h4><p>Fixed infinite block loop triggered when the Stop hook blocked its own post-mortem execution. Added trivial session detection to skip diary write on empty or no-op sessions.</p></div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- v1.1.0 Context Continuity -->
-<section id="v110" class="section-compact" style="background:linear-gradient(135deg,#1a0f2e 0%,#0F0A1A 100%);">
-    <div class="container">
-        <div class="section-label">New in v1.1.0</div>
-        <h2 class="section-title">Context Continuity</h2>
-        <p class="section-subtitle">
-            Long sessions no longer lose their thread. NEXO preserves session context across Claude Code compaction events using PreCompact checkpoints and PostCompact re-injection. 8-hour sessions feel like one continuous conversation.
-        </p>
-        <div class="cognitive-group">
-            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
-                <div class="cognitive-card"><h4>PreCompact Checkpoint</h4><p>Before compaction, NEXO saves a complete snapshot to SQLite: current task, active files, decisions, errors, reasoning thread, and next step.</p></div>
-                <div class="cognitive-card"><h4>Core Memory Block</h4><p>After compaction, a structured block is re-injected into context with everything needed to continue seamlessly. Zero "where were we?" moments.</p></div>
-                <div class="cognitive-card"><h4>Heartbeat Tracking</h4><p>The checkpoint updates automatically every interaction via the heartbeat. No manual action required &mdash; continuity is always maintained.</p></div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- v1.0.0 Cognitive Cortex -->
-<section id="v100" class="section-compact" style="background:linear-gradient(135deg,#1a0f2e 0%,#0F0A1A 100%);">
-    <div class="container">
-        <div class="section-label">New in v1.0.0</div>
-        <h2 class="section-title">Cognitive Cortex</h2>
-        <p class="section-subtitle">
-            The agent thinks before acting. Architectural inhibitory control validates reasoning quality and physically restricts tools until the plan is sound. Designed via 3-way AI debate (Claude Opus + GPT-5.4 + Gemini 3.1 Pro).
-        </p>
-        <div class="cognitive-group">
-            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
-                <div class="cognitive-card"><h4>ASK Mode</h4><p>Unknowns detected. Tools restricted to read and search. Agent must gather information before proceeding.</p></div>
-                <div class="cognitive-card"><h4>PROPOSE Mode</h4><p>No plan or verification step. Agent can propose but not execute. User reviews before action.</p></div>
-                <div class="cognitive-card"><h4>ACT Mode</h4><p>Plan, evidence, and verification present. Full tool access granted. Agent executes with confidence.</p></div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- v0.10.0-beta Features -->
-<section id="v0100" class="section-compact" style="background:linear-gradient(135deg,#1a0f2e 0%,#0F0A1A 100%);">
-    <div class="container">
-        <div class="section-label">New in v0.10.0</div>
-        <h2 class="section-title">Cognitive Cortex + 30 Core Rules + Stable Release</h2>
-        <p class="section-subtitle">
-            v0.10.0 tackles the "stores but forgets" problem. Three new features ensure the right memories surface at the right time &mdash; at session boot, during conversation, and when delegating to subagents.
-        </p>
-
-        <div class="cognitive-group">
-            <div class="cognitive-group-label">New Tools</div>
-            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
-                <div class="cognitive-card">
-                    <h4>Smart Startup</h4>
-                    <p>Pre-loads relevant memories at session boot by composing a query from pending followups, due reminders, and last session's topics. No more cold starts.</p>
-                </div>
-                <div class="cognitive-card">
-                    <h4>Context Packets</h4>
-                    <p>Bundles all area knowledge (learnings, changes, followups, preferences, cognitive memories) into a single injectable packet for subagent delegation.</p>
-                </div>
-                <div class="cognitive-card">
-                    <h4>Auto-Prime by Topic</h4>
-                    <p>Heartbeat detects project keywords in conversation and automatically surfaces relevant learnings. Context arrives proactively &mdash; no manual query needed.</p>
-                </div>
-            </div>
-        </div>
-
-        <div class="cognitive-group">
-            <div class="cognitive-group-label">Pipeline Improvements</div>
-            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
-                <div class="cognitive-card">
-                    <h4>Automated Quarantine</h4>
-                    <p>Quarantine queue now processes automatically during the nightly cycle. Items are promoted, rejected, or expired based on policy &mdash; no manual intervention needed.</p>
-                </div>
-                <div class="cognitive-card">
-                    <h4>Zero-Decay Pinning</h4>
-                    <p>Corrections and critical learnings are auto-pinned at ingest. Pinned memories never decay and get a +0.2 boost in search results. User corrections stick permanently.</p>
-                </div>
-                <div class="cognitive-card">
-                    <h4>Dream Noise Reduction</h4>
-                    <p>Dream insights (cross-memory connections) are excluded from default search, reducing noise by 21%. Capped at 50 active insights; excess is archived automatically.</p>
-                </div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- v0.9.0 Features -->
-<section id="v090" class="section-compact" style="background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
-    <div class="container">
-        <div class="section-label">New in v0.9.0</div>
-        <h2 class="section-title">Diary Archive &amp; Fuzzy Credentials</h2>
-        <p class="section-subtitle">
-            v0.9.0 introduces permanent subconscious memory. Session diaries are now archived forever before cleanup &mdash; nothing is ever truly lost. Plus fuzzy credential search for when you can't remember the exact service name.
-        </p>
-
-        <div class="cognitive-group">
-            <div class="cognitive-group-label">Major Features</div>
-            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
-                <div class="cognitive-card">
-                    <h4>Diary Archive</h4>
-                    <p>Session diaries older than 180 days are moved to a permanent diary_archive table instead of being deleted. Search by text, domain, year, or month. nexo_recall automatically falls back to the archive when recent memory has few results.</p>
-                </div>
-                <div class="cognitive-card">
-                    <h4>Fuzzy Credential Search</h4>
-                    <p>When exact credential match fails, NEXO searches across service, key, and notes fields. Results are tagged as fuzzy matches so you know they're suggestions, not exact hits.</p>
-                </div>
-                <div class="cognitive-card">
-                    <h4>Subconscious Recall</h4>
-                    <p>nexo_recall now has a two-tier search: recent memory first, then diary archive fallback. Your agent never truly forgets &mdash; old context surfaces when needed.</p>
-                </div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- v0.8.10 Features -->
-<section id="v0810" class="section-compact" style="background:linear-gradient(135deg,#1a0f2e 0%,#0F0A1A 100%);">
-    <div class="container">
-        <div class="section-label">v0.8.10</div>
-        <h2 class="section-title">Knowledge Graph, Dashboard &amp; Cross-Platform</h2>
-        <p class="section-subtitle">
-            v0.8.10 gives your AI agent a relationship graph, a visual brain dashboard, and runs everywhere. 988 bi-temporal nodes with D3 visualization, 6 dashboard pages, and full Linux + Windows support.
-        </p>
-
-        <div class="cognitive-group">
-            <div class="cognitive-group-label">Major Features</div>
-            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
-                <div class="cognitive-card">
-                    <h4>Knowledge Graph</h4>
-                    <p>Bi-temporal entity-relationship graph with 988 nodes and 896 edges. BFS traversal discovers multi-hop connections. Event-sourced edges with smart dedup (ADD/UPDATE/NOOP). Temporal queries. Interactive D3.js visualization.</p>
-                </div>
-                <div class="cognitive-card">
-                    <h4>Web Dashboard</h4>
-                    <p>Visual interface at localhost:6174 with 6 pages: Overview, Graph, Memory, Somatic, Adaptive, Sessions. FastAPI + D3.js. See your AI brain in real time.</p>
-                </div>
-                <div class="cognitive-card">
-                    <h4>Cross-Platform</h4>
-                    <p>Full Linux and Windows support. Platform-appropriate process managers. Opportunistic maintenance when resources are available.</p>
-                </div>
-            </div>
-        </div>
-
-        <div class="cognitive-group">
-            <div class="cognitive-group-label">5 Automated Hooks</div>
-            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px;">
-                <div class="cognitive-card">
-                    <div class="cognitive-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
-                    <h4>SessionStart Briefing</h4>
-                    <p>Generates a full briefing from SQLite: overdue reminders, today's tasks, pending followups, active sessions. Cached for 1 hour.</p>
-                </div>
-                <div class="cognitive-card">
-                    <div class="cognitive-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
-                    <h4>Stop Post-Mortem</h4>
-                    <p>Mandatory self-critique with 5 questions, session buffer, followup creation, proactive seeds for next session, and reflection trigger.</p>
-                </div>
-                <div class="cognitive-card">
-                    <div class="cognitive-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
-                    <h4>PreCompact Checkpoint</h4>
-                    <p>Saves context before conversation compression. Prevents losing the thread — compaction without a diary means starting from zero.</p>
-                </div>
-                <div class="cognitive-card">
-                    <div class="cognitive-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></div>
-                    <h4>PostToolUse Capture</h4>
-                    <p>Captures meaningful tool usage to the Sensory Register. Feeds the Atkinson-Shiffrin memory pipeline silently.</p>
-                </div>
-                <div class="cognitive-card">
-                    <div class="cognitive-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></div>
-                    <h4>Reflection Engine</h4>
-                    <p>After 3+ sessions, processes the buffer: extracts recurring tasks, error patterns, mood trends. Updates user model. No LLM needed.</p>
-                </div>
-            </div>
-        </div>
-
-        <div class="cognitive-group" style="margin-top:40px;">
-            <div class="cognitive-group-label">Operational Codex</div>
-            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px;">
-                <div class="cognitive-card">
-                    <div class="cognitive-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
-                    <h4>23 Non-Negotiable Principles</h4>
-                    <p>Hardwired behavioral foundation: never promise without scheduling, verify before claiming done, audit before delivering, proactive not reactive.</p>
-                </div>
-                <div class="cognitive-card">
-                    <div class="cognitive-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/></svg></div>
-                    <h4>Personality Calibration</h4>
-                    <p>5 configurable axes: autonomy, communication style, honesty level, proactivity, error handling. Set during install, adjustable anytime.</p>
-                </div>
-                <div class="cognitive-card">
-                    <div class="cognitive-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg></div>
-                    <h4>Auto-Migration</h4>
-                    <p>Seamless upgrade from previous versions. Updates hooks, core files, plugins, scripts — never touches your data or customized CLAUDE.md.</p>
-                </div>
+        <div class="callout">
+            <span class="eyebrow">Need the full diff?</span>
+            <h3>The repo changelog stays canonical</h3>
+            <p>Use the public timeline here for quick orientation, then open the repository changelog when you want the exact engineering detail and commit-level history.</p>
+            <div class="link-row">
+                <a class="link-chip" href="https://github.com/wazionapps/nexo/blob/main/CHANGELOG.md">Open CHANGELOG.md</a>
+                <a class="link-chip" href="https://github.com/wazionapps/nexo/releases">GitHub Releases</a>
             </div>
         </div>
     </div>
@@ -518,15 +107,10 @@
 <footer>
     <div class="container">
         <div class="footer-content">
-            <div class="footer-left">
-                Created by <strong>Francisco Cerd&agrave; Puigserver</strong> &amp; <strong>NEXO</strong> (Claude Opus) &bull; Built by <a href="https://www.wazion.com">WAzion</a> &bull; AGPL-3.0 License &bull; &copy; 2026
-            </div>
+            <div class="footer-left">NEXO Brain · release timeline</div>
             <div class="footer-links">
-                <a href="https://github.com/wazionapps/nexo">GitHub</a>
-                <a href="https://x.com/NEXOBRAIN">X / Twitter</a>
-                <a href="https://github.com/sponsors/wazionapps">Sponsor</a>
-                <a href="https://github.com/wazionapps/nexo/wiki">Docs</a>
-                <a href="https://www.npmjs.com/package/nexo-brain">npm</a>
+                <a href="/">Home</a>
+                <a href="/docs/">Docs</a>
                 <a href="https://github.com/wazionapps/nexo/releases">Releases</a>
             </div>
         </div>
@@ -534,44 +118,12 @@
 </footer>
 
 <script>
-// Intersection Observer for scroll animations
-const observer = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-        if (entry.isIntersecting) {
-            entry.target.style.opacity = '1';
-            entry.target.style.transform = 'translateY(0)';
-        }
-    });
-}, { threshold: 0.1 });
-
-document.querySelectorAll('.cognitive-card').forEach(el => {
-    el.style.opacity = '0';
-    el.style.transform = 'translateY(20px)';
-    el.style.transition = 'all 0.5s ease';
-    observer.observe(el);
-});
-</script>
-
-<!-- Cookie Consent (minimal, GDPR) -->
-<div id="cookie-consent" style="display:none;position:fixed;bottom:0;left:0;right:0;background:rgba(10,10,15,0.95);border-top:1px solid #1E1E2E;padding:12px 24px;z-index:200;font-size:13px;color:#94A3B8;text-align:center;">
-    This site uses analytics cookies to improve the experience. <a href="https://www.wazion.com/en/privacy" style="color:#A78BFA;">Privacy Policy</a>
-    <button onclick="document.getElementById('cookie-consent').style.display='none';localStorage.setItem('cc','1')" style="margin-left:16px;background:#7C3AED;color:#fff;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Accept</button>
-    <button onclick="document.getElementById('cookie-consent').style.display='none';localStorage.setItem('cc','0');window['ga-disable-G-1LNEMCJMS7']=true" style="margin-left:8px;background:transparent;color:#94A3B8;border:1px solid #333;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Decline</button>
-</div>
-<script>
-if(!localStorage.getItem('cc')){document.getElementById('cookie-consent').style.display='block';}
-else if(localStorage.getItem('cc')==='0'){window['ga-disable-G-1LNEMCJMS7']=true;}
-</script>
-
-<script>
 (function() {
     var navLinks = document.querySelector('.nav-links');
     var navToggle = document.querySelector('.nav-toggle');
-    // Close menu when clicking a link
     navLinks.querySelectorAll('a').forEach(function(link) {
         link.addEventListener('click', function() { navLinks.classList.remove('open'); });
     });
-    // Close menu when clicking outside
     document.addEventListener('click', function(e) {
         if (navLinks.classList.contains('open') && !navLinks.contains(e.target) && !navToggle.contains(e.target)) {
             navLinks.classList.remove('open');
@@ -579,6 +131,5 @@ else if(localStorage.getItem('cc')==='0'){window['ga-disable-G-1LNEMCJMS7']=true
     });
 })();
 </script>
-
 </body>
 </html>

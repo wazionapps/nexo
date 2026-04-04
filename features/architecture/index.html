@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Architecture — NEXO Brain</title>
-    <meta name="description" content="Atkinson-Shiffrin memory architecture for AI agents. Modular packages (db/ 11 modules, cognitive/ 6 modules), KG-boosted search, HNSW vector indexing, claim graph, and Ebbinghaus decay.">
+    <meta name="description" content="Atkinson-Shiffrin-inspired memory architecture for AI agents, plus the local runtime layers that make NEXO durable across updates, sleep, and wake recovery.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/features/architecture/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/features/architecture/">
     <meta property="og:title" content="Architecture — NEXO Brain">
-    <meta property="og:description" content="Atkinson-Shiffrin memory architecture for AI agents. Three-store model with sensory register, STM, and LTM.">
+    <meta property="og:description" content="Atkinson-Shiffrin-inspired memory architecture for AI agents, with a local runtime designed for durability and recovery.">
     <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
     <meta property="og:image:width" content="1536">
     <meta property="og:image:height" content="1024">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Architecture — NEXO Brain">
-    <meta name="twitter:description" content="Atkinson-Shiffrin memory architecture for AI agents. Three-store model with sensory register, STM, and LTM.">
+    <meta name="twitter:description" content="Atkinson-Shiffrin-inspired memory architecture for AI agents, with a local runtime designed for durability and recovery.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
 
     <!-- Google Analytics (GA4) -->
@@ -69,7 +69,7 @@
         <div class="section-label">Architecture</div>
         <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">How memory works</h1>
         <p class="section-subtitle">
-            Based on the Atkinson-Shiffrin model from cognitive psychology, adapted for AI agents.
+            Based on the Atkinson-Shiffrin model from cognitive psychology, then extended with the runtime layers needed for updates, diagnostics, and wake recovery.
         </p>
     </div>
 </section>
@@ -216,7 +216,7 @@
                 <div class="cognitive-card"><h4>KG-Boosted Search</h4><p>Memories with more Knowledge Graph connections rank higher. Logarithmic boost bridges semantic (vector) and structural (graph) retrieval.</p></div>
                 <div class="cognitive-card"><h4>HNSW Vector Indexing</h4><p>Optional hnswlib integration. Auto-activates at 10,000+ memories for sub-millisecond approximate nearest neighbor search. Graceful fallback to brute-force.</p></div>
                 <div class="cognitive-card"><h4>Claim Graph</h4><p>Decompose blob memories into atomic verifiable claims. Each claim has provenance, confidence, and verification status. Contradiction detection across sources.</p></div>
-                <div class="cognitive-card"><h4>24 Pytest Tests</h4><p>Migrations, CRUD, cosine similarity, KG boost, graph traversal, temporal boost. Each test uses isolated temp databases &mdash; zero interference with production.</p></div>
+                <div class="cognitive-card"><h4>Isolated runtime tests</h4><p>The current release line is covered by isolated tests for cron sync, startup preflight, recovery behavior, personal schedules, doctor paths, and runtime update flows.</p></div>
             </div>
         </div>
     </div>
