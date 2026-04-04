@@ -452,6 +452,57 @@ npx nexo-brain  # detects current version, migrates automatically
 - **Never touches your data** (memories, learnings, preferences)
 - Saves updated CLAUDE.md as reference (doesn't overwrite customizations)
 
+## Runtime CLI (v2.6.0)
+
+NEXO Brain includes a local CLI that runs independently of Claude Code:
+
+- `nexo chat` — launch Claude Code with NEXO as the operator
+- `nexo update` — sync runtime from source, run migrations, reconcile schedules
+- `nexo doctor --tier runtime` — boot/runtime/deep diagnostics with `--fix` mode
+- `nexo scripts list` — list all personal scripts and their status
+- `nexo scripts reconcile` — align declared schedules with actual LaunchAgents/systemd
+- `nexo -v` — show installed runtime version
+
+The CLI lives at `NEXO_HOME/bin/nexo` and is added to your PATH during install.
+
+## Personal Scripts Registry (v2.6.0)
+
+Scripts in `NEXO_HOME/scripts/` are first-class managed entities:
+
+- Tracked in SQLite with metadata, categories, and schedule associations
+- Inline metadata in scripts declares name, runtime, schedule, and recovery policy
+- `nexo scripts create NAME` scaffolds a new script with the correct template
+- `nexo scripts reconcile` creates/repairs LaunchAgents from declared metadata
+- `nexo scripts sync` discovers filesystem state and updates the registry
+- `nexo doctor --tier runtime` detects orphaned schedules, missing plists, and drift
+
+Personal scripts are completely separate from core NEXO processes. The `crons/manifest.json` defines core; everything in `NEXO_HOME/scripts/` is personal.
+
+## Recovery-Aware Background Jobs (v2.6.2)
+
+Core and personal jobs now declare explicit recovery contracts in `crons/manifest.json`:
+
+| Field | Purpose |
+|-------|---------|
+| `recovery_policy` | `catchup`, `restart`, or `skip` |
+| `run_on_boot` | Re-run when the machine starts |
+| `run_on_wake` | Re-run after sleep/resume |
+| `idempotent` | Safe to re-run without side effects |
+| `max_catchup_age` | Maximum age of a missed window to still catch up |
+
+If the Mac was asleep during a scheduled window, `catchup` detects the gap from `cron_runs` (not a state file) and re-executes eligible jobs once. Interval-based personal scripts get a single recovery run, not repeated ticks.
+
+## Startup Preflight (v2.6.2)
+
+Before `nexo chat` or MCP server start, NEXO runs a preflight check:
+
+1. Apply power policy (caffeinate on macOS, systemd-inhibit on Linux)
+2. Run safe local migrations and backfills
+3. Sync personal scripts registry
+4. For dev-linked runtimes: check if source repo is behind, pull if safe, sync to runtime
+
+This replaces the old "blind startup" where NEXO entered without verifying runtime health.
+
 ## Knowledge Graph (v0.8)
 
 A bi-temporal entity-relationship graph with 988 nodes and 896 edges. Entities and relationships carry both valid-time (when the fact was true) and system-time (when it was recorded), enabling temporal queries like "what did we know about X last Tuesday?". BFS traversal discovers multi-hop connections between concepts. Event-sourced edges with smart dedup (ADD/UPDATE/NOOP) prevent redundant writes while preserving full history.
