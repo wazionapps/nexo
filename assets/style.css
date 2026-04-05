@@ -545,6 +545,26 @@
             display: flex; flex-wrap: wrap; gap: 16px; justify-content: center;
         }
 
+        .listed-group + .listed-group {
+            margin-top: 28px;
+        }
+
+        .listed-group-title {
+            font-size: 14px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--purple-light);
+            margin-bottom: 8px;
+        }
+
+        .listed-group-note {
+            font-size: 14px;
+            color: var(--text-muted);
+            max-width: 720px;
+            margin: 0 auto 18px;
+        }
+
         .listed-badge {
             display: inline-flex; align-items: center; gap: 8px;
             background: var(--dark-card); border: 1px solid var(--dark-border);
