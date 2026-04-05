@@ -42,6 +42,9 @@ jobs:
           node-version: '22'
           registry-url: 'https://registry.npmjs.org'
 
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
       - name: Verify release readiness
         run: python3 scripts/verify_release_readiness.py --ci
 
