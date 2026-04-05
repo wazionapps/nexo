@@ -20,6 +20,26 @@
 
 Every time you close a session, everything is lost. Your agent doesn't remember yesterday's decisions, repeats the same mistakes, and starts from zero. NEXO Brain fixes this with a cognitive architecture modeled after how human memory actually works.
 
+## Shared Brain Across Clients
+
+Shared brain is now the baseline:
+
+- **Claude Code** remains the recommended path because it still has the deepest hook integration and the most battle-tested headless automation surface.
+- **Codex** is supported both as an interactive terminal client and as the background automation backend.
+- **Claude Desktop** can point at the same local brain through MCP.
+
+That means NEXO now manages not only the shared runtime and MCP wiring, but also the startup layer around it:
+
+- `nexo chat` opens the configured client instead of assuming Claude Code forever.
+- Claude Code and Codex both get managed bootstrap files:
+  - `~/.claude/CLAUDE.md`
+  - `~/.codex/AGENTS.md`
+- Those files now use an explicit **`CORE` / `USER`** contract, so NEXO can update product rules in `CORE` while preserving operator-specific instructions in `USER`.
+- For Codex specifically, `nexo chat` and Codex headless automation inject the current bootstrap explicitly, so Codex starts as NEXO even when plain global Codex startup is inconsistent about global instructions.
+- Deep Sleep now reads both Claude Code and Codex transcript stores, so overnight analysis still works even when the user spends the day in Codex.
+
+Version `2.6.14` is the release that closes those last two parity gaps in practice: startup bootstrap parity and transcript-aware Deep Sleep parity.
+
 ## The Problem
 
 AI coding agents are powerful but amnesic:

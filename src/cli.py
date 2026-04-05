@@ -859,6 +859,8 @@ def _chat(args):
             print(f"[NEXO] {preflight['git_update']}", file=sys.stderr)
         elif preflight.get("npm_notice"):
             print(f"[NEXO] {preflight['npm_notice']}", file=sys.stderr)
+        for message in preflight.get("client_bootstrap_updates", []):
+            print(f"[NEXO] {message}", file=sys.stderr)
         if preflight.get("error"):
             print(f"[NEXO] Startup preflight warning: {preflight['error']}", file=sys.stderr)
     except Exception:
@@ -1017,7 +1019,7 @@ Commands:
   nexo scripts list|create|classify|sync|reconcile|ensure-schedules|schedules|run|doctor|call|unschedule|remove
                                                       Personal scripts
   nexo skills list|apply|sync|approve                  Executable skills
-  nexo clients sync                                    Sync Claude Code/Desktop/Codex MCP configs
+  nexo clients sync                                    Sync Claude/Codex shared-brain configs and bootstrap files
   nexo update                                          Update installed runtime
   nexo contributor status|on|off                       Public Draft PR contribution mode
   nexo dashboard on|off|status                         Web dashboard control

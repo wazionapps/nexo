@@ -261,7 +261,7 @@ def check_watchdog_registry():
     if not HASH_REGISTRY.exists():
         return
     text = HASH_REGISTRY.read_text(errors="ignore")
-    forbidden = ["CLAUDE.md", "server.py", "plugin_loader.py"]
+    forbidden = ["CLAUDE.md", "AGENTS.md", "server.py", "plugin_loader.py"]
     bad = [name for name in forbidden if name in text]
     if bad:
         finding("ERROR", "watchdog", f"mutable files still protected: {', '.join(bad)}")

@@ -173,6 +173,22 @@ if os.path.exists(audit_file):
     except Exception:
         pass
 
+# Evolution status
+evolution_file = os.path.join(nexo_home, 'brain', 'evolution-objective.json')
+if os.path.exists(evolution_file):
+    try:
+        evo = json.load(open(evolution_file))
+        lines.append('## Evolution')
+        lines.append(f\"Enabled: {bool(evo.get('evolution_enabled', True))}\")
+        lines.append(f\"Mode: {evo.get('evolution_mode', 'auto')}\")
+        lines.append(f\"Last evolution: {evo.get('last_evolution', 'never')}\")
+        lines.append(f\"Total evolutions: {evo.get('total_evolutions', 0)}\")
+        if evo.get('disabled_reason'):
+            lines.append(f\"Disabled reason: {evo.get('disabled_reason')}\")
+        lines.append('')
+    except Exception:
+        pass
+
 print('\n'.join(lines))
 " > "$BRIEFING_FILE" 2>/dev/null
 

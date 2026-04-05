@@ -1134,7 +1134,7 @@ STEPS:
 ${PROPAGATE_BLOCK}
 
 CONSTRAINTS:
-- Do NOT modify CLAUDE.md or any protected file
+- Do NOT modify CLAUDE.md, AGENTS.md, or any protected file
 - Do NOT start interactive conversations
 - Keep it under 5 minutes
 - Log what you did to $NEXO_HOME/logs/watchdog-repair-result.log

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 """Terminal client launchers and headless automation backend runner."""
 
+import json
 import os
 import shutil
 import subprocess
@@ -75,6 +76,18 @@ def _headless_env(env: dict | None = None) -> dict:
     return merged
 
 
+def _load_client_bootstrap_prompt(client: str) -> str:
+    try:
+        from bootstrap_docs import load_bootstrap_prompt
+    except Exception:
+        return ""
+    return load_bootstrap_prompt(client, nexo_home=NEXO_HOME, user_home=Path.home())
+
+
+def _codex_initial_messages_config(prompt_text: str) -> str:
+    return f'initial_messages=[{{role="system",content={json.dumps(prompt_text, ensure_ascii=False)}}}]'
+
+
 def build_interactive_client_command(
     *,
     target: str | os.PathLike[str],
@@ -107,6 +120,9 @@ def build_interactive_client_command(
                 "Codex launcher not found in PATH. Install `codex` first or reconfigure NEXO."
             )
         cmd = [codex_bin]
+        bootstrap_prompt = _load_client_bootstrap_prompt(CLIENT_CODEX)
+        if bootstrap_prompt:
+            cmd.extend(["-c", _codex_initial_messages_config(bootstrap_prompt)])
         if profile["model"]:
             cmd.extend(["-m", profile["model"]])
         if profile["reasoning_effort"]:
@@ -253,6 +269,9 @@ def run_automation_prompt(
                 "-o",
                 str(output_path),
             ]
+            bootstrap_prompt = _load_client_bootstrap_prompt(CLIENT_CODEX)
+            if bootstrap_prompt:
+                cmd.extend(["-c", _codex_initial_messages_config(bootstrap_prompt)])
             if resolved_model:
                 cmd.extend(["-m", resolved_model])
             if resolved_effort:

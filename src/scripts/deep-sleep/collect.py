@@ -4,7 +4,8 @@ from __future__ import annotations
 Deep Sleep v2 -- Phase 1: Collect all context for overnight analysis.
 
 Gathers transcripts, DB data, logs, and discovered files into a single
-plain-text context file that subsequent phases read via Claude's Read tool.
+plain-text context file that subsequent phases read via the configured
+automation backend.
 
 Environment variables:
   NEXO_HOME  -- root of the NEXO installation (default: ~/.nexo)
@@ -52,22 +53,43 @@ def _redact_sensitive(text: str) -> str:
     return _SENSITIVE_PATTERNS.sub('[REDACTED]', text)
 
 
-# ── Transcript collection (kept from collect_transcripts.py) ──────────────
+# ── Transcript collection (Claude Code + Codex) ────────────────────────────
 
 
-def find_session_dirs() -> list[Path]:
-    """Find all Claude Code project directories that contain .jsonl files."""
+def _session_identifier(client: str, session_file: str) -> str:
+    return f"{client}:{session_file}"
+
+
+def find_claude_session_files() -> list[Path]:
+    """Find Claude Code session JSONL files under ~/.claude/projects."""
     claude_dir = Path.home() / ".claude" / "projects"
     if not claude_dir.exists():
         return []
-    dirs = set()
-    for jsonl in claude_dir.rglob("*.jsonl"):
-        dirs.add(jsonl.parent)
-    return list(dirs)
+    return sorted(claude_dir.rglob("*.jsonl"))
 
 
-def extract_session(jsonl_path: Path) -> dict | None:
-    """Extract clean transcript from a session JSONL file."""
+def find_codex_session_files() -> list[Path]:
+    """Find Codex session JSONL files under ~/.codex/sessions and archived_sessions."""
+    roots = [
+        Path.home() / ".codex" / "sessions",
+        Path.home() / ".codex" / "archived_sessions",
+    ]
+    files: list[Path] = []
+    seen: set[str] = set()
+    for root in roots:
+        if not root.exists():
+            continue
+        for jsonl in sorted(root.rglob("*.jsonl")):
+            key = jsonl.name
+            if key in seen:
+                continue
+            seen.add(key)
+            files.append(jsonl)
+    return files
+
+
+def extract_claude_session(jsonl_path: Path) -> dict | None:
+    """Extract clean transcript from a Claude Code JSONL session."""
     messages = []
     tool_uses = []
     user_msg_count = 0
@@ -136,13 +158,99 @@ def extract_session(jsonl_path: Path) -> dict | None:
         return None
 
     return {
-        "session_file": jsonl_path.name,
+        "client": "claude_code",
+        "session_file": _session_identifier("claude_code", jsonl_path.name),
+        "display_name": jsonl_path.name,
         "session_path": str(jsonl_path),
         "message_count": len(messages),
         "user_message_count": user_msg_count,
         "tool_use_count": len(tool_uses),
         "messages": messages,
-        "tool_uses": tool_uses
+        "tool_uses": tool_uses,
+        "source": "claude_projects",
+    }
+
+
+def extract_codex_session(jsonl_path: Path) -> dict | None:
+    """Extract clean transcript from a Codex JSONL session."""
+    messages = []
+    tool_uses = []
+    user_msg_count = 0
+    session_meta: dict = {}
+
+    try:
+        with open(jsonl_path, "r") as f:
+            for line_no, line in enumerate(f, 1):
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    d = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+
+                item_type = d.get("type")
+                payload = d.get("payload", {})
+
+                if item_type == "session_meta" and isinstance(payload, dict):
+                    session_meta = payload
+                    continue
+
+                if item_type == "event_msg" and isinstance(payload, dict) and payload.get("type") == "user_message":
+                    content = str(payload.get("message", "") or "").strip()
+                    if not content or content.startswith("<environment_context>"):
+                        continue
+                    messages.append({
+                        "role": "user",
+                        "index": line_no,
+                        "text": _redact_sensitive(content[:5000]),
+                    })
+                    user_msg_count += 1
+                    continue
+
+                if item_type == "response_item" and isinstance(payload, dict):
+                    response_type = payload.get("type")
+                    role = payload.get("role")
+                    if response_type == "message" and role == "assistant":
+                        text_parts = []
+                        for block in payload.get("content", []) or []:
+                            if isinstance(block, dict) and block.get("type") == "output_text":
+                                text_parts.append(str(block.get("text", "")))
+                        combined = "\n".join(part for part in text_parts if part).strip()
+                        if combined:
+                            messages.append({
+                                "role": "assistant",
+                                "index": line_no,
+                                "text": _redact_sensitive(combined[:5000]),
+                            })
+                    elif response_type == "function_call":
+                        tool_uses.append({
+                            "tool": payload.get("name", ""),
+                            "input_keys": [],
+                            "file": _redact_sensitive(str(payload.get("arguments", ""))[:100]),
+                        })
+
+    except Exception as e:
+        print(f"  [collect] Error reading {jsonl_path}: {e}", file=sys.stderr)
+        return None
+
+    if user_msg_count < MIN_USER_MESSAGES:
+        return None
+
+    return {
+        "client": "codex",
+        "session_file": _session_identifier("codex", jsonl_path.name),
+        "display_name": jsonl_path.name,
+        "session_path": str(jsonl_path),
+        "message_count": len(messages),
+        "user_message_count": user_msg_count,
+        "tool_use_count": len(tool_uses),
+        "messages": messages,
+        "tool_uses": tool_uses,
+        "source": session_meta.get("source", "codex"),
+        "cwd": session_meta.get("cwd", ""),
+        "originator": session_meta.get("originator", ""),
+        "session_uid": session_meta.get("id", ""),
     }
 
 
@@ -156,17 +264,22 @@ def collect_transcripts_since(since_iso: str, until_iso: str = "") -> list[dict]
     until_dt = datetime.fromisoformat(until_iso) if until_iso else datetime.now()
 
     sessions = []
-    for sdir in find_session_dirs():
-        for f in sdir.glob("*.jsonl"):
-            try:
-                mtime = datetime.fromtimestamp(f.stat().st_mtime)
-            except OSError:
-                continue
-            if since_dt < mtime <= until_dt:
-                session = extract_session(f)
-                if session:
-                    session["modified"] = mtime.isoformat()
-                    sessions.append(session)
+    transcript_files: list[tuple[str, Path]] = [
+        ("claude_code", path) for path in find_claude_session_files()
+    ] + [
+        ("codex", path) for path in find_codex_session_files()
+    ]
+    for client, session_file in transcript_files:
+        try:
+            mtime = datetime.fromtimestamp(session_file.stat().st_mtime)
+        except OSError:
+            continue
+        if not (since_dt < mtime <= until_dt):
+            continue
+        session = extract_codex_session(session_file) if client == "codex" else extract_claude_session(session_file)
+        if session:
+            session["modified"] = mtime.isoformat()
+            sessions.append(session)
     sessions.sort(key=lambda s: s["modified"])
     return sessions
 
@@ -353,6 +466,9 @@ def format_transcripts(sessions: list[dict]) -> str:
     for i, session in enumerate(sessions):
         lines.append(f"\n{'─' * 60}")
         lines.append(f"SESSION {i + 1}: {session['session_file']}")
+        lines.append(f"Client: {session.get('client', 'unknown')}")
+        if session.get("source"):
+            lines.append(f"Source: {session['source']}")
         lines.append(f"Modified: {session['modified']}")
         lines.append(f"Messages: {session['message_count']}, Tool uses: {session['tool_use_count']}")
         lines.append(f"{'─' * 60}")
@@ -460,18 +576,27 @@ def main():
 
     # Individual session files
     session_files_written = []
+    session_txt_map = {}
     total_size = len(shared_text.encode("utf-8"))
     for i, session in enumerate(sessions):
-        sid_short = session["session_file"].replace(".jsonl", "")[:20]
+        raw_id = session["session_file"].replace(".jsonl", "").replace(":", "-")
+        sid_short = raw_id[:30]
         filename = f"session-{i+1:02d}-{sid_short}.txt"
         session_path = date_dir / filename
 
         lines = [
             f"Session: {session['session_file']}",
+            f"Display name: {session.get('display_name', session['session_file'])}",
+            f"Client: {session.get('client', 'unknown')}",
+            f"Source: {session.get('source', 'unknown')}",
             f"Modified: {session['modified']}",
             f"Messages: {session['message_count']}, Tool uses: {session['tool_use_count']}",
             f"{'─' * 60}",
         ]
+        if session.get("cwd"):
+            lines.insert(4, f"CWD: {session['cwd']}")
+        if session.get("originator"):
+            lines.insert(4, f"Originator: {session['originator']}")
         for msg in session["messages"]:
             role = "USER" if msg["role"] == "user" else "AGENT"
             idx = msg.get("index", "?")
@@ -487,6 +612,7 @@ def main():
         session_text = "\n".join(lines)
         session_path.write_text(session_text, encoding="utf-8")
         session_files_written.append(filename)
+        session_txt_map[session["session_file"]] = filename
         total_size += len(session_text.encode("utf-8"))
         print(f"  {filename}: {len(session_text) / 1024:.0f} KB")
 
@@ -508,6 +634,18 @@ def main():
         "sessions_found": len(sessions),
         "session_files": [s["session_file"] for s in sessions],
         "session_txt_files": session_files_written,
+        "session_txt_map": session_txt_map,
+        "session_manifest": [
+            {
+                "session_id": s["session_file"],
+                "display_name": s.get("display_name", s["session_file"]),
+                "client": s.get("client", "unknown"),
+                "source": s.get("source", ""),
+                "session_path": s.get("session_path", ""),
+                "session_txt_file": session_txt_map.get(s["session_file"], ""),
+            }
+            for s in sessions
+        ],
         "total_messages": sum(s["message_count"] for s in sessions),
         "total_tool_uses": sum(s["tool_use_count"] for s in sessions),
         "followups_active": len(followups),

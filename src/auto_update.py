@@ -735,83 +735,61 @@ def _list_section_ids(text: str) -> list[str]:
 
 
 def _migrate_claude_md() -> str | None:
-    """Compare template version vs installed version. If newer, update core sections in user's CLAUDE.md.
-
-    Returns a status message or None if no migration was needed.
-    """
-    template_version = _read_template_version()
-    if not template_version:
+    """Sync the managed Claude bootstrap into ~/.claude/CLAUDE.md."""
+    try:
+        from bootstrap_docs import sync_client_bootstrap
+    except Exception as exc:
+        _log(f"CLAUDE.md migration import error: {exc}")
         return None
 
-    installed_version = _read_installed_claude_md_version()
-    if installed_version == template_version:
-        return None  # Already up to date
-
-    user_md_path = _find_user_claude_md()
-    if not user_md_path:
-        _log("CLAUDE.md migration: no user CLAUDE.md found, skipping")
-        return None
-
-    # Read both files
-    user_md = user_md_path.read_text()
-    template_raw = TEMPLATE_FILE.read_text()
-    template_resolved = _resolve_placeholders(template_raw)
-
-    # Get all section IDs from the template
-    section_ids = _list_section_ids(template_resolved)
-    if not section_ids:
-        _log("CLAUDE.md migration: no section markers in template, skipping")
-        _write_installed_claude_md_version(template_version)
-        return None
-
-    updated = user_md
-    sections_replaced = 0
-    sections_added = 0
-
-    for sid in section_ids:
-        new_section = _extract_section(template_resolved, sid)
-        if not new_section:
-            continue
-
-        old_section = _extract_section(updated, sid)
-        if old_section:
-            if old_section != new_section:
-                updated = updated.replace(old_section, new_section)
-                sections_replaced += 1
-        else:
-            # Section doesn't exist in user's file — append before the end
-            # (new sections added by template updates)
-            updated = updated.rstrip() + "\n\n" + new_section + "\n"
-            sections_added += 1
-
-    # Update the version comment if present in user's file
-    updated = re.sub(
-        r"<!-- nexo-claude-md-version: [\d.]+ -->",
-        f"<!-- nexo-claude-md-version: {template_version} -->",
-        updated,
+    result = sync_client_bootstrap(
+        "claude_code",
+        nexo_home=NEXO_HOME,
+        operator_name="",
+        user_home=Path.home(),
     )
-    # If no version comment existed, add one at the top
-    if "nexo-claude-md-version:" not in updated:
-        updated = f"<!-- nexo-claude-md-version: {template_version} -->\n" + updated
-
-    if sections_replaced > 0 or sections_added > 0:
-        # Backup before writing
-        backup_path = user_md_path.with_suffix(".md.bak")
-        try:
-            backup_path.write_text(user_md)
-        except Exception:
-            pass  # Non-critical
-
-        user_md_path.write_text(updated)
-
-    _write_installed_claude_md_version(template_version)
-
-    if sections_replaced == 0 and sections_added == 0:
-        return f"CLAUDE.md v{template_version}: already current (version file updated)"
-
-    msg = f"CLAUDE.md migrated to v{template_version}: {sections_replaced} section(s) updated, {sections_added} new section(s) added"
+    if not result.get("ok"):
+        _log(f"CLAUDE.md migration failed: {result.get('error', 'unknown error')}")
+        return None
+    version = result.get("version", "")
+    if version:
+        _write_installed_claude_md_version(version)
+    action = result.get("action", "updated")
+    if action == "unchanged":
+        return f"CLAUDE.md v{version}: already current"
+    msg = f"CLAUDE.md v{version}: {action}"
     _log(msg)
     return msg
+
+
+def _sync_client_bootstraps(preferences: dict | None = None) -> list[str]:
+    try:
+        from bootstrap_docs import sync_enabled_bootstraps
+    except Exception as exc:
+        _log(f"Client bootstrap sync import error: {exc}")
+        return []
+
+    results = sync_enabled_bootstraps(
+        nexo_home=NEXO_HOME,
+        operator_name="",
+        user_home=Path.home(),
+        preferences=preferences,
+    )
+    messages: list[str] = []
+    for client_key, item in results.items():
+        if item.get("skipped"):
+            continue
+        if not item.get("ok"):
+            _log(f"{client_key} bootstrap sync failed: {item.get('error', 'unknown error')}")
+            continue
+        action = item.get("action", "updated")
+        version = item.get("version", "")
+        label = "Codex AGENTS.md" if client_key == "codex" else "CLAUDE.md"
+        if action == "unchanged":
+            messages.append(f"{label} v{version}: already current")
+        else:
+            messages.append(f"{label} v{version}: {action}")
+    return messages
 
 
 # ── Main entry point ─────────────────────────────────────────────────
@@ -824,7 +802,7 @@ def auto_update_check() -> dict:
     Phase 1 (local, safe, no network):
         - DB schema migrations
         - File-based migrations
-        - CLAUDE.md version migration
+        - managed client bootstrap migration
 
     Phase 2 (network, wrapped in try/except):
         - git fetch/pull (if git repo)
@@ -835,6 +813,7 @@ def auto_update_check() -> dict:
         - git_update: str|None — git update status message
         - npm_notice: str|None — npm upgrade notice for non-git installs
         - claude_md_update: str|None — CLAUDE.md migration status
+        - client_bootstrap_updates: list[str] — Codex/Claude bootstrap sync statuses
         - migrations: list — file-based migration results
         - db_migrations: int — number of DB schema migrations applied
         - skipped_reason: str|None — why the network check was skipped (cooldown, etc.)
@@ -845,6 +824,7 @@ def auto_update_check() -> dict:
         "git_update": None,
         "npm_notice": None,
         "claude_md_update": None,
+        "client_bootstrap_updates": [],
         "migrations": [],
         "db_migrations": 0,
         "skipped_reason": None,
@@ -933,7 +913,7 @@ def auto_update_check() -> dict:
 
     # Backfill runtime CLI modules for existing installs
     try:
-        for fname in ("cli.py", "script_registry.py", "skills_runtime.py", "cron_recovery.py", "client_preferences.py", "agent_runner.py"):
+        for fname in ("cli.py", "script_registry.py", "skills_runtime.py", "cron_recovery.py", "client_preferences.py", "agent_runner.py", "bootstrap_docs.py"):
             src_file = SRC_DIR / fname
             dest_file = NEXO_HOME / fname
             if src_file.is_file() and (not dest_file.exists() or src_file.stat().st_mtime > dest_file.stat().st_mtime):
@@ -1024,11 +1004,13 @@ def auto_update_check() -> dict:
     except Exception as e:
         _log(f"Template backfill error: {e}")
 
-    # CLAUDE.md version migration
+    # Managed client bootstrap migration
     try:
-        result["claude_md_update"] = _migrate_claude_md()
+        bootstrap_messages = _sync_client_bootstraps(schedule_data if "schedule_data" in locals() else None)
+        result["client_bootstrap_updates"] = bootstrap_messages
+        result["claude_md_update"] = next((msg for msg in bootstrap_messages if msg.startswith("CLAUDE.md")), None)
     except Exception as e:
-        _log(f"CLAUDE.md migration error: {e}")
+        _log(f"Client bootstrap migration error: {e}")
 
     # ── Phase 2: Network operations (wrapped, never fatal) ──────────
     # Skip entirely if auto_update is disabled in schedule.json
@@ -1198,7 +1180,7 @@ def _backup_runtime_tree(dest: Path = NEXO_HOME) -> str:
         "maintenance.py", "storage_router.py", "claim_graph.py", "hnsw_index.py",
         "evolution_cycle.py", "migrate_embeddings.py", "auto_close_sessions.py",
         "client_sync.py",
-        "client_preferences.py", "agent_runner.py",
+        "client_preferences.py", "agent_runner.py", "bootstrap_docs.py",
         "auto_update.py", "tools_sessions.py", "tools_coordination.py",
         "tools_reminders.py", "tools_reminders_crud.py", "tools_learnings.py",
         "tools_credentials.py", "tools_task_history.py", "tools_menu.py",
@@ -1248,7 +1230,7 @@ def _copy_runtime_from_source(src_dir: Path, repo_dir: Path, dest: Path = NEXO_H
         "maintenance.py", "storage_router.py", "claim_graph.py", "hnsw_index.py",
         "evolution_cycle.py", "migrate_embeddings.py", "auto_close_sessions.py",
         "client_sync.py",
-        "client_preferences.py", "agent_runner.py",
+        "client_preferences.py", "agent_runner.py", "bootstrap_docs.py",
         "auto_update.py", "tools_sessions.py", "tools_coordination.py",
         "tools_reminders.py", "tools_reminders_crud.py", "tools_learnings.py",
         "tools_credentials.py", "tools_task_history.py", "tools_menu.py",
@@ -1617,6 +1599,7 @@ def startup_preflight(*, entrypoint: str, interactive: bool = False) -> dict:
         "git_update": None,
         "npm_notice": None,
         "claude_md_update": None,
+        "client_bootstrap_updates": [],
         "migrations": [],
         "power_policy": None,
         "power_message": None,
@@ -1651,7 +1634,9 @@ def startup_preflight(*, entrypoint: str, interactive: bool = False) -> dict:
 
             _run_db_migrations()
             result["migrations"] = run_file_migrations()
-            result["claude_md_update"] = _migrate_claude_md()
+            bootstrap_messages = _sync_client_bootstraps()
+            result["client_bootstrap_updates"] = bootstrap_messages
+            result["claude_md_update"] = next((msg for msg in bootstrap_messages if msg.startswith("CLAUDE.md")), None)
             _sync_watchdog_hash_registry()
             _warn_protected_runtime_location()
             _ensure_runtime_cli_wrapper()

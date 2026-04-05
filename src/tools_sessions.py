@@ -69,8 +69,9 @@ def handle_startup(task: str = "Startup", claude_session_id: str = "") -> str:
 
     Args:
         task: Initial task description
-        claude_session_id: UUID from Claude Code (passed via SessionStart hook file).
-                          Enables automatic inbox detection via PostToolUse hook.
+        claude_session_id: External client session token. Claude Code passes its UUID via hooks;
+                          other clients may pass a synthetic durable ID when useful.
+                          Enables automatic inbox detection when hook-backed clients provide one.
     """
     sid = _generate_sid()
     cleaned = clean_stale_sessions()

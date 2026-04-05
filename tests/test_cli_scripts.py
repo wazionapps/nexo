@@ -140,7 +140,7 @@ class TestRuntimeUpdate:
             "maintenance.py", "storage_router.py", "claim_graph.py", "hnsw_index.py",
             "evolution_cycle.py", "migrate_embeddings.py", "auto_close_sessions.py",
             "client_sync.py",
-            "client_preferences.py", "agent_runner.py",
+            "client_preferences.py", "agent_runner.py", "bootstrap_docs.py",
             "auto_update.py", "tools_sessions.py", "tools_coordination.py",
             "tools_reminders.py", "tools_reminders_crud.py", "tools_learnings.py",
             "tools_credentials.py", "tools_task_history.py", "tools_menu.py",
@@ -246,7 +246,7 @@ class TestRuntimeUpdate:
             "server.py", "plugin_loader.py", "knowledge_graph.py", "kg_populate.py",
             "maintenance.py", "storage_router.py", "claim_graph.py", "hnsw_index.py",
             "evolution_cycle.py", "migrate_embeddings.py", "auto_close_sessions.py",
-            "client_sync.py", "client_preferences.py", "agent_runner.py", "auto_update.py", "tools_sessions.py", "tools_coordination.py",
+            "client_sync.py", "client_preferences.py", "agent_runner.py", "bootstrap_docs.py", "auto_update.py", "tools_sessions.py", "tools_coordination.py",
             "tools_reminders.py", "tools_reminders_crud.py", "tools_learnings.py",
             "tools_credentials.py", "tools_task_history.py", "tools_menu.py", "cli.py",
             "skills_runtime.py", "user_context.py", "public_contribution.py",
@@ -334,7 +334,7 @@ class TestRuntimeUpdate:
             "server.py", "plugin_loader.py", "knowledge_graph.py", "kg_populate.py",
             "maintenance.py", "storage_router.py", "claim_graph.py", "hnsw_index.py",
             "evolution_cycle.py", "migrate_embeddings.py", "auto_close_sessions.py",
-            "client_sync.py", "client_preferences.py", "agent_runner.py", "auto_update.py", "tools_sessions.py", "tools_coordination.py",
+            "client_sync.py", "client_preferences.py", "agent_runner.py", "bootstrap_docs.py", "auto_update.py", "tools_sessions.py", "tools_coordination.py",
             "tools_reminders.py", "tools_reminders_crud.py", "tools_learnings.py",
             "tools_credentials.py", "tools_task_history.py", "tools_menu.py", "cli.py",
             "skills_runtime.py", "user_context.py", "public_contribution.py",
@@ -508,7 +508,12 @@ class TestChatCommand:
             capture_output=True, text=True, timeout=30, env=env,
         )
         assert result.returncode == 0
-        assert json.loads(out_file.read_text()) == ["-m", "gpt-5.4", "-c", 'model_reasoning_effort="xhigh"', "-C", "."]
+        argv = json.loads(out_file.read_text())
+        assert argv[:2] == ["-c", argv[1]]
+        assert argv[1].startswith('initial_messages=[{role="system",content=')
+        assert ["-m", "gpt-5.4"] == argv[2:4]
+        assert ["-c", 'model_reasoning_effort="xhigh"'] == argv[4:6]
+        assert argv[-2:] == ["-C", "."]
 
 
 class TestScriptsRun:

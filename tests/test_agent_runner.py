@@ -10,6 +10,7 @@ def test_build_interactive_client_command_uses_codex_when_selected(tmp_path, mon
     import agent_runner
 
     monkeypatch.setattr(agent_runner, "_resolve_codex_cli", lambda: "/tmp/fake-codex")
+    monkeypatch.setattr(agent_runner, "_load_client_bootstrap_prompt", lambda client: "You are NEXO.")
 
     client, cmd = agent_runner.build_interactive_client_command(
         target=tmp_path,
@@ -26,15 +27,11 @@ def test_build_interactive_client_command_uses_codex_when_selected(tmp_path, mon
     )
 
     assert client == "codex"
-    assert cmd == [
-        "/tmp/fake-codex",
-        "-m",
-        "gpt-5.4",
-        "-c",
-        'model_reasoning_effort="xhigh"',
-        "-C",
-        str(tmp_path),
-    ]
+    assert cmd[0] == "/tmp/fake-codex"
+    assert cmd[1:3] == ["-c", 'initial_messages=[{role="system",content="You are NEXO."}]']
+    assert cmd[3:5] == ["-m", "gpt-5.4"]
+    assert cmd[5:7] == ["-c", 'model_reasoning_effort="xhigh"']
+    assert cmd[-2:] == ["-C", str(tmp_path)]
 
 
 def test_build_interactive_client_command_preserves_claude_flags(tmp_path, monkeypatch):
@@ -116,6 +113,7 @@ def test_run_automation_prompt_uses_codex_exec_output_file(monkeypatch, tmp_path
     import agent_runner
 
     monkeypatch.setattr(agent_runner, "_resolve_codex_cli", lambda: "/tmp/fake-codex")
+    monkeypatch.setattr(agent_runner, "_load_client_bootstrap_prompt", lambda client: "You are NEXO.")
     monkeypatch.setattr(agent_runner, "load_client_preferences", lambda: {
         "interactive_clients": {"claude_code": True, "codex": True, "claude_desktop": False},
         "default_terminal_client": "codex",
@@ -161,8 +159,9 @@ def test_run_automation_prompt_uses_codex_exec_output_file(monkeypatch, tmp_path
     assert "-m" in captured["cmd"]
     model_idx = captured["cmd"].index("-m") + 1
     assert captured["cmd"][model_idx] == "gpt-5.4"
-    config_idx = captured["cmd"].index("-c") + 1
-    assert captured["cmd"][config_idx] == 'model_reasoning_effort="xhigh"'
+    config_values = [captured["cmd"][idx + 1] for idx, part in enumerate(captured["cmd"]) if part == "-c"]
+    assert 'initial_messages=[{role="system",content="You are NEXO."}]' in config_values
+    assert 'model_reasoning_effort="xhigh"' in config_values
     prompt = captured["cmd"][-1]
     assert "SYSTEM INSTRUCTIONS" in prompt
     assert "TOOLING SCOPE" in prompt
@@ -184,6 +183,7 @@ def test_codex_backend_maps_legacy_opus_hint_to_configured_profile(monkeypatch, 
     import agent_runner
 
     monkeypatch.setattr(agent_runner, "_resolve_codex_cli", lambda: "/tmp/fake-codex")
+    monkeypatch.setattr(agent_runner, "_load_client_bootstrap_prompt", lambda client: "You are NEXO.")
     monkeypatch.setattr(agent_runner, "load_client_preferences", lambda: {
         "interactive_clients": {"claude_code": True, "codex": True, "claude_desktop": False},
         "default_terminal_client": "codex",
@@ -214,4 +214,6 @@ def test_codex_backend_maps_legacy_opus_hint_to_configured_profile(monkeypatch, 
     )
 
     assert captured["cmd"][captured["cmd"].index("-m") + 1] == "gpt-5.4-mini"
-    assert captured["cmd"][captured["cmd"].index("-c") + 1] == 'model_reasoning_effort="high"'
+    config_values = [captured["cmd"][idx + 1] for idx, part in enumerate(captured["cmd"]) if part == "-c"]
+    assert 'initial_messages=[{role="system",content="You are NEXO."}]' in config_values
+    assert 'model_reasoning_effort="high"' in config_values

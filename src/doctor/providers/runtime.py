@@ -982,6 +982,176 @@ def check_client_backend_preferences() -> DoctorCheck:
     )
 
 
+def check_client_bootstrap_parity(fix: bool = False) -> DoctorCheck:
+    """Check managed Claude/Codex bootstrap documents and CORE/USER markers."""
+    try:
+        from bootstrap_docs import get_bootstrap_status, sync_enabled_bootstraps
+    except Exception as e:
+        return DoctorCheck(
+            id="runtime.client_bootstrap",
+            tier="runtime",
+            status="degraded",
+            severity="warn",
+            summary=f"Bootstrap check unavailable: {e}",
+        )
+
+    try:
+        schedule = _load_json(SCHEDULE_FILE) if SCHEDULE_FILE.is_file() else {}
+    except Exception:
+        schedule = {}
+    prefs = normalize_client_preferences(schedule)
+    detected = detect_installed_clients()
+
+    relevant: set[str] = set()
+    default_terminal = prefs["default_terminal_client"]
+    if default_terminal in {"claude_code", "codex"}:
+        relevant.add(default_terminal)
+    if prefs.get("automation_enabled", True):
+        backend = prefs.get("automation_backend")
+        if backend in {"claude_code", "codex"}:
+            relevant.add(backend)
+    for client_key, enabled in prefs.get("interactive_clients", {}).items():
+        if enabled and client_key in {"claude_code", "codex"}:
+            relevant.add(client_key)
+    if not relevant:
+        relevant.add("claude_code")
+
+    evidence: list[str] = []
+    repair_plan: list[str] = []
+    status = "healthy"
+    severity = "info"
+
+    def _evaluate() -> list[tuple[str, dict]]:
+        return [
+            (client_key, get_bootstrap_status(client_key, nexo_home=NEXO_HOME, user_home=Path.home()))
+            for client_key in sorted(relevant)
+        ]
+
+    evaluated = _evaluate()
+    for client_key, info in evaluated:
+        installed = detected.get(client_key, {}).get("installed", False)
+        if not installed and client_key in {default_terminal, prefs.get("automation_backend")}:
+            status = "degraded"
+            severity = "warn"
+            evidence.append(f"`{client_key}` selected but not installed; bootstrap parity cannot be verified")
+            continue
+        if not info.get("exists"):
+            status = "degraded"
+            severity = "warn"
+            evidence.append(f"`{client_key}` bootstrap missing at {info.get('path')}")
+            repair_plan.append("Run `nexo clients sync` or `nexo update` to regenerate client bootstrap files")
+            continue
+        if not info.get("markers_ok"):
+            status = "degraded"
+            severity = "warn"
+            evidence.append(f"`{client_key}` bootstrap lacks CORE/USER markers")
+            repair_plan.append("Migrate bootstrap files so NEXO owns CORE and preserves USER")
+            continue
+        if info.get("template_version") and info.get("version") != info.get("template_version"):
+            status = "degraded"
+            severity = "warn"
+            evidence.append(
+                f"`{client_key}` bootstrap version {info.get('version') or 'unknown'} != template {info.get('template_version')}"
+            )
+            repair_plan.append("Refresh bootstrap files from the current NEXO templates")
+
+    if fix and status != "healthy":
+        sync_enabled_bootstraps(
+            nexo_home=NEXO_HOME,
+            user_home=Path.home(),
+            preferences=prefs,
+        )
+        post = check_client_bootstrap_parity(fix=False)
+        if post.status == "healthy":
+            post.fixed = True
+            post.summary += " (fixed)"
+            return post
+
+    return DoctorCheck(
+        id="runtime.client_bootstrap",
+        tier="runtime",
+        status=status,
+        severity=severity,
+        summary="Client bootstrap parity OK" if status == "healthy" else "Client bootstrap parity needs attention",
+        evidence=evidence or [
+            f"{client_key}: {info.get('path')}"
+            for client_key, info in evaluated
+        ],
+        repair_plan=repair_plan,
+        escalation_prompt=(
+            "Claude/Codex startup bootstrap files are missing, outdated, or lack the CORE/USER contract. "
+            "Repair them so updates can refresh product rules without clobbering operator-specific instructions."
+        ) if status != "healthy" else "",
+    )
+
+
+def check_transcript_source_parity() -> DoctorCheck:
+    """Check whether Deep Sleep can see transcript sources for the selected clients."""
+    try:
+        schedule = _load_json(SCHEDULE_FILE) if SCHEDULE_FILE.is_file() else {}
+    except Exception:
+        schedule = {}
+    prefs = normalize_client_preferences(schedule)
+
+    wants_codex = bool(
+        prefs.get("interactive_clients", {}).get("codex")
+        or prefs.get("default_terminal_client") == "codex"
+        or (prefs.get("automation_enabled", True) and prefs.get("automation_backend") == "codex")
+    )
+    wants_claude = bool(
+        prefs.get("interactive_clients", {}).get("claude_code")
+        or prefs.get("default_terminal_client") == "claude_code"
+        or (prefs.get("automation_enabled", True) and prefs.get("automation_backend") == "claude_code")
+    )
+
+    claude_root = Path.home() / ".claude" / "projects"
+    codex_roots = [
+        Path.home() / ".codex" / "sessions",
+        Path.home() / ".codex" / "archived_sessions",
+    ]
+
+    evidence = []
+    status = "healthy"
+    severity = "info"
+    if wants_claude:
+        evidence.append(f"claude_code transcripts: {'present' if claude_root.exists() else 'missing'} at {claude_root}")
+    if wants_codex:
+        codex_present = any(root.exists() for root in codex_roots)
+        evidence.append(
+            "codex transcripts: "
+            + ("present" if codex_present else "missing")
+            + f" at {', '.join(str(root) for root in codex_roots)}"
+        )
+        if not codex_present:
+            status = "degraded"
+            severity = "warn"
+
+    summary = "Deep Sleep transcript sources available"
+    repair_plan = []
+    escalation_prompt = ""
+    if status != "healthy":
+        summary = "Deep Sleep transcript source parity needs attention"
+        repair_plan = [
+            "Start at least one Codex session so ~/.codex/sessions is created",
+            "If Codex sessions already exist elsewhere, update the collector before relying on Codex-only transcript analysis",
+        ]
+        escalation_prompt = (
+            "Codex is selected, but no durable Codex session store is visible under ~/.codex. "
+            "Deep Sleep can still use DB artifacts, but transcript-level overnight analysis will be limited until Codex session files exist."
+        )
+
+    return DoctorCheck(
+        id="runtime.transcript_sources",
+        tier="runtime",
+        status=status,
+        severity=severity,
+        summary=summary,
+        evidence=evidence,
+        repair_plan=repair_plan,
+        escalation_prompt=escalation_prompt,
+    )
+
+
 def run_runtime_checks(fix: bool = False) -> list[DoctorCheck]:
     """Run all runtime-tier checks. Read-only by default."""
     return [
@@ -990,6 +1160,8 @@ def run_runtime_checks(fix: bool = False) -> list[DoctorCheck]:
         check_stale_sessions(),
         check_cron_freshness(),
         check_client_backend_preferences(),
+        check_client_bootstrap_parity(fix=fix),
+        check_transcript_source_parity(),
         check_launchagent_integrity(fix=fix),
         check_personal_script_registry(fix=fix),
         check_skill_health(fix=fix),

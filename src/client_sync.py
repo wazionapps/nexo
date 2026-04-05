@@ -10,6 +10,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from bootstrap_docs import sync_client_bootstrap
+
 try:
     from client_preferences import (
         BACKEND_NONE,
@@ -202,11 +204,22 @@ def sync_claude_code(
         python_path=python_path,
         operator_name=operator_name,
     )
-    return _sync_json_client(
+    result = _sync_json_client(
         _claude_code_settings_path(Path(user_home).expanduser() if user_home else None),
         server_config,
         "claude_code",
     )
+    bootstrap_result = sync_client_bootstrap(
+        "claude_code",
+        nexo_home=nexo_home,
+        operator_name=operator_name,
+        user_home=user_home,
+    )
+    result["bootstrap"] = bootstrap_result
+    if not bootstrap_result.get("ok"):
+        result["ok"] = False
+        result["error"] = bootstrap_result.get("error", "Claude bootstrap sync failed")
+    return result
 
 
 def sync_claude_desktop(
@@ -249,13 +262,21 @@ def sync_codex(
     codex_bin = shutil.which("codex")
     config_path = _codex_config_path(home_path)
     if not codex_bin:
-        return {
+        result = {
             "ok": True,
             "client": "codex",
             "skipped": True,
             "reason": "codex binary not found in PATH",
             "path": str(config_path),
         }
+        bootstrap_result = sync_client_bootstrap(
+            "codex",
+            nexo_home=nexo_home,
+            operator_name=operator_name,
+            user_home=user_home,
+        )
+        result["bootstrap"] = bootstrap_result
+        return result
 
     cmd = [codex_bin, "mcp", "add", "nexo"]
     for key, value in sorted(server_config.get("env", {}).items()):
@@ -270,19 +291,40 @@ def sync_codex(
         env=env,
     )
     if result.returncode != 0:
-        return {
+        result = {
             "ok": False,
             "client": "codex",
             "path": str(config_path),
             "error": (result.stderr or result.stdout or "codex mcp add failed").strip(),
         }
-    return {
+        bootstrap_result = sync_client_bootstrap(
+            "codex",
+            nexo_home=nexo_home,
+            operator_name=operator_name,
+            user_home=user_home,
+        )
+        result["bootstrap"] = bootstrap_result
+        if not bootstrap_result.get("ok"):
+            result["error"] = f"{result['error']}; bootstrap: {bootstrap_result.get('error', 'unknown error')}"
+        return result
+    sync_result = {
         "ok": True,
         "client": "codex",
         "action": "updated",
         "path": str(config_path),
         "mode": "cli",
     }
+    bootstrap_result = sync_client_bootstrap(
+        "codex",
+        nexo_home=nexo_home_path,
+        operator_name=operator_name,
+        user_home=home_path,
+    )
+    sync_result["bootstrap"] = bootstrap_result
+    if not bootstrap_result.get("ok"):
+        sync_result["ok"] = False
+        sync_result["error"] = bootstrap_result.get("error", "Codex bootstrap sync failed")
+    return sync_result
 
 
 def sync_all_clients(
@@ -363,9 +405,19 @@ def format_sync_summary(result: dict) -> str:
         item = result.get("clients", {}).get(key, {})
         label = labels[key]
         if item.get("skipped"):
-            lines.append(f"  {label}: skipped ({item.get('reason', 'not available')})")
+            bootstrap = item.get("bootstrap", {})
+            if bootstrap.get("ok") and not bootstrap.get("skipped"):
+                lines.append(
+                    f"  {label}: skipped ({item.get('reason', 'not available')}); bootstrap {bootstrap.get('action', 'synced')} -> {bootstrap.get('path', '')}"
+                )
+            else:
+                lines.append(f"  {label}: skipped ({item.get('reason', 'not available')})")
         elif item.get("ok"):
-            lines.append(f"  {label}: {item.get('action', 'synced')} -> {item.get('path', '')}")
+            bootstrap = item.get("bootstrap", {})
+            suffix = ""
+            if bootstrap.get("ok"):
+                suffix = f"; bootstrap {bootstrap.get('action', 'synced')} -> {bootstrap.get('path', '')}"
+            lines.append(f"  {label}: {item.get('action', 'synced')} -> {item.get('path', '')}{suffix}")
         else:
             lines.append(f"  {label}: ERROR -> {item.get('error', 'unknown error')}")
     return "\n".join(lines)

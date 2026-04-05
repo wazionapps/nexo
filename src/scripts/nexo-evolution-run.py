@@ -3,8 +3,8 @@
 NEXO Evolution — Standalone weekly runner with real execution.
 Cron: 0 3 * * 0  (Sundays 3:00 AM)
 
-Runs independently of Cortex. Calls Opus API directly to analyze
-the past week and generate improvement proposals.
+Runs independently of Cortex. Calls the configured NEXO automation backend
+to analyze the past week and generate improvement proposals.
 
 AUTO proposals are executed: snapshot → apply → validate → commit/rollback.
 PROPOSE proposals are logged for the user's review.
@@ -45,6 +45,7 @@ GLOBAL_IMMUTABLE_FILES = {
     "nexo-watchdog.sh",
     "cortex-wrapper.py",
     "CLAUDE.md",
+    "AGENTS.md",
     "personality.md",
     "user-profile.md",
     "evolution_cycle.py",
@@ -364,7 +365,9 @@ def _sanitize_public_diff(worktree_dir: Path, changed_files: list[str]) -> tuple
         "/Users/",
         "/home/",
         "CLAUDE.md",
+        "AGENTS.md",
         ".nexo/",
+        ".codex/",
     ]
     for marker in private_markers:
         if marker and marker in diff_text:

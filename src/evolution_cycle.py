@@ -275,19 +275,19 @@ def build_evolution_prompt(week_data: dict, objective: dict) -> str:
     if mode == "review":
         mode_desc = "review-only, nothing executes automatically"
         safe_zones = "~/.nexo/scripts/, ~/.nexo/plugins/, ~/.nexo/brain/"
-        immutable_files = "db.py, server.py, plugin_loader.py, storage_router.py, cognitive.py, knowledge_graph.py, tools_*.py, nexo-watchdog.sh, evolution_cycle.py, CLAUDE.md"
+        immutable_files = "db.py, server.py, plugin_loader.py, storage_router.py, cognitive.py, knowledge_graph.py, tools_*.py, nexo-watchdog.sh, evolution_cycle.py, CLAUDE.md, AGENTS.md"
     elif mode == "managed":
         mode_desc = f"owner-managed, max {max_auto} auto-applied changes with rollback and followups"
         safe_zones = "~/.nexo/scripts/, ~/.nexo/plugins/, ~/.nexo/brain/, NEXO_CODE/src, repo bin/docs/templates/tests"
-        immutable_files = "db.py, server.py, plugin_loader.py, storage_router.py, nexo-watchdog.sh, evolution_cycle.py, CLAUDE.md, personality.md, user-profile.md"
+        immutable_files = "db.py, server.py, plugin_loader.py, storage_router.py, nexo-watchdog.sh, evolution_cycle.py, CLAUDE.md, AGENTS.md, personality.md, user-profile.md"
     elif mode == "public_core":
         mode_desc = "public core contribution via isolated checkout and Draft PR"
         safe_zones = "isolated public repo checkout only"
-        immutable_files = "personal runtime, ~/.nexo/**, local DBs/logs, CLAUDE.md, user-profile.md"
+        immutable_files = "personal runtime, ~/.nexo/**, local DBs/logs, CLAUDE.md, AGENTS.md, user-profile.md"
     else:
         mode_desc = f"public auto, max {max_auto} auto-applied changes in personal safe zones"
         safe_zones = "~/.nexo/scripts/, ~/.nexo/plugins/"
-        immutable_files = "db.py, server.py, plugin_loader.py, storage_router.py, cognitive.py, knowledge_graph.py, tools_*.py, nexo-watchdog.sh, evolution_cycle.py, CLAUDE.md"
+        immutable_files = "db.py, server.py, plugin_loader.py, storage_router.py, cognitive.py, knowledge_graph.py, tools_*.py, nexo-watchdog.sh, evolution_cycle.py, CLAUDE.md, AGENTS.md"
 
     prompt = f"""You are NEXO Evolution — the weekly self-improvement cycle.
 

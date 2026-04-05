@@ -105,6 +105,7 @@ function getCoreRuntimeFlatFiles() {
     "client_sync.py",
     "client_preferences.py",
     "agent_runner.py",
+    "bootstrap_docs.py",
     "auto_update.py",
     "tools_sessions.py",
     "tools_coordination.py",

@@ -140,6 +140,9 @@ def _server_init():
                     print(f"[NEXO] {result['npm_notice']}", file=sys.stderr)
                 if result.get("claude_md_update"):
                     print(f"[NEXO] {result['claude_md_update']}", file=sys.stderr)
+                for message in result.get("client_bootstrap_updates", []):
+                    if message != result.get("claude_md_update"):
+                        print(f"[NEXO] {message}", file=sys.stderr)
                 for m in result.get("migrations", []):
                     if m["status"] == "failed":
                         print(f"[NEXO] Migration {m['file']} FAILED: {m['message']}", file=sys.stderr)
@@ -184,6 +187,9 @@ mcp = FastMCP(
         "- **Diary:** When user signals end of session (any language, any style — 'bye', 'done', 'cierro', etc.), "
         "write `nexo_session_diary_write(...)` with self_critique BEFORE responding. "
         "Detect intent, not keywords. If session closes without diary, auto_close handles it.\n"
+        "- **Evolution:** NEXO has a weekly self-improvement cycle. If the user asks how NEXO evolves, inspect "
+        "`nexo_evolution_status` / `nexo_evolution_history` instead of assuming this subsystem does not exist. "
+        "Use propose/approve/reject only when the user explicitly wants to work on NEXO evolution.\n"
         "- **Cortex:** `nexo_cortex_check` before budget/campaign/architecture changes\n"
         "- **Dissonance:** user contradicts memory→`nexo_cognitive_dissonance`. Frustrated→force=True\n"
         "- **Trust:** <40=paranoid verify twice, >80=fluid. Check: `nexo_cognitive_trust`"
@@ -202,8 +208,9 @@ def nexo_startup(task: str = "Startup", claude_session_id: str = "") -> str:
 
     Args:
         task: Initial task description.
-        claude_session_id: The Claude Code session UUID (from session-briefing or hook).
-                          Pass this to enable automatic inter-terminal inbox detection.
+        claude_session_id: External client session token. Claude Code passes its UUID via hooks;
+                          other clients may pass a synthetic durable token when useful.
+                          Pass this to enable automatic inter-terminal inbox detection when available.
     """
     return handle_startup(task, claude_session_id=claude_session_id)
 

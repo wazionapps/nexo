@@ -66,23 +66,43 @@ def extract_json_from_response(text: str) -> dict | None:
     return None
 
 
-def find_session_file(session_id: str, date_dir: Path) -> Path | None:
+def _safe_session_slug(session_id: str) -> str:
+    return (
+        session_id
+        .replace(".jsonl", "")
+        .replace(":", "-")
+        .replace("/", "-")
+    )
+
+
+def find_session_file(session_id: str, date_dir: Path, session_txt_map: dict[str, str] | None = None) -> Path | None:
     """Find the individual .txt file for a session."""
+    if session_txt_map:
+        mapped = session_txt_map.get(session_id)
+        if mapped:
+            candidate = date_dir / mapped
+            if candidate.exists():
+                return candidate
     if date_dir and date_dir.exists():
-        sid_short = session_id.replace(".jsonl", "")[:20]
+        sid_short = _safe_session_slug(session_id)[:20]
         for f in sorted(date_dir.glob("session-*.txt")):
             if sid_short in f.name:
                 return f
     return None
 
 
-def analyze_session(session_id: str, date_dir: Path, shared_context_file: Path | None) -> dict | None:
+def analyze_session(
+    session_id: str,
+    date_dir: Path,
+    shared_context_file: Path | None,
+    session_txt_map: dict[str, str] | None = None,
+) -> dict | None:
     """Send a session to the automation backend for extraction analysis.
 
     The backend reads the small per-session file + shared context file.
     Prompt is short — the heavy lifting is in the Read tool calls.
     """
-    session_file = find_session_file(session_id, date_dir)
+    session_file = find_session_file(session_id, date_dir, session_txt_map=session_txt_map)
     if not session_file:
         print(f"    No session file found for {session_id}", file=sys.stderr)
         return None
@@ -181,10 +201,12 @@ def main():
         with open(meta_file) as f:
             meta = json.load(f)
         session_files = meta.get("session_files", [])
+        session_txt_map = meta.get("session_txt_map", {})
     else:
         # Fallback: parse context file for session IDs
         print("[extract] No meta file found, scanning context for sessions...")
         session_files = []
+        session_txt_map = {}
         if context_file.exists():
             for line in context_file.read_text().splitlines():
                 if line.startswith("SESSION ") and ":" in line:
@@ -224,7 +246,7 @@ def main():
     MAX_RETRIES = 3
 
     for i, session_id in enumerate(session_files):
-        sid_safe = session_id.replace(".jsonl", "")[:30]
+        sid_safe = _safe_session_slug(session_id)[:40]
         checkpoint_file = checkpoint_dir / f"{sid_safe}.json"
 
         # Resume: skip already-processed sessions
@@ -246,7 +268,12 @@ def main():
         # Retry loop
         result = None
         for attempt in range(1, MAX_RETRIES + 1):
-            result = analyze_session(session_id, date_dir, shared_context_file)
+            result = analyze_session(
+                session_id,
+                date_dir,
+                shared_context_file,
+                session_txt_map=session_txt_map,
+            )
             if result:
                 break
             if attempt < MAX_RETRIES:

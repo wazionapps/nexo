@@ -46,6 +46,12 @@ def test_sync_claude_code_preserves_existing_settings(tmp_path):
     assert payload["mcpServers"]["nexo"]["env"]["NEXO_HOME"] == str(runtime)
     assert payload["mcpServers"]["nexo"]["env"]["NEXO_CODE"] == str(runtime)
     assert payload["mcpServers"]["nexo"]["env"]["NEXO_NAME"] == "Atlas"
+    bootstrap_path = home / ".claude" / "CLAUDE.md"
+    assert bootstrap_path.is_file()
+    bootstrap_text = bootstrap_path.read_text()
+    assert "******CORE******" in bootstrap_text
+    assert "******USER******" in bootstrap_text
+    assert "Evolution" in bootstrap_text
 
 
 def test_sync_claude_desktop_preserves_preferences(tmp_path):
@@ -104,6 +110,12 @@ def test_sync_codex_uses_codex_cli_when_available(tmp_path, monkeypatch):
     assert "NEXO_NAME=Atlas" in captured["cmd"]
     assert captured["cmd"][-2:] == [str(runtime / ".venv" / "bin" / "python3"), str(runtime / "server.py")]
     assert captured["env"]["HOME"] == str(home)
+    bootstrap_path = home / ".codex" / "AGENTS.md"
+    assert bootstrap_path.is_file()
+    bootstrap_text = bootstrap_path.read_text()
+    assert "******CORE******" in bootstrap_text
+    assert "******USER******" in bootstrap_text
+    assert "NEXO Shared Brain for Codex" in bootstrap_text
 
 
 def test_sync_all_clients_treats_missing_codex_as_non_fatal(tmp_path, monkeypatch):
@@ -124,6 +136,7 @@ def test_sync_all_clients_treats_missing_codex_as_non_fatal(tmp_path, monkeypatc
     assert result["ok"] is True
     assert result["clients"]["codex"]["skipped"] is True
     assert "codex binary not found" in result["clients"]["codex"]["reason"]
+    assert (home / ".codex" / "AGENTS.md").is_file()
 
 
 def test_sync_all_clients_can_limit_to_configured_clients(tmp_path, monkeypatch):
@@ -155,3 +168,61 @@ def test_sync_all_clients_can_limit_to_configured_clients(tmp_path, monkeypatch)
     assert result["clients"]["claude_code"]["reason"] == "disabled in client preferences"
     assert result["clients"]["claude_desktop"]["reason"] == "disabled in client preferences"
     assert result["clients"]["codex"]["skipped"] is True
+
+
+def test_sync_claude_bootstrap_preserves_user_block(tmp_path):
+    import client_sync
+
+    runtime = _make_runtime(tmp_path)
+    home = tmp_path / "home"
+    bootstrap_path = home / ".claude" / "CLAUDE.md"
+    bootstrap_path.parent.mkdir(parents=True)
+    bootstrap_path.write_text(
+        "<!-- nexo-claude-md-version: 1.0.0 -->\n"
+        "******CORE******\n"
+        "<!-- nexo:core:start -->\nold core\n<!-- nexo:core:end -->\n\n"
+        "******USER******\n"
+        "<!-- nexo:user:start -->\nSPECIAL USER RULE\n<!-- nexo:user:end -->\n"
+    )
+
+    result = client_sync.sync_claude_code(
+        nexo_home=runtime,
+        runtime_root=runtime,
+        operator_name="Atlas",
+        user_home=home,
+    )
+
+    assert result["ok"] is True
+    updated = bootstrap_path.read_text()
+    assert "SPECIAL USER RULE" in updated
+    assert "old core" not in updated
+    assert "nexo-claude-md-version: 2.0.0" in updated
+
+
+def test_sync_claude_bootstrap_migrates_legacy_file_into_core_user_contract(tmp_path):
+    import client_sync
+
+    runtime = _make_runtime(tmp_path)
+    home = tmp_path / "home"
+    bootstrap_path = home / ".claude" / "CLAUDE.md"
+    bootstrap_path.parent.mkdir(parents=True)
+    bootstrap_path.write_text(
+        "<!-- nexo-claude-md-version: 1.0.0 -->\n"
+        "# Atlas — Cognitive Co-Operator\n"
+        "I am Atlas, a cognitive co-operator powered by NEXO Brain.\n"
+        "<!-- nexo:start:startup -->\nlegacy startup\n<!-- nexo:end:startup -->\n"
+        "Operator note: remember the private QA machine.\n"
+    )
+
+    result = client_sync.sync_claude_code(
+        nexo_home=runtime,
+        runtime_root=runtime,
+        operator_name="Atlas",
+        user_home=home,
+    )
+
+    assert result["ok"] is True
+    updated = bootstrap_path.read_text()
+    assert "******CORE******" in updated
+    assert "******USER******" in updated
+    assert "Operator note: remember the private QA machine." in updated

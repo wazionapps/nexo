@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.6.14] - 2026-04-05
+
+### Bootstrap Parity
+- Claude Code and Codex now have managed bootstrap documents with an explicit `CORE` / `USER` contract: NEXO updates can refresh product rules in `CORE` without touching operator-specific instructions in `USER`.
+- Added a new managed Codex bootstrap at `~/.codex/AGENTS.md`, while keeping `~/.claude/CLAUDE.md` on the same migration contract.
+- `nexo chat` and Codex headless automation now inject the current Codex bootstrap explicitly, so Codex starts as NEXO even when plain global Codex startup does not honor global instructions consistently.
+- Startup preflight, `nexo update`, and `nexo clients sync` now keep Claude/Codex bootstrap files aligned automatically.
+
+### Deep Sleep Parity
+- Deep Sleep transcript collection now reads both Claude Code raw transcripts and Codex durable session files, merging them into one overnight analysis input set with per-session client/source metadata.
+- Added session manifest and stable per-session file mapping so Deep Sleep extraction can resume safely across mixed Claude/Codex transcript sources.
+- Runtime doctor now checks transcript-source parity and managed client bootstrap parity, instead of assuming a Claude-only world.
+
+### Runtime Hardening
+- Runtime sync/install/update now ship the new bootstrap management module, so existing installations can migrate without missing-file breakage.
+- Evolution, self-audit, and watchdog safety prompts now protect `AGENTS.md` alongside `CLAUDE.md`.
+- Session startup guidance now surfaces Evolution state directly in the session briefing and treats external session tokens as multi-client, not Claude-only.
+
 ## [2.6.13] - 2026-04-04
 
 ### Personal KeepAlive Schedules

@@ -58,7 +58,7 @@ if [ "$SESSIONS" -eq 0 ]; then
     exit 0
 fi
 
-# Phase 2: Extract findings per session (Claude Opus)
+# Phase 2: Extract findings per session (configured automation backend)
 log "Phase 2: Extracting findings from $SESSIONS sessions..."
 python3 "$SCRIPT_DIR/deep-sleep/extract.py" "$RUN_ID" >> "$LOG_DIR/deep-sleep.log" 2>&1
 
@@ -67,7 +67,7 @@ if [ ! -f "$DEEP_SLEEP_DIR/$RUN_ID-extractions.json" ]; then
     exit 1
 fi
 
-# Phase 3: Cross-session synthesis (Claude Opus, one call)
+# Phase 3: Cross-session synthesis (configured automation backend, one call)
 log "Phase 3: Synthesizing cross-session findings..."
 python3 "$SCRIPT_DIR/deep-sleep/synthesize.py" "$RUN_ID" >> "$LOG_DIR/deep-sleep.log" 2>&1
 
