@@ -1838,7 +1838,11 @@ function copyInstall(btn) {
                 var text = node.textContent || '';
                 var idx = 0;
                 var textNode = document.createTextNode('');
-                parent.insertBefore(textNode, cursor);
+                if (cursor.parentNode === parent) {
+                    parent.insertBefore(textNode, cursor);
+                } else {
+                    parent.appendChild(textNode);
+                }
 
                 (function typeChar() {
                     if (idx < text.length) {
@@ -1855,7 +1859,11 @@ function copyInstall(btn) {
             if (node.nodeType === Node.ELEMENT_NODE) {
                 var el = document.createElement(node.tagName.toLowerCase());
                 if (node.className) el.className = node.className;
-                parent.insertBefore(el, cursor);
+                if (cursor.parentNode === parent) {
+                    parent.insertBefore(el, cursor);
+                } else {
+                    parent.appendChild(el);
+                }
                 var children = Array.prototype.slice.call(node.childNodes);
                 appendChildren(children, el, next);
                 return;
