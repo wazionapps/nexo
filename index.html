@@ -487,7 +487,7 @@
         align-items: start;
     }
     .install-flow-screen {
-        min-height: 460px;
+        height: 460px;
         background: rgba(8, 8, 14, 0.82);
         border: 1px solid rgba(255,255,255,0.05);
         border-radius: 18px;
@@ -497,7 +497,11 @@
         line-height: 1.7;
         color: #D6D6E7;
         box-shadow: inset 0 0 0 1px rgba(255,255,255,0.02);
+        overflow: auto;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
     }
+    .install-flow-screen::-webkit-scrollbar { display: none; }
     .install-flow-line {
         white-space: pre-wrap;
     }
@@ -575,6 +579,47 @@
         color: #F472B6;
     }
 
+    .release-evolution-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 20px;
+    }
+    .release-evolution-card {
+        background: rgba(17,17,25,0.78);
+        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 18px;
+        padding: 22px 22px 20px;
+    }
+    .release-evolution-version {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #C4B5FD;
+        margin-bottom: 10px;
+    }
+    .release-evolution-card h3 {
+        margin: 0 0 10px;
+        font-size: 18px;
+        color: #F8FAFC;
+    }
+    .release-evolution-card p {
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.65;
+        color: #94A3B8;
+    }
+    .release-evolution-actions {
+        display: flex;
+        justify-content: center;
+        gap: 14px;
+        flex-wrap: wrap;
+        margin-top: 26px;
+    }
+
     /* ===== Stat Counter ===== */
     .stat-icon {
         transition: all 0.3s ease;
@@ -602,7 +647,7 @@
 .brain-svg.active .stem circle:nth-child(4) { animation-delay: 1.5s; }
 @keyframes node-pulse { 0% { r: 0.5; opacity: 0.6; } 100% { r: 0.8; opacity: 1; } }
         .install-flow-grid { grid-template-columns: 1fr; }
-        .install-flow-screen { min-height: 420px; font-size: 13px; }
+        .install-flow-screen { height: 420px; font-size: 13px; }
         .install-flow-body { padding: 18px; }
     }
     </style>
@@ -953,155 +998,42 @@
     </div>
 </section>
 
-<!-- v2.6.18 Codex parity audits, Deep Sleep summaries, retrieval honesty -->
+<!-- Recent evolution -->
 <section class="feature-section">
     <div class="container">
-        <div class="section-label">New in v2.6.18</div>
-        <h2 class="section-title">Codex Session Audits, Weighted Deep Sleep, and More Honest Retrieval</h2>
-        <p class="section-subtitle">This patch closes the remaining practical roadmap items around multi-client discipline: Codex now keeps a managed <code>mcp_servers.nexo</code> contract in config, runtime doctor audits real recent sessions instead of guessing, Deep Sleep writes higher-horizon summaries, and retrieval explains itself more honestly while trimming associative noise.</p>
+        <div class="section-label">Recent Evolution</div>
+        <h2 class="section-title">The runtime has moved fast without losing the plot</h2>
+        <p class="section-subtitle">Instead of burying the home page in long release writeups, here is the short version: NEXO now behaves much more like a real shared-brain system across clients, retrieval is smarter and more honest, Deep Sleep sees further, and the recommended Claude path now defaults to Opus 4.6 with 1M context.</p>
 
-        <div class="features-grid">
-            <div class="feature-card">
-                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6"/><path d="M9 15h6"/><path d="M12 6v12"/></svg></div>
-                <h3>Managed Codex MCP Contract</h3>
-                <p>NEXO now persists a managed <code>mcp_servers.nexo</code> entry in <code>~/.codex/config.toml</code>, so the shared brain survives Codex MCP drift instead of depending only on a one-time CLI registration.</p>
+        <div class="release-evolution-grid">
+            <div class="release-evolution-card">
+                <div class="release-evolution-version">v2.6.20</div>
+                <h3>Claude 1M defaults</h3>
+                <p>Claude Code now defaults to <strong>Opus 4.6 with 1M context</strong> both during install and in runtime-safe updates, while Codex keeps an explicit <strong>GPT-5.4 · xhigh</strong> profile.</p>
             </div>
-            <div class="feature-card">
-                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
-                <h3>Doctor Audits Real Session Discipline</h3>
-                <p>Runtime doctor now inspects recent Codex sessions for startup/heartbeat behavior and verifies Claude Desktop shared-brain metadata explicitly, instead of treating both as invisible best-effort wiring.</p>
+            <div class="release-evolution-card">
+                <div class="release-evolution-version">v2.6.18</div>
+                <h3>Auditable parity</h3>
+                <p>Codex keeps a managed MCP contract, runtime doctor audits real recent sessions, and Deep Sleep writes weighted weekly and monthly summaries instead of only short-horizon noise.</p>
             </div>
-            <div class="feature-card">
-                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3"/><path d="M22 12h-4"/><path d="M12 22v-4"/></svg></div>
-                <h3>Weighted Deep Sleep Summaries</h3>
-                <p>Deep Sleep now writes weekly and monthly summaries and weights projects by diary activity, learnings, followups, and decisions, so higher-leverage work is easier to surface overnight.</p>
+            <div class="release-evolution-card">
+                <div class="release-evolution-version">v2.6.16–2.6.17</div>
+                <h3>Smarter defaults</h3>
+                <p>Codex bootstrap/model sync became durable outside <code>nexo chat</code>, retrieval gained HyDE + shallow spreading auto mode, and Deep Sleep moved to a 60-day blended horizon.</p>
             </div>
-            <div class="feature-card">
-                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-6"/></svg></div>
-                <h3>Confidence-Aware Retrieval</h3>
-                <p>Retrieval responses now show confidence and the auto-strategy that fired. Associative expansion also trims low-signal neighbors and re-slices back to <code>top_k</code> so exact lookups stay cleaner.</p>
+            <div class="release-evolution-card">
+                <div class="release-evolution-version">v2.6.14–2.6.15</div>
+                <h3>Shared-brain fidelity</h3>
+                <p>Claude Code and Codex got managed bootstrap docs with a <code>CORE</code>/<code>USER</code> contract, and Deep Sleep learned to read Codex transcripts instead of staying Claude-only.</p>
             </div>
-            <div class="feature-card">
-                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></div>
-                <h3>Deep Sleep Reliability Fix</h3>
-                <p>The overnight pipeline now accepts the nested synthesis output path produced by the current headless model flow, removing a false failure mode where the JSON already existed but the run still marked itself failed.</p>
-            </div>
+        </div>
+
+        <div class="release-evolution-actions">
+            <a href="/changelog/" class="btn btn-secondary">Read the full changelog</a>
+            <a href="/blog/nexo-2-6-12-shared-brain-clients-and-self-healing/" class="btn btn-secondary">Read the shared-brain post</a>
         </div>
     </div>
 </section>
-
-<!-- v2.6.17 Installed-runtime Codex bootstrap hotfix -->
-<section class="feature-section">
-    <div class="container">
-        <div class="section-label">New in v2.6.17</div>
-        <h2 class="section-title">Existing Installs Now Catch the Full Codex Bootstrap</h2>
-        <p class="section-subtitle">This is the patch that closes the last annoying migration gap after the Codex parity work: older installs that already had NEXO connected to Codex now backfill that state during update, managed bootstrap docs stop rendering blank identities, and the repaired client preferences get persisted for future updates.</p>
-
-        <div class="features-grid">
-            <div class="feature-card">
-                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></div>
-                <h3>Codex Existing-Install Backfill</h3>
-                <p>If an older runtime already had NEXO artifacts in Codex, <code>nexo update</code> now backfills that client state automatically so the managed global bootstrap/model sync actually lands.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16"/><path d="M6 16V4h12v12"/><path d="M9 8h6"/><path d="M9 12h6"/></svg></div>
-                <h3>Bootstrap Identity Fallback</h3>
-                <p>Managed <code>CLAUDE.md</code> and <code>AGENTS.md</code> now fall back cleanly to <code>NEXO</code> when local operator metadata is missing, instead of generating broken blank headings.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h18"/><path d="M12 3v18"/></svg></div>
-                <h3>Persistent Repair</h3>
-                <p>The normalized client backfill is now written back during update flows, so the repaired Codex state survives future syncs instead of being inferred only for one command.</p>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- v2.6.16 Smarter retrieval, Codex runtime sync, long-horizon Deep Sleep -->
-<section class="feature-section">
-    <div class="container">
-        <div class="section-label">New in v2.6.16</div>
-        <h2 class="section-title">Smarter Memory Defaults, Better Codex Runtime Fidelity</h2>
-        <p class="section-subtitle">This release pushes parity and cognition forward at the same time: Codex gets stronger managed startup state outside <code>nexo chat</code>, retrieval becomes smarter by default, and Deep Sleep now reasons across a 60-day blended horizon instead of only the recent past.</p>
-
-        <div class="features-grid">
-            <div class="feature-card">
-                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6"/><path d="M9 15h6"/><path d="M12 6v12"/></svg></div>
-                <h3>Managed Codex Global Bootstrap</h3>
-                <p>NEXO now also manages Codex global startup state in <code>~/.codex/config.toml</code>, syncing the active bootstrap plus the configured Codex model and reasoning profile.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg></div>
-                <h3>Client-Aware Session Tokens</h3>
-                <p>Session startup and followup execution are now client-aware instead of Claude-shaped. Codex sessions can register durable external session tokens, and dashboard followups open the configured terminal client.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
-                <h3>HyDE + Spreading Auto Mode</h3>
-                <p>Conceptual queries now auto-enable HyDE expansion and shallow spreading activation, while exact lookups like IDs, file paths, or stack traces stay conservative.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M6 8c0-2 2.5-4 6-4s6 2 6 4-2.5 4-6 4-6 2-6 4 2.5 4 6 4 6-2 6-4"/></svg></div>
-                <h3>Per-Memory Stability / Difficulty</h3>
-                <p>Decay still uses Ebbinghaus as the base, but memories now track their own stability and difficulty so reinforcement can shape how sticky each memory becomes over time.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3"/><path d="M22 12h-4"/><path d="M12 22v-4"/></svg></div>
-                <h3>60-Day Deep Sleep Blend</h3>
-                <p>Overnight analysis now mixes recent and older context across diaries, learnings, transcripts, and stale followups so multi-week patterns can surface again when they matter.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg></div>
-                <h3>Parity Regression Audits</h3>
-                <p>NEXO now ships automated regression checks so key jobs, transcript collectors, and dashboard actions do not silently drift back into Claude-only assumptions later.</p>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- v2.6.14 Bootstrap Parity and Codex Transcript-Aware Deep Sleep -->
-<section class="feature-section">
-    <div class="container">
-        <div class="section-label">New in v2.6.14</div>
-        <h2 class="section-title">Bootstrap Parity, Codex Deep Sleep, Better Shared-Brain Fidelity</h2>
-        <p class="section-subtitle">NEXO now closes two real parity gaps: Claude Code and Codex both get managed startup bootstraps, and Deep Sleep can analyze raw session transcripts from Codex as well as Claude Code. Shared brain now reaches further into how the system actually starts, remembers, and recovers.</p>
-
-        <div class="features-grid">
-            <div class="feature-card">
-                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/></svg></div>
-                <h3>Managed Claude + Codex Bootstrap</h3>
-                <p>NEXO now manages both <code>~/.claude/CLAUDE.md</code> and <code>~/.codex/AGENTS.md</code> as first-class bootstrap docs instead of treating Codex as MCP-only.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
-                <h3><code>CORE</code> / <code>USER</code> Contract</h3>
-                <p>Bootstrap files now split NEXO-owned rules from operator-owned instructions, so updates can strengthen core behavior without clobbering personal guidance.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8v8m-4-4h8"/></svg></div>
-                <h3>Codex Starts as NEXO</h3>
-                <p><code>nexo chat</code> and Codex headless automation now inject the current bootstrap explicitly, so Codex starts with NEXO identity and operating rules instead of behaving like plain Codex with an MCP attached.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></div>
-                <h3>Deep Sleep Reads Codex Sessions</h3>
-                <p>Overnight analysis no longer depends only on Claude Code raw transcripts. Codex durable session files now feed the same Deep Sleep pipeline with client/source metadata.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
-                <h3>Doctor Checks Real Parity</h3>
-                <p><code>nexo doctor</code> now audits bootstrap parity and transcript-source parity, so the runtime can tell you when shared brain is configured but overnight analysis or startup identity is still incomplete.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
-                <h3>Claude Code Still Recommended</h3>
-                <p>Codex parity is much better now, but Claude Code still has the deepest hook surface and the most battle-tested headless path. It remains the recommended default today.</p>
-            </div>
-        </div>
-    </div>
-</section>
-
-<div style="text-align:center;padding:32px 0 16px;"><a href="/changelog/" style="color:var(--purple-light);font-size:16px;font-weight:600;">View full changelog &rarr;</a></div>
 
 
 <!-- Quick Start -->
