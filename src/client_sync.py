@@ -8,6 +8,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 from bootstrap_docs import sync_client_bootstrap
@@ -19,6 +20,7 @@ try:
         normalize_backend_key,
         normalize_client_key,
         normalize_client_preferences,
+        resolve_client_runtime_profile,
     )
 except Exception:
     BACKEND_NONE = "none"
@@ -50,6 +52,13 @@ except Exception:
             "automation_enabled": True,
             "automation_backend": "claude_code",
         }
+
+    def resolve_client_runtime_profile(client: str, preferences: dict | None = None) -> dict:
+        defaults = {
+            "claude_code": {"model": "opus", "reasoning_effort": ""},
+            "codex": {"model": "gpt-5.4", "reasoning_effort": "xhigh"},
+        }
+        return dict(defaults.get(client, {}))
 
 
 
@@ -156,6 +165,118 @@ def _codex_config_path(home: Path | None = None) -> Path:
     return base / ".codex" / "config.toml"
 
 
+def _toml_key(key: str) -> str:
+    if key.replace("_", "").replace("-", "").isalnum():
+        return key
+    escaped = key.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
+def _toml_scalar(value) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return json.dumps(value)
+    escaped = str(value).replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+    return f'"{escaped}"'
+
+
+def _toml_inline_table(payload: dict) -> str:
+    parts = [f"{_toml_key(str(key))} = {_toml_value(value)}" for key, value in payload.items()]
+    return "{ " + ", ".join(parts) + " }"
+
+
+def _toml_value(value) -> str:
+    if isinstance(value, dict):
+        return _toml_inline_table(value)
+    if isinstance(value, list):
+        return "[" + ", ".join(_toml_value(item) for item in value) + "]"
+    return _toml_scalar(value)
+
+
+def _emit_toml_table(table: dict, prefix: tuple[str, ...] = ()) -> list[str]:
+    scalar_lines: list[str] = []
+    child_tables: list[tuple[str, dict]] = []
+    for key, value in table.items():
+        if isinstance(value, dict):
+            child_tables.append((str(key), value))
+        else:
+            scalar_lines.append(f"{_toml_key(str(key))} = {_toml_value(value)}")
+
+    lines: list[str] = []
+    emit_header = bool(prefix and (scalar_lines or not child_tables))
+    if emit_header:
+        lines.append("[" + ".".join(_toml_key(part) for part in prefix) + "]")
+    lines.extend(scalar_lines)
+
+    for child_key, child_value in child_tables:
+        child_lines = _emit_toml_table(child_value, prefix + (child_key,))
+        if child_lines:
+            if lines:
+                lines.append("")
+            lines.extend(child_lines)
+    return lines
+
+
+def _load_toml_object(path: Path) -> dict:
+    if not path.is_file():
+        return {}
+    try:
+        data = tomllib.loads(path.read_text())
+    except Exception as exc:
+        raise ValueError(f"Invalid TOML in {path}: {exc}") from exc
+    if not isinstance(data, dict):
+        raise ValueError(f"Expected TOML table in {path}")
+    return data
+
+
+def _write_toml_object(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lines = _emit_toml_table(payload)
+    path.write_text("\n".join(lines).rstrip() + "\n")
+
+
+def _sync_codex_managed_config(
+    path: Path,
+    *,
+    bootstrap_prompt: str,
+    runtime_profile: dict | None,
+) -> dict:
+    payload = _load_toml_object(path)
+    action = "updated" if payload else "created"
+    runtime_profile = dict(runtime_profile or {})
+
+    if runtime_profile.get("model"):
+        payload["model"] = runtime_profile["model"]
+    if "reasoning_effort" in runtime_profile:
+        payload["model_reasoning_effort"] = runtime_profile.get("reasoning_effort") or ""
+
+    payload["initial_messages"] = [
+        {
+            "role": "system",
+            "content": bootstrap_prompt,
+        }
+    ] if bootstrap_prompt else []
+
+    nexo_table = payload.setdefault("nexo", {})
+    codex_table = nexo_table.setdefault("codex", {})
+    codex_table["bootstrap_managed"] = True
+    codex_table["bootstrap_bytes"] = len(bootstrap_prompt.encode("utf-8")) if bootstrap_prompt else 0
+    if runtime_profile.get("model"):
+        codex_table["managed_model"] = runtime_profile["model"]
+    codex_table["managed_reasoning_effort"] = runtime_profile.get("reasoning_effort", "") or ""
+
+    _write_toml_object(path, payload)
+    return {
+        "ok": True,
+        "action": action,
+        "path": str(path),
+        "bootstrap_managed": True,
+        "model": runtime_profile.get("model", ""),
+        "reasoning_effort": runtime_profile.get("reasoning_effort", "") or "",
+    }
+
+
 def _load_json_object(path: Path) -> dict:
     if not path.is_file():
         return {}
@@ -197,6 +318,7 @@ def sync_claude_code(
     python_path: str = "",
     operator_name: str = "",
     user_home: str | os.PathLike[str] | None = None,
+    preferences: dict | None = None,
 ) -> dict:
     server_config = build_server_config(
         nexo_home=nexo_home,
@@ -229,6 +351,7 @@ def sync_claude_desktop(
     python_path: str = "",
     operator_name: str = "",
     user_home: str | os.PathLike[str] | None = None,
+    preferences: dict | None = None,
 ) -> dict:
     server_config = build_server_config(
         nexo_home=nexo_home,
@@ -250,9 +373,12 @@ def sync_codex(
     python_path: str = "",
     operator_name: str = "",
     user_home: str | os.PathLike[str] | None = None,
+    preferences: dict | None = None,
 ) -> dict:
     nexo_home_path = Path(nexo_home).expanduser() if nexo_home else _default_nexo_home()
     home_path = Path(user_home).expanduser() if user_home else _user_home()
+    active_preferences = normalize_client_preferences(preferences)
+    runtime_profile = resolve_client_runtime_profile("codex", preferences=active_preferences)
     server_config = build_server_config(
         nexo_home=nexo_home_path,
         runtime_root=runtime_root,
@@ -276,6 +402,13 @@ def sync_codex(
             user_home=user_home,
         )
         result["bootstrap"] = bootstrap_result
+        if bootstrap_result.get("ok"):
+            prompt_text = bootstrap_result.get("content") or ""
+            result["config"] = _sync_codex_managed_config(
+                config_path,
+                bootstrap_prompt=prompt_text,
+                runtime_profile=runtime_profile,
+            )
         return result
 
     cmd = [codex_bin, "mcp", "add", "nexo"]
@@ -324,6 +457,12 @@ def sync_codex(
     if not bootstrap_result.get("ok"):
         sync_result["ok"] = False
         sync_result["error"] = bootstrap_result.get("error", "Codex bootstrap sync failed")
+        return sync_result
+    sync_result["config"] = _sync_codex_managed_config(
+        config_path,
+        bootstrap_prompt=bootstrap_result.get("content") or "",
+        runtime_profile=runtime_profile,
+    )
     return sync_result
 
 
@@ -372,6 +511,7 @@ def sync_all_clients(
                 python_path=python_path,
                 operator_name=operator_name,
                 user_home=user_home,
+                preferences=preferences,
             )
         except Exception as exc:
             return {"ok": False, "client": label, "error": str(exc)}

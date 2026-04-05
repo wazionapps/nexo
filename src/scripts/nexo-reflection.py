@@ -132,7 +132,7 @@ def analyze_entries(entries):
         "files_modified": files_modified,
         "self_critiques": self_critiques,
         "entry_count": len(entries),
-        "claude_entries": sum(1 for e in entries if e.get("source") == "claude"),
+        "source_counts": dict(Counter(e.get("source") or "unknown" for e in entries)),
     }
 
 
@@ -188,7 +188,7 @@ def main():
     # Filter out pure hook entries (tool captures)
     session_entries = [
         e for e in entries
-        if e.get("source") in ("claude", "hook-fallback")
+        if e.get("source") in ("claude", "hook-fallback", "codex", "codex_cli", "codex_cli_rs")
         or "tasks" in e
     ]
 
@@ -210,7 +210,7 @@ def main():
     reflection = {
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
         "entries_processed": analysis["entry_count"],
-        "claude_entries": analysis["claude_entries"],
+        "source_counts": analysis["source_counts"],
         "tasks_seen": len(analysis["tasks"]),
         "decisions_made": len(analysis["decisions"]),
         "errors_resolved": len(analysis["errors"]),
@@ -243,8 +243,11 @@ def main():
     except Exception as e:
         print(f"Adaptive decay skipped: {e}")
 
+    source_summary = ", ".join(
+        f"{source}={count}" for source, count in sorted(analysis["source_counts"].items())
+    ) or "none"
     print(f"Reflection complete: {analysis['entry_count']} entries processed, "
-          f"{analysis['claude_entries']} from Claude, "
+          f"sources: {source_summary}, "
           f"{len(analysis['errors'])} errors, "
           f"{len(analysis['self_critiques'])} critiques.")
 

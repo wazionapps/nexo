@@ -34,18 +34,26 @@ def _validate_sid(sid: str) -> str:
     raise ValueError(f"Invalid SID format: {sid[:80]}")
 
 
-def register_session(sid: str, task: str, claude_session_id: str = "") -> dict:
+def register_session(
+    sid: str,
+    task: str,
+    claude_session_id: str = "",
+    *,
+    external_session_id: str = "",
+    session_client: str = "",
+) -> dict:
     """Register or re-register a session."""
     sid = _validate_sid(sid)
     conn = get_db()
     now = now_epoch()
+    linked_session_id = (external_session_id or claude_session_id or "").strip()
     conn.execute(
-        "INSERT OR REPLACE INTO sessions (sid, task, started_epoch, last_update_epoch, local_time, claude_session_id) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
-        (sid, task, now, now, local_time_str(), claude_session_id)
+        "INSERT OR REPLACE INTO sessions (sid, task, started_epoch, last_update_epoch, local_time, claude_session_id, external_session_id, session_client) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (sid, task, now, now, local_time_str(), linked_session_id, linked_session_id, (session_client or "").strip())
     )
     conn.commit()
-    return {"sid": sid, "task": task}
+    return {"sid": sid, "task": task, "external_session_id": linked_session_id, "session_client": (session_client or "").strip()}
 
 
 def update_session(sid: str, task: str | None) -> dict:
@@ -319,5 +327,4 @@ def _expire_old_questions(conn: sqlite3.Connection):
         "WHERE status = 'pending' AND created_epoch < ?",
         (cutoff,)
     )
-
 

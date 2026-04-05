@@ -91,6 +91,7 @@ def main():
 
     extractions_file = DEEP_SLEEP_DIR / f"{target_date}-extractions.json"
     context_file = DEEP_SLEEP_DIR / f"{target_date}-context.txt"
+    long_horizon_file = DEEP_SLEEP_DIR / target_date / "long-horizon-context.json"
 
     if not extractions_file.exists():
         print(f"[synthesize] No extractions file for {target_date}. Run extract.py first.")
@@ -129,6 +130,7 @@ def main():
     prompt = prompt_template.replace("{{EXTRACTIONS_FILE}}", str(extractions_file))
     prompt = prompt.replace("{{CONTEXT_FILE}}", str(context_file))
     prompt = prompt.replace("{{SKILL_RUNTIME_FILE}}", str(runtime_candidates_file))
+    prompt = prompt.replace("{{LONG_HORIZON_FILE}}", str(long_horizon_file))
 
     print(f"[synthesize] Phase 3: Synthesizing {total_findings} findings from {target_date}")
     print(f"[synthesize] Skill runtime candidates: {runtime_candidate_count}")

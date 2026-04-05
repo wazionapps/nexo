@@ -113,8 +113,8 @@ conn.row_factory = sqlite3.Row
 row = None
 if session_id and session_id != 'global':
     row = conn.execute(
-        'SELECT sid, task FROM sessions WHERE claude_session_id = ? LIMIT 1',
-        (session_id,)
+        'SELECT sid, task FROM sessions WHERE external_session_id = ? OR claude_session_id = ? LIMIT 1',
+        (session_id, session_id)
     ).fetchone()
 
 # Fallback: most recent active session

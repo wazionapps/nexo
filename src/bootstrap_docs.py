@@ -236,6 +236,7 @@ def sync_client_bootstrap(
             "action": "created",
             "path": str(target_path),
             "version": template_version,
+            "content": rendered,
         }
 
     existing = target_path.read_text()
@@ -275,6 +276,7 @@ def sync_client_bootstrap(
         "action": action,
         "path": str(target_path),
         "version": template_version,
+        "content": updated,
     }
 
 

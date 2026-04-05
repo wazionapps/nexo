@@ -64,18 +64,35 @@ def _format_age(epoch: float) -> str:
         return f"{int(seconds / 3600)}h{int((seconds % 3600) / 60)}m"
 
 
-def handle_startup(task: str = "Startup", claude_session_id: str = "") -> str:
+def handle_startup(
+    task: str = "Startup",
+    claude_session_id: str = "",
+    session_token: str = "",
+    session_client: str = "",
+) -> str:
     """Full startup sequence: register, clean, report.
 
     Args:
         task: Initial task description
-        claude_session_id: External client session token. Claude Code passes its UUID via hooks;
-                          other clients may pass a synthetic durable ID when useful.
-                          Enables automatic inbox detection when hook-backed clients provide one.
+        claude_session_id: Legacy alias for the external client session token.
+        session_token: External client session token. Claude Code passes its UUID via hooks;
+                      other clients may pass a synthetic durable ID when useful.
+                      Enables automatic inbox detection when hook-backed clients provide one.
+        session_client: Optional client label such as `claude_code` or `codex`.
     """
     sid = _generate_sid()
     cleaned = clean_stale_sessions()
-    register_session(sid, task, claude_session_id=claude_session_id)
+    linked_session_id = (session_token or claude_session_id or "").strip()
+    inferred_client = (session_client or "").strip()
+    if not inferred_client and claude_session_id and not session_token:
+        inferred_client = "claude_code"
+    register_session(
+        sid,
+        task,
+        claude_session_id=linked_session_id,
+        external_session_id=linked_session_id,
+        session_client=inferred_client,
+    )
     _start_keepalive(sid)
     active = get_active_sessions()
     other_sessions = [s for s in active if s["sid"] != sid]

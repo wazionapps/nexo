@@ -406,6 +406,10 @@ def get_stats() -> dict:
 
     avg_stm = db.execute("SELECT AVG(strength) FROM stm_memories WHERE lifecycle_state IN ('active', 'pinned') AND promoted_to_ltm = 0").fetchone()[0] or 0.0
     avg_ltm = db.execute("SELECT AVG(strength) FROM ltm_memories WHERE is_dormant = 0").fetchone()[0] or 0.0
+    avg_stm_stability = db.execute("SELECT AVG(stability) FROM stm_memories WHERE lifecycle_state IN ('active', 'pinned') AND promoted_to_ltm = 0").fetchone()[0] or 0.0
+    avg_ltm_stability = db.execute("SELECT AVG(stability) FROM ltm_memories WHERE is_dormant = 0").fetchone()[0] or 0.0
+    avg_stm_difficulty = db.execute("SELECT AVG(difficulty) FROM stm_memories WHERE lifecycle_state IN ('active', 'pinned') AND promoted_to_ltm = 0").fetchone()[0] or 0.0
+    avg_ltm_difficulty = db.execute("SELECT AVG(difficulty) FROM ltm_memories WHERE is_dormant = 0").fetchone()[0] or 0.0
 
     total_retrievals = db.execute("SELECT COUNT(*) FROM retrieval_log").fetchone()[0]
     avg_retrieval_score = db.execute("SELECT AVG(top_score) FROM retrieval_log").fetchone()[0] or 0.0
@@ -428,6 +432,10 @@ def get_stats() -> dict:
         "ltm_dormant": ltm_dormant,
         "avg_stm_strength": round(avg_stm, 3),
         "avg_ltm_strength": round(avg_ltm, 3),
+        "avg_stm_stability": round(avg_stm_stability, 3),
+        "avg_ltm_stability": round(avg_ltm_stability, 3),
+        "avg_stm_difficulty": round(avg_stm_difficulty, 3),
+        "avg_ltm_difficulty": round(avg_ltm_difficulty, 3),
         "total_retrievals": total_retrievals,
         "avg_retrieval_score": round(avg_retrieval_score, 3),
         "top_domains_stm": [(r["domain"], r["cnt"]) for r in top_domains_stm],

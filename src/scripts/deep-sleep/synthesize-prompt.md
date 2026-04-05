@@ -12,12 +12,17 @@ Read the extractions file provided below. It contains per-session findings inclu
 
 Also read the runtime skill candidate file at `{{SKILL_RUNTIME_FILE}}`. It contains mature guide skills with repeated successful usage and candidates for automatic text→script evolution.
 
+Also read the long-horizon file at `{{LONG_HORIZON_FILE}}`. It blends recent and older evidence from the last 60 days using a 70% recent / 30% older sample strategy. Use it to detect patterns that a single-day view would miss.
+
 Synthesize across all sessions:
 
 ### 1. Cross-Session Patterns
 - Same error appearing in multiple sessions (escalate confidence)
 - Same protocol violation repeated (systemic issue)
 - Related ideas mentioned across sessions (consolidate)
+- Themes that recur across multiple weeks, not just today
+- Cross-domain connections where an older learning or session sample explains a current issue
+- Topics repeatedly mentioned over time but never formalized into a learning or followup
 
 ### 2. Morning Agenda
 Generate a prioritized agenda for the next morning:

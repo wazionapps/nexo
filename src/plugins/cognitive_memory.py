@@ -19,8 +19,8 @@ def handle_cognitive_retrieve(
     source_type: str = "",
     domain: str = "",
     include_archived: bool = False,
-    use_hyde: bool = False,
-    spreading_depth: int = 0,
+    use_hyde: bool | None = None,
+    spreading_depth: int | None = None,
 ) -> str:
     """RAG query over cognitive memory (STM + LTM). Triggers rehearsal on retrieved memories.
 
@@ -32,8 +32,8 @@ def handle_cognitive_retrieve(
         source_type: Filter by source type e.g. "change", "learning", "diary" (default: all)
         domain: Filter by domain e.g. "project-a", "shopify" (default: all)
         include_archived: If True, also search archived memories (default False)
-        use_hyde: If True, use HyDE query expansion — embeds 3-5 query variants and searches with centroid. Better recall for conceptual queries. (default False)
-        spreading_depth: If >0, boost co-activated neighbors (memories frequently retrieved together). 1=direct neighbors only. (default 0)
+        use_hyde: If True/False, force HyDE on/off. If omitted, NEXO auto-enables it for conceptual queries.
+        spreading_depth: If >0, boost co-activated neighbors directly. If omitted, NEXO may auto-enable shallow spreading for multi-hop queries.
     """
     if not query or not query.strip():
         return "ERROR: query is required."
@@ -57,10 +57,14 @@ def handle_cognitive_retrieve(
 
     formatted = cognitive.format_results(results)
     mode_parts = [f"stores={stores}", f"min_score={min_score}"]
-    if use_hyde:
+    if use_hyde is True:
         mode_parts.append("hyde=ON")
-    if spreading_depth > 0:
+    elif use_hyde is None:
+        mode_parts.append("hyde=AUTO")
+    if spreading_depth and spreading_depth > 0:
         mode_parts.append(f"spreading={spreading_depth}")
+    elif spreading_depth is None:
+        mode_parts.append("spreading=AUTO")
     header = f"COGNITIVE RETRIEVE — query: '{query}' | {len(results)} results ({', '.join(mode_parts)})\n\n"
     return header + formatted
 
@@ -76,6 +80,10 @@ def handle_cognitive_stats() -> str:
         f"  LTM dormant:         {stats['ltm_dormant']}",
         f"  Avg STM strength:    {stats['avg_stm_strength']:.3f}",
         f"  Avg LTM strength:    {stats['avg_ltm_strength']:.3f}",
+        f"  Avg STM stability:   {stats.get('avg_stm_stability', 0.0):.3f}",
+        f"  Avg LTM stability:   {stats.get('avg_ltm_stability', 0.0):.3f}",
+        f"  Avg STM difficulty:  {stats.get('avg_stm_difficulty', 0.0):.3f}",
+        f"  Avg LTM difficulty:  {stats.get('avg_ltm_difficulty', 0.0):.3f}",
         f"  Total retrievals:    {stats['total_retrievals']}",
         f"  Avg retrieval score: {stats['avg_retrieval_score']:.3f}",
     ]

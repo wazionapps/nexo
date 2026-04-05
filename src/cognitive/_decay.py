@@ -2,7 +2,11 @@
 import math
 import numpy as np
 from datetime import datetime, timedelta
-from cognitive._core import _get_db, embed, cosine_similarity, _blob_to_array, _array_to_blob, LAMBDA_STM, LAMBDA_LTM, EMBEDDING_DIM
+from cognitive._core import (
+    _get_db, embed, cosine_similarity, _blob_to_array, _array_to_blob,
+    LAMBDA_STM, LAMBDA_LTM, EMBEDDING_DIM,
+    initial_memory_profile, personalize_decay_rate,
+)
 
 
 def _hnsw_invalidate():
@@ -48,20 +52,32 @@ def apply_decay(adaptive: bool = True):
                 _protected_ltm.add(row["id"])
 
     # STM decay (skip pinned)
-    rows = db.execute("SELECT id, last_accessed, strength FROM stm_memories WHERE promoted_to_ltm = 0 AND (lifecycle_state IS NULL OR lifecycle_state != 'pinned')").fetchall()
+    rows = db.execute("SELECT id, last_accessed, strength, stability, difficulty FROM stm_memories WHERE promoted_to_ltm = 0 AND (lifecycle_state IS NULL OR lifecycle_state != 'pinned')").fetchall()
     for row in rows:
         last = datetime.fromisoformat(row["last_accessed"])
         hours = (now - last).total_seconds() / 3600.0
-        decay_rate = LAMBDA_STM * 0.25 if (adaptive and row["id"] in _protected_stm) else LAMBDA_STM
+        decay_rate = personalize_decay_rate(
+            LAMBDA_STM,
+            stability=row["stability"],
+            difficulty=row["difficulty"],
+        )
+        if adaptive and row["id"] in _protected_stm:
+            decay_rate *= 0.25
         new_strength = row["strength"] * math.exp(-decay_rate * hours)
         db.execute("UPDATE stm_memories SET strength = ? WHERE id = ?", (new_strength, row["id"]))
 
     # LTM decay (skip pinned)
-    rows = db.execute("SELECT id, last_accessed, strength FROM ltm_memories WHERE is_dormant = 0 AND (lifecycle_state IS NULL OR lifecycle_state != 'pinned')").fetchall()
+    rows = db.execute("SELECT id, last_accessed, strength, stability, difficulty FROM ltm_memories WHERE is_dormant = 0 AND (lifecycle_state IS NULL OR lifecycle_state != 'pinned')").fetchall()
     for row in rows:
         last = datetime.fromisoformat(row["last_accessed"])
         hours = (now - last).total_seconds() / 3600.0
-        decay_rate = LAMBDA_LTM * 0.25 if (adaptive and row["id"] in _protected_ltm) else LAMBDA_LTM
+        decay_rate = personalize_decay_rate(
+            LAMBDA_LTM,
+            stability=row["stability"],
+            difficulty=row["difficulty"],
+        )
+        if adaptive and row["id"] in _protected_ltm:
+            decay_rate *= 0.25
         new_strength = row["strength"] * math.exp(-decay_rate * hours)
         if new_strength < 0.1:
             db.execute("UPDATE ltm_memories SET strength = ?, is_dormant = 1 WHERE id = ?", (new_strength, row["id"]))
@@ -101,10 +117,10 @@ def promote_stm_to_ltm():
     for row in rows:
         redacted = row["redaction_applied"] if "redaction_applied" in row.keys() else 0
         db.execute(
-            """INSERT INTO ltm_memories (content, embedding, source_type, source_id, source_title, domain, original_stm_id, redaction_applied)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            """INSERT INTO ltm_memories (content, embedding, source_type, source_id, source_title, domain, original_stm_id, redaction_applied, stability, difficulty)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (row["content"], row["embedding"], row["source_type"], row["source_id"],
-             row["source_title"], row["domain"], row["id"], redacted)
+             row["source_title"], row["domain"], row["id"], redacted, row["stability"], row["difficulty"])
         )
         db.execute("UPDATE stm_memories SET promoted_to_ltm = 1 WHERE id = ?", (row["id"],))
         promoted += 1
@@ -322,12 +338,13 @@ def dream_cycle(max_insights: int = 50) -> dict:
 
         # Store as LTM with dream_insight tag
         cur = db.execute(
-            """INSERT INTO ltm_memories (content, embedding, source_type, source_id, source_title, domain, tags, strength)
-               VALUES (?, ?, 'dream_insight', ?, ?, ?, 'dream_insight', 0.5)""",
+            """INSERT INTO ltm_memories (content, embedding, source_type, source_id, source_title, domain, tags, strength, stability, difficulty)
+               VALUES (?, ?, 'dream_insight', ?, ?, ?, 'dream_insight', 0.5, ?, ?)""",
             (insight_content, blob,
              f"{mem_a['store']}:{mem_a['id']},{mem_b['store']}:{mem_b['id']}",
              f"Dream: {title_a[:30]} <-> {title_b[:30]}",
-             domain_str)
+             domain_str,
+             *initial_memory_profile("dream_insight", store="ltm"))
         )
         insight_id = cur.lastrowid
 

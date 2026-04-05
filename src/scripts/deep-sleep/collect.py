@@ -16,6 +16,7 @@ import os
 import re
 import sqlite3
 import sys
+from collections import Counter
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -344,6 +345,172 @@ def collect_trust_score() -> list[dict]:
     )
 
 
+def _parse_diary_created_at(value) -> datetime | None:
+    if value in (None, ""):
+        return None
+    try:
+        if isinstance(value, (int, float)) or (isinstance(value, str) and str(value).strip().isdigit()):
+            return datetime.fromtimestamp(float(value))
+    except Exception:
+        return None
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00").replace("+00:00", ""))
+    except Exception:
+        return None
+
+
+def _sample_evenly(rows: list[dict], limit: int) -> list[dict]:
+    if limit <= 0 or not rows:
+        return []
+    if len(rows) <= limit:
+        return list(rows)
+    if limit == 1:
+        return [rows[-1]]
+    step = (len(rows) - 1) / float(limit - 1)
+    indices = sorted({round(i * step) for i in range(limit)})
+    sampled = [rows[idx] for idx in indices]
+    i = 0
+    while len(sampled) < limit and i < len(rows):
+        if rows[i] not in sampled:
+            sampled.append(rows[i])
+        i += 1
+    return sampled[:limit]
+
+
+def _compact_diary_row(row: dict) -> dict:
+    created = _parse_diary_created_at(row.get("created_at"))
+    return {
+        "session_id": row.get("session_id", ""),
+        "created_at": created.isoformat() if created else str(row.get("created_at", "")),
+        "domain": row.get("domain", "") or "",
+        "mental_state": row.get("mental_state", "") or "",
+        "summary": str(row.get("summary", "") or "")[:240],
+        "self_critique": str(row.get("self_critique", "") or "")[:240],
+        "source": row.get("source", "") or "",
+    }
+
+
+def collect_long_horizon_context(
+    target_date: str,
+    *,
+    horizon_days: int = 60,
+    recent_days: int = 14,
+    max_diaries: int = 20,
+    max_sessions: int = 12,
+) -> dict:
+    """Build long-horizon context blending recent and older evidence.
+
+    Strategy:
+    - recent 70% from the last `recent_days`
+    - older 30% sampled evenly from the rest of the `horizon_days` window
+    """
+    target_day = datetime.strptime(target_date, "%Y-%m-%d")
+    horizon_start = target_day - timedelta(days=horizon_days)
+    recent_start = target_day - timedelta(days=recent_days)
+
+    diary_rows = safe_query(
+        NEXO_DB,
+        "SELECT session_id, created_at, summary, mental_state, domain, self_critique, source "
+        "FROM session_diary ORDER BY created_at ASC"
+    )
+    compact_diaries = []
+    for row in diary_rows:
+        created = _parse_diary_created_at(row.get("created_at"))
+        if not created:
+            continue
+        if not (horizon_start <= created < target_day):
+            continue
+        compact_diaries.append(_compact_diary_row(row))
+
+    recent_diaries = [row for row in compact_diaries if _parse_diary_created_at(row.get("created_at")) and _parse_diary_created_at(row.get("created_at")) >= recent_start]
+    older_diaries = [row for row in compact_diaries if row not in recent_diaries]
+    recent_quota = max(1, round(max_diaries * 0.7))
+    older_quota = max(0, max_diaries - recent_quota)
+    sampled_diaries = recent_diaries[-recent_quota:] + _sample_evenly(older_diaries, older_quota)
+    sampled_diaries.sort(key=lambda row: row.get("created_at", ""))
+
+    recurring_domains = Counter(row["domain"] for row in compact_diaries if row.get("domain"))
+    recurring_states = Counter(row["mental_state"] for row in compact_diaries if row.get("mental_state"))
+    recurring_critiques = Counter(row["self_critique"] for row in compact_diaries if row.get("self_critique"))
+
+    learning_rows = safe_query(
+        NEXO_DB,
+        "SELECT category, title, content, created_at, updated_at, reasoning, prevention, applies_to "
+        "FROM learnings ORDER BY COALESCE(updated_at, created_at) DESC LIMIT 120"
+    )
+    long_horizon_learnings = []
+    for row in learning_rows:
+        long_horizon_learnings.append({
+            "category": row.get("category", ""),
+            "title": str(row.get("title", "") or "")[:140],
+            "content": str(row.get("content", "") or "")[:260],
+            "reasoning": str(row.get("reasoning", "") or "")[:180],
+            "prevention": str(row.get("prevention", "") or "")[:180],
+            "applies_to": str(row.get("applies_to", "") or "")[:180],
+            "updated_at": str(row.get("updated_at", "") or row.get("created_at", "")),
+        })
+    long_horizon_learnings = long_horizon_learnings[:24]
+
+    transcript_candidates: list[dict] = []
+    transcript_files: list[tuple[str, Path]] = [
+        ("claude_code", path) for path in find_claude_session_files()
+    ] + [
+        ("codex", path) for path in find_codex_session_files()
+    ]
+    horizon_end = target_day
+    for client, path in transcript_files:
+        try:
+            modified = datetime.fromtimestamp(path.stat().st_mtime)
+        except OSError:
+            continue
+        if not (horizon_start <= modified < horizon_end):
+            continue
+        transcript_candidates.append({
+            "client": client,
+            "session_file": _session_identifier(client, path.name),
+            "modified": modified.isoformat(),
+            "session_path": str(path),
+        })
+    transcript_candidates.sort(key=lambda row: row["modified"])
+    recent_sessions = [row for row in transcript_candidates if datetime.fromisoformat(row["modified"]) >= recent_start]
+    older_sessions = [row for row in transcript_candidates if row not in recent_sessions]
+    recent_session_quota = max(1, round(max_sessions * 0.7))
+    older_session_quota = max(0, max_sessions - recent_session_quota)
+    sampled_sessions = recent_sessions[-recent_session_quota:] + _sample_evenly(older_sessions, older_session_quota)
+    sampled_sessions.sort(key=lambda row: row["modified"])
+
+    stale_followups = safe_query(
+        NEXO_DB,
+        "SELECT id, description, date, status, created_at, updated_at FROM followups "
+        "WHERE status NOT IN ('COMPLETED', 'CANCELLED') ORDER BY date ASC, created_at ASC LIMIT 50"
+    )
+    older_than_week = []
+    week_ago = target_day - timedelta(days=7)
+    for row in stale_followups:
+        created = _parse_diary_created_at(row.get("created_at"))
+        if created and created < week_ago:
+            older_than_week.append({
+                "id": row.get("id", ""),
+                "description": str(row.get("description", "") or "")[:180],
+                "date": row.get("date", ""),
+                "status": row.get("status", ""),
+                "created_at": created.isoformat(),
+            })
+
+    return {
+        "horizon_days": horizon_days,
+        "recent_window_days": recent_days,
+        "sample_strategy": "70% recent + 30% older evenly sampled",
+        "historical_diaries": sampled_diaries,
+        "historical_sessions": sampled_sessions,
+        "historical_learnings": long_horizon_learnings,
+        "recurring_domains": recurring_domains.most_common(8),
+        "recurring_mental_states": recurring_states.most_common(8),
+        "recurring_self_critiques": recurring_critiques.most_common(6),
+        "stale_followups": older_than_week[:12],
+    }
+
+
 # ── Discovery: scan NEXO_HOME for non-core content ───────────────────────
 
 CORE_DIRS = {"data", "operations", "logs", "coordination", "brain"}
@@ -550,6 +717,14 @@ def main():
     error_logs = collect_error_logs(target_date)
     print(f"  Log files with errors: {len(error_logs)}")
 
+    print("[collect] Building long-horizon context...")
+    long_horizon = collect_long_horizon_context(target_date)
+    print(
+        "  Long horizon: "
+        f"{len(long_horizon.get('historical_diaries', []))} diary samples, "
+        f"{len(long_horizon.get('historical_sessions', []))} session samples"
+    )
+
     # 5. Build per-session files + shared context
     date_dir = DEEP_SLEEP_DIR / target_date
     date_dir.mkdir(parents=True, exist_ok=True)
@@ -568,11 +743,16 @@ def main():
     shared_parts.append(format_section("TRUST SCORE HISTORY (7d)", trust_history))
     shared_parts.append(format_section("DISCOVERED NON-CORE CONTENT", extras))
     shared_parts.append(format_section("ERROR LOGS", error_logs))
+    shared_parts.append(format_section("LONG-HORIZON CONTEXT (60d blend)", long_horizon))
 
     shared_text = "\n".join(shared_parts)
     shared_file = date_dir / "shared-context.txt"
     shared_file.write_text(shared_text, encoding="utf-8")
     print(f"  Shared context: {len(shared_text) / 1024:.0f} KB")
+
+    long_horizon_file = date_dir / "long-horizon-context.json"
+    long_horizon_file.write_text(json.dumps(long_horizon, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"  Long horizon JSON: {long_horizon_file.name}")
 
     # Individual session files
     session_files_written = []
@@ -654,6 +834,7 @@ def main():
         "error_log_files": len(error_logs),
         "date_dir": str(date_dir),
         "shared_context_file": str(shared_file),
+        "long_horizon_file": str(long_horizon_file),
         "context_file": str(legacy_file),
         "total_size_bytes": total_size,
     }

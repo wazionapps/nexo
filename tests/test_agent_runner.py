@@ -217,3 +217,30 @@ def test_codex_backend_maps_legacy_opus_hint_to_configured_profile(monkeypatch, 
     config_values = [captured["cmd"][idx + 1] for idx, part in enumerate(captured["cmd"]) if part == "-c"]
     assert 'initial_messages=[{role="system",content="You are NEXO."}]' in config_values
     assert 'model_reasoning_effort="high"' in config_values
+
+
+def test_codex_runner_skips_inline_bootstrap_when_global_bootstrap_is_managed(monkeypatch, tmp_path):
+    import agent_runner
+
+    monkeypatch.setattr(agent_runner, "_resolve_codex_cli", lambda: "/tmp/fake-codex")
+    monkeypatch.setattr(agent_runner, "_load_client_bootstrap_prompt", lambda client: "You are NEXO.")
+    monkeypatch.setattr(agent_runner, "_codex_managed_initial_messages_enabled", lambda: True)
+
+    client, cmd = agent_runner.build_interactive_client_command(
+        target=tmp_path,
+        preferences={
+            "interactive_clients": {"claude_code": True, "codex": True, "claude_desktop": False},
+            "default_terminal_client": "codex",
+            "automation_enabled": True,
+            "automation_backend": "codex",
+            "client_runtime_profiles": {
+                "claude_code": {"model": "opus", "reasoning_effort": ""},
+                "codex": {"model": "gpt-5.4", "reasoning_effort": "xhigh"},
+            },
+        },
+    )
+
+    assert client == "codex"
+    config_values = [cmd[idx + 1] for idx, part in enumerate(cmd) if part == "-c"]
+    assert not any("initial_messages=" in value for value in config_values)
+    assert 'model_reasoning_effort="xhigh"' in config_values

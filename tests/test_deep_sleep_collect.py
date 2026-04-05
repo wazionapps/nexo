@@ -5,7 +5,9 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import sqlite3
 import sys
+from datetime import datetime
 from pathlib import Path
 
 
@@ -103,3 +105,58 @@ def test_extract_codex_session_ignores_environment_context(monkeypatch, tmp_path
     assert session is not None
     assert session["user_message_count"] == 3
     assert all("<environment_context>" not in msg["text"] for msg in session["messages"])
+
+
+def test_collect_long_horizon_context_blends_recent_and_older(monkeypatch, tmp_path):
+    collect = _load_collect_module(monkeypatch, tmp_path)
+    nexo_home = Path(os.environ["NEXO_HOME"])
+    data_dir = nexo_home / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    db_path = data_dir / "nexo.db"
+
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        "CREATE TABLE session_diary (session_id TEXT, created_at TEXT, summary TEXT, mental_state TEXT, domain TEXT, self_critique TEXT, source TEXT)"
+    )
+    conn.execute(
+        "CREATE TABLE learnings (category TEXT, title TEXT, content TEXT, created_at TEXT, updated_at TEXT, reasoning TEXT, prevention TEXT, applies_to TEXT)"
+    )
+    conn.execute(
+        "CREATE TABLE followups (id TEXT, description TEXT, date TEXT, status TEXT, created_at TEXT, updated_at TEXT)"
+    )
+    for day in range(1, 31):
+        created = f"2026-03-{day:02d}T08:00:00"
+        conn.execute(
+            "INSERT INTO session_diary VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (f"s-{day}", created, f"summary {day}", "focused", "shopify" if day % 2 else "wazion", f"critique {day % 3}", "codex" if day % 2 else "claude"),
+        )
+    conn.execute(
+        "INSERT INTO learnings VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        ("ops", "Learning A", "Remember the worker port", "2026-03-10T10:00:00", "2026-04-01T10:00:00", "reason", "prevent", "deploy"),
+    )
+    conn.execute(
+        "INSERT INTO followups VALUES (?, ?, ?, ?, ?, ?)",
+        ("F1", "Old unresolved item", "2026-03-15", "PENDING", "2026-03-10T10:00:00", "2026-03-11T10:00:00"),
+    )
+    conn.commit()
+    conn.close()
+
+    recent_file = tmp_path / ".codex" / "sessions" / "2026" / "04" / "02" / "recent.jsonl"
+    recent_file.parent.mkdir(parents=True)
+    recent_file.write_text("{}\n")
+    older_file = tmp_path / ".claude" / "projects" / "demo" / "older.jsonl"
+    older_file.parent.mkdir(parents=True)
+    older_file.write_text("{}\n")
+    os.utime(recent_file, (0, datetime(2026, 4, 2, 12, 0, 0).timestamp()))
+    os.utime(older_file, (0, datetime(2026, 2, 20, 12, 0, 0).timestamp()))
+
+    context = collect.collect_long_horizon_context("2026-04-05", max_diaries=10, max_sessions=6)
+
+    assert context["sample_strategy"] == "70% recent + 30% older evenly sampled"
+    assert len(context["historical_diaries"]) <= 10
+    assert len(context["historical_sessions"]) <= 6
+    assert context["historical_learnings"][0]["title"] == "Learning A"
+    assert any(item["id"] == "F1" for item in context["stale_followups"])
+    diary_dates = [entry["created_at"] for entry in context["historical_diaries"]]
+    assert any(date.startswith("2026-03-3") for date in diary_dates)
+    assert any(date.startswith("2026-03-0") or date.startswith("2026-03-1") for date in diary_dates)

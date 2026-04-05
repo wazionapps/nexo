@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import tempfile
+import tomllib
 from pathlib import Path
 
 from client_preferences import (
@@ -66,6 +68,10 @@ def _resolve_codex_cli() -> str:
     return shutil.which("codex") or ""
 
 
+def _codex_config_path() -> Path:
+    return Path.home() / ".codex" / "config.toml"
+
+
 def _headless_env(env: dict | None = None) -> dict:
     merged = os.environ.copy()
     if env:
@@ -82,6 +88,21 @@ def _load_client_bootstrap_prompt(client: str) -> str:
     except Exception:
         return ""
     return load_bootstrap_prompt(client, nexo_home=NEXO_HOME, user_home=Path.home())
+
+
+def _codex_managed_initial_messages_enabled() -> bool:
+    config_path = _codex_config_path()
+    if not config_path.is_file():
+        return False
+    try:
+        payload = tomllib.loads(config_path.read_text())
+    except Exception:
+        return False
+    return bool(
+        payload.get("nexo", {})
+        .get("codex", {})
+        .get("bootstrap_managed")
+    )
 
 
 def _codex_initial_messages_config(prompt_text: str) -> str:
@@ -121,7 +142,7 @@ def build_interactive_client_command(
             )
         cmd = [codex_bin]
         bootstrap_prompt = _load_client_bootstrap_prompt(CLIENT_CODEX)
-        if bootstrap_prompt:
+        if bootstrap_prompt and not _codex_managed_initial_messages_enabled():
             cmd.extend(["-c", _codex_initial_messages_config(bootstrap_prompt)])
         if profile["model"]:
             cmd.extend(["-m", profile["model"]])
@@ -145,6 +166,53 @@ def launch_interactive_client(
     if env:
         launch_env.update(env)
     return subprocess.run(cmd, env=launch_env)
+
+
+def build_followup_terminal_shell_command(
+    followup_reference: str,
+    *,
+    client: str | None = None,
+    preferences: dict | None = None,
+    cwd: str | os.PathLike[str] | None = None,
+) -> tuple[str, str]:
+    prefs = preferences or load_client_preferences()
+    selected = resolve_terminal_client(client, preferences=prefs)
+    profile = resolve_client_runtime_profile(selected, preferences=prefs)
+    prompt = f"NEXO: execute followup from file $(cat {followup_reference})"
+
+    if selected == CLIENT_CLAUDE_CODE:
+        claude_bin = _resolve_claude_cli()
+        if not claude_bin:
+            raise TerminalClientUnavailableError(
+                "Claude Code launcher not found in PATH. Install `claude` first."
+            )
+        cmd = [claude_bin]
+        if profile["model"]:
+            cmd.extend(["--model", profile["model"]])
+        if profile["reasoning_effort"]:
+            cmd.extend(["--effort", profile["reasoning_effort"]])
+        cmd.extend(["--dangerously-skip-permissions", prompt])
+        return selected, shlex.join(cmd)
+
+    if selected == CLIENT_CODEX:
+        codex_bin = _resolve_codex_cli()
+        if not codex_bin:
+            raise TerminalClientUnavailableError(
+                "Codex launcher not found in PATH. Install `codex` first or reconfigure NEXO."
+            )
+        target_cwd = str(Path(cwd).expanduser()) if cwd else str(Path.home())
+        cmd = [codex_bin]
+        bootstrap_prompt = _load_client_bootstrap_prompt(CLIENT_CODEX)
+        if bootstrap_prompt and not _codex_managed_initial_messages_enabled():
+            cmd.extend(["-c", _codex_initial_messages_config(bootstrap_prompt)])
+        if profile["model"]:
+            cmd.extend(["-m", profile["model"]])
+        if profile["reasoning_effort"]:
+            cmd.extend(["-c", f'model_reasoning_effort="{profile["reasoning_effort"]}"'])
+        cmd.extend(["-C", target_cwd, prompt])
+        return selected, shlex.join(cmd)
+
+    raise TerminalClientUnavailableError(f"Unsupported terminal client: {selected}")
 
 
 def _resolve_runtime_model_and_effort(
@@ -270,7 +338,7 @@ def run_automation_prompt(
                 str(output_path),
             ]
             bootstrap_prompt = _load_client_bootstrap_prompt(CLIENT_CODEX)
-            if bootstrap_prompt:
+            if bootstrap_prompt and not _codex_managed_initial_messages_enabled():
                 cmd.extend(["-c", _codex_initial_messages_config(bootstrap_prompt)])
             if resolved_model:
                 cmd.extend(["-m", resolved_model])

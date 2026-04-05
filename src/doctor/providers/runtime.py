@@ -9,6 +9,7 @@ import plistlib
 import subprocess
 import sys
 import time
+import tomllib
 from pathlib import Path
 
 from client_preferences import (
@@ -37,6 +38,32 @@ SPECIAL_LAUNCHAGENT_IDS = {"prevent-sleep", "tcc-approve"}
 SPECIAL_ENV_NORMALIZE_IDS = SPECIAL_LAUNCHAGENT_IDS
 OPTIONALS_FILE = NEXO_HOME / "config" / "optionals.json"
 SCHEDULE_FILE = NEXO_HOME / "config" / "schedule.json"
+
+
+def _codex_bootstrap_config_status() -> dict:
+    path = Path.home() / ".codex" / "config.toml"
+    if not path.is_file():
+        return {"exists": False, "path": str(path), "bootstrap_managed": False}
+    try:
+        payload = tomllib.loads(path.read_text())
+    except Exception as exc:
+        return {
+            "exists": True,
+            "path": str(path),
+            "bootstrap_managed": False,
+            "error": str(exc),
+        }
+    managed = bool(payload.get("nexo", {}).get("codex", {}).get("bootstrap_managed"))
+    initial_messages = payload.get("initial_messages", [])
+    has_initial_messages = bool(initial_messages)
+    return {
+        "exists": True,
+        "path": str(path),
+        "bootstrap_managed": managed,
+        "has_initial_messages": has_initial_messages,
+        "model": str(payload.get("model", "") or ""),
+        "reasoning_effort": str(payload.get("model_reasoning_effort", "") or ""),
+    }
 
 
 def _file_age_seconds(path: Path) -> float | None:
@@ -1054,13 +1081,41 @@ def check_client_bootstrap_parity(fix: bool = False) -> DoctorCheck:
                 f"`{client_key}` bootstrap version {info.get('version') or 'unknown'} != template {info.get('template_version')}"
             )
             repair_plan.append("Refresh bootstrap files from the current NEXO templates")
+        if client_key == "codex":
+            codex_config = _codex_bootstrap_config_status()
+            if codex_config.get("error"):
+                status = "degraded"
+                severity = "warn"
+                evidence.append(f"codex config TOML invalid at {codex_config.get('path')}: {codex_config.get('error')}")
+                repair_plan.append("Repair ~/.codex/config.toml so NEXO can manage Codex bootstrap and model defaults")
+            elif codex_config.get("exists") and not codex_config.get("bootstrap_managed"):
+                status = "degraded"
+                severity = "warn"
+                evidence.append(f"codex config missing managed bootstrap injection at {codex_config.get('path')}")
+                repair_plan.append("Run `nexo clients sync` or `nexo update` so plain Codex sessions inherit the NEXO bootstrap")
+            elif codex_config.get("exists"):
+                evidence.append(
+                    "codex config bootstrap managed"
+                    + (
+                        f" ({codex_config.get('model') or 'default'}, {codex_config.get('reasoning_effort') or 'default'})"
+                    )
+                )
 
     if fix and status != "healthy":
-        sync_enabled_bootstraps(
-            nexo_home=NEXO_HOME,
-            user_home=Path.home(),
-            preferences=prefs,
-        )
+        try:
+            from client_sync import sync_all_clients
+            sync_all_clients(
+                nexo_home=NEXO_HOME,
+                runtime_root=NEXO_CODE,
+                user_home=Path.home(),
+                preferences=prefs,
+            )
+        except Exception:
+            sync_enabled_bootstraps(
+                nexo_home=NEXO_HOME,
+                user_home=Path.home(),
+                preferences=prefs,
+            )
         post = check_client_bootstrap_parity(fix=False)
         if post.status == "healthy":
             post.fixed = True

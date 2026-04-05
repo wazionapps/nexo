@@ -10,14 +10,18 @@ constants are re-exported here for full backwards compatibility:
 # Core: DB, embedding, cosine, constants, tables, redaction
 from cognitive._core import (
     COGNITIVE_DB, EMBEDDING_DIM, LAMBDA_STM, LAMBDA_LTM,
+    DEFAULT_MEMORY_STABILITY, DEFAULT_MEMORY_DIFFICULTY,
     PE_GATE_REJECT, PE_GATE_REFINE, _gate_stats,
     DISCRIMINATING_ENTITIES,
     POSITIVE_SIGNALS, NEGATIVE_SIGNALS, URGENCY_SIGNALS,
     _get_db, _init_tables, _migrate_lifecycle, _migrate_co_activation,
+    _migrate_memory_personalization,
     _auto_migrate_embeddings,
     _get_model, _get_reranker, rerank_results,
     embed, cosine_similarity, _array_to_blob, _blob_to_array,
     extract_temporal_date, redact_secrets,
+    clamp_memory_stability, clamp_memory_difficulty,
+    initial_memory_profile, personalize_decay_rate, rehearsal_profile_update,
 )
 
 # Search

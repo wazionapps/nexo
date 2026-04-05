@@ -203,3 +203,43 @@ def test_apply_temporal_boost_operational():
     boosted = cognitive._apply_temporal_boost(results, "active backend issues today")
     # Very recent + operational → should get noticeable boost
     assert boosted[0]["score"] > 0.7
+
+
+def test_auto_hyde_prefers_conceptual_queries():
+    import importlib
+    _search = importlib.import_module("cognitive._search")
+
+    assert _search._auto_use_hyde("why does the deploy backend keep drifting after updates") is True
+    assert _search._auto_use_hyde("src/server.py line 42 exact error") is False
+
+
+def test_auto_spreading_depth_stays_off_for_exact_lookups():
+    import importlib
+    _search = importlib.import_module("cognitive._search")
+
+    assert _search._auto_spreading_depth("how are shopify auth retries related to webhook drift") == 1
+    assert _search._auto_spreading_depth("path /Users/test/app.py exact port 6174") == 0
+
+
+def test_memory_personalization_changes_decay_rate():
+    import cognitive
+
+    easier = cognitive.personalize_decay_rate(
+        cognitive.LAMBDA_STM,
+        stability=1.8,
+        difficulty=0.3,
+    )
+    harder = cognitive.personalize_decay_rate(
+        cognitive.LAMBDA_STM,
+        stability=0.8,
+        difficulty=0.9,
+    )
+    assert easier < harder
+
+
+def test_rehearsal_profile_update_rewards_strong_recall():
+    import cognitive
+
+    stable, difficulty = cognitive.rehearsal_profile_update(1.0, 0.6, 0.9)
+    assert stable > 1.0
+    assert difficulty < 0.6

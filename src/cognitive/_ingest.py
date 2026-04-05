@@ -7,6 +7,7 @@ from cognitive._core import (
     _get_db, embed, cosine_similarity, _blob_to_array, _array_to_blob,
     redact_secrets, extract_temporal_date, EMBEDDING_DIM,
     PE_GATE_REJECT, PE_GATE_REFINE, _gate_stats,
+    initial_memory_profile, rehearsal_profile_update,
 )
 
 
@@ -76,6 +77,7 @@ def ingest(
     vec = embed(clean_content)
     blob = _array_to_blob(vec)
     temporal = extract_temporal_date(content)
+    stability, difficulty = initial_memory_profile(source_type, store="stm")
 
     # Auto-pin: corrections and blocking learnings get pinned (zero decay, +0.2 boost)
     # This ensures user's corrections NEVER fade away
@@ -94,9 +96,9 @@ def ingest(
         db.commit()
         # Now actually store in STM
         cur2 = db.execute(
-            """INSERT INTO stm_memories (content, embedding, source_type, source_id, source_title, domain, redaction_applied, temporal_date, lifecycle_state)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (clean_content, blob, source_type, source_id, source_title, domain, was_redacted, temporal, _pin_lifecycle)
+            """INSERT INTO stm_memories (content, embedding, source_type, source_id, source_title, domain, redaction_applied, temporal_date, lifecycle_state, stability, difficulty)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (clean_content, blob, source_type, source_id, source_title, domain, was_redacted, temporal, _pin_lifecycle, stability, difficulty)
         )
         db.commit()
         _hnsw_notify_insert("stm", cur2.lastrowid, vec)
@@ -105,9 +107,9 @@ def ingest(
     # skip_quarantine = direct STM (backward compatibility)
     if skip_quarantine:
         cur = db.execute(
-            """INSERT INTO stm_memories (content, embedding, source_type, source_id, source_title, domain, redaction_applied, temporal_date, lifecycle_state)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (clean_content, blob, source_type, source_id, source_title, domain, was_redacted, temporal, _pin_lifecycle)
+            """INSERT INTO stm_memories (content, embedding, source_type, source_id, source_title, domain, redaction_applied, temporal_date, lifecycle_state, stability, difficulty)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (clean_content, blob, source_type, source_id, source_title, domain, was_redacted, temporal, _pin_lifecycle, stability, difficulty)
         )
         db.commit()
         _hnsw_notify_insert("stm", cur.lastrowid, vec)
@@ -246,10 +248,11 @@ def ingest_to_ltm(
     was_redacted = 1 if clean_content != content else 0
     vec = embed(clean_content)
     blob = _array_to_blob(vec)
+    stability, difficulty = initial_memory_profile(source_type, store="ltm")
     cur = db.execute(
-        """INSERT INTO ltm_memories (content, embedding, source_type, source_id, source_title, domain, tags, redaction_applied)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-        (clean_content, blob, source_type, source_id, source_title, domain, tags, was_redacted)
+        """INSERT INTO ltm_memories (content, embedding, source_type, source_id, source_title, domain, tags, redaction_applied, stability, difficulty)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (clean_content, blob, source_type, source_id, source_title, domain, tags, was_redacted, stability, difficulty)
     )
     db.commit()
     return cur.lastrowid
@@ -267,10 +270,11 @@ def ingest_sensory(
     vec = embed(clean_content)
     blob = _array_to_blob(vec)
     ts = created_at or datetime.utcnow().isoformat()
+    stability, difficulty = initial_memory_profile("sensory", store="stm")
     cur = db.execute(
-        """INSERT INTO stm_memories (content, embedding, source_type, source_id, domain, created_at, redaction_applied)
-           VALUES (?, ?, 'sensory', ?, ?, ?, ?)""",
-        (clean_content, blob, source_id, domain, ts, was_redacted)
+        """INSERT INTO stm_memories (content, embedding, source_type, source_id, domain, created_at, redaction_applied, stability, difficulty)
+           VALUES (?, ?, 'sensory', ?, ?, ?, ?, ?, ?)""",
+        (clean_content, blob, source_id, domain, ts, was_redacted, stability, difficulty)
     )
     db.commit()
     return cur.lastrowid
@@ -386,6 +390,12 @@ def _refine_memory(match_info: dict, new_content: str) -> int:
     db = _get_db()
     table = "stm_memories" if match_info["store"] == "stm" else "ltm_memories"
     memory_id = match_info["id"]
+    profile_row = db.execute(
+        f"SELECT stability, difficulty FROM {table} WHERE id = ?",
+        (memory_id,),
+    ).fetchone()
+    current_stability = profile_row["stability"] if profile_row else 1.0
+    current_difficulty = profile_row["difficulty"] if profile_row else 0.5
 
     # Check word-level diff to avoid appending near-identical text
     existing_words = set(match_info["content"].lower().split())
@@ -395,10 +405,16 @@ def _refine_memory(match_info: dict, new_content: str) -> int:
     if len(unique_new) < 3:
         # Almost no new words -- just strengthen the existing memory
         now = datetime.utcnow().isoformat()
+        new_stability, new_difficulty = rehearsal_profile_update(
+            current_stability,
+            current_difficulty,
+            score=0.7,
+            refinement=True,
+        )
         db.execute(
             f"UPDATE {table} SET strength = MIN(1.0, strength + 0.1), "
-            f"access_count = access_count + 1, last_accessed = ? WHERE id = ?",
-            (now, memory_id)
+            f"access_count = access_count + 1, last_accessed = ?, stability = ?, difficulty = ? WHERE id = ?",
+            (now, new_stability, new_difficulty, memory_id)
         )
         db.commit()
         return memory_id
@@ -408,11 +424,17 @@ def _refine_memory(match_info: dict, new_content: str) -> int:
     new_vec = embed(merged_content)
     new_blob = _array_to_blob(new_vec)
     now = datetime.utcnow().isoformat()
+    new_stability, new_difficulty = rehearsal_profile_update(
+        current_stability,
+        current_difficulty,
+        score=0.82,
+        refinement=True,
+    )
 
     db.execute(
         f"UPDATE {table} SET content = ?, embedding = ?, strength = MIN(1.0, strength + 0.15), "
-        f"access_count = access_count + 1, last_accessed = ? WHERE id = ?",
-        (merged_content, new_blob, now, memory_id)
+        f"access_count = access_count + 1, last_accessed = ?, stability = ?, difficulty = ? WHERE id = ?",
+        (merged_content, new_blob, now, new_stability, new_difficulty, memory_id)
     )
     db.commit()
     return memory_id
@@ -614,10 +636,10 @@ def process_quarantine() -> dict:
         if should_promote:
             # Promote to STM
             cur = db.execute(
-                """INSERT INTO stm_memories (content, embedding, source_type, source_id, source_title, domain, redaction_applied)
-                   VALUES (?, ?, ?, ?, ?, ?, 0)""",
+                """INSERT INTO stm_memories (content, embedding, source_type, source_id, source_title, domain, redaction_applied, stability, difficulty)
+                   VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)""",
                 (content, row["embedding"], row["source_type"], row["source_id"],
-                 row["source_title"], row["domain"])
+                 row["source_title"], row["domain"], *initial_memory_profile(row["source_type"], store="stm"))
             )
             db.execute(
                 "UPDATE quarantine SET status = 'promoted', promoted_at = datetime('now'), confidence = 1.0 WHERE id = ?",
@@ -689,10 +711,10 @@ def quarantine_promote(quarantine_id: int) -> str:
 
     # Insert into STM
     db.execute(
-        """INSERT INTO stm_memories (content, embedding, source_type, source_id, source_title, domain, redaction_applied)
-           VALUES (?, ?, ?, ?, ?, ?, 0)""",
+        """INSERT INTO stm_memories (content, embedding, source_type, source_id, source_title, domain, redaction_applied, stability, difficulty)
+           VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)""",
         (row["content"], row["embedding"], row["source_type"], row["source_id"],
-         row["source_title"], row["domain"])
+         row["source_title"], row["domain"], *initial_memory_profile(row["source_type"], store="stm"))
     )
     db.execute(
         "UPDATE quarantine SET status = 'promoted', promoted_at = datetime('now'), confidence = 1.0 WHERE id = ?",

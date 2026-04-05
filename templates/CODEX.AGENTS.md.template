@@ -1,4 +1,4 @@
-<!-- nexo-codex-agents-version: 1.0.0 -->
+<!-- nexo-codex-agents-version: 1.1.0 -->
 ******CORE******
 <!-- nexo:core:start -->
 # {{NAME}} — NEXO Shared Brain for Codex
@@ -19,7 +19,7 @@ NEXO updates may rewrite `CORE`, but they must preserve `USER` verbatim.
 
 ## Codex Runtime Notes
 - Codex does not provide Claude Code hooks. Compensate explicitly: startup, heartbeat on every user message, diary on clear end-of-session intent, and memory capture on every correction or durable decision.
-- If a stable session token is useful, you may pass a synthetic `claude_session_id` like `codex-<task>-<date>` to `nexo_startup`; otherwise leave it blank.
+- If a stable session token is useful, pass `session_token='codex-<task>-<date>'` and `session_client='codex'` to `nexo_startup`; otherwise leave them blank.
 - `nexo chat` must inject this bootstrap explicitly when it launches Codex so the session starts as NEXO even if plain global Codex startup ignores global instructions.
 - `nexo chat` should open the configured client and keep runtime/model alignment with NEXO preferences.
 

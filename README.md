@@ -38,7 +38,24 @@ That means NEXO now manages not only the shared runtime and MCP wiring, but also
 - For Codex specifically, `nexo chat` and Codex headless automation inject the current bootstrap explicitly, so Codex starts as NEXO even when plain global Codex startup is inconsistent about global instructions.
 - Deep Sleep now reads both Claude Code and Codex transcript stores, so overnight analysis still works even when the user spends the day in Codex.
 
-Version `2.6.14` closes those parity gaps in practice, and `2.6.15` hardens the installed-runtime migration path so existing users actually receive the managed bootstrap updates cleanly.
+Version `2.6.14` closes those parity gaps in practice, `2.6.15` hardens the installed-runtime migration path so existing users actually receive the managed bootstrap updates cleanly, and `2.6.16` pushes the system further in three directions:
+
+- Codex now gets managed global bootstrap/model sync in `~/.codex/config.toml`, so sessions opened outside `nexo chat` are much less likely to start as plain Codex.
+- Retrieval is smarter by default: HyDE and spreading activation now auto-enable when the query shape benefits, while exact lookups remain conservative.
+- Deep Sleep now blends recent context with older context over a 60-day horizon, and memory decay now tracks per-memory `stability` and `difficulty` instead of relying only on global decay constants.
+
+### Client Capability Matrix
+
+| Capability | Claude Code | Codex | Claude Desktop |
+|------------|-------------|-------|----------------|
+| Shared brain / MCP runtime | Yes | Yes | Yes |
+| Managed bootstrap document | `~/.claude/CLAUDE.md` | `~/.codex/AGENTS.md` | Not applicable |
+| Global startup bootstrap sync | Native via hooks + bootstrap | Managed via bootstrap + Codex config `initial_messages` | MCP only |
+| `nexo chat` terminal client | Yes | Yes | No |
+| Background automation backend | Recommended | Supported | No |
+| Raw transcript source for Deep Sleep | Yes | Yes | No |
+| Native hook depth | Deepest | Partial, compensated | None |
+| Recommended today | Yes | Supported | Shared-brain companion |
 
 ## The Problem
 
@@ -100,11 +117,24 @@ NEXO Brain uses **Ebbinghaus forgetting curves** — memories naturally fade ove
 - A lesson accessed 5 times in 2 weeks gets promoted to long-term memory — because repeated use proves it matters.
 - A dormant memory can be reactivated if something similar comes up — the "oh wait, I remember this" moment.
 
+On top of that baseline, NEXO now keeps a lightweight **per-memory profile**:
+
+- **stability** slows decay for memories that keep surviving retrieval and reinforcement
+- **difficulty** speeds decay slightly for memories that tend to be weak, noisy, or harder to reuse correctly
+
+That keeps the core Ebbinghaus model, but makes decay more individual and less purely global.
+
 ### Semantic Search (Finding by Meaning)
 
 NEXO Brain doesn't search by keywords. It searches by **meaning** using vector embeddings (fastembed, 768 dimensions).
 
 Example: If you search for "deploy problems", NEXO Brain will find a memory about "SSH connection timeout on production server" — even though they share zero words. This is how human associative memory works.
+
+Retrieval is now also smarter by default:
+
+- **HyDE auto mode** expands conceptual or ambiguous queries when that improves recall
+- **Spreading activation auto mode** adds a shallow associative boost for concept-heavy searches
+- **Exact lookup heuristics** keep both off for literal file paths, IDs, stack traces, and other precision-sensitive queries
 
 ### Metacognition (Thinking About Thinking)
 
@@ -155,6 +185,12 @@ Like a human brain, NEXO Brain has automated processes that run while you're not
 | Boot | Catch-up: run anything missed while computer was off | -- |
 
 If your Mac was asleep during any scheduled process, NEXO Brain catches up in order when it wakes.
+
+Deep Sleep now also mixes **recent context with older context across a 60-day horizon**. Instead of only looking at the immediate past, it can surface:
+
+- recurring multi-week themes
+- cross-domain links between older learnings and current failures
+- stale followups and topics that keep being mentioned but never formalized
 
 ## Cognitive Cortex
 
@@ -235,21 +271,21 @@ NEXO Brain provides **150+ MCP tools** across 23 categories. These features impl
 |---------|-------------|
 | **Pin / Snooze / Archive** | Granular lifecycle states for memories. Pin = never decays (critical knowledge). Snooze = temporarily hidden (revisit later). Archive = cold storage (searchable but inactive). |
 | **Intelligent Chunking** | Adaptive chunking that respects sentence and paragraph boundaries. Produces semantically coherent chunks instead of arbitrary token splits, reducing retrieval noise. |
-| **Adaptive Decay** | Decay rate adapts per memory based on access patterns: frequently-accessed memories decay slower, rarely-accessed ones fade faster. Prevents permanent clutter while keeping active knowledge sharp. |
+| **Adaptive Decay** | Decay rate still follows Ebbinghaus as the base model, but now also adapts per memory using `stability` and `difficulty` profiles. Frequently reinforced memories become stickier; fragile memories fade sooner. |
 | **Auto-Migration** | Formal schema migration system (schema_migrations table) tracks all database changes. Safe, reversible schema evolution for production systems — upgrades never lose data. |
 | **Auto-Merge Duplicates** | Batch cosine deduplication during the 03:00 sleep cycle. Respects sibling discrimination — similar memories about different contexts are kept separate. |
-| **Memory Dreaming** | Discovers hidden connections between recent memories during the 03:00 sleep cycle. Surfaces non-obvious patterns like "these three bugs all relate to the same root cause." |
+| **Memory Dreaming** | Discovers hidden connections between recent memories during the 03:00 sleep cycle and now feeds a 60-day long-horizon Deep Sleep blend, so older patterns can reappear when they become relevant again. |
 
 ### Retrieval
 
 | Feature | What It Does |
 |---------|-------------|
-| **HyDE Query Expansion** | Generates hypothetical answer embeddings for richer semantic search. Instead of searching for "deploy error", it imagines what a helpful memory about deploy errors would look like, then searches for that. |
+| **HyDE Query Expansion** | Generates hypothetical answer embeddings for richer semantic search. NEXO now auto-enables HyDE for conceptual or ambiguous queries while keeping literal lookups conservative. |
 | **Hybrid Search (FTS5+BM25+RRF)** | Combines dense vector search with BM25 keyword search via Reciprocal Rank Fusion. Outperforms pure semantic search on precise terminology and code identifiers. |
 | **Cross-Encoder Reranking** | After initial vector retrieval, a cross-encoder model rescores candidates for precision. The top-k results are reordered by true semantic relevance before being returned to the agent. |
 | **Multi-Query Decomposition** | Complex questions are automatically split into sub-queries. Each component is retrieved independently, then fused for a higher-quality answer — improves recall on multi-faceted prompts. |
 | **Temporal Indexing** | Memories are indexed by time in addition to semantics. Time-sensitive queries ("what did we decide last Tuesday?") use temporal proximity scoring alongside semantic similarity. |
-| **Spreading Activation** | Graph-based co-activation network. Memories retrieved together reinforce each other's connections, building an associative web that improves over time. |
+| **Spreading Activation** | Graph-based co-activation network. NEXO now auto-enables a shallow spreading pass for concept-heavy queries, improving contextual recall without turning every exact lookup into a fuzzy search. |
 | **Recall Explanations** | Transparent score breakdown for every retrieval result. Shows exactly why a memory was returned: semantic similarity, recency, access frequency, and co-activation bonuses. |
 
 ### Proactive

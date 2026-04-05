@@ -1,5 +1,24 @@
 # Changelog
 
+## [2.6.16] - 2026-04-05
+
+### Codex Runtime Parity
+- Codex client sync now manages `~/.codex/config.toml` as part of the shared-brain contract, including bootstrap injection via `initial_messages` plus the configured Codex model/reasoning profile.
+- `nexo_startup` and session registration now support generic external session tokens and client identifiers instead of assuming every interactive session is Claude-shaped.
+- Dashboard followup execution now launches the configured NEXO terminal client instead of hardcoding Claude Code.
+
+### Retrieval & Memory Personalization
+- Cognitive retrieval now defaults to an automatic mode for HyDE query expansion and shallow spreading activation: conceptual queries get richer recall, while exact lookups stay conservative.
+- STM/LTM rows now track per-memory `stability` and `difficulty`, and rehearsal updates those profiles over time instead of relying only on global decay constants.
+- Cognitive stats and retrieval explanations now surface the new personalization/auto-mode behavior.
+
+### Long-Horizon Deep Sleep
+- Deep Sleep collection now builds a 60-day blended context (70% recent, 30% older) across diaries, learnings, stale followups, and transcript metadata.
+- Overnight synthesis prompts now explicitly ask for multi-week recurring themes, older/current cross-domain links, and topics repeatedly mentioned but never formalized.
+
+### Guardrails & Audits
+- Added regression audit coverage for shared-runner usage, transcript-source parity, Codex bootstrap guidance, and client-aware dashboard followups so future changes do not silently drift back into Claude-only assumptions.
+
 ## [2.6.15] - 2026-04-05
 
 ### Bootstrap Runtime Hotfix

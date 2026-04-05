@@ -19,6 +19,8 @@ COGNITIVE_DB = os.path.join(_data_dir, "cognitive.db")
 EMBEDDING_DIM = 768
 LAMBDA_STM = 0.004126   # half-life = ln(2) / (7 * 24) ≈ 7 days
 LAMBDA_LTM = 0.000481  # half-life = ln(2) / (60 * 24) ≈ 60 days
+DEFAULT_MEMORY_STABILITY = 1.0
+DEFAULT_MEMORY_DIFFICULTY = 0.5
 
 # Prediction Error Gate thresholds
 PE_GATE_REJECT = 0.85     # similarity > this → reject (not novel enough)
@@ -145,6 +147,7 @@ def _get_db() -> sqlite3.Connection:
         _init_tables(_conn)
         _migrate_lifecycle(_conn)
         _migrate_co_activation(_conn)
+        _migrate_memory_personalization(_conn)
         _auto_migrate_embeddings(_conn)
     return _conn
 
@@ -190,6 +193,79 @@ def _migrate_co_activation(conn: sqlite3.Connection):
         );
     """)
     conn.commit()
+
+
+def clamp_memory_stability(value: float | int | str | None) -> float:
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        numeric = DEFAULT_MEMORY_STABILITY
+    return max(0.6, min(3.0, numeric))
+
+
+def clamp_memory_difficulty(value: float | int | str | None) -> float:
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        numeric = DEFAULT_MEMORY_DIFFICULTY
+    return max(0.2, min(1.2, numeric))
+
+
+def initial_memory_profile(source_type: str, *, store: str = "stm") -> tuple[float, float]:
+    source = str(source_type or "").strip().lower()
+    if source in {"learning", "decision", "feedback"}:
+        return 1.2 if store == "stm" else 1.4, 0.4
+    if source in {"dream_insight", "session_summary"}:
+        return 1.1 if store == "stm" else 1.25, 0.55
+    if source in {"sensory", "dialog"}:
+        return 0.9, 0.6
+    return DEFAULT_MEMORY_STABILITY, DEFAULT_MEMORY_DIFFICULTY
+
+
+def personalize_decay_rate(base_lambda: float, *, stability: float, difficulty: float) -> float:
+    stability_factor = clamp_memory_stability(stability)
+    difficulty_factor = 0.75 + (clamp_memory_difficulty(difficulty) * 0.5)
+    return base_lambda * difficulty_factor / stability_factor
+
+
+def rehearsal_profile_update(
+    stability: float,
+    difficulty: float,
+    score: float,
+    *,
+    refinement: bool = False,
+) -> tuple[float, float]:
+    stable = clamp_memory_stability(stability)
+    hard = clamp_memory_difficulty(difficulty)
+    score = max(0.0, min(1.0, float(score or 0.0)))
+
+    stability_gain = 0.03 + max(0.0, score - 0.45) * 0.12
+    if refinement:
+        stability_gain += 0.03
+    new_stability = clamp_memory_stability(stable + stability_gain)
+
+    target_difficulty = clamp_memory_difficulty(1.0 - (score * 0.8))
+    if refinement:
+        target_difficulty = clamp_memory_difficulty(target_difficulty + 0.05)
+    new_difficulty = clamp_memory_difficulty((hard * 0.82) + (target_difficulty * 0.18))
+    return new_stability, new_difficulty
+
+
+def _migrate_memory_personalization(conn: sqlite3.Connection):
+    """Add per-memory stability and difficulty columns if they don't exist."""
+    for table in ("stm_memories", "ltm_memories"):
+        for col, col_type in [
+            ("stability", f"REAL DEFAULT {DEFAULT_MEMORY_STABILITY}"),
+            ("difficulty", f"REAL DEFAULT {DEFAULT_MEMORY_DIFFICULTY}"),
+        ]:
+            try:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}")
+                conn.commit()
+            except sqlite3.OperationalError as e:
+                if "duplicate column" in str(e).lower():
+                    pass
+                else:
+                    raise
 
 
 def _auto_migrate_embeddings(conn: sqlite3.Connection):
@@ -242,6 +318,8 @@ def _init_tables(conn: sqlite3.Connection):
             last_accessed TEXT DEFAULT (datetime('now')),
             access_count INTEGER DEFAULT 0,
             strength REAL DEFAULT 1.0,
+            stability REAL DEFAULT 1.0,
+            difficulty REAL DEFAULT 0.5,
             promoted_to_ltm INTEGER DEFAULT 0
         );
 
@@ -257,6 +335,8 @@ def _init_tables(conn: sqlite3.Connection):
             last_accessed TEXT DEFAULT (datetime('now')),
             access_count INTEGER DEFAULT 0,
             strength REAL DEFAULT 1.0,
+            stability REAL DEFAULT 1.0,
+            difficulty REAL DEFAULT 0.5,
             is_dormant INTEGER DEFAULT 0,
             original_stm_id INTEGER,
             tags TEXT DEFAULT ''

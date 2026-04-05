@@ -28,6 +28,8 @@ _PARENT = str(Path(__file__).resolve().parent.parent)
 if _PARENT not in sys.path:
     sys.path.insert(0, _PARENT)
 
+from agent_runner import AgentRunnerError, build_followup_terminal_shell_command
+
 app = FastAPI(title="NEXO Brain Dashboard", version="3.0.0")
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
@@ -137,7 +139,7 @@ class ChatMessage(BaseModel):
 
 def _cognitive_db():
     """Direct connection to cognitive.db."""
-    nexo_home = os.environ.get("NEXO_HOME", str(Path.home() / "claude"))
+    nexo_home = os.environ.get("NEXO_HOME", str(Path.home() / ".nexo"))
     db_path = Path(nexo_home) / "data" / "cognitive.db"
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
@@ -145,7 +147,8 @@ def _cognitive_db():
 
 def _email_db():
     """Direct connection to nexo-email.db."""
-    db_path = Path.home() / "claude" / "nexo-email" / "nexo-email.db"
+    nexo_home = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+    db_path = nexo_home / "nexo-email" / "nexo-email.db"
     if not db_path.exists():
         return None
     conn = sqlite3.connect(str(db_path))
@@ -420,7 +423,7 @@ async def api_sessions(limit: int = Query(10, ge=1, le=50)):
     conn = db.get_db()
     # Active sessions (from sessions table, not diaries)
     active_rows = conn.execute(
-        "SELECT sid as session_id, task, last_update_epoch, claude_session_id "
+        "SELECT sid as session_id, task, last_update_epoch, claude_session_id, external_session_id, session_client "
         "FROM sessions WHERE last_update_epoch > (strftime('%s','now') - 900) "
         "ORDER BY last_update_epoch DESC"
     ).fetchall()
@@ -716,7 +719,7 @@ async def api_ops_move(body: MoveRequest):
 
 @app.post("/api/ops/execute/{fid}")
 async def api_ops_execute(fid: str):
-    """Execute a followup by opening Terminal with claude command."""
+    """Execute a followup by opening Terminal with the configured NEXO client."""
     db = _db()
     conn = db.get_db()
     row = conn.execute("SELECT * FROM followups WHERE id = ?", (fid,)).fetchone()
@@ -734,9 +737,13 @@ async def api_ops_execute(fid: str):
     tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", prefix="nexo-followup-", delete=False)
     tmp.write(fid)
     tmp.close()
-    # The claude command reads the followup ID from the temp file — no shell interpolation of description
-    claude_cmd = f'claude \\"NEXO: execute followup from file $(cat {tmp.name})\\"'
-    script = f'tell application "Terminal" to do script "{claude_cmd}"'
+    # The selected terminal client reads the followup ID from the temp file — no shell interpolation of description
+    try:
+        _, shell_cmd = build_followup_terminal_shell_command(tmp.name)
+    except AgentRunnerError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=503)
+    escaped = shell_cmd.replace("\\", "\\\\").replace('"', '\\"')
+    script = f'tell application "Terminal" to do script "{escaped}"'
     subprocess.Popen(["osascript", "-e", script])
     return {"success": True, "followup_id": fid}
 
@@ -1388,7 +1395,7 @@ async def api_credentials():
 
 @app.get("/api/backups")
 async def api_backups():
-    nexo_home = Path(os.environ.get("NEXO_HOME", str(Path.home() / "claude")))
+    nexo_home = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
     backup_dir = nexo_home / "backups"
     data_dir = nexo_home / "data"
     backups = []

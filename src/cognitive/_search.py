@@ -1,9 +1,14 @@
 """NEXO Cognitive — Search, retrieval, ranking."""
 import math
+import re
 import sqlite3
 import numpy as np
 from datetime import datetime
-from cognitive._core import _get_db, embed, cosine_similarity, _blob_to_array, _array_to_blob, _get_model, _get_reranker, rerank_results, EMBEDDING_DIM
+from cognitive._core import (
+    _get_db, embed, cosine_similarity, _blob_to_array, _array_to_blob,
+    _get_model, _get_reranker, rerank_results, EMBEDDING_DIM,
+    rehearsal_profile_update,
+)
 
 def bm25_search(query_text: str, stores: str = "both", top_k: int = 20,
                 source_type_filter: str = "") -> list[dict]:
@@ -151,6 +156,10 @@ _HISTORICAL_CUES = frozenset({
     "cuando", "hace", "meses", "año", "anterior", "antes",
 })
 
+_EXACT_LOOKUP_RE = re.compile(
+    r"(/|\\|::|\.[A-Za-z0-9]+|#L\d+|line \d+|error[: ]|exception|traceback|0x[0-9a-fA-F]+|[A-Z]{2,}-\d+)"
+)
+
 
 def _apply_temporal_boost(results: list[dict], query_text: str) -> list[dict]:
     """Apply bounded temporal boost to retrieval results.
@@ -207,6 +216,42 @@ def _apply_temporal_boost(results: list[dict], query_text: str) -> list[dict]:
             r["temporal_boost"] = round(boost, 4)
 
     return results
+
+
+def _looks_like_exact_lookup(query_text: str) -> bool:
+    query = str(query_text or "").strip()
+    if not query:
+        return False
+    lowered = query.lower()
+    if _EXACT_LOOKUP_RE.search(query):
+        return True
+    if any(token in lowered for token in ("file ", "path ", "port ", "localhost", "grep ", "rg ", "exact", "literal")):
+        return True
+    if any(ch in query for ch in ('"', "'", "`", "=", "[", "]")):
+        return True
+    return False
+
+
+def _auto_use_hyde(query_text: str, source_type_filter: str = "") -> bool:
+    query = str(query_text or "").strip()
+    if not query or source_type_filter:
+        return False
+    if len(query) < 18 or _looks_like_exact_lookup(query):
+        return False
+    intent = _classify_query_intent(query)
+    return intent in {"howto", "definition", "reasoning"} or (intent == "lookup" and len(query.split()) >= 4)
+
+
+def _auto_spreading_depth(query_text: str, source_type_filter: str = "") -> int:
+    query = str(query_text or "").strip().lower()
+    if not query or source_type_filter or _looks_like_exact_lookup(query):
+        return 0
+    intent = _classify_query_intent(query)
+    if intent in {"howto", "definition", "reasoning"}:
+        return 1
+    if any(connector in query for connector in (" and ", " because ", " related ", " connect ", " why ", " how ")):
+        return 1
+    return 0
 
 
 # ============================================================================
@@ -614,9 +659,18 @@ def _rehearse_results(results: list[dict], skip_ids: set = None):
         if (r["store"], r["id"]) in skip:
             continue
         table = "stm_memories" if r["store"] == "stm" else "ltm_memories"
+        current = db.execute(
+            f"SELECT stability, difficulty FROM {table} WHERE id = ?",
+            (r["id"],),
+        ).fetchone()
+        new_stability, new_difficulty = rehearsal_profile_update(
+            current["stability"] if current else 1.0,
+            current["difficulty"] if current else 0.5,
+            score=r.get("score", 0.6),
+        )
         db.execute(
-            f"UPDATE {table} SET strength = MIN(1.0, strength + 0.08), access_count = access_count + 1, last_accessed = ? WHERE id = ?",
-            (now, r["id"])
+            f"UPDATE {table} SET strength = MIN(1.0, strength + 0.08), access_count = access_count + 1, last_accessed = ?, stability = ?, difficulty = ? WHERE id = ?",
+            (now, new_stability, new_difficulty, r["id"])
         )
     db.commit()
 
@@ -630,18 +684,18 @@ def search(
     rehearse: bool = True,
     source_type_filter: str = "",
     include_archived: bool = False,
-    use_hyde: bool = False,
+    use_hyde: bool | None = None,
     hybrid: bool = True,
     hybrid_alpha: float = 0.6,
-    spreading_depth: int = 0,
+    spreading_depth: int | None = None,
     decompose: bool = True,
     exclude_dreams: bool = True,
 ) -> list[dict]:
     """Full vector search across STM and/or LTM with rehearsal and dormant reactivation.
 
     Args:
-        use_hyde: If True, use HyDE query expansion for richer embedding (default False)
-        spreading_depth: If >0, fetch co-activated neighbors and boost their scores (default 0)
+        use_hyde: If True, force HyDE on; if False, force it off; if None, auto-enable for conceptual queries.
+        spreading_depth: If >0, fetch co-activated neighbors and boost their scores. If None, use a shallow auto-default for multi-hop queries.
         exclude_dreams: If True (default), exclude dream_insight memories from results.
                         Dream insights are 21% of LTM and dilute search precision.
                         Set to False only when explicitly looking for cross-domain patterns.
@@ -677,6 +731,8 @@ def search(
                     return merged
 
     db = _get_db()
+    resolved_use_hyde = _auto_use_hyde(query_text, source_type_filter) if use_hyde is None else bool(use_hyde)
+    resolved_spreading_depth = _auto_spreading_depth(query_text, source_type_filter) if spreading_depth is None else max(0, int(spreading_depth))
 
     # Detect temporal queries — boost results with temporal_date
     _temporal_keywords = {"when", "date", "time", "first", "last", "before", "after",
@@ -684,7 +740,7 @@ def search(
     query_lower = query_text.lower().split()
     is_temporal_query = bool(_temporal_keywords & set(query_lower))
 
-    if use_hyde:
+    if resolved_use_hyde:
         query_vec = hyde_expand_query(query_text)
     else:
         query_vec = embed(query_text)
@@ -855,9 +911,9 @@ def search(
 
     # Spreading activation: boost co-activated neighbors (Feature 2)
     co_activation_applied = False
-    if spreading_depth > 0 and results:
+    if resolved_spreading_depth > 0 and results:
         memory_ids = [(r["store"], r["id"]) for r in results]
-        neighbor_boosts = _get_co_activated_neighbors(memory_ids, depth=spreading_depth)
+        neighbor_boosts = _get_co_activated_neighbors(memory_ids, depth=resolved_spreading_depth)
 
         if neighbor_boosts:
             co_activation_applied = True
@@ -911,7 +967,7 @@ def search(
         reactivated = r.get("reactivated", False)
 
         ranking_desc = "semantic_similarity"
-        if use_hyde:
+        if resolved_use_hyde:
             ranking_desc = "hyde_centroid_similarity"
         parts = [f"Ranked #{rank}: {ranking_desc}={score:.3f}"]
         parts.append(f"store={store}, strength={strength:.2f}, accesses={access_count}")
@@ -919,6 +975,10 @@ def search(
             parts.append(f"kg_boost=+{r['kg_boost']:.3f} ({r.get('kg_connections', 0)} edges)")
         if r.get("co_activation_boost"):
             parts.append(f"co_activation_boost=+{r['co_activation_boost']:.3f}")
+        if use_hyde is None and resolved_use_hyde:
+            parts.append("hyde=auto")
+        if spreading_depth is None and resolved_spreading_depth > 0:
+            parts.append(f"spreading=auto:{resolved_spreading_depth}")
         if created:
             parts.append(f"created={created[:10]}")
         if tags:

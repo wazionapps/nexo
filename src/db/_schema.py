@@ -256,6 +256,15 @@ def _m13_claude_session_id(conn):
     conn.commit()
 
 
+def _m21_external_session_fields(conn):
+    """Generalize session linkage beyond Claude-specific naming."""
+    _migrate_add_column(conn, "sessions", "external_session_id", "TEXT DEFAULT ''")
+    _migrate_add_column(conn, "sessions", "session_client", "TEXT DEFAULT ''")
+    _migrate_add_index(conn, "idx_sessions_external_sid", "sessions", "external_session_id")
+    _migrate_add_index(conn, "idx_sessions_client", "sessions", "session_client")
+    conn.commit()
+
+
 def _m14_learnings_priority_weight(conn):
     """Add priority, weight, and guard usage tracking to learnings + followup priority."""
     _migrate_add_column(conn, "learnings", "priority", "TEXT DEFAULT 'medium'")
@@ -445,6 +454,7 @@ MIGRATIONS = [
     (18, "skills_steps_column", _m18_skills_steps),
     (19, "skills_v2", _m19_skills_v2),
     (20, "personal_scripts_registry", _m20_personal_scripts_registry),
+    (21, "external_session_fields", _m21_external_session_fields),
 ]
 
 

@@ -200,7 +200,7 @@ mcp = FastMCP(
 # ── Session management (3 tools) ──────────────────────────────────
 
 @mcp.tool
-def nexo_startup(task: str = "Startup", claude_session_id: str = "") -> str:
+def nexo_startup(task: str = "Startup", claude_session_id: str = "", session_token: str = "", session_client: str = "") -> str:
     """Register new session, clean stale ones, return active sessions + alerts.
 
     Call this ONCE at the start of every conversation.
@@ -208,11 +208,18 @@ def nexo_startup(task: str = "Startup", claude_session_id: str = "") -> str:
 
     Args:
         task: Initial task description.
-        claude_session_id: External client session token. Claude Code passes its UUID via hooks;
-                          other clients may pass a synthetic durable token when useful.
-                          Pass this to enable automatic inter-terminal inbox detection when available.
+        claude_session_id: Legacy alias for the external client session token.
+        session_token: External client session token. Claude Code passes its UUID via hooks;
+                      other clients may pass a synthetic durable token when useful.
+                      Pass this to enable automatic inter-terminal inbox detection when available.
+        session_client: Optional client label such as `claude_code` or `codex`.
     """
-    return handle_startup(task, claude_session_id=claude_session_id)
+    return handle_startup(
+        task,
+        claude_session_id=claude_session_id,
+        session_token=session_token,
+        session_client=session_client,
+    )
 
 
 @mcp.tool
