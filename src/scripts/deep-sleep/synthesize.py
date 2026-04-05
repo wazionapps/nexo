@@ -161,6 +161,7 @@ def main():
             for candidate in [
                 DEEP_SLEEP_DIR / f"{target_date}-analysis.json",
                 DEEP_SLEEP_DIR / f"{target_date}-synthesis.json",
+                DEEP_SLEEP_DIR / target_date / "synthesis.json",
             ]:
                 if candidate.exists() and candidate.stat().st_size > 100:
                     try:
