@@ -1819,7 +1819,7 @@ function copyInstall(btn) {
                     typed = false;
                     target.innerHTML = '';
                     runInstallFlow(items, target);
-                }, 3200);
+                }, 5000);
                 return;
             }
 
@@ -1830,7 +1830,7 @@ function copyInstall(btn) {
             typeHtml(items[lineIndex], wrapper, function() {
                 lineIndex += 1;
                 target.scrollTop = target.scrollHeight;
-                setTimeout(typeNextLine, lineIndex === 7 ? 420 : 120);
+                setTimeout(typeNextLine, lineIndex === 7 ? 1200 : 400);
             });
         }
 
@@ -1860,7 +1860,7 @@ function copyInstall(btn) {
                     if (idx < text.length) {
                         textNode.textContent += text[idx++];
                         container.parentElement.scrollTop = container.parentElement.scrollHeight;
-                        setTimeout(typeChar, 14 + Math.random() * 18);
+                        setTimeout(typeChar, 38 + Math.random() * 32);
                         return;
                     }
                     next();
