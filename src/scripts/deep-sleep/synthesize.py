@@ -14,6 +14,7 @@ import json
 import os
 import subprocess
 import sys
+import hashlib
 from datetime import datetime
 from pathlib import Path
 
@@ -28,6 +29,7 @@ if str(NEXO_CODE) not in sys.path:
 from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
 
 CLAUDE_TIMEOUT = 21600  # 3h safety net (prevents zombie processes)
+ACTION_VERBS = {"add", "implement", "create", "write", "build", "enforce", "automate", "validate", "guard", "fix", "review"}
 
 
 def extract_json_from_response(text: str) -> dict | None:
@@ -84,6 +86,96 @@ def collect_skill_runtime_candidates(target_date: str) -> tuple[Path, dict]:
     with open(output_file, "w") as f:
         json.dump(payload, f, indent=2, ensure_ascii=False)
     return output_file, payload
+
+
+def _normalize_action_text(value: str) -> str:
+    return " ".join(str(value or "").strip().lower().split())
+
+
+def _looks_concrete_action(text: str) -> bool:
+    words = {word.strip(".,:;()[]{}").lower() for word in str(text or "").split()}
+    return bool(words & ACTION_VERBS)
+
+
+def _pattern_followup_from_fix(pattern: dict) -> dict | None:
+    severity = str(pattern.get("severity", "") or "").lower()
+    sessions = pattern.get("sessions", []) or []
+    if severity not in {"medium", "high"} and len(sessions) < 2:
+        return None
+
+    proposed_fix = pattern.get("proposed_fix") or {}
+    pattern_text = str(pattern.get("pattern", "") or "").strip()
+    title = str(proposed_fix.get("title", "") or "").strip()
+    description = str(proposed_fix.get("description", "") or "").strip()
+    deliverable = str(proposed_fix.get("deliverable", "") or proposed_fix.get("artifact", "") or "").strip()
+
+    if title and description:
+        if _looks_concrete_action(description):
+            followup_description = description
+        else:
+            followup_description = f"{title}: {description}"
+    elif description:
+        followup_description = description
+    elif title:
+        followup_description = title
+    elif pattern_text:
+        followup_description = (
+            f"Implement a concrete guardrail for recurring issue: {pattern_text}. "
+            "Deliverable should be a script, hook, checklist, or automated validation that prevents the same failure from repeating."
+        )
+    else:
+        return None
+
+    if deliverable and deliverable.lower() not in followup_description.lower():
+        followup_description = f"{followup_description} Deliverable: {deliverable}."
+    if not _looks_concrete_action(followup_description):
+        followup_description = f"Implement this fix: {followup_description}"
+
+    return {
+        "action_type": "followup_create",
+        "action_class": "auto_apply" if severity == "high" else "draft_for_morning",
+        "confidence": round(max(float(proposed_fix.get("confidence", 0.0) or 0.0), 0.86 if severity == "high" else 0.78), 2),
+        "impact": "high" if severity == "high" else "medium",
+        "reversibility": "reversible",
+        "evidence": pattern.get("evidence", []) or [],
+        "dedupe_key": "engineering-fix:" + hashlib.md5(
+            _normalize_action_text(followup_description).encode("utf-8")
+        ).hexdigest()[:16],
+        "content": {
+            "title": title or f"Engineering fix for: {pattern_text[:90]}",
+            "description": followup_description,
+            "date": "",
+            "reasoning": f"Deep Sleep engineering followup from recurring pattern: {pattern_text}",
+        },
+    }
+
+
+def backfill_engineering_actions(payload: dict) -> dict:
+    if not isinstance(payload, dict):
+        return payload
+    actions = payload.get("actions")
+    if not isinstance(actions, list):
+        actions = []
+        payload["actions"] = actions
+
+    existing_keys = {str(action.get("dedupe_key", "") or "") for action in actions}
+    existing_descriptions = {
+        _normalize_action_text(action.get("content", {}).get("description", ""))
+        for action in actions
+        if isinstance(action, dict)
+    }
+
+    for pattern in payload.get("cross_session_patterns", []) or []:
+        action = _pattern_followup_from_fix(pattern)
+        if not action:
+            continue
+        description = _normalize_action_text(action["content"]["description"])
+        if action["dedupe_key"] in existing_keys or description in existing_descriptions:
+            continue
+        actions.append(action)
+        existing_keys.add(action["dedupe_key"])
+        existing_descriptions.add(description)
+    return payload
 
 
 def main():
@@ -176,6 +268,8 @@ def main():
             debug_file.write_text(result.stdout[:10000])
             print(f"[synthesize] Failed to parse JSON. Raw output saved to {debug_file}", file=sys.stderr)
             sys.exit(1)
+
+        parsed = backfill_engineering_actions(parsed)
 
         # Write synthesis output
         output_file = DEEP_SLEEP_DIR / f"{target_date}-synthesis.json"

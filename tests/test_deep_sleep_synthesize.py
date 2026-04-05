@@ -64,3 +64,34 @@ def test_synthesize_accepts_nested_direct_write(monkeypatch, tmp_path):
     assert output_file.exists()
     payload = json.loads(output_file.read_text(encoding="utf-8"))
     assert payload["actions"][0]["text"] == "Recovered from nested synthesis path"
+
+
+def test_backfill_engineering_actions_adds_fix_followup():
+    module = _load_module()
+    payload = {
+        "date": "2026-04-05",
+        "cross_session_patterns": [
+            {
+                "pattern": "Releases often need a same-day hotfix",
+                "sessions": ["one", "two"],
+                "severity": "high",
+                "evidence": [{"type": "transcript", "quote": "hotfix again"}],
+                "proposed_fix": {
+                    "title": "Add pre-release validation script",
+                    "description": "Add a pre-release validation script that runs doctor, parity, tests, and publish checks before cutting a release.",
+                    "deliverable": "script",
+                    "confidence": 0.91,
+                },
+            }
+        ],
+        "actions": [],
+    }
+
+    result = module.backfill_engineering_actions(payload)
+
+    assert len(result["actions"]) == 1
+    action = result["actions"][0]
+    assert action["action_type"] == "followup_create"
+    assert action["action_class"] == "auto_apply"
+    assert action["content"]["description"].startswith("Add a pre-release validation script")
+    assert action["dedupe_key"].startswith("engineering-fix:")

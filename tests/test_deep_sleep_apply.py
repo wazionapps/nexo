@@ -114,3 +114,137 @@ def test_write_periodic_summaries_creates_weekly_and_monthly_outputs(monkeypatch
     weekly_markdown = Path(outputs["weekly_markdown"]).read_text()
     assert "Top Projects" in weekly_markdown
     assert "wazion" in weekly_markdown
+
+
+def test_create_followup_consolidates_semantic_duplicates(monkeypatch, tmp_path):
+    apply_mod = _load_apply_module(monkeypatch, tmp_path)
+    nexo_home = Path(os.environ["NEXO_HOME"])
+    data_dir = nexo_home / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    conn = sqlite3.connect(str(data_dir / "nexo.db"))
+    conn.execute(
+        "CREATE TABLE followups (id TEXT PRIMARY KEY, description TEXT, date TEXT, status TEXT, verification TEXT, reasoning TEXT, created_at REAL, updated_at REAL)"
+    )
+    conn.execute(
+        "INSERT INTO followups VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            "NF-EXISTING",
+            "Release reliability issue",
+            "2026-04-08",
+            "PENDING",
+            "",
+            "",
+            1.0,
+            1.0,
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+    result = apply_mod.create_followup(
+        "Add a release reliability validation checklist and script before publishing.",
+        date="2026-04-06",
+        reasoning_note="Recurring hotfix pattern detected overnight.",
+    )
+
+    assert result["success"] is True
+    assert result["id"] == "NF-EXISTING"
+    assert result["outcome"] == "matched_existing_followup"
+
+    conn = sqlite3.connect(str(data_dir / "nexo.db"))
+    row = conn.execute("SELECT description, date, reasoning FROM followups WHERE id = 'NF-EXISTING'").fetchone()
+    conn.close()
+    assert "validation checklist" in row[0].lower()
+    assert row[1] == "2026-04-06"
+    assert "Recurring hotfix pattern" in row[2]
+
+
+def test_add_learning_reinforces_instead_of_duplication(monkeypatch, tmp_path):
+    apply_mod = _load_apply_module(monkeypatch, tmp_path)
+    nexo_home = Path(os.environ["NEXO_HOME"])
+    data_dir = nexo_home / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    conn = sqlite3.connect(str(data_dir / "nexo.db"))
+    conn.execute(
+        "CREATE TABLE learnings (id INTEGER PRIMARY KEY AUTOINCREMENT, category TEXT, title TEXT, content TEXT, reasoning TEXT, weight REAL, created_at REAL, updated_at REAL)"
+    )
+    conn.execute(
+        "INSERT INTO learnings (category, title, content, reasoning, weight, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (
+            "release",
+            "Validate before publishing",
+            "Run nexo doctor and parity checks before publishing a release.",
+            "",
+            1.0,
+            1.0,
+            1.0,
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+    result = apply_mod.add_learning(
+        "release",
+        "Always validate releases before publish",
+        "Run nexo doctor plus parity and packaging checks before publishing any release.",
+    )
+
+    assert result["success"] is True
+    assert result["outcome"] == "reinforced_learning"
+
+    conn = sqlite3.connect(str(data_dir / "nexo.db"))
+    count = conn.execute("SELECT COUNT(*) FROM learnings").fetchone()[0]
+    row = conn.execute("SELECT weight, reasoning FROM learnings LIMIT 1").fetchone()
+    conn.close()
+    assert count == 1
+    assert row[0] > 1.0
+    assert "Deep Sleep reinforcement" in row[1]
+
+
+def test_add_learning_flags_contradictions_for_review(monkeypatch, tmp_path):
+    apply_mod = _load_apply_module(monkeypatch, tmp_path)
+    nexo_home = Path(os.environ["NEXO_HOME"])
+    data_dir = nexo_home / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    conn = sqlite3.connect(str(data_dir / "nexo.db"))
+    conn.execute(
+        "CREATE TABLE learnings (id INTEGER PRIMARY KEY AUTOINCREMENT, category TEXT, title TEXT, content TEXT, reasoning TEXT, created_at REAL, updated_at REAL)"
+    )
+    conn.execute(
+        "CREATE TABLE followups (id TEXT PRIMARY KEY, description TEXT, date TEXT, status TEXT, verification TEXT, reasoning TEXT, created_at REAL, updated_at REAL)"
+    )
+    conn.execute(
+        "INSERT INTO learnings (category, title, content, reasoning, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+        (
+            "release",
+            "Never skip validation",
+            "Never skip release validation before publishing.",
+            "",
+            1.0,
+            1.0,
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+    result = apply_mod.add_learning(
+        "release",
+        "Skip validation on tiny releases",
+        "Skip release validation when the patch looks small.",
+    )
+
+    assert result["success"] is True
+    assert result["outcome"] == "contradiction_review"
+    assert result["review_followup_id"]
+
+    conn = sqlite3.connect(str(data_dir / "nexo.db"))
+    learning_count = conn.execute("SELECT COUNT(*) FROM learnings").fetchone()[0]
+    followup_count = conn.execute("SELECT COUNT(*) FROM followups").fetchone()[0]
+    followup_desc = conn.execute("SELECT description FROM followups LIMIT 1").fetchone()[0]
+    conn.close()
+    assert learning_count == 1
+    assert followup_count == 1
+    assert "Reconcile contradictory learning" in followup_desc

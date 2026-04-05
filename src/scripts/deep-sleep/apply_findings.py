@@ -17,10 +17,12 @@ Environment variables:
 import hashlib
 import json
 import os
+import re
 import sqlite3
 import sys
 from collections import Counter
 from datetime import datetime, timedelta
+from difflib import SequenceMatcher
 from pathlib import Path
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
@@ -33,6 +35,36 @@ NEXO_DB = NEXO_HOME / "data" / "nexo.db"
 COGNITIVE_DB = NEXO_HOME / "data" / "cognitive.db"
 OPERATIONS_DIR = NEXO_HOME / "operations"
 BACKUP_DIR = DEEP_SLEEP_DIR  # backups stored alongside outputs
+
+STOPWORDS = {
+    "the", "a", "an", "and", "or", "but", "with", "for", "from", "into", "onto",
+    "that", "this", "these", "those", "have", "has", "had", "will", "would",
+    "could", "should", "must", "need", "needs", "your", "their", "there", "here",
+    "about", "before", "after", "during", "through", "without", "within", "while",
+    "que", "con", "para", "por", "los", "las", "una", "uno", "sobre", "desde",
+    "cuando", "como", "pero", "todo", "toda", "cada", "into", "across", "using",
+}
+CONCRETE_ACTION_VERBS = {
+    "add", "implement", "create", "write", "build", "introduce", "enforce",
+    "automate", "validate", "check", "verify", "guard", "fix", "migrate",
+    "review", "reconcile", "pin", "sync", "instrument",
+}
+NEGATION_PATTERNS = (
+    "do not", "don't", "never", "avoid", "skip", "without", "forbid", "forbidden",
+    "disable", "disabled", "remove", "ban", "bypass",
+)
+CONTRADICTION_PAIRS = (
+    ("enable", "disable"),
+    ("use", "avoid"),
+    ("add", "remove"),
+    ("allow", "forbid"),
+    ("always", "never"),
+    ("before", "after"),
+    ("require", "skip"),
+    ("validate", "bypass"),
+    ("include", "exclude"),
+)
+TABLE_COLUMNS_CACHE: dict[tuple[str, str], set[str]] = {}
 
 
 def generate_run_id(target_date: str) -> str:
@@ -75,41 +107,435 @@ def backup_db(db_path: Path, run_id: str) -> Path | None:
         return None
 
 
+def _table_columns(db_path: Path, table: str) -> set[str]:
+    cache_key = (str(db_path), table)
+    if cache_key in TABLE_COLUMNS_CACHE:
+        return TABLE_COLUMNS_CACHE[cache_key]
+    if not db_path.exists():
+        TABLE_COLUMNS_CACHE[cache_key] = set()
+        return set()
+    try:
+        conn = sqlite3.connect(str(db_path))
+        rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
+        conn.close()
+    except Exception:
+        TABLE_COLUMNS_CACHE[cache_key] = set()
+        return set()
+    cols = {str(row[1]) for row in rows}
+    TABLE_COLUMNS_CACHE[cache_key] = cols
+    return cols
+
+
+def _row_dict(row) -> dict:
+    if row is None:
+        return {}
+    if isinstance(row, sqlite3.Row):
+        return dict(row)
+    return dict(zip(row.keys(), row)) if hasattr(row, "keys") else dict(row)
+
+
+def _normalize_text(value: str) -> str:
+    text = str(value or "").lower()
+    text = re.sub(r"https?://\S+", " ", text)
+    text = re.sub(r"[^a-z0-9_/\-\s]+", " ", text)
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
+
+
+def _tokenize(value: str) -> list[str]:
+    tokens = re.findall(r"[a-z0-9_/-]+", _normalize_text(value))
+    return [token for token in tokens if len(token) > 2 and token not in STOPWORDS]
+
+
+def _text_similarity(left: str, right: str) -> float:
+    normalized_left = _normalize_text(left)
+    normalized_right = _normalize_text(right)
+    if not normalized_left or not normalized_right:
+        return 0.0
+    if normalized_left == normalized_right:
+        return 1.0
+
+    left_tokens = set(_tokenize(normalized_left))
+    right_tokens = set(_tokenize(normalized_right))
+    shared = left_tokens & right_tokens
+    if not shared:
+        return SequenceMatcher(None, normalized_left, normalized_right).ratio()
+
+    seq = SequenceMatcher(None, normalized_left, normalized_right).ratio()
+    jaccard = len(shared) / len(left_tokens | right_tokens) if (left_tokens or right_tokens) else 0.0
+    overlap = len(shared) / min(len(left_tokens), len(right_tokens)) if min(len(left_tokens), len(right_tokens)) else 0.0
+    containment = (
+        1.0
+        if normalized_left in normalized_right or normalized_right in normalized_left
+        else 0.0
+    )
+    return round(max((seq * 0.45) + (jaccard * 0.2) + (overlap * 0.35), overlap, (containment * 0.8) + (seq * 0.2)), 4)
+
+
+def _is_concrete_action(text: str) -> bool:
+    tokens = set(_tokenize(text))
+    return bool(tokens & CONCRETE_ACTION_VERBS)
+
+
+def _prefer_due_date(current_value, new_value) -> str:
+    current = _parse_any_datetime(current_value)
+    new = _parse_any_datetime(new_value)
+    if new and (not current or new <= current):
+        return str(new_value or "")
+    return str(current_value or "")
+
+
+def _append_note(base: str, note: str) -> str:
+    base = str(base or "").strip()
+    note = str(note or "").strip()
+    if not note:
+        return base
+    if not base:
+        return note
+    if note.lower() in base.lower():
+        return base
+    return f"{base}\n\n{note}"
+
+
+def _contains_negation(text: str) -> bool:
+    lowered = _normalize_text(text)
+    return any(token in lowered for token in NEGATION_PATTERNS)
+
+
+def _negated_action_verbs(text: str) -> set[str]:
+    lowered = _normalize_text(text)
+    matches = set()
+    for pattern in (r"(?:never|avoid|skip|disable|remove|forbid|bypass)\s+([a-z0-9_-]+)", r"(?:do not|don't)\s+([a-z0-9_-]+)"):
+        matches.update(re.findall(pattern, lowered))
+    return {match for match in matches if len(match) > 2}
+
+
+def _looks_contradictory(existing_text: str, new_text: str) -> bool:
+    existing_norm = _normalize_text(existing_text)
+    new_norm = _normalize_text(new_text)
+    if not existing_norm or not new_norm:
+        return False
+    existing_tokens = set(_tokenize(existing_norm))
+    new_tokens = set(_tokenize(new_norm))
+    if len(existing_tokens & new_tokens) < 3:
+        return False
+    existing_negated_verbs = _negated_action_verbs(existing_norm)
+    new_negated_verbs = _negated_action_verbs(new_norm)
+    if existing_negated_verbs & new_tokens and not existing_negated_verbs & new_negated_verbs:
+        return True
+    if new_negated_verbs & existing_tokens and not existing_negated_verbs & new_negated_verbs:
+        return True
+    if _contains_negation(existing_norm) != _contains_negation(new_norm):
+        return True
+    for positive, negative in CONTRADICTION_PAIRS:
+        existing_has_pair = positive in existing_norm or negative in existing_norm
+        new_has_pair = positive in new_norm or negative in new_norm
+        if existing_has_pair and new_has_pair:
+            if (positive in existing_norm and negative in new_norm) or (negative in existing_norm and positive in new_norm):
+                return True
+    return False
+
+
+def _fetch_open_followups() -> list[dict]:
+    if not NEXO_DB.exists():
+        return []
+    conn = sqlite3.connect(str(NEXO_DB))
+    conn.row_factory = sqlite3.Row
+    cols = _table_columns(NEXO_DB, "followups")
+    reasoning_sql = ", reasoning" if "reasoning" in cols else ""
+    verification_sql = ", verification" if "verification" in cols else ""
+    try:
+        rows = conn.execute(
+            "SELECT id, description, date, status"
+            f"{verification_sql}{reasoning_sql} "
+            "FROM followups WHERE status NOT LIKE 'COMPLETED%' "
+            "AND status NOT IN ('DELETED','archived','blocked','waiting','CANCELLED')"
+        ).fetchall()
+    finally:
+        conn.close()
+    return [dict(row) for row in rows]
+
+
+def _find_similar_followup(description: str, threshold: float = 0.58) -> dict | None:
+    candidates = []
+    query = str(description or "").strip()
+    if not query:
+        return None
+    query_tokens = set(_tokenize(query))
+    for row in _fetch_open_followups():
+        haystack = " ".join(
+            [
+                str(row.get("description", "") or ""),
+                str(row.get("verification", "") or ""),
+                str(row.get("reasoning", "") or ""),
+            ]
+        )
+        haystack_tokens = set(_tokenize(haystack))
+        if len(query_tokens & haystack_tokens) < 2 and _normalize_text(query) not in _normalize_text(haystack):
+            continue
+        score = _text_similarity(query, haystack)
+        if score >= threshold:
+            candidates.append({**row, "_similarity": score})
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: item["_similarity"], reverse=True)
+    return candidates[0]
+
+
+def _touch_existing_followup(existing: dict, *, description: str, date: str = "", reasoning_note: str = "") -> dict:
+    cols = _table_columns(NEXO_DB, "followups")
+    if not cols:
+        return {"success": False, "error": "followups table not found"}
+
+    updates: dict[str, object] = {}
+    existing_description = str(existing.get("description", "") or "")
+    if _is_concrete_action(description) and not _is_concrete_action(existing_description):
+        updates["description"] = description
+    preferred_date = _prefer_due_date(existing.get("date", ""), date)
+    if preferred_date and preferred_date != str(existing.get("date", "") or "") and "date" in cols:
+        updates["date"] = preferred_date
+    if "reasoning" in cols and reasoning_note:
+        updates["reasoning"] = _append_note(existing.get("reasoning", ""), reasoning_note)
+    if "updated_at" in cols:
+        updates["updated_at"] = datetime.now().timestamp()
+
+    if updates:
+        conn = sqlite3.connect(str(NEXO_DB))
+        set_clause = ", ".join(f"{column} = ?" for column in updates)
+        params = list(updates.values()) + [existing["id"]]
+        conn.execute(f"UPDATE followups SET {set_clause} WHERE id = ?", params)
+        conn.commit()
+        conn.close()
+
+    return {
+        "success": True,
+        "id": existing["id"],
+        "outcome": "matched_existing_followup",
+        "similarity": existing.get("_similarity", 1.0),
+        "updated_existing": bool(updates),
+    }
+
+
+def _fetch_learning_candidates(category: str = "") -> list[dict]:
+    if not NEXO_DB.exists():
+        return []
+    cols = _table_columns(NEXO_DB, "learnings")
+    if not cols:
+        return []
+    select_fields = ["id", "category", "title", "content", "created_at", "updated_at"]
+    for optional in ("reasoning", "prevention", "applies_to", "status", "review_due_at", "last_reviewed_at", "weight", "priority"):
+        if optional in cols:
+            select_fields.append(optional)
+    query = f"SELECT {', '.join(select_fields)} FROM learnings"
+    params: list[object] = []
+    if category and "category" in cols:
+        query += " WHERE category = ?"
+        params.append(category)
+    query += " ORDER BY COALESCE(updated_at, created_at) DESC LIMIT 240"
+    conn = sqlite3.connect(str(NEXO_DB))
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(query, tuple(params)).fetchall()
+    finally:
+        conn.close()
+    return [dict(row) for row in rows]
+
+
+def _find_learning_match(category: str, title: str, content: str) -> dict | None:
+    candidates = []
+    new_text = " ".join([str(title or ""), str(content or "")]).strip()
+    for row in _fetch_learning_candidates(category):
+        existing_text = " ".join([str(row.get("title", "") or ""), str(row.get("content", "") or "")])
+        similarity = _text_similarity(new_text, existing_text)
+        if similarity < 0.58:
+            continue
+        contradiction = _looks_contradictory(existing_text, new_text)
+        candidates.append({**row, "_similarity": similarity, "_contradiction": contradiction})
+    if not candidates:
+        return None
+    candidates.sort(
+        key=lambda item: (item["_contradiction"], item["_similarity"], item.get("updated_at", 0) or item.get("created_at", 0)),
+        reverse=True,
+    )
+    return candidates[0]
+
+
+def _update_learning_row(learning_id: int, updates: dict[str, object]) -> None:
+    if not updates:
+        return
+    conn = sqlite3.connect(str(NEXO_DB))
+    set_clause = ", ".join(f"{column} = ?" for column in updates)
+    conn.execute(f"UPDATE learnings SET {set_clause} WHERE id = ?", list(updates.values()) + [learning_id])
+    conn.commit()
+    conn.close()
+
+
+def _bump_weight(existing_value, amount: float) -> float:
+    try:
+        base = float(existing_value or 0)
+    except Exception:
+        base = 0.0
+    return round(min(10.0, base + amount), 2)
+
+
+def _flag_learning_contradiction(existing: dict, category: str, title: str, content: str) -> dict:
+    review_description = (
+        f"Reconcile contradictory learning in {category or 'general'}: "
+        f"review existing learning #{existing.get('id')} ('{existing.get('title', '')}') "
+        f"against new Deep Sleep finding '{title}'. Produce one canonical rule, update guardrails, and remove ambiguity."
+    )
+    followup_result = create_followup(
+        description=review_description,
+        date="",
+        reasoning_note=f"Contradiction detected against learning #{existing.get('id')}: {content[:240]}",
+    )
+    return {
+        "success": followup_result.get("success", False),
+        "id": existing.get("id"),
+        "outcome": "contradiction_review",
+        "similarity": existing.get("_similarity", 0.0),
+        "review_followup_id": followup_result.get("id"),
+        "followup_result": followup_result,
+    }
+
+
 def add_learning(category: str, title: str, content: str) -> dict:
     """Add a learning to nexo.db. Returns result dict."""
     if not NEXO_DB.exists():
         return {"success": False, "error": "nexo.db not found"}
     try:
+        existing = _find_learning_match(category, title, content)
+        if existing:
+            similarity = existing.get("_similarity", 0.0)
+            if existing.get("_contradiction"):
+                return _flag_learning_contradiction(existing, category, title, content)
+
+            updates: dict[str, object] = {}
+            columns = _table_columns(NEXO_DB, "learnings")
+            if "updated_at" in columns:
+                updates["updated_at"] = datetime.now().timestamp()
+
+            existing_title = _normalize_text(existing.get("title", ""))
+            existing_content = _normalize_text(existing.get("content", ""))
+            incoming_title = _normalize_text(title)
+            incoming_content = _normalize_text(content)
+
+            if similarity >= 0.95 and (
+                existing_title == incoming_title
+                or existing_content == incoming_content
+                or incoming_content in existing_content
+                or existing_content in incoming_content
+            ):
+                if "weight" in columns:
+                    updates["weight"] = _bump_weight(existing.get("weight"), 0.1)
+                if "last_reviewed_at" in columns:
+                    updates["last_reviewed_at"] = datetime.now().timestamp()
+                if "reasoning" in columns:
+                    updates["reasoning"] = _append_note(
+                        existing.get("reasoning", ""),
+                        f"Reconfirmed by Deep Sleep on {datetime.now().strftime('%Y-%m-%d')}.",
+                    )
+                _update_learning_row(existing["id"], updates)
+                return {
+                    "success": True,
+                    "id": existing["id"],
+                    "outcome": "duplicate_learning",
+                    "similarity": similarity,
+                    "updated_existing": bool(updates),
+                }
+
+            if similarity >= 0.58:
+                if "weight" in columns:
+                    updates["weight"] = _bump_weight(existing.get("weight"), 0.25)
+                if "reasoning" in columns:
+                    updates["reasoning"] = _append_note(
+                        existing.get("reasoning", ""),
+                        f"Deep Sleep reinforcement ({datetime.now().strftime('%Y-%m-%d')}): {title}. {content[:240]}",
+                    )
+                elif "content" in columns and content and content not in str(existing.get("content", "")):
+                    updates["content"] = _append_note(
+                        existing.get("content", ""),
+                        f"Reinforced by Deep Sleep: {content[:240]}",
+                    )
+                _update_learning_row(existing["id"], updates)
+                return {
+                    "success": True,
+                    "id": existing["id"],
+                    "outcome": "reinforced_learning",
+                    "similarity": similarity,
+                    "updated_existing": bool(updates),
+                }
+
         now = datetime.now().timestamp()
+        columns = _table_columns(NEXO_DB, "learnings")
+        payload = {
+            "category": category,
+            "title": title,
+            "content": content,
+            "created_at": now,
+            "updated_at": now,
+        }
+        if "reasoning" in columns:
+            payload["reasoning"] = "Deep Sleep v2 overnight analysis"
+        if "status" in columns:
+            payload["status"] = "active"
+        insert_columns = [column for column in payload if column in columns]
+        values = [payload[column] for column in insert_columns]
+
         conn = sqlite3.connect(str(NEXO_DB))
         cursor = conn.execute(
-            "INSERT INTO learnings (category, title, content, created_at, updated_at, reasoning) VALUES (?, ?, ?, ?, ?, ?)",
-            (category, title, content, now, now, "Deep Sleep v2 overnight analysis")
+            f"INSERT INTO learnings ({', '.join(insert_columns)}) VALUES ({', '.join('?' for _ in insert_columns)})",
+            values,
         )
         learning_id = cursor.lastrowid
         conn.commit()
         conn.close()
-        return {"success": True, "id": learning_id}
+        return {"success": True, "id": learning_id, "outcome": "new_learning"}
     except Exception as e:
         return {"success": False, "error": str(e)}
 
 
-def create_followup(description: str, date: str = "") -> dict:
+def create_followup(description: str, date: str = "", reasoning_note: str = "") -> dict:
     """Create a followup in nexo.db. Returns result dict."""
     if not NEXO_DB.exists():
         return {"success": False, "error": "nexo.db not found"}
     try:
+        matched = _find_similar_followup(description)
+        if matched:
+            return _touch_existing_followup(
+                matched,
+                description=description,
+                date=date,
+                reasoning_note=reasoning_note or "Deep Sleep matched this followup semantically.",
+            )
+
         now = datetime.now().timestamp()
         # Generate a deterministic ID
         fid = "NF-DS-" + hashlib.md5(description.encode()).hexdigest()[:8].upper()
+        columns = _table_columns(NEXO_DB, "followups")
+        payload = {
+            "id": fid,
+            "description": description,
+            "date": date,
+            "status": "PENDING",
+            "created_at": now,
+            "updated_at": now,
+        }
+        if "reasoning" in columns:
+            payload["reasoning"] = reasoning_note or "Deep Sleep v2 overnight analysis"
+        if "verification" in columns:
+            payload["verification"] = ""
+        insert_columns = [column for column in payload if column in columns]
+        values = [payload[column] for column in insert_columns]
+
         conn = sqlite3.connect(str(NEXO_DB))
         conn.execute(
-            "INSERT OR IGNORE INTO followups (id, description, date, status, created_at, updated_at, reasoning) VALUES (?, ?, ?, 'PENDING', ?, ?, ?)",
-            (fid, description, date, now, now, "Deep Sleep v2 overnight analysis")
+            f"INSERT OR IGNORE INTO followups ({', '.join(insert_columns)}) VALUES ({', '.join('?' for _ in insert_columns)})",
+            values,
         )
         conn.commit()
         conn.close()
-        return {"success": True, "id": fid}
+        return {"success": True, "id": fid, "outcome": "new_followup"}
     except Exception as e:
         return {"success": False, "error": str(e)}
 
@@ -964,7 +1390,8 @@ def apply_action(action: dict, run_id: str) -> dict:
     elif action_type == "followup_create":
         result = create_followup(
             description=content.get("description", content.get("title", "")),
-            date=content.get("date", "")
+            date=content.get("date", ""),
+            reasoning_note=content.get("reasoning", content.get("why", "")),
         )
         log_entry["status"] = "applied" if result.get("success") else "error"
         log_entry["details"] = result

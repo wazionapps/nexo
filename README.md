@@ -38,7 +38,7 @@ That means NEXO now manages not only the shared runtime and MCP wiring, but also
 - For Codex specifically, `nexo chat` and Codex headless automation inject the current bootstrap explicitly, so Codex starts as NEXO even when plain global Codex startup is inconsistent about global instructions.
 - Deep Sleep now reads both Claude Code and Codex transcript stores, so overnight analysis still works even when the user spends the day in Codex.
 
-Version `2.6.14` closes those parity gaps in practice, `2.6.15` hardens the installed-runtime migration path so existing users actually receive the managed bootstrap updates cleanly, `2.6.16` pushes the system further in three directions, `2.6.17` finishes the annoying last-mile migration bugs for real existing installs, `2.6.18` tightens the remaining practical gaps around manual Codex use, Deep Sleep horizon artifacts, and retrieval honesty, and `2.6.20` makes the recommended Claude profile explicit across installer, runtime defaults, existing installs, and the update path itself: `Opus 4.6 with 1M context`.
+Version `2.6.14` closes those parity gaps in practice, `2.6.15` hardens the installed-runtime migration path so existing users actually receive the managed bootstrap updates cleanly, `2.6.16` pushes the system further in three directions, `2.6.17` finishes the annoying last-mile migration bugs for real existing installs, `2.6.18` tightens the remaining practical gaps around manual Codex use, Deep Sleep horizon artifacts, and retrieval honesty, `2.6.20` makes the recommended Claude profile explicit across installer, runtime defaults, existing installs, and the update path itself with `Opus 4.6 with 1M context`, and `2.6.21` upgrades Deep Sleep from passive nightly analysis toward concrete engineering action.
 
 - Codex now gets managed global bootstrap/model sync in `~/.codex/config.toml`, so sessions opened outside `nexo chat` are much less likely to start as plain Codex.
 - Codex config now also persists a managed `mcp_servers.nexo` entry, so the shared brain survives even if ad-hoc Codex MCP state drifts.
@@ -47,6 +47,7 @@ Version `2.6.14` closes those parity gaps in practice, `2.6.15` hardens the inst
 - Retrieval explanations now surface confidence and the auto-strategy that fired, while associative expansion trims itself back to `top_k` instead of leaking low-signal neighbors.
 - Deep Sleep now blends recent context with older context over a 60-day horizon, and memory decay now tracks per-memory `stability` and `difficulty` instead of relying only on global decay constants.
 - Deep Sleep now also carries project-priority weighting into its long-horizon context and writes reusable weekly/monthly summary artifacts instead of reasoning only day by day.
+- Deep Sleep now semantically deduplicates followups, consolidates overlapping learnings, flags contradictory learnings for review, and backfills explicit engineering followups when recurring patterns imply a concrete fix.
 - Existing installs that already had NEXO connected to Codex now backfill that client state automatically during update/sync, so the managed Codex bootstrap actually lands without manual cleanup.
 - Bootstrap docs now fall back to the operator name `NEXO` when local metadata is blank, avoiding broken headings in `CLAUDE.md` and `AGENTS.md`.
 

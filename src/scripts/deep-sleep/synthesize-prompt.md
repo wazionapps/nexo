@@ -30,6 +30,15 @@ Synthesize across all sessions:
 - Cross-domain connections where an older learning or session sample explains a current issue
 - Topics repeatedly mentioned over time but never formalized into a learning or followup
 - Project pressure that is rising because of repeated diary mentions, open followups, or adverse outcomes
+- For medium/high-severity patterns, propose a concrete fix artifact:
+  - script
+  - hook
+  - checklist
+  - validation step
+  - workflow change
+  - guardrail
+
+Do not stop at diagnosis. Turn repeated problems into concrete engineering work.
 
 ### 2. Morning Agenda
 Generate a prioritized agenda for the next morning:
@@ -126,6 +135,14 @@ Merge and deduplicate all findings into a final action list. Each action should 
 - `dedupe_key`: deterministic key for idempotency
 - `content`: the actual data to write
 
+When generating `followup_create`, prefer descriptions that start with a concrete verb and include the deliverable:
+- "Add a pre-release validation script ..."
+- "Implement a guard hook that ..."
+- "Create a checklist for ..."
+- "Write a watchdog check that ..."
+
+Avoid vague followups that merely restate the diagnosis.
+
 ## Output Format
 
 Return ONLY valid JSON. No markdown code fences. No explanation text.
@@ -140,6 +157,12 @@ Return ONLY valid JSON. No markdown code fences. No explanation text.
       "pattern": "Description of the pattern",
       "sessions": ["session1.jsonl", "session2.jsonl"],
       "severity": "low|medium|high",
+      "proposed_fix": {
+        "title": "Short concrete fix title",
+        "description": "Concrete engineering change to make",
+        "deliverable": "script|hook|checklist|workflow|guardrail",
+        "confidence": 0.0
+      },
       "evidence": [
         {"type": "transcript", "session_id": "...", "message_index": 42, "quote": "..."}
       ]
