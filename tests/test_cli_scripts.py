@@ -460,7 +460,7 @@ class TestChatCommand:
             capture_output=True, text=True, timeout=30, env=env,
         )
         assert result.returncode == 0
-        assert json.loads(out_file.read_text()) == ["--model", "opus", "--dangerously-skip-permissions", "."]
+        assert json.loads(out_file.read_text()) == ["--model", "claude-opus-4-6[1m]", "--dangerously-skip-permissions", "."]
 
     def test_chat_uses_configured_codex_client(self, nexo_home, tmp_path):
         fake_codex = tmp_path / "codex"
@@ -485,7 +485,7 @@ class TestChatCommand:
             "automation_backend": "claude_code",
             "client_runtime_profiles": {
                 "claude_code": {
-                    "model": "opus",
+                    "model": "claude-opus-4-6[1m]",
                     "reasoning_effort": "",
                 },
                 "codex": {

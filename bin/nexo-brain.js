@@ -33,6 +33,10 @@ const LAUNCH_AGENTS = path.join(
 );
 const MACOS_FDA_SETTINGS_URL = "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles";
 const PUBLIC_CONTRIBUTION_UPSTREAM = "wazionapps/nexo";
+const DEFAULT_CLAUDE_CODE_MODEL = "claude-opus-4-6[1m]";
+const DEFAULT_CLAUDE_CODE_REASONING_EFFORT = "";
+const DEFAULT_CODEX_MODEL = "gpt-5.4";
+const DEFAULT_CODEX_REASONING_EFFORT = "xhigh";
 
 function isEphemeralInstall(nexoHome) {
   const homeDir = require("os").homedir();
@@ -103,6 +107,7 @@ function getCoreRuntimeFlatFiles() {
     "migrate_embeddings.py",
     "auto_close_sessions.py",
     "client_sync.py",
+    "client_runtime_defaults.py",
     "client_preferences.py",
     "agent_runner.py",
     "bootstrap_docs.py",
@@ -480,12 +485,12 @@ function getDefaultSchedule(timezone) {
     automation_backend: "claude_code",
     client_runtime_profiles: {
       claude_code: {
-        model: "opus",
-        reasoning_effort: "",
+        model: DEFAULT_CLAUDE_CODE_MODEL,
+        reasoning_effort: DEFAULT_CLAUDE_CODE_REASONING_EFFORT,
       },
       codex: {
-        model: "gpt-5.4",
-        reasoning_effort: "xhigh",
+        model: DEFAULT_CODEX_MODEL,
+        reasoning_effort: DEFAULT_CODEX_REASONING_EFFORT,
       },
     },
     client_install_preferences: {
@@ -656,12 +661,12 @@ async function askChoice(question, options, defaultValue) {
 function defaultClientRuntimeProfiles() {
   return {
     claude_code: {
-      model: "opus",
-      reasoning_effort: "",
+      model: DEFAULT_CLAUDE_CODE_MODEL,
+      reasoning_effort: DEFAULT_CLAUDE_CODE_REASONING_EFFORT,
     },
     codex: {
-      model: "gpt-5.4",
-      reasoning_effort: "xhigh",
+      model: DEFAULT_CODEX_MODEL,
+      reasoning_effort: DEFAULT_CODEX_REASONING_EFFORT,
     },
   };
 }
@@ -690,10 +695,11 @@ function runtimeProfileCatalog(lang, client) {
       customModelQuestionEn: `  Enter the model alias/name for ${runtimeClientLabel(client)} > `,
       customEffortQuestion: `  Escribe el effort para ${runtimeClientLabel(client)} (vacío = default) > `,
       customEffortQuestionEn: `  Enter the effort for ${runtimeClientLabel(client)} (blank = default) > `,
-      modelDefault: "opus",
+      modelDefault: DEFAULT_CLAUDE_CODE_MODEL,
       effortDefault: "",
       modelOptions: [
-        { value: "opus", label: `Opus latest${recommended}` },
+        { value: DEFAULT_CLAUDE_CODE_MODEL, label: `Opus 4.6 with 1M context${recommended}` },
+        { value: "claude-opus-4-6", label: "Opus 4.6" },
         { value: "sonnet", label: "Sonnet latest" },
         { value: "custom", label: lang === "es" ? "Modelo personalizado" : "Custom model" },
       ],
@@ -715,8 +721,8 @@ function runtimeProfileCatalog(lang, client) {
     customModelQuestionEn: `  Enter the model name for ${runtimeClientLabel(client)} > `,
     customEffortQuestion: `  Escribe el reasoning effort para ${runtimeClientLabel(client)} > `,
     customEffortQuestionEn: `  Enter the reasoning effort for ${runtimeClientLabel(client)} > `,
-    modelDefault: "gpt-5.4",
-    effortDefault: "xhigh",
+    modelDefault: DEFAULT_CODEX_MODEL,
+    effortDefault: DEFAULT_CODEX_REASONING_EFFORT,
     modelOptions: [
       { value: "gpt-5.4", label: `GPT-5.4${recommended}` },
       { value: "gpt-5.4-pro", label: "GPT-5.4 Pro" },

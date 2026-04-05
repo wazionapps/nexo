@@ -229,6 +229,9 @@ def _resolve_runtime_model_and_effort(
     if client == CLIENT_CODEX:
         if not requested_model or requested_model.lower() in CLAUDE_LEGACY_MODEL_HINTS:
             requested_model = profile["model"]
+    elif client == CLIENT_CLAUDE_CODE:
+        if not requested_model or requested_model.lower() in CLAUDE_LEGACY_MODEL_HINTS:
+            requested_model = profile["model"]
     elif not requested_model:
         requested_model = profile["model"]
 

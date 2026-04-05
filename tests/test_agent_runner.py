@@ -21,7 +21,7 @@ def test_build_interactive_client_command_uses_codex_when_selected(tmp_path, mon
             "automation_enabled": True,
             "automation_backend": "claude_code",
             "client_runtime_profiles": {
-                "claude_code": {"model": "opus", "reasoning_effort": ""},
+                "claude_code": {"model": "claude-opus-4-6[1m]", "reasoning_effort": ""},
                 "codex": {"model": "gpt-5.4", "reasoning_effort": "xhigh"},
             },
         },
@@ -48,14 +48,14 @@ def test_build_interactive_client_command_preserves_claude_flags(tmp_path, monke
             "automation_enabled": True,
             "automation_backend": "claude_code",
             "client_runtime_profiles": {
-                "claude_code": {"model": "opus", "reasoning_effort": ""},
+                "claude_code": {"model": "claude-opus-4-6[1m]", "reasoning_effort": ""},
                 "codex": {"model": "gpt-5.4", "reasoning_effort": "xhigh"},
             },
         },
     )
 
     assert client == "claude_code"
-    assert cmd == ["/tmp/fake-claude", "--model", "opus", "--dangerously-skip-permissions", str(tmp_path)]
+    assert cmd == ["/tmp/fake-claude", "--model", "claude-opus-4-6[1m]", "--dangerously-skip-permissions", str(tmp_path)]
 
 
 def test_run_automation_prompt_uses_claude_backend_command(monkeypatch, tmp_path):
@@ -69,7 +69,7 @@ def test_run_automation_prompt_uses_claude_backend_command(monkeypatch, tmp_path
         "automation_enabled": True,
         "automation_backend": "claude_code",
         "client_runtime_profiles": {
-            "claude_code": {"model": "opus", "reasoning_effort": ""},
+            "claude_code": {"model": "claude-opus-4-6[1m]", "reasoning_effort": ""},
             "codex": {"model": "gpt-5.4", "reasoning_effort": "xhigh"},
         },
     })
@@ -98,7 +98,7 @@ def test_run_automation_prompt_uses_claude_backend_command(monkeypatch, tmp_path
         "-p",
         "Do the thing",
         "--model",
-        "opus",
+        "claude-opus-4-6[1m]",
         "--output-format",
         "text",
         "--append-system-prompt",
@@ -122,7 +122,7 @@ def test_run_automation_prompt_uses_codex_exec_output_file(monkeypatch, tmp_path
         "automation_enabled": True,
         "automation_backend": "codex",
         "client_runtime_profiles": {
-            "claude_code": {"model": "opus", "reasoning_effort": ""},
+            "claude_code": {"model": "claude-opus-4-6[1m]", "reasoning_effort": ""},
             "codex": {"model": "gpt-5.4", "reasoning_effort": "xhigh"},
         },
     })
@@ -193,7 +193,7 @@ def test_codex_backend_maps_legacy_opus_hint_to_configured_profile(monkeypatch, 
         "automation_enabled": True,
         "automation_backend": "codex",
         "client_runtime_profiles": {
-            "claude_code": {"model": "opus", "reasoning_effort": ""},
+            "claude_code": {"model": "claude-opus-4-6[1m]", "reasoning_effort": ""},
             "codex": {"model": "gpt-5.4-mini", "reasoning_effort": "high"},
         },
     })
@@ -237,7 +237,7 @@ def test_codex_runner_skips_inline_bootstrap_when_global_bootstrap_is_managed(mo
             "automation_enabled": True,
             "automation_backend": "codex",
             "client_runtime_profiles": {
-                "claude_code": {"model": "opus", "reasoning_effort": ""},
+                "claude_code": {"model": "claude-opus-4-6[1m]", "reasoning_effort": ""},
                 "codex": {"model": "gpt-5.4", "reasoning_effort": "xhigh"},
             },
         },

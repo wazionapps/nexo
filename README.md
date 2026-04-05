@@ -38,7 +38,7 @@ That means NEXO now manages not only the shared runtime and MCP wiring, but also
 - For Codex specifically, `nexo chat` and Codex headless automation inject the current bootstrap explicitly, so Codex starts as NEXO even when plain global Codex startup is inconsistent about global instructions.
 - Deep Sleep now reads both Claude Code and Codex transcript stores, so overnight analysis still works even when the user spends the day in Codex.
 
-Version `2.6.14` closes those parity gaps in practice, `2.6.15` hardens the installed-runtime migration path so existing users actually receive the managed bootstrap updates cleanly, `2.6.16` pushes the system further in three directions, `2.6.17` finishes the annoying last-mile migration bugs for real existing installs, and `2.6.18` tightens the remaining practical gaps around manual Codex use, Deep Sleep horizon artifacts, and retrieval honesty:
+Version `2.6.14` closes those parity gaps in practice, `2.6.15` hardens the installed-runtime migration path so existing users actually receive the managed bootstrap updates cleanly, `2.6.16` pushes the system further in three directions, `2.6.17` finishes the annoying last-mile migration bugs for real existing installs, `2.6.18` tightens the remaining practical gaps around manual Codex use, Deep Sleep horizon artifacts, and retrieval honesty, and `2.6.19` makes the recommended Claude profile explicit across installer, runtime defaults, and existing installs: `Opus 4.6 with 1M context`.
 
 - Codex now gets managed global bootstrap/model sync in `~/.codex/config.toml`, so sessions opened outside `nexo chat` are much less likely to start as plain Codex.
 - Codex config now also persists a managed `mcp_servers.nexo` entry, so the shared brain survives even if ad-hoc Codex MCP state drifts.
@@ -645,7 +645,7 @@ nexo scripts list  # See your personal scripts
 During install, NEXO now asks which interactive clients you want to connect, which one `nexo chat` should open by default, whether to enable background automation, which backend should run that automation, and which model profile each active terminal/backend should use. Shared brain stays on in every mode.
 
 Recommended defaults:
-- Claude Code: `Opus latest`
+- Claude Code: `Opus 4.6 with 1M context`
 - Codex: `gpt-5.4` with `xhigh` reasoning
 
 Or use the shell alias created during install (e.g. `atlas`), which now runs `nexo chat .` so it opens whichever terminal client you selected as default.
@@ -726,7 +726,7 @@ The Doctor system reads existing health artifacts (immune, watchdog, self-audit)
 - **macOS or Linux** (Windows via [WSL](https://learn.microsoft.com/en-us/windows/wsl/install))
 - **Node.js 18+** (for the installer)
 - **Claude Code is the primary recommended client.** It remains the most mature NEXO path: native hooks, the most battle-tested automation contract, and the clearest parity with historical production behavior.
-- **Recommended profiles:** Claude Code + `Opus latest`; Codex + `gpt-5.4` with `xhigh` reasoning if you prefer Codex as your terminal or automation backend.
+- **Recommended profiles:** Claude Code + `Opus 4.6 with 1M context`; Codex + `gpt-5.4` with `xhigh` reasoning if you prefer Codex as your terminal or automation backend.
 - Python 3, Homebrew, and the selected required client/backend can be installed automatically when NEXO has a supported installer path for that dependency.
 
 ## Architecture
@@ -833,7 +833,7 @@ NEXO Brain is designed as an MCP server. Claude Code remains the primary recomme
 npx nexo-brain
 ```
 
-All 150+ tools are available immediately after installation. The installer configures Claude Code's `~/.claude/settings.json` automatically. The recommended Claude profile is `Opus latest`.
+All 150+ tools are available immediately after installation. The installer configures Claude Code's `~/.claude/settings.json` automatically. The recommended Claude profile is `Opus 4.6 with 1M context`.
 
 ### Claude Desktop
 

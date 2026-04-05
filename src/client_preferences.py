@@ -8,6 +8,7 @@ import sys
 import tomllib
 from pathlib import Path
 
+from client_runtime_defaults import default_client_runtime_profiles as build_default_client_runtime_profiles
 from runtime_power import load_schedule_config, save_schedule_config
 
 
@@ -36,18 +37,6 @@ INSTALL_PREFERENCE_KEYS = {
     "skip",
     "manual",
 }
-DEFAULT_CLIENT_RUNTIME_PROFILES = {
-    CLIENT_CLAUDE_CODE: {
-        "model": "opus",
-        "reasoning_effort": "",
-    },
-    CLIENT_CODEX: {
-        "model": "gpt-5.4",
-        "reasoning_effort": "xhigh",
-    },
-}
-
-
 def _user_home() -> Path:
     return Path(os.environ.get("HOME", str(Path.home()))).expanduser()
 
@@ -224,10 +213,7 @@ def normalize_client_install_preferences(value) -> dict[str, str]:
 
 
 def default_client_runtime_profiles() -> dict[str, dict[str, str]]:
-    return {
-        client_key: dict(profile)
-        for client_key, profile in DEFAULT_CLIENT_RUNTIME_PROFILES.items()
-    }
+    return build_default_client_runtime_profiles()
 
 
 def _normalize_runtime_model(value, *, default: str) -> str:

@@ -22,6 +22,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from client_runtime_defaults import default_client_runtime_profiles
+
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parent)))
@@ -79,16 +81,7 @@ def _schedule_defaults() -> dict:
         "default_terminal_client": "claude_code",
         "automation_enabled": True,
         "automation_backend": "claude_code",
-        "client_runtime_profiles": {
-            "claude_code": {
-                "model": "opus",
-                "reasoning_effort": "",
-            },
-            "codex": {
-                "model": "gpt-5.4",
-                "reasoning_effort": "xhigh",
-            },
-        },
+        "client_runtime_profiles": default_client_runtime_profiles(),
         "client_install_preferences": {
             "claude_code": "ask",
             "codex": "ask",

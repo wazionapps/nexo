@@ -14,7 +14,7 @@ def test_normalize_client_preferences_preserves_old_defaults(tmp_path):
     assert prefs["default_terminal_client"] == "claude_code"
     assert prefs["automation_enabled"] is True
     assert prefs["automation_backend"] == "claude_code"
-    assert prefs["client_runtime_profiles"]["claude_code"]["model"] == "opus"
+    assert prefs["client_runtime_profiles"]["claude_code"]["model"] == "claude-opus-4-6[1m]"
     assert prefs["client_runtime_profiles"]["codex"]["model"] == "gpt-5.4"
     assert prefs["client_runtime_profiles"]["codex"]["reasoning_effort"] == "xhigh"
 
@@ -49,7 +49,7 @@ def test_client_runtime_profiles_normalize_and_default():
         }
     )
 
-    assert prefs["client_runtime_profiles"]["claude_code"]["model"] == "opus"
+    assert prefs["client_runtime_profiles"]["claude_code"]["model"] == "claude-opus-4-6[1m]"
     assert prefs["client_runtime_profiles"]["codex"]["model"] == "gpt-5.4-mini"
     assert prefs["client_runtime_profiles"]["codex"]["reasoning_effort"] == "high"
 
