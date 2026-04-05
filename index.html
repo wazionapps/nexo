@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>NEXO Brain — Shared Brain for Claude Code, Codex, and MCP Agents</title>
-    <meta name="description" content="Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients. Persistent memory, configurable automation, smarter retrieval defaults, long-horizon Deep Sleep, and 150+ MCP tools.">
+    <meta name="description" content="Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients. Persistent memory, configurable automation, confidence-aware retrieval, long-horizon Deep Sleep, and 150+ MCP tools.">
     <meta name="keywords" content="AI memory, cognitive architecture, MCP, Claude Code, Codex, Claude Desktop, agent memory, vector search, AI agents, shared brain, open source">
     <meta name="author" content="WAzion">
     <meta name="robots" content="index, follow">
@@ -14,7 +14,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com">
     <meta property="og:title" content="NEXO Brain — Shared Brain for Claude Code, Codex, and MCP Agents">
-    <meta property="og:description" content="Open-source cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Configurable automation backend, smarter retrieval defaults, long-horizon Deep Sleep, and 150+ MCP tools.">
+    <meta property="og:description" content="Open-source cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Configurable automation backend, confidence-aware retrieval, long-horizon Deep Sleep, and 150+ MCP tools.">
     <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
     <meta property="og:image:width" content="1536">
     <meta property="og:image:height" content="1024">
@@ -22,7 +22,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="NEXO Brain — Shared Brain for Claude Code, Codex, and MCP Agents">
-    <meta name="twitter:description" content="Open-source cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Configurable automation backend, smarter retrieval defaults, long-horizon Deep Sleep, and 150+ MCP tools.">
+    <meta name="twitter:description" content="Open-source cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Configurable automation backend, confidence-aware retrieval, long-horizon Deep Sleep, and 150+ MCP tools.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
 
     <!-- Google Analytics (GA4) -->
@@ -46,12 +46,12 @@
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
         "name": "NEXO Brain",
-        "description": "Local cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Persistent memory, configurable automation backend, smarter retrieval defaults, long-horizon Deep Sleep, doctor diagnostics, personal scripts, and 150+ MCP tools.",
+        "description": "Local cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Persistent memory, configurable automation backend, confidence-aware retrieval, long-horizon Deep Sleep, doctor diagnostics, personal scripts, and 150+ MCP tools.",
         "applicationCategory": "DeveloperApplication",
         "operatingSystem": "macOS, Linux, Windows",
         "url": "https://nexo-brain.com",
         "downloadUrl": "https://www.npmjs.com/package/nexo-brain",
-        "softwareVersion": "2.6.17",
+        "softwareVersion": "2.6.18",
         "license": "https://www.gnu.org/licenses/agpl-3.0",
         "author": {
             "@type": "Organization",
@@ -88,7 +88,7 @@
         "@type": "WebSite",
         "name": "NEXO Brain",
         "url": "https://nexo-brain.com",
-        "description": "Local cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Persistent memory, configurable automation backend, smarter retrieval defaults, long-horizon Deep Sleep, doctor diagnostics, personal scripts, and 150+ MCP tools.",
+        "description": "Local cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Persistent memory, configurable automation backend, confidence-aware retrieval, long-horizon Deep Sleep, doctor diagnostics, personal scripts, and 150+ MCP tools.",
         "publisher": {
             "@type": "Organization",
             "name": "WAzion",
@@ -498,7 +498,7 @@
     <div class="container">
         <div class="hero-badge fade-up">
             <span class="dot"></span>
-            <span id="version-badge">v2.6.17</span> &mdash; installed Codex bootstrap sync hotfix plus smarter retrieval, long-horizon Deep Sleep, and stronger runtime parity
+            <span id="version-badge">v2.6.18</span> &mdash; Codex session parity audits, confidence-aware retrieval, weighted Deep Sleep summaries, and the morning reliability hotfix
         </div>
         <div class="fade-up" style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;">
             <img src="https://img.shields.io/npm/v/nexo-brain?color=7C3AED&label=npm" alt="npm version">
@@ -512,7 +512,7 @@
         </h1>
 
         <p class="hero-subtitle fade-up">
-            Give Claude Code, Codex, Claude Desktop, and other MCP clients the same local brain. Persistent memory, configurable automation, smarter retrieval, 60-day overnight learning, and recovery-aware self-healing on top of 150+ MCP tools.
+            Give Claude Code, Codex, Claude Desktop, and other MCP clients the same local brain. Persistent memory, configurable automation, confidence-aware retrieval, 60-day overnight learning with weekly/monthly summaries, and recovery-aware self-healing on top of 150+ MCP tools.
         </p>
 
         <div class="fade-up" style="display:flex;gap:16px;justify-content:center;margin-top:12px;margin-bottom:24px;flex-wrap:wrap;">
@@ -805,6 +805,43 @@
     <div class="container" style="text-align:center;">
         <img src="/assets/nexo-brain-infographic-v5.png" alt="NEXO Brain Architecture Infographic" style="max-width:800px;width:100%;border-radius:16px;box-shadow:0 8px 32px rgba(124,58,237,0.15);cursor:pointer;" class="fade-up" onclick="document.getElementById('infographic-modal').style.display='flex'" title="Click to enlarge">
         <p style="margin-top:12px;color:var(--gray);font-size:13px;">Click to view full size</p>
+    </div>
+</section>
+
+<!-- v2.6.18 Codex parity audits, Deep Sleep summaries, retrieval honesty -->
+<section class="feature-section">
+    <div class="container">
+        <div class="section-label">New in v2.6.18</div>
+        <h2 class="section-title">Codex Session Audits, Weighted Deep Sleep, and More Honest Retrieval</h2>
+        <p class="section-subtitle">This patch closes the remaining practical roadmap items around multi-client discipline: Codex now keeps a managed <code>mcp_servers.nexo</code> contract in config, runtime doctor audits real recent sessions instead of guessing, Deep Sleep writes higher-horizon summaries, and retrieval explains itself more honestly while trimming associative noise.</p>
+
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6"/><path d="M9 15h6"/><path d="M12 6v12"/></svg></div>
+                <h3>Managed Codex MCP Contract</h3>
+                <p>NEXO now persists a managed <code>mcp_servers.nexo</code> entry in <code>~/.codex/config.toml</code>, so the shared brain survives Codex MCP drift instead of depending only on a one-time CLI registration.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
+                <h3>Doctor Audits Real Session Discipline</h3>
+                <p>Runtime doctor now inspects recent Codex sessions for startup/heartbeat behavior and verifies Claude Desktop shared-brain metadata explicitly, instead of treating both as invisible best-effort wiring.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3"/><path d="M22 12h-4"/><path d="M12 22v-4"/></svg></div>
+                <h3>Weighted Deep Sleep Summaries</h3>
+                <p>Deep Sleep now writes weekly and monthly summaries and weights projects by diary activity, learnings, followups, and decisions, so higher-leverage work is easier to surface overnight.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-6"/></svg></div>
+                <h3>Confidence-Aware Retrieval</h3>
+                <p>Retrieval responses now show confidence and the auto-strategy that fired. Associative expansion also trims low-signal neighbors and re-slices back to <code>top_k</code> so exact lookups stay cleaner.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></div>
+                <h3>Deep Sleep Reliability Fix</h3>
+                <p>The overnight pipeline now accepts the nested synthesis output path produced by the current headless model flow, removing a false failure mode where the JSON already existed but the run still marked itself failed.</p>
+            </div>
+        </div>
     </div>
 </section>
 

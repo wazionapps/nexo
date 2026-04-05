@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXO 2.6.18: Codex Session Audits, Weekly Deep Sleep Memory, and Cleaner Retrieval</title>
+    <meta name="description" content="NEXO Brain 2.6.18 hardens the last practical roadmap gaps: managed Codex MCP config, real recent-session parity audits, weighted weekly/monthly Deep Sleep memory, cleaner retrieval explanations, and a Deep Sleep synthesis hotfix.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-2-6-18-codex-session-audits-deep-sleep-summaries/">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/blog/nexo-2-6-18-codex-session-audits-deep-sleep-summaries/">
+    <meta property="og:title" content="NEXO 2.6.18: Codex Session Audits, Weekly Deep Sleep Memory, and Cleaner Retrieval">
+    <meta property="og:description" content="Codex now keeps a managed shared-brain MCP contract in config, runtime doctor audits real recent sessions, Deep Sleep writes weekly/monthly summaries, and retrieval becomes more honest without getting noisier.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
+    <meta property="og:image:width" content="1536">
+    <meta property="og:image:height" content="1024">
+    <meta property="article:published_time" content="2026-04-05">
+    <meta property="article:author" content="Francisco Cerd&agrave; Puigserver">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO 2.6.18: Codex Session Audits, Weekly Deep Sleep Memory, and Cleaner Retrieval">
+    <meta name="twitter:description" content="Codex now keeps a managed shared-brain MCP contract in config, runtime doctor audits real recent sessions, Deep Sleep writes weekly/monthly summaries, and retrieval becomes more honest without getting noisier.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "NEXO 2.6.18: Codex Session Audits, Weekly Deep Sleep Memory, and Cleaner Retrieval",
+        "description": "NEXO Brain 2.6.18 hardens the last practical roadmap gaps: managed Codex MCP config, real recent-session parity audits, weighted weekly/monthly Deep Sleep memory, cleaner retrieval explanations, and a Deep Sleep synthesis hotfix.",
+        "datePublished": "2026-04-05",
+        "dateModified": "2026-04-05",
+        "author": {
+            "@type": "Person",
+            "name": "Francisco Cerd\u00e0 Puigserver"
+        },
+        "publisher": {
+            "@type": "Organization",
+            "name": "WAzion",
+            "url": "https://www.wazion.com"
+        },
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https://nexo-brain.com/blog/nexo-2-6-18-codex-session-audits-deep-sleep-summaries/"
+        },
+        "url": "https://nexo-brain.com/blog/nexo-2-6-18-codex-session-audits-deep-sleep-summaries/",
+        "image": "https://nexo-brain.com/assets/social-preview.png",
+        "keywords": ["NEXO Brain 2.6.18", "Codex", "Deep Sleep", "shared brain", "retrieval", "runtime doctor"]
+    }
+    </script>
+
+    <style>
+        .article-header { padding-top: 128px; padding-bottom: 40px; text-align: center; }
+        .article-meta { font-size: 14px; color: var(--text-muted); margin-bottom: 16px; }
+        .article-body {
+            max-width: 720px; margin: 0 auto; padding: 0 24px 80px;
+            font-size: 17px; line-height: 1.8; color: var(--text);
+        }
+        .article-body h2 { font-size: 28px; font-weight: 700; margin: 48px 0 16px; letter-spacing: -0.01em; }
+        .article-body p { margin-bottom: 20px; color: var(--text-muted); }
+        .article-body strong { color: var(--text); }
+        .article-body a { color: var(--purple-light); }
+        .article-body a:hover { color: var(--pink); }
+        .article-body ul { margin: 0 0 20px 24px; color: var(--text-muted); }
+        .article-body li { margin-bottom: 8px; }
+        .article-body code {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 14px; color: var(--pink);
+            background: rgba(236, 72, 153, 0.1);
+            padding: 2px 8px; border-radius: 4px;
+        }
+        .article-body pre {
+            background: var(--dark-card);
+            border: 1px solid var(--dark-border);
+            border-radius: 12px;
+            padding: 24px;
+            overflow-x: auto;
+            margin-bottom: 24px;
+        }
+        .article-body pre code {
+            background: none; padding: 0;
+            font-size: 15px; color: #22C55E;
+        }
+        .article-back {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 14px; font-weight: 600; color: var(--text-muted);
+            margin-bottom: 24px;
+        }
+        .article-back:hover { color: var(--purple-light); }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-64.png" alt="NEXO Brain" width="32" height="32">
+            NEXO Brain
+        </a>
+        <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/features/">Features</a>
+            <a href="/compare/">Compare</a>
+            <a href="/blog/">Blog</a>
+            <a href="/changelog/">Changelog</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<article>
+    <header class="article-header">
+        <div class="container">
+            <a href="/blog/" class="article-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg> Back to Blog</a>
+            <div class="article-meta">April 5, 2026 &middot; 5 min read</div>
+            <h1 class="section-title" style="font-size:clamp(28px,4.5vw,48px);max-width:860px;margin:0 auto 16px;">NEXO 2.6.18: Codex Session Audits, Weekly Deep Sleep Memory, and Cleaner Retrieval</h1>
+            <p class="section-subtitle">The shared-brain parity release was real. This patch is the one that makes the remaining practical edges visible, auditable, and harder to drift.</p>
+        </div>
+    </header>
+
+    <div class="article-body">
+        <p>By 2.6.17, NEXO already had the big parity story in place: Claude Code and Codex shared one brain, Codex could start as NEXO, and Deep Sleep could read both transcript stores. But a few practical gaps still mattered in daily use. 2.6.18 closes those gaps without pretending Codex and Claude Code expose the exact same surfaces.</p>
+
+        <h2>Codex Now Keeps a Managed Shared-Brain Contract in Config</h2>
+        <p>Before this patch, Codex wiring still leaned too much on the CLI path that registers MCP servers ad hoc. That worked, but it also meant the shared-brain contract could drift if local Codex state got out of sync.</p>
+        <p>2.6.18 now persists a managed <code>mcp_servers.nexo</code> entry directly in <code>~/.codex/config.toml</code>, alongside the existing bootstrap, model, and reasoning profile sync. In practice, that makes Codex much harder to knock out of shared-brain mode accidentally.</p>
+
+        <h2>Runtime Doctor Audits Real Recent Sessions</h2>
+        <p>The original parity work proved NEXO could wire Codex correctly. The next question was stricter: <strong>did real recent sessions actually start like NEXO sessions?</strong></p>
+        <p>2.6.18 teaches runtime doctor to inspect recent Codex session artifacts for startup markers, startup tool usage, and heartbeat discipline. It also verifies Claude Desktop shared-brain metadata explicitly, instead of treating Desktop as an invisible best-effort MCP attachment.</p>
+        <ul>
+            <li>Codex manual sessions are now auditable instead of assumed.</li>
+            <li>Claude Desktop shared-brain mode is now visible in runtime health.</li>
+            <li>New runtime changes are checked against fresh Claude-only regressions.</li>
+        </ul>
+
+        <h2>Deep Sleep Now Keeps Weekly and Monthly Memory</h2>
+        <p>Version 2.6.16 gave Deep Sleep a longer 60-day horizon. That was the right first move, but it still meant the overnight system could end up rediscovering similar patterns day after day.</p>
+        <p>2.6.18 adds reusable weekly and monthly summary artifacts, so Deep Sleep can carry higher-horizon memory forward explicitly. It also adds project-priority weighting based on diaries, learnings, followups, and decisions, which means the overnight system can rank work by leverage and pressure instead of raw recency alone.</p>
+        <ul>
+            <li>daily Deep Sleep still exists</li>
+            <li>weekly and monthly layers now exist too</li>
+            <li>important projects get stronger weighting when the system synthesizes what matters</li>
+        </ul>
+
+        <h2>Retrieval Gets More Honest Without Getting Noisier</h2>
+        <p>NEXO already auto-enabled HyDE and shallow spreading when the query shape suggested semantic or associative recall would help. The remaining problem was explainability and precision: users and agents should know <em>why</em> a result surfaced, and exact lookups should not be polluted by weak associative neighbors.</p>
+        <p>2.6.18 adds confidence and auto-strategy hints to retrieval explanations and trims associative expansion back to <code>top_k</code> after ranking. So the system becomes more transparent without regressing into noisier exact lookups.</p>
+
+        <h2>The Reliability Hotfix That Matters in Practice</h2>
+        <p>This patch also includes a targeted Deep Sleep reliability fix: the current headless model flow can write synthesis output into a nested path that the previous verification step did not always accept cleanly. That meant a run could produce the right JSON and still look failed.</p>
+        <p>2.6.18 accepts that nested output path correctly, which removes one of the most annoying false-failure modes in the overnight pipeline.</p>
+
+        <h2>Install or Update</h2>
+        <p>New install:</p>
+        <pre><code>npx nexo-brain</code></pre>
+        <p>Existing installation:</p>
+        <pre><code>nexo update</code></pre>
+        <p>Need to reapply shared-brain client wiring later?</p>
+        <pre><code>nexo clients sync</code></pre>
+        <p>See the full version history in the <a href="/changelog/">changelog</a>, or help tighten the next edges through <a href="https://github.com/wazionapps/nexo">issues and PRs on GitHub</a>.</p>
+    </div>
+</article>
+
+<section class="cta-section">
+    <div class="container">
+        <h2 class="section-title">Stress the shared brain across clients</h2>
+        <p class="section-subtitle" style="margin: 16px auto 48px;">
+            Install it, open real sessions, let it sleep overnight, and help push the next level of client parity and long-horizon cognition.
+        </p>
+        <div class="hero-actions">
+            <a href="https://github.com/wazionapps/nexo" class="btn btn-primary">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+                View on GitHub
+            </a>
+            <a href="/" class="btn btn-secondary">Back to Home</a>
+        </div>
+    </div>
+</section>
+
+</body>
+</html>

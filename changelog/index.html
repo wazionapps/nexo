@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v2.6.17.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v2.6.18.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v2.6.17.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v2.6.18.">
     <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
     <meta property="og:image:width" content="1536">
     <meta property="og:image:height" content="1024">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v2.6.17.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v2.6.18.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v2.6.17.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v2.6.18.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -83,6 +83,26 @@
         <div class="section-label">VERSION HISTORY</div>
         <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
         <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning.</p>
+    </div>
+</section>
+
+<!-- v2.6.18 Codex session parity, Deep Sleep summaries, retrieval honesty -->
+<section id="v2618" class="section-compact" style="background:linear-gradient(135deg,#221238 0%,#0F0A1A 100%);">
+    <div class="container">
+        <div class="section-label">New in v2.6.18 <span style="opacity:.5;font-weight:400;">&mdash; April 5, 2026</span></div>
+        <h2 class="section-title">Real Codex Session Audits, Weighted Deep Sleep, Cleaner Retrieval</h2>
+        <p class="section-subtitle">
+            2.6.18 closes the practical roadmap items after bootstrap parity: Codex now keeps a managed MCP contract in config, runtime doctor audits real recent sessions, Deep Sleep writes higher-horizon summaries, and retrieval explains itself more honestly while staying cleaner on exact lookups.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Managed <code>mcp_servers.nexo</code></h4><p>Codex sync now persists a managed shared-brain MCP entry in <code>~/.codex/config.toml</code>, instead of depending only on ad-hoc CLI MCP state.</p></div>
+                <div class="cognitive-card"><h4>Doctor Audits Real Sessions</h4><p>Runtime doctor now checks recent Codex sessions for startup discipline and verifies Claude Desktop shared-brain metadata explicitly.</p></div>
+                <div class="cognitive-card"><h4>Weekly / Monthly Deep Sleep Memory</h4><p>Deep Sleep now writes reusable weekly and monthly summary artifacts and weighs projects by activity, learnings, followups, and decisions.</p></div>
+                <div class="cognitive-card"><h4>Confidence-Aware Retrieval</h4><p>Retrieval responses now expose confidence and the auto-strategy that fired, while associative expansion trims low-signal neighbors back to <code>top_k</code>.</p></div>
+                <div class="cognitive-card"><h4>Nested Synthesis Output Hotfix</h4><p>Deep Sleep now accepts the nested synthesis output path produced by the current headless model flow, removing a false overnight failure mode.</p></div>
+            </div>
+        </div>
     </div>
 </section>
 
