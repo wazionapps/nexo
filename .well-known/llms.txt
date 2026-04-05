@@ -1,6 +1,6 @@
 # NEXO Brain
 
-> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v2.6.18).
+> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v2.6.20).
 
 NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It adds a local shared brain across supported clients, configurable terminal and automation backends, recovery-aware background jobs, startup preflight, runtime self-healing, smarter retrieval defaults, long-horizon overnight analysis, and 150+ MCP tools.
 
@@ -44,7 +44,7 @@ NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cogniti
 ## Recommended Defaults
 
 - Claude Code: recommended primary client
-- Claude Code model profile: Opus latest
+- Claude Code model profile: Opus 4.6 with 1M context
 - Codex model profile: GPT-5.4 xhigh
 
 ## Installation
@@ -78,6 +78,7 @@ nexo clients sync
 - Changelog: https://nexo-brain.com/changelog/
 - Blog: https://nexo-brain.com/blog/
 - Docs: https://nexo-brain.com/docs/
+- Install flow: https://nexo-brain.com/docs/install-flow/
 - GitHub: https://github.com/wazionapps/nexo
 - npm: https://www.npmjs.com/package/nexo-brain
 

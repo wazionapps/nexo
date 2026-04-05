@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEXO Install Flow — What Happens When You Run npx nexo-brain</title>
+    <meta name="description" content="Step-by-step install flow for NEXO Brain: runtime setup, shared-brain client connection, terminal client choice, automation backend, recommended model profiles, and post-install commands.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/docs/install-flow/">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/docs/install-flow/">
+    <meta property="og:title" content="NEXO Install Flow — What Happens When You Run npx nexo-brain">
+    <meta property="og:description" content="See the actual install flow for NEXO Brain: shared-brain setup, client selection, automation backend, and recommended model profiles.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
+    <meta property="og:image:width" content="1536">
+    <meta property="og:image:height" content="1024">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO Install Flow — What Happens When You Run npx nexo-brain">
+    <meta name="twitter:description" content="See the actual install flow for NEXO Brain: shared-brain setup, client selection, automation backend, and recommended model profiles.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "HowTo",
+        "name": "NEXO Brain install flow",
+        "description": "What happens when you run npx nexo-brain: runtime setup, shared-brain client configuration, terminal client choice, automation backend, and recommended model profiles.",
+        "step": [
+            {"@type": "HowToStep", "name": "Choose language and install path"},
+            {"@type": "HowToStep", "name": "Confirm operator identity and environment scan"},
+            {"@type": "HowToStep", "name": "Connect Claude Code, Codex, and Claude Desktop when available"},
+            {"@type": "HowToStep", "name": "Choose which client nexo chat opens"},
+            {"@type": "HowToStep", "name": "Choose whether background automation is enabled and which backend runs it"},
+            {"@type": "HowToStep", "name": "Apply recommended model profiles"},
+            {"@type": "HowToStep", "name": "Finish with nexo chat, nexo update, and nexo doctor ready"}
+        ],
+        "url": "https://nexo-brain.com/docs/install-flow/"
+    }
+    </script>
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-64.png" alt="NEXO Brain logo">
+            <span>NEXO Brain</span>
+        </a>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/features/">Features</a>
+            <a href="/compare/">Compare</a>
+            <a href="/blog/">Blog</a>
+            <a href="/changelog/">Changelog</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta">GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<main class="pt-nav">
+    <section>
+        <div class="container">
+            <div class="section-label">Install Flow</div>
+            <h1 style="font-size:clamp(34px,5vw,58px);margin-bottom:18px;text-align:center;">What Actually Happens When You Run <span class="gradient">npx nexo-brain</span></h1>
+            <p class="section-subtitle">This is the real product flow: not just “MCP setup”, but runtime installation, shared-brain configuration, client choice, automation choice, and recommended model profiles.</p>
+
+            <div class="code-block" style="max-width:820px;margin-bottom:36px;">
+                <div class="code-header">
+                    <span class="code-dot"></span><span class="code-dot"></span><span class="code-dot"></span>
+                    <span class="code-title">Terminal</span>
+                </div>
+                <div class="code-body">
+                    <span style="color:#94A3B8"># install NEXO Brain</span><br>
+                    <span style="color:#22C55E">$</span> <span style="color:#A78BFA">npx nexo-brain</span>
+                </div>
+            </div>
+
+            <div class="fit-grid">
+                <div class="fit-card">
+                    <div class="fit-step">1</div>
+                    <h3>Language, path, operator identity</h3>
+                    <p>The installer asks for language, where the runtime should live, and the operator identity NEXO should adopt. Shared brain is always on.</p>
+                </div>
+                <div class="fit-card">
+                    <div class="fit-step">2</div>
+                    <h3>Environment scan</h3>
+                    <p>NEXO checks what is already installed on the machine and looks for supported clients such as Claude Code, Codex, and Claude Desktop.</p>
+                </div>
+                <div class="fit-card">
+                    <div class="fit-step">3</div>
+                    <h3>Shared-brain clients</h3>
+                    <p>You decide which interactive clients to connect. Claude Code remains recommended, Codex is supported, and Claude Desktop can share the same brain through MCP.</p>
+                </div>
+                <div class="fit-card">
+                    <div class="fit-step">4</div>
+                    <h3>Terminal default</h3>
+                    <p>NEXO asks which client <code>nexo chat</code> should open by default, so you do not have to remember separate launch commands later.</p>
+                </div>
+                <div class="fit-card">
+                    <div class="fit-step">5</div>
+                    <h3>Automation backend</h3>
+                    <p>You choose whether background automation is enabled, and which backend should run it. Claude Code is still the primary recommended automation path.</p>
+                </div>
+                <div class="fit-card">
+                    <div class="fit-step">6</div>
+                    <h3>Model profiles</h3>
+                    <p>Recommended profiles are applied at install time: <strong>Claude Code → Opus 4.6 with 1M context</strong>, <strong>Codex → GPT-5.4 with xhigh reasoning</strong>.</p>
+                </div>
+            </div>
+
+            <div class="client-path-grid" style="margin-top:44px;">
+                <div class="client-path-card recommended">
+                    <h3>Recommended path</h3>
+                    <p>Install the runtime, use Claude Code as the default client, keep automation on Claude Code, and let Codex or Claude Desktop attach to the same shared brain when needed.</p>
+                </div>
+                <div class="client-path-card">
+                    <h3>After install</h3>
+                    <p>The runtime ends with the three commands that matter most ready to go: <code>nexo chat</code>, <code>nexo update</code>, and <code>nexo doctor</code>.</p>
+                </div>
+                <div class="client-path-card">
+                    <h3>If you add clients later</h3>
+                    <p>You can always resync them without reinstalling: <code>nexo clients sync</code>.</p>
+                </div>
+            </div>
+
+            <div class="release-evolution-actions" style="margin-top:34px;">
+                <a href="/" class="btn btn-secondary">Back to home</a>
+                <a href="/changelog/" class="btn btn-secondary">Read patch notes</a>
+                <a href="https://github.com/wazionapps/nexo/wiki" class="btn btn-primary">Open docs on GitHub</a>
+            </div>
+        </div>
+    </section>
+</main>
+</body>
+</html>

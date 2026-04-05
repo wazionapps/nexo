@@ -362,6 +362,80 @@
             background: rgba(124, 58, 237, 0.12); color: var(--purple-light);
         }
 
+        .fit-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 20px;
+        }
+
+        .fit-card {
+            background: var(--dark-card);
+            border: 1px solid var(--dark-border);
+            border-radius: 16px;
+            padding: 28px;
+            transition: all 0.3s;
+        }
+
+        .fit-card:hover {
+            border-color: rgba(124, 58, 237, 0.3);
+            box-shadow: var(--glow);
+            transform: translateY(-4px);
+        }
+
+        .fit-step {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            border-radius: 999px;
+            background: rgba(124, 58, 237, 0.12);
+            color: var(--purple-light);
+            font-weight: 800;
+            font-size: 14px;
+            margin-bottom: 14px;
+        }
+
+        .fit-card h3 { font-size: 19px; font-weight: 700; margin-bottom: 10px; }
+        .fit-card p { font-size: 15px; color: var(--text-muted); line-height: 1.65; }
+
+        .client-path-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 20px;
+        }
+
+        .client-path-card {
+            background: var(--dark-card);
+            border: 1px solid var(--dark-border);
+            border-radius: 16px;
+            padding: 26px;
+            transition: all 0.3s;
+        }
+
+        .client-path-card.recommended {
+            border-color: rgba(124, 58, 237, 0.35);
+            box-shadow: 0 0 0 1px rgba(124, 58, 237, 0.12) inset;
+        }
+
+        .client-path-card h3 { font-size: 19px; font-weight: 700; margin-bottom: 8px; }
+        .client-path-card p { font-size: 15px; color: var(--text-muted); line-height: 1.65; }
+        .client-path-card .tag-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 14px;
+        }
+        .client-path-card .tag-chip {
+            font-size: 12px;
+            font-weight: 700;
+            padding: 7px 10px;
+            border-radius: 999px;
+            background: rgba(124,58,237,0.08);
+            border: 1px solid rgba(124,58,237,0.2);
+            color: #C4B5FD;
+        }
+
         /* ===== Autonomous Processes ===== */
         .processes-grid {
             display: grid;

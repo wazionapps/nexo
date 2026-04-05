@@ -802,6 +802,30 @@
 <!-- Integrations -->
 <section id="integrations">
     <div class="container">
+        <div class="section-label">How It Fits</div>
+        <h2 class="section-title">One runtime, three decisions, much less fragmentation</h2>
+        <p class="section-subtitle">
+            NEXO is not just an MCP endpoint. The product flow is: install the runtime once, connect the clients you actually use, and let the same local brain drive both interactive sessions and background automation.
+        </p>
+
+        <div class="fit-grid" style="margin-bottom:56px;">
+            <div class="fit-card">
+                <div class="fit-step">1</div>
+                <h3>Install the runtime</h3>
+                <p><code>npx nexo-brain</code> sets up the local runtime, doctor/update commands, background schedules, embeddings, and the shared-brain MCP layer. This is the primary path.</p>
+            </div>
+            <div class="fit-card">
+                <div class="fit-step">2</div>
+                <h3>Connect your clients</h3>
+                <p>Claude Code, Codex, and Claude Desktop can all point to the same local NEXO brain. You choose which client <code>nexo chat</code> opens and which backend runs automation.</p>
+            </div>
+            <div class="fit-card">
+                <div class="fit-step">3</div>
+                <h3>Keep memory and automation aligned</h3>
+                <p>The value is not just persistence. It is one operator memory, one runtime truth, one recovery model, and one set of cognitive tools across your daily workflow.</p>
+            </div>
+        </div>
+
         <div class="section-label">Integrations</div>
         <h2 class="section-title">Connect NEXO Brain the way your stack needs</h2>
         <p class="section-subtitle">
@@ -826,6 +850,45 @@
                 <h3>ClawHub Skill</h3>
                 <p>Marketplace-friendly install path for people who already browse skills via ClawHub. It is the same NEXO engine underneath, just packaged for a faster discovery and one-click workflow.</p>
                 <span class="tag">Marketplace</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="feature-section">
+    <div class="container">
+        <div class="section-label">Recommended Path</div>
+        <h2 class="section-title">Why Claude Code is still the default recommendation</h2>
+        <p class="section-subtitle">
+            NEXO is now multi-client by design, but the three clients are not identical surfaces. The honest recommendation today is still Claude Code first, Codex second, Claude Desktop for shared-brain access.
+        </p>
+
+        <div class="client-path-grid">
+            <div class="client-path-card recommended">
+                <h3>Claude Code</h3>
+                <p>The deepest path today: strongest hook surface, most battle-tested headless automation, and the cleanest fit for overnight jobs. Recommended default profile: <strong>Opus 4.6 with 1M context</strong>.</p>
+                <div class="tag-row">
+                    <span class="tag-chip">Recommended</span>
+                    <span class="tag-chip">Hooks</span>
+                    <span class="tag-chip">Automation</span>
+                </div>
+            </div>
+            <div class="client-path-card">
+                <h3>Codex</h3>
+                <p>Now a real first-class option for terminal sessions and headless automation. It shares the same brain, model sync, and managed bootstrap, but still has fewer native hook surfaces than Claude Code.</p>
+                <div class="tag-row">
+                    <span class="tag-chip">Supported</span>
+                    <span class="tag-chip">Terminal</span>
+                    <span class="tag-chip">Backend</span>
+                </div>
+            </div>
+            <div class="client-path-card">
+                <h3>Claude Desktop</h3>
+                <p>Useful as a shared-brain client through MCP, but not the main terminal/automation surface. Best understood as another entry point into the same memory system, not the primary runtime operator.</p>
+                <div class="tag-row">
+                    <span class="tag-chip">Shared brain</span>
+                    <span class="tag-chip">MCP</span>
+                </div>
             </div>
         </div>
     </div>
@@ -1100,6 +1163,7 @@
                                 <p><strong>Claude Code</strong> remains the primary recommended path because it has the deepest hook and headless automation surface. The recommended Claude profile is now <strong>Opus 4.6 with 1M context</strong>.</p>
                                 <div class="install-flow-actions">
                                     <a class="install-flow-link" href="https://www.npmjs.com/package/nexo-brain">npm</a>
+                                    <a class="install-flow-link" href="/docs/install-flow/">Full install flow</a>
                                     <a class="install-flow-link" href="/changelog/#v2620">Patch notes</a>
                                 </div>
                             </div>

@@ -78,6 +78,7 @@ nexo clients sync
 - Changelog: https://nexo-brain.com/changelog/
 - Blog: https://nexo-brain.com/blog/
 - Docs: https://nexo-brain.com/docs/
+- Install flow: https://nexo-brain.com/docs/install-flow/
 - GitHub: https://github.com/wazionapps/nexo
 - npm: https://www.npmjs.com/package/nexo-brain
 
