@@ -36,6 +36,7 @@ Thumbs.db
 *_token.txt
 credentials*.json
 .mcpregistry_*
+.clawhub/
 
 # macOS Finder duplicates
 * 2*

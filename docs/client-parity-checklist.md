@@ -8,6 +8,16 @@ Use it in three situations:
 - after adding a new client-facing runtime feature
 - when an external client changes behavior and parity assumptions may have drifted
 
+Quick verification command:
+
+```bash
+python3 scripts/verify_client_parity.py
+```
+
+This command is also enforced in CI through:
+
+- `.github/workflows/verify-client-parity.yml`
+
 ## 1. Automatic Guardrails
 
 These should be covered by tests, `nexo doctor`, or CI. If one of these is not automated yet, treat it as technical debt.
