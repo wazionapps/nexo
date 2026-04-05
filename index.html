@@ -433,6 +433,148 @@
         50% { opacity: 0; }
     }
 
+    .install-flow-shell {
+        position: relative;
+        background: rgba(12, 12, 18, 0.95);
+        border: 1px solid rgba(124,58,237,0.18);
+        border-radius: 28px;
+        overflow: hidden;
+        box-shadow: 0 24px 80px rgba(0,0,0,0.28), 0 0 0 1px rgba(124,58,237,0.06) inset;
+    }
+    .install-flow-shell::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+            radial-gradient(circle at top left, rgba(124,58,237,0.08), transparent 35%),
+            radial-gradient(circle at bottom right, rgba(236,72,153,0.06), transparent 30%);
+        pointer-events: none;
+    }
+    .install-flow-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 18px 24px;
+        border-bottom: 1px solid rgba(255,255,255,0.06);
+        background: rgba(18,18,28,0.92);
+    }
+    .install-flow-dots {
+        display: flex;
+        gap: 8px;
+    }
+    .install-flow-dots span {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+    .install-flow-dots span:nth-child(1) { background: #ff5f57; }
+    .install-flow-dots span:nth-child(2) { background: #febc2e; }
+    .install-flow-dots span:nth-child(3) { background: #28c840; }
+    .install-flow-title {
+        color: #94A3B8;
+        font-size: 14px;
+        letter-spacing: 0.01em;
+    }
+    .install-flow-body {
+        position: relative;
+        padding: 28px 28px 32px;
+    }
+    .install-flow-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+        gap: 24px;
+        align-items: start;
+    }
+    .install-flow-screen {
+        min-height: 460px;
+        background: rgba(8, 8, 14, 0.82);
+        border: 1px solid rgba(255,255,255,0.05);
+        border-radius: 18px;
+        padding: 20px 22px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 14px;
+        line-height: 1.7;
+        color: #D6D6E7;
+        box-shadow: inset 0 0 0 1px rgba(255,255,255,0.02);
+    }
+    .install-flow-line {
+        white-space: pre-wrap;
+    }
+    .install-flow-line + .install-flow-line {
+        margin-top: 2px;
+    }
+    .install-flow-dim { color: #7C869C; }
+    .install-flow-prompt { color: #A78BFA; }
+    .install-flow-answer { color: #22C55E; }
+    .install-flow-note { color: #F472B6; }
+    .install-flow-ok { color: #60A5FA; }
+    .install-flow-cursor {
+        display: inline-block;
+        width: 8px;
+        height: 17px;
+        margin-left: 2px;
+        vertical-align: -2px;
+        background: #A78BFA;
+        animation: blink-cursor 1s step-end infinite;
+    }
+    .install-flow-side {
+        display: grid;
+        gap: 14px;
+    }
+    .install-flow-card {
+        background: rgba(17,17,25,0.78);
+        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 18px;
+        padding: 18px 18px 16px;
+    }
+    .install-flow-card h3 {
+        margin: 0 0 10px;
+        font-size: 15px;
+        color: #F8FAFC;
+    }
+    .install-flow-card p {
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.65;
+        color: #94A3B8;
+    }
+    .install-flow-card strong {
+        color: #E2E8F0;
+    }
+    .install-flow-chip-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 14px;
+    }
+    .install-flow-chip {
+        font-size: 12px;
+        font-weight: 600;
+        padding: 7px 10px;
+        border-radius: 999px;
+        border: 1px solid rgba(124,58,237,0.22);
+        background: rgba(124,58,237,0.08);
+        color: #C4B5FD;
+    }
+    .install-flow-actions {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-top: 18px;
+    }
+    .install-flow-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: #C4B5FD;
+        font-weight: 600;
+        text-decoration: none;
+    }
+    .install-flow-link:hover {
+        color: #F472B6;
+    }
+
     /* ===== Stat Counter ===== */
     .stat-icon {
         transition: all 0.3s ease;
@@ -459,6 +601,9 @@
 .brain-svg.active .stem circle:nth-child(3) { animation-delay: 1s; }
 .brain-svg.active .stem circle:nth-child(4) { animation-delay: 1.5s; }
 @keyframes node-pulse { 0% { r: 0.5; opacity: 0.6; } 100% { r: 0.8; opacity: 1; } }
+        .install-flow-grid { grid-template-columns: 1fr; }
+        .install-flow-screen { min-height: 420px; font-size: 13px; }
+        .install-flow-body { padding: 18px; }
     }
     </style>
 </head>
@@ -989,6 +1134,46 @@
                 <span class="cmd">$</span> docker run <span class="flag">-v</span> <span class="str">~/.nexo:/data</span> nexo-brain<br><br>
                 <span class="comment"># Re-sync clients later if you install a new one:</span><br>
                 <span class="cmd">$</span> <span class="str">nexo clients sync</span>
+            </div>
+        </div>
+
+        <div style="margin-top:32px;">
+            <div class="install-flow-shell">
+                <div class="install-flow-header">
+                    <div class="install-flow-dots" aria-hidden="true">
+                        <span></span><span></span><span></span>
+                    </div>
+                    <div class="install-flow-title">Installer preview</div>
+                </div>
+                <div class="install-flow-body">
+                    <div class="install-flow-grid">
+                        <div class="install-flow-screen" id="install-flow-screen" aria-label="Animated NEXO installer preview"></div>
+                        <div class="install-flow-side">
+                            <div class="install-flow-card">
+                                <h3>What this preview shows</h3>
+                                <p>A condensed run of <strong>`npx nexo-brain`</strong>: language, install path, shared-brain clients, default terminal client, automation backend, and recommended model profiles.</p>
+                                <div class="install-flow-chip-row">
+                                    <span class="install-flow-chip">Claude Code recommended</span>
+                                    <span class="install-flow-chip">Opus 4.6 with 1M</span>
+                                    <span class="install-flow-chip">Codex optional</span>
+                                    <span class="install-flow-chip">GPT-5.4 xhigh</span>
+                                </div>
+                            </div>
+                            <div class="install-flow-card">
+                                <h3>Why it matters</h3>
+                                <p>People can see the setup experience before they install: NEXO does not just wire MCP. It configures the shared brain, lets you choose the client that <strong>`nexo chat`</strong> opens, and decides which backend runs background automation.</p>
+                            </div>
+                            <div class="install-flow-card">
+                                <h3>Current recommendation</h3>
+                                <p><strong>Claude Code</strong> remains the primary recommended path because it has the deepest hook and headless automation surface. The recommended Claude profile is now <strong>Opus 4.6 with 1M context</strong>.</p>
+                                <div class="install-flow-actions">
+                                    <a class="install-flow-link" href="https://www.npmjs.com/package/nexo-brain">npm</a>
+                                    <a class="install-flow-link" href="/changelog/#v2620">Patch notes</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -1573,6 +1758,128 @@ function copyInstall(btn) {
         });
     }, { threshold: 0.5 });
     obs.observe(installBlock);
+})();
+
+// ===== Install Flow Preview =====
+(function() {
+    var screen = document.getElementById('install-flow-screen');
+    if (!screen) return;
+
+    var lines = [
+        '<span class="install-flow-dim"># npx nexo-brain</span>',
+        '<span class="install-flow-prompt">?</span> Preferred language <span class="install-flow-answer">English</span>',
+        '<span class="install-flow-prompt">?</span> Install path <span class="install-flow-answer">~/.nexo</span>',
+        '<span class="install-flow-prompt">?</span> Your name <span class="install-flow-answer">Francisco</span>',
+        '<span class="install-flow-prompt">?</span> Operator name <span class="install-flow-answer">NEXO</span>',
+        '<span class="install-flow-prompt">?</span> Deep environment scan <span class="install-flow-answer">Yes, analyze everything</span>',
+        '<span class="install-flow-note">› Shared brain is always on</span>',
+        '<span class="install-flow-prompt">?</span> Use Claude Code as interactive client <span class="install-flow-answer">Yes</span>',
+        '<span class="install-flow-prompt">?</span> Use Codex as interactive client <span class="install-flow-answer">Yes</span>',
+        '<span class="install-flow-prompt">?</span> Connect Claude Desktop <span class="install-flow-answer">Yes</span>',
+        '<span class="install-flow-prompt">?</span> Default client for <span class="install-flow-dim">nexo chat</span> <span class="install-flow-answer">Claude Code</span>',
+        '<span class="install-flow-prompt">?</span> Enable background automation <span class="install-flow-answer">Yes</span>',
+        '<span class="install-flow-prompt">?</span> Automation backend <span class="install-flow-answer">Claude Code</span>',
+        '<span class="install-flow-prompt">?</span> Claude model profile <span class="install-flow-answer">Opus 4.6 with 1M context</span>',
+        '<span class="install-flow-prompt">?</span> Codex model profile <span class="install-flow-answer">GPT-5.4 · xhigh</span>',
+        '<span class="install-flow-ok">✓</span> Shared brain configured for Claude Code, Codex, Claude Desktop',
+        '<span class="install-flow-ok">✓</span> <span class="install-flow-dim">nexo chat</span>, <span class="install-flow-dim">nexo update</span>, and <span class="install-flow-dim">nexo doctor</span> ready'
+    ];
+
+    var typed = false;
+    var flowObserver = new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) {
+            if (entry.isIntersecting && !typed) {
+                typed = true;
+                runInstallFlow(lines, screen);
+            }
+        });
+    }, { threshold: 0.25 });
+
+    flowObserver.observe(screen);
+
+    function runInstallFlow(items, target) {
+        var lineIndex = 0;
+        target.innerHTML = '';
+
+        function typeNextLine() {
+            if (lineIndex >= items.length) {
+                setTimeout(function() {
+                    typed = false;
+                    target.innerHTML = '';
+                    runInstallFlow(items, target);
+                }, 3200);
+                return;
+            }
+
+            var wrapper = document.createElement('div');
+            wrapper.className = 'install-flow-line';
+            target.appendChild(wrapper);
+
+            typeHtml(items[lineIndex], wrapper, function() {
+                lineIndex += 1;
+                target.scrollTop = target.scrollHeight;
+                setTimeout(typeNextLine, lineIndex === 7 ? 420 : 120);
+            });
+        }
+
+        typeNextLine();
+    }
+
+    function typeHtml(html, container, done) {
+        var parser = document.createElement('div');
+        parser.innerHTML = html;
+        var nodes = Array.prototype.slice.call(parser.childNodes);
+        var cursor = document.createElement('span');
+        cursor.className = 'install-flow-cursor';
+        container.appendChild(cursor);
+
+        function appendNodeWithTyping(node, parent, next) {
+            if (node.nodeType === Node.TEXT_NODE) {
+                var text = node.textContent || '';
+                var idx = 0;
+                var textNode = document.createTextNode('');
+                parent.insertBefore(textNode, cursor);
+
+                (function typeChar() {
+                    if (idx < text.length) {
+                        textNode.textContent += text[idx++];
+                        container.parentElement.scrollTop = container.parentElement.scrollHeight;
+                        setTimeout(typeChar, 14 + Math.random() * 18);
+                        return;
+                    }
+                    next();
+                })();
+                return;
+            }
+
+            if (node.nodeType === Node.ELEMENT_NODE) {
+                var el = document.createElement(node.tagName.toLowerCase());
+                if (node.className) el.className = node.className;
+                parent.insertBefore(el, cursor);
+                var children = Array.prototype.slice.call(node.childNodes);
+                appendChildren(children, el, next);
+                return;
+            }
+
+            next();
+        }
+
+        function appendChildren(children, parent, doneChildren) {
+            var idx = 0;
+            (function nextChild() {
+                if (idx >= children.length) {
+                    doneChildren();
+                    return;
+                }
+                appendNodeWithTyping(children[idx++], parent, nextChild);
+            })();
+        }
+
+        appendChildren(nodes, container, function() {
+            cursor.remove();
+            done();
+        });
+    }
 })();
 
 // ===== Fetch live version from npm =====
