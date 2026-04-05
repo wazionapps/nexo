@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXO 2.6.17: The Codex Bootstrap Hotfix Existing Installs Actually Needed</title>
+    <meta name="description" content="NEXO Brain 2.6.17 fixes the last migration gap for existing Codex-linked installs: managed bootstrap sync now backfills correctly, blank bootstrap identities are repaired, and the fix persists across later updates.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-2-6-17-installed-codex-bootstrap-hotfix/">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/blog/nexo-2-6-17-installed-codex-bootstrap-hotfix/">
+    <meta property="og:title" content="NEXO 2.6.17: The Codex Bootstrap Hotfix Existing Installs Actually Needed">
+    <meta property="og:description" content="Older Codex-linked NEXO installs now backfill cleanly during update, bootstrap docs stop rendering blank identities, and the repaired client state persists for future syncs.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
+    <meta property="og:image:width" content="1536">
+    <meta property="og:image:height" content="1024">
+    <meta property="article:published_time" content="2026-04-05">
+    <meta property="article:author" content="Francisco Cerd&agrave; Puigserver">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO 2.6.17: The Codex Bootstrap Hotfix Existing Installs Actually Needed">
+    <meta name="twitter:description" content="Older Codex-linked NEXO installs now backfill cleanly during update, bootstrap docs stop rendering blank identities, and the repaired client state persists for future syncs.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "NEXO 2.6.17: The Codex Bootstrap Hotfix Existing Installs Actually Needed",
+        "description": "NEXO Brain 2.6.17 fixes the last migration gap for existing Codex-linked installs: managed bootstrap sync now backfills correctly, blank bootstrap identities are repaired, and the fix persists across later updates.",
+        "datePublished": "2026-04-05",
+        "dateModified": "2026-04-05",
+        "author": {
+            "@type": "Person",
+            "name": "Francisco Cerd\u00e0 Puigserver"
+        },
+        "publisher": {
+            "@type": "Organization",
+            "name": "WAzion",
+            "url": "https://www.wazion.com"
+        },
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https://nexo-brain.com/blog/nexo-2-6-17-installed-codex-bootstrap-hotfix/"
+        },
+        "url": "https://nexo-brain.com/blog/nexo-2-6-17-installed-codex-bootstrap-hotfix/",
+        "image": "https://nexo-brain.com/assets/social-preview.png",
+        "keywords": ["NEXO Brain 2.6.17", "Codex", "bootstrap", "shared brain", "nexo update"]
+    }
+    </script>
+
+    <style>
+        .article-header { padding-top: 128px; padding-bottom: 40px; text-align: center; }
+        .article-meta { font-size: 14px; color: var(--text-muted); margin-bottom: 16px; }
+        .article-body {
+            max-width: 720px; margin: 0 auto; padding: 0 24px 80px;
+            font-size: 17px; line-height: 1.8; color: var(--text);
+        }
+        .article-body h2 { font-size: 28px; font-weight: 700; margin: 48px 0 16px; letter-spacing: -0.01em; }
+        .article-body p { margin-bottom: 20px; color: var(--text-muted); }
+        .article-body strong { color: var(--text); }
+        .article-body a { color: var(--purple-light); }
+        .article-body a:hover { color: var(--pink); }
+        .article-body ul { margin: 0 0 20px 24px; color: var(--text-muted); }
+        .article-body li { margin-bottom: 8px; }
+        .article-body code {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 14px; color: var(--pink);
+            background: rgba(236, 72, 153, 0.1);
+            padding: 2px 8px; border-radius: 4px;
+        }
+        .article-body pre {
+            background: var(--dark-card);
+            border: 1px solid var(--dark-border);
+            border-radius: 12px;
+            padding: 24px;
+            overflow-x: auto;
+            margin-bottom: 24px;
+        }
+        .article-body pre code {
+            background: none; padding: 0;
+            font-size: 15px; color: #22C55E;
+        }
+        .article-back {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 14px; font-weight: 600; color: var(--text-muted);
+            margin-bottom: 24px;
+        }
+        .article-back:hover { color: var(--purple-light); }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-64.png" alt="NEXO Brain" width="32" height="32">
+            NEXO Brain
+        </a>
+        <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/features/">Features</a>
+            <a href="/compare/">Compare</a>
+            <a href="/blog/">Blog</a>
+            <a href="/changelog/">Changelog</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<article>
+    <header class="article-header">
+        <div class="container">
+            <a href="/blog/" class="article-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg> Back to Blog</a>
+            <div class="article-meta">April 5, 2026 &middot; 4 min read</div>
+            <h1 class="section-title" style="font-size:clamp(28px,4.5vw,48px);max-width:860px;margin:0 auto 16px;">NEXO 2.6.17: The Codex Bootstrap Hotfix Existing Installs Actually Needed</h1>
+            <p class="section-subtitle">The parity release was real. This patch is the part that makes sure older real-world installs actually receive it without manual cleanup.</p>
+        </div>
+    </header>
+
+    <div class="article-body">
+        <p>Version 2.6.16 made NEXO much stronger in mixed Claude Code and Codex setups. But one ugly edge case remained: some existing installs already had NEXO artifacts inside Codex while their stored client preferences still said <code>codex=false</code>. That meant <code>nexo update</code> could still skip the new managed Codex bootstrap sync even though the user clearly had NEXO wired into Codex already.</p>
+
+        <h2>The Real Existing-Install Bug</h2>
+        <p>The shared-brain model was correct, but the migration path still had one blind spot. NEXO knew how to manage <code>~/.codex/config.toml</code> and <code>~/.codex/AGENTS.md</code>, yet some older installs did not automatically re-enable Codex as an interactive client during normalization. So the new sync path existed but the update flow could decide not to use it.</p>
+        <p>2.6.17 fixes that by looking for conservative evidence that Codex is already part of the user's NEXO setup, such as managed bootstrap artifacts or an existing <code>mcp_servers.nexo</code> entry.</p>
+
+        <h2>What the Patch Changes</h2>
+        <ul>
+            <li>Existing Codex-linked installs now backfill <code>interactive_clients.codex</code> during normalization when NEXO-managed Codex artifacts already exist.</li>
+            <li>Runtime update flows persist that repaired client preference before syncing shared client configs.</li>
+            <li>Managed bootstrap rendering now falls back to the operator name <code>NEXO</code> when local metadata is blank or missing.</li>
+        </ul>
+
+        <h2>Why the Operator Name Fix Matters</h2>
+        <p>Without that fallback, managed bootstrap docs could render broken identity headings like <code>#  — Cognitive Co-Operator</code> or <code>You are , a cognitive co-operator...</code>. The runtime still mostly worked, but the startup contract looked visibly wrong and made the managed bootstrap feel less trustworthy.</p>
+        <p>Now the fallback is explicit and safe: if no operator name is available, the bootstrap identity becomes <code>NEXO</code>.</p>
+
+        <h2>What This Means for Existing Users</h2>
+        <p>If you already had NEXO connected to Codex before the latest parity work, you should no longer need manual cleanup just to get the new managed global bootstrap/model sync. The update flow now recognizes that older state, repairs it, persists it, and then finishes the client sync correctly.</p>
+        <ul>
+            <li>Codex gets the managed startup bootstrap it was supposed to receive.</li>
+            <li><code>CLAUDE.md</code> and <code>AGENTS.md</code> render a sane identity again.</li>
+            <li>Later updates stay aligned because the repaired preference is now written back to disk.</li>
+        </ul>
+
+        <h2>Install or Update</h2>
+        <p>New install:</p>
+        <pre><code>npx nexo-brain</code></pre>
+        <p>Existing installation:</p>
+        <pre><code>nexo update</code></pre>
+        <p>Need to reapply shared-brain client wiring later?</p>
+        <pre><code>nexo clients sync</code></pre>
+        <p>Read the full release history in the <a href="/changelog/">changelog</a> or contribute ideas and fixes on <a href="https://github.com/wazionapps/nexo">GitHub</a>.</p>
+    </div>
+</article>
+
+<section class="cta-section">
+    <div class="container">
+        <h2 class="section-title">Ship the shared brain properly</h2>
+        <p class="section-subtitle" style="margin: 16px auto 48px;">
+            Install it, stress it across clients, and help tighten the last real-world edges with issues and PRs.
+        </p>
+        <div class="hero-actions">
+            <a href="https://github.com/wazionapps/nexo" class="btn btn-primary">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+                View on GitHub
+            </a>
+            <a href="/" class="btn btn-secondary">Back to Home</a>
+        </div>
+    </div>
+</section>
+
+</body>
+</html>
