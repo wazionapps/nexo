@@ -18,6 +18,10 @@ Thanks for your interest in contributing to NEXO. This guide will help you get s
 4. Run tests: `python -m pytest tests/`
 5. Submit a PR with a clear description
 
+If your PR touches bootstrap, startup, Deep Sleep, session handling, client sync, or public client-parity claims, also review:
+
+- [docs/client-parity-checklist.md](docs/client-parity-checklist.md)
+
 ### Code style
 
 - Python: Follow PEP 8, use type hints
@@ -78,6 +82,10 @@ Maintainers handle releases. Version bumps follow SemVer:
 - **Patch** (0.1.x): Bug fixes, small improvements
 - **Minor** (0.x.0): New features, new tools, new plugins
 - **Major** (x.0.0): Breaking changes to tool signatures or DB schema
+
+For releases that touch client parity, shared-brain behavior, bootstrap, startup, or Deep Sleep, use:
+
+- [docs/client-parity-checklist.md](docs/client-parity-checklist.md)
 
 ## Code of Conduct
 

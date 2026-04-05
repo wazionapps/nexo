@@ -662,6 +662,9 @@ NEXO is being hardened in public, and the best contributions now are not only co
 
 The project still recommends Claude Code as the primary path, but contributions that improve Codex, client parity, installer clarity, and ecosystem integrations are especially valuable.
 
+Maintainers and contributors touching startup, bootstrap, Deep Sleep, or shared-brain behavior should also use the client parity checklist:
+- [docs/client-parity-checklist.md](docs/client-parity-checklist.md)
+
 ### What Gets Installed
 
 | Component | What | Where |
@@ -920,6 +923,7 @@ If NEXO Brain is useful to you, consider:
 - **[Sponsor on GitHub](https://github.com/sponsors/wazionapps)** — support ongoing development directly
 - **Share your experience** — tell others how you're using cognitive memory in your AI workflows
 - **Contribute** — see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines. Issues and PRs welcome
+- **Client parity / shared-brain maintenance** — see [docs/client-parity-checklist.md](docs/client-parity-checklist.md)
 
 [![Star History Chart](https://api.star-history.com/svg?repos=wazionapps/nexo&type=Date)](https://star-history.com/#wazionapps/nexo&Date)
 
