@@ -509,10 +509,10 @@ class TestChatCommand:
         )
         assert result.returncode == 0
         argv = json.loads(out_file.read_text())
-        assert argv[:3] == ["--full-auto", "-c", argv[2]]
-        assert argv[2].startswith('initial_messages=[{role="system",content=')
-        assert ["-m", "gpt-5.4"] == argv[3:5]
-        assert ["-c", 'model_reasoning_effort="xhigh"'] == argv[5:7]
+        assert argv[:5] == ["--sandbox", "danger-full-access", "--ask-for-approval", "never", "-c"]
+        assert argv[5].startswith('initial_messages=[{role="system",content=')
+        assert ["-m", "gpt-5.4"] == argv[6:8]
+        assert ["-c", 'model_reasoning_effort="xhigh"'] == argv[8:10]
         assert argv[-2:] == ["-C", "."]
 
     def test_chat_prompts_when_multiple_clients_are_available_and_reorders_to_last_used(self, nexo_home, tmp_path):

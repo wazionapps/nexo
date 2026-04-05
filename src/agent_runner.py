@@ -110,8 +110,7 @@ def _codex_initial_messages_config(prompt_text: str) -> str:
 
 
 def _codex_interactive_launch_flags() -> list[str]:
-    # `--full-auto` already expands to a compatible sandboxed approval policy.
-    return ["--full-auto"]
+    return ["--sandbox", "danger-full-access", "--ask-for-approval", "never"]
 
 
 def build_interactive_client_command(

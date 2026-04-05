@@ -29,11 +29,17 @@ def test_build_interactive_client_command_uses_codex_when_selected(tmp_path, mon
     )
 
     assert client == "codex"
-    assert cmd[:2] == ["/tmp/fake-codex", "--full-auto"]
-    assert "--dangerously-bypass-approvals-and-sandbox" not in cmd
-    assert cmd[2:4] == ["-c", 'initial_messages=[{role="system",content="You are NEXO."}]']
-    assert cmd[4:6] == ["-m", "gpt-5.4"]
-    assert cmd[6:8] == ["-c", 'model_reasoning_effort="xhigh"']
+    assert cmd[:5] == [
+        "/tmp/fake-codex",
+        "--sandbox",
+        "danger-full-access",
+        "--ask-for-approval",
+        "never",
+    ]
+    assert "--full-auto" not in cmd
+    assert cmd[5:7] == ["-c", 'initial_messages=[{role="system",content="You are NEXO."}]']
+    assert cmd[7:9] == ["-m", "gpt-5.4"]
+    assert cmd[9:11] == ["-c", 'model_reasoning_effort="xhigh"']
     assert cmd[-2:] == ["-C", str(tmp_path)]
 
 
@@ -246,14 +252,20 @@ def test_codex_runner_skips_inline_bootstrap_when_global_bootstrap_is_managed(mo
     )
 
     assert client == "codex"
-    assert cmd[:2] == ["/tmp/fake-codex", "--full-auto"]
-    assert "--dangerously-bypass-approvals-and-sandbox" not in cmd
+    assert cmd[:5] == [
+        "/tmp/fake-codex",
+        "--sandbox",
+        "danger-full-access",
+        "--ask-for-approval",
+        "never",
+    ]
+    assert "--full-auto" not in cmd
     config_values = [cmd[idx + 1] for idx, part in enumerate(cmd) if part == "-c"]
     assert not any("initial_messages=" in value for value in config_values)
     assert 'model_reasoning_effort="xhigh"' in config_values
 
 
-def test_build_followup_terminal_shell_command_uses_codex_full_auto_only(monkeypatch, tmp_path):
+def test_build_followup_terminal_shell_command_uses_codex_interactive_flags(monkeypatch, tmp_path):
     import agent_runner
 
     monkeypatch.setattr(agent_runner, "_resolve_codex_cli", lambda: "/tmp/fake-codex")
@@ -278,6 +290,12 @@ def test_build_followup_terminal_shell_command_uses_codex_full_auto_only(monkeyp
 
     assert client == "codex"
     parsed = shlex.split(command)
-    assert parsed[:2] == ["/tmp/fake-codex", "--full-auto"]
-    assert "--dangerously-bypass-approvals-and-sandbox" not in parsed
+    assert parsed[:5] == [
+        "/tmp/fake-codex",
+        "--sandbox",
+        "danger-full-access",
+        "--ask-for-approval",
+        "never",
+    ]
+    assert "--full-auto" not in parsed
     assert parsed[-1] == "NEXO: execute followup from file $(cat /tmp/followup.txt)"
