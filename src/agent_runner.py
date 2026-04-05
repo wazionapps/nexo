@@ -140,7 +140,11 @@ def build_interactive_client_command(
             raise TerminalClientUnavailableError(
                 "Codex launcher not found in PATH. Install `codex` first or reconfigure NEXO."
             )
-        cmd = [codex_bin]
+        cmd = [
+            codex_bin,
+            "--full-auto",
+            "--dangerously-bypass-approvals-and-sandbox",
+        ]
         bootstrap_prompt = _load_client_bootstrap_prompt(CLIENT_CODEX)
         if bootstrap_prompt and not _codex_managed_initial_messages_enabled():
             cmd.extend(["-c", _codex_initial_messages_config(bootstrap_prompt)])
@@ -201,7 +205,11 @@ def build_followup_terminal_shell_command(
                 "Codex launcher not found in PATH. Install `codex` first or reconfigure NEXO."
             )
         target_cwd = str(Path(cwd).expanduser()) if cwd else str(Path.home())
-        cmd = [codex_bin]
+        cmd = [
+            codex_bin,
+            "--full-auto",
+            "--dangerously-bypass-approvals-and-sandbox",
+        ]
         bootstrap_prompt = _load_client_bootstrap_prompt(CLIENT_CODEX)
         if bootstrap_prompt and not _codex_managed_initial_messages_enabled():
             cmd.extend(["-c", _codex_initial_messages_config(bootstrap_prompt)])

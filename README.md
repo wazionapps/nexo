@@ -523,7 +523,7 @@ npx nexo-brain  # detects current version, migrates automatically
 
 NEXO Brain includes a local CLI that runs independently of any single terminal client:
 
-- `nexo chat` — launch the configured terminal client with NEXO as the operator
+- `nexo chat` — launch a NEXO terminal client; if both Claude Code and Codex are available, it asks every time which one to open and puts the last-used client first
 - `nexo update` — sync runtime from source, run migrations, reconcile schedules
 - `nexo doctor --tier runtime` — boot/runtime/deep diagnostics with `--fix` mode
 - `nexo scripts list` — list all personal scripts and their status
@@ -636,20 +636,20 @@ The installer handles everything and syncs the same `nexo` MCP brain into Claude
 After install, use the runtime CLI:
 
 ```bash
-nexo chat          # Launch the configured terminal client (Claude Code or Codex)
+nexo chat          # Launch a NEXO terminal client (asks if both Claude Code and Codex are available)
 nexo doctor        # Check runtime health
 nexo update        # Pull latest version and sync
 nexo clients sync  # Re-sync Claude Code/Desktop/Codex to the same brain
 nexo scripts list  # See your personal scripts
 ```
 
-During install, NEXO now asks which interactive clients you want to connect, which one `nexo chat` should open by default, whether to enable background automation, which backend should run that automation, and which model profile each active terminal/backend should use. Shared brain stays on in every mode.
+During install, NEXO now asks which interactive clients you want to connect, which one `nexo chat` should suggest first when multiple terminal clients are available, whether to enable background automation, which backend should run that automation, and which model profile each active terminal/backend should use. Shared brain stays on in every mode.
 
 Recommended defaults:
 - Claude Code: `Opus 4.6 with 1M context`
 - Codex: `gpt-5.4` with `xhigh` reasoning
 
-Or use the shell alias created during install (e.g. `atlas`), which now runs `nexo chat .` so it opens whichever terminal client you selected as default.
+Or use the shell alias created during install (e.g. `atlas`), which now runs `nexo chat .` so it opens the terminal client you pick for that session, with the last-used option shown first.
 
 Your operator will greet you immediately — adapted to the time of day, resuming from where you left off. No cold starts.
 
@@ -842,7 +842,7 @@ When Claude Desktop is installed, `nexo-brain`, `nexo update`, and `nexo clients
 
 ### Codex
 
-When Codex CLI is available, `nexo-brain`, `nexo update`, and `nexo clients sync` register the same `nexo` MCP server via `codex mcp add`, so Codex uses the same local memory store as Claude Code and Claude Desktop. If selected during install, `nexo chat` can open Codex directly and background automation can also run through Codex. The current recommended Codex profile is `gpt-5.4` with `xhigh` reasoning.
+When Codex CLI is available, `nexo-brain`, `nexo update`, and `nexo clients sync` register the same `nexo` MCP server via `codex mcp add`, so Codex uses the same local memory store as Claude Code and Claude Desktop. If selected during install, `nexo chat` can open Codex directly and background automation can also run through Codex. Interactive `nexo chat` launches use Codex's aggressive no-confirmation mode so the session does not stall on repetitive approval prompts. The current recommended Codex profile is `gpt-5.4` with `xhigh` reasoning.
 
 ### OpenClaw
 
@@ -956,7 +956,7 @@ If NEXO Brain is useful to you, consider:
 - **Personal scripts registry**: Scripts in `NEXO_HOME/scripts/` tracked in SQLite with metadata, categories, schedules. Full lifecycle: create, sync, reconcile, schedule, unschedule, remove.
 - **Orchestrator removed from core** (breaking): Was opt-in personal automation adding complexity for all users. Existing users keep their setup in `NEXO_HOME/scripts/`.
 - **Claude Code plugin structure**: `plugin.json`, entry point, packaging for marketplace submission.
-- **`nexo chat`**: Official command to launch the configured terminal client with NEXO as operator.
+- **`nexo chat`**: Official command to launch a NEXO terminal client, asking when multiple supported terminal clients are available.
 - **Managed Evolution hardening**: Can modify core behavior modules with rollback followups.
 - Cron recovery hardened: TCC diagnostics, keepalive sync, personal schedule catchup.
 

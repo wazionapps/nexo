@@ -509,11 +509,95 @@ class TestChatCommand:
         )
         assert result.returncode == 0
         argv = json.loads(out_file.read_text())
-        assert argv[:2] == ["-c", argv[1]]
-        assert argv[1].startswith('initial_messages=[{role="system",content=')
-        assert ["-m", "gpt-5.4"] == argv[2:4]
-        assert ["-c", 'model_reasoning_effort="xhigh"'] == argv[4:6]
+        assert argv[:4] == [
+            "--full-auto",
+            "--dangerously-bypass-approvals-and-sandbox",
+            "-c",
+            argv[3],
+        ]
+        assert argv[3].startswith('initial_messages=[{role="system",content=')
+        assert ["-m", "gpt-5.4"] == argv[4:6]
+        assert ["-c", 'model_reasoning_effort="xhigh"'] == argv[6:8]
         assert argv[-2:] == ["-C", "."]
+
+    def test_chat_prompts_when_multiple_clients_are_available_and_reorders_to_last_used(self, nexo_home, tmp_path):
+        fake_claude = tmp_path / "claude"
+        claude_out = tmp_path / "claude-invocation.json"
+        fake_claude.write_text(
+            "#!/usr/bin/env python3\n"
+            "import json, sys\n"
+            f"open({json.dumps(str(claude_out))}, 'w').write(json.dumps(sys.argv[1:]))\n"
+        )
+        fake_claude.chmod(0o755)
+
+        fake_codex = tmp_path / "codex"
+        codex_out = tmp_path / "codex-invocation.json"
+        fake_codex.write_text(
+            "#!/usr/bin/env python3\n"
+            "import json, sys\n"
+            f"open({json.dumps(str(codex_out))}, 'w').write(json.dumps(sys.argv[1:]))\n"
+        )
+        fake_codex.chmod(0o755)
+
+        (nexo_home / "config").mkdir(exist_ok=True)
+        schedule_path = nexo_home / "config" / "schedule.json"
+        schedule_path.write_text(json.dumps({
+            "timezone": "UTC",
+            "auto_update": True,
+            "interactive_clients": {
+                "claude_code": True,
+                "codex": True,
+                "claude_desktop": False,
+            },
+            "default_terminal_client": "claude_code",
+            "automation_enabled": True,
+            "automation_backend": "claude_code",
+            "client_runtime_profiles": {
+                "claude_code": {
+                    "model": "claude-opus-4-6[1m]",
+                    "reasoning_effort": "",
+                },
+                "codex": {
+                    "model": "gpt-5.4",
+                    "reasoning_effort": "xhigh",
+                },
+            },
+            "processes": {},
+        }))
+
+        env = {
+            **os.environ,
+            "NEXO_HOME": str(nexo_home),
+            "NEXO_CODE": os.path.join(os.path.dirname(__file__), "..", "src"),
+            "HOME": str(nexo_home),
+            "PATH": f"{tmp_path}:{os.environ.get('PATH', '')}",
+        }
+
+        first = subprocess.run(
+            [sys.executable, CLI_PY, "chat", "."],
+            input="2\n",
+            capture_output=True,
+            text=True,
+            timeout=30,
+            env=env,
+        )
+        assert first.returncode == 0
+        assert "1. Claude Code [default]" in first.stdout
+        assert "2. Codex" in first.stdout
+        assert json.loads(schedule_path.read_text())["default_terminal_client"] == "codex"
+
+        second = subprocess.run(
+            [sys.executable, CLI_PY, "chat", "."],
+            input="\n",
+            capture_output=True,
+            text=True,
+            timeout=30,
+            env=env,
+        )
+        assert second.returncode == 0
+        assert "1. Codex [default]" in second.stdout
+        assert "2. Claude Code" in second.stdout
+        assert codex_out.is_file()
 
 
 class TestScriptsRun:

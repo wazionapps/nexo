@@ -41,6 +41,11 @@ from pathlib import Path
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parent)))
+TERMINAL_CLIENT_LABELS = {
+    "claude_code": "Claude Code",
+    "codex": "Codex",
+}
+TERMINAL_CLIENT_ORDER = ("claude_code", "codex")
 
 
 def _get_version() -> str:
@@ -844,8 +849,60 @@ def _dashboard(args):
     return _service_control("dashboard", args.action)
 
 
+def _terminal_client_label(client: str) -> str:
+    return TERMINAL_CLIENT_LABELS.get(client, client.replace("_", " ").title())
+
+
+def _ordered_available_terminal_clients(preferences: dict, detected: dict) -> list[str]:
+    enabled = preferences.get("interactive_clients", {})
+    preferred = str(preferences.get("default_terminal_client", "")).strip()
+    ordered: list[str] = []
+
+    for client in (preferred, *TERMINAL_CLIENT_ORDER):
+        if client in TERMINAL_CLIENT_ORDER and client not in ordered:
+            ordered.append(client)
+
+    return [
+        client
+        for client in ordered
+        if enabled.get(client, False) and detected.get(client, {}).get("installed", False)
+    ]
+
+
+def _prompt_for_terminal_client(clients: list[str], normalize_client_key) -> str | None:
+    if not clients:
+        return None
+    if len(clients) == 1:
+        return clients[0]
+
+    while True:
+        print("Select terminal client for this chat:")
+        for index, client in enumerate(clients, start=1):
+            suffix = " [default]" if index == 1 else ""
+            print(f"  {index}. {_terminal_client_label(client)}{suffix}")
+
+        try:
+            response = input(f"Choose 1-{len(clients)} [1]: ").strip()
+        except EOFError:
+            return clients[0]
+
+        if not response:
+            return clients[0]
+        if response.isdigit():
+            choice = int(response)
+            if 1 <= choice <= len(clients):
+                return clients[choice - 1]
+
+        client_key = normalize_client_key(response)
+        if client_key in clients:
+            return client_key
+
+        print("Invalid choice. Try again.", file=sys.stderr)
+
+
 def _chat(args):
     target = args.path or "."
+    selected_client = getattr(args, "client", None)
 
     try:
         from auto_update import startup_preflight
@@ -867,20 +924,42 @@ def _chat(args):
         pass
 
     try:
+        from client_preferences import (
+            detect_installed_clients,
+            load_client_preferences,
+            normalize_client_key,
+            save_client_preferences,
+        )
         from agent_runner import TerminalClientUnavailableError, launch_interactive_client
     except ImportError:
         print("Agent runner module not found. Ensure NEXO is properly installed.", file=sys.stderr)
         return 1
 
+    if not selected_client:
+        try:
+            preferences = load_client_preferences()
+            detected = detect_installed_clients()
+            selected_client = _prompt_for_terminal_client(
+                _ordered_available_terminal_clients(preferences, detected),
+                normalize_client_key,
+            )
+        except Exception:
+            selected_client = None
+
     try:
         result = launch_interactive_client(
             target=target,
-            client=getattr(args, "client", None),
+            client=selected_client,
             env=os.environ.copy(),
         )
     except TerminalClientUnavailableError as exc:
         print(str(exc), file=sys.stderr)
         return 1
+    if result.returncode == 0 and selected_client:
+        try:
+            save_client_preferences(default_terminal_client=normalize_client_key(selected_client))
+        except Exception:
+            pass
     return int(result.returncode)
 
 
@@ -1014,7 +1093,7 @@ def _print_help():
     print(f"""NEXO Runtime CLI v{v}
 
 Commands:
-  nexo chat [path] [--client claude_code|codex]      Launch the selected terminal client
+  nexo chat [path] [--client claude_code|codex]      Launch a NEXO terminal client
   nexo doctor [--tier boot|runtime|deep|all] [--fix]   System diagnostics
   nexo scripts list|create|classify|sync|reconcile|ensure-schedules|schedules|run|doctor|call|unschedule|remove
                                                       Personal scripts
@@ -1036,12 +1115,12 @@ def main():
     sub = parser.add_subparsers(dest="command")
 
     # -- chat --
-    chat_parser = sub.add_parser("chat", help="Launch the selected terminal client")
+    chat_parser = sub.add_parser("chat", help="Launch a NEXO terminal client")
     chat_parser.add_argument("path", nargs="?", default=".", help="Working directory (default: current directory)")
     chat_parser.add_argument(
         "--client",
         choices=["claude_code", "codex"],
-        help="Override the configured default terminal client",
+        help="Override the chat picker and launch a specific terminal client",
     )
 
     # -- scripts --

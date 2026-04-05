@@ -28,10 +28,14 @@ def test_build_interactive_client_command_uses_codex_when_selected(tmp_path, mon
     )
 
     assert client == "codex"
-    assert cmd[0] == "/tmp/fake-codex"
-    assert cmd[1:3] == ["-c", 'initial_messages=[{role="system",content="You are NEXO."}]']
-    assert cmd[3:5] == ["-m", "gpt-5.4"]
-    assert cmd[5:7] == ["-c", 'model_reasoning_effort="xhigh"']
+    assert cmd[:3] == [
+        "/tmp/fake-codex",
+        "--full-auto",
+        "--dangerously-bypass-approvals-and-sandbox",
+    ]
+    assert cmd[3:5] == ["-c", 'initial_messages=[{role="system",content="You are NEXO."}]']
+    assert cmd[5:7] == ["-m", "gpt-5.4"]
+    assert cmd[7:9] == ["-c", 'model_reasoning_effort="xhigh"']
     assert cmd[-2:] == ["-C", str(tmp_path)]
 
 
@@ -244,6 +248,11 @@ def test_codex_runner_skips_inline_bootstrap_when_global_bootstrap_is_managed(mo
     )
 
     assert client == "codex"
+    assert cmd[:3] == [
+        "/tmp/fake-codex",
+        "--full-auto",
+        "--dangerously-bypass-approvals-and-sandbox",
+    ]
     config_values = [cmd[idx + 1] for idx, part in enumerate(cmd) if part == "-c"]
     assert not any("initial_messages=" in value for value in config_values)
     assert 'model_reasoning_effort="xhigh"' in config_values
