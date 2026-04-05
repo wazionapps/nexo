@@ -390,6 +390,220 @@ def _compact_diary_row(row: dict) -> dict:
     }
 
 
+def _load_project_aliases() -> dict[str, set[str]]:
+    atlas_path = NEXO_HOME / "brain" / "project-atlas.json"
+    aliases: dict[str, set[str]] = {}
+    if not atlas_path.is_file():
+        return aliases
+    try:
+        payload = json.loads(atlas_path.read_text())
+    except Exception:
+        return aliases
+    if not isinstance(payload, dict):
+        return aliases
+    for key, value in payload.items():
+        if str(key).startswith("_"):
+            continue
+        canonical = str(key).strip().lower()
+        alias_set = {canonical, canonical.replace("-", " "), canonical.replace("_", " ")}
+        if isinstance(value, dict):
+            for alias in value.get("aliases", []) or []:
+                alias_value = str(alias or "").strip().lower()
+                if alias_value:
+                    alias_set.add(alias_value)
+                    alias_set.add(alias_value.replace("-", " "))
+        aliases[canonical] = {item for item in alias_set if item}
+    return aliases
+
+
+def _match_projects(text: str, alias_map: dict[str, set[str]]) -> set[str]:
+    haystack = str(text or "").strip().lower()
+    if not haystack:
+        return set()
+    matches: set[str] = set()
+    for canonical, aliases in alias_map.items():
+        for alias in sorted(aliases, key=len, reverse=True):
+            if alias and alias in haystack:
+                matches.add(canonical)
+                break
+    return matches
+
+
+def _priority_weight(value) -> float:
+    lowered = str(value or "").strip().lower()
+    if lowered in {"critical", "urgent"}:
+        return 4.0
+    if lowered == "high":
+        return 3.0
+    if lowered == "medium":
+        return 2.0
+    if lowered == "low":
+        return 1.0
+    return 1.5
+
+
+def _compact_periodic_summary(data: dict) -> dict:
+    return {
+        "label": data.get("label", ""),
+        "window_start": data.get("window_start", ""),
+        "window_end": data.get("window_end", ""),
+        "summary": str(data.get("summary", "") or "")[:320],
+        "top_projects": data.get("top_projects", [])[:4],
+        "top_patterns": data.get("top_patterns", [])[:4],
+        "avg_mood_score": data.get("avg_mood_score"),
+        "avg_trust_score": data.get("avg_trust_score"),
+    }
+
+
+def _load_periodic_summaries(target_date: str, *, kind: str, limit: int = 2) -> list[dict]:
+    target_day = datetime.strptime(target_date, "%Y-%m-%d")
+    summaries: list[tuple[str, dict]] = []
+    pattern = "*-weekly-summary.json" if kind == "weekly" else "*-monthly-summary.json"
+    for path in sorted(DEEP_SLEEP_DIR.glob(pattern)):
+        try:
+            payload = json.loads(path.read_text())
+        except Exception:
+            continue
+        window_end_raw = str(payload.get("window_end", "") or "")
+        parsed = _parse_diary_created_at(window_end_raw)
+        if parsed and parsed >= target_day:
+            continue
+        summaries.append((window_end_raw, _compact_periodic_summary(payload)))
+    summaries.sort(key=lambda item: item[0], reverse=True)
+    return [item for _, item in summaries[:limit]]
+
+
+def _project_priority_signals(target_day: datetime, compact_diaries: list[dict]) -> list[dict]:
+    alias_map = _load_project_aliases()
+    scoreboard: dict[str, dict] = {}
+
+    def bump(project: str, score: float, signal_key: str, reason: str) -> None:
+        if not project:
+            return
+        slot = scoreboard.setdefault(
+            project,
+            {
+                "project": project,
+                "score": 0.0,
+                "signals": {
+                    "diary_sessions": 0,
+                    "learnings": 0,
+                    "followups": 0,
+                    "decisions": 0,
+                },
+                "reasons": [],
+            },
+        )
+        slot["score"] += score
+        slot["signals"][signal_key] += 1
+        if reason and reason not in slot["reasons"]:
+            slot["reasons"].append(reason)
+
+    for row in compact_diaries:
+        created = _parse_diary_created_at(row.get("created_at"))
+        recency_bonus = 1.0
+        if created:
+            age_days = max(0.0, (target_day - created).total_seconds() / 86400)
+            recency_bonus = 1.4 if age_days <= 7 else 1.0
+        candidates = set()
+        domain = str(row.get("domain", "") or "").strip().lower()
+        if domain:
+            candidates.add(domain)
+        candidates |= _match_projects(" ".join([row.get("summary", ""), row.get("self_critique", "")]), alias_map)
+        for project in candidates:
+            bump(project, 3.0 * recency_bonus, "diary_sessions", "recent session diary activity")
+
+    learning_rows = safe_query(
+        NEXO_DB,
+        "SELECT category, title, content, created_at, updated_at, priority, weight, applies_to FROM learnings "
+        "ORDER BY COALESCE(updated_at, created_at) DESC LIMIT 160",
+    )
+    for row in learning_rows:
+        text = " ".join(
+            [
+                str(row.get("applies_to", "") or ""),
+                str(row.get("title", "") or ""),
+                str(row.get("content", "") or ""),
+                str(row.get("category", "") or ""),
+            ]
+        )
+        matched = _match_projects(text, alias_map)
+        if not matched:
+            continue
+        weight = float(row.get("weight", 0) or 0)
+        score = 1.0 + _priority_weight(row.get("priority")) + min(2.0, max(0.0, weight))
+        for project in matched:
+            bump(project, score, "learnings", "recent leverage-bearing learning")
+
+    followup_rows = safe_query(
+        NEXO_DB,
+        "SELECT id, description, date, status, priority, created_at, updated_at, reasoning FROM followups "
+        "WHERE status NOT IN ('COMPLETED', 'CANCELLED') ORDER BY date ASC, created_at ASC LIMIT 120",
+    )
+    for row in followup_rows:
+        matched = _match_projects(
+            " ".join(
+                [
+                    str(row.get("description", "") or ""),
+                    str(row.get("reasoning", "") or ""),
+                ]
+            ),
+            alias_map,
+        )
+        if not matched:
+            continue
+        overdue_bonus = 0.0
+        due_value = str(row.get("date", "") or "")
+        try:
+            if due_value:
+                due_dt = datetime.strptime(due_value[:10], "%Y-%m-%d")
+                if due_dt <= target_day:
+                    overdue_bonus = 1.5
+        except Exception:
+            overdue_bonus = 0.0
+        score = 1.5 + _priority_weight(row.get("priority")) + overdue_bonus
+        for project in matched:
+            bump(project, score, "followups", "open followup pressure")
+
+    decision_rows = safe_query(
+        NEXO_DB,
+        "SELECT domain, outcome, status, reasoning, created_at, review_due_at FROM decisions "
+        "ORDER BY COALESCE(created_at, review_due_at) DESC LIMIT 120",
+    )
+    for row in decision_rows:
+        matched = set()
+        domain = str(row.get("domain", "") or "").strip().lower()
+        if domain:
+            matched.add(domain)
+        matched |= _match_projects(
+            " ".join(
+                [
+                    str(row.get("reasoning", "") or ""),
+                    str(row.get("outcome", "") or ""),
+                    str(row.get("status", "") or ""),
+                ]
+            ),
+            alias_map,
+        )
+        if not matched:
+            continue
+        outcome = str(row.get("outcome", "") or "").lower()
+        status = str(row.get("status", "") or "").lower()
+        score = 2.5
+        if any(token in outcome for token in ("fail", "error", "blocked", "regression")):
+            score += 2.0
+        if status in {"pending", "blocked", "open"}:
+            score += 1.5
+        for project in matched:
+            bump(project, score, "decisions", "recent decision pressure")
+
+    ranked = sorted(scoreboard.values(), key=lambda item: item["score"], reverse=True)
+    for item in ranked:
+        item["score"] = round(item["score"], 2)
+        item["reasons"] = item["reasons"][:4]
+    return ranked[:8]
+
+
 def collect_long_horizon_context(
     target_date: str,
     *,
@@ -497,6 +711,10 @@ def collect_long_horizon_context(
                 "created_at": created.isoformat(),
             })
 
+    weekly_summaries = _load_periodic_summaries(target_date, kind="weekly", limit=2)
+    monthly_summaries = _load_periodic_summaries(target_date, kind="monthly", limit=2)
+    project_priority_signals = _project_priority_signals(target_day, compact_diaries)
+
     return {
         "horizon_days": horizon_days,
         "recent_window_days": recent_days,
@@ -508,6 +726,9 @@ def collect_long_horizon_context(
         "recurring_mental_states": recurring_states.most_common(8),
         "recurring_self_critiques": recurring_critiques.most_common(6),
         "stale_followups": older_than_week[:12],
+        "project_priority_signals": project_priority_signals,
+        "weekly_summaries": weekly_summaries,
+        "monthly_summaries": monthly_summaries,
     }
 
 

@@ -221,6 +221,74 @@ def test_auto_spreading_depth_stays_off_for_exact_lookups():
     assert _search._auto_spreading_depth("path /Users/test/app.py exact port 6174") == 0
 
 
+def test_result_confidence_labels():
+    import importlib
+    _search = importlib.import_module("cognitive._search")
+
+    assert _search._result_confidence(0.9) == "high"
+    assert _search._result_confidence(0.7) == "medium"
+    assert _search._result_confidence(0.5) == "low"
+
+
+def test_spreading_activation_keeps_top_k_and_explains_auto_strategy(monkeypatch):
+    import importlib
+
+    _search = importlib.import_module("cognitive._search")
+
+    class _Cursor:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def fetchall(self):
+            return self._rows
+
+    class _DB:
+        def execute(self, sql, params=()):
+            if "FROM stm_memories" in sql and "SELECT *" in sql:
+                return _Cursor([
+                    {"id": 1, "embedding": np.array([0.92], dtype=np.float32), "content": "alpha", "source_type": "learning", "source_id": "L1", "source_title": "A", "domain": "nexo", "created_at": "2026-04-05T01:00:00", "strength": 0.9, "access_count": 2, "lifecycle_state": "active"},
+                    {"id": 2, "embedding": np.array([0.81], dtype=np.float32), "content": "beta", "source_type": "learning", "source_id": "L2", "source_title": "B", "domain": "nexo", "created_at": "2026-04-05T01:00:00", "strength": 0.8, "access_count": 1, "lifecycle_state": "active"},
+                    {"id": 3, "embedding": np.array([0.22], dtype=np.float32), "content": "neighbor", "source_type": "learning", "source_id": "L3", "source_title": "C", "domain": "nexo", "created_at": "2026-04-05T01:00:00", "strength": 0.4, "access_count": 0, "lifecycle_state": "active"},
+                ])
+            if "FROM ltm_memories" in sql and "SELECT *" in sql:
+                return _Cursor([
+                    {"id": 10, "embedding": np.array([0.18], dtype=np.float32), "content": "ltm-neighbor", "source_type": "learning", "source_id": "L10", "source_title": "D", "domain": "nexo", "created_at": "2026-04-05T01:00:00", "strength": 0.5, "access_count": 0, "tags": "", "lifecycle_state": "active", "is_dormant": 0},
+                ])
+            return _Cursor([])
+
+        def commit(self):
+            return None
+
+    monkeypatch.setattr(_search, "_get_db", lambda: _DB())
+    monkeypatch.setattr(_search, "_blob_to_array", lambda value: value)
+    monkeypatch.setattr(_search, "embed", lambda query: np.array([1.0], dtype=np.float32))
+    monkeypatch.setattr(_search, "hyde_expand_query", lambda query: np.array([1.0], dtype=np.float32))
+    monkeypatch.setattr(_search, "cosine_similarity", lambda query, vec: float(vec[0]))
+    monkeypatch.setattr(_search, "_auto_use_hyde", lambda query, source_type_filter="": True)
+    monkeypatch.setattr(_search, "_auto_spreading_depth", lambda query, source_type_filter="": 1)
+    monkeypatch.setattr(_search, "_apply_temporal_boost", lambda results, query: results)
+    monkeypatch.setattr(_search, "_kg_boost_results", lambda results: results)
+    monkeypatch.setattr(_search, "_auto_restore_snoozed", lambda db: None)
+    monkeypatch.setattr(_search, "_rehearse_results", lambda results, skip_ids=None: None)
+    monkeypatch.setattr(_search, "record_co_activation", lambda items: None)
+    monkeypatch.setattr(_search, "_get_co_activated_neighbors", lambda ids, depth=1: {
+        _search._canonical_co_id("stm", 3): 0.08,
+        _search._canonical_co_id("ltm", 10): 0.06,
+    })
+
+    results = _search.search(
+        "how are these deploy issues related",
+        top_k=2,
+        min_score=0.1,
+        hybrid=False,
+        rehearse=False,
+    )
+
+    assert len(results) == 2
+    assert all("confidence=" in item["explanation"] for item in results)
+    assert any("auto_strategy=" in item["explanation"] for item in results)
+
+
 def test_memory_personalization_changes_decay_rate():
     import cognitive
 

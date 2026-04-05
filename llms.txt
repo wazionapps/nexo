@@ -1,6 +1,6 @@
 # NEXO Brain
 
-> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v2.6.17).
+> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v2.6.18).
 
 NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It adds a local shared brain across supported clients, configurable terminal and automation backends, recovery-aware background jobs, startup preflight, runtime self-healing, smarter retrieval defaults, long-horizon overnight analysis, and 150+ MCP tools.
 
@@ -22,6 +22,7 @@ NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cogniti
 - Shared-brain client sync for Claude Code, Codex, and Claude Desktop
 - Managed bootstrap parity for `~/.claude/CLAUDE.md` and `~/.codex/AGENTS.md`
 - Managed Codex global bootstrap/model sync via `~/.codex/config.toml`
+- Managed Codex `mcp_servers.nexo` sync inside `~/.codex/config.toml`
 - Existing-install backfill so older Codex-linked runtimes actually receive that managed global bootstrap/model sync during `nexo update`
 - Installed-runtime bootstrap hotfix so existing users receive those managed bootstrap updates correctly
 - Bootstrap operator-name fallback so managed `CLAUDE.md` / `AGENTS.md` never render with blank identity headings
@@ -29,9 +30,12 @@ NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cogniti
 - Configurable `nexo chat` terminal client
 - Configurable automation backend with client-specific model profiles
 - Automatic HyDE / spreading activation defaults that stay conservative for exact lookups
+- Retrieval explanations with confidence + auto-strategy hints
 - Per-memory `stability` / `difficulty` personalization on top of Ebbinghaus decay
 - Deep Sleep transcript parity across Claude Code and Codex session stores
 - 60-day long-horizon Deep Sleep blend for recurring themes and older/current cross-domain connections
+- Weighted project-priority signals plus weekly/monthly Deep Sleep summary artifacts
+- Runtime doctor parity audits for recent Codex sessions and Claude Desktop shared-brain metadata
 - Runtime CLI with `nexo chat`, `nexo update`, `nexo doctor`, and personal script management
 - Self-healing runtime with managed schedule reconciliation and KeepAlive daemon support
 - Personal scripts registry, dashboard, overnight learning, and recovery-aware jobs

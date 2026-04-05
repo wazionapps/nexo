@@ -65,6 +65,10 @@ def handle_cognitive_retrieve(
         mode_parts.append(f"spreading={spreading_depth}")
     elif spreading_depth is None:
         mode_parts.append("spreading=AUTO")
+    if results:
+        top_score = float(results[0].get("score", 0.0) or 0.0)
+        confidence = "high" if top_score >= 0.82 else "medium" if top_score >= 0.66 else "low"
+        mode_parts.append(f"top_confidence={confidence}")
     header = f"COGNITIVE RETRIEVE — query: '{query}' | {len(results)} results ({', '.join(mode_parts)})\n\n"
     return header + formatted
 

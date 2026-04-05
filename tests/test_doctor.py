@@ -479,6 +479,46 @@ class TestRuntimeChecks:
         assert check.status == "degraded"
         assert any("bootstrap missing" in item for item in check.evidence)
 
+    def test_client_bootstrap_parity_warns_when_codex_mcp_config_missing(self, nexo_home, monkeypatch):
+        from doctor.providers import runtime
+
+        schedule_file = nexo_home / "config" / "schedule.json"
+        schedule_file.parent.mkdir(parents=True, exist_ok=True)
+        schedule_file.write_text(json.dumps({
+            "interactive_clients": {
+                "claude_code": False,
+                "codex": True,
+                "claude_desktop": False,
+            },
+            "default_terminal_client": "codex",
+            "automation_enabled": False,
+            "automation_backend": "none",
+        }))
+        codex_home = nexo_home / ".codex"
+        codex_home.mkdir(parents=True, exist_ok=True)
+        (codex_home / "AGENTS.md").write_text(
+            "<!-- nexo-codex-agents-version: 1.1.0 -->\n"
+            "******CORE******\n<!-- nexo:core:start -->\ncore\n<!-- nexo:core:end -->\n"
+            "******USER******\n<!-- nexo:user:start -->\nuser\n<!-- nexo:user:end -->\n"
+        )
+        (codex_home / "config.toml").write_text(
+            'initial_messages = [{ role = "system", content = "NEXO" }]\n\n'
+            '[nexo.codex]\n'
+            'bootstrap_managed = true\n'
+        )
+
+        monkeypatch.setattr(runtime, "SCHEDULE_FILE", schedule_file)
+        monkeypatch.setattr(runtime, "detect_installed_clients", lambda user_home=None: {
+            "claude_code": {"installed": True},
+            "codex": {"installed": True},
+            "claude_desktop": {"installed": False},
+        })
+        monkeypatch.setattr(runtime.Path, "home", lambda: nexo_home)
+
+        check = runtime.check_client_bootstrap_parity()
+        assert check.status == "degraded"
+        assert any("mcp_servers.nexo" in item for item in check.evidence)
+
     def test_transcript_source_parity_warns_when_codex_selected_without_sessions(self, nexo_home, monkeypatch):
         from doctor.providers import runtime
 
@@ -501,6 +541,94 @@ class TestRuntimeChecks:
         check = runtime.check_transcript_source_parity()
         assert check.status == "degraded"
         assert any("codex transcripts: missing" in item for item in check.evidence)
+
+    def test_codex_session_parity_warns_when_recent_sessions_skip_startup(self, nexo_home, monkeypatch):
+        from doctor.providers import runtime
+
+        schedule_file = nexo_home / "config" / "schedule.json"
+        schedule_file.parent.mkdir(parents=True, exist_ok=True)
+        schedule_file.write_text(json.dumps({
+            "interactive_clients": {
+                "claude_code": False,
+                "codex": True,
+                "claude_desktop": False,
+            },
+            "default_terminal_client": "codex",
+            "automation_enabled": False,
+            "automation_backend": "none",
+        }))
+        codex_file = nexo_home / ".codex" / "sessions" / "2026" / "04" / "05" / "rollout-demo.jsonl"
+        codex_file.parent.mkdir(parents=True, exist_ok=True)
+        codex_file.write_text(
+            json.dumps({"type": "session_meta", "payload": {"originator": "codex_cli_rs"}}) + "\n"
+            + json.dumps({"type": "event_msg", "payload": {"type": "user_message", "message": "hola"}}) + "\n"
+        )
+
+        monkeypatch.setattr(runtime, "SCHEDULE_FILE", schedule_file)
+        monkeypatch.setattr(runtime.Path, "home", lambda: nexo_home)
+
+        check = runtime.check_codex_session_parity()
+        assert check.status == "degraded"
+        assert any("nexo_startup seen in 0/" in item for item in check.evidence)
+
+    def test_claude_desktop_shared_brain_reports_mcp_only_mode(self, nexo_home, monkeypatch):
+        from doctor.providers import runtime
+
+        schedule_file = nexo_home / "config" / "schedule.json"
+        schedule_file.parent.mkdir(parents=True, exist_ok=True)
+        schedule_file.write_text(json.dumps({
+            "interactive_clients": {
+                "claude_code": False,
+                "codex": False,
+                "claude_desktop": True,
+            },
+            "default_terminal_client": "claude_code",
+            "automation_enabled": False,
+            "automation_backend": "none",
+        }))
+        desktop_dir = nexo_home / "Library" / "Application Support" / "Claude"
+        desktop_dir.mkdir(parents=True, exist_ok=True)
+        (desktop_dir / "claude_desktop_config.json").write_text(json.dumps({
+            "mcpServers": {
+                "nexo": {
+                    "command": "/opt/homebrew/bin/python3",
+                    "args": [str(nexo_home / "server.py")],
+                }
+            },
+            "nexo": {
+                "claude_desktop": {
+                    "shared_brain_managed": True,
+                    "shared_brain_mode": "mcp_only",
+                    "managed_runtime_home": str(nexo_home),
+                }
+            },
+        }))
+
+        monkeypatch.setattr(runtime, "SCHEDULE_FILE", schedule_file)
+        monkeypatch.setattr(runtime.Path, "home", lambda: nexo_home)
+        monkeypatch.setattr(runtime, "detect_installed_clients", lambda user_home=None: {
+            "claude_code": {"installed": True},
+            "codex": {"installed": False},
+            "claude_desktop": {"installed": True},
+        })
+
+        check = runtime.check_claude_desktop_shared_brain()
+        assert check.status == "healthy"
+        assert "MCP-only mode" in check.summary
+
+    def test_client_assumption_regressions_flags_unapproved_claude_only_paths(self, nexo_home, monkeypatch, tmp_path):
+        from doctor.providers import runtime
+
+        src_root = tmp_path / "src"
+        scripts_dir = src_root / "scripts" / "deep-sleep"
+        scripts_dir.mkdir(parents=True, exist_ok=True)
+        (scripts_dir / "collect.py").write_text("CLAUDE = '~/.claude/projects'\nCODEX='~/.codex/sessions'\nfind_codex_session_files = True\n")
+        (src_root / "foo.py").write_text("ROOT='~/.claude/projects'\n")
+
+        monkeypatch.setattr(runtime, "NEXO_CODE", tmp_path)
+        check = runtime.check_client_assumption_regressions()
+        assert check.status == "critical"
+        assert any("foo.py" in item for item in check.evidence)
 
     def test_launchagent_integrity_fix_bootstraps_real_plist(self, nexo_home, monkeypatch):
         from doctor.providers import runtime

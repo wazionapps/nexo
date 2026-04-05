@@ -36,6 +36,26 @@ def test_deep_sleep_collects_transcripts_from_claude_and_codex():
     assert ".claude" in text and ".codex" in text
     assert "find_claude_session_files" in text
     assert "find_codex_session_files" in text
+    assert "weekly_summaries" in text
+    assert "monthly_summaries" in text
+    assert "project_priority_signals" in text
+
+
+def test_no_new_runtime_files_hardcode_claude_only_transcript_roots():
+    offenders = []
+    allowed = {
+        ROOT / "src" / "scripts" / "deep-sleep" / "collect.py",
+        ROOT / "src" / "doctor" / "providers" / "runtime.py",
+    }
+    for path in (ROOT / "src").rglob("*.py"):
+        text = path.read_text()
+        if ".claude/projects" not in text:
+            continue
+        if path in allowed:
+            assert ".codex" in text
+            continue
+        offenders.append(str(path.relative_to(ROOT)))
+    assert offenders == []
 
 
 def test_codex_bootstrap_uses_generic_session_token_guidance():

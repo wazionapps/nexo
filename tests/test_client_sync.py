@@ -81,6 +81,8 @@ def test_sync_claude_desktop_preserves_preferences(tmp_path):
     assert payload["preferences"]["sidebarMode"] == "chat"
     assert payload["mcpServers"]["legacy"]["args"] == ["legacy.py"]
     assert payload["mcpServers"]["nexo"]["env"]["NEXO_NAME"] == "Atlas"
+    assert payload["nexo"]["claude_desktop"]["shared_brain_managed"] is True
+    assert payload["nexo"]["claude_desktop"]["shared_brain_mode"] == "mcp_only"
 
 
 def test_sync_codex_uses_codex_cli_when_available(tmp_path, monkeypatch):
@@ -126,6 +128,8 @@ def test_sync_codex_uses_codex_cli_when_available(tmp_path, monkeypatch):
     assert "initial_messages = [{ role = \"system\"" in config_text
     assert "[nexo.codex]" in config_text
     assert "bootstrap_managed = true" in config_text
+    assert "mcp_managed = true" in config_text
+    assert "[mcp_servers.nexo]" in config_text
 
 
 def test_sync_all_clients_treats_missing_codex_as_non_fatal(tmp_path, monkeypatch):
@@ -147,6 +151,7 @@ def test_sync_all_clients_treats_missing_codex_as_non_fatal(tmp_path, monkeypatc
     assert result["clients"]["codex"]["skipped"] is True
     assert "codex binary not found" in result["clients"]["codex"]["reason"]
     assert (home / ".codex" / "AGENTS.md").is_file()
+    assert "[mcp_servers.nexo]" in (home / ".codex" / "config.toml").read_text()
 
 
 def test_sync_codex_defaults_operator_name_when_runtime_version_has_blank_value(tmp_path, monkeypatch):
@@ -174,6 +179,33 @@ def test_sync_codex_defaults_operator_name_when_runtime_version_has_blank_value(
     assert "NEXO_NAME=NEXO" in captured["cmd"]
     bootstrap_text = (home / ".codex" / "AGENTS.md").read_text()
     assert "You are NEXO" in bootstrap_text
+
+
+def test_sync_codex_falls_back_to_managed_config_when_cli_add_fails(tmp_path, monkeypatch):
+    import client_sync
+
+    runtime = _make_runtime(tmp_path)
+    home = tmp_path / "home"
+
+    monkeypatch.setattr(client_sync.shutil, "which", lambda name: "/tmp/fake-codex" if name == "codex" else None)
+
+    def fake_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(cmd, 1, "", "mcp add exploded")
+
+    monkeypatch.setattr(client_sync.subprocess, "run", fake_run)
+
+    result = client_sync.sync_codex(
+        nexo_home=runtime,
+        runtime_root=runtime,
+        operator_name="Atlas",
+        user_home=home,
+    )
+
+    assert result["ok"] is True
+    assert result["mode"] == "config_only"
+    assert "mcp add exploded" in result["warning"]
+    config_text = (home / ".codex" / "config.toml").read_text()
+    assert "[mcp_servers.nexo]" in config_text
 
 
 def test_sync_all_clients_can_limit_to_configured_clients(tmp_path, monkeypatch):

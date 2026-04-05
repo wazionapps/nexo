@@ -150,6 +150,25 @@ def test_collect_long_horizon_context_blends_recent_and_older(monkeypatch, tmp_p
     os.utime(recent_file, (0, datetime(2026, 4, 2, 12, 0, 0).timestamp()))
     os.utime(older_file, (0, datetime(2026, 2, 20, 12, 0, 0).timestamp()))
 
+    deep_sleep_dir = nexo_home / "operations" / "deep-sleep"
+    deep_sleep_dir.mkdir(parents=True, exist_ok=True)
+    (deep_sleep_dir / "2026-W13-weekly-summary.json").write_text(json.dumps({
+        "label": "2026-W13",
+        "window_start": "2026-03-23",
+        "window_end": "2026-03-29",
+        "summary": "weekly drift summary",
+        "top_projects": [{"project": "wazion", "score": 9.5}],
+        "top_patterns": [{"pattern": "deploy drift", "count": 2}],
+    }))
+    (deep_sleep_dir / "2026-03-monthly-summary.json").write_text(json.dumps({
+        "label": "2026-03",
+        "window_start": "2026-03-01",
+        "window_end": "2026-03-31",
+        "summary": "monthly drift summary",
+        "top_projects": [{"project": "shopify", "score": 7.0}],
+        "top_patterns": [{"pattern": "auth retries", "count": 3}],
+    }))
+
     context = collect.collect_long_horizon_context("2026-04-05", max_diaries=10, max_sessions=6)
 
     assert context["sample_strategy"] == "70% recent + 30% older evenly sampled"
@@ -160,3 +179,6 @@ def test_collect_long_horizon_context_blends_recent_and_older(monkeypatch, tmp_p
     diary_dates = [entry["created_at"] for entry in context["historical_diaries"]]
     assert any(date.startswith("2026-03-3") for date in diary_dates)
     assert any(date.startswith("2026-03-0") or date.startswith("2026-03-1") for date in diary_dates)
+    assert context["weekly_summaries"][0]["label"] == "2026-W13"
+    assert context["monthly_summaries"][0]["label"] == "2026-03"
+    assert context["project_priority_signals"]

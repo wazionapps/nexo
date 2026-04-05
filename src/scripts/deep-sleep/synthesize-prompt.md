@@ -13,6 +13,12 @@ Read the extractions file provided below. It contains per-session findings inclu
 Also read the runtime skill candidate file at `{{SKILL_RUNTIME_FILE}}`. It contains mature guide skills with repeated successful usage and candidates for automatic text→script evolution.
 
 Also read the long-horizon file at `{{LONG_HORIZON_FILE}}`. It blends recent and older evidence from the last 60 days using a 70% recent / 30% older sample strategy. Use it to detect patterns that a single-day view would miss.
+That long-horizon file may also contain:
+- weekly summaries
+- monthly summaries
+- project priority signals based on diary activity, followup pressure, learnings, and decision outcomes
+
+Use those signals to weight importance, leverage, and chronic risk instead of treating all projects equally.
 
 Synthesize across all sessions:
 
@@ -23,6 +29,7 @@ Synthesize across all sessions:
 - Themes that recur across multiple weeks, not just today
 - Cross-domain connections where an older learning or session sample explains a current issue
 - Topics repeatedly mentioned over time but never formalized into a learning or followup
+- Project pressure that is rising because of repeated diary mentions, open followups, or adverse outcomes
 
 ### 2. Morning Agenda
 Generate a prioritized agenda for the next morning:
@@ -58,6 +65,12 @@ Consolidate `abandoned_projects` from all sessions:
 - Cross-reference with active followups — is there already a followup for this?
 - Cross-reference across sessions — was the abandoned work picked up later in another session?
 - Only flag projects that are truly abandoned (no followup AND not resumed)
+
+### 6.5 Weekly / Monthly Horizon
+When the long-horizon payload includes weekly or monthly summaries:
+- use them to detect drift across horizons, not just within a single day
+- identify which priorities are rising, stable, or cooling down
+- prefer high-leverage projects when multiple agenda items compete for attention
 
 ### 7. Trust Calibration (CRITICAL)
 Score the agent's performance for the day on a scale of 0-100. This score becomes the agent's trust score and directly affects its autonomy level the next day. Be fair but honest.

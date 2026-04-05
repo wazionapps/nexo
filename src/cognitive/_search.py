@@ -159,6 +159,7 @@ _HISTORICAL_CUES = frozenset({
 _EXACT_LOOKUP_RE = re.compile(
     r"(/|\\|::|\.[A-Za-z0-9]+|#L\d+|line \d+|error[: ]|exception|traceback|0x[0-9a-fA-F]+|[A-Z]{2,}-\d+)"
 )
+_MIN_NEIGHBOR_BOOST = 0.035
 
 
 def _apply_temporal_boost(results: list[dict], query_text: str) -> list[dict]:
@@ -252,6 +253,14 @@ def _auto_spreading_depth(query_text: str, source_type_filter: str = "") -> int:
     if any(connector in query for connector in (" and ", " because ", " related ", " connect ", " why ", " how ")):
         return 1
     return 0
+
+
+def _result_confidence(score: float) -> str:
+    if score >= 0.82:
+        return "high"
+    if score >= 0.66:
+        return "medium"
+    return "low"
 
 
 # ============================================================================
@@ -928,13 +937,23 @@ def search(
                     r["co_activation_boost"] = boost
 
             # Add neighbor memories not already in results
-            new_neighbor_hashes = set(neighbor_boosts.keys()) - existing_hashes
+            new_neighbor_hashes = {
+                nh
+                for nh, boost in neighbor_boosts.items()
+                if nh not in existing_hashes and boost >= _MIN_NEIGHBOR_BOOST
+            }
             if new_neighbor_hashes:
+                ranked_new_neighbors = sorted(
+                    new_neighbor_hashes,
+                    key=lambda nh: neighbor_boosts.get(nh, 0.0),
+                    reverse=True,
+                )[: max(1, min(3, top_k // 3 or 1))]
+                allowed_new_neighbors = set(ranked_new_neighbors)
                 for store_name, table in [("stm", "stm_memories"), ("ltm", "ltm_memories")]:
                     rows = db.execute(f"SELECT * FROM {table}").fetchall()
                     for row in rows:
                         nh = _canonical_co_id(store_name, row["id"])
-                        if nh in new_neighbor_hashes:
+                        if nh in allowed_new_neighbors:
                             boost = neighbor_boosts[nh]
                             results.append({
                                 "store": store_name,
@@ -951,10 +970,11 @@ def search(
                                 "co_activation_boost": boost,
                                 "lifecycle_state": row.get("lifecycle_state", "active"),
                             })
-                            new_neighbor_hashes.discard(nh)
+                            allowed_new_neighbors.discard(nh)
 
             # Re-sort after applying boosts
             results.sort(key=lambda x: x["score"], reverse=True)
+            results = results[:top_k]
 
     # Add rank explanations
     for rank, r in enumerate(results, 1):
@@ -970,6 +990,7 @@ def search(
         if resolved_use_hyde:
             ranking_desc = "hyde_centroid_similarity"
         parts = [f"Ranked #{rank}: {ranking_desc}={score:.3f}"]
+        parts.append(f"confidence={_result_confidence(score)}")
         parts.append(f"store={store}, strength={strength:.2f}, accesses={access_count}")
         if r.get("kg_boost"):
             parts.append(f"kg_boost=+{r['kg_boost']:.3f} ({r.get('kg_connections', 0)} edges)")
@@ -979,6 +1000,12 @@ def search(
             parts.append("hyde=auto")
         if spreading_depth is None and resolved_spreading_depth > 0:
             parts.append(f"spreading=auto:{resolved_spreading_depth}")
+        if use_hyde is None and resolved_use_hyde and spreading_depth is None and resolved_spreading_depth > 0:
+            parts.append("auto_strategy=semantic+associative recall")
+        elif use_hyde is None and resolved_use_hyde:
+            parts.append("auto_strategy=semantic expansion")
+        elif spreading_depth is None and resolved_spreading_depth > 0:
+            parts.append("auto_strategy=associative expansion")
         if created:
             parts.append(f"created={created[:10]}")
         if tags:

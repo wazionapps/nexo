@@ -19,6 +19,7 @@ import json
 import os
 import sqlite3
 import sys
+from collections import Counter
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -307,6 +308,392 @@ def create_abandoned_followups(synthesis: dict) -> list[dict]:
         )
         results.append(result)
     return results
+
+
+def _safe_query(db_path: Path, query: str, params: tuple = ()) -> list[dict]:
+    if not db_path.exists():
+        return []
+    try:
+        conn = sqlite3.connect(str(db_path))
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(query, params).fetchall()
+        conn.close()
+        return [dict(row) for row in rows]
+    except Exception:
+        return []
+
+
+def _parse_any_datetime(value) -> datetime | None:
+    if value in (None, ""):
+        return None
+    try:
+        if isinstance(value, (int, float)) or (isinstance(value, str) and str(value).strip().isdigit()):
+            return datetime.fromtimestamp(float(value))
+    except Exception:
+        return None
+    raw = str(value).strip()
+    for fmt in ("%Y-%m-%d", "%Y-%m-%d %H:%M:%S"):
+        try:
+            return datetime.strptime(raw[:19], fmt)
+        except Exception:
+            continue
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00").replace("+00:00", ""))
+    except Exception:
+        return None
+
+
+def _load_project_aliases() -> dict[str, set[str]]:
+    atlas_path = NEXO_HOME / "brain" / "project-atlas.json"
+    if not atlas_path.is_file():
+        return {}
+    try:
+        payload = json.loads(atlas_path.read_text())
+    except Exception:
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+    aliases: dict[str, set[str]] = {}
+    for key, value in payload.items():
+        if str(key).startswith("_"):
+            continue
+        canonical = str(key).strip().lower()
+        alias_set = {canonical, canonical.replace("-", " "), canonical.replace("_", " ")}
+        if isinstance(value, dict):
+            for alias in value.get("aliases", []) or []:
+                alias_value = str(alias or "").strip().lower()
+                if alias_value:
+                    alias_set.add(alias_value)
+                    alias_set.add(alias_value.replace("-", " "))
+        aliases[canonical] = {item for item in alias_set if item}
+    return aliases
+
+
+def _match_projects(text: str, alias_map: dict[str, set[str]]) -> set[str]:
+    haystack = str(text or "").strip().lower()
+    if not haystack:
+        return set()
+    matches: set[str] = set()
+    for canonical, aliases in alias_map.items():
+        for alias in sorted(aliases, key=len, reverse=True):
+            if alias and alias in haystack:
+                matches.add(canonical)
+                break
+    return matches
+
+
+def _priority_weight(value) -> float:
+    lowered = str(value or "").strip().lower()
+    if lowered in {"critical", "urgent"}:
+        return 4.0
+    if lowered == "high":
+        return 3.0
+    if lowered == "medium":
+        return 2.0
+    if lowered == "low":
+        return 1.0
+    return 1.5
+
+
+def _project_weighting_window(target_date: str, *, window_days: int) -> list[dict]:
+    target_day = datetime.strptime(target_date, "%Y-%m-%d")
+    window_start = target_day - timedelta(days=max(0, window_days - 1))
+    alias_map = _load_project_aliases()
+    scoreboard: dict[str, dict] = {}
+
+    def normalize_project(project: str) -> str:
+        lowered = str(project or "").strip().lower()
+        if not lowered:
+            return ""
+        matched = _match_projects(lowered, alias_map)
+        if matched:
+            return sorted(matched)[0]
+        return lowered
+
+    def bump(project: str, score: float, signal_key: str, reason: str) -> None:
+        canonical = normalize_project(project)
+        if not canonical:
+            return
+        slot = scoreboard.setdefault(
+            canonical,
+            {
+                "project": canonical,
+                "score": 0.0,
+                "signals": {
+                    "diary_sessions": 0,
+                    "learnings": 0,
+                    "followups": 0,
+                    "decisions": 0,
+                },
+                "reasons": [],
+            },
+        )
+        slot["score"] += score
+        slot["signals"][signal_key] += 1
+        if reason and reason not in slot["reasons"]:
+            slot["reasons"].append(reason)
+
+    diary_rows = _safe_query(
+        NEXO_DB,
+        "SELECT created_at, summary, self_critique, domain FROM session_diary ORDER BY created_at DESC",
+    )
+    for row in diary_rows:
+        created = _parse_any_datetime(row.get("created_at"))
+        if not created or created < window_start or created > target_day + timedelta(days=1):
+            continue
+        recency_bonus = 1.4 if (target_day - created).days <= 7 else 1.0
+        matched = _match_projects(
+            " ".join(
+                [
+                    str(row.get("summary", "") or ""),
+                    str(row.get("self_critique", "") or ""),
+                ]
+            ),
+            alias_map,
+        )
+        domain = normalize_project(str(row.get("domain", "") or ""))
+        if domain:
+            matched.add(domain)
+        for project in matched:
+            bump(project, 3.0 * recency_bonus, "diary_sessions", "recent diary activity")
+
+    learning_rows = _safe_query(
+        NEXO_DB,
+        "SELECT title, content, applies_to, priority, weight, updated_at, created_at FROM learnings "
+        "ORDER BY COALESCE(updated_at, created_at) DESC LIMIT 180",
+    )
+    for row in learning_rows:
+        when = _parse_any_datetime(row.get("updated_at") or row.get("created_at"))
+        if when and when < window_start:
+            continue
+        matched = _match_projects(
+            " ".join(
+                [
+                    str(row.get("applies_to", "") or ""),
+                    str(row.get("title", "") or ""),
+                    str(row.get("content", "") or ""),
+                ]
+            ),
+            alias_map,
+        )
+        if not matched:
+            continue
+        score = 1.0 + _priority_weight(row.get("priority")) + min(2.0, max(0.0, float(row.get("weight", 0) or 0)))
+        for project in matched:
+            bump(project, score, "learnings", "recent leverage-bearing learning")
+
+    followup_rows = _safe_query(
+        NEXO_DB,
+        "SELECT description, date, status, priority, created_at, updated_at, reasoning FROM followups "
+        "WHERE status NOT IN ('COMPLETED', 'CANCELLED') ORDER BY date ASC, created_at ASC LIMIT 160",
+    )
+    for row in followup_rows:
+        matched = _match_projects(
+            " ".join(
+                [
+                    str(row.get("description", "") or ""),
+                    str(row.get("reasoning", "") or ""),
+                ]
+            ),
+            alias_map,
+        )
+        if not matched:
+            continue
+        overdue_bonus = 0.0
+        due_dt = _parse_any_datetime(row.get("date"))
+        if due_dt and due_dt <= target_day:
+            overdue_bonus = 1.5
+        score = 1.5 + _priority_weight(row.get("priority")) + overdue_bonus
+        for project in matched:
+            bump(project, score, "followups", "open followup pressure")
+
+    decision_rows = _safe_query(
+        NEXO_DB,
+        "SELECT domain, outcome, status, reasoning, created_at, review_due_at FROM decisions "
+        "ORDER BY COALESCE(created_at, review_due_at) DESC LIMIT 160",
+    )
+    for row in decision_rows:
+        when = _parse_any_datetime(row.get("created_at") or row.get("review_due_at"))
+        if when and when < window_start:
+            continue
+        matched = _match_projects(
+            " ".join(
+                [
+                    str(row.get("reasoning", "") or ""),
+                    str(row.get("outcome", "") or ""),
+                    str(row.get("status", "") or ""),
+                ]
+            ),
+            alias_map,
+        )
+        domain = normalize_project(str(row.get("domain", "") or ""))
+        if domain:
+            matched.add(domain)
+        if not matched:
+            continue
+        outcome = str(row.get("outcome", "") or "").lower()
+        status = str(row.get("status", "") or "").lower()
+        score = 2.5
+        if any(token in outcome for token in ("fail", "error", "blocked", "regression")):
+            score += 2.0
+        if status in {"pending", "blocked", "open"}:
+            score += 1.5
+        for project in matched:
+            bump(project, score, "decisions", "recent decision pressure")
+
+    ranked = sorted(scoreboard.values(), key=lambda item: item["score"], reverse=True)
+    for item in ranked:
+        item["score"] = round(item["score"], 2)
+        item["reasons"] = item["reasons"][:4]
+    return ranked[:8]
+
+
+def _load_period_syntheses(target_date: str, *, window_days: int) -> list[dict]:
+    target_day = datetime.strptime(target_date, "%Y-%m-%d")
+    syntheses: list[dict] = []
+    for offset in range(window_days):
+        date_str = (target_day - timedelta(days=offset)).strftime("%Y-%m-%d")
+        path = DEEP_SLEEP_DIR / f"{date_str}-synthesis.json"
+        if not path.is_file():
+            continue
+        try:
+            payload = json.loads(path.read_text())
+        except Exception:
+            continue
+        if isinstance(payload, dict):
+            syntheses.append(payload)
+    syntheses.reverse()
+    return syntheses
+
+
+def _build_period_summary(target_date: str, synthesis: dict, *, kind: str, window_days: int) -> dict:
+    target_day = datetime.strptime(target_date, "%Y-%m-%d")
+    window_start = (target_day - timedelta(days=max(0, window_days - 1))).strftime("%Y-%m-%d")
+    label = (
+        f"{target_day.isocalendar().year}-W{target_day.isocalendar().week:02d}"
+        if kind == "weekly"
+        else target_day.strftime("%Y-%m")
+    )
+    syntheses = _load_period_syntheses(target_date, window_days=window_days)
+    if not any(item.get("date") == target_date for item in syntheses):
+        syntheses.append(synthesis)
+
+    mood_scores = []
+    trust_scores = []
+    total_corrections = 0
+    pattern_counter: Counter[str] = Counter()
+    agenda_counter: Counter[str] = Counter()
+    for item in syntheses:
+        mood = item.get("emotional_day", {}).get("mood_score")
+        if isinstance(mood, (int, float)):
+            mood_scores.append(float(mood))
+        trust = item.get("trust_calibration", {}).get("score")
+        if isinstance(trust, (int, float)):
+            trust_scores.append(float(trust))
+        total_corrections += int(item.get("productivity_day", {}).get("total_corrections", 0) or 0)
+        for pattern in item.get("cross_session_patterns", []) or []:
+            text = str(pattern.get("pattern", "") or "").strip()
+            if text:
+                pattern_counter[text] += 1
+        for agenda in item.get("morning_agenda", []) or []:
+            title = str(agenda.get("title", "") or "").strip()
+            if title:
+                agenda_counter[title] += 1
+
+    top_projects = _project_weighting_window(target_date, window_days=window_days)
+    avg_mood = round(sum(mood_scores) / len(mood_scores), 3) if mood_scores else None
+    avg_trust = round(sum(trust_scores) / len(trust_scores), 1) if trust_scores else None
+    top_patterns = [
+        {"pattern": pattern, "count": count}
+        for pattern, count in pattern_counter.most_common(6)
+    ]
+    recurring_agenda = [
+        {"title": title, "count": count}
+        for title, count in agenda_counter.most_common(6)
+    ]
+
+    summary_parts = [f"{len(syntheses)} Deep Sleep run(s)"]
+    if top_projects:
+        summary_parts.append(f"top focus: {top_projects[0]['project']}")
+    if top_patterns:
+        summary_parts.append(f"recurring pattern: {top_patterns[0]['pattern']}")
+    if avg_trust is not None:
+        summary_parts.append(f"avg trust {avg_trust:.1f}")
+    summary = " | ".join(summary_parts)
+
+    return {
+        "kind": kind,
+        "label": label,
+        "window_days": window_days,
+        "window_start": window_start,
+        "window_end": target_date,
+        "generated_at": datetime.now().isoformat(),
+        "daily_syntheses": len(syntheses),
+        "avg_mood_score": avg_mood,
+        "avg_trust_score": avg_trust,
+        "total_corrections": total_corrections,
+        "top_projects": top_projects,
+        "top_patterns": top_patterns,
+        "recurring_agenda": recurring_agenda,
+        "summary": summary,
+    }
+
+
+def _render_period_summary_markdown(summary: dict) -> str:
+    lines = [
+        f"# {summary.get('kind', 'period').title()} Deep Sleep Summary — {summary.get('label', '')}",
+        "",
+        f"- Window: {summary.get('window_start', '')} -> {summary.get('window_end', '')}",
+        f"- Deep Sleep runs: {summary.get('daily_syntheses', 0)}",
+    ]
+    if summary.get("avg_mood_score") is not None:
+        lines.append(f"- Avg mood score: {summary['avg_mood_score']:.2f}")
+    if summary.get("avg_trust_score") is not None:
+        lines.append(f"- Avg trust score: {summary['avg_trust_score']:.1f}")
+    lines.append(f"- Total corrections: {summary.get('total_corrections', 0)}")
+    lines.append("")
+    if summary.get("summary"):
+        lines.append(f"> {summary['summary']}")
+        lines.append("")
+
+    if summary.get("top_projects"):
+        lines.append("## Top Projects")
+        lines.append("")
+        for item in summary["top_projects"][:5]:
+            lines.append(f"- **{item['project']}** — score {item['score']}")
+            if item.get("reasons"):
+                lines.append(f"  Reasons: {', '.join(item['reasons'])}")
+        lines.append("")
+
+    if summary.get("top_patterns"):
+        lines.append("## Recurring Patterns")
+        lines.append("")
+        for item in summary["top_patterns"][:5]:
+            lines.append(f"- {item['pattern']} ({item['count']}x)")
+        lines.append("")
+
+    if summary.get("recurring_agenda"):
+        lines.append("## Recurring Agenda")
+        lines.append("")
+        for item in summary["recurring_agenda"][:5]:
+            lines.append(f"- {item['title']} ({item['count']}x)")
+        lines.append("")
+
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def write_periodic_summaries(target_date: str, synthesis: dict) -> dict:
+    outputs: dict[str, str] = {}
+    for kind, window_days in (("weekly", 7), ("monthly", 30)):
+        summary = _build_period_summary(target_date, synthesis, kind=kind, window_days=window_days)
+        label = summary["label"]
+        json_path = DEEP_SLEEP_DIR / f"{label}-{kind}-summary.json"
+        md_path = DEEP_SLEEP_DIR / f"{label}-{kind}-summary.md"
+        json_path.write_text(json.dumps(summary, indent=2, ensure_ascii=False))
+        md_path.write_text(_render_period_summary_markdown(summary), encoding="utf-8")
+        outputs[f"{kind}_json"] = str(json_path)
+        outputs[f"{kind}_markdown"] = str(md_path)
+    return outputs
 
 
 def generate_session_tone(synthesis: dict, target_date: str) -> dict:
@@ -730,6 +1117,11 @@ def main():
     briefing_path = write_morning_briefing(target_date, synthesis)
     print(f"  Briefing: {briefing_path}")
 
+    print("[apply] Writing weekly/monthly Deep Sleep summaries...")
+    periodic_outputs = write_periodic_summaries(target_date, synthesis)
+    for label, path in periodic_outputs.items():
+        print(f"  {label}: {path}")
+
     # Write applied log
     applied_log = {
         "date": target_date,
@@ -738,6 +1130,7 @@ def main():
         "stats": stats,
         "applied_actions": applied_actions,
         "summary": synthesis.get("summary", ""),
+        "periodic_summaries": periodic_outputs,
     }
 
     applied_file = DEEP_SLEEP_DIR / f"{target_date}-applied.json"

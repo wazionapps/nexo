@@ -243,10 +243,12 @@ def _sync_codex_managed_config(
     *,
     bootstrap_prompt: str,
     runtime_profile: dict | None,
+    server_config: dict | None,
 ) -> dict:
     payload = _load_toml_object(path)
     action = "updated" if payload else "created"
     runtime_profile = dict(runtime_profile or {})
+    server_config = dict(server_config or {})
 
     if runtime_profile.get("model"):
         payload["model"] = runtime_profile["model"]
@@ -263,10 +265,19 @@ def _sync_codex_managed_config(
     nexo_table = payload.setdefault("nexo", {})
     codex_table = nexo_table.setdefault("codex", {})
     codex_table["bootstrap_managed"] = True
+    codex_table["mcp_managed"] = True
     codex_table["bootstrap_bytes"] = len(bootstrap_prompt.encode("utf-8")) if bootstrap_prompt else 0
     if runtime_profile.get("model"):
         codex_table["managed_model"] = runtime_profile["model"]
     codex_table["managed_reasoning_effort"] = runtime_profile.get("reasoning_effort", "") or ""
+    if server_config:
+        mcp_servers = payload.setdefault("mcp_servers", {})
+        mcp_servers["nexo"] = {
+            "command": server_config.get("command", ""),
+            "args": list(server_config.get("args", []) or []),
+            "env": dict(server_config.get("env", {}) or {}),
+        }
+        codex_table["managed_server_command"] = server_config.get("command", "")
 
     _write_toml_object(path, payload)
     return {
@@ -274,6 +285,7 @@ def _sync_codex_managed_config(
         "action": action,
         "path": str(path),
         "bootstrap_managed": True,
+        "mcp_managed": True,
         "model": runtime_profile.get("model", ""),
         "reasoning_effort": runtime_profile.get("reasoning_effort", "") or "",
     }
@@ -296,7 +308,7 @@ def _write_json_object(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
 
 
-def _sync_json_client(path: Path, server_config: dict, label: str) -> dict:
+def _sync_json_client(path: Path, server_config: dict, label: str, *, managed_metadata: dict | None = None) -> dict:
     payload = _load_json_object(path)
     mcp_servers = payload.setdefault("mcpServers", {})
     if not isinstance(mcp_servers, dict):
@@ -304,12 +316,30 @@ def _sync_json_client(path: Path, server_config: dict, label: str) -> dict:
         payload["mcpServers"] = mcp_servers
     action = "updated" if "nexo" in mcp_servers else "created"
     mcp_servers["nexo"] = server_config
+    if managed_metadata is not None:
+        nexo_meta = payload.setdefault("nexo", {})
+        if not isinstance(nexo_meta, dict):
+            nexo_meta = {}
+            payload["nexo"] = nexo_meta
+        nexo_meta.update(managed_metadata)
     _write_json_object(path, payload)
     return {
         "ok": True,
         "client": label,
         "action": action,
         "path": str(path),
+    }
+
+
+def _claude_desktop_managed_metadata(server_config: dict, *, operator_name: str) -> dict:
+    return {
+        "claude_desktop": {
+            "shared_brain_managed": True,
+            "shared_brain_mode": "mcp_only",
+            "managed_operator": operator_name or server_config.get("env", {}).get("NEXO_NAME", "") or "NEXO",
+            "managed_runtime_home": server_config.get("env", {}).get("NEXO_HOME", ""),
+            "managed_runtime_root": server_config.get("env", {}).get("NEXO_CODE", ""),
+        }
     }
 
 
@@ -361,10 +391,15 @@ def sync_claude_desktop(
         python_path=python_path,
         operator_name=operator_name,
     )
+    resolved_name = server_config.get("env", {}).get("NEXO_NAME", "") or _resolve_operator_name(
+        Path(nexo_home).expanduser() if nexo_home else _default_nexo_home(),
+        explicit=operator_name,
+    )
     return _sync_json_client(
         _claude_desktop_config_path(Path(user_home).expanduser() if user_home else None),
         server_config,
         "claude_desktop",
+        managed_metadata=_claude_desktop_managed_metadata(server_config, operator_name=resolved_name),
     )
 
 
@@ -410,6 +445,7 @@ def sync_codex(
                 config_path,
                 bootstrap_prompt=prompt_text,
                 runtime_profile=runtime_profile,
+                server_config=server_config,
             )
         return result
 
@@ -425,29 +461,12 @@ def sync_codex(
         timeout=30,
         env=env,
     )
-    if result.returncode != 0:
-        result = {
-            "ok": False,
-            "client": "codex",
-            "path": str(config_path),
-            "error": (result.stderr or result.stdout or "codex mcp add failed").strip(),
-        }
-        bootstrap_result = sync_client_bootstrap(
-            "codex",
-            nexo_home=nexo_home,
-            operator_name=operator_name,
-            user_home=user_home,
-        )
-        result["bootstrap"] = bootstrap_result
-        if not bootstrap_result.get("ok"):
-            result["error"] = f"{result['error']}; bootstrap: {bootstrap_result.get('error', 'unknown error')}"
-        return result
     sync_result = {
         "ok": True,
         "client": "codex",
         "action": "updated",
         "path": str(config_path),
-        "mode": "cli",
+        "mode": "cli" if result.returncode == 0 else "config_only",
     }
     bootstrap_result = sync_client_bootstrap(
         "codex",
@@ -464,7 +483,10 @@ def sync_codex(
         config_path,
         bootstrap_prompt=bootstrap_result.get("content") or "",
         runtime_profile=runtime_profile,
+        server_config=server_config,
     )
+    if result.returncode != 0:
+        sync_result["warning"] = (result.stderr or result.stdout or "codex mcp add failed").strip()
     return sync_result
 
 

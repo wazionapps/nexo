@@ -54,16 +54,160 @@ def _codex_bootstrap_config_status() -> dict:
             "error": str(exc),
         }
     managed = bool(payload.get("nexo", {}).get("codex", {}).get("bootstrap_managed"))
+    mcp_managed = bool(payload.get("nexo", {}).get("codex", {}).get("mcp_managed"))
     initial_messages = payload.get("initial_messages", [])
     has_initial_messages = bool(initial_messages)
+    mcp_server = payload.get("mcp_servers", {}).get("nexo", {})
     return {
         "exists": True,
         "path": str(path),
         "bootstrap_managed": managed,
+        "mcp_managed": mcp_managed,
         "has_initial_messages": has_initial_messages,
         "model": str(payload.get("model", "") or ""),
         "reasoning_effort": str(payload.get("model_reasoning_effort", "") or ""),
+        "has_mcp_server": isinstance(mcp_server, dict) and bool(mcp_server.get("command")) and bool(mcp_server.get("args")),
+        "mcp_runtime_home": str((mcp_server.get("env") or {}).get("NEXO_HOME", "") or ""),
+        "mcp_runtime_root": str((mcp_server.get("env") or {}).get("NEXO_CODE", "") or ""),
     }
+
+
+def _claude_desktop_shared_brain_status() -> dict:
+    path = Path.home() / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json"
+    if not path.is_file():
+        return {"exists": False, "path": str(path), "shared_brain_managed": False}
+    try:
+        payload = json.loads(path.read_text())
+    except Exception as exc:
+        return {
+            "exists": True,
+            "path": str(path),
+            "shared_brain_managed": False,
+            "error": str(exc),
+        }
+    mcp_server = (payload.get("mcpServers") or {}).get("nexo", {})
+    metadata = ((payload.get("nexo") or {}).get("claude_desktop") or {})
+    return {
+        "exists": True,
+        "path": str(path),
+        "has_mcp_server": isinstance(mcp_server, dict) and bool(mcp_server.get("command")) and bool(mcp_server.get("args")),
+        "shared_brain_managed": bool(metadata.get("shared_brain_managed")),
+        "shared_brain_mode": str(metadata.get("shared_brain_mode", "") or ""),
+        "managed_runtime_home": str(metadata.get("managed_runtime_home", "") or ""),
+        "managed_runtime_root": str(metadata.get("managed_runtime_root", "") or ""),
+    }
+
+
+def _recent_codex_session_parity_status(*, days: int = 7, max_files: int = 24) -> dict:
+    roots = [
+        Path.home() / ".codex" / "sessions",
+        Path.home() / ".codex" / "archived_sessions",
+    ]
+    cutoff = time.time() - (days * 86400)
+    candidates: list[tuple[float, Path]] = []
+    for root in roots:
+        if not root.exists():
+            continue
+        for path in root.rglob("*.jsonl"):
+            try:
+                mtime = path.stat().st_mtime
+            except OSError:
+                continue
+            if mtime >= cutoff:
+                candidates.append((mtime, path))
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    files = [path for _, path in candidates[:max_files]]
+
+    status = {
+        "files": len(files),
+        "bootstrap_sessions": 0,
+        "startup_sessions": 0,
+        "heartbeat_sessions": 0,
+        "origins": set(),
+        "samples": [],
+    }
+    for path in files:
+        saw_bootstrap = False
+        saw_startup = False
+        saw_heartbeat = False
+        origin = ""
+        try:
+            with path.open() as fh:
+                for raw in fh:
+                    if (
+                        not saw_bootstrap
+                        and (
+                            "NEXO Shared Brain for Codex" in raw
+                            or "<!-- nexo-codex-agents-version:" in raw
+                            or "You are NEXO" in raw
+                        )
+                    ):
+                        saw_bootstrap = True
+                    try:
+                        event = json.loads(raw)
+                    except Exception:
+                        continue
+                    payload = event.get("payload", {})
+                    if event.get("type") == "session_meta" and isinstance(payload, dict):
+                        origin = str(payload.get("originator", "") or payload.get("source", "") or "")
+                    if event.get("type") != "response_item" or not isinstance(payload, dict):
+                        continue
+                    if payload.get("type") != "function_call":
+                        continue
+                    name = str(payload.get("name", "") or "")
+                    if name in {"mcp__nexo__nexo_startup", "nexo_startup"}:
+                        saw_startup = True
+                    elif name in {"mcp__nexo__nexo_heartbeat", "nexo_heartbeat"}:
+                        saw_heartbeat = True
+                    if saw_bootstrap and saw_startup and saw_heartbeat and origin:
+                        break
+        except Exception:
+            continue
+        if origin:
+            status["origins"].add(origin)
+        if saw_bootstrap:
+            status["bootstrap_sessions"] += 1
+        if saw_startup:
+            status["startup_sessions"] += 1
+        if saw_heartbeat:
+            status["heartbeat_sessions"] += 1
+        status["samples"].append(
+            {
+                "file": str(path),
+                "bootstrap": saw_bootstrap,
+                "startup": saw_startup,
+                "heartbeat": saw_heartbeat,
+                "origin": origin,
+            }
+        )
+    status["origins"] = sorted(status["origins"])
+    return status
+
+
+def _client_assumption_regressions() -> list[str]:
+    src_root = NEXO_CODE / "src"
+    if not src_root.is_dir():
+        return []
+    allowed_claude_projects = {
+        (src_root / "scripts" / "deep-sleep" / "collect.py").resolve(),
+    }
+    offenders: list[str] = []
+    for path in src_root.rglob("*.py"):
+        try:
+            text = path.read_text()
+        except Exception:
+            continue
+        resolved = path.resolve()
+        if ".claude/projects" in text and resolved not in allowed_claude_projects:
+            offenders.append(f"{path.relative_to(NEXO_CODE)} hardcodes ~/.claude/projects")
+    collect_path = src_root / "scripts" / "deep-sleep" / "collect.py"
+    try:
+        collect_text = collect_path.read_text()
+    except Exception:
+        collect_text = ""
+    if collect_text and (".claude/projects" in collect_text) and (".codex" not in collect_text or "find_codex_session_files" not in collect_text):
+        offenders.append("deep-sleep/collect.py references Claude transcripts without Codex transcript parity")
+    return offenders
 
 
 def _file_age_seconds(path: Path) -> float | None:
@@ -1093,6 +1237,11 @@ def check_client_bootstrap_parity(fix: bool = False) -> DoctorCheck:
                 severity = "warn"
                 evidence.append(f"codex config missing managed bootstrap injection at {codex_config.get('path')}")
                 repair_plan.append("Run `nexo clients sync` or `nexo update` so plain Codex sessions inherit the NEXO bootstrap")
+            elif codex_config.get("exists") and not codex_config.get("has_mcp_server"):
+                status = "degraded"
+                severity = "warn"
+                evidence.append(f"codex config missing managed `mcp_servers.nexo` at {codex_config.get('path')}")
+                repair_plan.append("Re-sync Codex so manual sessions keep the shared brain even if `codex mcp add` state drifts")
             elif codex_config.get("exists"):
                 evidence.append(
                     "codex config bootstrap managed"
@@ -1137,6 +1286,151 @@ def check_client_bootstrap_parity(fix: bool = False) -> DoctorCheck:
             "Claude/Codex startup bootstrap files are missing, outdated, or lack the CORE/USER contract. "
             "Repair them so updates can refresh product rules without clobbering operator-specific instructions."
         ) if status != "healthy" else "",
+    )
+
+
+def check_codex_session_parity() -> DoctorCheck:
+    try:
+        schedule = _load_json(SCHEDULE_FILE) if SCHEDULE_FILE.is_file() else {}
+    except Exception:
+        schedule = {}
+    prefs = normalize_client_preferences(schedule)
+    wants_codex = bool(
+        prefs.get("interactive_clients", {}).get("codex")
+        or prefs.get("default_terminal_client") == "codex"
+        or (prefs.get("automation_enabled", True) and prefs.get("automation_backend") == "codex")
+    )
+    if not wants_codex:
+        return DoctorCheck(
+            id="runtime.codex_sessions",
+            tier="runtime",
+            status="healthy",
+            severity="info",
+            summary="Codex session parity check skipped (Codex not selected)",
+        )
+
+    audit = _recent_codex_session_parity_status()
+    if audit["files"] == 0:
+        return DoctorCheck(
+            id="runtime.codex_sessions",
+            tier="runtime",
+            status="degraded",
+            severity="warn",
+            summary="No recent Codex sessions found to verify startup discipline",
+            repair_plan=[
+                "Start Codex through `nexo chat` at least once so doctor can verify recent NEXO startup behavior",
+            ],
+            escalation_prompt=(
+                "Codex is selected, but there are no recent durable Codex sessions to inspect. "
+                "NEXO cannot prove that manual Codex sessions are entering the shared-brain startup flow."
+            ),
+        )
+
+    evidence = [
+        f"recent codex sessions inspected: {audit['files']}",
+        f"bootstrap markers seen in {audit['bootstrap_sessions']}/{audit['files']}",
+        f"nexo_startup seen in {audit['startup_sessions']}/{audit['files']}",
+        f"nexo_heartbeat seen in {audit['heartbeat_sessions']}/{audit['files']}",
+    ]
+    if audit["origins"]:
+        evidence.append(f"origins: {', '.join(audit['origins'])}")
+
+    status = "healthy"
+    severity = "info"
+    repair_plan: list[str] = []
+    if audit["bootstrap_sessions"] == 0:
+        status = "degraded"
+        severity = "warn"
+        repair_plan.append("Run `nexo update` or `nexo clients sync` so plain Codex sessions inherit the managed bootstrap")
+    if audit["startup_sessions"] == 0:
+        status = "degraded"
+        severity = "warn"
+        repair_plan.append("Use `nexo chat` or keep the global Codex bootstrap intact so sessions actually call `nexo_startup`")
+
+    return DoctorCheck(
+        id="runtime.codex_sessions",
+        tier="runtime",
+        status=status,
+        severity=severity,
+        summary="Recent Codex sessions show NEXO startup discipline" if status == "healthy" else "Recent Codex sessions need stronger NEXO startup discipline",
+        evidence=evidence,
+        repair_plan=repair_plan,
+        escalation_prompt=(
+            "Codex is selected, but recent durable Codex sessions are not consistently showing NEXO bootstrap markers or `nexo_startup`. "
+            "Manual Codex sessions may still be starting too plain."
+        ) if status != "healthy" else "",
+    )
+
+
+def check_claude_desktop_shared_brain() -> DoctorCheck:
+    try:
+        schedule = _load_json(SCHEDULE_FILE) if SCHEDULE_FILE.is_file() else {}
+    except Exception:
+        schedule = {}
+    prefs = normalize_client_preferences(schedule)
+    wants_desktop = bool(prefs.get("interactive_clients", {}).get("claude_desktop"))
+    installed = detect_installed_clients().get("claude_desktop", {}).get("installed", False)
+    status_info = _claude_desktop_shared_brain_status()
+
+    if not wants_desktop and not installed:
+        return DoctorCheck(
+            id="runtime.claude_desktop",
+            tier="runtime",
+            status="healthy",
+            severity="info",
+            summary="Claude Desktop shared-brain check skipped (client not installed)",
+        )
+
+    evidence = [
+        f"config: {status_info.get('path')}",
+        f"shared brain mode: {status_info.get('shared_brain_mode') or 'mcp_only'}",
+    ]
+    if status_info.get("managed_runtime_home"):
+        evidence.append(f"runtime home: {status_info.get('managed_runtime_home')}")
+
+    if status_info.get("error"):
+        return DoctorCheck(
+            id="runtime.claude_desktop",
+            tier="runtime",
+            status="degraded",
+            severity="warn",
+            summary="Claude Desktop config is unreadable",
+            evidence=evidence + [status_info["error"]],
+            repair_plan=["Repair Claude Desktop config JSON and re-run `nexo clients sync`"],
+        )
+
+    if not status_info.get("exists") or not status_info.get("has_mcp_server"):
+        return DoctorCheck(
+            id="runtime.claude_desktop",
+            tier="runtime",
+            status="degraded",
+            severity="warn",
+            summary="Claude Desktop is not pointed at the shared NEXO brain",
+            evidence=evidence,
+            repair_plan=["Run `nexo clients sync` so Claude Desktop shares the same local brain"],
+            escalation_prompt=(
+                "Claude Desktop is installed or enabled, but its MCP config does not show the shared `nexo` runtime."
+            ),
+        )
+
+    if not status_info.get("shared_brain_managed"):
+        return DoctorCheck(
+            id="runtime.claude_desktop",
+            tier="runtime",
+            status="degraded",
+            severity="warn",
+            summary="Claude Desktop shares NEXO, but managed metadata is missing",
+            evidence=evidence,
+            repair_plan=["Re-sync Claude Desktop so doctor can verify the managed shared-brain contract"],
+        )
+
+    return DoctorCheck(
+        id="runtime.claude_desktop",
+        tier="runtime",
+        status="healthy",
+        severity="info",
+        summary="Claude Desktop shared-brain parity OK (MCP-only mode)",
+        evidence=evidence,
     )
 
 
@@ -1207,6 +1501,34 @@ def check_transcript_source_parity() -> DoctorCheck:
     )
 
 
+def check_client_assumption_regressions() -> DoctorCheck:
+    offenders = _client_assumption_regressions()
+    if not offenders:
+        return DoctorCheck(
+            id="runtime.client_assumptions",
+            tier="runtime",
+            status="healthy",
+            severity="info",
+            summary="No new Claude-only runtime path assumptions detected",
+        )
+    return DoctorCheck(
+        id="runtime.client_assumptions",
+        tier="runtime",
+        status="critical",
+        severity="error",
+        summary=f"Detected {len(offenders)} client-parity regression(s) in runtime source",
+        evidence=offenders[:10],
+        repair_plan=[
+            "Replace Claude-only transcript or hook assumptions with shared client abstractions",
+            "Keep Deep Sleep and startup flows aware of both Claude Code and Codex surfaces",
+        ],
+        escalation_prompt=(
+            "A runtime source file drifted back to a Claude-only assumption. "
+            "Audit the offending file and restore client-agnostic parity before shipping."
+        ),
+    )
+
+
 def run_runtime_checks(fix: bool = False) -> list[DoctorCheck]:
     """Run all runtime-tier checks. Read-only by default."""
     return [
@@ -1216,7 +1538,10 @@ def run_runtime_checks(fix: bool = False) -> list[DoctorCheck]:
         check_cron_freshness(),
         check_client_backend_preferences(),
         check_client_bootstrap_parity(fix=fix),
+        check_codex_session_parity(),
+        check_claude_desktop_shared_brain(),
         check_transcript_source_parity(),
+        check_client_assumption_regressions(),
         check_launchagent_integrity(fix=fix),
         check_personal_script_registry(fix=fix),
         check_skill_health(fix=fix),
