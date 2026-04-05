@@ -6,7 +6,7 @@
 [![GitHub stars](https://img.shields.io/github/stars/wazionapps/nexo?style=social)](https://github.com/wazionapps/nexo/stargazers)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 
-> The first AI memory system with architectural inhibitory control — the agent reasons about whether to act before acting. Cognitive Cortex, Context Continuity via auto-compaction hooks, Smart Startup, Context Packets, Auto-Prime, and 30 Core Rules as DNA. Battle-tested from 6 months of production use, validated via multi-AI debate.
+> Local cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Persistent memory, selectable terminal and automation backends, overnight learning, self-healing background jobs, startup preflight, and doctor diagnostics. 150+ MCP tools. Benchmarked on LoCoMo (F1 0.588, +55% vs GPT-4).
 
 **NEXO Brain transforms any MCP-compatible AI agent from a stateless assistant into a cognitive partner that remembers, learns, forgets, adapts, and builds a relationship with you over time.**
 
@@ -19,6 +19,43 @@
 [Watch the overview on YouTube](https://www.youtube.com/watch?v=IBs7zh7ZMG0) · [Watch the full deep-dive](https://www.youtube.com/watch?v=bKAfowyyy5M)
 
 Every time you close a session, everything is lost. Your agent doesn't remember yesterday's decisions, repeats the same mistakes, and starts from zero. NEXO Brain fixes this with a cognitive architecture modeled after how human memory actually works.
+
+## Shared Brain Across Clients
+
+Shared brain is now the baseline:
+
+- **Claude Code** remains the recommended path because it still has the deepest hook integration and the most battle-tested headless automation surface.
+- **Codex** is supported both as an interactive terminal client and as the background automation backend.
+- **Claude Desktop** can point at the same local brain through MCP.
+
+That means NEXO now manages not only the shared runtime and MCP wiring, but also the startup layer around it:
+
+- `nexo chat` opens the configured client instead of assuming Claude Code forever.
+- Claude Code and Codex both get managed bootstrap files:
+  - `~/.claude/CLAUDE.md`
+  - `~/.codex/AGENTS.md`
+- Those files now use an explicit **`CORE` / `USER`** contract, so NEXO can update product rules in `CORE` while preserving operator-specific instructions in `USER`.
+- For Codex specifically, `nexo chat` and Codex headless automation inject the current bootstrap explicitly, so Codex starts as NEXO even when plain global Codex startup is inconsistent about global instructions.
+- Deep Sleep now reads both Claude Code and Codex transcript stores, so overnight analysis still works even when the user spends the day in Codex.
+
+Version `2.6.14` closes those parity gaps in practice, `2.6.15` hardens the installed-runtime migration path so existing users actually receive the managed bootstrap updates cleanly, and `2.6.16` pushes the system further in three directions:
+
+- Codex now gets managed global bootstrap/model sync in `~/.codex/config.toml`, so sessions opened outside `nexo chat` are much less likely to start as plain Codex.
+- Retrieval is smarter by default: HyDE and spreading activation now auto-enable when the query shape benefits, while exact lookups remain conservative.
+- Deep Sleep now blends recent context with older context over a 60-day horizon, and memory decay now tracks per-memory `stability` and `difficulty` instead of relying only on global decay constants.
+
+### Client Capability Matrix
+
+| Capability | Claude Code | Codex | Claude Desktop |
+|------------|-------------|-------|----------------|
+| Shared brain / MCP runtime | Yes | Yes | Yes |
+| Managed bootstrap document | `~/.claude/CLAUDE.md` | `~/.codex/AGENTS.md` | Not applicable |
+| Global startup bootstrap sync | Native via hooks + bootstrap | Managed via bootstrap + Codex config `initial_messages` | MCP only |
+| `nexo chat` terminal client | Yes | Yes | No |
+| Background automation backend | Recommended | Supported | No |
+| Raw transcript source for Deep Sleep | Yes | Yes | No |
+| Native hook depth | Deepest | Partial, compensated | None |
+| Recommended today | Yes | Supported | Shared-brain companion |
 
 ## The Problem
 
@@ -80,11 +117,24 @@ NEXO Brain uses **Ebbinghaus forgetting curves** — memories naturally fade ove
 - A lesson accessed 5 times in 2 weeks gets promoted to long-term memory — because repeated use proves it matters.
 - A dormant memory can be reactivated if something similar comes up — the "oh wait, I remember this" moment.
 
+On top of that baseline, NEXO now keeps a lightweight **per-memory profile**:
+
+- **stability** slows decay for memories that keep surviving retrieval and reinforcement
+- **difficulty** speeds decay slightly for memories that tend to be weak, noisy, or harder to reuse correctly
+
+That keeps the core Ebbinghaus model, but makes decay more individual and less purely global.
+
 ### Semantic Search (Finding by Meaning)
 
 NEXO Brain doesn't search by keywords. It searches by **meaning** using vector embeddings (fastembed, 768 dimensions).
 
 Example: If you search for "deploy problems", NEXO Brain will find a memory about "SSH connection timeout on production server" — even though they share zero words. This is how human associative memory works.
+
+Retrieval is now also smarter by default:
+
+- **HyDE auto mode** expands conceptual or ambiguous queries when that improves recall
+- **Spreading activation auto mode** adds a shallow associative boost for concept-heavy searches
+- **Exact lookup heuristics** keep both off for literal file paths, IDs, stack traces, and other precision-sensitive queries
 
 ### Metacognition (Thinking About Thinking)
 
@@ -136,6 +186,12 @@ Like a human brain, NEXO Brain has automated processes that run while you're not
 
 If your Mac was asleep during any scheduled process, NEXO Brain catches up in order when it wakes.
 
+Deep Sleep now also mixes **recent context with older context across a 60-day horizon**. Instead of only looking at the immediate past, it can surface:
+
+- recurring multi-week themes
+- cross-domain links between older learnings and current failures
+- stale followups and topics that keep being mentioned but never formalized
+
 ## Cognitive Cortex
 
 The Cortex is a middleware cognitive layer that makes the agent **think before acting**. It implements architectural inhibitory control — the agent cannot bypass reasoning.
@@ -184,11 +240,11 @@ This means long sessions (8+ hours) feel like one continuous conversation instea
   "hooks": {
     "PreCompact": [{
       "matcher": "*",
-      "hooks": [{"type": "command", "command": "bash path/to/nexo/src/hooks/pre-compact.sh", "timeout": 10}]
+      "hooks": [{"type": "command", "command": "bash $NEXO_HOME/hooks/pre-compact.sh", "timeout": 10}]
     }],
     "PostCompact": [{
       "matcher": "*",
-      "hooks": [{"type": "command", "command": "bash path/to/nexo/src/hooks/post-compact.sh", "timeout": 10}]
+      "hooks": [{"type": "command", "command": "bash $NEXO_HOME/hooks/post-compact.sh", "timeout": 10}]
     }]
   }
 }
@@ -198,7 +254,7 @@ This means long sessions (8+ hours) feel like one continuous conversation instea
 
 ## Cognitive Features
 
-NEXO Brain provides 29 cognitive tools on top of the 78 base tools, totaling **115+ MCP tools**. These features implement cognitive science concepts that go beyond basic memory:
+NEXO Brain provides **150+ MCP tools** across 23 categories. These features implement cognitive science concepts that go beyond basic memory:
 
 ### Input Pipeline
 
@@ -215,21 +271,21 @@ NEXO Brain provides 29 cognitive tools on top of the 78 base tools, totaling **1
 |---------|-------------|
 | **Pin / Snooze / Archive** | Granular lifecycle states for memories. Pin = never decays (critical knowledge). Snooze = temporarily hidden (revisit later). Archive = cold storage (searchable but inactive). |
 | **Intelligent Chunking** | Adaptive chunking that respects sentence and paragraph boundaries. Produces semantically coherent chunks instead of arbitrary token splits, reducing retrieval noise. |
-| **Adaptive Decay** | Decay rate adapts per memory based on access patterns: frequently-accessed memories decay slower, rarely-accessed ones fade faster. Prevents permanent clutter while keeping active knowledge sharp. |
+| **Adaptive Decay** | Decay rate still follows Ebbinghaus as the base model, but now also adapts per memory using `stability` and `difficulty` profiles. Frequently reinforced memories become stickier; fragile memories fade sooner. |
 | **Auto-Migration** | Formal schema migration system (schema_migrations table) tracks all database changes. Safe, reversible schema evolution for production systems — upgrades never lose data. |
 | **Auto-Merge Duplicates** | Batch cosine deduplication during the 03:00 sleep cycle. Respects sibling discrimination — similar memories about different contexts are kept separate. |
-| **Memory Dreaming** | Discovers hidden connections between recent memories during the 03:00 sleep cycle. Surfaces non-obvious patterns like "these three bugs all relate to the same root cause." |
+| **Memory Dreaming** | Discovers hidden connections between recent memories during the 03:00 sleep cycle and now feeds a 60-day long-horizon Deep Sleep blend, so older patterns can reappear when they become relevant again. |
 
 ### Retrieval
 
 | Feature | What It Does |
 |---------|-------------|
-| **HyDE Query Expansion** | Generates hypothetical answer embeddings for richer semantic search. Instead of searching for "deploy error", it imagines what a helpful memory about deploy errors would look like, then searches for that. |
+| **HyDE Query Expansion** | Generates hypothetical answer embeddings for richer semantic search. NEXO now auto-enables HyDE for conceptual or ambiguous queries while keeping literal lookups conservative. |
 | **Hybrid Search (FTS5+BM25+RRF)** | Combines dense vector search with BM25 keyword search via Reciprocal Rank Fusion. Outperforms pure semantic search on precise terminology and code identifiers. |
 | **Cross-Encoder Reranking** | After initial vector retrieval, a cross-encoder model rescores candidates for precision. The top-k results are reordered by true semantic relevance before being returned to the agent. |
 | **Multi-Query Decomposition** | Complex questions are automatically split into sub-queries. Each component is retrieved independently, then fused for a higher-quality answer — improves recall on multi-faceted prompts. |
 | **Temporal Indexing** | Memories are indexed by time in addition to semantics. Time-sensitive queries ("what did we decide last Tuesday?") use temporal proximity scoring alongside semantic similarity. |
-| **Spreading Activation** | Graph-based co-activation network. Memories retrieved together reinforce each other's connections, building an associative web that improves over time. |
+| **Spreading Activation** | Graph-based co-activation network. NEXO now auto-enables a shallow spreading pass for concept-heavy queries, improving contextual recall without turning every exact lookup into a fuzzy search. |
 | **Recall Explanations** | Transparent score breakdown for every retrieval result. Shows exactly why a memory was returned: semantic similarity, recency, access frequency, and co-activation bonuses. |
 
 ### Proactive
@@ -267,29 +323,105 @@ NEXO Brain was evaluated on [LoCoMo](https://github.com/snap-research/locomo) (A
 
 Full results in [`benchmarks/locomo/results/`](benchmarks/locomo/results/).
 
-## Nervous System (v1.6.0)
+## Nervous System (v2.0.0)
 
-NEXO Brain doesn't just respond — it runs autonomous processes in the background, like a biological nervous system. 11 scripts handle maintenance, health monitoring, and self-improvement without any user interaction:
+NEXO Brain doesn't just respond — it runs 13 core recovery-aware background jobs plus optional helpers, like a biological nervous system. They handle maintenance, health monitoring, and self-improvement without any user interaction:
 
 | Script | Schedule | What It Does |
 |--------|----------|-------------|
 | **cognitive-decay** | 03:00 daily | Ebbinghaus decay + memory consolidation + duplicate merging + dreaming |
-| **deep-sleep** | 04:30 daily | Reads full session transcripts, finds uncaptured corrections and protocol violations |
-| **daily-self-audit** | 07:00 daily | Health checks, guard stats, trust score review, metrics |
+| **sleep** | 04:00 daily | Synaptic pruning, expired data cleanup |
+| **deep-sleep** | 04:30 daily | 4-phase overnight pipeline: Collect→Extract→Synthesize→Apply. Analyzes all sessions, detects emotional patterns, abandoned projects, productivity issues, and auto-creates learnings |
+| **self-audit** | 07:00 daily | Health checks, guard stats, trust score review, metrics |
+| **postmortem** | 23:30 daily | Session consolidation, extract patterns from day's events |
 | **catchup** | On boot | Runs any missed scheduled processes (Mac was off/asleep) |
-| **evolution-run** | Weekly | Self-improvement proposals — NEXO suggests and applies enhancements |
-| **followup-hygiene** | Weekly | Normalizes statuses, flags stale followups, cleans orphans |
-| **immune** | 04:00 daily | Quarantine processing, memory promotion/rejection, synaptic pruning |
-| **watchdog** | Every 30 min | Monitors 15+ services, LaunchAgents, and infrastructure health |
-| **github-monitor** | 08:00 daily | Checks issues, PRs, and commits on public repos |
-| **learning-validator** | Nightly | Validates learnings for staleness, contradictions, and duplicates |
-| **cognitive-migrate** | On upgrade | Schema migrations for cognitive.db — safe, reversible evolution |
+| **tcc-approve** | On boot (macOS) | Auto-approve macOS permissions for Claude Code updates |
+| **prevent-sleep** | Always (daemon) | Keeps machine awake for nocturnal processes (caffeinate/systemd-inhibit) |
+| **evolution** | Weekly (Sun) | Self-improvement proposals — NEXO suggests and applies enhancements |
+| **followup-hygiene** | Weekly (Sun) | Normalizes statuses, flags stale followups, cleans orphans |
+| **learning-housekeep** | 03:15 daily | Dedup learnings, adjust weights by usage, process overdue reviews, reconcile decision outcomes |
+| **immune** | Every 30 min | Quarantine processing, memory promotion/rejection, synaptic pruning |
+| **synthesis** | 06:00 daily | Memory synthesis — discovers cross-memory patterns |
+| **watchdog** | Every 30 min | Monitors services, LaunchAgents, and infrastructure health |
+| **auto-close-sessions** | Every 5 min | Cleans stale sessions |
 
-All scripts run via macOS LaunchAgents (or catch-up on Linux). If your Mac was asleep during a scheduled process, the catch-up script re-runs everything in order when it wakes.
+Core processes are defined in `src/crons/manifest.json` and auto-synced to your system by `nexo_update`. On macOS they run via LaunchAgents; on Linux via systemd user timers. `tcc-approve`, `prevent-sleep`, and `backup` are platform/personal helpers — not in the manifest but listed above for completeness. Personal crons (your own scripts) are never touched by the sync. If your Mac was asleep during a scheduled process, the catch-up script re-runs everything in order when it wakes.
 
-### LaunchAgent Templates
+## Deep Sleep v2 — Overnight Learning (v2.1.0)
 
-13 macOS automation templates are included for scheduling the nervous system. The installer configures them automatically. On Linux, equivalent cron entries are generated.
+Deep Sleep is a 4-phase pipeline that runs at 4:30 AM and makes NEXO smarter while you sleep:
+
+```
+Phase 1: COLLECT (Python)
+├── Reads all session transcripts from the day
+├── Splits each session into individual .txt files
+└── Gathers DB state (followups, learnings, trust)
+
+Phase 2: EXTRACT (Opus, one call per session)
+├── 8 types of findings per session:
+│   ├── Uncaptured corrections (user corrected agent, no learning saved)
+│   ├── Self-corrected errors (knowledge gaps to fix)
+│   ├── Unformalised ideas (mentioned but never tracked)
+│   ├── Missed commitments (promised but no followup)
+│   ├── Protocol violations (guard_check, heartbeat, change_log)
+│   ├── Emotional signals (frustration, flow, satisfaction)
+│   ├── Abandoned projects (started but not finished)
+│   └── Productivity patterns (corrections, proactivity, tool efficiency)
+└── Outputs per-session JSON with findings + emotional timeline
+
+Phase 3: SYNTHESIZE (Opus, one call)
+├── Cross-session patterns (same error in 5 sessions = systemic)
+├── Daily mood arc with score (0.0 = terrible day, 1.0 = great day)
+├── Recurring triggers (what causes frustration vs flow)
+├── Productivity analysis (corrections, tool efficiency)
+├── Abandoned project detection
+├── Morning agenda (prioritized)
+└── Calibration recommendations
+
+Phase 4: APPLY (Python)
+├── Auto-creates learnings from high-confidence findings
+├── Creates followups for unfinished work
+├── Updates mood_history in calibration.json (30-day rolling)
+├── Generates session-tone.json (emotional guidance for next session)
+└── Writes morning-briefing.md
+```
+
+### Session Tone — Emotional Intelligence
+
+Deep Sleep generates a `session-tone.json` that tells NEXO how to behave next morning:
+
+- **Agent made many mistakes yesterday** → Acknowledge them, show what was learned, demonstrate improvement
+- **User had a bad day (mood < 40%)** → Supportive approach, lighter start, avoid known frustration triggers
+- **User had a great day (mood > 70%)** → Reinforce momentum, reference wins, push ambitious goals
+- **Agent was too reactive** → Be proactive today, don't wait for instructions
+
+This is read by `nexo_smart_startup` and injected into every session's context. NEXO adapts its personality based on real behavioral data, not just configuration.
+
+## Cron Manifest & Scheduler (v2.4.0)
+
+All core crons are defined in `src/crons/manifest.json`. When you run `nexo_update`, the sync script:
+- **Installs** new crons from the manifest
+- **Updates** changed schedules/intervals
+- **Removes** crons no longer in the manifest (only core ones)
+- **Never touches** personal crons you created yourself
+
+Every cron execution is tracked in the `cron_runs` table via a universal wrapper. Use `nexo_schedule_status` to see what ran overnight:
+
+```
+✅ deep-sleep: 1/1 OK, 4523s avg — 37 sessions, 259 findings
+✅ immune: 48/48 OK, 2s avg
+❌ evolution: 0/1 OK — CLI timeout
+```
+
+Add personal crons from conversation with `nexo_schedule_add` — generates LaunchAgent (macOS) or systemd timer (Linux) automatically.
+
+## Skill Auto-Creation (v2.4.0)
+
+Deep Sleep automatically extracts reusable procedures from successful multi-step tasks and stores them as skills with full procedural content (steps, gotchas, markdown).
+
+Pipeline: `trace → draft → published → archived`. Trust rises with successful use, decays without it. No human approval gates.
+
+7 MCP tools: `nexo_skill_create`, `nexo_skill_match`, `nexo_skill_get`, `nexo_skill_result`, `nexo_skill_list`, `nexo_skill_merge`, `nexo_skill_stats`.
 
 ## Dashboard (v1.6.0)
 
@@ -304,7 +436,13 @@ A web interface at `localhost:6174` with 6 interactive pages for visual insight 
 | **Adaptive** | Personality signals, learned weights, and current mode |
 | **Sessions** | Active and historical sessions with timeline and diary entries |
 
-Built with FastAPI backend and D3.js frontend. Runs as a LaunchAgent, auto-starts with the system.
+Built with FastAPI backend and D3.js frontend. Dashboard files are installed to `NEXO_HOME/dashboard/` but must be started manually:
+
+```bash
+python3 ~/.nexo/dashboard/app.py
+```
+
+This opens `localhost:6174` in your browser. Add `--port 8080` to change the port or `--no-browser` to skip auto-opening.
 
 ## Full Orchestration System
 
@@ -312,18 +450,17 @@ Memory alone doesn't make a co-operator. What makes the difference is the **beha
 
 ### Automated Hooks
 
-8 hooks fire automatically at key moments in every Claude Code session:
+7 hooks fire automatically at key moments in every Claude Code session:
 
 | Hook | When | What It Does |
 |------|------|-------------|
-| **SessionStart** | Session opens | Generates briefing from SQLite: overdue reminders, today's tasks, pending followups, active sessions. Cleans up post-mortem flags. |
+| **SessionStart (timestamp)** | Session opens | Writes session timestamp for staleness detection |
+| **SessionStart (briefing)** | Session opens | Generates briefing from SQLite: overdue reminders, today's tasks, pending followups, active sessions. Cleans up post-mortem flags. |
 | **Stop** | Session ends | Mandatory post-mortem: self-critique (5 questions), session buffer entry, followup creation, proactive seeds for next session |
-| **PostToolUse** | After each tool call | Captures meaningful mutations to the Sensory Register + inter-terminal inbox delivery |
-| **PreCompact** | Before context compression | Saves full session checkpoint to SQLite — task, files, decisions, errors, reasoning thread |
+| **PostToolUse (capture)** | After each tool call | Captures meaningful mutations to the Sensory Register + auto-diary every 10 tool calls |
+| **PostToolUse (inbox)** | After each tool call | Inter-terminal inbox delivery between parallel sessions |
+| **PreCompact** | Before context compression | Saves full session checkpoint to SQLite — task, files, decisions, errors, reasoning thread + emergency diary |
 | **PostCompact** | After context compression | Re-injects Core Memory Block so the session continues seamlessly from where it left off |
-| **PreToolUse** | Before tool execution | Validates tool parameters and injects guard context for destructive operations |
-| **Notification** | External events | Routes incoming notifications (GitHub, email, watchdog alerts) to the active session |
-| **Caffeinate** | Always (optional) | Keeps Mac awake for nocturnal cognitive processes |
 
 ### The Session Lifecycle
 
@@ -367,14 +504,62 @@ Existing users upgrading from any previous version:
 npx nexo-brain  # detects current version, migrates automatically
 ```
 - Updates hooks, core files, plugins, scripts, and LaunchAgent templates
-- Runs `cognitive-migrate.py` for safe, reversible schema evolution
+- Runs database schema migrations automatically
 - **Never touches your data** (memories, learnings, preferences)
 - Saves updated CLAUDE.md as reference (doesn't overwrite customizations)
 
-For manual migration (e.g., from a custom setup):
-```bash
-python3 ~/.nexo/scripts/nexo-cognitive-migrate.py
-```
+## Runtime CLI (v2.6.0)
+
+NEXO Brain includes a local CLI that runs independently of any single terminal client:
+
+- `nexo chat` — launch the configured terminal client with NEXO as the operator
+- `nexo update` — sync runtime from source, run migrations, reconcile schedules
+- `nexo doctor --tier runtime` — boot/runtime/deep diagnostics with `--fix` mode
+- `nexo scripts list` — list all personal scripts and their status
+- `nexo scripts reconcile` — align declared schedules with actual LaunchAgents/systemd
+- `nexo -v` — show installed runtime version
+
+The CLI lives at `NEXO_HOME/bin/nexo` and is added to your PATH during install.
+
+## Personal Scripts Registry (v2.6.0)
+
+Scripts in `NEXO_HOME/scripts/` are first-class managed entities:
+
+- Tracked in SQLite with metadata, categories, and schedule associations
+- Inline metadata in scripts declares name, runtime, schedule, and recovery policy
+- `nexo scripts create NAME` scaffolds a new script with the correct template
+- `nexo scripts reconcile` creates/repairs LaunchAgents from declared metadata
+- `nexo scripts sync` discovers filesystem state and updates the registry
+- `nexo doctor --tier runtime` detects orphaned schedules, missing plists, and drift
+
+Personal scripts are completely separate from core NEXO processes. The `crons/manifest.json` defines core; everything in `NEXO_HOME/scripts/` is personal.
+
+## Recovery-Aware Background Jobs (v2.6.2)
+
+Core and personal jobs now declare explicit recovery contracts in `crons/manifest.json`:
+
+| Field | Purpose |
+|-------|---------|
+| `recovery_policy` | `catchup`, `restart`, `restart_daemon`, or `skip` |
+| `run_on_boot` | Re-run when the machine starts |
+| `run_on_wake` | Re-run after sleep/resume |
+| `idempotent` | Safe to re-run without side effects |
+| `max_catchup_age` | Maximum age of a missed window to still catch up |
+
+If the Mac was asleep during a scheduled window, `catchup` detects the gap from `cron_runs` (not a state file) and re-executes eligible jobs once. Interval-based personal scripts get a single recovery run, not repeated ticks.
+
+For personal daemon-style helpers, `recovery_policy=restart_daemon` plus `schedule_required=true` declares an official `KeepAlive` schedule. NEXO can now reconcile and repair those daemons instead of treating them as unmanaged legacy LaunchAgents.
+
+## Startup Preflight (v2.6.2)
+
+Before `nexo chat` or MCP server start, NEXO runs a preflight check:
+
+1. Apply power policy (caffeinate on macOS, systemd-inhibit on Linux)
+2. Run safe local migrations and backfills
+3. Sync personal scripts registry
+4. For dev-linked runtimes: check if source repo is behind, pull if safe, sync to runtime
+
+This replaces the old "blind startup" where NEXO entered without verifying runtime health.
 
 ## Knowledge Graph (v0.8)
 
@@ -409,7 +594,7 @@ Files and areas that cause repeated errors accumulate a risk score (0.0–1.0). 
 npx nexo-brain
 ```
 
-The installer handles everything:
+The installer handles everything and syncs the same `nexo` MCP brain into Claude Code, Claude Desktop, and Codex when those clients are present:
 
 ```
   How should I call myself? (default: NEXO) > Atlas
@@ -425,8 +610,7 @@ The installer handles everything:
     - Node.js project detected
   Configuring MCP server...
   Setting up nervous system...
-    11 autonomous scripts configured.
-    13 LaunchAgent templates installed.
+    13 core recovery-aware jobs configured.
     Dashboard configured at localhost:6174.
   Caffeinate enabled.
   Generating operator instructions...
@@ -438,45 +622,118 @@ The installer handles everything:
 
 ### Starting a Session
 
-The installer creates a shell alias with your chosen name. Just type it:
+After install, use the runtime CLI:
 
 ```bash
-atlas
+nexo chat          # Launch the configured terminal client (Claude Code or Codex)
+nexo doctor        # Check runtime health
+nexo update        # Pull latest version and sync
+nexo clients sync  # Re-sync Claude Code/Desktop/Codex to the same brain
+nexo scripts list  # See your personal scripts
 ```
 
-Under the hood, the alias runs:
-```bash
-claude --append-system-prompt "You are NEXO. Run nexo_startup immediately, load context, greet the user." "."
-```
-`--append-system-prompt` adds to the default system prompt without replacing it (preserves CLAUDE.md). The `"."` triggers the operator to start immediately.
+During install, NEXO now asks which interactive clients you want to connect, which one `nexo chat` should open by default, whether to enable background automation, which backend should run that automation, and which model profile each active terminal/backend should use. Shared brain stays on in every mode.
 
-That's it. No need to run `claude` manually. Your operator will greet you immediately — adapted to the time of day, resuming from where you left off if there's a previous session. No cold starts, no waiting for your input.
+Recommended defaults:
+- Claude Code: `Opus latest`
+- Codex: `gpt-5.4` with `xhigh` reasoning
+
+Or use the shell alias created during install (e.g. `atlas`), which now runs `nexo chat .` so it opens whichever terminal client you selected as default.
+
+Your operator will greet you immediately — adapted to the time of day, resuming from where you left off. No cold starts.
+
+### Contributing
+
+NEXO is being hardened in public, and the best contributions now are not only code changes but also real workflow feedback:
+
+- Open issues when a client flow feels asymmetric across Claude Code, Codex, Claude Desktop, OpenClaw, or other MCP environments.
+- Send PRs for docs, install UX, tests, compatibility checks, and public-facing copy.
+- If you use NEXO in production-like daily work, include exact runtime symptoms and commands in bug reports. This project improves fastest when the operational reality is concrete.
+
+The project still recommends Claude Code as the primary path, but contributions that improve Codex, client parity, installer clarity, and ecosystem integrations are especially valuable.
 
 ### What Gets Installed
 
 | Component | What | Where |
 |-----------|------|-------|
 | Cognitive engine | Python: fastembed, numpy, vector search | pip packages |
-| MCP server | 111+ tools for memory, cognition, learning, guard | ~/.nexo/ |
-| Plugins | Guard, episodic memory, cognitive memory, entities, preferences | ~/.nexo/plugins/ |
-| Hooks (8) | SessionStart, Stop, PostToolUse, PreCompact, PostCompact, PreToolUse, Notification, Caffeinate | ~/.nexo/hooks/ |
-| Nervous system | 11 autonomous scripts (decay, sleep, audit, evolution, watchdog, etc.) | ~/.nexo/scripts/ |
-| Dashboard | Web UI at localhost:6174 (6 pages) | ~/.nexo/dashboard/ |
+| MCP server | 150+ tools for memory, cognition, learning, guard | NEXO_HOME/ |
+| Claude Code Plugin | Marketplace-ready (packaging verified) | `.claude-plugin/` |
+| Plugins | Guard, episodic memory, cognitive memory, entities, preferences, update, etc. | Code: src/plugins/, Personal: NEXO_HOME/plugins/ |
+| Hooks (7) | SessionStart, Stop, PostToolUse, PreCompact, PostCompact | NEXO_HOME/hooks/ |
+| Nervous system | 13 core recovery-aware jobs + optional helpers (dashboard, prevent-sleep) | NEXO_HOME/scripts/ |
+| Dashboard | Web UI at localhost:6174 (23 modules, dark theme) — opt-in, always-on | NEXO_HOME/dashboard/ |
+| Runtime CLI | `nexo` command: scripts, doctor, skills, update | NEXO_HOME/bin/ |
+| Doctor | Unified diagnostics: boot/runtime/deep tiers, `--fix` mode | src/doctor/ |
+| Skills v2 | Executable skills with guide/execute/hybrid modes, approval levels | NEXO_HOME/skills/ |
+| Startup Preflight | Health checks before every `nexo chat` or server start | Built into CLI |
 | CLAUDE.md | Complete operator instructions (Codex, hooks, guard, trust, memory) | ~/.claude/CLAUDE.md |
-| LaunchAgents | 13 templates for macOS automation | ~/Library/LaunchAgents/ |
-| Auto-update | Checks for new versions at boot | Built into catch-up |
-| Claude Code config | MCP server + 8 hooks registered | ~/.claude/settings.json |
+| Schedule config | schedule.json with customizable process times and timezone | NEXO_HOME/config/ |
+| Auto-update | Non-blocking startup check (5s max), opt-out via schedule.json | Built into server startup |
+| CLAUDE.md tracker | Version-tracked core sections with safe updates preserving customizations | Built into auto-update |
+| Shared client sync | Same `nexo` MCP entry wired into Claude Code, Claude Desktop, and Codex | User config dirs |
+| Client/backend preferences | Selected interactive clients, default terminal client, automation backend, and model/reasoning profiles per client | `NEXO_HOME/config/schedule.json` |
+| Auto-diary | 3-layer system: PostToolUse every 10 calls, PreCompact emergency, heartbeat DIARY_OVERDUE | Built into hooks |
+| Claude Code config | MCP server + 7 hooks + 15 managed processes registered | ~/.claude/settings.json |
+
+### Runtime CLI
+
+After installation or auto-update, NEXO adds `NEXO_HOME/bin` to your shell `PATH`. Open a new terminal and the `nexo` command provides operational tools:
+
+```bash
+# Personal Scripts
+nexo scripts list              # List your personal scripts
+nexo scripts run my-script     # Run a script with injected NEXO env
+nexo scripts doctor            # Validate all personal scripts
+nexo scripts call nexo_learning_search --input '{"query":"cron"}' # Call any MCP tool
+
+# Skills v2
+nexo skills sync               # Sync filesystem skill definitions into SQLite
+nexo skills list               # List published/stable skills
+nexo skills get SK-...         # Inspect a skill definition
+nexo skills apply SK-... --dry-run --json  # Resolve guide/execute/hybrid without running it
+nexo skills approve SK-... --execution-level local --approved-by Francisco  # Optional metadata override
+nexo skills evolution          # Show text→script and improvement candidates
+
+# Unified Doctor
+nexo doctor                    # Quick boot diagnostics
+nexo doctor --tier all         # Full system check (boot + runtime + deep)
+nexo doctor --tier runtime --json  # Machine-readable health report
+nexo doctor --fix              # Apply deterministic repairs
+```
+
+Personal scripts live in `NEXO_HOME/scripts/` with inline metadata. Their Python templates now include `run_automation_text(...)`, which routes work through the configured NEXO automation backend instead of hardcoding `claude -p` or provider-specific model names. See `docs/writing-scripts.md` for details.
+
+Skills v2 combine procedural guides with optional executable scripts. Personal skills live in `NEXO_HOME/skills/`, packaged core skills live in `NEXO_CODE/skills/` during development and `NEXO_HOME/skills-core/` in installed environments, and staged runtime copies live in `NEXO_HOME/skills-runtime/`. Execution is fully autonomous: Deep Sleep can evolve mature guide skills into executable drafts automatically, and runtime execution no longer waits for manual approval. See `docs/skills-v2.md` for the full model.
+
+The Doctor system reads existing health artifacts (immune, watchdog, self-audit) without triggering repairs in default mode.
 
 ### Requirements
 
 - **macOS or Linux** (Windows via [WSL](https://learn.microsoft.com/en-us/windows/wsl/install))
 - **Node.js 18+** (for the installer)
-- **Claude Opus (latest version) strongly recommended.** NEXO Brain provides 111+ MCP tools across 20 categories. This cognitive load requires a top-tier model with large context window. Smaller models (Haiku, Sonnet) may struggle with tool selection and produce inconsistent results. Opus handles all 111+ tools without hesitation.
-- Python 3, Homebrew, and Claude Code are installed automatically if missing.
+- **Claude Code is the primary recommended client.** It remains the most mature NEXO path: native hooks, the most battle-tested automation contract, and the clearest parity with historical production behavior.
+- **Recommended profiles:** Claude Code + `Opus latest`; Codex + `gpt-5.4` with `xhigh` reasoning if you prefer Codex as your terminal or automation backend.
+- Python 3, Homebrew, and the selected required client/backend can be installed automatically when NEXO has a supported installer path for that dependency.
 
 ## Architecture
 
-### 111+ MCP Tools across 20 Categories
+### Unified Code/Data Separation (v2.0.0)
+
+NEXO Brain separates **code** (immutable, in the repo or npm package) from **data** (personal, in `NEXO_HOME`):
+
+| Path | Contents |
+|------|----------|
+| `src/` (or npm package) | Server, plugins, hooks, scripts — never modified at runtime |
+| `NEXO_HOME/` (default `~/.nexo/`) | Database, config, personal plugins, schedule, backups |
+| `NEXO_HOME/config/schedule.json` | Customizable process schedules, timezone, auto_update flag |
+| `NEXO_HOME/plugins/` | Personal plugins that override or extend repo plugins |
+| `NEXO_HOME/data/` | SQLite databases (nexo.db, cognitive.db), migration state |
+
+The plugin loader scans `src/plugins/` first (base), then `NEXO_HOME/plugins/` (personal override by filename). This dual-directory approach lets you extend NEXO without forking the repo.
+The client sync layer points Claude Code, Claude Desktop, and Codex at the same runtime and `NEXO_HOME`, so all three clients share one brain instead of drifting into separate local memories.
+
+### 150+ MCP Tools across 23 Categories
 
 | Category | Count | Tools | Purpose |
 |----------|-------|-------|---------|
@@ -490,7 +747,7 @@ That's it. No need to run `claude` manually. Your operator will greet you immedi
 | Reminders | 5 | list, create, update, complete, delete | User's tasks and deadlines |
 | Followups | 4 | create, update, complete, delete | System's autonomous verification tasks |
 | Learnings | 5 | add, search, update, delete, list | Error patterns and prevention rules |
-| Credentials | 5 | create, get, update, delete, list | Secure local credential storage |
+| Credentials | 5 | create, get, update, delete, list | Local credential storage (plaintext SQLite — protect with filesystem permissions) |
 | Task History | 3 | log, list, frequency | Execution tracking and overdue alerts |
 | Menu | 1 | menu | Operations center with box-drawing UI |
 | Entities | 5 | search, create, update, delete, list | People, services, URLs |
@@ -501,10 +758,15 @@ That's it. No need to run `claude` manually. Your operator will greet you immedi
 | Adaptive & Somatic | 4 | adaptive_weights, adaptive_override, somatic_check, somatic_stats | Learned signal weights + pain memory per file |
 | Knowledge Graph | 4 | kg_query, kg_path, kg_neighbors, kg_stats | Bi-temporal entity-relationship graph |
 | Context Continuity | 2 | checkpoint_save, checkpoint_read | Auto-compaction session preservation |
+| Personal Scripts | 9 | sync, list, create, remove, schedules, unschedule, reconcile, classify, ensure_schedules | Script lifecycle management |
+| Skills | 12 | match, create, get, list, apply, approve, result, stats, evolution_candidates, merge, sync, featured | Reusable procedure library |
+| Schedule | 2 | add, status | Personal cron scheduling |
+| Doctor | 1 | doctor | Runtime diagnostics with --fix |
+| Update | 1 | update | Pull latest code, backup, migrate, verify (with rollback) |
 
 ### Plugin System
 
-NEXO Brain supports hot-loadable plugins. Drop a `.py` file in `~/.nexo/plugins/`:
+NEXO Brain supports hot-loadable plugins with a dual-directory loader. Base plugins live in `src/plugins/` (repo). Personal plugins go in `NEXO_HOME/plugins/` and can override base plugins by filename. Drop a `.py` file in `NEXO_HOME/plugins/`:
 
 ```python
 # my_plugin.py
@@ -524,7 +786,7 @@ Reload without restarting: `nexo_plugin_load("my_plugin.py")`
 - **Everything stays local.** All data in `~/.nexo/`, never uploaded anywhere.
 - **No telemetry.** No analytics. No phone-home.
 - **No cloud dependencies.** Vector search runs on CPU (fastembed), not an API.
-- **Auto-update is opt-in.** Checks GitHub releases, never sends data.
+- **Auto-update is resilient.** NEXO checks for updates on startup. If an update fails, it continues with the current version and notifies you. Local migrations (database schema, configuration) always run. Network updates (git pull) can be disabled by setting `auto_update: false` in `NEXO_HOME/config/schedule.json`.
 - **Secret redaction.** API keys and tokens are stripped before they ever reach memory storage.
 
 ## The Psychology Behind NEXO Brain
@@ -552,13 +814,21 @@ NEXO Brain isn't just engineering — it's applied cognitive psychology:
 
 ### Claude Code (Primary)
 
-NEXO Brain is designed as an MCP server. Claude Code is the primary supported client:
+NEXO Brain is designed as an MCP server. Claude Code remains the primary recommended client and the most complete integration path:
 
 ```bash
 npx nexo-brain
 ```
 
-All 111+ tools are available immediately after installation. The installer configures Claude Code's `~/.claude/settings.json` automatically.
+All 150+ tools are available immediately after installation. The installer configures Claude Code's `~/.claude/settings.json` automatically. The recommended Claude profile is `Opus latest`.
+
+### Claude Desktop
+
+When Claude Desktop is installed, `nexo-brain`, `nexo update`, and `nexo clients sync` keep `claude_desktop_config.json` pointed at the same local NEXO runtime and `NEXO_HOME`.
+
+### Codex
+
+When Codex CLI is available, `nexo-brain`, `nexo update`, and `nexo clients sync` register the same `nexo` MCP server via `codex mcp add`, so Codex uses the same local memory store as Claude Code and Claude Desktop. If selected during install, `nexo chat` can open Codex directly and background automation can also run through Codex. The current recommended Codex profile is `gpt-5.4` with `xhigh` reasoning.
 
 ### OpenClaw
 
@@ -574,7 +844,7 @@ Add NEXO Brain to your OpenClaw config at `~/.openclaw/openclaw.json`:
     "servers": {
       "nexo-brain": {
         "command": "python3",
-        "args": ["~/.nexo/src/server.py"],
+        "args": ["~/.nexo/server.py"],
         "env": {
           "NEXO_HOME": "~/.nexo"
         }
@@ -587,7 +857,7 @@ Add NEXO Brain to your OpenClaw config at `~/.openclaw/openclaw.json`:
 Or via CLI:
 
 ```bash
-openclaw mcp set nexo-brain '{"command":"python3","args":["~/.nexo/src/server.py"],"env":{"NEXO_HOME":"~/.nexo"}}'
+openclaw mcp set nexo-brain '{"command":"python3","args":["~/.nexo/server.py"],"env":{"NEXO_HOME":"~/.nexo"}}'
 openclaw gateway restart
 ```
 
@@ -617,7 +887,7 @@ This replaces OpenClaw's default memory system with NEXO Brain's full cognitive 
 
 ### Any MCP Client
 
-NEXO Brain works with any application that supports the MCP protocol. Configure it as an MCP server pointing to `~/.nexo/src/server.py`.
+NEXO Brain works with any application that supports the MCP protocol. Configure it as an MCP server pointing to `server.py` inside `NEXO_HOME` (default `~/.nexo/server.py`), with the `NEXO_HOME` env var set to the same directory.
 
 ## Listed On
 
@@ -629,19 +899,8 @@ NEXO Brain works with any application that supports the MCP protocol. Configure 
 | mcpservers.org | MCP Directory | [mcpservers.org](https://mcpservers.org) |
 | OpenClaw | Native Plugin | [openclaw.com](https://openclaw.ai) |
 | dev.to | Technical Article | [How I Applied Cognitive Psychology to AI Agents](https://dev.to/wazionapps/how-i-applied-cognitive-psychology-to-give-ai-agents-real-memory-2oce) |
+| Claude Code | Plugin (marketplace-ready) | Packaging verified, included in npm tarball |
 | nexo-brain.com | Official Website | [nexo-brain.com](https://nexo-brain.com) |
-
-## Inspired By
-
-NEXO Brain builds on ideas from several open-source projects. We're grateful for the research and implementations that inspired specific features:
-
-| Project | Inspired Features |
-|---------|------------------|
-| [Vestige](https://github.com/pchaganti/gx-vestige) | HyDE query expansion, spreading activation, prediction error gating, memory dreaming, prospective memory |
-| [ShieldCortex](https://github.com/PShieldCortex/ShieldCortex) | Security pipeline (4-layer memory poisoning defense) |
-| [Bicameral](https://github.com/nicobailey/Bicameral) | Quarantine queue (trust promotion policy for new facts) |
-| [claude-mem](https://github.com/nicobailey/claude-mem) | Hook auto-capture (extracting decisions and facts from conversations) |
-| [ClawMem](https://github.com/nicobailey/ClawMem) | Co-activation reinforcement (memories retrieved together strengthen connections) |
 
 ## Support the Project
 
@@ -656,13 +915,88 @@ If NEXO Brain is useful to you, consider:
 
 ## Changelog
 
+### v2.6.9 — Integration Sync, CI/CD Pipeline (2026-04-04)
+- **Release artifact sync**: Automated version synchronization across Claude Code plugin, OpenClaw package, and ClawHub skill before every publish.
+- **CI/CD pipeline**: Full GitHub Actions workflow for publish + verification of all integration channels.
+- **OpenClaw plugin hardened**: Contract tests, correct runtime path, synchronized version. Published as @wazionapps/openclaw-memory-nexo-brain@2.6.9.
+- **ClawHub skill hardened**: Version-synced metadata, correct server path, post-publish smoke verification.
+- **Claude Code plugin packaging**: Verified plugin.json, .mcp.json, hooks included in npm tarball. Marketplace-ready.
+
+### v2.6.5 — Power Helper Hardening, Recovery Contracts (2026-04-04)
+- Power helper semantics explicit and safer: `always_on` = platform helper for best-effort background availability.
+- Catch-up recovery suppresses duplicate relaunches for in-flight `cron_runs`.
+- Runtime update/startup reconciles declared personal schedules automatically.
+
+### v2.6.3 — Cron Sync Fix, Hook Migration (2026-04-04)
+- Runtime cron sync skips same-file copies, avoiding `SameFileError` on synced runtimes.
+- Core hook migration normalizes legacy flat entries into Claude Code's required `matcher + hooks[]` format.
+
+### v2.6.2 — Startup Preflight, Personal Recovery, Power Policy (2026-04-04)
+- Startup preflight before `nexo chat` and server — safe local migrations, deferred remote updates.
+- Personal managed schedules can declare recovery contracts (wake/boot/catchup).
+- Persisted runtime power policy (`always_on`/`disabled`/`unset`). Installer and `nexo update` prompt once.
+- Packaged installs resolve update root correctly (fixes `vunknown`).
+
+### v2.6.0 — Personal Scripts Registry, Plugin Marketplace, Managed Evolution (2026-04-03)
+- **Personal scripts registry**: Scripts in `NEXO_HOME/scripts/` tracked in SQLite with metadata, categories, schedules. Full lifecycle: create, sync, reconcile, schedule, unschedule, remove.
+- **Orchestrator removed from core** (breaking): Was opt-in personal automation adding complexity for all users. Existing users keep their setup in `NEXO_HOME/scripts/`.
+- **Claude Code plugin structure**: `plugin.json`, entry point, packaging for marketplace submission.
+- **`nexo chat`**: Official command to launch the configured terminal client with NEXO as operator.
+- **Managed Evolution hardening**: Can modify core behavior modules with rollback followups.
+- Cron recovery hardened: TCC diagnostics, keepalive sync, personal schedule catchup.
+
+### v2.5.0 — Runtime CLI, Doctor, Skills v2, Day Orchestrator (2026-04-03)
+- **Runtime CLI** (`nexo`): New operational CLI separate from installer. `nexo scripts list/run/doctor/call` for personal scripts, `nexo doctor` for diagnostics, `nexo skills apply` for executable skills, `nexo update` for one-step sync.
+- **Unified Doctor**: Modular diagnostic system with boot/runtime/deep tiers. Report-only by default, deterministic `--fix` mode. MCP tool `nexo_doctor`. LaunchAgent schedule drift detection and reconciliation.
+- **Skills v2**: Executable skills with guide/execute/hybrid modes. Security levels (read-only/local/remote) with explicit approval. Core vs personal vs community directories. Deep Sleep auto-evolution integration.
+- **Day Orchestrator**: Autonomous NEXO cycles every 15 min (8:00-23:00). Launches Claude Code headless with full MCP. Checks followups, emails, infra — acts autonomously, emails user only when needed. Opt-in.
+- **Dashboard always-on**: Web UI at localhost:6174 as persistent LaunchAgent. 23 modules, Jinja2 templating, dark theme. Opt-in.
+- **Personal Scripts Framework**: Auto-discovery in NEXO_HOME/scripts/, inline metadata, runtime detection, forbidden-pattern validation, vendorable helper, template.
+- Configurable operator name (UserContext singleton), watchdog normalized to 30 min, LaunchAgent drift fix.
+
+### v2.4.0 — Skills, Cron Scheduler, Security, Full Audit (2026-04-03)
+- **Skill Auto-Creation**: Deep Sleep extracts reusable procedures from sessions. Content stored as markdown with steps and gotchas. Trust pipeline with autonomous quality control.
+- **Cron Scheduler**: execution tracking (`cron_runs` table), `nexo_schedule_status` and `nexo_schedule_add` MCP tools, universal cron wrapper for all processes.
+- **Deep Sleep v2.4**: watermark-based collection (late-night sessions included), per-session checkpointing (crash-safe), retry x3, JSON parsing fix, auto-calibration of personality settings.
+- **Security**: credential redaction in tool logs, transcript sanitization, command injection fix in dashboard, path traversal protection in plugin loader.
+- **Diary filter**: startup only shows human sessions, auto-closed cron sessions filtered out. Email sessions preserved as real interactions.
+- **Preflight CI**: 66 automated checks (py_compile, bash -n, manifest consistency, npm artifact, forbidden markers).
+- **Python 3.9 compat**: `from __future__ import annotations` across 18 files.
+- **Linux**: full systemd timer support, .bashrc alias for interactive shells.
+- Passed 5-phase automated audit: Product, Failure, Security, Packaging, UX.
+
+### v2.2.0 — Trust Score v2 (2026-04-01)
+- **Trust Score**: fair daily calibration from Deep Sleep analysis. Score 0-100 based on corrections, autonomy, proactivity.
+- **Cognitive Quarantine**: new memories go through quarantine before promotion to LTM.
+
+### v2.0.0 — Unified Architecture (2026-03-31)
+- **Code/data separation**: Code in repo (`src/`), personal data in `NEXO_HOME` (default `~/.nexo/`). `NEXO_HOME` env var required.
+- **Plugin loader dual-directory**: Scans `src/plugins/` (base) then `NEXO_HOME/plugins/` (personal override by filename).
+- **Auto-update on startup**: Non-blocking (5s max), resilient, opt-out via `schedule.json`. Separate from manual `nexo_update` tool.
+- **Auto-diary**: 3-layer system — PostToolUse every 10 calls, PreCompact emergency save, heartbeat DIARY_OVERDUE signal.
+- **CLAUDE.md version tracker**: Section markers enable safe core updates without losing user customizations.
+- **schedule.json**: Customizable process schedules with timezone support and `auto_update` flag.
+- **15 autonomous processes**: Added auto-close-sessions, synthesis, backup, tcc-approve, prevent-sleep (cross-platform).
+- **7 hooks**: SessionStart (timestamp + briefing), Stop, PostToolUse (capture + inbox), PreCompact, PostCompact.
+- **150+ MCP tools**: Added `nexo_update` tool for manual updates with rollback.
+- **Lambda fix**: Decay values were 24x too aggressive (STM: 7h to 7d, LTM: 2.4d to 60d).
+- **Guard scoping**: Was returning 35+ irrelevant blocking rules; now scoped to area and gated to high/critical.
+- **12 rounds of external audit**: ~60 findings resolved.
+
+### v1.7.0 — Full Internationalization + Linux Support (2026-03-31)
+- **Full i18n**: All UI strings, error messages, DB status values in English. NLP detection patterns retain bilingual keywords (Spanish + English) for multilingual user support.
+- **Linux support**: systemd user timers (preferred) or crontab fallback for all automated cognitive processes.
+- **Auto-resolve followups**: Change log entries automatically cross-reference and complete matching open followups.
+- **Free-form learning categories**: No more hardcoded category validation — use any category name.
+- **CLAUDE.md template rewrite**: 494 to 127 lines, compact procedural format with full heartbeat signal reactions.
+- **Complete sanitization**: All hardcoded paths use `NEXO_HOME` env var. No credentials or personal data in the distributed package. Migration scripts and maintainer tooling use configurable paths.
+
 ### v1.6.0 — Nervous System + Dashboard v2 (2026-03-30)
-- **Nervous System**: 11 autonomous scripts (decay, deep sleep, self-audit, catchup, evolution, followup hygiene, immune, watchdog, github monitor, learning validator, cognitive migrate)
+- **Nervous System**: 11 autonomous scripts (decay, deep sleep, self-audit, catchup, evolution, followup hygiene, immune, watchdog, github monitor, learning validator)
 - **Dashboard v2**: 6 interactive pages at localhost:6174 (Overview, Graph, Memory, Somatic, Adaptive, Sessions)
-- **LaunchAgent Templates**: 13 macOS automation templates included in the package for scheduling the nervous system
-- **Migration Script**: `cognitive-migrate.py` for safe, reversible schema evolution on upgrades
-- **Hooks**: 8 total — added PreToolUse (parameter validation + guard injection) and Notification (external event routing)
-- **Installer**: Now configures dashboard LaunchAgent, nervous system scripts, and all 13 templates automatically
+- **LaunchAgent Templates**: macOS automation templates included in the package for scheduling the nervous system
+- **Hooks**: 7 total — SessionStart, Stop, PostToolUse, PreCompact, PostCompact
+- **Installer**: Now configures dashboard LaunchAgent, nervous system scripts, and all templates automatically
 
 ### v1.5.2 — Deep Sleep (2026-03-29)
 - **Deep Sleep**: Reads full session transcripts (not just diary) — finds uncaptured corrections, protocol violations, missed commitments
@@ -675,7 +1009,7 @@ If NEXO Brain is useful to you, consider:
 - **HNSW Vector Index**: Optional approximate nearest neighbor acceleration (auto-activates above 10,000 memories)
 - **Claim Graph**: Decomposes blob memories into atomic verifiable facts with provenance and contradiction detection
 - **Inter-terminal Auto-inbox (D+)**: `nexo_startup` accepts `claude_session_id` for automatic inbox delivery between parallel terminals
-- **Tests**: 24 pytest tests across 3 suites (cognitive, knowledge graph, migrations)
+- **Tests**: 156 pytest tests across 3 suites (cognitive, knowledge graph, migrations)
 
 ### v1.4.1 — Multi-AI Code Review (2026-03-29)
 - **Fix**: 3 bugs found by GPT-5.4 (Codex CLI) + Gemini 2.5 (Gemini CLI) reviewing full codebase
@@ -718,7 +1052,7 @@ If NEXO Brain is useful to you, consider:
 - New tools: `nexo_checkpoint_save`, `nexo_checkpoint_read`
 - Heartbeat automatically maintains checkpoint every interaction
 - Core Memory Block re-injected post-compaction with task, files, decisions, reasoning thread
-- 115+ total tools, 20 categories
+- 115+ total tools at the time, 20 categories
 
 ### v1.0.0 — Cognitive Cortex + Stable Release (2026-03-26)
 - **Cognitive Cortex**: architectural inhibitory control (ASK/PROPOSE/ACT modes)
@@ -735,7 +1069,7 @@ If NEXO Brain is useful to you, consider:
 
 ### v0.9.0 — Cognitive Memory (2026-03-15)
 - Atkinson-Shiffrin memory model (STM → LTM promotion)
-- Semantic RAG with fastembed (BAAI/bge-small-en-v1.5, 384 dims)
+- Semantic RAG with fastembed (BAAI/bge-base-en-v1.5, 768 dims)
 - Trust scoring, sentiment detection, adaptive personality modes
 - Ebbinghaus decay, sister detection, quarantine system
 

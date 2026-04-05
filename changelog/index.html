@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v2.6.15.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v2.6.16.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v2.6.15.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v2.6.16.">
     <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
     <meta property="og:image:width" content="1536">
     <meta property="og:image:height" content="1024">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v2.6.15.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v2.6.16.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v2.6.15.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v2.6.16.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -83,6 +83,27 @@
         <div class="section-label">VERSION HISTORY</div>
         <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
         <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning.</p>
+    </div>
+</section>
+
+<!-- v2.6.16 Smarter retrieval defaults, Codex runtime sync, long-horizon Deep Sleep -->
+<section id="v2616" class="section-compact" style="background:linear-gradient(135deg,#1a0f2e 0%,#0F0A1A 100%);">
+    <div class="container">
+        <div class="section-label">New in v2.6.16 <span style="opacity:.5;font-weight:400;">&mdash; April 5, 2026</span></div>
+        <h2 class="section-title">Smarter Retrieval Defaults, Stronger Codex Runtime Parity</h2>
+        <p class="section-subtitle">
+            2.6.16 improves both cognition and multi-client realism: Codex gets managed global bootstrap/model sync, retrieval becomes smarter by default, and Deep Sleep now reasons across a blended 60-day horizon instead of focusing only on the recent past.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Managed Codex Global Startup State</h4><p>NEXO now syncs the live bootstrap, model, and reasoning profile into <code>~/.codex/config.toml</code>, not just <code>~/.codex/AGENTS.md</code>.</p></div>
+                <div class="cognitive-card"><h4>Generic Session Tokens</h4><p>Startup/session coordination and dashboard followups are now client-aware instead of assuming every interactive session is Claude-shaped.</p></div>
+                <div class="cognitive-card"><h4>HyDE + Spreading Auto Mode</h4><p>Conceptual queries now auto-enable HyDE and shallow spreading activation, while exact lookups stay conservative.</p></div>
+                <div class="cognitive-card"><h4>Per-Memory Personalization</h4><p>STM/LTM memories now track their own <code>stability</code> and <code>difficulty</code> on top of the Ebbinghaus base curve.</p></div>
+                <div class="cognitive-card"><h4>60-Day Deep Sleep Blend</h4><p>Overnight synthesis now mixes recent and older context across diaries, learnings, transcript metadata, and stale followups to surface multi-week patterns.</p></div>
+                <div class="cognitive-card"><h4>Parity Regression Audits</h4><p>New tests now guard key shared-runner, transcript-source, bootstrap, and followup paths against drifting back into Claude-only assumptions.</p></div>
+            </div>
+        </div>
     </div>
 </section>
 

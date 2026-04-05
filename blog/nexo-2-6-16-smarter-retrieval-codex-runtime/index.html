@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXO 2.6.16: Smarter Retrieval Defaults, Stronger Codex Runtime Parity, and 60-Day Deep Sleep</title>
+    <meta name="description" content="NEXO Brain 2.6.16 adds managed Codex global bootstrap/model sync, smarter automatic retrieval defaults, per-memory stability and difficulty, and a 60-day Deep Sleep horizon.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-2-6-16-smarter-retrieval-codex-runtime/">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/blog/nexo-2-6-16-smarter-retrieval-codex-runtime/">
+    <meta property="og:title" content="NEXO 2.6.16: Smarter Retrieval Defaults, Stronger Codex Runtime Parity, and 60-Day Deep Sleep">
+    <meta property="og:description" content="Codex gets stronger managed startup state, retrieval becomes smarter by default, memory decay grows more individualized, and Deep Sleep sees a longer horizon.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
+    <meta property="og:image:width" content="1536">
+    <meta property="og:image:height" content="1024">
+    <meta property="article:published_time" content="2026-04-05">
+    <meta property="article:author" content="Francisco Cerd&agrave; Puigserver">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO 2.6.16: Smarter Retrieval Defaults, Stronger Codex Runtime Parity, and 60-Day Deep Sleep">
+    <meta name="twitter:description" content="Codex gets stronger managed startup state, retrieval becomes smarter by default, memory decay grows more individualized, and Deep Sleep sees a longer horizon.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "NEXO 2.6.16: Smarter Retrieval Defaults, Stronger Codex Runtime Parity, and 60-Day Deep Sleep",
+        "description": "NEXO Brain 2.6.16 adds managed Codex global bootstrap/model sync, smarter automatic retrieval defaults, per-memory stability and difficulty, and a 60-day Deep Sleep horizon.",
+        "datePublished": "2026-04-05",
+        "dateModified": "2026-04-05",
+        "author": {
+            "@type": "Person",
+            "name": "Francisco Cerd\u00e0 Puigserver"
+        },
+        "publisher": {
+            "@type": "Organization",
+            "name": "WAzion",
+            "url": "https://www.wazion.com"
+        },
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https://nexo-brain.com/blog/nexo-2-6-16-smarter-retrieval-codex-runtime/"
+        },
+        "url": "https://nexo-brain.com/blog/nexo-2-6-16-smarter-retrieval-codex-runtime/",
+        "image": "https://nexo-brain.com/assets/social-preview.png",
+        "keywords": ["NEXO Brain 2.6.16", "Codex", "HyDE", "spreading activation", "Deep Sleep", "AI memory", "shared brain"]
+    }
+    </script>
+
+    <style>
+        .article-header { padding-top: 128px; padding-bottom: 40px; text-align: center; }
+        .article-meta { font-size: 14px; color: var(--text-muted); margin-bottom: 16px; }
+        .article-body {
+            max-width: 720px; margin: 0 auto; padding: 0 24px 80px;
+            font-size: 17px; line-height: 1.8; color: var(--text);
+        }
+        .article-body h2 { font-size: 28px; font-weight: 700; margin: 48px 0 16px; letter-spacing: -0.01em; }
+        .article-body p { margin-bottom: 20px; color: var(--text-muted); }
+        .article-body strong { color: var(--text); }
+        .article-body a { color: var(--purple-light); }
+        .article-body a:hover { color: var(--pink); }
+        .article-body ul { margin: 0 0 20px 24px; color: var(--text-muted); }
+        .article-body li { margin-bottom: 8px; }
+        .article-body code {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 14px; color: var(--pink);
+            background: rgba(236, 72, 153, 0.1);
+            padding: 2px 8px; border-radius: 4px;
+        }
+        .article-body pre {
+            background: var(--dark-card);
+            border: 1px solid var(--dark-border);
+            border-radius: 12px;
+            padding: 24px;
+            overflow-x: auto;
+            margin-bottom: 24px;
+        }
+        .article-body pre code {
+            background: none; padding: 0;
+            font-size: 15px; color: #22C55E;
+        }
+        .article-back {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 14px; font-weight: 600; color: var(--text-muted);
+            margin-bottom: 24px;
+        }
+        .article-back:hover { color: var(--purple-light); }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-64.png" alt="NEXO Brain" width="32" height="32">
+            NEXO Brain
+        </a>
+        <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/features/">Features</a>
+            <a href="/compare/">Compare</a>
+            <a href="/blog/">Blog</a>
+            <a href="/changelog/">Changelog</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<article>
+    <header class="article-header">
+        <div class="container">
+            <a href="/blog/" class="article-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg> Back to Blog</a>
+            <div class="article-meta">April 5, 2026 &middot; 6 min read</div>
+            <h1 class="section-title" style="font-size:clamp(28px,4.5vw,48px);max-width:860px;margin:0 auto 16px;">NEXO 2.6.16: Smarter Retrieval Defaults, Stronger Codex Runtime Parity, and 60-Day Deep Sleep</h1>
+            <p class="section-subtitle">This release does two things at once: it makes the shared brain more real in day-to-day Codex use, and it makes the brain itself more intelligent when it retrieves, forgets, and dreams.</p>
+        </div>
+    </header>
+
+    <div class="article-body">
+        <p>Once NEXO gained a shared brain across Claude Code, Codex, and Claude Desktop, the next question was obvious: <strong>is the parity only true when users stay on the golden path, or is it still true in messy real use?</strong> Version 2.6.16 pushes that answer further in the right direction.</p>
+        <p>At the same time, we also tightened the memory system itself. Retrieval now makes better default choices, memory decay grows more individualized, and Deep Sleep looks farther back before it decides what still matters.</p>
+
+        <h2>Codex Now Gets Managed Global Bootstrap and Model Sync</h2>
+        <p>Codex sessions launched through <code>nexo chat</code> already started with the current NEXO bootstrap. The weak spot was sessions opened more directly: they could still drift back toward plain Codex behavior depending on how the client loaded global startup state.</p>
+        <p>NEXO now manages that layer too by writing the active bootstrap and runtime profile into <code>~/.codex/config.toml</code>. That means Codex inherits:</p>
+        <ul>
+            <li>the managed NEXO startup instructions</li>
+            <li>the configured Codex model</li>
+            <li>the configured reasoning effort</li>
+        </ul>
+        <p>This still does not magically create Claude Code&rsquo;s native hook surface inside Codex. But it does make the baseline startup identity far more reliable, even outside <code>nexo chat</code>.</p>
+
+        <h2>Session Tokens and Followups Are No Longer Claude-Shaped</h2>
+        <p>Some of the surrounding runtime logic still assumed that every interactive session looked like Claude Code internally. That was subtle technical debt: the product claim said “shared brain across clients,” but pieces of coordination still smelled Claude-first.</p>
+        <p>2.6.16 generalizes that surface. Startup and session registration now support generic external session tokens and client identifiers, and dashboard followups launch the currently configured terminal client instead of hardcoding Claude Code.</p>
+
+        <h2>HyDE and Spreading Activation Now Make Smarter Default Choices</h2>
+        <p>Two retrieval features were already present in NEXO, but they were effectively opt-in: HyDE query expansion and spreading activation. That meant the capability existed, but the system was still leaving quality on the table unless something called those modes explicitly.</p>
+        <p>Now the defaults are smarter:</p>
+        <ul>
+            <li>conceptual and ambiguous queries auto-enable HyDE</li>
+            <li>concept-heavy queries auto-enable a shallow spreading pass</li>
+            <li>exact lookups such as file paths, IDs, stack traces, and literal errors keep both off</li>
+        </ul>
+        <p>That improves semantic recall without turning every precise lookup into fuzzy mush.</p>
+
+        <h2>Memory Decay Is Still Ebbinghaus, but Less Generic</h2>
+        <p>We did not replace NEXO with a foreign review scheduler. Instead, we made the existing memory model more individualized.</p>
+        <p>Each STM and LTM memory now carries two lightweight factors:</p>
+        <ul>
+            <li><strong>stability</strong> &mdash; how resilient that memory has proven to be</li>
+            <li><strong>difficulty</strong> &mdash; how fragile or hard to reuse it tends to be</li>
+        </ul>
+        <p>Decay still uses Ebbinghaus as the base. These new factors just stop every memory from being treated like the same anonymous unit.</p>
+
+        <h2>Deep Sleep Now Looks Across a 60-Day Horizon</h2>
+        <p>Before this release, Deep Sleep was already transcript-aware across Claude Code and Codex. What it still lacked was a deliberately longer memory of its own: the ability to mix recent context with older signals instead of focusing almost entirely on the immediate past.</p>
+        <p>NEXO now builds a blended 60-day context that combines:</p>
+        <ul>
+            <li>recent and older diary entries</li>
+            <li>historical learnings</li>
+            <li>transcript session metadata</li>
+            <li>stale followups</li>
+            <li>recurring domains, moods, and self-critiques</li>
+        </ul>
+        <p>The synthesis prompt now explicitly asks for multi-week recurring themes, older/current cross-domain connections, and topics that keep being mentioned but never formalized.</p>
+
+        <h2>Guardrails Against Sliding Back Into a Claude-Only World</h2>
+        <p>One of the risks in a multi-client system is not the first parity release. It is the third or fourth change afterward, when someone adds a feature and quietly assumes Claude-only paths again.</p>
+        <p>2.6.16 adds regression audit coverage for exactly that class of mistake: shared automation runner usage, transcript-source parity, Codex bootstrap guidance, and client-aware dashboard followups now have explicit tests.</p>
+
+        <h2>What This Release Actually Means</h2>
+        <ul>
+            <li>Codex now starts as NEXO more reliably, even outside the perfect path.</li>
+            <li>NEXO retrieval makes better default decisions without sacrificing exact lookups.</li>
+            <li>Memory personalization is more real, not just globally tuned.</li>
+            <li>Deep Sleep can reason across a longer historical horizon instead of only the recent past.</li>
+            <li>Claude Code is still the recommended path, but the Codex story is stronger and more honest.</li>
+        </ul>
+
+        <h2>Install or Update</h2>
+        <p>New install:</p>
+        <pre><code>npx nexo-brain</code></pre>
+        <p>Existing installation:</p>
+        <pre><code>nexo update</code></pre>
+        <p>Need to reapply shared-brain wiring and managed client state later?</p>
+        <pre><code>nexo clients sync</code></pre>
+        <p>Read the full release history in the <a href="/changelog/">changelog</a> or contribute ideas and fixes on <a href="https://github.com/wazionapps/nexo">GitHub</a>.</p>
+    </div>
+</article>
+
+<section class="cta-section">
+    <div class="container">
+        <h2 class="section-title">Give your agent a mind</h2>
+        <p class="section-subtitle" style="margin: 16px auto 48px;">
+            Run it hard, compare clients, and help make the shared brain more intelligent with every release.
+        </p>
+        <div class="hero-actions">
+            <a href="https://github.com/wazionapps/nexo" class="btn btn-primary">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+                Star on GitHub
+            </a>
+            <a href="https://github.com/wazionapps/nexo/issues" class="btn btn-secondary">
+                Open an issue
+            </a>
+            <a href="https://www.npmjs.com/package/nexo-brain" class="btn btn-secondary">
+                View on npm
+            </a>
+        </div>
+    </div>
+</section>
+
+<footer>
+    <div class="container">
+        <div class="footer-content">
+            <div class="footer-left">
+                Created by <strong>Francisco Cerd&agrave; Puigserver</strong> &amp; <strong>NEXO</strong> (Claude Opus) &bull; Built by <a href="https://www.wazion.com">WAzion</a> &bull; AGPL-3.0 License &bull; &copy; 2026
+            </div>
+            <div class="footer-links">
+                <a href="https://github.com/wazionapps/nexo">GitHub</a>
+                <a href="https://x.com/NEXOBRAIN">X / Twitter</a>
+                <a href="https://github.com/sponsors/wazionapps">Sponsor</a>
+                <a href="/docs/">Docs</a>
+                <a href="/compare/">Compare</a>
+                <a href="/blog/">Blog</a>
+                <a href="https://www.npmjs.com/package/nexo-brain">npm</a>
+                <a href="https://github.com/wazionapps/nexo/releases">Releases</a>
+            </div>
+            <div style="text-align:center;margin-top:12px;color:#6b7280;font-size:12px;">Last updated: April 2026</div>
+        </div>
+    </div>
+</footer>
+
+<div id="cookie-consent" style="display:none;position:fixed;bottom:0;left:0;right:0;background:rgba(10,10,15,0.95);border-top:1px solid #1E1E2E;padding:12px 24px;z-index:200;font-size:13px;color:#94A3B8;text-align:center;">
+    This site uses analytics cookies to improve the experience. <a href="https://www.wazion.com/en/privacy" style="color:#A78BFA;">Privacy Policy</a>
+    <button onclick="document.getElementById('cookie-consent').style.display='none';localStorage.setItem('cc','1')" style="margin-left:16px;background:#7C3AED;color:#fff;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Accept</button>
+    <button onclick="document.getElementById('cookie-consent').style.display='none';localStorage.setItem('cc','0');window['ga-disable-G-1LNEMCJMS7']=true" style="margin-left:8px;background:transparent;color:#94A3B8;border:1px solid #333;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Decline</button>
+</div>
+<script>
+if(!localStorage.getItem('cc')){document.getElementById('cookie-consent').style.display='block';}
+else if(localStorage.getItem('cc')==='0'){window['ga-disable-G-1LNEMCJMS7']=true;}
+</script>
+
+</body>
+</html>
