@@ -22,8 +22,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-from client_runtime_defaults import default_client_runtime_profiles
-
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parent)))
@@ -67,6 +65,10 @@ MACOS_FDA_PROBE_PATHS = (
     Path.home() / "Library" / "Safari",
     Path.home() / "Library" / "Application Support" / "AddressBook",
 )
+DEFAULT_CLAUDE_CODE_MODEL = "claude-opus-4-6[1m]"
+DEFAULT_CLAUDE_CODE_REASONING_EFFORT = ""
+DEFAULT_CODEX_MODEL = "gpt-5.4"
+DEFAULT_CODEX_REASONING_EFFORT = "xhigh"
 
 
 def _schedule_defaults() -> dict:
@@ -81,7 +83,16 @@ def _schedule_defaults() -> dict:
         "default_terminal_client": "claude_code",
         "automation_enabled": True,
         "automation_backend": "claude_code",
-        "client_runtime_profiles": default_client_runtime_profiles(),
+        "client_runtime_profiles": {
+            "claude_code": {
+                "model": DEFAULT_CLAUDE_CODE_MODEL,
+                "reasoning_effort": DEFAULT_CLAUDE_CODE_REASONING_EFFORT,
+            },
+            "codex": {
+                "model": DEFAULT_CODEX_MODEL,
+                "reasoning_effort": DEFAULT_CODEX_REASONING_EFFORT,
+            },
+        },
         "client_install_preferences": {
             "claude_code": "ask",
             "codex": "ask",

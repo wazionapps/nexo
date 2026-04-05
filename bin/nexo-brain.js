@@ -107,7 +107,6 @@ function getCoreRuntimeFlatFiles() {
     "migrate_embeddings.py",
     "auto_close_sessions.py",
     "client_sync.py",
-    "client_runtime_defaults.py",
     "client_preferences.py",
     "agent_runner.py",
     "bootstrap_docs.py",

@@ -1,11 +1,12 @@
 # Changelog
 
-## [2.6.19] - 2026-04-05
+## [2.6.20] - 2026-04-05
 
 ### Claude Profile Defaults
 - Claude Code now defaults explicitly to `claude-opus-4-6[1m]` instead of the looser `opus` alias, so fresh installs and normalized runtime schedules point at Opus 4.6 with 1M context deterministically.
 - The installer now recommends `Opus 4.6 with 1M context` directly in the model picker instead of the older `Opus latest` wording.
 - Claude interactive launches and Claude automation runs now both resolve legacy task hints like `model="opus"` and `model="sonnet"` through the configured Claude runtime profile, so the selected Claude model actually applies end-to-end instead of only affecting one surface.
+- `nexo update` now carries that change safely into existing installs without tripping over a missing support module during runtime sync.
 
 ## [2.6.18] - 2026-04-05
 
