@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v2.6.13.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v2.6.14.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v2.6.13.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v2.6.14.">
     <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
     <meta property="og:image:width" content="1536">
     <meta property="og:image:height" content="1024">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v2.6.13.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v2.6.14.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v2.6.13.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v2.6.14.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -83,6 +83,27 @@
         <div class="section-label">VERSION HISTORY</div>
         <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
         <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning.</p>
+    </div>
+</section>
+
+<!-- v2.6.14 Bootstrap Parity and Codex Transcript-Aware Deep Sleep -->
+<section id="v2614" class="section-compact" style="background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
+    <div class="container">
+        <div class="section-label">New in v2.6.14 <span style="opacity:.5;font-weight:400;">&mdash; April 5, 2026</span></div>
+        <h2 class="section-title">Bootstrap Parity, Codex Transcript-Aware Deep Sleep</h2>
+        <p class="section-subtitle">
+            Shared brain now reaches startup identity and overnight analysis, not just MCP wiring. Claude and Codex both get managed bootstrap docs, Codex starts explicitly as NEXO, and Deep Sleep reads both transcript stores.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Managed Claude + Codex Bootstrap</h4><p>NEXO now manages both <code>~/.claude/CLAUDE.md</code> and <code>~/.codex/AGENTS.md</code> as first-class bootstrap files.</p></div>
+                <div class="cognitive-card"><h4><code>CORE</code> / <code>USER</code> Contract</h4><p>Bootstrap docs now preserve operator instructions in a protected <code>USER</code> section while allowing NEXO updates to refresh product rules in <code>CORE</code>.</p></div>
+                <div class="cognitive-card"><h4>Codex Starts as NEXO</h4><p><code>nexo chat</code> and Codex headless automation inject the live bootstrap explicitly, so Codex no longer behaves like plain Codex with an MCP attached.</p></div>
+                <div class="cognitive-card"><h4>Deep Sleep Transcript Parity</h4><p>Overnight analysis now reads Codex durable sessions alongside Claude transcripts, with client/source metadata and stable per-session mapping.</p></div>
+                <div class="cognitive-card"><h4>Doctor Audits Real Parity</h4><p>Runtime doctor now checks bootstrap parity and transcript-source parity instead of assuming a Claude-only world.</p></div>
+                <div class="cognitive-card"><h4>Protected Bootstrap Files</h4><p>Evolution, watchdog, and self-audit now treat <code>AGENTS.md</code> as protected alongside <code>CLAUDE.md</code>.</p></div>
+            </div>
+        </div>
     </div>
 </section>
 

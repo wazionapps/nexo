@@ -51,7 +51,7 @@
         "operatingSystem": "macOS, Linux, Windows",
         "url": "https://nexo-brain.com",
         "downloadUrl": "https://www.npmjs.com/package/nexo-brain",
-        "softwareVersion": "2.6.13",
+        "softwareVersion": "2.6.14",
         "license": "https://www.gnu.org/licenses/agpl-3.0",
         "author": {
             "@type": "Organization",
@@ -498,7 +498,7 @@
     <div class="container">
         <div class="hero-badge fade-up">
             <span class="dot"></span>
-            <span id="version-badge">v2.6.13</span> &mdash; Shared brain, selectable clients, configurable automation, and stronger self-healing
+            <span id="version-badge">v2.6.14</span> &mdash; Bootstrap parity, Codex transcript-aware Deep Sleep, and stronger shared-brain runtime alignment
         </div>
         <div class="fade-up" style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;">
             <img src="https://img.shields.io/npm/v/nexo-brain?color=7C3AED&label=npm" alt="npm version">
@@ -808,43 +808,43 @@
     </div>
 </section>
 
-<!-- v2.6.12 + v2.6.13 Shared Brain, Client Selection, and Self-Healing -->
+<!-- v2.6.14 Bootstrap Parity and Codex Transcript-Aware Deep Sleep -->
 <section class="feature-section">
     <div class="container">
-        <div class="section-label">New in v2.6.12 + v2.6.13</div>
-        <h2 class="section-title">Shared Brain Across Clients, Selectable Automation, Better Self-Healing</h2>
-        <p class="section-subtitle">NEXO no longer assumes a single interactive client or a single background engine. Claude Code remains the recommended path, but Codex and Claude Desktop now share the same brain, and runtime recovery is more trustworthy in real installs.</p>
+        <div class="section-label">New in v2.6.14</div>
+        <h2 class="section-title">Bootstrap Parity, Codex Deep Sleep, Better Shared-Brain Fidelity</h2>
+        <p class="section-subtitle">NEXO now closes two real parity gaps: Claude Code and Codex both get managed startup bootstraps, and Deep Sleep can analyze raw session transcripts from Codex as well as Claude Code. Shared brain now reaches further into how the system actually starts, remembers, and recovers.</p>
 
         <div class="features-grid">
             <div class="feature-card">
                 <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/></svg></div>
-                <h3>Shared Brain Across Clients</h3>
-                <p>Claude Code, Codex, and Claude Desktop can now point at the same local NEXO brain. One runtime, one memory system, one MCP server, multiple ways to work.</p>
+                <h3>Managed Claude + Codex Bootstrap</h3>
+                <p>NEXO now manages both <code>~/.claude/CLAUDE.md</code> and <code>~/.codex/AGENTS.md</code> as first-class bootstrap docs instead of treating Codex as MCP-only.</p>
             </div>
             <div class="feature-card">
                 <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
-                <h3><code>nexo chat</code> Opens Your Chosen Client</h3>
-                <p>The CLI is no longer hardwired to Claude Code. You can choose the default terminal client, override it manually, and keep shared brain continuity across tools.</p>
+                <h3><code>CORE</code> / <code>USER</code> Contract</h3>
+                <p>Bootstrap files now split NEXO-owned rules from operator-owned instructions, so updates can strengthen core behavior without clobbering personal guidance.</p>
             </div>
             <div class="feature-card">
                 <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8v8m-4-4h8"/></svg></div>
-                <h3>Configurable Automation Backend</h3>
-                <p>Background jobs now run through a shared automation runner. Claude Code is still the recommended and deepest integration, but Codex is also supported as a configurable backend.</p>
+                <h3>Codex Starts as NEXO</h3>
+                <p><code>nexo chat</code> and Codex headless automation now inject the current bootstrap explicitly, so Codex starts with NEXO identity and operating rules instead of behaving like plain Codex with an MCP attached.</p>
             </div>
             <div class="feature-card">
                 <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></div>
-                <h3>Model Profiles Per Client</h3>
-                <p>NEXO can keep a preferred model profile for the active client/backend. Recommended defaults today: Claude Code with Opus latest, Codex with GPT-5.4 xhigh.</p>
+                <h3>Deep Sleep Reads Codex Sessions</h3>
+                <p>Overnight analysis no longer depends only on Claude Code raw transcripts. Codex durable session files now feed the same Deep Sleep pipeline with client/source metadata.</p>
             </div>
             <div class="feature-card">
                 <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
-                <h3>Claude Code Still Recommended</h3>
-                <p>Hooks, session plumbing, and hardened headless automation remain deepest on Claude Code. Codex is supported, but Claude Code is still the most complete path today.</p>
+                <h3>Doctor Checks Real Parity</h3>
+                <p><code>nexo doctor</code> now audits bootstrap parity and transcript-source parity, so the runtime can tell you when shared brain is configured but overnight analysis or startup identity is still incomplete.</p>
             </div>
             <div class="feature-card">
                 <div class="feature-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
-                <h3>Managed KeepAlive Recovery</h3>
-                <p>Personal helper daemons like <code>wake-recovery</code> are now supported officially. Fewer false criticals, better doctor output, and more honest runtime self-healing.</p>
+                <h3>Claude Code Still Recommended</h3>
+                <p>Codex parity is much better now, but Claude Code still has the deepest hook surface and the most battle-tested headless path. It remains the recommended default today.</p>
             </div>
         </div>
     </div>
