@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v2.6.20.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v2.6.21.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v2.6.20.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v2.6.21.">
     <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
     <meta property="og:image:width" content="1536">
     <meta property="og:image:height" content="1024">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v2.6.20.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v2.6.21.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v2.6.20.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v2.6.21.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -83,6 +83,24 @@
         <div class="section-label">VERSION HISTORY</div>
         <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
         <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning.</p>
+    </div>
+</section>
+
+<!-- v2.6.21 Deep Sleep turns into engineering work -->
+<section id="v2621" class="section-compact" style="background:linear-gradient(135deg,#0F0A1A 0%,#24123d 100%);">
+    <div class="container">
+        <div class="section-label">New in v2.6.21 <span style="opacity:.5;font-weight:400;">&mdash; April 5, 2026</span></div>
+        <h2 class="section-title">Deep Sleep Starts Engineering the Fix</h2>
+        <p class="section-subtitle">
+            Deep Sleep now does more than diagnose recurring problems. It semantically deduplicates followups, consolidates learnings into stronger canonical records, flags contradictions for review, and backfills explicit engineering followups when a recurring pattern implies a concrete script, hook, checklist, or guardrail.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Followup Dedup by Meaning</h4><p>Nightly followups are now checked against existing open followups semantically, not just by generated ID, and a matched followup can be upgraded in place when the new proposal is more concrete.</p></div>
+                <div class="cognitive-card"><h4>Learning Consolidation Outcomes</h4><p>New learnings are classified as duplicate, reinforcement, contradiction review, or genuinely new instead of always creating another row.</p></div>
+                <div class="cognitive-card"><h4>Concrete Engineering Backfill</h4><p>Recurring medium/high-severity patterns can now backfill concrete engineering followups automatically even when the raw synthesis would otherwise stop at diagnosis.</p></div>
+            </div>
+        </div>
     </div>
 </section>
 

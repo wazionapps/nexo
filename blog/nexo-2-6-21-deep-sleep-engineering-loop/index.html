@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXO 2.6.21: Deep Sleep Stops Repeating Itself and Starts Engineering Fixes</title>
+    <meta name="description" content="NEXO Brain 2.6.21 upgrades Deep Sleep from passive diagnosis toward concrete engineering action: semantic followup deduplication, learning consolidation, contradiction review, and backfilled fix proposals.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-2-6-21-deep-sleep-engineering-loop/">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/blog/nexo-2-6-21-deep-sleep-engineering-loop/">
+    <meta property="og:title" content="NEXO 2.6.21: Deep Sleep Stops Repeating Itself and Starts Engineering Fixes">
+    <meta property="og:description" content="Deep Sleep now deduplicates followups by meaning, consolidates overlapping learnings, flags contradictions for review, and backfills concrete engineering followups from recurring patterns.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
+    <meta property="og:image:width" content="1536">
+    <meta property="og:image:height" content="1024">
+    <meta property="article:published_time" content="2026-04-05">
+    <meta property="article:author" content="Francisco Cerd&agrave; Puigserver">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO 2.6.21: Deep Sleep Stops Repeating Itself and Starts Engineering Fixes">
+    <meta name="twitter:description" content="Deep Sleep now deduplicates followups by meaning, consolidates overlapping learnings, flags contradictions for review, and backfills concrete engineering followups from recurring patterns.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "NEXO 2.6.21: Deep Sleep Stops Repeating Itself and Starts Engineering Fixes",
+        "description": "NEXO Brain 2.6.21 upgrades Deep Sleep from passive diagnosis toward concrete engineering action: semantic followup deduplication, learning consolidation, contradiction review, and backfilled fix proposals.",
+        "datePublished": "2026-04-05",
+        "dateModified": "2026-04-05",
+        "author": {
+            "@type": "Person",
+            "name": "Francisco Cerd\u00e0 Puigserver"
+        },
+        "publisher": {
+            "@type": "Organization",
+            "name": "WAzion",
+            "url": "https://www.wazion.com"
+        },
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https://nexo-brain.com/blog/nexo-2-6-21-deep-sleep-engineering-loop/"
+        },
+        "url": "https://nexo-brain.com/blog/nexo-2-6-21-deep-sleep-engineering-loop/",
+        "image": "https://nexo-brain.com/assets/social-preview.png",
+        "keywords": ["NEXO Brain 2.6.21", "Deep Sleep", "learning consolidation", "followup deduplication", "engineering followups", "AI memory"]
+    }
+    </script>
+
+    <style>
+        .article-header { padding-top: 128px; padding-bottom: 40px; text-align: center; }
+        .article-meta { font-size: 14px; color: var(--text-muted); margin-bottom: 16px; }
+        .article-body {
+            max-width: 720px; margin: 0 auto; padding: 0 24px 80px;
+            font-size: 17px; line-height: 1.8; color: var(--text);
+        }
+        .article-body h2 { font-size: 28px; font-weight: 700; margin: 48px 0 16px; letter-spacing: -0.01em; }
+        .article-body p { margin-bottom: 20px; color: var(--text-muted); }
+        .article-body strong { color: var(--text); }
+        .article-body a { color: var(--purple-light); }
+        .article-body a:hover { color: var(--pink); }
+        .article-body ul { margin: 0 0 20px 24px; color: var(--text-muted); }
+        .article-body li { margin-bottom: 8px; }
+        .article-body code {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 14px; color: var(--pink);
+            background: rgba(236, 72, 153, 0.1);
+            padding: 2px 8px; border-radius: 4px;
+        }
+        .article-body pre {
+            background: var(--dark-card);
+            border: 1px solid var(--dark-border);
+            border-radius: 12px;
+            padding: 24px;
+            overflow-x: auto;
+            margin-bottom: 24px;
+        }
+        .article-body pre code {
+            background: none; padding: 0;
+            font-size: 15px; color: #22C55E;
+        }
+        .article-back {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 14px; font-weight: 600; color: var(--text-muted);
+            margin-bottom: 24px;
+        }
+        .article-back:hover { color: var(--purple-light); }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-64.png" alt="NEXO Brain" width="32" height="32">
+            NEXO Brain
+        </a>
+        <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/features/">Features</a>
+            <a href="/compare/">Compare</a>
+            <a href="/blog/">Blog</a>
+            <a href="/changelog/">Changelog</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<article>
+    <header class="article-header">
+        <div class="container">
+            <a href="/blog/" class="article-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg> Back to Blog</a>
+            <div class="article-meta">April 5, 2026 &middot; 5 min read</div>
+            <h1 class="section-title" style="font-size:clamp(28px,4.5vw,48px);max-width:860px;margin:0 auto 16px;">NEXO 2.6.21: Deep Sleep Stops Repeating Itself and Starts Engineering Fixes</h1>
+            <p class="section-subtitle">The overnight loop now behaves less like a passive analyst and more like an engineer that consolidates signal and turns recurring problems into concrete work.</p>
+        </div>
+    </header>
+
+    <div class="article-body">
+        <p>Deep Sleep already knew how to spot recurring errors, protocol drift, abandoned work, and cross-session patterns. The problem was what happened next: it could still create duplicate followups with different IDs, pile overlapping learnings on top of each other, and stop at diagnosis when the real value was a fix.</p>
+
+        <h2>Followups Are Now Deduplicated by Meaning</h2>
+        <p>Before 2.6.21, Deep Sleep relied mostly on generated IDs and action dedupe keys. That prevented identical replays, but it did not stop semantically identical followups from reappearing with different descriptions.</p>
+        <p>Now the apply layer checks a proposed Deep Sleep followup against open followups by meaning before creating anything new. If the same issue is already open, NEXO links to the existing followup instead of growing noise. And if the new nightly suggestion is more concrete than the old wording, it upgrades the existing followup in place.</p>
+
+        <h2>Learnings Now Consolidate Instead of Just Accumulating</h2>
+        <p>Nightly learning growth is only useful if the learning store stays clean. 2.6.21 adds a local consolidation step with four outcomes:</p>
+        <ul>
+            <li><strong>Duplicate:</strong> the learning already exists, so Deep Sleep reaffirms it instead of creating another row.</li>
+            <li><strong>Reinforcement:</strong> the new learning strengthens an existing one, so NEXO updates the canonical record instead of duplicating it.</li>
+            <li><strong>Contradiction:</strong> the new learning conflicts with an existing rule, so NEXO creates an explicit review followup.</li>
+            <li><strong>Genuinely new:</strong> only then is a new learning created.</li>
+        </ul>
+        <p>The key design choice is that this logic lives in the apply phase, not only in the model prompt. That means Deep Sleep gets stronger even when the model output is imperfect.</p>
+
+        <h2>Recurring Problems Now Backfill Concrete Engineering Work</h2>
+        <p>The third gap was the most important one: Deep Sleep could tell you something was wrong, but still leave you with a passive observation instead of an actionable fix.</p>
+        <p>2.6.21 pushes the synthesis contract toward explicit fix artifacts. Medium and high-severity recurring patterns are now expected to carry a concrete proposed fix: script, hook, checklist, validation step, workflow change, or guardrail. And if that fix exists in the pattern analysis but no actionable followup was emitted, NEXO backfills one automatically.</p>
+        <p>That changes the character of the overnight loop:</p>
+        <ul>
+            <li>less duplicate followup churn</li>
+            <li>stronger canonical learnings</li>
+            <li>explicit contradiction handling</li>
+            <li>recurring problems turned into concrete engineering work</li>
+        </ul>
+
+        <h2>Why This Matters</h2>
+        <p>If you want an agent to become materially better over time, nightly analysis cannot just write more memory. It has to improve the shape of memory and push the system toward durable fixes.</p>
+        <p>That is the real point of this release: Deep Sleep is still an analyst, but it is now much closer to being an engineer too.</p>
+
+        <h2>Install or Update</h2>
+        <p>New install:</p>
+        <pre><code>npx nexo-brain</code></pre>
+        <p>Existing installation:</p>
+        <pre><code>nexo update</code></pre>
+        <p>See the full version history in the <a href="/changelog/">changelog</a>, or help drive the next strategic step through <a href="https://github.com/wazionapps/nexo/issues/17">the issue that tracked this work</a>.</p>
+    </div>
+</article>
+
+<section class="cta-section">
+    <div class="container">
+        <h2 class="section-title">Make the overnight loop earn its keep</h2>
+        <p class="section-subtitle" style="margin: 16px auto 48px;">
+            Install NEXO, let it work overnight, and stress whether the new Deep Sleep loop actually reduces repeated mistakes instead of just describing them better.
+        </p>
+        <div class="hero-actions">
+            <a href="https://github.com/wazionapps/nexo" class="btn btn-primary">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+                View on GitHub
+            </a>
+            <a href="/" class="btn btn-secondary">Back to Home</a>
+        </div>
+    </div>
+</section>
+
+</body>
+</html>

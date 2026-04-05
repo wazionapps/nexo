@@ -61,6 +61,12 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://nexo-brain.com/blog/nexo-2-6-21-deep-sleep-engineering-loop/</loc>
+    <lastmod>2026-04-05</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://nexo-brain.com/blog/nexo-2-6-18-codex-session-audits-deep-sleep-summaries/</loc>
     <lastmod>2026-04-05</lastmod>
     <changefreq>monthly</changefreq>
