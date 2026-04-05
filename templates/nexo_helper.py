@@ -16,6 +16,36 @@ from pathlib import Path
 
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+DEFAULT_ALLOWED_TOOLS = "Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__*"
+
+
+def _load_schedule() -> dict:
+    schedule_path = NEXO_HOME / "config" / "schedule.json"
+    if not schedule_path.is_file():
+        return {}
+    try:
+        return json.loads(schedule_path.read_text())
+    except Exception:
+        return {}
+
+
+def _resolve_automation_backend() -> str:
+    data = _load_schedule()
+    return str(data.get("automation_backend", "claude_code") or "claude_code")
+
+
+def _load_bootstrap_prompt() -> str:
+    backend = _resolve_automation_backend()
+    if backend == "codex":
+        path = Path.home() / ".codex" / "AGENTS.md"
+    else:
+        path = Path.home() / ".claude" / "CLAUDE.md"
+    if not path.is_file():
+        return ""
+    try:
+        return path.read_text()
+    except Exception:
+        return ""
 
 
 def run_nexo(args: list[str]) -> str:
@@ -57,6 +87,9 @@ def run_automation_text(
     model: str = "",
     reasoning_effort: str = "",
     cwd: str = "",
+    allowed_tools: str = DEFAULT_ALLOWED_TOOLS,
+    append_system_prompt: str = "",
+    include_bootstrap: bool = True,
 ) -> str:
     """Run the configured NEXO automation backend and return text output.
 
@@ -75,6 +108,17 @@ def run_automation_text(
         cmd.extend(["--reasoning-effort", reasoning_effort])
     if cwd:
         cmd.extend(["--cwd", cwd])
+    merged_system_prompt = []
+    if include_bootstrap:
+        bootstrap = _load_bootstrap_prompt()
+        if bootstrap:
+            merged_system_prompt.append(bootstrap)
+    if append_system_prompt:
+        merged_system_prompt.append(append_system_prompt)
+    if merged_system_prompt:
+        cmd.extend(["--append-system-prompt", "\n\n".join(merged_system_prompt)])
+    if allowed_tools:
+        cmd.extend(["--allowed-tools", allowed_tools])
 
     env = os.environ.copy()
     env.setdefault("NEXO_HOME", str(NEXO_HOME))
