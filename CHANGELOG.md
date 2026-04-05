@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.6.15] - 2026-04-05
+
+### Bootstrap Runtime Hotfix
+- Fixed installed-runtime bootstrap template resolution so `bootstrap_docs.py` now finds `templates/` correctly in both source-tree and packaged/runtime layouts.
+- This restores real migration/sync of `~/.claude/CLAUDE.md` and `~/.codex/AGENTS.md` in existing installations instead of failing silently after the parity release.
+- Added regression coverage for runtime-layout template resolution and isolated startup-preflight tests so local test runs no longer contaminate real user bootstrap files.
+
 ## [2.6.14] - 2026-04-05
 
 ### Bootstrap Parity

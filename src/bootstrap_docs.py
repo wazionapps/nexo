@@ -17,9 +17,18 @@ from client_preferences import (
     normalize_client_preferences,
 )
 
+def _resolve_templates_dir(module_file: str | os.PathLike[str]) -> Path:
+    module_dir = Path(module_file).resolve().parent
+    direct = module_dir / "templates"
+    if direct.is_dir():
+        return direct
+    parent = module_dir.parent / "templates"
+    if parent.is_dir():
+        return parent
+    return direct
 
-REPO_DIR = Path(__file__).resolve().parents[1]
-TEMPLATES_DIR = REPO_DIR / "templates"
+
+TEMPLATES_DIR = _resolve_templates_dir(__file__)
 
 CORE_LABEL = "******CORE******"
 USER_LABEL = "******USER******"

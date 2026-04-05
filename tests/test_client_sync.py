@@ -226,3 +226,16 @@ def test_sync_claude_bootstrap_migrates_legacy_file_into_core_user_contract(tmp_
     assert "******CORE******" in updated
     assert "******USER******" in updated
     assert "Operator note: remember the private QA machine." in updated
+
+
+def test_bootstrap_docs_resolve_templates_for_runtime_layout(tmp_path):
+    import bootstrap_docs
+
+    runtime_root = tmp_path / "runtime"
+    (runtime_root / "templates").mkdir(parents=True)
+    module_file = runtime_root / "bootstrap_docs.py"
+    module_file.write_text("# placeholder\n")
+
+    resolved = bootstrap_docs._resolve_templates_dir(module_file)
+
+    assert resolved == runtime_root / "templates"

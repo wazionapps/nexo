@@ -38,7 +38,7 @@ That means NEXO now manages not only the shared runtime and MCP wiring, but also
 - For Codex specifically, `nexo chat` and Codex headless automation inject the current bootstrap explicitly, so Codex starts as NEXO even when plain global Codex startup is inconsistent about global instructions.
 - Deep Sleep now reads both Claude Code and Codex transcript stores, so overnight analysis still works even when the user spends the day in Codex.
 
-Version `2.6.14` is the release that closes those last two parity gaps in practice: startup bootstrap parity and transcript-aware Deep Sleep parity.
+Version `2.6.14` closes those parity gaps in practice, and `2.6.15` hardens the installed-runtime migration path so existing users actually receive the managed bootstrap updates cleanly.
 
 ## The Problem
 

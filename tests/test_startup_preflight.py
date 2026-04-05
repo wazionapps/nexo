@@ -14,8 +14,10 @@ def test_startup_preflight_defers_sync_update_when_runtime_busy(tmp_path, monkey
     import script_registry
 
     nexo_home = tmp_path / "nexo"
+    user_home = tmp_path / "home"
     (nexo_home / "config").mkdir(parents=True)
     (nexo_home / "logs").mkdir(parents=True)
+    user_home.mkdir(parents=True)
     (nexo_home / "config" / "schedule.json").write_text(json.dumps({
         "timezone": "UTC",
         "auto_update": True,
@@ -23,6 +25,7 @@ def test_startup_preflight_defers_sync_update_when_runtime_busy(tmp_path, monkey
         "processes": {},
     }))
 
+    monkeypatch.setenv("HOME", str(user_home))
     monkeypatch.setattr(auto_update, "NEXO_HOME", nexo_home)
     monkeypatch.setattr(auto_update, "UPDATE_SUMMARY_FILE", nexo_home / "logs" / "update-last-summary.json")
     monkeypatch.setattr(auto_update, "UPDATE_HISTORY_FILE", nexo_home / "logs" / "update-history.jsonl")
@@ -143,8 +146,10 @@ def test_startup_preflight_reports_personal_schedule_heal(tmp_path, monkeypatch)
     import script_registry
 
     nexo_home = tmp_path / "nexo"
+    user_home = tmp_path / "home"
     (nexo_home / "config").mkdir(parents=True)
     (nexo_home / "logs").mkdir(parents=True)
+    user_home.mkdir(parents=True)
     (nexo_home / "config" / "schedule.json").write_text(json.dumps({
         "timezone": "UTC",
         "auto_update": True,
@@ -152,6 +157,7 @@ def test_startup_preflight_reports_personal_schedule_heal(tmp_path, monkeypatch)
         "processes": {},
     }))
 
+    monkeypatch.setenv("HOME", str(user_home))
     monkeypatch.setattr(auto_update, "NEXO_HOME", nexo_home)
     monkeypatch.setattr(auto_update, "UPDATE_SUMMARY_FILE", nexo_home / "logs" / "update-last-summary.json")
     monkeypatch.setattr(auto_update, "UPDATE_HISTORY_FILE", nexo_home / "logs" / "update-history.jsonl")
