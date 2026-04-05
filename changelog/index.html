@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v2.6.21.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v2.7.0.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v2.6.21.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v2.7.0.">
     <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
     <meta property="og:image:width" content="1536">
     <meta property="og:image:height" content="1024">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v2.6.21.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v2.7.0.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v2.6.21.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v2.7.0.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -83,6 +83,26 @@
         <div class="section-label">VERSION HISTORY</div>
         <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
         <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning.</p>
+    </div>
+</section>
+
+<!-- v2.7.0 Engineering Loop + Trust -->
+<section id="v270" class="section-compact" style="background:linear-gradient(135deg,#0F0A1A 0%,#1d1033 100%);">
+    <div class="container">
+        <div class="section-label">New in v2.7.0 <span style="opacity:.5;font-weight:400;">&mdash; April 6, 2026</span></div>
+        <h2 class="section-title">Engineering Loop, Release Discipline, and Operational Truth</h2>
+        <p class="section-subtitle">
+            NEXO now measures the Deep Sleep engineering loop instead of treating it like a black box. Periodic summaries expose protocol compliance, engineering output, project pressure, and trend-vs-previous data, while runtime doctor and release tooling enforce that operational truth before publish.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Measured Deep Sleep</h4><p>Weekly and monthly summaries now include protocol compliance, engineering followup counts, project pulse, and period-over-period trend data.</p></div>
+                <div class="cognitive-card"><h4>Dashboard Narrative</h4><p>The dashboard now surfaces <code>What Matters Now</code>, <code>What Is Drifting</code>, and <code>What Is Improving</code> directly from the latest periodic summaries.</p></div>
+                <div class="cognitive-card"><h4>Doctor Checks the Loop</h4><p>Runtime doctor now audits heartbeat, <code>guard_check</code>, and <code>change_log</code> compliance from the latest weekly summary instead of leaving protocol drift implicit.</p></div>
+                <div class="cognitive-card"><h4>Release Discipline in Repo</h4><p><code>scripts/verify_release_readiness.py</code> now enforces changelog/version alignment, synced release artifacts, parity checks, and website drift before release.</p></div>
+                <div class="cognitive-card"><h4>Pending Codex Fixes Included</h4><p>The unreleased Codex launcher fixes after <code>v2.6.21</code> are now shipped too: better client selection, corrected launch mode handling, last terminal choice tracking, and aligned interactive flags.</p></div>
+            </div>
+        </div>
     </div>
 </section>
 
