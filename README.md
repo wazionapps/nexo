@@ -637,7 +637,7 @@ nexo scripts list  # See your personal scripts
 During install, NEXO now asks which interactive clients you want to connect, which one `nexo chat` should open by default, whether to enable background automation, which backend should run that automation, and which model profile each active terminal/backend should use. Shared brain stays on in every mode.
 
 Recommended defaults:
-- Claude Code: `Opus latest`
+- Claude Code: `Opus 4.6 with 1M context`
 - Codex: `gpt-5.4` with `xhigh` reasoning
 
 Or use the shell alias created during install (e.g. `atlas`), which now runs `nexo chat .` so it opens whichever terminal client you selected as default.
@@ -715,7 +715,7 @@ The Doctor system reads existing health artifacts (immune, watchdog, self-audit)
 - **macOS or Linux** (Windows via [WSL](https://learn.microsoft.com/en-us/windows/wsl/install))
 - **Node.js 18+** (for the installer)
 - **Claude Code is the primary recommended client.** It remains the most mature NEXO path: native hooks, the most battle-tested automation contract, and the clearest parity with historical production behavior.
-- **Recommended profiles:** Claude Code + `Opus latest`; Codex + `gpt-5.4` with `xhigh` reasoning if you prefer Codex as your terminal or automation backend.
+- **Recommended profiles:** Claude Code + `Opus 4.6 with 1M context`; Codex + `gpt-5.4` with `xhigh` reasoning if you prefer Codex as your terminal or automation backend.
 - Python 3, Homebrew, and the selected required client/backend can be installed automatically when NEXO has a supported installer path for that dependency.
 
 ## Architecture
@@ -822,7 +822,7 @@ NEXO Brain is designed as an MCP server. Claude Code remains the primary recomme
 npx nexo-brain
 ```
 
-All 150+ tools are available immediately after installation. The installer configures Claude Code's `~/.claude/settings.json` automatically. The recommended Claude profile is `Opus latest`.
+All 150+ tools are available immediately after installation. The installer configures Claude Code's `~/.claude/settings.json` automatically. The recommended Claude profile is `Opus 4.6 with 1M context`.
 
 ### Claude Desktop
 
