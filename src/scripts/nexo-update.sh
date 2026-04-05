@@ -266,7 +266,13 @@ sys.path.insert(0, os.environ["NEXO_CODE"])
 from client_preferences import normalize_client_preferences
 
 schedule_file = Path(os.environ["NEXO_HOME"]) / "config" / "schedule.json"
-prefs = normalize_client_preferences(json.loads(schedule_file.read_text())) if schedule_file.exists() else normalize_client_preferences({})
+schedule_payload = json.loads(schedule_file.read_text()) if schedule_file.exists() else {}
+prefs = normalize_client_preferences(schedule_payload)
+if prefs != {key: schedule_payload.get(key) for key in prefs}:
+    merged = dict(schedule_payload)
+    merged.update(prefs)
+    schedule_file.parent.mkdir(parents=True, exist_ok=True)
+    schedule_file.write_text(json.dumps(merged, indent=2, ensure_ascii=False) + "\n")
 enabled = [key for key, value in prefs.get("interactive_clients", {}).items() if value]
 if prefs.get("automation_enabled", True):
     backend = prefs.get("automation_backend")

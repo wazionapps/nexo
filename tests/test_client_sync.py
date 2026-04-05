@@ -10,12 +10,15 @@ from pathlib import Path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 
-def _make_runtime(root: Path) -> Path:
+def _make_runtime(root: Path, *, operator_name: str = "Atlas") -> Path:
     runtime = root / "runtime"
     (runtime / ".venv" / "bin").mkdir(parents=True)
     (runtime / ".venv" / "bin" / "python3").write_text("")
     (runtime / "server.py").write_text("print('server')\n")
-    (runtime / "version.json").write_text(json.dumps({"operator_name": "Atlas"}))
+    payload = {}
+    if operator_name is not None:
+        payload["operator_name"] = operator_name
+    (runtime / "version.json").write_text(json.dumps(payload))
     return runtime
 
 
@@ -144,6 +147,33 @@ def test_sync_all_clients_treats_missing_codex_as_non_fatal(tmp_path, monkeypatc
     assert result["clients"]["codex"]["skipped"] is True
     assert "codex binary not found" in result["clients"]["codex"]["reason"]
     assert (home / ".codex" / "AGENTS.md").is_file()
+
+
+def test_sync_codex_defaults_operator_name_when_runtime_version_has_blank_value(tmp_path, monkeypatch):
+    import client_sync
+
+    runtime = _make_runtime(tmp_path, operator_name="")
+    home = tmp_path / "home"
+    captured = {}
+
+    monkeypatch.setattr(client_sync.shutil, "which", lambda name: "/tmp/fake-codex" if name == "codex" else None)
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        return subprocess.CompletedProcess(cmd, 0, "Added global MCP server 'nexo'.", "")
+
+    monkeypatch.setattr(client_sync.subprocess, "run", fake_run)
+
+    result = client_sync.sync_codex(
+        nexo_home=runtime,
+        runtime_root=runtime,
+        user_home=home,
+    )
+
+    assert result["ok"] is True
+    assert "NEXO_NAME=NEXO" in captured["cmd"]
+    bootstrap_text = (home / ".codex" / "AGENTS.md").read_text()
+    assert "You are NEXO" in bootstrap_text
 
 
 def test_sync_all_clients_can_limit_to_configured_clients(tmp_path, monkeypatch):

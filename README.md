@@ -38,11 +38,13 @@ That means NEXO now manages not only the shared runtime and MCP wiring, but also
 - For Codex specifically, `nexo chat` and Codex headless automation inject the current bootstrap explicitly, so Codex starts as NEXO even when plain global Codex startup is inconsistent about global instructions.
 - Deep Sleep now reads both Claude Code and Codex transcript stores, so overnight analysis still works even when the user spends the day in Codex.
 
-Version `2.6.14` closes those parity gaps in practice, `2.6.15` hardens the installed-runtime migration path so existing users actually receive the managed bootstrap updates cleanly, and `2.6.16` pushes the system further in three directions:
+Version `2.6.14` closes those parity gaps in practice, `2.6.15` hardens the installed-runtime migration path so existing users actually receive the managed bootstrap updates cleanly, `2.6.16` pushes the system further in three directions, and `2.6.17` finishes the annoying last-mile migration bugs for real existing installs:
 
 - Codex now gets managed global bootstrap/model sync in `~/.codex/config.toml`, so sessions opened outside `nexo chat` are much less likely to start as plain Codex.
 - Retrieval is smarter by default: HyDE and spreading activation now auto-enable when the query shape benefits, while exact lookups remain conservative.
 - Deep Sleep now blends recent context with older context over a 60-day horizon, and memory decay now tracks per-memory `stability` and `difficulty` instead of relying only on global decay constants.
+- Existing installs that already had NEXO connected to Codex now backfill that client state automatically during update/sync, so the managed Codex bootstrap actually lands without manual cleanup.
+- Bootstrap docs now fall back to the operator name `NEXO` when local metadata is blank, avoiding broken headings in `CLAUDE.md` and `AGENTS.md`.
 
 ### Client Capability Matrix
 

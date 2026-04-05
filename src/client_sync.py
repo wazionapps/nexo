@@ -80,10 +80,12 @@ def _resolve_operator_name(nexo_home: Path, explicit: str = "") -> str:
     version_file = nexo_home / "version.json"
     if version_file.is_file():
         try:
-            return str(json.loads(version_file.read_text()).get("operator_name", "")).strip()
+            candidate = str(json.loads(version_file.read_text()).get("operator_name", "")).strip()
+            if candidate:
+                return candidate
         except Exception:
             pass
-    return ""
+    return "NEXO"
 
 
 def _resolve_runtime_root(nexo_home: Path, runtime_root: str | os.PathLike[str] | None = None) -> Path:

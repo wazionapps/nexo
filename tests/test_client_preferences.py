@@ -4,10 +4,10 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 
-def test_normalize_client_preferences_preserves_old_defaults():
+def test_normalize_client_preferences_preserves_old_defaults(tmp_path):
     import client_preferences
 
-    prefs = client_preferences.normalize_client_preferences({"timezone": "UTC"})
+    prefs = client_preferences.normalize_client_preferences({"timezone": "UTC"}, user_home=tmp_path / "home")
 
     assert prefs["interactive_clients"]["claude_code"] is True
     assert prefs["interactive_clients"]["codex"] is False
@@ -89,3 +89,27 @@ def test_detect_installed_clients_reports_binary_and_desktop(monkeypatch, tmp_pa
     assert detected["codex"]["installed"] is True
     assert detected["claude_desktop"]["installed"] is True
     assert detected["claude_desktop"]["detected_by"] in {"app", "config"}
+
+
+def test_normalize_client_preferences_backfills_existing_codex_artifacts(tmp_path):
+    import client_preferences
+
+    home = tmp_path / "home"
+    codex_dir = home / ".codex"
+    codex_dir.mkdir(parents=True)
+    (codex_dir / "config.toml").write_text(
+        '[mcp_servers.nexo]\ncommand = "python3"\nargs = ["server.py"]\n'
+    )
+
+    prefs = client_preferences.normalize_client_preferences(
+        {
+            "interactive_clients": {
+                "claude_code": True,
+                "codex": False,
+                "claude_desktop": False,
+            }
+        },
+        user_home=home,
+    )
+
+    assert prefs["interactive_clients"]["codex"] is True

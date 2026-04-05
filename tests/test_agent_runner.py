@@ -11,6 +11,7 @@ def test_build_interactive_client_command_uses_codex_when_selected(tmp_path, mon
 
     monkeypatch.setattr(agent_runner, "_resolve_codex_cli", lambda: "/tmp/fake-codex")
     monkeypatch.setattr(agent_runner, "_load_client_bootstrap_prompt", lambda client: "You are NEXO.")
+    monkeypatch.setattr(agent_runner, "_codex_managed_initial_messages_enabled", lambda: False)
 
     client, cmd = agent_runner.build_interactive_client_command(
         target=tmp_path,
@@ -114,6 +115,7 @@ def test_run_automation_prompt_uses_codex_exec_output_file(monkeypatch, tmp_path
 
     monkeypatch.setattr(agent_runner, "_resolve_codex_cli", lambda: "/tmp/fake-codex")
     monkeypatch.setattr(agent_runner, "_load_client_bootstrap_prompt", lambda client: "You are NEXO.")
+    monkeypatch.setattr(agent_runner, "_codex_managed_initial_messages_enabled", lambda: False)
     monkeypatch.setattr(agent_runner, "load_client_preferences", lambda: {
         "interactive_clients": {"claude_code": True, "codex": True, "claude_desktop": False},
         "default_terminal_client": "codex",
@@ -184,6 +186,7 @@ def test_codex_backend_maps_legacy_opus_hint_to_configured_profile(monkeypatch, 
 
     monkeypatch.setattr(agent_runner, "_resolve_codex_cli", lambda: "/tmp/fake-codex")
     monkeypatch.setattr(agent_runner, "_load_client_bootstrap_prompt", lambda client: "You are NEXO.")
+    monkeypatch.setattr(agent_runner, "_codex_managed_initial_messages_enabled", lambda: False)
     monkeypatch.setattr(agent_runner, "load_client_preferences", lambda: {
         "interactive_clients": {"claude_code": True, "codex": True, "claude_desktop": False},
         "default_terminal_client": "codex",

@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import shutil
 import sys
+import tomllib
 from pathlib import Path
 
 from runtime_power import load_schedule_config, save_schedule_config
@@ -49,6 +50,14 @@ DEFAULT_CLIENT_RUNTIME_PROFILES = {
 
 def _user_home() -> Path:
     return Path(os.environ.get("HOME", str(Path.home()))).expanduser()
+
+
+def _codex_config_path(home: Path) -> Path:
+    return home / ".codex" / "config.toml"
+
+
+def _codex_bootstrap_path(home: Path) -> Path:
+    return home / ".codex" / "AGENTS.md"
 
 
 def _coerce_bool(value, default: bool) -> bool:
@@ -124,6 +133,56 @@ def normalize_interactive_clients(value) -> dict[str, bool]:
         key = normalize_client_key(raw_key)
         if key:
             normalized[key] = _coerce_bool(raw_value, False)
+    return normalized
+
+
+def _codex_artifacts_suggest_nexo_management(home: Path) -> bool:
+    bootstrap_path = _codex_bootstrap_path(home)
+    if bootstrap_path.is_file():
+        try:
+            bootstrap_text = bootstrap_path.read_text()
+        except Exception:
+            bootstrap_text = ""
+        if (
+            "nexo-codex-agents-version:" in bootstrap_text
+            or "NEXO Shared Brain for Codex" in bootstrap_text
+            or "<!-- nexo:core:start -->" in bootstrap_text
+        ):
+            return True
+
+    config_path = _codex_config_path(home)
+    if not config_path.is_file():
+        return False
+
+    try:
+        payload = tomllib.loads(config_path.read_text())
+    except Exception:
+        try:
+            raw_text = config_path.read_text()
+        except Exception:
+            return False
+        return "[mcp_servers.nexo]" in raw_text or "[nexo.codex]" in raw_text
+
+    if not isinstance(payload, dict):
+        return False
+    mcp_servers = payload.get("mcp_servers")
+    if isinstance(mcp_servers, dict) and "nexo" in mcp_servers:
+        return True
+    nexo_table = payload.get("nexo")
+    if isinstance(nexo_table, dict) and "codex" in nexo_table:
+        return True
+    return False
+
+
+def _backfill_interactive_clients(
+    interactive_clients: dict[str, bool],
+    *,
+    user_home: str | os.PathLike[str] | None = None,
+) -> dict[str, bool]:
+    normalized = dict(interactive_clients)
+    home = Path(user_home).expanduser() if user_home else _user_home()
+    if not normalized.get(CLIENT_CODEX, False) and _codex_artifacts_suggest_nexo_management(home):
+        normalized[CLIENT_CODEX] = True
     return normalized
 
 
@@ -210,9 +269,16 @@ def normalize_client_runtime_profiles(value) -> dict[str, dict[str, str]]:
     return normalized
 
 
-def normalize_client_preferences(schedule: dict | None = None) -> dict:
+def normalize_client_preferences(
+    schedule: dict | None = None,
+    *,
+    user_home: str | os.PathLike[str] | None = None,
+) -> dict:
     schedule = dict(schedule or {})
-    interactive_clients = normalize_interactive_clients(schedule.get("interactive_clients"))
+    interactive_clients = _backfill_interactive_clients(
+        normalize_interactive_clients(schedule.get("interactive_clients")),
+        user_home=user_home,
+    )
     automation_enabled = normalize_automation_enabled(schedule.get("automation_enabled"))
     default_terminal_client = normalize_default_terminal_client(
         schedule.get("default_terminal_client"),

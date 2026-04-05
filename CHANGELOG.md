@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.6.17] - 2026-04-05
+
+### Bootstrap Sync Hotfix
+- Existing installs that already had NEXO wired into Codex now backfill `interactive_clients.codex` conservatively when managed Codex artifacts are present, so `nexo update` and `nexo clients sync` no longer skip the new global Codex bootstrap sync by mistake.
+- Managed bootstrap rendering now falls back cleanly to `NEXO` when `operator_name` is blank or missing, instead of generating broken headings like `#  — Cognitive Co-Operator`.
+- Runtime update flows now persist the normalized client preference backfill before client sync, so the repaired Codex state survives future updates instead of only existing in memory for one command.
+
 ## [2.6.16] - 2026-04-05
 
 ### Codex Runtime Parity

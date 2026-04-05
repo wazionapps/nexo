@@ -1434,10 +1434,19 @@ def _run_runtime_post_sync(dest: Path = NEXO_HOME, progress_fn=None) -> tuple[bo
 
         schedule_path = dest / "config" / "schedule.json"
         schedule_payload = json.loads(schedule_path.read_text()) if schedule_path.exists() else {}
+        normalized_preferences = normalize_client_preferences(schedule_payload)
+        if normalized_preferences != {
+            key: schedule_payload.get(key)
+            for key in normalized_preferences
+        }:
+            merged_schedule = dict(schedule_payload)
+            merged_schedule.update(normalized_preferences)
+            schedule_path.parent.mkdir(parents=True, exist_ok=True)
+            schedule_path.write_text(json.dumps(merged_schedule, indent=2, ensure_ascii=False) + "\n")
         client_sync_result = sync_all_clients(
             nexo_home=dest,
             runtime_root=dest,
-            preferences=normalize_client_preferences(schedule_payload),
+            preferences=normalized_preferences,
         )
         if client_sync_result.get("ok"):
             actions.append("client-sync")
