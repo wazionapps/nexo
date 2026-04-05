@@ -87,6 +87,38 @@ def test_write_periodic_summaries_creates_weekly_and_monthly_outputs(monkeypatch
             "productivity_day": {"total_corrections": corrections},
             "summary": "summary",
         }))
+        (deep_sleep_dir / f"{date_str}-extractions.json").write_text(json.dumps({
+            "date": date_str,
+            "extractions": [
+                {
+                    "session_id": f"{date_str}-a",
+                    "findings": [],
+                    "protocol_summary": {
+                        "guard_check": {"required": 2, "executed": 1},
+                        "heartbeat": {"total": 3, "with_context": 2},
+                        "change_log": {"edits": 2, "logged": 1},
+                    },
+                }
+            ],
+        }))
+        (deep_sleep_dir / f"{date_str}-applied.json").write_text(json.dumps({
+            "date": date_str,
+            "stats": {
+                "applied": 2,
+                "deferred": 1,
+                "skipped_dedupe": 1,
+                "errors": 0,
+            },
+            "applied_actions": [
+                {
+                    "action_type": "followup_create",
+                    "details": {
+                        "description": "Engineering guardrail for deploy drift",
+                        "reasoning": "Engineering fix",
+                    },
+                }
+            ],
+        }))
 
     current_synthesis = {
         "date": "2026-04-05",
@@ -97,6 +129,38 @@ def test_write_periodic_summaries_creates_weekly_and_monthly_outputs(monkeypatch
         "productivity_day": {"total_corrections": 3},
         "summary": "Current synthesis summary",
     }
+    (deep_sleep_dir / "2026-04-05-extractions.json").write_text(json.dumps({
+        "date": "2026-04-05",
+        "extractions": [
+            {
+                "session_id": "2026-04-05-a",
+                "findings": [],
+                "protocol_summary": {
+                    "guard_check": {"required": 4, "executed": 3},
+                    "heartbeat": {"total": 5, "with_context": 4},
+                    "change_log": {"edits": 3, "logged": 2},
+                },
+            }
+        ],
+    }))
+    (deep_sleep_dir / "2026-04-05-applied.json").write_text(json.dumps({
+        "date": "2026-04-05",
+        "stats": {
+            "applied": 3,
+            "deferred": 1,
+            "skipped_dedupe": 2,
+            "errors": 0,
+        },
+        "applied_actions": [
+            {
+                "action_type": "followup_create",
+                "details": {
+                    "description": "Engineering fix for recurring deploy drift",
+                    "reasoning": "Engineering guardrail",
+                },
+            }
+        ],
+    }))
 
     outputs = apply_mod.write_periodic_summaries("2026-04-05", current_synthesis)
 
@@ -110,9 +174,14 @@ def test_write_periodic_summaries_creates_weekly_and_monthly_outputs(monkeypatch
     assert weekly_payload["daily_syntheses"] == 3
     assert weekly_payload["top_projects"][0]["project"] == "wazion"
     assert weekly_payload["top_patterns"][0]["pattern"] == "deploy drift"
+    assert weekly_payload["protocol_summary"]["overall_compliance_pct"] == 64.1
+    assert weekly_payload["delivery_metrics"]["engineering_followups"] == 3
+    assert weekly_payload["project_pulse"][0]["project"] == "wazion"
 
     weekly_markdown = Path(outputs["weekly_markdown"]).read_text()
     assert "Top Projects" in weekly_markdown
+    assert "Protocol Compliance" in weekly_markdown
+    assert "Loop Output" in weekly_markdown
     assert "wazion" in weekly_markdown
 
 

@@ -5,7 +5,7 @@ import sys
 
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
 
 from db import init_db, get_personal_script, list_personal_scripts, list_personal_script_schedules
 from script_registry import (

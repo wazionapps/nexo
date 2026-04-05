@@ -6,6 +6,7 @@ import json
 import os
 import platform
 import plistlib
+import re
 import subprocess
 import sys
 import time
@@ -38,6 +39,8 @@ SPECIAL_LAUNCHAGENT_IDS = {"prevent-sleep", "tcc-approve"}
 SPECIAL_ENV_NORMALIZE_IDS = SPECIAL_LAUNCHAGENT_IDS
 OPTIONALS_FILE = NEXO_HOME / "config" / "optionals.json"
 SCHEDULE_FILE = NEXO_HOME / "config" / "schedule.json"
+PACKAGE_JSON = NEXO_CODE / "package.json"
+CHANGELOG_FILE = NEXO_CODE / "CHANGELOG.md"
 
 
 def _codex_bootstrap_config_status() -> dict:
@@ -190,6 +193,7 @@ def _client_assumption_regressions() -> list[str]:
         return []
     allowed_claude_projects = {
         (src_root / "scripts" / "deep-sleep" / "collect.py").resolve(),
+        Path(__file__).resolve(),
     }
     offenders: list[str] = []
     for path in src_root.rglob("*.py"):
@@ -222,6 +226,44 @@ def _file_age_seconds(path: Path) -> float | None:
 
 def _load_json(path: Path) -> dict:
     return json.loads(path.read_text())
+
+
+def _latest_periodic_summary(kind: str) -> dict | None:
+    pattern = f"*-{kind}-summary.json"
+    candidates: list[tuple[str, Path]] = []
+    for path in (NEXO_HOME / "operations" / "deep-sleep").glob(pattern):
+        try:
+            payload = json.loads(path.read_text())
+        except Exception:
+            continue
+        label = str(payload.get("label", "") or "")
+        if label:
+            candidates.append((label, path))
+    if not candidates:
+        return None
+    _, path = sorted(candidates, key=lambda item: item[0])[-1]
+    try:
+        payload = json.loads(path.read_text())
+    except Exception:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _package_version() -> str:
+    try:
+        payload = json.loads(PACKAGE_JSON.read_text())
+    except Exception:
+        return ""
+    return str(payload.get("version", "") or "").strip()
+
+
+def _top_changelog_version() -> str:
+    try:
+        text = CHANGELOG_FILE.read_text(encoding="utf-8")
+    except Exception:
+        return ""
+    match = re.search(r"^## \[([^\]]+)\]", text, flags=re.MULTILINE)
+    return match.group(1).strip() if match else ""
 
 
 def _count_checks(checks) -> int:
@@ -1529,6 +1571,143 @@ def check_client_assumption_regressions() -> DoctorCheck:
     )
 
 
+def check_protocol_compliance() -> DoctorCheck:
+    summary = _latest_periodic_summary("weekly")
+    if not summary:
+        return DoctorCheck(
+            id="runtime.protocol_compliance",
+            tier="runtime",
+            status="degraded",
+            severity="warn",
+            summary="No weekly Deep Sleep protocol summary found",
+            repair_plan=[
+                "Run the Deep Sleep pipeline so weekly summaries include protocol compliance again",
+            ],
+            escalation_prompt=(
+                "NEXO cannot verify heartbeat / guard_check / change_log compliance because the latest weekly Deep Sleep summary is missing."
+            ),
+        )
+
+    protocol = summary.get("protocol_summary") or {}
+    overall = protocol.get("overall_compliance_pct")
+    guard = protocol.get("guard_check") or {}
+    heartbeat = protocol.get("heartbeat") or {}
+    change_log = protocol.get("change_log") or {}
+    evidence = [f"weekly summary: {summary.get('label', 'unknown')}"]
+    if overall is not None:
+        evidence.append(f"overall protocol compliance: {overall:.1f}%")
+    if guard.get("compliance_pct") is not None:
+        evidence.append(
+            f"guard_check: {guard.get('executed', 0)}/{guard.get('required', 0)} ({guard['compliance_pct']:.1f}%)"
+        )
+    if heartbeat.get("compliance_pct") is not None:
+        evidence.append(
+            f"heartbeat with context: {heartbeat.get('with_context', 0)}/{heartbeat.get('total', 0)} ({heartbeat['compliance_pct']:.1f}%)"
+        )
+    if change_log.get("compliance_pct") is not None:
+        evidence.append(
+            f"change_log after edits: {change_log.get('logged', 0)}/{change_log.get('edits', 0)} ({change_log['compliance_pct']:.1f}%)"
+        )
+
+    status = "healthy"
+    severity = "info"
+    repair_plan: list[str] = []
+    if overall is None:
+        status = "degraded"
+        severity = "warn"
+        repair_plan.append("Ensure Deep Sleep extractions keep writing protocol_summary data")
+    elif overall < 45:
+        status = "critical"
+        severity = "error"
+    elif overall < 70:
+        status = "degraded"
+        severity = "warn"
+
+    if status != "healthy":
+        repair_plan.extend(
+            [
+                "Reinforce heartbeat discipline on every user message",
+                "Call nexo_guard_check before production/shared edits",
+                "Record production changes with nexo_change_log after editing",
+            ]
+        )
+
+    return DoctorCheck(
+        id="runtime.protocol_compliance",
+        tier="runtime",
+        status=status,
+        severity=severity,
+        summary="Protocol compliance looks healthy" if status == "healthy" else "Protocol compliance needs hardening",
+        evidence=evidence,
+        repair_plan=repair_plan,
+        escalation_prompt=(
+            "Heartbeat / guard_check / change_log discipline is drifting. NEXO is at risk of repeating known errors and hiding change history."
+        ) if status != "healthy" else "",
+    )
+
+
+def check_release_artifact_sync() -> DoctorCheck:
+    version = _package_version()
+    changelog_version = _top_changelog_version()
+    evidence = []
+    status = "healthy"
+    severity = "info"
+    repair_plan: list[str] = []
+
+    if version:
+        evidence.append(f"package version: {version}")
+    if changelog_version:
+        evidence.append(f"top changelog version: {changelog_version}")
+
+    if version and changelog_version and version != changelog_version:
+        status = "critical"
+        severity = "error"
+        evidence.append("package/changelog release version mismatch")
+        repair_plan.append("Bump or align CHANGELOG.md before publishing")
+
+    sync_script = NEXO_CODE / "scripts" / "sync_release_artifacts.py"
+    if not sync_script.is_file():
+        status = "critical"
+        severity = "error"
+        evidence.append(f"missing release artifact sync script at {sync_script}")
+        repair_plan.append("Restore scripts/sync_release_artifacts.py")
+    else:
+        try:
+            result = subprocess.run(
+                [sys.executable, str(sync_script), "--check"],
+                cwd=str(NEXO_CODE),
+                capture_output=True,
+                text=True,
+            )
+        except Exception as exc:
+            status = "degraded" if status == "healthy" else status
+            severity = "warn" if severity == "info" else severity
+            evidence.append(f"artifact sync check failed to run: {exc}")
+            repair_plan.append("Run scripts/sync_release_artifacts.py manually and inspect the local environment")
+        else:
+            if result.returncode != 0:
+                status = "degraded" if status == "healthy" else status
+                severity = "warn" if severity == "info" else severity
+                detail = result.stderr.strip() or result.stdout.strip() or "artifact sync check failed"
+                evidence.append(detail.splitlines()[0])
+                repair_plan.append("Run scripts/sync_release_artifacts.py before publishing")
+            else:
+                evidence.append("release artifacts in sync")
+
+    return DoctorCheck(
+        id="runtime.release_artifacts",
+        tier="runtime",
+        status=status,
+        severity=severity,
+        summary="Release artifact discipline OK" if status == "healthy" else "Release artifact discipline needs attention",
+        evidence=evidence,
+        repair_plan=repair_plan,
+        escalation_prompt=(
+            "Release-facing artifacts drifted away from the source version contract. Publishing now risks another hotfix release."
+        ) if status != "healthy" else "",
+    )
+
+
 def run_runtime_checks(fix: bool = False) -> list[DoctorCheck]:
     """Run all runtime-tier checks. Read-only by default."""
     return [
@@ -1542,6 +1721,8 @@ def run_runtime_checks(fix: bool = False) -> list[DoctorCheck]:
         check_claude_desktop_shared_brain(),
         check_transcript_source_parity(),
         check_client_assumption_regressions(),
+        check_protocol_compliance(),
+        check_release_artifact_sync(),
         check_launchagent_integrity(fix=fix),
         check_personal_script_registry(fix=fix),
         check_skill_health(fix=fix),

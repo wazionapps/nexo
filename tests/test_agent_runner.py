@@ -4,7 +4,7 @@ import shlex
 import subprocess
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
 
 
 def test_build_interactive_client_command_uses_codex_when_selected(tmp_path, monkeypatch):

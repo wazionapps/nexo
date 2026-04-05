@@ -138,6 +138,30 @@
       </div>
     </div>
   </div>
+
+  <!-- Row 3: engineering loop narrative -->
+  <div class="grid grid-cols-3 gap-4">
+    <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-5 card">
+      <div class="text-xs uppercase tracking-wider text-slate-400 font-medium mb-3">What Matters Now</div>
+      <ul id="matters-now-list" class="space-y-2">
+        <li class="text-xs text-slate-600 py-1">loading...</li>
+      </ul>
+    </div>
+
+    <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-5 card">
+      <div class="text-xs uppercase tracking-wider text-slate-400 font-medium mb-3">What Is Drifting</div>
+      <ul id="drifting-list" class="space-y-2">
+        <li class="text-xs text-slate-600 py-1">loading...</li>
+      </ul>
+    </div>
+
+    <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-5 card">
+      <div class="text-xs uppercase tracking-wider text-slate-400 font-medium mb-3">What Is Improving</div>
+      <ul id="improving-list" class="space-y-2">
+        <li class="text-xs text-slate-600 py-1">loading...</li>
+      </ul>
+    </div>
+  </div>
 </div>
 
 <!-- Quick Create Modal -->
@@ -244,7 +268,7 @@ async function submitQuickCreate(e) {
 async function loadDashboardData() {
   const today = getToday();
 
-  const [trustData, statsData, remindersData, followupsData, sessionsData, watchdogData, inboxData] =
+  const [trustData, statsData, remindersData, followupsData, sessionsData, watchdogData, inboxData, engineeringData] =
     await Promise.all([
       fetchJSON('/api/trust'),
       fetchJSON('/api/stats'),
@@ -253,6 +277,7 @@ async function loadDashboardData() {
       fetchJSON('/api/sessions?limit=3'),
       fetchJSON('/api/watchdog'),
       fetchJSON('/api/inbox/unread'),
+      fetchJSON('/api/engineering-loop'),
     ]);
 
   // --- Trust Score (animated gauge) ---
@@ -425,6 +450,39 @@ async function loadDashboardData() {
       badge.classList.remove('hidden');
       badge.classList.add('flex');
     }
+  }
+
+  // --- Engineering loop narrative ---
+  const toneClass = tone => {
+    if (tone === 'critical') return 'text-red-400';
+    if (tone === 'elevated' || tone === 'watch') return 'text-amber-400';
+    return 'text-emerald-400';
+  };
+  const renderNarrativeList = (id, items, emptyText) => {
+    const node = document.getElementById(id);
+    if (!node) return;
+    if (!items || items.length === 0) {
+      node.innerHTML = `<li class="text-xs text-slate-600 py-1">${escapeHtml(emptyText)}</li>`;
+      return;
+    }
+    node.innerHTML = items.map(item => `
+      <li class="border-b border-slate-800/30 pb-2 last:border-0 last:pb-0">
+        <div class="flex items-center justify-between gap-2">
+          <span class="text-xs text-slate-300">${escapeHtml(item.title || '--')}</span>
+          <span class="text-[10px] font-mono ${toneClass(item.tone)}">${escapeHtml(item.detail || '')}</span>
+        </div>
+        ${item.meta ? `<div class="text-[10px] text-slate-600 mt-1">${escapeHtml(item.meta)}</div>` : ''}
+      </li>
+    `).join('');
+  };
+  if (engineeringData && !engineeringData.error) {
+    renderNarrativeList('matters-now-list', engineeringData.matters_now, 'No active pressure detected');
+    renderNarrativeList('drifting-list', engineeringData.drifting, 'No major drift detected');
+    renderNarrativeList('improving-list', engineeringData.improving, 'No improvement deltas yet');
+  } else {
+    renderNarrativeList('matters-now-list', [], 'No periodic summary available');
+    renderNarrativeList('drifting-list', [], 'No periodic summary available');
+    renderNarrativeList('improving-list', [], 'No periodic summary available');
   }
 }
 

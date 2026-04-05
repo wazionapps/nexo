@@ -4,7 +4,7 @@ import os
 import subprocess
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
 
 
 def test_startup_preflight_defers_sync_update_when_runtime_busy(tmp_path, monkeypatch):

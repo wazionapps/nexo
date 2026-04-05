@@ -24,6 +24,9 @@ jobs:
       - name: Run tests
         run: PYTHONPATH=src pytest tests/ -v
 
+      - name: Verify release readiness
+        run: python3 scripts/verify_release_readiness.py --ci
+
   publish:
     needs: test
     runs-on: ubuntu-latest
@@ -38,6 +41,9 @@ jobs:
         with:
           node-version: '22'
           registry-url: 'https://registry.npmjs.org'
+
+      - name: Verify release readiness
+        run: python3 scripts/verify_release_readiness.py --ci
 
       - name: Sync release artifacts
         run: python3 scripts/sync_release_artifacts.py --release-version "${GITHUB_REF_NAME#v}"

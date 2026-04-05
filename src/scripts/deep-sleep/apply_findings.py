@@ -992,6 +992,201 @@ def _load_period_syntheses(target_date: str, *, window_days: int) -> list[dict]:
     return syntheses
 
 
+def _load_period_extractions(target_date: str, *, window_days: int) -> list[dict]:
+    target_day = datetime.strptime(target_date, "%Y-%m-%d")
+    payloads: list[dict] = []
+    for offset in range(window_days):
+        date_str = (target_day - timedelta(days=offset)).strftime("%Y-%m-%d")
+        path = DEEP_SLEEP_DIR / f"{date_str}-extractions.json"
+        if not path.is_file():
+            continue
+        try:
+            payload = json.loads(path.read_text())
+        except Exception:
+            continue
+        if isinstance(payload, dict):
+            payloads.append(payload)
+    payloads.reverse()
+    return payloads
+
+
+def _load_period_applied_logs(target_date: str, *, window_days: int) -> list[dict]:
+    target_day = datetime.strptime(target_date, "%Y-%m-%d")
+    payloads: list[dict] = []
+    for offset in range(window_days):
+        date_str = (target_day - timedelta(days=offset)).strftime("%Y-%m-%d")
+        path = DEEP_SLEEP_DIR / f"{date_str}-applied.json"
+        if not path.is_file():
+            continue
+        try:
+            payload = json.loads(path.read_text())
+        except Exception:
+            continue
+        if isinstance(payload, dict):
+            payloads.append(payload)
+    payloads.reverse()
+    return payloads
+
+
+def _safe_pct(numerator: float, denominator: float) -> float | None:
+    if denominator <= 0:
+        return None
+    return round((numerator / denominator) * 100.0, 1)
+
+
+def _aggregate_protocol_summary(extractions: list[dict]) -> dict:
+    totals = {
+        "sessions": 0,
+        "guard_check": {"required": 0, "executed": 0},
+        "heartbeat": {"total": 0, "with_context": 0},
+        "change_log": {"edits": 0, "logged": 0},
+    }
+
+    for payload in extractions:
+        for item in payload.get("extractions", []) or []:
+            if not isinstance(item, dict) or item.get("error"):
+                continue
+            totals["sessions"] += 1
+            protocol_summary = item.get("protocol_summary") or {}
+            for key in ("guard_check", "heartbeat", "change_log"):
+                current = protocol_summary.get(key) or {}
+                if key == "guard_check":
+                    totals[key]["required"] += int(current.get("required", 0) or 0)
+                    totals[key]["executed"] += int(current.get("executed", 0) or 0)
+                elif key == "heartbeat":
+                    totals[key]["total"] += int(current.get("total", 0) or 0)
+                    totals[key]["with_context"] += int(current.get("with_context", 0) or 0)
+                else:
+                    totals[key]["edits"] += int(current.get("edits", 0) or 0)
+                    totals[key]["logged"] += int(current.get("logged", 0) or 0)
+
+    guard_pct = _safe_pct(totals["guard_check"]["executed"], totals["guard_check"]["required"])
+    heartbeat_pct = _safe_pct(totals["heartbeat"]["with_context"], totals["heartbeat"]["total"])
+    change_pct = _safe_pct(totals["change_log"]["logged"], totals["change_log"]["edits"])
+    available = [value for value in (guard_pct, heartbeat_pct, change_pct) if value is not None]
+
+    totals["guard_check"]["compliance_pct"] = guard_pct
+    totals["heartbeat"]["compliance_pct"] = heartbeat_pct
+    totals["change_log"]["compliance_pct"] = change_pct
+    totals["overall_compliance_pct"] = round(sum(available) / len(available), 1) if available else None
+    return totals
+
+
+def _aggregate_delivery_metrics(applied_logs: list[dict]) -> dict:
+    totals = {
+        "runs": len(applied_logs),
+        "applied_actions": 0,
+        "deferred_actions": 0,
+        "skipped_dedupe": 0,
+        "errors": 0,
+        "engineering_followups": 0,
+    }
+    for payload in applied_logs:
+        stats = payload.get("stats") or {}
+        totals["applied_actions"] += int(stats.get("applied", 0) or 0)
+        totals["deferred_actions"] += int(stats.get("deferred", 0) or 0)
+        totals["skipped_dedupe"] += int(stats.get("skipped_dedupe", 0) or 0)
+        totals["errors"] += int(stats.get("errors", 0) or 0)
+        for action in payload.get("applied_actions", []) or []:
+            details = action.get("details") or {}
+            if action.get("action_type") == "followup_create":
+                description = str(details.get("description", "") or "") + " " + str(details.get("reasoning", "") or "")
+                if "engineering" in description.lower() or "guardrail" in description.lower():
+                    totals["engineering_followups"] += 1
+
+    attempted = totals["applied_actions"] + totals["deferred_actions"] + totals["skipped_dedupe"] + totals["errors"]
+    totals["dedupe_rate_pct"] = _safe_pct(totals["skipped_dedupe"], attempted)
+    totals["error_rate_pct"] = _safe_pct(totals["errors"], attempted)
+    return totals
+
+
+def _load_previous_period_summary(kind: str, label: str) -> dict | None:
+    pattern = f"*-{kind}-summary.json"
+    candidates: list[tuple[str, Path]] = []
+    for path in DEEP_SLEEP_DIR.glob(pattern):
+        try:
+            payload = json.loads(path.read_text())
+        except Exception:
+            continue
+        candidate_label = str(payload.get("label", "") or "")
+        if candidate_label and candidate_label < label:
+            candidates.append((candidate_label, path))
+    if not candidates:
+        return None
+    _, path = sorted(candidates, key=lambda item: item[0])[-1]
+    try:
+        payload = json.loads(path.read_text())
+    except Exception:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _build_project_pulse(top_projects: list[dict], previous_summary: dict | None) -> list[dict]:
+    previous_scores: dict[str, float] = {}
+    if previous_summary:
+        for item in previous_summary.get("project_pulse", []) or previous_summary.get("top_projects", []) or []:
+            project = str(item.get("project", "") or "")
+            if project:
+                previous_scores[project] = float(item.get("score", 0) or 0)
+
+    pulse: list[dict] = []
+    for item in top_projects:
+        project = str(item.get("project", "") or "")
+        score = float(item.get("score", 0) or 0)
+        previous_score = previous_scores.get(project, 0.0)
+        delta = round(score - previous_score, 2)
+        if score >= 18:
+            status = "critical"
+        elif score >= 10:
+            status = "elevated"
+        else:
+            status = "watch"
+        if delta >= 2.0:
+            trend = "rising"
+        elif delta <= -2.0:
+            trend = "cooling"
+        else:
+            trend = "steady"
+        pulse.append(
+            {
+                "project": project,
+                "score": round(score, 2),
+                "delta_vs_previous": delta,
+                "trend": trend,
+                "status": status,
+                "signals": item.get("signals", {}),
+                "reasons": item.get("reasons", []),
+            }
+        )
+    return pulse
+
+
+def _build_period_trend(summary: dict, previous_summary: dict | None) -> dict:
+    if not previous_summary:
+        return {
+            "has_previous": False,
+            "avg_mood_delta": None,
+            "avg_trust_delta": None,
+            "total_corrections_delta": None,
+            "protocol_compliance_delta": None,
+        }
+
+    current_protocol = summary.get("protocol_summary", {}).get("overall_compliance_pct")
+    previous_protocol = (previous_summary.get("protocol_summary") or {}).get("overall_compliance_pct")
+    current_mood = summary.get("avg_mood_score")
+    previous_mood = previous_summary.get("avg_mood_score")
+    current_trust = summary.get("avg_trust_score")
+    previous_trust = previous_summary.get("avg_trust_score")
+
+    return {
+        "has_previous": True,
+        "avg_mood_delta": round(current_mood - previous_mood, 3) if isinstance(current_mood, (int, float)) and isinstance(previous_mood, (int, float)) else None,
+        "avg_trust_delta": round(current_trust - previous_trust, 1) if isinstance(current_trust, (int, float)) and isinstance(previous_trust, (int, float)) else None,
+        "total_corrections_delta": int(summary.get("total_corrections", 0) or 0) - int(previous_summary.get("total_corrections", 0) or 0),
+        "protocol_compliance_delta": round(current_protocol - previous_protocol, 1) if isinstance(current_protocol, (int, float)) and isinstance(previous_protocol, (int, float)) else None,
+    }
+
+
 def _build_period_summary(target_date: str, synthesis: dict, *, kind: str, window_days: int) -> dict:
     target_day = datetime.strptime(target_date, "%Y-%m-%d")
     window_start = (target_day - timedelta(days=max(0, window_days - 1))).strftime("%Y-%m-%d")
@@ -1001,6 +1196,8 @@ def _build_period_summary(target_date: str, synthesis: dict, *, kind: str, windo
         else target_day.strftime("%Y-%m")
     )
     syntheses = _load_period_syntheses(target_date, window_days=window_days)
+    extractions = _load_period_extractions(target_date, window_days=window_days)
+    applied_logs = _load_period_applied_logs(target_date, window_days=window_days)
     if not any(item.get("date") == target_date for item in syntheses):
         syntheses.append(synthesis)
 
@@ -1037,6 +1234,10 @@ def _build_period_summary(target_date: str, synthesis: dict, *, kind: str, windo
         {"title": title, "count": count}
         for title, count in agenda_counter.most_common(6)
     ]
+    protocol_summary = _aggregate_protocol_summary(extractions)
+    delivery_metrics = _aggregate_delivery_metrics(applied_logs)
+    previous_summary = _load_previous_period_summary(kind, label)
+    project_pulse = _build_project_pulse(top_projects, previous_summary)
 
     summary_parts = [f"{len(syntheses)} Deep Sleep run(s)"]
     if top_projects:
@@ -1045,9 +1246,11 @@ def _build_period_summary(target_date: str, synthesis: dict, *, kind: str, windo
         summary_parts.append(f"recurring pattern: {top_patterns[0]['pattern']}")
     if avg_trust is not None:
         summary_parts.append(f"avg trust {avg_trust:.1f}")
+    if protocol_summary.get("overall_compliance_pct") is not None:
+        summary_parts.append(f"protocol {protocol_summary['overall_compliance_pct']:.1f}%")
     summary = " | ".join(summary_parts)
 
-    return {
+    period_summary = {
         "kind": kind,
         "label": label,
         "window_days": window_days,
@@ -1059,11 +1262,15 @@ def _build_period_summary(target_date: str, synthesis: dict, *, kind: str, windo
         "avg_trust_score": avg_trust,
         "total_corrections": total_corrections,
         "top_projects": top_projects,
+        "project_pulse": project_pulse,
         "top_patterns": top_patterns,
         "recurring_agenda": recurring_agenda,
+        "protocol_summary": protocol_summary,
+        "delivery_metrics": delivery_metrics,
         "summary": summary,
     }
-
+    period_summary["trend"] = _build_period_trend(period_summary, previous_summary)
+    return period_summary
 
 def _render_period_summary_markdown(summary: dict) -> str:
     lines = [
@@ -1082,6 +1289,47 @@ def _render_period_summary_markdown(summary: dict) -> str:
         lines.append(f"> {summary['summary']}")
         lines.append("")
 
+    protocol_summary = summary.get("protocol_summary") or {}
+    if protocol_summary:
+        lines.append("## Protocol Compliance")
+        lines.append("")
+        overall = protocol_summary.get("overall_compliance_pct")
+        if overall is not None:
+            lines.append(f"- Overall compliance: {overall:.1f}%")
+        guard = protocol_summary.get("guard_check", {})
+        heartbeat = protocol_summary.get("heartbeat", {})
+        change_log = protocol_summary.get("change_log", {})
+        if guard:
+            lines.append(
+                f"- guard_check: {guard.get('executed', 0)}/{guard.get('required', 0)}"
+                + (f" ({guard['compliance_pct']:.1f}%)" if guard.get("compliance_pct") is not None else "")
+            )
+        if heartbeat:
+            lines.append(
+                f"- heartbeat with context: {heartbeat.get('with_context', 0)}/{heartbeat.get('total', 0)}"
+                + (f" ({heartbeat['compliance_pct']:.1f}%)" if heartbeat.get("compliance_pct") is not None else "")
+            )
+        if change_log:
+            lines.append(
+                f"- change_log after edits: {change_log.get('logged', 0)}/{change_log.get('edits', 0)}"
+                + (f" ({change_log['compliance_pct']:.1f}%)" if change_log.get("compliance_pct") is not None else "")
+            )
+        lines.append("")
+
+    delivery_metrics = summary.get("delivery_metrics") or {}
+    if delivery_metrics:
+        lines.append("## Loop Output")
+        lines.append("")
+        lines.append(f"- Applied actions: {delivery_metrics.get('applied_actions', 0)}")
+        lines.append(f"- Deferred actions: {delivery_metrics.get('deferred_actions', 0)}")
+        lines.append(f"- Dedupe skips: {delivery_metrics.get('skipped_dedupe', 0)}")
+        lines.append(f"- Engineering followups: {delivery_metrics.get('engineering_followups', 0)}")
+        if delivery_metrics.get("dedupe_rate_pct") is not None:
+            lines.append(f"- Dedupe rate: {delivery_metrics['dedupe_rate_pct']:.1f}%")
+        if delivery_metrics.get("error_rate_pct") is not None:
+            lines.append(f"- Error rate: {delivery_metrics['error_rate_pct']:.1f}%")
+        lines.append("")
+
     if summary.get("top_projects"):
         lines.append("## Top Projects")
         lines.append("")
@@ -1089,6 +1337,20 @@ def _render_period_summary_markdown(summary: dict) -> str:
             lines.append(f"- **{item['project']}** — score {item['score']}")
             if item.get("reasons"):
                 lines.append(f"  Reasons: {', '.join(item['reasons'])}")
+        lines.append("")
+
+    if summary.get("project_pulse"):
+        lines.append("## Project Pulse")
+        lines.append("")
+        for item in summary["project_pulse"][:5]:
+            delta = item.get("delta_vs_previous")
+            delta_label = ""
+            if isinstance(delta, (int, float)):
+                delta_label = f" | Δ {delta:+.2f}"
+            lines.append(
+                f"- **{item['project']}** — {item.get('status', 'watch')} / {item.get('trend', 'steady')}"
+                f" | score {item.get('score', 0)}{delta_label}"
+            )
         lines.append("")
 
     if summary.get("top_patterns"):
@@ -1103,6 +1365,20 @@ def _render_period_summary_markdown(summary: dict) -> str:
         lines.append("")
         for item in summary["recurring_agenda"][:5]:
             lines.append(f"- {item['title']} ({item['count']}x)")
+        lines.append("")
+
+    trend = summary.get("trend") or {}
+    if trend.get("has_previous"):
+        lines.append("## Trend vs Previous")
+        lines.append("")
+        if trend.get("avg_mood_delta") is not None:
+            lines.append(f"- Mood delta: {trend['avg_mood_delta']:+.3f}")
+        if trend.get("avg_trust_delta") is not None:
+            lines.append(f"- Trust delta: {trend['avg_trust_delta']:+.1f}")
+        if trend.get("total_corrections_delta") is not None:
+            lines.append(f"- Corrections delta: {trend['total_corrections_delta']:+d}")
+        if trend.get("protocol_compliance_delta") is not None:
+            lines.append(f"- Protocol delta: {trend['protocol_compliance_delta']:+.1f}%")
         lines.append("")
 
     return "\n".join(lines).rstrip() + "\n"

@@ -12,6 +12,7 @@ Quick verification command:
 
 ```bash
 python3 scripts/verify_client_parity.py
+python3 scripts/verify_release_readiness.py
 ```
 
 This command is also enforced in CI through:
@@ -28,6 +29,8 @@ These should be covered by tests, `nexo doctor`, or CI. If one of these is not a
 - [ ] Claude Desktop shared-brain metadata still syncs correctly
 - [ ] Runtime doctor still audits recent Codex sessions for startup discipline
 - [ ] Runtime doctor still audits Claude Desktop shared-brain state
+- [ ] Runtime doctor still checks weekly protocol compliance summaries
+- [ ] Runtime doctor still detects release artifact drift before publish
 - [ ] Runtime doctor / regression tests still reject new Claude-only assumptions
 - [ ] Deep Sleep still reads both Claude Code and Codex transcript sources
 - [ ] Deep Sleep long-horizon summaries still write daily + weekly + monthly artifacts
@@ -39,6 +42,7 @@ These should be covered by tests, `nexo doctor`, or CI. If one of these is not a
 Run this before a release whenever the touched area includes clients, startup, bootstrap, Deep Sleep, or public product claims.
 
 - [ ] `PYTHONPATH=src pytest -q tests/`
+- [ ] `python3 scripts/verify_release_readiness.py`
 - [ ] `nexo doctor --tier runtime`
 - [ ] Open a recent Codex session and verify it starts as NEXO
 - [ ] Verify Codex still has bootstrap + managed config + `mcp_servers.nexo`

@@ -3,6 +3,7 @@ import json
 import os
 import plistlib
 import sqlite3
+import textwrap
 import sys
 import time
 from pathlib import Path
@@ -10,7 +11,7 @@ from types import SimpleNamespace
 
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
 
 
 @pytest.fixture
@@ -47,6 +48,15 @@ def nexo_home(tmp_path, monkeypatch):
 
     monkeypatch.setenv("NEXO_HOME", str(home))
     monkeypatch.setenv("HOME", str(home))
+
+    # Force doctor imports to reload from this repo, not from any operator-local runtime.
+    repo_src = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+    if repo_src in sys.path:
+        sys.path.remove(repo_src)
+    sys.path.insert(0, repo_src)
+    for name in list(sys.modules):
+        if name == "doctor" or name.startswith("doctor."):
+            sys.modules.pop(name, None)
 
     # Patch module-level NEXO_HOME in all doctor modules
     from doctor.providers import boot, runtime, deep
@@ -518,6 +528,53 @@ class TestRuntimeChecks:
         check = runtime.check_client_bootstrap_parity()
         assert check.status == "degraded"
         assert any("mcp_servers.nexo" in item for item in check.evidence)
+
+    def test_protocol_compliance_uses_latest_weekly_summary(self, nexo_home, monkeypatch):
+        from doctor.providers import runtime
+
+        summary_dir = nexo_home / "operations" / "deep-sleep"
+        summary_dir.mkdir(parents=True, exist_ok=True)
+        (summary_dir / "2026-W14-weekly-summary.json").write_text(json.dumps({
+            "label": "2026-W14",
+            "protocol_summary": {
+                "overall_compliance_pct": 41.2,
+                "guard_check": {"required": 12, "executed": 3, "compliance_pct": 25.0},
+                "heartbeat": {"total": 20, "with_context": 10, "compliance_pct": 50.0},
+                "change_log": {"edits": 11, "logged": 4, "compliance_pct": 36.4},
+            },
+        }))
+
+        monkeypatch.setattr(runtime, "NEXO_HOME", nexo_home)
+        check = runtime.check_protocol_compliance()
+
+        assert check.status == "critical"
+        assert any("41.2%" in item for item in check.evidence)
+        assert any("guard_check" in item for item in check.evidence)
+
+    def test_release_artifact_sync_detects_version_mismatch(self, nexo_home, monkeypatch, tmp_path):
+        from doctor.providers import runtime
+
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        (repo / "scripts").mkdir()
+        (repo / "package.json").write_text(json.dumps({"version": "2.7.0"}))
+        (repo / "CHANGELOG.md").write_text("## [2.6.21] - 2026-04-05\n")
+        sync_script = repo / "scripts" / "sync_release_artifacts.py"
+        sync_script.write_text(textwrap.dedent("""\
+            import sys
+            if __name__ == "__main__":
+                print("[sync-release-artifacts] OK")
+                raise SystemExit(0)
+        """))
+
+        monkeypatch.setattr(runtime, "NEXO_CODE", repo)
+        monkeypatch.setattr(runtime, "PACKAGE_JSON", repo / "package.json")
+        monkeypatch.setattr(runtime, "CHANGELOG_FILE", repo / "CHANGELOG.md")
+
+        check = runtime.check_release_artifact_sync()
+
+        assert check.status == "critical"
+        assert any("version mismatch" in item for item in check.evidence)
 
     def test_transcript_source_parity_warns_when_codex_selected_without_sessions(self, nexo_home, monkeypatch):
         from doctor.providers import runtime

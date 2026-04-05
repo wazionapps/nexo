@@ -156,6 +156,106 @@ def _email_db():
     return conn
 
 
+def _deep_sleep_dir() -> Path:
+    nexo_home = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+    return nexo_home / "operations" / "deep-sleep"
+
+
+def _latest_periodic_summary(kind: str) -> dict:
+    root = _deep_sleep_dir()
+    pattern = f"*-{kind}-summary.json"
+    candidates = []
+    for path in root.glob(pattern):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        label = str(payload.get("label", "") or "")
+        if label:
+            candidates.append((label, payload))
+    if not candidates:
+        return {}
+    return sorted(candidates, key=lambda item: item[0])[-1][1]
+
+
+def _summarize_engineering_loop(weekly: dict, monthly: dict) -> dict:
+    matters_now = []
+    for item in (weekly.get("project_pulse") or weekly.get("top_projects") or [])[:4]:
+        matters_now.append(
+            {
+                "title": str(item.get("project", "") or "unknown"),
+                "detail": f"score {item.get('score', 0)}",
+                "tone": str(item.get("status", "watch") or "watch"),
+                "meta": ", ".join(item.get("reasons", [])[:2]) if isinstance(item.get("reasons"), list) else "",
+            }
+        )
+
+    drifting = []
+    protocol = weekly.get("protocol_summary") or {}
+    for key, label in (
+        ("guard_check", "guard_check"),
+        ("heartbeat", "heartbeat"),
+        ("change_log", "change_log"),
+    ):
+        item = protocol.get(key) or {}
+        pct = item.get("compliance_pct")
+        if isinstance(pct, (int, float)) and pct < 70:
+            drifting.append(
+                {
+                    "title": label,
+                    "detail": f"{pct:.1f}% compliance",
+                    "tone": "critical" if pct < 45 else "elevated",
+                    "meta": "",
+                }
+            )
+    for item in (weekly.get("top_patterns") or [])[:3]:
+        pattern = str(item.get("pattern", "") or "")
+        if pattern:
+            drifting.append(
+                {
+                    "title": pattern,
+                    "detail": f"{item.get('count', 0)}x this period",
+                    "tone": "watch",
+                    "meta": "recurring pattern",
+                }
+            )
+        if len(drifting) >= 4:
+            break
+
+    improving = []
+    trend = weekly.get("trend") or {}
+    trust_delta = trend.get("avg_trust_delta")
+    if isinstance(trust_delta, (int, float)) and trust_delta > 0:
+        improving.append({"title": "Trust", "detail": f"{trust_delta:+.1f}", "tone": "healthy", "meta": "vs previous window"})
+    delivery = weekly.get("delivery_metrics") or {}
+    if int(delivery.get("engineering_followups", 0) or 0) > 0:
+        improving.append(
+            {
+                "title": "Engineering followups",
+                "detail": str(delivery.get("engineering_followups", 0)),
+                "tone": "healthy",
+                "meta": "guardrails created from recurring patterns",
+            }
+        )
+    protocol_delta = trend.get("protocol_compliance_delta")
+    if isinstance(protocol_delta, (int, float)) and protocol_delta > 0:
+        improving.append({"title": "Protocol", "detail": f"{protocol_delta:+.1f}%", "tone": "healthy", "meta": "vs previous window"})
+    corrections_delta = trend.get("total_corrections_delta")
+    if isinstance(corrections_delta, int) and corrections_delta < 0:
+        improving.append({"title": "Corrections", "detail": f"{corrections_delta:+d}", "tone": "healthy", "meta": "lower is better"})
+    mood_delta = trend.get("avg_mood_delta")
+    if isinstance(mood_delta, (int, float)) and mood_delta > 0:
+        improving.append({"title": "Mood", "detail": f"{mood_delta:+.3f}", "tone": "healthy", "meta": "vs previous window"})
+
+    return {
+        "weekly": weekly,
+        "monthly": monthly,
+        "matters_now": matters_now[:4],
+        "drifting": drifting[:4],
+        "improving": improving[:4],
+    }
+
+
 # ---------------------------------------------------------------------------
 # HTML page routes — Jinja2 with fallback to plain file
 # ---------------------------------------------------------------------------
@@ -394,6 +494,30 @@ async def api_trust():
         "current_score": current,
         "history": history,
     }
+
+
+@app.get("/api/project-pulse")
+async def api_project_pulse(kind: str = Query("weekly", pattern="^(weekly|monthly)$")):
+    """Latest project pressure snapshot from Deep Sleep summaries."""
+    summary = _latest_periodic_summary(kind)
+    if not summary:
+        return JSONResponse({"error": f"No {kind} summary found"}, status_code=404)
+    return {
+        "kind": kind,
+        "label": summary.get("label"),
+        "project_pulse": summary.get("project_pulse", []),
+        "top_projects": summary.get("top_projects", []),
+    }
+
+
+@app.get("/api/engineering-loop")
+async def api_engineering_loop():
+    """Dashboard narrative: what matters now, what is drifting, what is improving."""
+    weekly = _latest_periodic_summary("weekly")
+    monthly = _latest_periodic_summary("monthly")
+    if not weekly and not monthly:
+        return JSONResponse({"error": "No periodic Deep Sleep summaries found"}, status_code=404)
+    return _summarize_engineering_loop(weekly or {}, monthly or {})
 
 
 @app.get("/api/adaptive")

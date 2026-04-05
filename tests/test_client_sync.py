@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
 
 
 def _make_runtime(root: Path, *, operator_name: str = "Atlas") -> Path:

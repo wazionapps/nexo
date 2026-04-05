@@ -38,18 +38,15 @@ That means NEXO now manages not only the shared runtime and MCP wiring, but also
 - For Codex specifically, `nexo chat` and Codex headless automation inject the current bootstrap explicitly, so Codex starts as NEXO even when plain global Codex startup is inconsistent about global instructions.
 - Deep Sleep now reads both Claude Code and Codex transcript stores, so overnight analysis still works even when the user spends the day in Codex.
 
-Version `2.6.14` closes those parity gaps in practice, `2.6.15` hardens the installed-runtime migration path so existing users actually receive the managed bootstrap updates cleanly, `2.6.16` pushes the system further in three directions, `2.6.17` finishes the annoying last-mile migration bugs for real existing installs, `2.6.18` tightens the remaining practical gaps around manual Codex use, Deep Sleep horizon artifacts, and retrieval honesty, `2.6.20` makes the recommended Claude profile explicit across installer, runtime defaults, existing installs, and the update path itself with `Opus 4.6 with 1M context`, and `2.6.21` upgrades Deep Sleep from passive nightly analysis toward concrete engineering action.
+Versions `2.6.14` through `2.6.21` established the practical shared-brain baseline: managed Claude/Codex bootstrap, Codex config sync, transcript-aware Deep Sleep, 60-day long-horizon analysis, weekly/monthly summary artifacts, retrieval auto-mode, and the first Deep Sleep engineering loop.
 
-- Codex now gets managed global bootstrap/model sync in `~/.codex/config.toml`, so sessions opened outside `nexo chat` are much less likely to start as plain Codex.
-- Codex config now also persists a managed `mcp_servers.nexo` entry, so the shared brain survives even if ad-hoc Codex MCP state drifts.
-- Runtime doctor now audits recent Codex sessions for real startup discipline and verifies Claude Desktop shared-brain metadata explicitly instead of treating both as invisible best-effort wiring.
-- Retrieval is smarter by default: HyDE and spreading activation now auto-enable when the query shape benefits, while exact lookups remain conservative.
-- Retrieval explanations now surface confidence and the auto-strategy that fired, while associative expansion trims itself back to `top_k` instead of leaking low-signal neighbors.
-- Deep Sleep now blends recent context with older context over a 60-day horizon, and memory decay now tracks per-memory `stability` and `difficulty` instead of relying only on global decay constants.
-- Deep Sleep now also carries project-priority weighting into its long-horizon context and writes reusable weekly/monthly summary artifacts instead of reasoning only day by day.
-- Deep Sleep now semantically deduplicates followups, consolidates overlapping learnings, flags contradictory learnings for review, and backfills explicit engineering followups when recurring patterns imply a concrete fix.
-- Existing installs that already had NEXO connected to Codex now backfill that client state automatically during update/sync, so the managed Codex bootstrap actually lands without manual cleanup.
-- Bootstrap docs now fall back to the operator name `NEXO` when local metadata is blank, avoiding broken headings in `CLAUDE.md` and `AGENTS.md`.
+Version `2.7.0` closes the next operational gap:
+
+- Weekly/monthly Deep Sleep summaries now include protocol compliance, engineering-loop output, project pulse, and trend-vs-previous-period data.
+- Runtime doctor now audits both weekly protocol compliance and release-artifact sync drift instead of leaving those checks implicit.
+- The repo now ships `scripts/verify_release_readiness.py`, and tagged publish runs it automatically so release discipline is enforced in the product itself.
+- The dashboard now surfaces `What Matters Now`, `What Is Drifting`, and `What Is Improving` directly from the periodic Deep Sleep summaries.
+- The unreleased Codex launcher fixes after `v2.6.21` are now included: stronger `nexo chat` client selection, corrected launch mode handling, tracked last terminal choice, and aligned interactive flags.
 
 ### Client Capability Matrix
 
@@ -665,6 +662,7 @@ The project still recommends Claude Code as the primary path, but contributions 
 
 Maintainers and contributors touching startup, bootstrap, Deep Sleep, or shared-brain behavior should also use the client parity checklist:
 - [docs/client-parity-checklist.md](docs/client-parity-checklist.md)
+- `python3 scripts/verify_release_readiness.py`
 
 ### What Gets Installed
 
