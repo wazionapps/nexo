@@ -855,10 +855,11 @@ def _terminal_client_label(client: str) -> str:
 
 def _ordered_available_terminal_clients(preferences: dict, detected: dict) -> list[str]:
     enabled = preferences.get("interactive_clients", {})
+    last_used = str(preferences.get("last_terminal_client", "")).strip()
     preferred = str(preferences.get("default_terminal_client", "")).strip()
     ordered: list[str] = []
 
-    for client in (preferred, *TERMINAL_CLIENT_ORDER):
+    for client in (last_used, preferred, *TERMINAL_CLIENT_ORDER):
         if client in TERMINAL_CLIENT_ORDER and client not in ordered:
             ordered.append(client)
 
@@ -869,7 +870,19 @@ def _ordered_available_terminal_clients(preferences: dict, detected: dict) -> li
     ]
 
 
-def _prompt_for_terminal_client(clients: list[str], normalize_client_key) -> str | None:
+def _preferred_terminal_client_label(preferences: dict, clients: list[str]) -> str:
+    last_used = str(preferences.get("last_terminal_client", "")).strip()
+    if clients and clients[0] == last_used:
+        return "last choice"
+    return "default"
+
+
+def _prompt_for_terminal_client(
+    clients: list[str],
+    normalize_client_key,
+    *,
+    preferred_label: str = "default",
+) -> str | None:
     if not clients:
         return None
     if len(clients) == 1:
@@ -878,7 +891,7 @@ def _prompt_for_terminal_client(clients: list[str], normalize_client_key) -> str
     while True:
         print("Select terminal client for this chat:")
         for index, client in enumerate(clients, start=1):
-            suffix = " [default]" if index == 1 else ""
+            suffix = f" [{preferred_label}]" if index == 1 else ""
             print(f"  {index}. {_terminal_client_label(client)}{suffix}")
 
         try:
@@ -939,9 +952,11 @@ def _chat(args):
         try:
             preferences = load_client_preferences()
             detected = detect_installed_clients()
+            clients = _ordered_available_terminal_clients(preferences, detected)
             selected_client = _prompt_for_terminal_client(
-                _ordered_available_terminal_clients(preferences, detected),
+                clients,
                 normalize_client_key,
+                preferred_label=_preferred_terminal_client_label(preferences, clients),
             )
         except Exception:
             selected_client = None
@@ -957,7 +972,7 @@ def _chat(args):
         return 1
     if result.returncode == 0 and selected_client:
         try:
-            save_client_preferences(default_terminal_client=normalize_client_key(selected_client))
+            save_client_preferences(last_terminal_client=normalize_client_key(selected_client))
         except Exception:
             pass
     return int(result.returncode)

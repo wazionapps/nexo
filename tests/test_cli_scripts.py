@@ -509,15 +509,10 @@ class TestChatCommand:
         )
         assert result.returncode == 0
         argv = json.loads(out_file.read_text())
-        assert argv[:4] == [
-            "--full-auto",
-            "--dangerously-bypass-approvals-and-sandbox",
-            "-c",
-            argv[3],
-        ]
-        assert argv[3].startswith('initial_messages=[{role="system",content=')
-        assert ["-m", "gpt-5.4"] == argv[4:6]
-        assert ["-c", 'model_reasoning_effort="xhigh"'] == argv[6:8]
+        assert argv[:3] == ["--full-auto", "-c", argv[2]]
+        assert argv[2].startswith('initial_messages=[{role="system",content=')
+        assert ["-m", "gpt-5.4"] == argv[3:5]
+        assert ["-c", 'model_reasoning_effort="xhigh"'] == argv[5:7]
         assert argv[-2:] == ["-C", "."]
 
     def test_chat_prompts_when_multiple_clients_are_available_and_reorders_to_last_used(self, nexo_home, tmp_path):
@@ -584,7 +579,9 @@ class TestChatCommand:
         assert first.returncode == 0
         assert "1. Claude Code [default]" in first.stdout
         assert "2. Codex" in first.stdout
-        assert json.loads(schedule_path.read_text())["default_terminal_client"] == "codex"
+        schedule = json.loads(schedule_path.read_text())
+        assert schedule["default_terminal_client"] == "claude_code"
+        assert schedule["last_terminal_client"] == "codex"
 
         second = subprocess.run(
             [sys.executable, CLI_PY, "chat", "."],
@@ -595,7 +592,7 @@ class TestChatCommand:
             env=env,
         )
         assert second.returncode == 0
-        assert "1. Codex [default]" in second.stdout
+        assert "1. Codex [last choice]" in second.stdout
         assert "2. Claude Code" in second.stdout
         assert codex_out.is_file()
 

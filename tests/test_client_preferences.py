@@ -12,6 +12,7 @@ def test_normalize_client_preferences_preserves_old_defaults(tmp_path):
     assert prefs["interactive_clients"]["claude_code"] is True
     assert prefs["interactive_clients"]["codex"] is False
     assert prefs["default_terminal_client"] == "claude_code"
+    assert prefs["last_terminal_client"] == ""
     assert prefs["automation_enabled"] is True
     assert prefs["automation_backend"] == "claude_code"
     assert prefs["client_runtime_profiles"]["claude_code"]["model"] == "claude-opus-4-6[1m]"
@@ -33,6 +34,20 @@ def test_apply_client_preferences_forces_backend_none_when_automation_disabled()
     assert schedule["default_terminal_client"] == "codex"
     assert schedule["automation_enabled"] is False
     assert schedule["automation_backend"] == "none"
+
+
+def test_apply_client_preferences_keeps_default_and_last_terminal_client_separate():
+    import client_preferences
+
+    schedule = client_preferences.apply_client_preferences(
+        {},
+        interactive_clients={"claude_code": True, "codex": True},
+        default_terminal_client="claude_code",
+        last_terminal_client="codex",
+    )
+
+    assert schedule["default_terminal_client"] == "claude_code"
+    assert schedule["last_terminal_client"] == "codex"
 
 
 def test_client_runtime_profiles_normalize_and_default():
@@ -65,6 +80,22 @@ def test_resolve_terminal_client_ignores_desktop_as_default_terminal():
     )
 
     assert prefs["default_terminal_client"] == "codex"
+
+
+def test_normalize_last_terminal_client_clears_disabled_client(tmp_path):
+    import client_preferences
+
+    prefs = client_preferences.normalize_client_preferences(
+        {
+            "interactive_clients": {"claude_code": True, "codex": False},
+            "default_terminal_client": "claude_code",
+            "last_terminal_client": "codex",
+        },
+        user_home=tmp_path / "home",
+    )
+
+    assert prefs["default_terminal_client"] == "claude_code"
+    assert prefs["last_terminal_client"] == ""
 
 
 def test_detect_installed_clients_reports_binary_and_desktop(monkeypatch, tmp_path):

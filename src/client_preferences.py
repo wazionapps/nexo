@@ -73,6 +73,7 @@ def default_client_preferences() -> dict:
             CLIENT_CLAUDE_DESKTOP: False,
         },
         "default_terminal_client": CLIENT_CLAUDE_CODE,
+        "last_terminal_client": "",
         "automation_enabled": True,
         "automation_backend": CLIENT_CLAUDE_CODE,
         "client_runtime_profiles": default_client_runtime_profiles(),
@@ -189,6 +190,14 @@ def normalize_default_terminal_client(value, interactive_clients: dict[str, bool
     return CLIENT_CLAUDE_CODE
 
 
+def normalize_last_terminal_client(value, interactive_clients: dict[str, bool] | None = None) -> str:
+    interactive_clients = normalize_interactive_clients(interactive_clients or {})
+    candidate = normalize_client_key(value)
+    if candidate in TERMINAL_CLIENT_KEYS and interactive_clients.get(candidate, False):
+        return candidate
+    return ""
+
+
 def normalize_automation_enabled(value) -> bool:
     return _coerce_bool(value, True)
 
@@ -282,6 +291,10 @@ def normalize_client_preferences(
         schedule.get("default_terminal_client"),
         interactive_clients=interactive_clients,
     )
+    last_terminal_client = normalize_last_terminal_client(
+        schedule.get("last_terminal_client"),
+        interactive_clients=interactive_clients,
+    )
     automation_backend = normalize_automation_backend(
         schedule.get("automation_backend"),
         automation_enabled=automation_enabled,
@@ -295,6 +308,7 @@ def normalize_client_preferences(
     return {
         "interactive_clients": interactive_clients,
         "default_terminal_client": default_terminal_client,
+        "last_terminal_client": last_terminal_client,
         "automation_enabled": automation_enabled,
         "automation_backend": automation_backend,
         "client_runtime_profiles": runtime_profiles,
@@ -307,6 +321,7 @@ def apply_client_preferences(
     *,
     interactive_clients: dict | None = None,
     default_terminal_client: str | None = None,
+    last_terminal_client: str | None = None,
     automation_enabled=None,
     automation_backend: str | None = None,
     client_runtime_profiles: dict | None = None,
@@ -322,6 +337,10 @@ def apply_client_preferences(
     )
     merged["default_terminal_client"] = normalize_default_terminal_client(
         default_terminal_client if default_terminal_client is not None else current["default_terminal_client"],
+        interactive_clients=merged["interactive_clients"],
+    )
+    merged["last_terminal_client"] = normalize_last_terminal_client(
+        last_terminal_client if last_terminal_client is not None else current.get("last_terminal_client", ""),
         interactive_clients=merged["interactive_clients"],
     )
     merged["automation_backend"] = normalize_automation_backend(
@@ -349,6 +368,7 @@ def save_client_preferences(
     *,
     interactive_clients: dict | None = None,
     default_terminal_client: str | None = None,
+    last_terminal_client: str | None = None,
     automation_enabled=None,
     automation_backend: str | None = None,
     client_runtime_profiles: dict | None = None,
@@ -358,6 +378,7 @@ def save_client_preferences(
         load_schedule_config(),
         interactive_clients=interactive_clients,
         default_terminal_client=default_terminal_client,
+        last_terminal_client=last_terminal_client,
         automation_enabled=automation_enabled,
         automation_backend=automation_backend,
         client_runtime_profiles=client_runtime_profiles,
