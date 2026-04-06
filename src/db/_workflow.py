@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import secrets
 import time
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 from db._core import get_db
 
@@ -48,7 +48,7 @@ def _workflow_goal_id() -> str:
 
 
 def _now_sql() -> str:
-    return datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def _as_json(value, default):

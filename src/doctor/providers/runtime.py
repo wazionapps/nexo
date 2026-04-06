@@ -12,8 +12,12 @@ import sqlite3
 import subprocess
 import sys
 import time
-import tomllib
 from pathlib import Path
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python < 3.11
+    import tomli as tomllib
 
 from client_preferences import (
     detect_installed_clients,
@@ -738,7 +742,7 @@ def _parse_timestamp(value: str) -> dt.datetime | None:
     except ValueError:
         return None
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=dt.UTC)
+        parsed = parsed.replace(tzinfo=dt.timezone.utc)
     return parsed
 
 
@@ -2470,7 +2474,7 @@ def check_state_watchers() -> DoctorCheck:
             generated_dt = dt.datetime.fromisoformat(str(generated_at).replace("Z", "+00:00"))
         except Exception:
             generated_dt = None
-    if not generated_dt or (dt.datetime.now(dt.UTC) - generated_dt).total_seconds() > 36 * 3600:
+    if not generated_dt or (dt.datetime.now(dt.timezone.utc) - generated_dt).total_seconds() > 36 * 3600:
         status = "degraded"
         severity = "warn"
         repair_plan.append("Refresh state watchers daily so repo/API/expiry drift stays explicit")

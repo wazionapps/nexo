@@ -5,7 +5,7 @@ import json
 import os
 import sqlite3
 import sys
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -72,7 +72,7 @@ def test_expiry_watcher_persists_summary(watcher_env):
     db.create_state_watcher(
         "expiry",
         "SSL cert",
-        config={"due_at": (datetime.now(UTC) + timedelta(days=3)).strftime("%Y-%m-%d"), "warn_days": 14, "critical_days": 5},
+        config={"due_at": (datetime.now(timezone.utc) + timedelta(days=3)).strftime("%Y-%m-%d"), "warn_days": 14, "critical_days": 5},
     )
     summary = runtime.run_state_watchers()
 

@@ -6,7 +6,7 @@ import os
 import time
 import secrets
 import threading
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 from pathlib import Path
 from db import (
     register_session, update_session, complete_session,
@@ -133,7 +133,7 @@ def _session_portability_bundle(sid: str = "") -> dict:
     ]
     return {
         "ok": True,
-        "generated_at": datetime.now(UTC).isoformat(),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
         "session": {
             "sid": session_id,
             "task": session_row["task"],

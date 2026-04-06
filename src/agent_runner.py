@@ -9,8 +9,12 @@ import shutil
 import subprocess
 import tempfile
 import time
-import tomllib
 from pathlib import Path
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python < 3.11
+    import tomli as tomllib
 
 from client_preferences import (
     BACKEND_NONE,

@@ -30,7 +30,7 @@ if _PARENT not in sys.path:
 
 from agent_runner import AgentRunnerError, build_followup_terminal_shell_command
 
-app = FastAPI(title="NEXO Brain Dashboard", version="3.0.0")
+app = FastAPI(title="NEXO Brain Dashboard", version="3.0.1")
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 STATIC_DIR = Path(__file__).resolve().parent / "static"

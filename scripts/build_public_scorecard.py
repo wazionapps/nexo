@@ -6,7 +6,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
@@ -139,8 +139,8 @@ def _parse_tool_timestamp(value: str) -> datetime | None:
     except ValueError:
         return None
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=UTC)
-    return parsed.astimezone(UTC)
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 def _normalize_tool_input(value):
@@ -168,7 +168,7 @@ def _tool_signature(entry: dict) -> str:
 def _iter_tool_entries(tool_log_dir: Path, days: int):
     if not tool_log_dir.is_dir():
         return
-    cutoff = datetime.now(UTC) - timedelta(days=max(1, int(days)))
+    cutoff = datetime.now(timezone.utc) - timedelta(days=max(1, int(days)))
     min_date = cutoff.date()
     files = []
     for path in sorted(tool_log_dir.glob("*.jsonl")):
@@ -333,7 +333,7 @@ def collect_longitudinal_metrics(db_path: Path = NEXO_DB, tool_log_dir: Path = T
 
 def build_scorecard() -> dict:
     return {
-        "generated_at": datetime.now(UTC).isoformat(),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
         "product_story": "NEXO is the local cognitive runtime that makes the model around your model smarter.",
         "benchmarks": {
             "locomo_rag": load_locomo_summary(),

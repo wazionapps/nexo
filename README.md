@@ -50,7 +50,7 @@ That means NEXO now manages not only the shared runtime and MCP wiring, but also
 
 Versions `2.6.14` through `2.7.0` established the practical shared-brain baseline: managed Claude/Codex bootstrap, Codex config sync, transcript-aware Deep Sleep, 60-day long-horizon analysis, weekly/monthly summary artifacts, retrieval auto-mode, and the first measured engineering loop.
 
-Version `3.0.0` closes the next execution gap:
+Versions `3.0.0` and `3.0.1` close the next execution gap:
 
 - protocol discipline is now a runtime contract, not just instructions:
   - `nexo_task_open`

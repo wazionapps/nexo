@@ -5,7 +5,7 @@ import json
 import os
 import sqlite3
 import subprocess
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib import error, request
 
@@ -30,7 +30,7 @@ def _manifest_file() -> Path:
 
 
 def _now_iso() -> str:
-    return datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def _parse_dt(value: str | None) -> datetime | None:
@@ -41,13 +41,13 @@ def _parse_dt(value: str | None) -> datetime | None:
     for candidate in (normalized, normalized + "T00:00:00+00:00"):
         try:
             parsed = datetime.fromisoformat(candidate)
-            return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+            return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
         except Exception:
             continue
     for fmt in ("%Y-%m-%d", "%Y-%m-%d %H:%M:%S"):
         try:
             parsed = datetime.strptime(text, fmt)
-            return parsed.replace(tzinfo=UTC)
+            return parsed.replace(tzinfo=timezone.utc)
         except Exception:
             continue
     return None
@@ -150,7 +150,7 @@ def _evaluate_cron_drift(watcher: dict) -> dict:
     last_run = _load_last_cron_run(cron_id)
     if not last_run:
         return {"health": "critical", "summary": f"cron {cron_id} has never run", "evidence": [f"threshold_seconds={threshold}"]}
-    age = (datetime.now(UTC) - last_run).total_seconds()
+    age = (datetime.now(timezone.utc) - last_run).total_seconds()
     if age > threshold * 2:
         health = "critical"
     elif age > threshold:
@@ -218,7 +218,7 @@ def _evaluate_expiry(watcher: dict) -> dict:
         return {"health": "critical", "summary": f"expiry watcher missing due_at: {watcher.get('watcher_id')}", "evidence": []}
     warn_days = int(config.get("warn_days") or 21)
     critical_days = int(config.get("critical_days") or 7)
-    remaining = due_at - datetime.now(UTC)
+    remaining = due_at - datetime.now(timezone.utc)
     days = remaining.total_seconds() / 86400
     if days <= critical_days:
         health = "critical"

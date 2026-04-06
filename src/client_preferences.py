@@ -5,8 +5,12 @@ from __future__ import annotations
 import os
 import shutil
 import sys
-import tomllib
 from pathlib import Path
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python < 3.11
+    import tomli as tomllib
 
 from runtime_power import load_schedule_config, save_schedule_config
 
