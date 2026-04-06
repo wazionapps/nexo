@@ -308,6 +308,74 @@
             flex: 0 0 auto;
             margin-top: 2px;
         }
+        .evo-rule-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 24px;
+            margin-top: 30px;
+        }
+        .evo-rule-column {
+            position: relative;
+            overflow: hidden;
+        }
+        .evo-rule-column::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(145deg, rgba(124,58,237,0.08), transparent 56%, rgba(236,72,153,0.08));
+            pointer-events: none;
+        }
+        .evo-rule-head {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+        .evo-rule-icon {
+            width: 42px;
+            height: 42px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 14px;
+            flex: 0 0 auto;
+        }
+        .evo-rule-icon.allow {
+            background: rgba(34,197,94,0.12);
+            color: #86EFAC;
+        }
+        .evo-rule-icon.block {
+            background: rgba(248,113,113,0.12);
+            color: #FCA5A5;
+        }
+        .evo-rule-column h3 {
+            margin: 0;
+            font-size: 24px;
+        }
+        .evo-rule-column p {
+            color: var(--text-muted);
+            font-size: 14px;
+            margin-top: 6px;
+        }
+        .evo-rule-items {
+            display: grid;
+            gap: 12px;
+        }
+        .evo-rule-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 14px 16px;
+            border-radius: 16px;
+            border: 1px solid rgba(255,255,255,0.04);
+            background: rgba(14,14,22,0.82);
+            color: var(--text-muted);
+            position: relative;
+        }
+        .evo-rule-item svg {
+            flex: 0 0 auto;
+            margin-top: 2px;
+        }
         .evo-code {
             padding: 0;
             overflow: hidden;
@@ -357,7 +425,7 @@
             gap: 24px;
             margin-top: 30px;
         }
-        .evo-panel svg {
+        .evo-panel > svg {
             width: 100%;
             height: auto;
         }
@@ -381,7 +449,8 @@
         @media (max-width: 980px) {
             .evo-hero-grid,
             .evo-panel-grid,
-            .evo-dual {
+            .evo-dual,
+            .evo-rule-grid {
                 grid-template-columns: 1fr;
             }
             .evo-process {
@@ -520,7 +589,7 @@
     </div>
 </section>
 
-<section>
+<section id="guardrails">
     <div class="container">
         <div class="section-label">Why it matters</div>
         <h2 class="section-title">A way for real-world usage to improve the product without giving up control</h2>
@@ -596,26 +665,42 @@
     <div class="container">
         <div class="section-label">Guardrails</div>
         <h2 class="section-title">What Evolution can do, and what it is explicitly forbidden to do</h2>
-        <div class="evo-dual">
-            <div class="evo-panel">
-                <h3>What it can do</h3>
-                <ul class="evo-list">
-                    <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22C55E" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg><span>Propose improvements from recurring real-world patterns</span></li>
-                    <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22C55E" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg><span>Use isolated public-core checkouts for opt-in contribution mode</span></li>
-                    <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22C55E" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg><span>Open a single Draft PR and stop there</span></li>
-                    <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22C55E" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg><span>Peer-review another opt-in PR when its own Draft PR is already open</span></li>
-                    <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22C55E" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg><span>Run managed/core improvement modes with rollback awareness</span></li>
-                </ul>
+        <div class="evo-rule-grid">
+            <div class="evo-panel evo-rule-column">
+                <div class="evo-rule-head">
+                    <span class="evo-rule-icon allow">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M20 6 9 17l-5-5"/></svg>
+                    </span>
+                    <div>
+                        <h3>What it can do</h3>
+                        <p>Bounded engineering motion from real runtime evidence.</p>
+                    </div>
+                </div>
+                <div class="evo-rule-items">
+                    <div class="evo-rule-item"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22C55E" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg><span>Propose improvements from recurring real-world patterns.</span></div>
+                    <div class="evo-rule-item"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22C55E" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg><span>Use isolated public-core checkouts for opt-in contribution mode.</span></div>
+                    <div class="evo-rule-item"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22C55E" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg><span>Open a single Draft PR and stop there.</span></div>
+                    <div class="evo-rule-item"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22C55E" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg><span>Peer-review another opt-in PR when its own Draft PR is already open.</span></div>
+                    <div class="evo-rule-item"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22C55E" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg><span>Run managed/core improvement modes with rollback awareness.</span></div>
+                </div>
             </div>
-            <div class="evo-panel">
-                <h3>What it cannot do</h3>
-                <ul class="evo-list">
-                    <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F87171" stroke-width="2.4"><path d="m18 6-12 12"/><path d="m6 6 12 12"/></svg><span>Auto-merge, rebase, or push to another contributor branch</span></li>
-                    <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F87171" stroke-width="2.4"><path d="m18 6-12 12"/><path d="m6 6 12 12"/></svg><span>Publish prompts, logs, secrets, credentials, or personal runtime data</span></li>
-                    <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F87171" stroke-width="2.4"><path d="m18 6-12 12"/><path d="m6 6 12 12"/></svg><span>Spam multiple public PRs from the same machine</span></li>
-                    <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F87171" stroke-width="2.4"><path d="m18 6-12 12"/><path d="m6 6 12 12"/></svg><span>Act as if confidence equals authority</span></li>
-                    <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F87171" stroke-width="2.4"><path d="m18 6-12 12"/><path d="m6 6 12 12"/></svg><span>Replace maintainer review with autonomous publishing</span></li>
-                </ul>
+            <div class="evo-panel evo-rule-column">
+                <div class="evo-rule-head">
+                    <span class="evo-rule-icon block">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="m18 6-12 12"/><path d="m6 6 12 12"/></svg>
+                    </span>
+                    <div>
+                        <h3>What it cannot do</h3>
+                        <p>Explicit red lines that keep the loop socially and operationally safe.</p>
+                    </div>
+                </div>
+                <div class="evo-rule-items">
+                    <div class="evo-rule-item"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F87171" stroke-width="2.4"><path d="m18 6-12 12"/><path d="m6 6 12 12"/></svg><span>Auto-merge, rebase, or push to another contributor branch.</span></div>
+                    <div class="evo-rule-item"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F87171" stroke-width="2.4"><path d="m18 6-12 12"/><path d="m6 6 12 12"/></svg><span>Publish prompts, logs, secrets, credentials, or personal runtime data.</span></div>
+                    <div class="evo-rule-item"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F87171" stroke-width="2.4"><path d="m18 6-12 12"/><path d="m6 6 12 12"/></svg><span>Spam multiple public PRs from the same machine.</span></div>
+                    <div class="evo-rule-item"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F87171" stroke-width="2.4"><path d="m18 6-12 12"/><path d="m6 6 12 12"/></svg><span>Act as if confidence equals authority.</span></div>
+                    <div class="evo-rule-item"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F87171" stroke-width="2.4"><path d="m18 6-12 12"/><path d="m6 6 12 12"/></svg><span>Replace maintainer review with autonomous publishing.</span></div>
+                </div>
             </div>
         </div>
 
@@ -802,7 +887,7 @@ const observer = new IntersectionObserver((entries) => {
     });
 }, { threshold: 0.12 });
 
-document.querySelectorAll('.evo-card, .evo-proof, .evo-process-step, .evo-panel').forEach(el => {
+document.querySelectorAll('.evo-card, .evo-proof, .evo-process-step').forEach(el => {
     el.style.opacity = '0';
     el.style.transform = 'translateY(18px)';
     el.style.transition = 'all 0.55s ease';

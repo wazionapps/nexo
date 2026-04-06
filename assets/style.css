@@ -190,9 +190,16 @@
         .section-header { padding-bottom: 16px; }
 
         .section-label {
+            display: flex; align-items: center; justify-content: center; gap: 10px;
             font-size: 13px; font-weight: 700; text-transform: uppercase;
-            letter-spacing: 0.1em; color: var(--purple-light); margin-bottom: 12px;
-            text-align: center;
+            letter-spacing: 0.1em; color: var(--purple-light); margin-bottom: 14px;
+            padding: 8px 16px; border-radius: 999px; text-align: center;
+            border: 1px solid rgba(167, 139, 250, 0.22);
+            background: rgba(18, 18, 26, 0.82);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+            width: fit-content;
+            margin-left: auto;
+            margin-right: auto;
         }
 
         .section-title {
@@ -207,6 +214,146 @@
         }
         .section-subtitle:last-child { margin-bottom: 0; }
 
+        .page-hero {
+            position: relative;
+            overflow: hidden;
+            background:
+                radial-gradient(circle at 12% 18%, rgba(124, 58, 237, 0.18), transparent 26%),
+                radial-gradient(circle at 88% 20%, rgba(236, 72, 153, 0.14), transparent 24%),
+                linear-gradient(180deg, rgba(18, 18, 26, 0.82), rgba(10, 10, 15, 0.96));
+        }
+
+        .page-hero::before,
+        .page-hero::after {
+            content: "";
+            position: absolute;
+            border-radius: 999px;
+            filter: blur(30px);
+            pointer-events: none;
+        }
+
+        .page-hero::before {
+            width: 360px;
+            height: 360px;
+            top: 72px;
+            left: -96px;
+            background: rgba(124, 58, 237, 0.14);
+        }
+
+        .page-hero::after {
+            width: 320px;
+            height: 320px;
+            top: 110px;
+            right: -100px;
+            background: rgba(236, 72, 153, 0.12);
+        }
+
+        .page-hero-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1.02fr) minmax(0, 0.98fr);
+            gap: 40px;
+            align-items: center;
+        }
+
+        .page-hero-copy {
+            position: relative;
+            z-index: 1;
+            text-align: left;
+        }
+
+        .page-hero-copy .section-label {
+            margin-left: 0;
+            margin-right: 0;
+        }
+
+        .page-hero-copy .section-title,
+        .page-hero-copy .section-subtitle {
+            text-align: left;
+            margin-left: 0;
+        }
+
+        .page-hero-copy .section-subtitle {
+            max-width: 720px;
+            margin-bottom: 28px;
+        }
+
+        .page-chip-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin: 22px 0 28px;
+        }
+
+        .page-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 9px 14px;
+            border-radius: 999px;
+            border: 1px solid rgba(167, 139, 250, 0.18);
+            background: rgba(18, 18, 26, 0.78);
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+
+        .page-visual {
+            position: relative;
+            z-index: 1;
+            padding: 28px;
+            border-radius: 28px;
+            border: 1px solid rgba(167, 139, 250, 0.18);
+            background:
+                radial-gradient(circle at top left, rgba(124, 58, 237, 0.18), transparent 36%),
+                radial-gradient(circle at bottom right, rgba(236, 72, 153, 0.12), transparent 34%),
+                rgba(18, 18, 26, 0.9);
+            box-shadow: 0 30px 80px rgba(0,0,0,0.34);
+        }
+
+        .page-visual svg {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .page-stack {
+            display: grid;
+            gap: 16px;
+        }
+
+        .page-stack-card {
+            position: relative;
+            overflow: hidden;
+            padding: 18px 18px 16px;
+            border-radius: 20px;
+            border: 1px solid rgba(167, 139, 250, 0.16);
+            background: rgba(15, 15, 24, 0.9);
+            box-shadow: 0 20px 44px rgba(0,0,0,0.24);
+        }
+
+        .page-stack-card::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(124, 58, 237, 0.12), transparent 55%, rgba(236, 72, 153, 0.08));
+            pointer-events: none;
+        }
+
+        .page-stack-card strong,
+        .page-stack-card h3 {
+            position: relative;
+            display: block;
+            margin-bottom: 6px;
+            font-size: 18px;
+            color: var(--text);
+        }
+
+        .page-stack-card p,
+        .page-stack-card span {
+            position: relative;
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
         /* ===== Features Grid ===== */
         .features-grid {
             display: grid;
@@ -220,6 +367,17 @@
             border-radius: 16px;
             padding: 32px;
             transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 18px 48px rgba(0,0,0,0.18);
+        }
+
+        .feature-card::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(145deg, rgba(124, 58, 237, 0.1), transparent 52%, rgba(236, 72, 153, 0.08));
+            pointer-events: none;
         }
 
         .feature-card:hover {
@@ -449,6 +607,17 @@
             border-radius: 12px;
             padding: 24px;
             transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 16px 40px rgba(0,0,0,0.18);
+        }
+
+        .process-card::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(160deg, rgba(124, 58, 237, 0.08), transparent 58%, rgba(236, 72, 153, 0.07));
+            pointer-events: none;
         }
 
         .process-card:hover {
@@ -512,11 +681,23 @@
             padding: 28px;
             text-align: center;
             transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 16px 40px rgba(0,0,0,0.18);
+        }
+
+        .cognitive-card::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(155deg, rgba(124, 58, 237, 0.1), transparent 56%, rgba(236, 72, 153, 0.08));
+            pointer-events: none;
         }
 
         .cognitive-card:hover {
             border-color: rgba(236, 72, 153, 0.3);
             transform: translateY(-2px);
+            box-shadow: 0 24px 58px rgba(0,0,0,0.24);
         }
 
         .cognitive-card h4 {
@@ -553,6 +734,10 @@
             width: 100%;
             border-collapse: collapse;
             margin-top: 32px;
+            border-radius: 18px;
+            overflow: hidden;
+            background: rgba(18, 18, 26, 0.82);
+            box-shadow: 0 20px 52px rgba(0,0,0,0.2);
         }
 
         .psychology-table th,
@@ -704,6 +889,68 @@
             pointer-events: none;
         }
 
+        .compare-page .pt-nav,
+        .features-page .pt-nav {
+            padding-bottom: 72px;
+        }
+
+        .compare-page .compare-chip {
+            border: 1px solid rgba(167, 139, 250, 0.18);
+            background: rgba(18,18,26,0.82);
+            box-shadow: 0 10px 28px rgba(0,0,0,0.18);
+        }
+
+        .compare-page .compare-panel,
+        .compare-page .related-links a {
+            position: relative;
+            overflow: hidden;
+            border-radius: 22px;
+            background:
+                linear-gradient(180deg, rgba(255,255,255,0.015), rgba(255,255,255,0)),
+                linear-gradient(145deg, rgba(124, 58, 237, 0.08), transparent 52%, rgba(236, 72, 153, 0.06)),
+                rgba(18,18,26,0.92);
+            box-shadow: 0 22px 56px rgba(0,0,0,0.22);
+        }
+
+        .compare-page .compare-panel::before,
+        .compare-page .related-links a::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at top right, rgba(167,139,250,0.12), transparent 34%);
+            pointer-events: none;
+        }
+
+        .compare-page .cognitive-card {
+            text-align: left;
+            border-radius: 22px;
+        }
+
+        .compare-page .cognitive-card h3 {
+            font-size: 20px;
+            margin-bottom: 10px;
+        }
+
+        .compare-page .psychology-table thead {
+            background: rgba(14, 14, 22, 0.96);
+        }
+
+        .compare-detail-page .section-subtitle,
+        .compare-detail-page .compare-hero-meta {
+            max-width: 900px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .features-page .feature-card,
+        .features-page .process-card {
+            border-radius: 22px;
+        }
+
+        .features-page .pt-nav .section-subtitle {
+            max-width: 760px;
+        }
+
         /* ===== Footer ===== */
         footer {
             border-top: 1px solid var(--dark-border);
@@ -759,6 +1006,12 @@
             .code-body { font-size: 12px; }
             .psychology-table { font-size: 13px; }
             .psychology-table td:first-child { white-space: normal; }
+            .page-hero-grid { grid-template-columns: 1fr; }
+            .page-hero-copy,
+            .page-hero-copy .section-title,
+            .page-hero-copy .section-subtitle { text-align: center; }
+            .page-chip-row,
+            .page-hero-copy .hero-actions { justify-content: center !important; }
         }
 
         /* ===== Benchmark Section ===== */

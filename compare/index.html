@@ -66,7 +66,7 @@
 <script type="application/ld+json">{"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "Home", "item": "https://nexo-brain.com"}, {"@type": "ListItem", "position": 2, "name": "Compare", "item": "https://nexo-brain.com/compare/"}]}</script>
 <script type="application/ld+json">{"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "Is NEXO Brain a Mem0 alternative?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Mem0 is strong as a memory layer for products, while NEXO is stronger as a local cognitive runtime around your daily AI work."}}, {"@type": "Question", "name": "Does NEXO compete with LangGraph?", "acceptedAnswer": {"@type": "Answer", "text": "Partly. LangGraph is stronger as an orchestration framework inside custom apps; NEXO is stronger when you want memory, discipline, shared brain, and operational surfaces already built in."}}, {"@type": "Question", "name": "Why compare NEXO with Letta?", "acceptedAnswer": {"@type": "Answer", "text": "Because both care about persistent agents, but they optimize for different buyers. Letta leans toward stateful agent infrastructure; NEXO leans toward a local operator-centric runtime."}}, {"@type": "Question", "name": "Why compare NEXO with CrewAI?", "acceptedAnswer": {"@type": "Answer", "text": "Because both can coordinate AI workflows, but CrewAI leans toward crews, flows, and enterprise automations while NEXO leans toward one persistent local working brain."}}, {"@type": "Question", "name": "When should I pick Zep or Graphiti instead of NEXO?", "acceptedAnswer": {"@type": "Answer", "text": "Pick Zep/Graphiti when temporal knowledge graphs are the center of your architecture. Pick NEXO when you need a broader local runtime with workflows, guardrails, and operational tools around memory."}}]}</script>
 </head>
-<body>
+<body class="compare-page compare-hub-page">
 
 <nav>
     <div class="container">
@@ -80,6 +80,7 @@
         <div class="nav-links">
             <a href="/">Home</a>
             <a href="/features/">Features</a>
+            <a href="/evolution/">Evolution</a>
             <a href="/compare/">Compare</a>
             <a href="/blog/">Blog</a>
             <a href="/changelog/">Changelog</a>
@@ -90,19 +91,75 @@
 </nav>
 
 
-<section class="pt-nav" style="text-align:center;">
+<section class="pt-nav page-hero">
     <div class="container">
-        <div class="section-label">Competitive comparisons</div>
-        <h1 class="section-title" style="font-size:clamp(34px,5vw,58px);">NEXO Brain competitors and alternatives</h1>
-        <p class="section-subtitle">
-            These pages are built for honest buying intent, not fake “everyone else has nothing” marketing. The frame is simple:
-            if you want a <strong>local cognitive runtime</strong> around real daily AI work, NEXO is unusually strong.
-            If you want a narrower memory layer or an orchestration framework, some competitors win on that slice.
-        </p>
-        <div class="compare-hero-meta">
-            <span class="compare-chip">Updated April 6, 2026</span>
-            <span class="compare-chip">Mem0, Letta, LangGraph, CrewAI, Zep, Graphiti, Basic Memory, Engram, Vestige</span>
-            <span class="compare-chip">Local-first memory + durable workflows + protocol discipline</span>
+        <div class="page-hero-grid">
+            <div class="page-hero-copy">
+                <div class="section-label">Competitive comparisons</div>
+                <h1 class="section-title" style="font-size:clamp(34px,5vw,58px);">NEXO Brain competitors and alternatives</h1>
+                <p class="section-subtitle">
+                    These pages are built for honest buying intent, not fake “everyone else has nothing” marketing. The frame is simple:
+                    if you want a <strong>local cognitive runtime</strong> around real daily AI work, NEXO is unusually strong.
+                    If you want a narrower memory layer or an orchestration framework, some competitors win on that slice.
+                </p>
+                <div class="compare-hero-meta" style="justify-content:flex-start;">
+                    <span class="compare-chip">Updated April 6, 2026</span>
+                    <span class="compare-chip">Mem0, Letta, LangGraph, CrewAI, Zep, Graphiti, Basic Memory, Engram, Vestige</span>
+                    <span class="compare-chip">Local-first memory + durable workflows + protocol discipline</span>
+                </div>
+                <div class="page-chip-row">
+                    <span class="page-chip">Memory layer vs working brain</span>
+                    <span class="page-chip">Framework vs assembled runtime</span>
+                    <span class="page-chip">SEO pages built for real buyer intent</span>
+                </div>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/compare/nexo-vs-mem0/" class="btn btn-primary">Start with Mem0</a>
+                    <a href="/compare/nexo-vs-langgraph/" class="btn btn-secondary">See LangGraph</a>
+                    <a href="/compare/nexo-vs-letta/" class="btn btn-secondary">See Letta</a>
+                </div>
+            </div>
+            <div class="page-visual">
+                <svg viewBox="0 0 620 520" xmlns="http://www.w3.org/2000/svg" fill="none">
+                    <defs>
+                        <linearGradient id="compareGrad" x1="140" y1="80" x2="500" y2="420" gradientUnits="userSpaceOnUse">
+                            <stop stop-color="#A78BFA"/>
+                            <stop offset="1" stop-color="#EC4899"/>
+                        </linearGradient>
+                    </defs>
+                    <circle cx="310" cy="260" r="168" stroke="rgba(167,139,250,0.16)" stroke-width="2" stroke-dasharray="10 10"/>
+                    <circle cx="310" cy="260" r="220" stroke="rgba(236,72,153,0.1)" stroke-width="2" stroke-dasharray="8 14"/>
+                    <rect x="222" y="188" width="176" height="144" rx="28" fill="rgba(10,10,15,0.96)" stroke="url(#compareGrad)" stroke-width="2"/>
+                    <text x="310" y="236" text-anchor="middle" fill="#E2E8F0" font-size="22" font-weight="700">NEXO</text>
+                    <text x="310" y="264" text-anchor="middle" fill="#94A3B8" font-size="13">working brain</text>
+                    <text x="310" y="292" text-anchor="middle" fill="#C4B5FD" font-size="13">memory + workflow + discipline</text>
+
+                    <g>
+                        <rect x="36" y="110" width="142" height="70" rx="18" fill="rgba(18,18,26,0.95)" stroke="rgba(167,139,250,0.28)"/>
+                        <text x="107" y="138" text-anchor="middle" fill="#E2E8F0" font-size="17" font-weight="700">Memory layer</text>
+                        <text x="107" y="160" text-anchor="middle" fill="#94A3B8" font-size="12">Mem0, Engram</text>
+                    </g>
+                    <g>
+                        <rect x="24" y="302" width="156" height="70" rx="18" fill="rgba(18,18,26,0.95)" stroke="rgba(167,139,250,0.28)"/>
+                        <text x="102" y="330" text-anchor="middle" fill="#E2E8F0" font-size="17" font-weight="700">Graph memory</text>
+                        <text x="102" y="352" text-anchor="middle" fill="#94A3B8" font-size="12">Zep / Graphiti</text>
+                    </g>
+                    <g>
+                        <rect x="440" y="106" width="146" height="74" rx="18" fill="rgba(18,18,26,0.95)" stroke="rgba(236,72,153,0.28)"/>
+                        <text x="513" y="136" text-anchor="middle" fill="#E2E8F0" font-size="17" font-weight="700">Framework</text>
+                        <text x="513" y="158" text-anchor="middle" fill="#94A3B8" font-size="12">LangGraph, CrewAI</text>
+                    </g>
+                    <g>
+                        <rect x="428" y="310" width="160" height="78" rx="18" fill="rgba(18,18,26,0.95)" stroke="rgba(236,72,153,0.28)"/>
+                        <text x="508" y="340" text-anchor="middle" fill="#E2E8F0" font-size="17" font-weight="700">Stateful agents</text>
+                        <text x="508" y="362" text-anchor="middle" fill="#94A3B8" font-size="12">Letta and platform stacks</text>
+                    </g>
+
+                    <path d="M178 146c36 0 92 34 112 74" stroke="url(#compareGrad)" stroke-width="3" stroke-linecap="round"/>
+                    <path d="M176 336c48 0 88-18 118-52" stroke="url(#compareGrad)" stroke-width="3" stroke-linecap="round"/>
+                    <path d="M440 142c-38 6-92 34-114 72" stroke="url(#compareGrad)" stroke-width="3" stroke-linecap="round"/>
+                    <path d="M428 346c-40 0-84-16-108-52" stroke="url(#compareGrad)" stroke-width="3" stroke-linecap="round"/>
+                </svg>
+            </div>
         </div>
     </div>
 </section>

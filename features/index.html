@@ -54,7 +54,7 @@
 
     <link rel="stylesheet" href="/assets/style.css">
 </head>
-<body>
+<body class="features-page">
 
 <nav>
     <div class="container">
@@ -79,13 +79,69 @@
 </nav>
 
 <!-- Header -->
-<section class="pt-nav" style="text-align:center;">
+<section class="pt-nav page-hero">
     <div class="container">
-        <div class="section-label">Everything NEXO Brain Does</div>
-        <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Features</h1>
-        <p class="section-subtitle">
-            Cognitive memory, architecture, 150+ tools, confidence-aware retrieval, 60-day overnight analysis with weekly/monthly summaries, review-gated Evolution, 13 core recovery-aware jobs plus optional helpers, and benchmarks &mdash; explore each area in depth.
-        </p>
+        <div class="page-hero-grid">
+            <div class="page-hero-copy">
+                <div class="section-label">Everything NEXO Brain Does</div>
+                <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Features</h1>
+                <p class="section-subtitle">
+                    Cognitive memory, architecture, 150+ tools, confidence-aware retrieval, 60-day overnight analysis with weekly/monthly summaries, review-gated Evolution, 13 core recovery-aware jobs plus optional helpers, and benchmarks &mdash; explore each area in depth.
+                </p>
+                <div class="page-chip-row">
+                    <span class="page-chip">Shared brain across clients</span>
+                    <span class="page-chip">Deep Sleep + guardrails + workflows</span>
+                    <span class="page-chip">Local-first runtime with operator discipline</span>
+                </div>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/features/cognitive/" class="btn btn-primary">Explore cognitive stack</a>
+                    <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
+                    <a href="/compare/" class="btn btn-secondary">Compare NEXO</a>
+                </div>
+            </div>
+            <div class="page-visual">
+                <svg viewBox="0 0 620 520" xmlns="http://www.w3.org/2000/svg" fill="none">
+                    <defs>
+                        <linearGradient id="featuresGrad" x1="130" y1="88" x2="496" y2="426" gradientUnits="userSpaceOnUse">
+                            <stop stop-color="#A78BFA"/>
+                            <stop offset="1" stop-color="#EC4899"/>
+                        </linearGradient>
+                    </defs>
+                    <circle cx="310" cy="260" r="172" stroke="rgba(167,139,250,0.16)" stroke-width="2" stroke-dasharray="10 10"/>
+                    <circle cx="310" cy="260" r="226" stroke="rgba(236,72,153,0.1)" stroke-width="2" stroke-dasharray="8 14"/>
+                    <rect x="226" y="190" width="168" height="140" rx="28" fill="rgba(10,10,15,0.96)" stroke="url(#featuresGrad)" stroke-width="2"/>
+                    <text x="310" y="234" text-anchor="middle" fill="#E2E8F0" font-size="22" font-weight="700">NEXO</text>
+                    <text x="310" y="262" text-anchor="middle" fill="#94A3B8" font-size="13">runtime core</text>
+                    <text x="310" y="290" text-anchor="middle" fill="#C4B5FD" font-size="13">memory, workflows, evolution</text>
+
+                    <g>
+                        <rect x="58" y="116" width="142" height="70" rx="18" fill="rgba(18,18,26,0.95)" stroke="rgba(167,139,250,0.28)"/>
+                        <text x="129" y="144" text-anchor="middle" fill="#E2E8F0" font-size="17" font-weight="700">Memory</text>
+                        <text x="129" y="166" text-anchor="middle" fill="#94A3B8" font-size="12">retrieval, trust, KG</text>
+                    </g>
+                    <g>
+                        <rect x="44" y="312" width="156" height="72" rx="18" fill="rgba(18,18,26,0.95)" stroke="rgba(167,139,250,0.28)"/>
+                        <text x="122" y="340" text-anchor="middle" fill="#E2E8F0" font-size="17" font-weight="700">Recovery</text>
+                        <text x="122" y="362" text-anchor="middle" fill="#94A3B8" font-size="12">doctor, catch-up, watchdog</text>
+                    </g>
+                    <g>
+                        <rect x="430" y="112" width="146" height="72" rx="18" fill="rgba(18,18,26,0.95)" stroke="rgba(236,72,153,0.28)"/>
+                        <text x="503" y="140" text-anchor="middle" fill="#E2E8F0" font-size="17" font-weight="700">Evolution</text>
+                        <text x="503" y="162" text-anchor="middle" fill="#94A3B8" font-size="12">review-gated improvement</text>
+                    </g>
+                    <g>
+                        <rect x="420" y="314" width="168" height="76" rx="18" fill="rgba(18,18,26,0.95)" stroke="rgba(236,72,153,0.28)"/>
+                        <text x="504" y="342" text-anchor="middle" fill="#E2E8F0" font-size="17" font-weight="700">Tooling</text>
+                        <text x="504" y="364" text-anchor="middle" fill="#94A3B8" font-size="12">150+ MCP tools and surfaces</text>
+                    </g>
+
+                    <path d="M200 152c44 4 83 23 112 62" stroke="url(#featuresGrad)" stroke-width="3" stroke-linecap="round"/>
+                    <path d="M200 344c36 0 79-20 108-56" stroke="url(#featuresGrad)" stroke-width="3" stroke-linecap="round"/>
+                    <path d="M430 148c-44 4-84 24-114 64" stroke="url(#featuresGrad)" stroke-width="3" stroke-linecap="round"/>
+                    <path d="M420 350c-40 0-82-18-108-56" stroke="url(#featuresGrad)" stroke-width="3" stroke-linecap="round"/>
+                </svg>
+            </div>
+        </div>
     </div>
 </section>
 
