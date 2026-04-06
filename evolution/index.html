@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXO Evolution — Review-gated AI self-improvement</title>
+    <meta name="description" content="Understand NEXO Evolution: the opt-in self-improvement loop that proposes code changes from real-world usage, uses isolated checkouts, never auto-merges, and can peer-review other opt-in PRs safely.">
+    <meta name="keywords" content="NEXO Evolution, AI self-improvement, review-gated evolution, contributor evolution, draft PR automation, isolated checkout, AI peer review">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/evolution/">
+
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://nexo-brain.com/evolution/">
+    <meta property="og:title" content="NEXO Evolution — Review-gated AI self-improvement">
+    <meta property="og:description" content="The opt-in self-improvement loop behind NEXO: real-world proposals, isolated checkout, draft PRs, human review, and peer-review fallback instead of idle cycles.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
+    <meta property="og:image:width" content="1536">
+    <meta property="og:image:height" content="1024">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO Evolution — Review-gated AI self-improvement">
+    <meta name="twitter:description" content="The opt-in self-improvement loop behind NEXO: real-world proposals, isolated checkout, draft PRs, human review, and peer-review fallback instead of idle cycles.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "WebPage",
+        "name": "NEXO Evolution",
+        "description": "The review-gated self-improvement loop for NEXO: opt-in evolution, isolated checkout, draft PRs, human review, and peer review fallback.",
+        "url": "https://nexo-brain.com/evolution/",
+        "datePublished": "2026-04-06",
+        "dateModified": "2026-04-06",
+        "publisher": {
+            "@type": "Organization",
+            "name": "WAzion",
+            "url": "https://www.wazion.com"
+        }
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+            {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "Home",
+                "item": "https://nexo-brain.com"
+            },
+            {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "Evolution",
+                "item": "https://nexo-brain.com/evolution/"
+            }
+        ]
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+            {
+                "@type": "Question",
+                "name": "Is NEXO Evolution opt-in?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Yes. Public contributor evolution is strictly opt-in and can be enabled explicitly. It does not silently publish changes from personal machines."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "Can NEXO Evolution auto-merge its own pull requests?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "No. Evolution can prepare changes and open a Draft PR, but maintainers decide what ships. Auto-merge is explicitly blocked."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "What happens if a machine already has its own Draft PR open?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "NEXO does not open a second PR from that machine. Instead, it can reuse the cycle to peer-review other opt-in public evolution PRs with approve, comment, or skip."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "Does Evolution expose prompts, logs, or secrets?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "No. Public evolution runs in an isolated checkout and blocks personal runtime data, prompts, logs, credentials, and secrets from proposals."
+                }
+            }
+        ]
+    }
+    </script>
+
+    <style>
+        .evo-hero {
+            padding: 140px 0 84px;
+            position: relative;
+            overflow: hidden;
+        }
+        .evo-hero::before,
+        .evo-hero::after {
+            content: "";
+            position: absolute;
+            border-radius: 999px;
+            filter: blur(24px);
+            pointer-events: none;
+        }
+        .evo-hero::before {
+            width: 380px;
+            height: 380px;
+            background: rgba(124, 58, 237, 0.16);
+            top: 80px;
+            left: -80px;
+        }
+        .evo-hero::after {
+            width: 360px;
+            height: 360px;
+            background: rgba(236, 72, 153, 0.14);
+            top: 140px;
+            right: -90px;
+        }
+        .evo-hero-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+            gap: 42px;
+            align-items: center;
+        }
+        .evo-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 16px;
+            border-radius: 999px;
+            border: 1px solid rgba(167, 139, 250, 0.25);
+            background: rgba(18, 18, 26, 0.82);
+            color: var(--text-muted);
+            font-size: 13px;
+            margin-bottom: 24px;
+        }
+        .evo-badge .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #22C55E;
+            box-shadow: 0 0 0 6px rgba(34,197,94,0.12);
+        }
+        .evo-hero p {
+            color: var(--text-muted);
+            font-size: 18px;
+            max-width: 680px;
+        }
+        .evo-chip-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin: 24px 0 30px;
+        }
+        .evo-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 14px;
+            border-radius: 999px;
+            border: 1px solid var(--dark-border);
+            background: rgba(18,18,26,.86);
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+        .evo-visual {
+            position: relative;
+            border: 1px solid rgba(167, 139, 250, 0.18);
+            border-radius: 28px;
+            padding: 26px;
+            background:
+                radial-gradient(circle at top left, rgba(124,58,237,0.18), transparent 32%),
+                radial-gradient(circle at bottom right, rgba(236,72,153,0.14), transparent 32%),
+                rgba(18,18,26,0.92);
+            box-shadow: 0 30px 80px rgba(0,0,0,0.38);
+        }
+        .evo-visual svg {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        .evo-card-grid,
+        .evo-proof-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 22px;
+            margin-top: 30px;
+        }
+        .evo-card,
+        .evo-proof,
+        .evo-process-step,
+        .evo-code,
+        .evo-panel {
+            background: rgba(18,18,26,0.9);
+            border: 1px solid var(--dark-border);
+            border-radius: 22px;
+            box-shadow: 0 18px 48px rgba(0,0,0,0.2);
+        }
+        .evo-card,
+        .evo-proof,
+        .evo-panel {
+            padding: 24px;
+        }
+        .evo-card h3,
+        .evo-proof h3,
+        .evo-panel h3,
+        .evo-process-step h3 {
+            margin-bottom: 12px;
+            font-size: 22px;
+        }
+        .evo-card p,
+        .evo-proof p,
+        .evo-panel p,
+        .evo-process-step p {
+            color: var(--text-muted);
+            font-size: 15px;
+        }
+        .evo-card-icon,
+        .evo-proof-icon {
+            width: 46px;
+            height: 46px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 14px;
+            background: rgba(124,58,237,0.16);
+            color: var(--purple-light);
+            margin-bottom: 14px;
+        }
+        .evo-process {
+            margin-top: 34px;
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 18px;
+        }
+        .evo-process-step {
+            position: relative;
+            padding: 22px 20px 20px;
+        }
+        .evo-step-num {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            background: var(--gradient);
+            color: #fff;
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 14px;
+        }
+        .evo-process-step::after {
+            content: "";
+            position: absolute;
+            top: 38px;
+            right: -14px;
+            width: 28px;
+            height: 2px;
+            background: linear-gradient(90deg, rgba(167,139,250,0.55), rgba(236,72,153,0.2));
+        }
+        .evo-process-step:last-child::after {
+            display: none;
+        }
+        .evo-dual {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 24px;
+            margin-top: 30px;
+        }
+        .evo-list {
+            list-style: none;
+            display: grid;
+            gap: 12px;
+            margin-top: 14px;
+        }
+        .evo-list li {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            color: var(--text-muted);
+        }
+        .evo-list svg {
+            flex: 0 0 auto;
+            margin-top: 2px;
+        }
+        .evo-code {
+            padding: 0;
+            overflow: hidden;
+        }
+        .evo-code-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 18px;
+            border-bottom: 1px solid var(--dark-border);
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+        .evo-code pre {
+            margin: 0;
+            padding: 20px 22px;
+            overflow-x: auto;
+            font-size: 14px;
+            line-height: 1.7;
+            color: #E9D5FF;
+        }
+        .evo-proof-grid {
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        }
+        .evo-proof {
+            position: relative;
+            overflow: hidden;
+        }
+        .evo-proof::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(180deg, rgba(124,58,237,0.08), transparent 50%);
+            pointer-events: none;
+        }
+        .evo-proof small {
+            display: block;
+            margin-top: 14px;
+            color: var(--purple-light);
+            font-size: 12px;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+        .evo-panel-grid {
+            display: grid;
+            grid-template-columns: 1.1fr 0.9fr;
+            gap: 24px;
+            margin-top: 30px;
+        }
+        .evo-panel svg {
+            width: 100%;
+            height: auto;
+        }
+        .evo-faq {
+            margin-top: 28px;
+        }
+        .evo-faq-item {
+            padding: 22px 0;
+            border-bottom: 1px solid var(--dark-border);
+        }
+        .evo-faq-item:last-child {
+            border-bottom: none;
+        }
+        .evo-faq-item h3 {
+            margin-bottom: 8px;
+            font-size: 21px;
+        }
+        .evo-faq-item p {
+            color: var(--text-muted);
+        }
+        @media (max-width: 980px) {
+            .evo-hero-grid,
+            .evo-panel-grid,
+            .evo-dual {
+                grid-template-columns: 1fr;
+            }
+            .evo-process {
+                grid-template-columns: 1fr;
+            }
+            .evo-process-step::after {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-64.png" alt="NEXO Brain" width="32" height="32">
+            NEXO Brain
+        </a>
+        <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/features/">Features</a>
+            <a href="/evolution/">Evolution</a>
+            <a href="/compare/">Compare</a>
+            <a href="/blog/">Blog</a>
+            <a href="/changelog/">Changelog</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<section class="evo-hero">
+    <div class="container">
+        <div class="evo-hero-grid">
+            <div>
+                <div class="evo-badge"><span class="dot"></span> Review-gated self-improvement</div>
+                <h1>Evolution that earns trust<br><span class="gradient">before it ships</span></h1>
+                <p>
+                    NEXO Evolution turns real-world usage into proposals, reviews, and safer product improvements. It is not
+                    “the AI rewrites itself”. It is a constrained loop: opt-in, isolated checkout, Draft PRs only, human review,
+                    and peer-review fallback when a machine already has its own proposal open.
+                </p>
+                <div class="evo-chip-row">
+                    <span class="evo-chip">Weekly self-improvement cycle</span>
+                    <span class="evo-chip">Opt-in public contribution</span>
+                    <span class="evo-chip">Single Draft PR gate</span>
+                    <span class="evo-chip">Peer review instead of idle cycles</span>
+                </div>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="https://github.com/wazionapps/nexo/blob/main/docs/public-contribution.md" class="btn btn-primary">Read the contribution rules</a>
+                    <a href="/blog/nexo-2-6-7-contributor-evolution-personal-plugins/" class="btn btn-secondary">Read the origin story</a>
+                    <a href="/changelog/" class="btn btn-secondary">See release history</a>
+                </div>
+            </div>
+            <div class="evo-visual">
+                <svg viewBox="0 0 640 560" xmlns="http://www.w3.org/2000/svg" fill="none">
+                    <defs>
+                        <linearGradient id="evoGrad" x1="120" y1="80" x2="540" y2="440" gradientUnits="userSpaceOnUse">
+                            <stop stop-color="#A78BFA"/>
+                            <stop offset="1" stop-color="#EC4899"/>
+                        </linearGradient>
+                        <linearGradient id="evoSoft" x1="0" y1="0" x2="1" y2="1">
+                            <stop stop-color="rgba(167,139,250,0.32)"/>
+                            <stop offset="1" stop-color="rgba(236,72,153,0.08)"/>
+                        </linearGradient>
+                        <filter id="evoGlow" x="-40%" y="-40%" width="180%" height="180%">
+                            <feGaussianBlur stdDeviation="18" result="blur"/>
+                            <feMerge>
+                                <feMergeNode in="blur"/>
+                                <feMergeNode in="SourceGraphic"/>
+                            </feMerge>
+                        </filter>
+                    </defs>
+
+                    <circle cx="320" cy="280" r="170" stroke="rgba(167,139,250,0.16)" stroke-width="2" stroke-dasharray="10 10"/>
+                    <circle cx="320" cy="280" r="228" stroke="rgba(236,72,153,0.08)" stroke-width="2" stroke-dasharray="8 14"/>
+
+                    <path d="M170 170C222 115 280 94 320 94c62 0 116 26 151 72" stroke="url(#evoGrad)" stroke-width="3" stroke-linecap="round"/>
+                    <path d="M470 394c-43 43-95 66-150 66-58 0-112-24-151-67" stroke="url(#evoGrad)" stroke-width="3" stroke-linecap="round"/>
+                    <path d="M125 280c0-46 15-86 44-121" stroke="url(#evoGrad)" stroke-width="3" stroke-linecap="round"/>
+                    <path d="M514 280c0 41-13 79-44 114" stroke="url(#evoGrad)" stroke-width="3" stroke-linecap="round"/>
+
+                    <g filter="url(#evoGlow)">
+                        <rect x="234" y="188" width="172" height="184" rx="28" fill="rgba(10,10,15,0.96)" stroke="url(#evoGrad)" stroke-width="2"/>
+                        <path d="M320 214l54 30v70c0 44-31 72-54 86-23-14-54-42-54-86v-70l54-30z" fill="rgba(167,139,250,0.08)" stroke="url(#evoGrad)" stroke-width="2"/>
+                        <path d="M297 291l17 17 32-37" stroke="#22C55E" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+                        <text x="320" y="336" text-anchor="middle" fill="#E2E8F0" font-size="20" font-weight="700">EVOLUTION</text>
+                        <text x="320" y="360" text-anchor="middle" fill="#94A3B8" font-size="13">review-gated core</text>
+                    </g>
+
+                    <g>
+                        <rect x="54" y="112" width="122" height="64" rx="18" fill="rgba(18,18,26,0.95)" stroke="rgba(167,139,250,0.28)"/>
+                        <text x="115" y="138" text-anchor="middle" fill="#E2E8F0" font-size="16" font-weight="700">Real usage</text>
+                        <text x="115" y="158" text-anchor="middle" fill="#94A3B8" font-size="12">sessions, fixes, patterns</text>
+                    </g>
+                    <g>
+                        <rect x="54" y="244" width="132" height="64" rx="18" fill="rgba(18,18,26,0.95)" stroke="rgba(167,139,250,0.28)"/>
+                        <text x="120" y="270" text-anchor="middle" fill="#E2E8F0" font-size="16" font-weight="700">Deep Sleep</text>
+                        <text x="120" y="290" text-anchor="middle" fill="#94A3B8" font-size="12">findings, learnings, loops</text>
+                    </g>
+                    <g>
+                        <rect x="56" y="378" width="126" height="64" rx="18" fill="rgba(18,18,26,0.95)" stroke="rgba(167,139,250,0.28)"/>
+                        <text x="119" y="404" text-anchor="middle" fill="#E2E8F0" font-size="16" font-weight="700">Metrics</text>
+                        <text x="119" y="424" text-anchor="middle" fill="#94A3B8" font-size="12">guard, trust, outcomes</text>
+                    </g>
+
+                    <g>
+                        <rect x="470" y="96" width="126" height="68" rx="18" fill="rgba(18,18,26,0.95)" stroke="rgba(236,72,153,0.28)"/>
+                        <text x="533" y="124" text-anchor="middle" fill="#E2E8F0" font-size="16" font-weight="700">Isolated checkout</text>
+                        <text x="533" y="145" text-anchor="middle" fill="#94A3B8" font-size="12">public-core only</text>
+                    </g>
+                    <g>
+                        <rect x="474" y="250" width="120" height="64" rx="18" fill="rgba(18,18,26,0.95)" stroke="rgba(236,72,153,0.28)"/>
+                        <text x="534" y="277" text-anchor="middle" fill="#E2E8F0" font-size="16" font-weight="700">Draft PR</text>
+                        <text x="534" y="296" text-anchor="middle" fill="#94A3B8" font-size="12">never auto-merge</text>
+                    </g>
+                    <g>
+                        <rect x="452" y="386" width="164" height="76" rx="18" fill="rgba(18,18,26,0.95)" stroke="rgba(236,72,153,0.28)"/>
+                        <text x="534" y="413" text-anchor="middle" fill="#E2E8F0" font-size="16" font-weight="700">Maintainer review</text>
+                        <text x="534" y="434" text-anchor="middle" fill="#94A3B8" font-size="12">approve, reject, ask changes</text>
+                    </g>
+
+                    <circle cx="178" cy="170" r="6" fill="#A78BFA"/>
+                    <circle cx="188" cy="280" r="6" fill="#A78BFA"/>
+                    <circle cx="178" cy="410" r="6" fill="#A78BFA"/>
+                    <circle cx="470" cy="130" r="6" fill="#EC4899"/>
+                    <circle cx="474" cy="282" r="6" fill="#EC4899"/>
+                    <circle cx="452" cy="424" r="6" fill="#EC4899"/>
+                </svg>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section>
+    <div class="container">
+        <div class="section-label">Why it matters</div>
+        <h2 class="section-title">A way for real-world usage to improve the product without giving up control</h2>
+        <div class="evo-card-grid">
+            <div class="evo-card">
+                <div class="evo-card-icon">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+                </div>
+                <h3>Real signal beats toy demos</h3>
+                <p>Evolution is grounded in what actual NEXO installations discover: recurring fixes, runtime pain, better defaults, safer workflows, and missing guardrails that appear under real load.</p>
+            </div>
+            <div class="evo-card">
+                <div class="evo-card-icon">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                </div>
+                <h3>Proposal nodes, not rogue nodes</h3>
+                <p>Each opt-in installation can become a proposal node that prepares useful draft work. It never becomes an unsupervised publisher.</p>
+            </div>
+            <div class="evo-card">
+                <div class="evo-card-icon">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                </div>
+                <h3>Review is the safety boundary</h3>
+                <p>The gate is maintainers and scoped peer review, not blind confidence. That makes Evolution interesting to developers instead of alarming them.</p>
+            </div>
+            <div class="evo-card">
+                <div class="evo-card-icon">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 8h1a4 4 0 0 1 0 8h-1"/><path d="M7 8H6a4 4 0 0 0 0 8h1"/><path d="M8 12h8"/><path d="M12 16V8"/></svg>
+                </div>
+                <h3>It keeps adding value when blocked</h3>
+                <p>If a machine already has its own public Draft PR open, Evolution does not sit idle anymore. It can shift into review mode and help validate other opt-in PRs.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section style="background:rgba(18,18,26,0.28);">
+    <div class="container">
+        <div class="section-label">Process</div>
+        <h2 class="section-title">The procedure in plain English</h2>
+        <p class="section-subtitle">This is the loop developers actually care about: where the signal comes from, where changes are prepared, what is blocked, and where human review stays in charge.</p>
+        <div class="evo-process">
+            <div class="evo-process-step">
+                <div class="evo-step-num">1</div>
+                <h3>Observe</h3>
+                <p>NEXO gathers patterns from runtime metrics, guard stats, Deep Sleep findings, learnings, and repeated operational pain.</p>
+            </div>
+            <div class="evo-process-step">
+                <div class="evo-step-num">2</div>
+                <h3>Propose</h3>
+                <p>It drafts a bounded improvement with rationale, risk framing, and rollback awareness instead of making silent code changes in place.</p>
+            </div>
+            <div class="evo-process-step">
+                <div class="evo-step-num">3</div>
+                <h3>Isolate</h3>
+                <p>Public contribution mode works in an isolated checkout of the public repository, never against your personal runtime data.</p>
+            </div>
+            <div class="evo-process-step">
+                <div class="evo-step-num">4</div>
+                <h3>Open draft</h3>
+                <p>At most one public Draft PR per machine. The machine pauses there. No merge authority, no second PR flood.</p>
+            </div>
+            <div class="evo-process-step">
+                <div class="evo-step-num">5</div>
+                <h3>Review</h3>
+                <p>Maintainers decide what ships. If the machine already has an open Draft PR, it can review other opt-in PRs with approve, comment, or skip.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section>
+    <div class="container">
+        <div class="section-label">Guardrails</div>
+        <h2 class="section-title">What Evolution can do, and what it is explicitly forbidden to do</h2>
+        <div class="evo-dual">
+            <div class="evo-panel">
+                <h3>What it can do</h3>
+                <ul class="evo-list">
+                    <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22C55E" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg><span>Propose improvements from recurring real-world patterns</span></li>
+                    <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22C55E" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg><span>Use isolated public-core checkouts for opt-in contribution mode</span></li>
+                    <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22C55E" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg><span>Open a single Draft PR and stop there</span></li>
+                    <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22C55E" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg><span>Peer-review another opt-in PR when its own Draft PR is already open</span></li>
+                    <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22C55E" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg><span>Run managed/core improvement modes with rollback awareness</span></li>
+                </ul>
+            </div>
+            <div class="evo-panel">
+                <h3>What it cannot do</h3>
+                <ul class="evo-list">
+                    <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F87171" stroke-width="2.4"><path d="m18 6-12 12"/><path d="m6 6 12 12"/></svg><span>Auto-merge, rebase, or push to another contributor branch</span></li>
+                    <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F87171" stroke-width="2.4"><path d="m18 6-12 12"/><path d="m6 6 12 12"/></svg><span>Publish prompts, logs, secrets, credentials, or personal runtime data</span></li>
+                    <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F87171" stroke-width="2.4"><path d="m18 6-12 12"/><path d="m6 6 12 12"/></svg><span>Spam multiple public PRs from the same machine</span></li>
+                    <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F87171" stroke-width="2.4"><path d="m18 6-12 12"/><path d="m6 6 12 12"/></svg><span>Act as if confidence equals authority</span></li>
+                    <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F87171" stroke-width="2.4"><path d="m18 6-12 12"/><path d="m6 6 12 12"/></svg><span>Replace maintainer review with autonomous publishing</span></li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="evo-panel-grid">
+            <div class="evo-code">
+                <div class="evo-code-head">
+                    <span>Useful commands</span>
+                    <span>interactive + weekly</span>
+                </div>
+                <pre><code>nexo contributor on
+
+nexo_evolution_status
+nexo_evolution_history
+nexo_evolution_propose
+nexo_evolution_approve
+nexo_evolution_reject
+
+nexo skills evolution</code></pre>
+            </div>
+            <div class="evo-panel">
+                <h3>Two loops, one philosophy</h3>
+                <p>
+                    There is a private improvement loop inside your own runtime, and there is an opt-in public contribution loop for the core product. Both share the same philosophy: improvements must be bounded, inspectable, and reversible.
+                </p>
+                <p style="margin-top:14px;color:var(--text-muted);">
+                    That is why Evolution is interesting. It is not “fully autonomous coding”. It is a disciplined system for turning lived operational truth into safer engineering motion.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section>
+    <div class="container">
+        <div class="section-label">Peer review mode</div>
+        <h2 class="section-title">The part that makes the community story stronger</h2>
+        <div class="evo-proof-grid">
+            <div class="evo-proof">
+                <div class="evo-proof-icon">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+                </div>
+                <h3>Idle time becomes useful review time</h3>
+                <p>If a machine already has its own Draft PR open, Evolution no longer wastes the cycle. It can shift into scoped review work on another opt-in PR.</p>
+                <small>Better signal density, less waste</small>
+            </div>
+            <div class="evo-proof">
+                <div class="evo-proof-icon">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                </div>
+                <h3>Review is bounded to approve, comment, or skip</h3>
+                <p>Peer review mode does not give the machine merger powers. It can leave a technical comment, approve if confidence is high, or skip if the evidence is too weak.</p>
+                <small>Review, not authority</small>
+            </div>
+            <div class="evo-proof">
+                <div class="evo-proof-icon">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>
+                </div>
+                <h3>Collective improvement without collective chaos</h3>
+                <p>This is the story worth telling developers: many installations can help improve the product, but the loop stays legible, reviewable, and socially acceptable.</p>
+                <small>Community-guided evolution</small>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section style="background:rgba(18,18,26,0.3);">
+    <div class="container">
+        <div class="section-label">How it feels</div>
+        <h2 class="section-title">A visual map of the loop</h2>
+        <div class="evo-panel" style="margin-top:28px;">
+            <svg viewBox="0 0 1120 340" xmlns="http://www.w3.org/2000/svg" fill="none">
+                <defs>
+                    <linearGradient id="timelineGrad" x1="100" y1="170" x2="1020" y2="170" gradientUnits="userSpaceOnUse">
+                        <stop stop-color="#7C3AED"/>
+                        <stop offset="1" stop-color="#EC4899"/>
+                    </linearGradient>
+                </defs>
+                <path d="M120 170H1000" stroke="url(#timelineGrad)" stroke-width="4" stroke-linecap="round"/>
+                <g>
+                    <circle cx="120" cy="170" r="18" fill="#12121A" stroke="#A78BFA" stroke-width="4"/>
+                    <circle cx="320" cy="170" r="18" fill="#12121A" stroke="#A78BFA" stroke-width="4"/>
+                    <circle cx="520" cy="170" r="18" fill="#12121A" stroke="#A78BFA" stroke-width="4"/>
+                    <circle cx="720" cy="170" r="18" fill="#12121A" stroke="#EC4899" stroke-width="4"/>
+                    <circle cx="920" cy="170" r="18" fill="#12121A" stroke="#EC4899" stroke-width="4"/>
+                </g>
+                <g fill="#E2E8F0" font-size="18" font-weight="700">
+                    <text x="82" y="102">Usage signal</text>
+                    <text x="280" y="102">Proposal</text>
+                    <text x="452" y="102">Isolated checkout</text>
+                    <text x="680" y="102">Draft PR</text>
+                    <text x="862" y="102">Review / merge</text>
+                </g>
+                <g fill="#94A3B8" font-size="13">
+                    <text x="50" y="232">Deep Sleep, metrics, learnings</text>
+                    <text x="245" y="232">bounded change + rationale</text>
+                    <text x="438" y="232">public-core only, no secrets</text>
+                    <text x="674" y="232">one open PR per machine</text>
+                    <text x="846" y="232">maintainer gate or peer review</text>
+                </g>
+                <path d="M730 196c28 38 66 54 118 54 58 0 95-17 121-53" stroke="#22C55E" stroke-width="3" stroke-dasharray="8 8" stroke-linecap="round"/>
+                <text x="805" y="285" fill="#22C55E" font-size="14" font-weight="700">review fallback if own PR is already open</text>
+            </svg>
+        </div>
+    </div>
+</section>
+
+<section>
+    <div class="container">
+        <div class="section-label">FAQ</div>
+        <h2 class="section-title">The questions developers ask first</h2>
+        <div class="evo-panel evo-faq">
+            <div class="evo-faq-item">
+                <h3>Is this just marketing for “the AI edits its own code”?</h3>
+                <p>No. The interesting part is not autonomy theater; it is the control surface. Evolution is bounded by isolated checkouts, Draft PRs, human review, rollback awareness, and explicit forbidden data classes.</p>
+            </div>
+            <div class="evo-faq-item">
+                <h3>Why would a developer care?</h3>
+                <p>Because it turns lived operational pain into structured engineering motion. That means better defaults, tighter guardrails, fewer repeated mistakes, and useful contributor review loops without handing over merge power.</p>
+            </div>
+            <div class="evo-faq-item">
+                <h3>Can public contributor evolution leak my data?</h3>
+                <p>The model is specifically designed to prevent that. Prompts, logs, secrets, personal scripts, and runtime state are blocked from proposals. Public-core work happens in an isolated checkout, not inside your personal runtime tree.</p>
+            </div>
+            <div class="evo-faq-item">
+                <h3>Why the peer-review mode matters so much?</h3>
+                <p>Because it turns stalled machines into useful reviewers instead of dead weight. That makes the network of opt-in installs feel more like a technical community and less like a collection of isolated bots.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="cta-section">
+    <div class="container">
+        <h2 class="section-title">If you want self-improvement with a real safety story, start here</h2>
+        <p class="section-subtitle" style="margin: 16px auto 48px;">
+            NEXO Evolution is interesting because it is constrained, inspectable, and useful to both maintainers and contributors.
+            That is the difference between “AI hype” and a loop developers can actually respect.
+        </p>
+        <div class="hero-actions">
+            <a href="https://github.com/wazionapps/nexo/blob/main/docs/public-contribution.md" class="btn btn-primary">Read public contribution rules</a>
+            <a href="/blog/nexo-2-6-7-contributor-evolution-personal-plugins/" class="btn btn-secondary">Read contributor evolution article</a>
+            <a href="https://github.com/wazionapps/nexo" class="btn btn-secondary">Star on GitHub</a>
+        </div>
+    </div>
+</section>
+
+<footer>
+    <div class="container">
+        <div class="footer-content">
+            <div class="footer-left">
+                Created by <strong>Francisco Cerd&agrave; Puigserver</strong> &amp; <strong>NEXO</strong> (Claude Opus) &bull; Built by <a href="https://www.wazion.com">WAzion</a> &bull; AGPL-3.0 License &bull; &copy; 2026
+            </div>
+            <div class="footer-links">
+                <a href="https://github.com/wazionapps/nexo">GitHub</a>
+                <a href="https://x.com/NEXOBRAIN">X / Twitter</a>
+                <a href="https://github.com/sponsors/wazionapps">Sponsor</a>
+                <a href="/docs/">Docs</a>
+                <a href="/compare/">Compare</a>
+                <a href="/blog/">Blog</a>
+                <a href="/changelog/">Changelog</a>
+                <a href="https://www.npmjs.com/package/nexo-brain">npm</a>
+            </div>
+            <div style="text-align:center;margin-top:12px;color:#6b7280;font-size:12px;">Last updated: April 6, 2026</div>
+        </div>
+    </div>
+</footer>
+
+<div id="cookie-consent" style="display:none;position:fixed;bottom:0;left:0;right:0;background:rgba(10,10,15,0.95);border-top:1px solid #1E1E2E;padding:12px 24px;z-index:200;font-size:13px;color:#94A3B8;text-align:center;">
+    This site uses analytics cookies. <a href="https://www.wazion.com/en/privacy" style="color:#A78BFA;">Privacy Policy</a>
+    <button onclick="document.getElementById('cookie-consent').style.display='none';localStorage.setItem('cc','1')" style="margin-left:16px;background:#7C3AED;color:#fff;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Accept</button>
+    <button onclick="document.getElementById('cookie-consent').style.display='none';localStorage.setItem('cc','0');window['ga-disable-G-1LNEMCJMS7']=true" style="margin-left:8px;background:transparent;color:#94A3B8;border:1px solid #333;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Decline</button>
+</div>
+
+<script>
+if(!localStorage.getItem('cc')){document.getElementById('cookie-consent').style.display='block';}
+else if(localStorage.getItem('cc')==='0'){window['ga-disable-G-1LNEMCJMS7']=true;}
+
+const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+        if (entry.isIntersecting) {
+            entry.target.style.opacity = '1';
+            entry.target.style.transform = 'translateY(0)';
+        }
+    });
+}, { threshold: 0.12 });
+
+document.querySelectorAll('.evo-card, .evo-proof, .evo-process-step, .evo-panel').forEach(el => {
+    el.style.opacity = '0';
+    el.style.transform = 'translateY(18px)';
+    el.style.transition = 'all 0.55s ease';
+    observer.observe(el);
+});
+
+(function() {
+    var navLinks = document.querySelector('.nav-links');
+    var navToggle = document.querySelector('.nav-toggle');
+    navLinks.querySelectorAll('a').forEach(function(link) {
+        link.addEventListener('click', function() { navLinks.classList.remove('open'); });
+    });
+    document.addEventListener('click', function(e) {
+        if (navLinks.classList.contains('open') && !navLinks.contains(e.target) && !navToggle.contains(e.target)) {
+            navLinks.classList.remove('open');
+        }
+    });
+})();
+</script>
+
+</body>
+</html>
