@@ -1080,6 +1080,10 @@ def _aggregate_delivery_metrics(applied_logs: list[dict]) -> dict:
         "skipped_dedupe": 0,
         "errors": 0,
         "engineering_followups": 0,
+        "followup_dedupe_matches": 0,
+        "learning_reinforcements": 0,
+        "learning_duplicate_skips": 0,
+        "learning_contradiction_reviews": 0,
     }
     for payload in applied_logs:
         stats = payload.get("stats") or {}
@@ -1093,11 +1097,162 @@ def _aggregate_delivery_metrics(applied_logs: list[dict]) -> dict:
                 description = str(details.get("description", "") or "") + " " + str(details.get("reasoning", "") or "")
                 if "engineering" in description.lower() or "guardrail" in description.lower():
                     totals["engineering_followups"] += 1
+                if details.get("outcome") == "matched_existing_followup":
+                    totals["followup_dedupe_matches"] += 1
+            elif action.get("action_type") == "learning_add":
+                outcome = str(details.get("outcome", "") or "")
+                if outcome == "reinforced_learning":
+                    totals["learning_reinforcements"] += 1
+                elif outcome == "duplicate_learning":
+                    totals["learning_duplicate_skips"] += 1
+                elif outcome == "contradiction_review":
+                    totals["learning_contradiction_reviews"] += 1
 
     attempted = totals["applied_actions"] + totals["deferred_actions"] + totals["skipped_dedupe"] + totals["errors"]
     totals["dedupe_rate_pct"] = _safe_pct(totals["skipped_dedupe"], attempted)
     totals["error_rate_pct"] = _safe_pct(totals["errors"], attempted)
     return totals
+
+
+def _semantic_duplicate_metrics(items: list[tuple[str, str]], *, threshold: float = 0.82) -> dict:
+    filtered = [(item_id, _normalize_text(text)) for item_id, text in items if _normalize_text(text)]
+    if len(filtered) < 2:
+        return {
+            "cluster_count": 0,
+            "duplicate_items": 0,
+            "duplicate_excess": 0,
+            "sample_clusters": [],
+        }
+
+    used: set[int] = set()
+    clusters: list[list[tuple[str, str]]] = []
+    for index, (item_id, text) in enumerate(filtered):
+        if index in used:
+            continue
+        cluster = [(item_id, text)]
+        for other_index in range(index + 1, len(filtered)):
+            if other_index in used:
+                continue
+            other_id, other_text = filtered[other_index]
+            if _text_similarity(text, other_text) >= threshold:
+                cluster.append((other_id, other_text))
+                used.add(other_index)
+        if len(cluster) > 1:
+            used.add(index)
+            clusters.append(cluster)
+
+    return {
+        "cluster_count": len(clusters),
+        "duplicate_items": sum(len(cluster) for cluster in clusters),
+        "duplicate_excess": sum(max(0, len(cluster) - 1) for cluster in clusters),
+        "sample_clusters": [
+            [item_id for item_id, _ in cluster[:4]]
+            for cluster in clusters[:5]
+        ],
+    }
+
+
+def _followup_deduplication_metrics() -> dict:
+    cols = _table_columns(NEXO_DB, "followups")
+    if "description" not in cols:
+        return {
+            "open_followups": 0,
+            "duplicate_clusters": 0,
+            "duplicate_open_followups": 0,
+            "duplicate_rate_pct": None,
+            "sample_clusters": [],
+        }
+
+    select_cols = ["description"]
+    if "id" in cols:
+        select_cols.append("id")
+    if "status" in cols:
+        select_cols.append("status")
+
+    conn = sqlite3.connect(str(NEXO_DB))
+    conn.row_factory = sqlite3.Row
+    rows = [dict(row) for row in conn.execute(f"SELECT {', '.join(select_cols)} FROM followups").fetchall()]
+    conn.close()
+
+    open_rows = []
+    for row in rows:
+        status = str(row.get("status", "pending") or "pending").strip().lower()
+        if status in {"done", "completed", "cancelled", "resolved"}:
+            continue
+        identifier = str(row.get("id") or row.get("description") or f"followup-{len(open_rows)+1}")
+        open_rows.append((identifier, str(row.get("description", "") or "")))
+
+    duplicates = _semantic_duplicate_metrics(open_rows)
+    return {
+        "open_followups": len(open_rows),
+        "duplicate_clusters": duplicates["cluster_count"],
+        "duplicate_open_followups": duplicates["duplicate_excess"],
+        "duplicate_rate_pct": _safe_pct(duplicates["duplicate_excess"], len(open_rows)),
+        "sample_clusters": duplicates["sample_clusters"],
+    }
+
+
+def _learning_consolidation_metrics() -> dict:
+    cols = _table_columns(NEXO_DB, "learnings")
+    if not {"title", "content"}.issubset(cols):
+        return {
+            "active_learnings": 0,
+            "weak_active_learnings": 0,
+            "duplicate_clusters": 0,
+            "duplicate_active_learnings": 0,
+            "noise_pressure": 0,
+            "noise_rate_pct": None,
+            "sample_clusters": [],
+        }
+
+    select_cols = ["title", "content"]
+    if "id" in cols:
+        select_cols.append("id")
+    for field in ("status", "weight", "reasoning", "prevention", "applies_to", "guard_hits"):
+        if field in cols:
+            select_cols.append(field)
+
+    conn = sqlite3.connect(str(NEXO_DB))
+    conn.row_factory = sqlite3.Row
+    rows = [dict(row) for row in conn.execute(f"SELECT {', '.join(select_cols)} FROM learnings").fetchall()]
+    conn.close()
+
+    active_rows = []
+    weak_active = 0
+    for row in rows:
+        status = str(row.get("status", "active") or "active").strip().lower()
+        if status != "active":
+            continue
+        active_rows.append(row)
+        weight = row.get("weight")
+        reasoning = str(row.get("reasoning", "") or "").strip()
+        prevention = str(row.get("prevention", "") or "").strip()
+        guard_hits = int(row.get("guard_hits", 0) or 0)
+        applies_to = str(row.get("applies_to", "") or "").strip()
+        if isinstance(weight, (int, float)) and float(weight) < 1.0:
+            weak_active += 1
+        elif not reasoning and not prevention:
+            weak_active += 1
+        elif applies_to and guard_hits <= 0:
+            weak_active += 1
+
+    duplicates = _semantic_duplicate_metrics(
+        [
+            (str(row.get("id") or f"learning-{index}"), f"{row.get('title', '')} {row.get('content', '')}")
+            for index, row in enumerate(active_rows, 1)
+        ],
+        threshold=0.8,
+    )
+    noise_pressure = weak_active + duplicates["duplicate_excess"]
+    return {
+        "active_learnings": len(active_rows),
+        "weak_active_learnings": weak_active,
+        "duplicate_clusters": duplicates["cluster_count"],
+        "duplicate_active_learnings": duplicates["duplicate_excess"],
+        "noise_pressure": noise_pressure,
+        "noise_rate_pct": _safe_pct(noise_pressure, len(active_rows)),
+        "sample_clusters": duplicates["sample_clusters"],
+    }
 
 
 def _load_previous_period_summary(kind: str, label: str) -> dict | None:
@@ -1169,6 +1324,10 @@ def _build_period_trend(summary: dict, previous_summary: dict | None) -> dict:
             "avg_trust_delta": None,
             "total_corrections_delta": None,
             "protocol_compliance_delta": None,
+            "followup_duplicate_open_delta": None,
+            "followup_duplicate_rate_delta": None,
+            "learning_noise_delta": None,
+            "learning_noise_rate_delta": None,
         }
 
     current_protocol = summary.get("protocol_summary", {}).get("overall_compliance_pct")
@@ -1177,6 +1336,14 @@ def _build_period_trend(summary: dict, previous_summary: dict | None) -> dict:
     previous_mood = previous_summary.get("avg_mood_score")
     current_trust = summary.get("avg_trust_score")
     previous_trust = previous_summary.get("avg_trust_score")
+    current_followup = (summary.get("followup_deduplication") or {}).get("duplicate_open_followups")
+    previous_followup = (previous_summary.get("followup_deduplication") or {}).get("duplicate_open_followups")
+    current_followup_rate = (summary.get("followup_deduplication") or {}).get("duplicate_rate_pct")
+    previous_followup_rate = (previous_summary.get("followup_deduplication") or {}).get("duplicate_rate_pct")
+    current_learning_noise = (summary.get("learning_consolidation") or {}).get("noise_pressure")
+    previous_learning_noise = (previous_summary.get("learning_consolidation") or {}).get("noise_pressure")
+    current_learning_rate = (summary.get("learning_consolidation") or {}).get("noise_rate_pct")
+    previous_learning_rate = (previous_summary.get("learning_consolidation") or {}).get("noise_rate_pct")
 
     return {
         "has_previous": True,
@@ -1184,6 +1351,10 @@ def _build_period_trend(summary: dict, previous_summary: dict | None) -> dict:
         "avg_trust_delta": round(current_trust - previous_trust, 1) if isinstance(current_trust, (int, float)) and isinstance(previous_trust, (int, float)) else None,
         "total_corrections_delta": int(summary.get("total_corrections", 0) or 0) - int(previous_summary.get("total_corrections", 0) or 0),
         "protocol_compliance_delta": round(current_protocol - previous_protocol, 1) if isinstance(current_protocol, (int, float)) and isinstance(previous_protocol, (int, float)) else None,
+        "followup_duplicate_open_delta": int(current_followup or 0) - int(previous_followup or 0) if current_followup is not None or previous_followup is not None else None,
+        "followup_duplicate_rate_delta": round(float(current_followup_rate) - float(previous_followup_rate), 1) if isinstance(current_followup_rate, (int, float)) and isinstance(previous_followup_rate, (int, float)) else None,
+        "learning_noise_delta": int(current_learning_noise or 0) - int(previous_learning_noise or 0) if current_learning_noise is not None or previous_learning_noise is not None else None,
+        "learning_noise_rate_delta": round(float(current_learning_rate) - float(previous_learning_rate), 1) if isinstance(current_learning_rate, (int, float)) and isinstance(previous_learning_rate, (int, float)) else None,
     }
 
 
@@ -1236,6 +1407,8 @@ def _build_period_summary(target_date: str, synthesis: dict, *, kind: str, windo
     ]
     protocol_summary = _aggregate_protocol_summary(extractions)
     delivery_metrics = _aggregate_delivery_metrics(applied_logs)
+    followup_deduplication = _followup_deduplication_metrics()
+    learning_consolidation = _learning_consolidation_metrics()
     previous_summary = _load_previous_period_summary(kind, label)
     project_pulse = _build_project_pulse(top_projects, previous_summary)
 
@@ -1267,6 +1440,8 @@ def _build_period_summary(target_date: str, synthesis: dict, *, kind: str, windo
         "recurring_agenda": recurring_agenda,
         "protocol_summary": protocol_summary,
         "delivery_metrics": delivery_metrics,
+        "followup_deduplication": followup_deduplication,
+        "learning_consolidation": learning_consolidation,
         "summary": summary,
     }
     period_summary["trend"] = _build_period_trend(period_summary, previous_summary)
@@ -1328,6 +1503,27 @@ def _render_period_summary_markdown(summary: dict) -> str:
             lines.append(f"- Dedupe rate: {delivery_metrics['dedupe_rate_pct']:.1f}%")
         if delivery_metrics.get("error_rate_pct") is not None:
             lines.append(f"- Error rate: {delivery_metrics['error_rate_pct']:.1f}%")
+        lines.append(f"- Followup dedupe matches: {delivery_metrics.get('followup_dedupe_matches', 0)}")
+        lines.append(f"- Learning reinforcements: {delivery_metrics.get('learning_reinforcements', 0)}")
+        lines.append(f"- Learning duplicate skips: {delivery_metrics.get('learning_duplicate_skips', 0)}")
+        lines.append(f"- Learning contradiction reviews: {delivery_metrics.get('learning_contradiction_reviews', 0)}")
+        lines.append("")
+
+    followup_deduplication = summary.get("followup_deduplication") or {}
+    learning_consolidation = summary.get("learning_consolidation") or {}
+    if followup_deduplication or learning_consolidation:
+        lines.append("## Prevention Quality")
+        lines.append("")
+        if followup_deduplication:
+            lines.append(f"- Open followups: {followup_deduplication.get('open_followups', 0)}")
+            lines.append(f"- Duplicate open followups: {followup_deduplication.get('duplicate_open_followups', 0)}")
+            if followup_deduplication.get("duplicate_rate_pct") is not None:
+                lines.append(f"- Duplicate followup rate: {followup_deduplication['duplicate_rate_pct']:.1f}%")
+        if learning_consolidation:
+            lines.append(f"- Active learnings: {learning_consolidation.get('active_learnings', 0)}")
+            lines.append(f"- Learning noise pressure: {learning_consolidation.get('noise_pressure', 0)}")
+            if learning_consolidation.get("noise_rate_pct") is not None:
+                lines.append(f"- Learning noise rate: {learning_consolidation['noise_rate_pct']:.1f}%")
         lines.append("")
 
     if summary.get("top_projects"):
@@ -1379,6 +1575,14 @@ def _render_period_summary_markdown(summary: dict) -> str:
             lines.append(f"- Corrections delta: {trend['total_corrections_delta']:+d}")
         if trend.get("protocol_compliance_delta") is not None:
             lines.append(f"- Protocol delta: {trend['protocol_compliance_delta']:+.1f}%")
+        if trend.get("followup_duplicate_open_delta") is not None:
+            lines.append(f"- Duplicate followups delta: {trend['followup_duplicate_open_delta']:+d}")
+        if trend.get("followup_duplicate_rate_delta") is not None:
+            lines.append(f"- Duplicate followup rate delta: {trend['followup_duplicate_rate_delta']:+.1f}%")
+        if trend.get("learning_noise_delta") is not None:
+            lines.append(f"- Learning noise delta: {trend['learning_noise_delta']:+d}")
+        if trend.get("learning_noise_rate_delta") is not None:
+            lines.append(f"- Learning noise rate delta: {trend['learning_noise_rate_delta']:+.1f}%")
         lines.append("")
 
     return "\n".join(lines).rstrip() + "\n"

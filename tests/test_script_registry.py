@@ -12,6 +12,7 @@ from script_registry import (
     parse_inline_metadata,
     classify_runtime,
     classify_scripts_dir,
+    audit_personal_schedules,
     get_declared_schedule,
     list_scripts,
     resolve_script,
@@ -533,3 +534,160 @@ class TestRegistrySync:
         assert result["schedules_upserted"] == 0
         assert result["schedule_audit"]["summary"]["discovered_manual"] == 1
         assert result["missing_declared_schedules"][0]["reason"].startswith("schedule discovered but not managed")
+
+    def test_audit_personal_schedules_marks_keep_alive_daemon_alive(self, scripts_dir, monkeypatch):
+        import script_registry
+
+        script = scripts_dir / "nexo-wake-recovery.sh"
+        script.write_text(
+            "#!/bin/bash\n"
+            "# nexo: name=nexo-wake-recovery\n"
+            "# nexo: runtime=shell\n"
+            "# nexo: cron_id=wake-recovery\n"
+            "# nexo: schedule_required=true\n"
+            "# nexo: recovery_policy=restart_daemon\n"
+            "echo ok\n"
+        )
+
+        monkeypatch.setattr(script_registry.platform, "system", lambda: "Darwin")
+        monkeypatch.setattr(
+            script_registry,
+            "_discover_personal_schedule_records",
+            lambda: [{
+                "cron_id": "wake-recovery",
+                "script_path": str(script),
+                "schedule_type": "keep_alive",
+                "schedule_value": "true",
+                "schedule_label": "keep alive",
+                "launchd_label": "com.nexo.wake-recovery",
+                "plist_path": "/tmp/com.nexo.wake-recovery.plist",
+                "enabled": True,
+                "description": "Wake recovery",
+                "managed_marker": True,
+                "script_exists": True,
+                "script_within_scripts_dir": True,
+                "run_at_load": True,
+            }],
+        )
+        monkeypatch.setattr(
+            script_registry,
+            "_launchctl_service_state",
+            lambda label: {"loaded": True, "pid": "123", "state": "running", "last_exit_status": "", "error": ""},
+        )
+
+        audit = audit_personal_schedules()
+        record = audit["schedules"][0]
+
+        assert record["runtime_state"] == "alive"
+        assert "pid 123" in record["runtime_summary"]
+        assert audit["summary"]["runtime_alive"] == 1
+
+    def test_audit_personal_schedules_marks_duplicate_keep_alive_daemons(self, scripts_dir, monkeypatch):
+        import script_registry
+
+        script = scripts_dir / "nexo-wake-recovery.sh"
+        script.write_text(
+            "#!/bin/bash\n"
+            "# nexo: name=nexo-wake-recovery\n"
+            "# nexo: runtime=shell\n"
+            "# nexo: cron_id=wake-recovery\n"
+            "# nexo: schedule_required=true\n"
+            "# nexo: recovery_policy=restart_daemon\n"
+            "echo ok\n"
+        )
+
+        monkeypatch.setattr(script_registry.platform, "system", lambda: "Darwin")
+        monkeypatch.setattr(
+            script_registry,
+            "_discover_personal_schedule_records",
+            lambda: [
+                {
+                    "cron_id": "wake-recovery",
+                    "script_path": str(script),
+                    "schedule_type": "keep_alive",
+                    "schedule_value": "true",
+                    "schedule_label": "keep alive",
+                    "launchd_label": "com.nexo.wake-recovery",
+                    "plist_path": "/tmp/com.nexo.wake-recovery-a.plist",
+                    "enabled": True,
+                    "description": "Wake recovery A",
+                    "managed_marker": True,
+                    "script_exists": True,
+                    "script_within_scripts_dir": True,
+                    "run_at_load": True,
+                },
+                {
+                    "cron_id": "wake-recovery",
+                    "script_path": str(script),
+                    "schedule_type": "keep_alive",
+                    "schedule_value": "true",
+                    "schedule_label": "keep alive",
+                    "launchd_label": "com.nexo.wake-recovery-2",
+                    "plist_path": "/tmp/com.nexo.wake-recovery-b.plist",
+                    "enabled": True,
+                    "description": "Wake recovery B",
+                    "managed_marker": True,
+                    "script_exists": True,
+                    "script_within_scripts_dir": True,
+                    "run_at_load": True,
+                },
+            ],
+        )
+        monkeypatch.setattr(
+            script_registry,
+            "_launchctl_service_state",
+            lambda label: {"loaded": True, "pid": "123", "state": "running", "last_exit_status": "", "error": ""},
+        )
+
+        audit = audit_personal_schedules()
+
+        assert audit["summary"]["runtime_duplicated"] == 2
+        assert all(item["runtime_state"] == "duplicated" for item in audit["schedules"])
+        assert any("duplicate keep_alive schedules" in problem for problem in audit["schedules"][0]["runtime_problems"])
+
+    def test_audit_personal_schedules_marks_unloaded_keep_alive_as_stale(self, scripts_dir, monkeypatch):
+        import script_registry
+
+        script = scripts_dir / "nexo-wake-recovery.sh"
+        script.write_text(
+            "#!/bin/bash\n"
+            "# nexo: name=nexo-wake-recovery\n"
+            "# nexo: runtime=shell\n"
+            "# nexo: cron_id=wake-recovery\n"
+            "# nexo: schedule_required=true\n"
+            "# nexo: recovery_policy=restart_daemon\n"
+            "echo ok\n"
+        )
+
+        monkeypatch.setattr(script_registry.platform, "system", lambda: "Darwin")
+        monkeypatch.setattr(
+            script_registry,
+            "_discover_personal_schedule_records",
+            lambda: [{
+                "cron_id": "wake-recovery",
+                "script_path": str(script),
+                "schedule_type": "keep_alive",
+                "schedule_value": "true",
+                "schedule_label": "keep alive",
+                "launchd_label": "com.nexo.wake-recovery",
+                "plist_path": "/tmp/com.nexo.wake-recovery.plist",
+                "enabled": True,
+                "description": "Wake recovery",
+                "managed_marker": True,
+                "script_exists": True,
+                "script_within_scripts_dir": True,
+                "run_at_load": True,
+            }],
+        )
+        monkeypatch.setattr(
+            script_registry,
+            "_launchctl_service_state",
+            lambda label: {"loaded": False, "pid": "", "state": "", "last_exit_status": "", "error": "not loaded"},
+        )
+
+        audit = audit_personal_schedules()
+        record = audit["schedules"][0]
+
+        assert record["runtime_state"] == "stale"
+        assert "not loaded" in record["runtime_summary"]
+        assert audit["summary"]["runtime_stale"] == 1

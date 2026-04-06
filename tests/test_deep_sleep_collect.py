@@ -182,3 +182,48 @@ def test_collect_long_horizon_context_blends_recent_and_older(monkeypatch, tmp_p
     assert context["weekly_summaries"][0]["label"] == "2026-W13"
     assert context["monthly_summaries"][0]["label"] == "2026-03"
     assert context["project_priority_signals"]
+
+
+def test_project_priority_signals_handles_optional_schema_columns(monkeypatch, tmp_path):
+    collect = _load_collect_module(monkeypatch, tmp_path)
+    nexo_home = Path(os.environ["NEXO_HOME"])
+    (nexo_home / "brain").mkdir(parents=True, exist_ok=True)
+    (nexo_home / "brain" / "project-atlas.json").write_text(json.dumps({
+        "wazion": {"aliases": ["wazion"]},
+    }))
+    data_dir = nexo_home / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    db_path = data_dir / "nexo.db"
+
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        "CREATE TABLE learnings (category TEXT, title TEXT, content TEXT, created_at TEXT, updated_at TEXT)"
+    )
+    conn.execute(
+        "CREATE TABLE followups (id TEXT, description TEXT, date TEXT, status TEXT, created_at TEXT, updated_at TEXT)"
+    )
+    conn.execute(
+        "CREATE TABLE decisions (domain TEXT, outcome TEXT, created_at TEXT)"
+    )
+    conn.execute(
+        "INSERT INTO learnings VALUES (?, ?, ?, ?, ?)",
+        ("ops", "Wazion deploy gotcha", "wazion deploy drift", "2026-04-01T08:00:00", "2026-04-02T08:00:00"),
+    )
+    conn.execute(
+        "INSERT INTO followups VALUES (?, ?, ?, ?, ?, ?)",
+        ("F1", "Review wazion deploy", "2026-04-03", "PENDING", "2026-04-01T09:00:00", "2026-04-01T09:00:00"),
+    )
+    conn.execute(
+        "INSERT INTO decisions VALUES (?, ?, ?)",
+        ("wazion", "blocked deploy", "2026-04-02T10:00:00"),
+    )
+    conn.commit()
+    conn.close()
+
+    signals = collect._project_priority_signals(
+        datetime(2026, 4, 5),
+        [{"created_at": "2026-04-02T11:00:00", "domain": "wazion", "summary": "wazion deploy", "self_critique": ""}],
+    )
+
+    assert signals
+    assert signals[0]["project"] == "wazion"

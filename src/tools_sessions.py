@@ -1,15 +1,20 @@
 from __future__ import annotations
 """Session management tools: startup, heartbeat, status."""
 
+import json
+import os
 import time
 import secrets
 import threading
+from datetime import datetime, UTC
+from pathlib import Path
 from db import (
     register_session, update_session, complete_session,
     get_active_sessions, clean_stale_sessions, search_sessions,
     get_inbox, get_pending_questions, now_epoch,
     SESSION_STALE_SECONDS, check_session_has_diary,
     save_checkpoint, read_checkpoint, increment_compaction_count,
+    get_db,
 )
 
 # ── Session Keepalive ────────────────────────────────────────────────
@@ -19,6 +24,8 @@ from db import (
 # Threads are daemon=True so they die when the MCP server process exits.
 
 KEEPALIVE_INTERVAL = 600  # 10 min — well inside the 15-min TTL
+NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+SESSION_PORTABILITY_DIR = NEXO_HOME / "operations" / "session-portability"
 
 _keepalive_threads: dict[str, threading.Event] = {}  # sid → stop_event
 
@@ -62,6 +69,182 @@ def _format_age(epoch: float) -> str:
         return f"{int(seconds / 60)}m"
     else:
         return f"{int(seconds / 3600)}h{int((seconds % 3600) / 60)}m"
+
+
+def _resolve_session_row(conn, sid: str = ""):
+    if sid.strip():
+        return conn.execute("SELECT * FROM sessions WHERE sid = ?", (sid.strip(),)).fetchone()
+    return conn.execute(
+        "SELECT * FROM sessions ORDER BY last_update_epoch DESC LIMIT 1"
+    ).fetchone()
+
+
+def _session_portability_bundle(sid: str = "") -> dict:
+    conn = get_db()
+    session_row = _resolve_session_row(conn, sid)
+    if not session_row:
+        return {"ok": False, "error": "session not found"}
+
+    session_id = str(session_row["sid"])
+    checkpoint = read_checkpoint(session_id) or {}
+    diary = conn.execute(
+        """SELECT summary, decisions, pending, context_next, mental_state, domain, created_at
+           FROM session_diary
+           WHERE session_id = ?
+           ORDER BY created_at DESC
+           LIMIT 1""",
+        (session_id,),
+    ).fetchone()
+    draft = conn.execute(
+        """SELECT summary_draft, last_context_hint, updated_at
+           FROM session_diary_draft
+           WHERE sid = ?""",
+        (session_id,),
+    ).fetchone()
+    protocol_tasks = [
+        dict(row) for row in conn.execute(
+            """SELECT task_id, goal, task_type, area, status, opened_at
+               FROM protocol_tasks
+               WHERE session_id = ? AND status = 'open'
+               ORDER BY opened_at DESC
+               LIMIT 10""",
+            (session_id,),
+        ).fetchall()
+    ]
+    workflow_goals = [
+        dict(row) for row in conn.execute(
+            """SELECT goal_id, title, status, priority, next_action, blocker_reason, updated_at
+               FROM workflow_goals
+               WHERE session_id = ? AND status IN ('active', 'blocked')
+               ORDER BY updated_at DESC
+               LIMIT 10""",
+            (session_id,),
+        ).fetchall()
+    ]
+    workflow_runs = [
+        dict(row) for row in conn.execute(
+            """SELECT run_id, goal_id, goal, workflow_kind, status, priority, next_action, current_step_key, updated_at
+               FROM workflow_runs
+               WHERE session_id = ? AND status IN ('open', 'running', 'blocked', 'needs_approval')
+               ORDER BY updated_at DESC
+               LIMIT 10""",
+            (session_id,),
+        ).fetchall()
+    ]
+    return {
+        "ok": True,
+        "generated_at": datetime.now(UTC).isoformat(),
+        "session": {
+            "sid": session_id,
+            "task": session_row["task"],
+            "client": session_row["session_client"],
+            "external_session_id": session_row["external_session_id"],
+            "started_epoch": session_row["started_epoch"],
+            "last_update_epoch": session_row["last_update_epoch"],
+            "local_time": session_row["local_time"],
+        },
+        "checkpoint": dict(checkpoint) if checkpoint else {},
+        "latest_diary": dict(diary) if diary else {},
+        "diary_draft": dict(draft) if draft else {},
+        "open_protocol_tasks": protocol_tasks,
+        "open_workflow_goals": workflow_goals,
+        "open_workflow_runs": workflow_runs,
+    }
+
+
+def handle_session_portable_context(sid: str = "") -> str:
+    """Build a portable handoff packet for another client/runtime."""
+    bundle = _session_portability_bundle(sid)
+    if not bundle.get("ok"):
+        return f"ERROR: {bundle.get('error', 'session not found')}"
+
+    session = bundle["session"]
+    checkpoint = bundle.get("checkpoint") or {}
+    diary = bundle.get("latest_diary") or {}
+    draft = bundle.get("diary_draft") or {}
+    lines = [
+        "SESSION PORTABILITY PACKET",
+        f"SID: {session['sid']}",
+        f"Task: {session['task'] or '(none)'}",
+        f"Client: {session['client'] or '(unknown)'}",
+    ]
+    if session.get("external_session_id"):
+        lines.append(f"External session: {session['external_session_id']}")
+    if checkpoint:
+        lines.extend(
+            [
+                "",
+                "Checkpoint:",
+                f"- Goal: {checkpoint.get('current_goal') or checkpoint.get('task') or '(none)'}",
+                f"- Next: {checkpoint.get('next_step') or '(none)'}",
+                f"- Files: {checkpoint.get('active_files') or '[]'}",
+            ]
+        )
+    if diary:
+        lines.extend(
+            [
+                "",
+                "Latest diary:",
+                f"- Summary: {diary.get('summary') or '(none)'}",
+                f"- Pending: {diary.get('pending') or '(none)'}",
+                f"- Context next: {diary.get('context_next') or '(none)'}",
+            ]
+        )
+    elif draft:
+        lines.extend(
+            [
+                "",
+                "Diary draft:",
+                f"- Summary draft: {draft.get('summary_draft') or '(none)'}",
+                f"- Context hint: {draft.get('last_context_hint') or '(none)'}",
+            ]
+        )
+
+    protocol_tasks = bundle.get("open_protocol_tasks") or []
+    if protocol_tasks:
+        lines.extend(["", "Open protocol tasks:"])
+        for item in protocol_tasks[:5]:
+            lines.append(f"- {item['task_id']}: {item['goal']} [{item['task_type']}/{item['status']}]")
+
+    goals = bundle.get("open_workflow_goals") or []
+    if goals:
+        lines.extend(["", "Open goals:"])
+        for item in goals[:5]:
+            lines.append(f"- {item['goal_id']}: {item['title']} [{item['status']}] -> {item['next_action'] or '(no next action)'}")
+
+    runs = bundle.get("open_workflow_runs") or []
+    if runs:
+        lines.extend(["", "Open workflows:"])
+        for item in runs[:5]:
+            lines.append(
+                f"- {item['run_id']}: {item['goal']} [{item['status']}] "
+                f"step={item['current_step_key'] or '?'} next={item['next_action'] or '(none)'}"
+            )
+
+    return "\n".join(lines)
+
+
+def handle_session_export_bundle(sid: str = "", path: str = "") -> str:
+    """Export a machine-readable session bundle for cross-client handoff."""
+    bundle = _session_portability_bundle(sid)
+    if not bundle.get("ok"):
+        return json.dumps(bundle, ensure_ascii=False)
+
+    session_id = bundle["session"]["sid"]
+    export_path = Path(path).expanduser() if path else (SESSION_PORTABILITY_DIR / f"{session_id}.json")
+    export_path.parent.mkdir(parents=True, exist_ok=True)
+    export_path.write_text(json.dumps(bundle, indent=2, ensure_ascii=False) + "\n")
+    return json.dumps(
+        {
+            "ok": True,
+            "sid": session_id,
+            "path": str(export_path),
+            "open_protocol_tasks": len(bundle.get("open_protocol_tasks") or []),
+            "open_workflow_goals": len(bundle.get("open_workflow_goals") or []),
+            "open_workflow_runs": len(bundle.get("open_workflow_runs") or []),
+        },
+        ensure_ascii=False,
+    )
 
 
 def handle_startup(

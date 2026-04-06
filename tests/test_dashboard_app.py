@@ -1,7 +1,10 @@
 import json
 from pathlib import Path
 
-from dashboard.app import _latest_periodic_summary, _summarize_engineering_loop
+from fastapi.testclient import TestClient
+
+import db
+from dashboard.app import app, _latest_periodic_summary, _protocol_explainability_snapshot, _summarize_engineering_loop
 
 
 def test_latest_periodic_summary_reads_latest_label(monkeypatch, tmp_path):
@@ -59,3 +62,77 @@ def test_summarize_engineering_loop_surfaces_matters_drift_and_improvement():
     assert summary["drifting"][2]["title"] == "release validation skipped"
     assert summary["improving"][0]["title"] == "Trust"
     assert any(item["title"] == "Engineering followups" for item in summary["improving"])
+
+
+def test_protocol_explainability_snapshot_surfaces_runtime_state(isolated_db):
+    task = db.create_protocol_task(
+        "sid-1",
+        "Ship explainability dashboard",
+        task_type="edit",
+        must_verify=True,
+        must_change_log=True,
+        opened_with_guard=True,
+        opened_with_rules=True,
+    )
+    db.close_protocol_task(
+        task["task_id"],
+        outcome="done",
+        evidence="Dashboard route and template validated",
+        files_changed=["src/dashboard/app.py"],
+    )
+    db.create_protocol_debt(
+        "sid-1",
+        "missing_change_log",
+        severity="warn",
+        task_id=task["task_id"],
+        evidence="Change log not written yet",
+    )
+    goal = db.create_workflow_goal(
+        "sid-1",
+        "Close explainability UI",
+        next_action="Render protocol dashboard",
+    )
+    db.create_workflow_run(
+        "sid-1",
+        "Render protocol dashboard",
+        goal_id=goal["goal_id"],
+        workflow_kind="dashboard",
+        steps=[{"step_key": "render", "title": "Render dashboard page"}],
+    )
+    db.create_learning(
+        "code",
+        "Read conditioned learnings first",
+        "Always review file-conditioned learnings before touching guarded files.",
+        applies_to="/repo/guarded.py",
+    )
+    conn = db.get_db()
+    conn.execute(
+        """INSERT INTO guard_checks (
+               session_id, files, area, learnings_returned, blocking_rules_returned, created_at
+           ) VALUES (?, ?, ?, ?, ?, datetime('now'))""",
+        ("sid-1", "/repo/guarded.py", "nexo", 2, 1),
+    )
+    conn.commit()
+
+    snapshot = _protocol_explainability_snapshot(limit=10)
+
+    assert snapshot["debt_summary"]["open_total"] == 1
+    assert snapshot["workflow_summary"]["open_runs"] == 1
+    assert snapshot["goal_summary"]["active"] == 1
+    assert snapshot["guard_summary"]["blocking_hits"] == 1
+    assert snapshot["conditioned_learnings"][0]["applies_to"] == "/repo/guarded.py"
+    assert snapshot["recent_tasks"][0]["has_evidence"] is True
+
+
+def test_protocol_routes_render_and_return_snapshot():
+    client = TestClient(app)
+
+    page = client.get("/protocol")
+    assert page.status_code == 200
+    assert "Protocol Explainability" in page.text
+
+    api = client.get("/api/protocol")
+    assert api.status_code == 200
+    payload = api.json()
+    assert "protocol_summary" in payload
+    assert "recent_tasks" in payload

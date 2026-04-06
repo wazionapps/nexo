@@ -120,52 +120,93 @@ def save_public_contribution_config(config: dict) -> dict:
 
 
 def _gh(*args: str, cwd: Path | None = None, timeout: int = 20) -> subprocess.CompletedProcess:
+    env = os.environ.copy()
+    token = (
+        str(env.get("GH_TOKEN") or env.get("GITHUB_TOKEN") or "").strip()
+        or _github_token_from_credentials()
+    )
+    if token:
+        env["GH_TOKEN"] = token
     return subprocess.run(
         ["gh", *args],
         cwd=str(cwd) if cwd else None,
         capture_output=True,
         text=True,
         timeout=timeout,
+        env=env,
     )
+
+
+def _github_token_from_credentials() -> str:
+    try:
+        from db import get_credential
+    except Exception:
+        return ""
+    for key in ("token", "gh_token", "github_token"):
+        try:
+            matches = get_credential("github", key)
+        except Exception:
+            continue
+        for item in matches or []:
+            value = str(item.get("value") or "").strip()
+            if value:
+                return value
+    return ""
 
 
 def github_auth_status() -> dict:
     if not shutil.which("gh"):
-        return {"ok": False, "message": "GitHub CLI not found.", "login": ""}
+        return {"ok": False, "message": "GitHub CLI not found.", "login": "", "code": "gh_missing"}
     try:
         result = _gh("api", "user", timeout=20)
     except Exception as e:
-        return {"ok": False, "message": str(e), "login": ""}
+        return {"ok": False, "message": str(e), "login": "", "code": "gh_error"}
     if result.returncode != 0:
-        return {"ok": False, "message": (result.stderr or result.stdout).strip(), "login": ""}
+        message = (result.stderr or result.stdout).strip()
+        lowered = message.lower()
+        code = "auth_missing"
+        if "keychain" in lowered:
+            code = "keychain_blocked"
+        elif "token" in lowered or "authentication" in lowered or "login" in lowered:
+            code = "auth_missing"
+        return {"ok": False, "message": message, "login": "", "code": code}
     try:
         payload = json.loads(result.stdout or "{}")
         login = str(payload.get("login") or "").strip()
     except Exception:
         login = ""
-    return {"ok": bool(login), "message": "", "login": login}
+    return {"ok": bool(login), "message": "", "login": login, "code": "ok" if login else "auth_missing"}
 
 
 def ensure_fork(login: str) -> dict:
     if not login:
-        return {"ok": False, "message": "Missing GitHub login.", "fork_repo": ""}
+        return {"ok": False, "message": "Missing GitHub login.", "fork_repo": "", "code": "missing_login"}
     fork_repo = f"{login}/nexo"
     if not shutil.which("gh"):
-        return {"ok": False, "message": "GitHub CLI not found.", "fork_repo": ""}
+        return {"ok": False, "message": "GitHub CLI not found.", "fork_repo": "", "code": "gh_missing"}
     try:
         check = _gh("repo", "view", fork_repo, "--json", "nameWithOwner", timeout=20)
         if check.returncode == 0:
-            return {"ok": True, "message": "", "fork_repo": fork_repo}
+            return {"ok": True, "message": "", "fork_repo": fork_repo, "code": "ok"}
         create = _gh("repo", "fork", UPSTREAM_REPO, "--clone=false", "--remote=false", timeout=60)
         if create.returncode == 0:
-            return {"ok": True, "message": "", "fork_repo": fork_repo}
+            return {"ok": True, "message": "", "fork_repo": fork_repo, "code": "ok"}
         return {
             "ok": False,
             "message": (create.stderr or create.stdout or check.stderr or check.stdout).strip(),
             "fork_repo": "",
+            "code": "fork_unavailable",
         }
     except Exception as e:
-        return {"ok": False, "message": str(e), "fork_repo": ""}
+        return {"ok": False, "message": str(e), "fork_repo": "", "code": "fork_error"}
+
+
+def _set_pending_auth(config: dict, message: str) -> dict:
+    config["status"] = STATUS_PENDING_AUTH
+    config["last_result"] = f"pending_auth:{message}"
+    save_public_contribution_config(config)
+    config["message"] = message
+    return config
 
 
 def _parse_iso(ts: str | None) -> datetime | None:
@@ -336,13 +377,45 @@ def refresh_public_contribution_state(config: dict | None = None) -> dict:
             config["status"] = STATUS_COOLDOWN
             save_public_contribution_config(config)
             return config
+        return _set_pending_auth(
+            config,
+            f"GitHub Draft PR status check failed: {(result.stderr or result.stdout).strip() or 'unknown gh error'}",
+        )
 
     cooldown_until = _parse_iso(config.get("cooldown_until"))
     if cooldown_until and cooldown_until > _utcnow():
         config["status"] = STATUS_COOLDOWN
-    elif config["mode"] == MODE_PENDING_AUTH:
+        save_public_contribution_config(config)
+        return config
+
+    auth = github_auth_status()
+    if not auth.get("ok"):
+        return _set_pending_auth(
+            config,
+            auth.get("message") or "GitHub authentication is missing for public contribution.",
+        )
+    login = str(auth.get("login") or "").strip()
+    configured_login = str(config.get("github_user") or "").strip()
+    if configured_login and login and configured_login.lower() != login.lower():
+        return _set_pending_auth(
+            config,
+            f"GitHub login drift detected: configured {configured_login}, current {login}. Reconfirm public contribution credentials.",
+        )
+    if login and not configured_login:
+        config["github_user"] = login
+
+    if not str(config.get("fork_repo") or "").strip():
+        fork = ensure_fork(login)
+        if not fork.get("ok"):
+            return _set_pending_auth(
+                config,
+                fork.get("message") or "GitHub fork setup is missing for public contribution.",
+            )
+        config["fork_repo"] = str(fork.get("fork_repo") or "").strip()
+
+    if config["mode"] == MODE_PENDING_AUTH:
         config["status"] = STATUS_PENDING_AUTH
-    elif config["mode"] == MODE_DRAFT_PRS:
+    else:
         config["status"] = STATUS_ACTIVE
     save_public_contribution_config(config)
     return config
@@ -351,7 +424,8 @@ def refresh_public_contribution_state(config: dict | None = None) -> dict:
 def can_run_public_contribution(config: dict | None = None) -> tuple[bool, str, dict]:
     config = refresh_public_contribution_state(config)
     if config["mode"] == MODE_PENDING_AUTH or config["status"] == STATUS_PENDING_AUTH:
-        return False, "github authentication or fork setup is pending", config
+        detail = str(config.get("message") or config.get("last_result") or "").strip()
+        return False, detail or "github authentication or fork setup is pending", config
     if config["mode"] != MODE_DRAFT_PRS or not config.get("enabled"):
         return False, "public contribution is disabled", config
     if config["status"] == STATUS_PAUSED_OPEN_PR:

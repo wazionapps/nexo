@@ -8,6 +8,7 @@ import shlex
 import shutil
 import subprocess
 import tempfile
+import time
 import tomllib
 from pathlib import Path
 
@@ -18,6 +19,7 @@ from client_preferences import (
     TERMINAL_CLIENT_KEYS,
     load_client_preferences,
     resolve_automation_backend,
+    resolve_automation_task_profile,
     resolve_client_runtime_profile,
     resolve_terminal_client,
 )
@@ -25,6 +27,12 @@ from client_preferences import (
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 CLAUDE_LEGACY_MODEL_HINTS = {"opus", "sonnet"}
+MODEL_PRICING_USD_PER_1M = {
+    # Pricing snapshot used only when the backend does not return explicit cost.
+    # Codex model names map to the current GPT-5 family pricing.
+    "gpt-5.4": {"input": 1.25, "cached_input": 0.125, "output": 10.0},
+    "gpt-5.4-mini": {"input": 0.25, "cached_input": 0.025, "output": 2.0},
+}
 
 
 class AgentRunnerError(RuntimeError):
@@ -37,6 +45,192 @@ class TerminalClientUnavailableError(AgentRunnerError):
 
 class AutomationBackendUnavailableError(AgentRunnerError):
     """Raised when the configured automation backend is unavailable."""
+
+
+def _canonical_pricing_model(model: str) -> str:
+    lowered = str(model or "").strip().lower()
+    lowered = lowered.split("[", 1)[0]
+    aliases = {
+        "gpt-5": "gpt-5.4",
+        "gpt-5.4": "gpt-5.4",
+        "gpt-5-mini": "gpt-5.4-mini",
+        "gpt-5.4-mini": "gpt-5.4-mini",
+    }
+    return aliases.get(lowered, lowered)
+
+
+def _estimate_openai_cost_usd(model: str, *, input_tokens: int, cached_input_tokens: int, output_tokens: int) -> tuple[float | None, str]:
+    pricing = MODEL_PRICING_USD_PER_1M.get(_canonical_pricing_model(model))
+    if not pricing:
+        return None, "pricing_unavailable"
+    total = 0.0
+    total += (max(0, int(input_tokens or 0)) / 1_000_000.0) * pricing["input"]
+    total += (max(0, int(cached_input_tokens or 0)) / 1_000_000.0) * pricing["cached_input"]
+    total += (max(0, int(output_tokens or 0)) / 1_000_000.0) * pricing["output"]
+    return round(total, 6), "pricing_snapshot"
+
+
+def _safe_json_loads(raw: str) -> dict | list | None:
+    try:
+        return json.loads(raw)
+    except Exception:
+        return None
+
+
+def _extract_claude_telemetry(raw_stdout: str, *, requested_output_format: str) -> tuple[str, dict]:
+    payload = _safe_json_loads(raw_stdout) if str(raw_stdout or "").strip().startswith("{") else None
+    if not isinstance(payload, dict):
+        return raw_stdout or "", {
+            "telemetry_source": "missing",
+            "cost_source": "missing",
+            "usage": {},
+            "warnings": ["backend did not return parseable JSON telemetry"],
+        }
+
+    result_payload = payload.get("result", "")
+    if requested_output_format and requested_output_format.lower() == "json" and not isinstance(result_payload, str):
+        final_stdout = json.dumps(result_payload, ensure_ascii=False)
+    else:
+        final_stdout = result_payload if isinstance(result_payload, str) else json.dumps(result_payload, ensure_ascii=False)
+
+    usage = payload.get("usage") or {}
+    model_usage = payload.get("modelUsage") or {}
+    explicit_cost = payload.get("total_cost_usd")
+    if explicit_cost is None and isinstance(model_usage, dict):
+        explicit_cost = sum(
+            float((item or {}).get("costUSD") or 0.0)
+            for item in model_usage.values()
+            if isinstance(item, dict)
+        )
+
+    return final_stdout, {
+        "telemetry_source": "claude_json",
+        "cost_source": "backend",
+        "usage": {
+            "input_tokens": int(usage.get("input_tokens") or 0),
+            "cached_input_tokens": int(usage.get("cache_read_input_tokens") or 0),
+            "output_tokens": int(usage.get("output_tokens") or 0),
+        },
+        "total_cost_usd": float(explicit_cost) if explicit_cost is not None else None,
+        "raw": payload,
+        "warnings": [],
+    }
+
+
+def _extract_codex_telemetry(stream_stdout: str, *, final_stdout: str, model: str) -> tuple[str, dict]:
+    usage_payload: dict = {}
+    raw_events: list[dict] = []
+    for line in str(stream_stdout or "").splitlines():
+        line = line.strip()
+        if not line.startswith("{"):
+            continue
+        payload = _safe_json_loads(line)
+        if not isinstance(payload, dict):
+            continue
+        raw_events.append(payload)
+        if payload.get("type") == "turn.completed" and isinstance(payload.get("usage"), dict):
+            usage_payload = payload["usage"]
+
+    usage = {
+        "input_tokens": int(usage_payload.get("input_tokens") or 0),
+        "cached_input_tokens": int(usage_payload.get("cached_input_tokens") or 0),
+        "output_tokens": int(usage_payload.get("output_tokens") or 0),
+    }
+    total_cost_usd = usage_payload.get("total_cost_usd")
+    cost_source = "backend" if total_cost_usd is not None else "missing"
+    warnings: list[str] = []
+    if total_cost_usd is None:
+        estimated_cost, estimated_source = _estimate_openai_cost_usd(
+            model,
+            input_tokens=usage["input_tokens"],
+            cached_input_tokens=usage["cached_input_tokens"],
+            output_tokens=usage["output_tokens"],
+        )
+        total_cost_usd = estimated_cost
+        cost_source = estimated_source
+        if estimated_cost is None:
+            warnings.append(f"no pricing snapshot available for model `{model}`")
+
+    if not usage_payload:
+        warnings.append("backend did not return usage telemetry")
+
+    return final_stdout, {
+        "telemetry_source": "codex_jsonl",
+        "cost_source": cost_source,
+        "usage": usage,
+        "total_cost_usd": float(total_cost_usd) if total_cost_usd is not None else None,
+        "raw": raw_events[-8:],
+        "warnings": warnings,
+    }
+
+
+def _append_stderr(stderr: str, message: str) -> str:
+    bits = [part for part in [str(stderr or "").rstrip(), str(message or "").strip()] if part]
+    if not bits:
+        return ""
+    return "\n".join(bits) + "\n"
+
+
+def _record_automation_run(
+    *,
+    backend: str,
+    task_profile: str,
+    model: str,
+    reasoning_effort: str,
+    cwd: Path,
+    output_format: str,
+    prompt: str,
+    returncode: int,
+    duration_ms: int,
+    telemetry: dict,
+) -> tuple[bool, str]:
+    try:
+        from db._core import get_db
+    except Exception as exc:
+        return False, f"automation telemetry unavailable: {exc}"
+
+    try:
+        conn = get_db()
+        usage = telemetry.get("usage") or {}
+        conn.execute(
+            """
+            INSERT INTO automation_runs (
+                backend, task_profile, model, reasoning_effort, cwd, output_format,
+                prompt_chars, returncode, duration_ms,
+                input_tokens, cached_input_tokens, output_tokens,
+                total_cost_usd, telemetry_source, cost_source, status, metadata
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                backend,
+                task_profile or "default",
+                model,
+                reasoning_effort,
+                str(cwd),
+                output_format or "text",
+                len(prompt or ""),
+                int(returncode),
+                int(duration_ms),
+                int(usage.get("input_tokens") or 0),
+                int(usage.get("cached_input_tokens") or 0),
+                int(usage.get("output_tokens") or 0),
+                telemetry.get("total_cost_usd"),
+                telemetry.get("telemetry_source", ""),
+                telemetry.get("cost_source", ""),
+                "ok" if int(returncode) == 0 else "failed",
+                json.dumps(
+                    {
+                        "warnings": telemetry.get("warnings") or [],
+                        "raw": telemetry.get("raw") or {},
+                    },
+                    ensure_ascii=False,
+                ),
+            ),
+        )
+        conn.commit()
+        return True, ""
+    except Exception as exc:
+        return False, f"automation telemetry unavailable: {exc}"
 
 
 def _resolve_claude_cli() -> str:
@@ -245,6 +439,27 @@ def _resolve_runtime_model_and_effort(
     return requested_model, requested_effort
 
 
+def _backend_is_available(backend: str) -> bool:
+    if backend == CLIENT_CLAUDE_CODE:
+        return bool(_resolve_claude_cli())
+    if backend == CLIENT_CODEX:
+        return bool(_resolve_codex_cli())
+    return False
+
+
+def _resolve_available_backend(selected_backend: str, *, preferences: dict | None = None) -> str:
+    if _backend_is_available(selected_backend):
+        return selected_backend
+    prefs = preferences or load_client_preferences()
+    preferred = resolve_automation_backend(preferences=prefs)
+    for candidate in (preferred, CLIENT_CLAUDE_CODE, CLIENT_CODEX):
+        if candidate == selected_backend or candidate == BACKEND_NONE:
+            continue
+        if _backend_is_available(candidate):
+            return candidate
+    return selected_backend
+
+
 def _build_codex_prompt(
     prompt: str,
     *,
@@ -252,7 +467,18 @@ def _build_codex_prompt(
     append_system_prompt: str = "",
     allowed_tools: str = "",
 ) -> str:
+    protocol_contract = (
+        "NEXO PROTOCOL (MANDATORY):\n"
+        "- Before non-trivial analyze/edit/execute/delegate work, call `nexo_task_open(...)`. "
+        "If that tool is unavailable, call `nexo_guard_check(...)` and `nexo_cortex_check(...)` first.\n"
+        "- For long multi-step or cross-session work, call `nexo_workflow_open(...)` and keep it updated with "
+        "`nexo_workflow_update(...)` so resume/replay use durable state instead of guesswork.\n"
+        "- If a target file has conditioned learnings or blocking guard rules, review them before any read/edit/delete step, and acknowledge guard before any edit/delete step.\n"
+        "- Do not claim done without explicit verification evidence. Close with `nexo_task_close(...)`; if unavailable, capture the change log and state the evidence explicitly.\n"
+        "- When a correction changes the canonical rule, capture or supersede the learning instead of leaving contradictory active rules behind."
+    )
     instructions: list[str] = []
+    instructions.append(protocol_contract)
     if append_system_prompt:
         instructions.append(f"SYSTEM INSTRUCTIONS:\n{append_system_prompt}")
     if output_format and output_format.lower() == "text":
@@ -273,6 +499,7 @@ def run_automation_prompt(
     prompt: str,
     *,
     backend: str | None = None,
+    task_profile: str = "",
     cwd: str | os.PathLike[str] | None = None,
     env: dict | None = None,
     model: str = "",
@@ -288,15 +515,26 @@ def run_automation_prompt(
     if selected_backend == BACKEND_NONE:
         raise AutomationBackendUnavailableError("Automation backend is disabled in config.")
 
+    if task_profile:
+        profile = resolve_automation_task_profile(task_profile, preferences=prefs)
+        selected_backend = profile["backend"] or selected_backend
+        if not model:
+            model = profile["model"]
+        if not reasoning_effort:
+            reasoning_effort = profile["reasoning_effort"]
+    selected_backend = _resolve_available_backend(selected_backend, preferences=prefs)
+
     cwd_path = Path(cwd).expanduser().resolve() if cwd else Path.cwd()
     run_env = _headless_env(env)
     extra_args = list(extra_args or [])
+    requested_output_format = output_format or "text"
     resolved_model, resolved_effort = _resolve_runtime_model_and_effort(
         selected_backend,
         model=model,
         reasoning_effort=reasoning_effort,
         preferences=prefs,
     )
+    started_at = time.perf_counter()
 
     if selected_backend == CLIENT_CLAUDE_CODE:
         claude_bin = _resolve_claude_cli()
@@ -309,20 +547,44 @@ def run_automation_prompt(
             cmd.extend(["--model", resolved_model])
         if resolved_effort:
             cmd.extend(["--effort", resolved_effort])
-        if output_format:
-            cmd.extend(["--output-format", output_format])
+        cmd.extend(["--output-format", "json"])
         if append_system_prompt:
             cmd.extend(["--append-system-prompt", append_system_prompt])
         if allowed_tools:
             cmd.extend(["--allowedTools", allowed_tools])
         cmd.extend(extra_args)
-        return subprocess.run(
+        result = subprocess.run(
             cmd,
             cwd=str(cwd_path),
             capture_output=True,
             text=True,
             timeout=timeout,
             env=run_env,
+        )
+        final_stdout, telemetry = _extract_claude_telemetry(
+            result.stdout or "",
+            requested_output_format=requested_output_format,
+        )
+        recorded, record_error = _record_automation_run(
+            backend=selected_backend,
+            task_profile=task_profile,
+            model=resolved_model,
+            reasoning_effort=resolved_effort,
+            cwd=cwd_path,
+            output_format=requested_output_format,
+            prompt=prompt,
+            returncode=result.returncode,
+            duration_ms=int((time.perf_counter() - started_at) * 1000),
+            telemetry=telemetry,
+        )
+        stderr = result.stderr or ""
+        if not recorded:
+            stderr = _append_stderr(stderr, record_error)
+        return subprocess.CompletedProcess(
+            cmd,
+            result.returncode,
+            final_stdout,
+            stderr,
         )
 
     if selected_backend == CLIENT_CODEX:
@@ -339,6 +601,7 @@ def run_automation_prompt(
                 "--skip-git-repo-check",
                 "--dangerously-bypass-approvals-and-sandbox",
                 "--ephemeral",
+                "--json",
                 "-C",
                 str(cwd_path),
                 "-o",
@@ -368,12 +631,33 @@ def run_automation_prompt(
                 timeout=timeout,
                 env=run_env,
             )
-            stdout = output_path.read_text() if output_path.exists() else (result.stdout or "")
+            raw_stdout = result.stdout or ""
+            stdout = output_path.read_text() if output_path.exists() else raw_stdout
+            final_stdout, telemetry = _extract_codex_telemetry(
+                raw_stdout,
+                final_stdout=stdout,
+                model=resolved_model,
+            )
+            recorded, record_error = _record_automation_run(
+                backend=selected_backend,
+                task_profile=task_profile,
+                model=resolved_model,
+                reasoning_effort=resolved_effort,
+                cwd=cwd_path,
+                output_format=requested_output_format,
+                prompt=prompt,
+                returncode=result.returncode,
+                duration_ms=int((time.perf_counter() - started_at) * 1000),
+                telemetry=telemetry,
+            )
+            stderr = result.stderr or ""
+            if not recorded:
+                stderr = _append_stderr(stderr, record_error)
             return subprocess.CompletedProcess(
                 cmd,
                 result.returncode,
-                stdout,
-                result.stderr,
+                final_stdout,
+                stderr,
             )
 
     raise AutomationBackendUnavailableError(f"Unsupported automation backend: {selected_backend}")

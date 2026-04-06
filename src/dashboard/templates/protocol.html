@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+
+{% block title %}Protocol Explainability{% endblock %}
+
+{% block page_title %}Protocol Explainability{% endblock %}
+{% block page_subtitle %}
+<span class="text-xs text-slate-500 ml-2">Why the runtime acted, blocked, drifted, or asked for evidence</span>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/api/protocol" class="text-xs text-slate-400 hover:text-slate-200 transition-colors px-2 py-1 rounded hover:bg-slate-800 font-mono">
+  /api/protocol
+</a>
+{% endblock %}
+
+{% block content %}
+{% set compliance = snapshot.protocol_summary or {} %}
+{% set overall = compliance.overall_compliance_pct or 0 %}
+{% set debt = snapshot.debt_summary or {} %}
+{% set workflow = snapshot.workflow_summary or {} %}
+{% set goals = snapshot.goal_summary or {} %}
+{% set conditioned = snapshot.conditioned_learnings or [] %}
+
+<div class="grid grid-cols-5 gap-4 mb-6">
+  <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-5 card">
+    <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1">Compliance 7d</p>
+    <p class="text-2xl font-display font-bold {{ 'text-emerald-400' if overall >= 80 else 'text-amber-400' if overall >= 60 else 'text-red-400' }}">{{ "%.1f"|format(overall) }}%</p>
+  </div>
+  <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-5 card">
+    <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1">Open Debt</p>
+    <p class="text-2xl font-display font-bold {{ 'text-emerald-400' if (debt.open_total or 0) == 0 else 'text-red-400' }}">{{ debt.open_total or 0 }}</p>
+  </div>
+  <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-5 card">
+    <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1">Open Runs</p>
+    <p class="text-2xl font-display font-bold text-slate-100">{{ workflow.open_runs or 0 }}</p>
+  </div>
+  <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-5 card">
+    <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1">Blocked Goals</p>
+    <p class="text-2xl font-display font-bold {{ 'text-red-400' if (goals.blocked or 0) else 'text-emerald-400' }}">{{ goals.blocked or 0 }}</p>
+  </div>
+  <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-5 card">
+    <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1">Conditioned Files</p>
+    <p class="text-2xl font-display font-bold text-nexo-400">{{ conditioned|length }}</p>
+  </div>
+</div>
+
+<div class="grid grid-cols-2 gap-5 mb-6">
+  <section class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-5 card">
+    <h2 class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-4">Protocol Requirements</h2>
+    <div class="space-y-3">
+      {% for key, label in [('guard_check', 'Guard before action'), ('heartbeat', 'Heartbeat with context'), ('change_log', 'Change log after edits'), ('learning_capture', 'Learning capture after correction'), ('done_evidence', 'Evidence before done')] %}
+      {% set item = compliance.get(key, {}) %}
+      <div class="flex items-center justify-between gap-4">
+        <div>
+          <p class="text-sm text-slate-200">{{ label }}</p>
+          <p class="text-[11px] text-slate-500 font-mono">
+            {% if item.required is defined %}required {{ item.required }}{% endif %}
+            {% if item.total is defined %}total {{ item.total }}{% endif %}
+            {% if item.executed is defined %} • executed {{ item.executed }}{% endif %}
+            {% if item.logged is defined %} • logged {{ item.logged }}{% endif %}
+            {% if item.captured is defined %} • captured {{ item.captured }}{% endif %}
+            {% if item.done_tasks is defined %} • done {{ item.done_tasks }}{% endif %}
+          </p>
+        </div>
+        <span class="text-sm font-mono {{ 'text-emerald-400' if (item.compliance_pct or 0) >= 80 else 'text-amber-400' if (item.compliance_pct or 0) >= 60 else 'text-red-400' }}">
+          {{ "%.1f"|format(item.compliance_pct or 0) }}%
+        </span>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-5 card">
+    <h2 class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-4">Debt Pressure</h2>
+    <div class="grid grid-cols-3 gap-3 mb-4">
+      {% for severity in ['error', 'warn', 'info'] %}
+      <div class="rounded-lg border border-slate-800/60 bg-slate-950/50 p-3">
+        <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ severity }}</p>
+        <p class="text-xl font-display font-bold text-slate-100">{{ debt.by_severity.get(severity, 0) }}</p>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="space-y-2 max-h-56 overflow-y-auto pr-1">
+      {% for item in snapshot.recent_debts[:10] %}
+      <div class="rounded-lg border border-slate-800/60 bg-slate-950/50 p-3">
+        <div class="flex items-center justify-between gap-3 mb-1">
+          <span class="text-xs font-semibold {{ 'text-red-400' if item.severity == 'error' else 'text-amber-400' if item.severity == 'warn' else 'text-slate-400' }}">{{ item.debt_type }}</span>
+          <span class="text-[10px] text-slate-500 font-mono">{{ item.status }}</span>
+        </div>
+        <p class="text-xs text-slate-300">{{ item.evidence or 'No evidence summary recorded.' }}</p>
+      </div>
+      {% else %}
+      <p class="text-sm text-slate-500">No protocol debt recorded.</p>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+
+<div class="grid grid-cols-2 gap-5 mb-6">
+  <section class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-5 card">
+    <h2 class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-4">Recent Protocol Tasks</h2>
+    <div class="space-y-3 max-h-[420px] overflow-y-auto pr-1">
+      {% for item in snapshot.recent_tasks[:12] %}
+      <div class="rounded-lg border border-slate-800/60 bg-slate-950/50 p-3">
+        <div class="flex items-center justify-between gap-3 mb-1">
+          <p class="text-sm text-slate-100">{{ item.goal }}</p>
+          <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-400">{{ item.status }}</span>
+        </div>
+        <p class="text-[11px] text-slate-500 font-mono mb-2">{{ item.task_type }} • cortex={{ item.cortex_mode or 'n/a' }} • response={{ item.response_mode or 'n/a' }}</p>
+        <div class="flex flex-wrap gap-2 text-[10px]">
+          {% if item.guarded_open %}<span class="px-2 py-0.5 rounded bg-nexo-500/15 text-nexo-300">guarded open</span>{% endif %}
+          {% if item.must_verify %}<span class="px-2 py-0.5 rounded bg-amber-500/15 text-amber-300">must verify</span>{% endif %}
+          {% if item.must_change_log %}<span class="px-2 py-0.5 rounded bg-blue-500/15 text-blue-300">must change-log</span>{% endif %}
+          {% if item.has_evidence %}<span class="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300">evidence attached</span>{% endif %}
+          {% if item.guard_has_blocking %}<span class="px-2 py-0.5 rounded bg-red-500/15 text-red-300">blocking risk</span>{% endif %}
+        </div>
+      </div>
+      {% else %}
+      <p class="text-sm text-slate-500">No protocol tasks yet.</p>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-5 card">
+    <h2 class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-4">Durable Workflow State</h2>
+    <div class="grid grid-cols-3 gap-3 mb-4">
+      <div class="rounded-lg border border-slate-800/60 bg-slate-950/50 p-3">
+        <p class="text-[10px] uppercase tracking-wider text-slate-500">Open Runs</p>
+        <p class="text-xl font-display font-bold text-slate-100">{{ workflow.open_runs or 0 }}</p>
+      </div>
+      <div class="rounded-lg border border-slate-800/60 bg-slate-950/50 p-3">
+        <p class="text-[10px] uppercase tracking-wider text-slate-500">Blocked Runs</p>
+        <p class="text-xl font-display font-bold {{ 'text-red-400' if (workflow.blocked_runs or 0) else 'text-slate-100' }}">{{ workflow.blocked_runs or 0 }}</p>
+      </div>
+      <div class="rounded-lg border border-slate-800/60 bg-slate-950/50 p-3">
+        <p class="text-[10px] uppercase tracking-wider text-slate-500">Waiting Approval</p>
+        <p class="text-xl font-display font-bold {{ 'text-amber-400' if (workflow.waiting_approval or 0) else 'text-slate-100' }}">{{ workflow.waiting_approval or 0 }}</p>
+      </div>
+    </div>
+    <div class="space-y-3 max-h-[420px] overflow-y-auto pr-1">
+      {% for item in snapshot.recent_runs[:10] %}
+      <div class="rounded-lg border border-slate-800/60 bg-slate-950/50 p-3">
+        <div class="flex items-center justify-between gap-3 mb-1">
+          <p class="text-sm text-slate-100">{{ item.goal }}</p>
+          <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-400">{{ item.status }}</span>
+        </div>
+        <p class="text-[11px] text-slate-500 font-mono">{{ item.workflow_kind }}{% if item.current_step_key %} • step={{ item.current_step_key }}{% endif %}{% if item.next_action %} • next={{ item.next_action }}{% endif %}</p>
+      </div>
+      {% else %}
+      <p class="text-sm text-slate-500">No workflow runs recorded.</p>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+
+<div class="grid grid-cols-2 gap-5">
+  <section class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-5 card">
+    <h2 class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-4">Conditioned Learnings</h2>
+    <div class="space-y-3 max-h-[420px] overflow-y-auto pr-1">
+      {% for item in conditioned[:12] %}
+      <div class="rounded-lg border border-slate-800/60 bg-slate-950/50 p-3">
+        <div class="flex items-center justify-between gap-3 mb-1">
+          <p class="text-sm text-slate-100">{{ item.title }}</p>
+          <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-400">{{ item.priority or 'normal' }}</span>
+        </div>
+        <p class="text-xs text-slate-400 break-all">{{ item.applies_to }}</p>
+        <p class="text-[11px] text-slate-500 font-mono mt-1">guard_hits={{ item.guard_hits or 0 }} • weight={{ "%.2f"|format(item.weight or 0) }}</p>
+      </div>
+      {% else %}
+      <p class="text-sm text-slate-500">No conditioned learnings active.</p>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-5 card">
+    <h2 class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-4">Guard Pressure</h2>
+    <div class="grid grid-cols-2 gap-3 mb-4">
+      <div class="rounded-lg border border-slate-800/60 bg-slate-950/50 p-3">
+        <p class="text-[10px] uppercase tracking-wider text-slate-500">Recent Checks</p>
+        <p class="text-xl font-display font-bold text-slate-100">{{ snapshot.guard_summary.recent_checks or 0 }}</p>
+      </div>
+      <div class="rounded-lg border border-slate-800/60 bg-slate-950/50 p-3">
+        <p class="text-[10px] uppercase tracking-wider text-slate-500">Blocking Hits</p>
+        <p class="text-xl font-display font-bold {{ 'text-red-400' if (snapshot.guard_summary.blocking_hits or 0) else 'text-slate-100' }}">{{ snapshot.guard_summary.blocking_hits or 0 }}</p>
+      </div>
+    </div>
+    <div class="space-y-2">
+      {% for area, count in snapshot.guard_summary.areas.items() %}
+      <div class="flex items-center justify-between rounded-lg border border-slate-800/60 bg-slate-950/50 px-3 py-2">
+        <span class="text-sm text-slate-300">{{ area }}</span>
+        <span class="text-xs font-mono text-slate-500">{{ count }} checks</span>
+      </div>
+      {% else %}
+      <p class="text-sm text-slate-500">No guard pressure recorded.</p>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+{% endblock %}

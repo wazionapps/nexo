@@ -1,8 +1,10 @@
 """Shared fixtures for NEXO test suite.
 
-Uses isolated temp databases so tests never touch production data.
+Uses isolated temp databases so tests never touch production data and forces
+repo-local imports so the suite never silently picks up installed runtime code.
 """
 
+import importlib
 import os
 import sqlite3
 import sys
@@ -12,10 +14,24 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = str(ROOT / "src")
+REPO_PREFIXES = (
+    "plugins",
+    "db",
+    "doctor",
+    "cognitive",
+    "hook_guardrails",
+    "script_registry",
+    "state_watchers_runtime",
+)
 
-# Add src/ to path so we can import repo modules deterministically.
-if SRC not in sys.path:
+
+def _ensure_repo_src_first() -> None:
+    """Keep the repo src/ directory first in sys.path for deterministic imports."""
+    sys.path[:] = [path for path in sys.path if path != SRC]
     sys.path.insert(0, SRC)
+
+
+_ensure_repo_src_first()
 
 
 def _purge_external_repo_modules(prefixes: tuple[str, ...]) -> None:
@@ -34,7 +50,22 @@ def _purge_external_repo_modules(prefixes: tuple[str, ...]) -> None:
             sys.modules.pop(name, None)
 
 
-_purge_external_repo_modules(("doctor",))
+def _reset_repo_import_state(prefixes: tuple[str, ...] = REPO_PREFIXES) -> None:
+    """Force core package imports to come from this repo, not the live runtime."""
+    _ensure_repo_src_first()
+    _purge_external_repo_modules(prefixes)
+    importlib.invalidate_caches()
+
+
+_reset_repo_import_state()
+
+
+@pytest.fixture(autouse=True)
+def repo_import_isolation():
+    """Prevent earlier tests from polluting imports with installed runtime modules."""
+    _reset_repo_import_state()
+    yield
+    _reset_repo_import_state()
 
 
 @pytest.fixture(autouse=True)

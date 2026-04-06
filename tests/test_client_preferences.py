@@ -18,6 +18,8 @@ def test_normalize_client_preferences_preserves_old_defaults(tmp_path):
     assert prefs["client_runtime_profiles"]["claude_code"]["model"] == "claude-opus-4-6[1m]"
     assert prefs["client_runtime_profiles"]["codex"]["model"] == "gpt-5.4"
     assert prefs["client_runtime_profiles"]["codex"]["reasoning_effort"] == "xhigh"
+    assert prefs["automation_task_profiles"]["fast"]["backend"] == "codex"
+    assert prefs["automation_task_profiles"]["fast"]["model"] == "gpt-5.4-mini"
 
 
 def test_apply_client_preferences_forces_backend_none_when_automation_disabled():
@@ -67,6 +69,40 @@ def test_client_runtime_profiles_normalize_and_default():
     assert prefs["client_runtime_profiles"]["claude_code"]["model"] == "claude-opus-4-6[1m]"
     assert prefs["client_runtime_profiles"]["codex"]["model"] == "gpt-5.4-mini"
     assert prefs["client_runtime_profiles"]["codex"]["reasoning_effort"] == "high"
+
+
+def test_resolve_automation_task_profile_uses_profile_override_and_runtime_defaults():
+    import client_preferences
+
+    prefs = client_preferences.normalize_client_preferences(
+        {
+            "automation_backend": "claude_code",
+            "client_runtime_profiles": {
+                "claude_code": {"model": "claude-sonnet-4-6", "reasoning_effort": "medium"},
+                "codex": {"model": "gpt-5.4", "reasoning_effort": "high"},
+            },
+            "automation_task_profiles": {
+                "deep": {"backend": "claude_code", "model": "", "reasoning_effort": ""},
+                "fast": {"backend": "codex", "model": "gpt-5.4-mini", "reasoning_effort": "medium"},
+            },
+        }
+    )
+
+    deep = client_preferences.resolve_automation_task_profile("deep", preferences=prefs)
+    fast = client_preferences.resolve_automation_task_profile("fast", preferences=prefs)
+
+    assert deep == {
+        "name": "deep",
+        "backend": "claude_code",
+        "model": "claude-opus-4-6[1m]",
+        "reasoning_effort": "medium",
+    }
+    assert fast == {
+        "name": "fast",
+        "backend": "codex",
+        "model": "gpt-5.4-mini",
+        "reasoning_effort": "medium",
+    }
 
 
 def test_resolve_terminal_client_ignores_desktop_as_default_terminal():

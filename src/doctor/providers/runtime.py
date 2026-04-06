@@ -7,6 +7,8 @@ import os
 import platform
 import plistlib
 import re
+import shlex
+import sqlite3
 import subprocess
 import sys
 import time
@@ -41,6 +43,51 @@ OPTIONALS_FILE = NEXO_HOME / "config" / "optionals.json"
 SCHEDULE_FILE = NEXO_HOME / "config" / "schedule.json"
 PACKAGE_JSON = NEXO_CODE / "package.json"
 CHANGELOG_FILE = NEXO_CODE / "CHANGELOG.md"
+
+
+def _recorded_source_root() -> Path | None:
+    version_file = NEXO_HOME / "version.json"
+    try:
+        payload = json.loads(version_file.read_text())
+    except Exception:
+        return None
+    source = payload.get("source")
+    if not source:
+        return None
+    candidate = Path(str(source)).expanduser()
+    if (candidate / "package.json").is_file() and (candidate / "CHANGELOG.md").is_file():
+        return candidate
+    return None
+
+
+def _release_root() -> Path:
+    source_root = _recorded_source_root()
+    candidates = [
+        source_root,
+        PACKAGE_JSON.parent,
+        CHANGELOG_FILE.parent,
+        NEXO_CODE,
+        NEXO_CODE.parent,
+    ]
+    for candidate in candidates:
+        if not candidate:
+            continue
+        candidate = Path(candidate)
+        if (candidate / "package.json").is_file() and (candidate / "CHANGELOG.md").is_file():
+            return candidate
+    return Path(NEXO_CODE)
+
+
+def _package_json_path() -> Path:
+    if PACKAGE_JSON.is_file():
+        return PACKAGE_JSON
+    return _release_root() / "package.json"
+
+
+def _changelog_path() -> Path:
+    if CHANGELOG_FILE.is_file():
+        return CHANGELOG_FILE
+    return _release_root() / "CHANGELOG.md"
 
 
 def _codex_bootstrap_config_status() -> dict:
@@ -187,10 +234,395 @@ def _recent_codex_session_parity_status(*, days: int = 7, max_files: int = 24) -
     return status
 
 
+def _normalize_path_token(value: str) -> str:
+    return str(value or "").replace("\\", "/").rstrip("/").lower()
+
+
+def _split_applies_to(applies_to: str) -> list[str]:
+    return [item.strip() for item in str(applies_to or "").split(",") if item.strip()]
+
+
+def _applies_to_matches_file(applies_to: str, filepath: str) -> bool:
+    file_path = Path(filepath)
+    file_norm = _normalize_path_token(str(file_path))
+    parent_norm = _normalize_path_token(str(file_path.parent))
+    filename = file_path.name.lower()
+    stem = file_path.stem.lower()
+    parent_name = file_path.parent.name.lower()
+
+    for raw in _split_applies_to(applies_to):
+        token_norm = _normalize_path_token(raw)
+        if not token_norm:
+            continue
+        if "/" in token_norm:
+            if (
+                file_norm == token_norm
+                or file_norm.endswith(f"/{token_norm}")
+                or file_norm.startswith(f"{token_norm}/")
+                or parent_norm == token_norm
+                or parent_norm.endswith(f"/{token_norm}")
+            ):
+                return True
+            continue
+        if token_norm in {filename, stem, parent_name}:
+            return True
+    return False
+
+
+def _parse_jsonish_arguments(arguments) -> dict:
+    if isinstance(arguments, dict):
+        return arguments
+    if isinstance(arguments, str):
+        try:
+            parsed = json.loads(arguments)
+        except Exception:
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+    return {}
+
+
+def _resolve_candidate_path(token: str, cwd: str) -> str:
+    token = str(token or "").strip()
+    if not token:
+        return ""
+    if token.startswith("~"):
+        token = str(Path(token).expanduser())
+    path = Path(token)
+    if not path.is_absolute():
+        if not cwd.strip():
+            return ""
+        path = Path(cwd).expanduser() / path
+    return str(path.resolve())
+
+
+def _extract_shell_file_candidates(command: str, cwd: str) -> list[str]:
+    if not command.strip():
+        return []
+    try:
+        tokens = shlex.split(command)
+    except Exception:
+        tokens = command.split()
+
+    candidates: list[str] = []
+    seen = set()
+    shell_noise = {"&&", "||", "|", ";", ">", ">>", "<", "<<<"}
+    suffixes = {
+        ".py", ".md", ".json", ".jsonl", ".sh", ".txt", ".toml", ".yaml", ".yml",
+        ".js", ".ts", ".tsx", ".jsx", ".php", ".sql", ".rs", ".go", ".c", ".cpp",
+        ".h", ".css", ".html",
+    }
+    for token in tokens:
+        if token in shell_noise or token.startswith("-"):
+            continue
+        if not token.startswith(("/", "~", ".")) and "/" not in token and Path(token).suffix.lower() not in suffixes:
+            continue
+        resolved = _resolve_candidate_path(token, cwd)
+        normalized = _normalize_path_token(resolved)
+        if resolved and normalized not in seen:
+            seen.add(normalized)
+            candidates.append(resolved)
+    return candidates
+
+
+def _classify_shell_operation(command: str) -> str:
+    if not command.strip():
+        return "read"
+    try:
+        tokens = shlex.split(command)
+    except Exception:
+        tokens = command.split()
+    if not tokens:
+        return "read"
+    base = Path(tokens[0]).name.lower()
+    if base in {"rm", "unlink", "rmdir"}:
+        return "delete"
+    if base in {"mv", "cp", "touch", "install"}:
+        return "write"
+    if base == "sed" and "-i" in tokens:
+        return "write"
+    if base == "perl" and any(token == "-i" or token.startswith("-i") for token in tokens[1:]):
+        return "write"
+    return "read"
+
+
+def _extract_shell_file_touches(command: str, cwd: str) -> list[tuple[str, str]]:
+    operation = _classify_shell_operation(command)
+    return [(candidate, operation) for candidate in _extract_shell_file_candidates(command, cwd)]
+
+
+def _extract_apply_patch_targets(patch_text: str, cwd: str) -> list[tuple[str, str]]:
+    targets: list[tuple[str, str]] = []
+    seen = set()
+    for raw_line in str(patch_text or "").splitlines():
+        line = raw_line.strip()
+        prefix = None
+        operation = "write"
+        if line.startswith("*** Update File: "):
+            prefix = "*** Update File: "
+        elif line.startswith("*** Add File: "):
+            prefix = "*** Add File: "
+        elif line.startswith("*** Delete File: "):
+            prefix = "*** Delete File: "
+            operation = "delete"
+        if not prefix:
+            continue
+        resolved = _resolve_candidate_path(line[len(prefix):].strip(), cwd)
+        normalized = _normalize_path_token(resolved)
+        if resolved and normalized not in seen:
+            seen.add(normalized)
+            targets.append((resolved, operation))
+    return targets
+
+
+def _extract_declared_file_targets(args: dict, cwd: str) -> set[str]:
+    raw_items: list[str] = []
+    for key in ("files", "paths", "file_paths"):
+        value = args.get(key)
+        if isinstance(value, str):
+            raw_items.extend(part.strip() for part in value.split(",") if part.strip())
+        elif isinstance(value, list):
+            raw_items.extend(str(item).strip() for item in value if str(item).strip())
+    for key in ("file_path", "path"):
+        value = args.get(key)
+        if isinstance(value, str) and value.strip():
+            raw_items.append(value.strip())
+    resolved = set()
+    for item in raw_items:
+        candidate = _resolve_candidate_path(item, cwd)
+        if candidate:
+            resolved.add(_normalize_path_token(candidate))
+    return resolved
+
+
+def _load_active_conditioned_learnings() -> list[dict]:
+    db_path = NEXO_HOME / "data" / "nexo.db"
+    if not db_path.is_file():
+        return []
+    try:
+        import sqlite3
+
+        conn = sqlite3.connect(str(db_path), timeout=2)
+        conn.row_factory = sqlite3.Row
+        table = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='learnings'"
+        ).fetchone()
+        if not table:
+            conn.close()
+            return []
+        rows = conn.execute(
+            """SELECT id, title, applies_to
+               FROM learnings
+               WHERE status = 'active' AND COALESCE(applies_to, '') != ''
+               ORDER BY updated_at DESC, id DESC"""
+        ).fetchall()
+        conn.close()
+        return [dict(row) for row in rows]
+    except Exception:
+        return []
+
+
+def _recent_codex_conditioned_file_discipline_status(*, days: int = 7, max_files: int = 24) -> dict:
+    conditioned = _load_active_conditioned_learnings()
+    status = {
+        "files": 0,
+        "conditioned_rules": len(conditioned),
+        "conditioned_sessions": 0,
+        "conditioned_touches": 0,
+        "read_without_protocol": 0,
+        "write_without_protocol": 0,
+        "write_without_guard_ack": 0,
+        "delete_without_protocol": 0,
+        "delete_without_guard_ack": 0,
+        "latest_violation_age_seconds": None,
+        "samples": [],
+    }
+    if not conditioned:
+        return status
+
+    roots = [
+        Path.home() / ".codex" / "sessions",
+        Path.home() / ".codex" / "archived_sessions",
+    ]
+    cutoff = time.time() - (days * 86400)
+    candidates: list[tuple[float, Path]] = []
+    for root in roots:
+        if not root.exists():
+            continue
+        for path in root.rglob("*.jsonl"):
+            try:
+                mtime = path.stat().st_mtime
+            except OSError:
+                continue
+            if mtime >= cutoff:
+                candidates.append((mtime, path))
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    files = candidates[:max_files]
+    status["files"] = len(files)
+
+    for file_mtime, path in files:
+        cwd = ""
+        protocol_files: set[str] = set()
+        guard_files: set[str] = set()
+        guard_ack = False
+        session_touches = 0
+        session_samples: list[dict] = []
+
+        try:
+            with path.open() as fh:
+                for raw in fh:
+                    try:
+                        event = json.loads(raw)
+                    except Exception:
+                        continue
+                    event_age_seconds = None
+                    event_ts = _parse_timestamp(str(event.get("timestamp", "") or ""))
+                    if event_ts is not None:
+                        event_age_seconds = max(0.0, time.time() - event_ts.timestamp())
+                    payload = event.get("payload", {})
+                    if event.get("type") == "session_meta" and isinstance(payload, dict):
+                        cwd = str(payload.get("cwd", "") or "")
+                        continue
+                    if event.get("type") != "response_item" or not isinstance(payload, dict):
+                        continue
+                    if payload.get("type") != "function_call":
+                        continue
+
+                    name = str(payload.get("name", "") or "")
+                    args = _parse_jsonish_arguments(payload.get("arguments"))
+
+                    if name in {"mcp__nexo__nexo_task_open", "nexo_task_open"}:
+                        protocol_files.update(_extract_declared_file_targets(args, cwd))
+                        continue
+                    if name in {"mcp__nexo__nexo_guard_check", "nexo_guard_check"}:
+                        guard_files.update(_extract_declared_file_targets(args, cwd))
+                        continue
+                    if name in {"mcp__nexo__nexo_task_acknowledge_guard", "nexo_task_acknowledge_guard"}:
+                        guard_ack = True
+                        continue
+
+                    touched_files: list[tuple[str, str]] = []
+                    if name in {"exec_command", "functions.exec_command"}:
+                        touched_files = _extract_shell_file_touches(str(args.get("cmd", "") or ""), cwd)
+                    elif name in {"apply_patch", "functions.apply_patch"}:
+                        patch_text = payload.get("arguments", "")
+                        touched_files = _extract_apply_patch_targets(str(patch_text or ""), cwd)
+
+                    if not touched_files:
+                        continue
+
+                    for touched, operation in touched_files:
+                        matches = [row for row in conditioned if _applies_to_matches_file(str(row.get("applies_to", "")), touched)]
+                        if not matches:
+                            continue
+                        session_touches += 1
+                        status["conditioned_touches"] += 1
+                        normalized = _normalize_path_token(touched)
+                        if operation == "read":
+                            if normalized not in protocol_files and normalized not in guard_files:
+                                status["read_without_protocol"] += 1
+                                age_seconds = (
+                                    event_age_seconds
+                                    if event_age_seconds is not None
+                                    else max(0.0, time.time() - float(file_mtime))
+                                )
+                                current_latest = status.get("latest_violation_age_seconds")
+                                if current_latest is None or age_seconds < float(current_latest):
+                                    status["latest_violation_age_seconds"] = round(age_seconds, 1)
+                                session_samples.append(
+                                    {"kind": "read_without_protocol", "file": touched, "tool": name}
+                                )
+                        elif operation in {"write", "delete"}:
+                            if normalized not in protocol_files:
+                                status["write_without_protocol"] += 1
+                                if operation == "delete":
+                                    status["delete_without_protocol"] += 1
+                                age_seconds = (
+                                    event_age_seconds
+                                    if event_age_seconds is not None
+                                    else max(0.0, time.time() - float(file_mtime))
+                                )
+                                current_latest = status.get("latest_violation_age_seconds")
+                                if current_latest is None or age_seconds < float(current_latest):
+                                    status["latest_violation_age_seconds"] = round(age_seconds, 1)
+                                session_samples.append(
+                                    {
+                                        "kind": f"{operation}_without_protocol",
+                                        "file": touched,
+                                        "tool": name,
+                                    }
+                                )
+                            elif not guard_ack:
+                                status["write_without_guard_ack"] += 1
+                                if operation == "delete":
+                                    status["delete_without_guard_ack"] += 1
+                                age_seconds = (
+                                    event_age_seconds
+                                    if event_age_seconds is not None
+                                    else max(0.0, time.time() - float(file_mtime))
+                                )
+                                current_latest = status.get("latest_violation_age_seconds")
+                                if current_latest is None or age_seconds < float(current_latest):
+                                    status["latest_violation_age_seconds"] = round(age_seconds, 1)
+                                session_samples.append(
+                                    {
+                                        "kind": f"{operation}_without_guard_ack",
+                                        "file": touched,
+                                        "tool": name,
+                                    }
+                                )
+        except Exception:
+            continue
+
+        if session_touches:
+            status["conditioned_sessions"] += 1
+            for sample in session_samples[:3]:
+                if len(status["samples"]) >= 6:
+                    break
+                status["samples"].append({"session_file": str(path), **sample})
+
+    return status
+
+
+def _open_protocol_debt_summary(*debt_types: str) -> dict:
+    db_path = NEXO_HOME / "data" / "nexo.db"
+    summary = {"available": False, "open_total": 0, "counts": {}}
+    if not db_path.is_file() or not debt_types:
+        return summary
+
+    try:
+        conn = sqlite3.connect(str(db_path), timeout=2)
+        conn.row_factory = sqlite3.Row
+        table = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='protocol_debt'"
+        ).fetchone()
+        if not table:
+            conn.close()
+            return summary
+        placeholders = ",".join("?" for _ in debt_types)
+        rows = conn.execute(
+            f"""SELECT debt_type, COUNT(*) AS total
+                FROM protocol_debt
+                WHERE status = 'open' AND debt_type IN ({placeholders})
+                GROUP BY debt_type""",
+            tuple(debt_types),
+        ).fetchall()
+        conn.close()
+    except Exception:
+        return summary
+
+    counts = {str(row["debt_type"]): int(row["total"] or 0) for row in rows}
+    summary["available"] = True
+    summary["counts"] = counts
+    summary["open_total"] = sum(counts.values())
+    return summary
+
+
 def _client_assumption_regressions() -> list[str]:
-    src_root = NEXO_CODE / "src"
+    src_root = NEXO_CODE if (NEXO_CODE / "server.py").is_file() else (NEXO_CODE / "src")
     if not src_root.is_dir():
         return []
+    backup_root = (NEXO_HOME / "backups").resolve()
+    contrib_root = (NEXO_HOME / "contrib").resolve()
     allowed_claude_projects = {
         (src_root / "scripts" / "deep-sleep" / "collect.py").resolve(),
         Path(__file__).resolve(),
@@ -202,6 +634,16 @@ def _client_assumption_regressions() -> list[str]:
         except Exception:
             continue
         resolved = path.resolve()
+        try:
+            if resolved.is_relative_to(backup_root):
+                continue
+        except Exception:
+            pass
+        try:
+            if resolved.is_relative_to(contrib_root):
+                continue
+        except Exception:
+            pass
         if ".claude/projects" in text and resolved not in allowed_claude_projects:
             offenders.append(f"{path.relative_to(NEXO_CODE)} hardcodes ~/.claude/projects")
     collect_path = src_root / "scripts" / "deep-sleep" / "collect.py"
@@ -251,7 +693,7 @@ def _latest_periodic_summary(kind: str) -> dict | None:
 
 def _package_version() -> str:
     try:
-        payload = json.loads(PACKAGE_JSON.read_text())
+        payload = json.loads(_package_json_path().read_text())
     except Exception:
         return ""
     return str(payload.get("version", "") or "").strip()
@@ -259,7 +701,7 @@ def _package_version() -> str:
 
 def _top_changelog_version() -> str:
     try:
-        text = CHANGELOG_FILE.read_text(encoding="utf-8")
+        text = _changelog_path().read_text(encoding="utf-8")
     except Exception:
         return ""
     match = re.search(r"^## \[([^\]]+)\]", text, flags=re.MULTILINE)
@@ -281,15 +723,23 @@ def _count_checks(checks) -> int:
 
 
 def _parse_timestamp(value: str) -> dt.datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
     for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
         try:
-            return dt.datetime.strptime(value, fmt)
+            return dt.datetime.strptime(text, fmt)
         except ValueError:
             continue
     try:
-        return dt.datetime.fromisoformat(value)
+        parsed = dt.datetime.fromisoformat(text)
     except ValueError:
         return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=dt.UTC)
+    return parsed
 
 
 def _enabled_optionals() -> dict[str, bool]:
@@ -1073,6 +1523,11 @@ def check_personal_script_registry(fix: bool = False) -> DoctorCheck:
             f"({report.get('scripts', 0)} scripts, {report.get('schedules', 0)} schedules"
             f", {audit.get('healthy', report.get('schedules', 0))} managed)"
         )
+        keep_alive = int(audit.get("keep_alive", 0) or 0)
+        if keep_alive:
+            summary += (
+                f", keep_alive {int(audit.get('runtime_alive', 0) or 0)}/{keep_alive} alive"
+            )
         if fix:
             summary += " (fixed)"
         return DoctorCheck(
@@ -1404,6 +1859,136 @@ def check_codex_session_parity() -> DoctorCheck:
     )
 
 
+def check_codex_conditioned_file_discipline() -> DoctorCheck:
+    try:
+        schedule = _load_json(SCHEDULE_FILE) if SCHEDULE_FILE.is_file() else {}
+    except Exception:
+        schedule = {}
+    prefs = normalize_client_preferences(schedule)
+    wants_codex = bool(
+        prefs.get("interactive_clients", {}).get("codex")
+        or prefs.get("default_terminal_client") == "codex"
+        or (prefs.get("automation_enabled", True) and prefs.get("automation_backend") == "codex")
+    )
+    if not wants_codex:
+        return DoctorCheck(
+            id="runtime.codex_conditioned_files",
+            tier="runtime",
+            status="healthy",
+            severity="info",
+            summary="Codex conditioned-file discipline check skipped (Codex not selected)",
+        )
+
+    audit = _recent_codex_conditioned_file_discipline_status()
+    debt_summary = _open_protocol_debt_summary(
+        "codex_conditioned_read_without_protocol",
+        "codex_conditioned_write_without_protocol",
+        "codex_conditioned_write_without_guard_ack",
+        "codex_conditioned_delete_without_protocol",
+        "codex_conditioned_delete_without_guard_ack",
+    )
+    evidence = [
+        f"active conditioned file rules: {audit['conditioned_rules']}",
+        f"recent codex sessions inspected: {audit['files']}",
+    ]
+
+    if audit["conditioned_rules"] == 0:
+        return DoctorCheck(
+            id="runtime.codex_conditioned_files",
+            tier="runtime",
+            status="healthy",
+            severity="info",
+            summary="No active conditioned-file learnings defined for Codex session audits",
+            evidence=evidence,
+        )
+
+    if audit["files"] == 0 or audit["conditioned_sessions"] == 0:
+        return DoctorCheck(
+            id="runtime.codex_conditioned_files",
+            tier="runtime",
+            status="healthy",
+            severity="info",
+            summary="No conditioned-file touches seen in recent Codex sessions",
+            evidence=evidence + [f"conditioned touches: {audit['conditioned_touches']}"],
+        )
+
+    evidence.extend([
+        f"conditioned sessions: {audit['conditioned_sessions']}",
+        f"conditioned touches: {audit['conditioned_touches']}",
+        f"read touches without protocol/guard review: {audit['read_without_protocol']}",
+        f"write touches without protocol task: {audit['write_without_protocol']}",
+        f"write touches without guard acknowledgement: {audit['write_without_guard_ack']}",
+        f"delete touches without protocol task: {audit['delete_without_protocol']}",
+        f"delete touches without guard acknowledgement: {audit['delete_without_guard_ack']}",
+    ])
+    if audit.get("latest_violation_age_seconds") is not None:
+        age_hours = round(float(audit["latest_violation_age_seconds"]) / 3600, 2)
+        evidence.append(f"latest violation age hours: {age_hours}")
+    if debt_summary["available"]:
+        evidence.append(f"open conditioned protocol debt: {debt_summary['open_total']}")
+    for sample in audit["samples"][:5]:
+        evidence.append(f"{sample['kind']}: {sample['file']} via {sample['tool']}")
+
+    repair_plan: list[str] = []
+    if audit["read_without_protocol"]:
+        repair_plan.append("Run nexo_task_open or nexo_guard_check before reading conditioned files in Codex sessions")
+    if audit["write_without_protocol"]:
+        repair_plan.append("Open work with nexo_task_open before editing conditioned files from Codex")
+    if audit["write_without_guard_ack"]:
+        repair_plan.append("Acknowledge blocking guard rules before writing conditioned files from Codex")
+    if audit["delete_without_protocol"]:
+        repair_plan.append("Open work with nexo_task_open before deleting conditioned files from Codex")
+    if audit["delete_without_guard_ack"]:
+        repair_plan.append("Acknowledge blocking guard rules before deleting conditioned files from Codex")
+    if not repair_plan:
+        repair_plan.append("Keep using managed Codex bootstrap so conditioned-file discipline remains visible in transcripts")
+
+    historical_read_only = (
+        audit["read_without_protocol"] > 0
+        and audit["write_without_protocol"] == 0
+        and audit["write_without_guard_ack"] == 0
+        and audit["delete_without_protocol"] == 0
+        and audit["delete_without_guard_ack"] == 0
+        and debt_summary["available"]
+        and debt_summary["open_total"] == 0
+        and audit.get("latest_violation_age_seconds") is not None
+        and float(audit["latest_violation_age_seconds"]) >= 7200
+    )
+
+    if audit["write_without_protocol"] or audit["write_without_guard_ack"]:
+        status = "critical"
+        severity = "error"
+    elif historical_read_only:
+        status = "healthy"
+        severity = "info"
+    elif audit["read_without_protocol"]:
+        status = "degraded"
+        severity = "warn"
+    else:
+        status = "healthy"
+        severity = "info"
+
+    return DoctorCheck(
+        id="runtime.codex_conditioned_files",
+        tier="runtime",
+        status=status,
+        severity=severity,
+        summary=(
+            "Historical Codex conditioned-file drift has no open protocol debt"
+            if historical_read_only
+            else "Recent Codex sessions respect conditioned-file discipline"
+            if status == "healthy"
+            else "Recent Codex sessions are bypassing conditioned-file discipline"
+        ),
+        evidence=evidence,
+        repair_plan=repair_plan,
+        escalation_prompt=(
+            "Codex sessions are touching conditioned files without the expected protocol/guard sequence. "
+            "Until this is clean, parity with Claude hooks is still incomplete."
+        ) if status != "healthy" else "",
+    )
+
+
 def check_claude_desktop_shared_brain() -> DoctorCheck:
     try:
         schedule = _load_json(SCHEDULE_FILE) if SCHEDULE_FILE.is_file() else {}
@@ -1572,6 +2157,111 @@ def check_client_assumption_regressions() -> DoctorCheck:
 
 
 def check_protocol_compliance() -> DoctorCheck:
+    try:
+        import sqlite3
+
+        db_path = NEXO_HOME / "data" / "nexo.db"
+        if db_path.is_file():
+            conn = sqlite3.connect(str(db_path), timeout=2)
+            conn.row_factory = sqlite3.Row
+            tables = {
+                row["name"]
+                for row in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('protocol_tasks', 'protocol_debt')"
+                ).fetchall()
+            }
+            if {"protocol_tasks", "protocol_debt"}.issubset(tables):
+                window = "-7 days"
+                tasks = conn.execute(
+                    """SELECT * FROM protocol_tasks
+                       WHERE opened_at >= datetime('now', ?)
+                       ORDER BY opened_at DESC""",
+                    (window,),
+                ).fetchall()
+                debt_rows = conn.execute(
+                    """SELECT severity, debt_type, COUNT(*) AS total
+                       FROM protocol_debt
+                       WHERE status = 'open' AND created_at >= datetime('now', ?)
+                       GROUP BY severity, debt_type
+                       ORDER BY total DESC, debt_type ASC""",
+                    (window,),
+                ).fetchall()
+                conn.close()
+
+                if tasks or debt_rows:
+                    closed_tasks = [row for row in tasks if row["status"] != "open"]
+                    verify_required = [row for row in closed_tasks if row["must_verify"] and row["status"] == "done"]
+                    verify_ok = [row for row in verify_required if (row["close_evidence"] or "").strip()]
+                    change_required = [row for row in closed_tasks if row["must_change_log"]]
+                    change_ok = [row for row in change_required if row["change_log_id"]]
+                    learning_required = [row for row in closed_tasks if row["correction_happened"]]
+                    learning_ok = [row for row in learning_required if row["learning_id"]]
+                    action_tasks = [row for row in tasks if row["task_type"] in ("edit", "execute", "delegate")]
+                    cortex_ok = [row for row in action_tasks if row["cortex_mode"] == "act"]
+
+                    score_parts = []
+                    if verify_required:
+                        score_parts.append((len(verify_ok) / len(verify_required)) * 100)
+                    if change_required:
+                        score_parts.append((len(change_ok) / len(change_required)) * 100)
+                    if learning_required:
+                        score_parts.append((len(learning_ok) / len(learning_required)) * 100)
+                    if action_tasks:
+                        score_parts.append((len(cortex_ok) / len(action_tasks)) * 100)
+
+                    base_score = (sum(score_parts) / len(score_parts)) if score_parts else (100.0 if tasks else 0.0)
+                    warn_debt = sum(row["total"] for row in debt_rows if row["severity"] == "warn")
+                    error_debt = sum(row["total"] for row in debt_rows if row["severity"] == "error")
+                    overall = max(0.0, round(base_score - min(60, (warn_debt * 5) + (error_debt * 20)), 1))
+
+                    evidence = [f"live protocol window: 7d", f"protocol tasks: {len(tasks)} total / {len(closed_tasks)} closed"]
+                    evidence.append(f"overall live protocol compliance: {overall:.1f}%")
+                    if verify_required:
+                        evidence.append(f"verified closures: {len(verify_ok)}/{len(verify_required)}")
+                    if change_required:
+                        evidence.append(f"change_log coverage: {len(change_ok)}/{len(change_required)}")
+                    if learning_required:
+                        evidence.append(f"learning-after-correction: {len(learning_ok)}/{len(learning_required)}")
+                    if action_tasks:
+                        evidence.append(f"action tasks Cortex-cleared: {len(cortex_ok)}/{len(action_tasks)}")
+                    for row in debt_rows[:5]:
+                        evidence.append(f"open {row['severity']} debt — {row['debt_type']}: {row['total']}")
+
+                    repair_plan: list[str] = []
+                    if verify_required and len(verify_ok) != len(verify_required):
+                        repair_plan.append("Close tasks with nexo_task_close evidence before claiming completion")
+                    if change_required and len(change_ok) != len(change_required):
+                        repair_plan.append("Use nexo_task_close or nexo_change_log for edit/execute tasks")
+                    if learning_required and len(learning_ok) != len(learning_required):
+                        repair_plan.append("Capture reusable learnings whenever a correction happened")
+                    if error_debt or warn_debt:
+                        repair_plan.append("Resolve open protocol debt before treating the runtime as healthy")
+
+                    if error_debt > 0 or overall < 45:
+                        status = "critical"
+                        severity = "error"
+                    elif warn_debt > 0 or overall < 70:
+                        status = "degraded"
+                        severity = "warn"
+                    else:
+                        status = "healthy"
+                        severity = "info"
+
+                    return DoctorCheck(
+                        id="runtime.protocol_compliance",
+                        tier="runtime",
+                        status=status,
+                        severity=severity,
+                        summary="Live protocol compliance looks healthy" if status == "healthy" else "Live protocol compliance needs hardening",
+                        evidence=evidence,
+                        repair_plan=repair_plan,
+                        escalation_prompt=(
+                            "Task discipline is drifting in live runtime data. NEXO is still skipping verification, change logging, or correction capture."
+                        ) if status != "healthy" else "",
+                    )
+    except Exception:
+        pass
+
     summary = _latest_periodic_summary("weekly")
     if not summary:
         return DoctorCheck(
@@ -1665,7 +2355,8 @@ def check_release_artifact_sync() -> DoctorCheck:
         evidence.append("package/changelog release version mismatch")
         repair_plan.append("Bump or align CHANGELOG.md before publishing")
 
-    sync_script = NEXO_CODE / "scripts" / "sync_release_artifacts.py"
+    release_root = _release_root()
+    sync_script = release_root / "scripts" / "sync_release_artifacts.py"
     if not sync_script.is_file():
         status = "critical"
         severity = "error"
@@ -1675,7 +2366,7 @@ def check_release_artifact_sync() -> DoctorCheck:
         try:
             result = subprocess.run(
                 [sys.executable, str(sync_script), "--check"],
-                cwd=str(NEXO_CODE),
+                cwd=str(release_root),
                 capture_output=True,
                 text=True,
             )
@@ -1708,6 +2399,223 @@ def check_release_artifact_sync() -> DoctorCheck:
     )
 
 
+def check_state_watchers() -> DoctorCheck:
+    db_path = NEXO_HOME / "data" / "nexo.db"
+    summary_path = NEXO_HOME / "operations" / "state-watchers-status.json"
+    active_watchers = 0
+    if db_path.is_file():
+        try:
+            conn = sqlite3.connect(str(db_path))
+            row = conn.execute(
+                "SELECT COUNT(*) FROM state_watchers WHERE status = 'active'"
+            ).fetchone()
+            conn.close()
+            active_watchers = int(row[0] or 0) if row else 0
+        except Exception:
+            active_watchers = 0
+
+    if active_watchers == 0:
+        return DoctorCheck(
+            id="runtime.state_watchers",
+            tier="runtime",
+            status="healthy",
+            severity="info",
+            summary="No active state watchers configured",
+            evidence=[],
+            repair_plan=[],
+            escalation_prompt="",
+        )
+
+    if not summary_path.is_file():
+        return DoctorCheck(
+            id="runtime.state_watchers",
+            tier="runtime",
+            status="degraded",
+            severity="warn",
+            summary="State watchers configured but no fresh summary exists",
+            evidence=[f"active_watchers={active_watchers}", str(summary_path)],
+            repair_plan=["Run nexo_state_watcher_run or wait for daily self-audit to refresh watcher status"],
+            escalation_prompt="State watchers exist but their health summary is missing, so drift and expiry signals may be going dark.",
+        )
+
+    try:
+        payload = json.loads(summary_path.read_text())
+    except Exception as exc:
+        return DoctorCheck(
+            id="runtime.state_watchers",
+            tier="runtime",
+            status="degraded",
+            severity="warn",
+            summary="State watchers summary is unreadable",
+            evidence=[str(exc)],
+            repair_plan=["Re-run nexo_state_watcher_run to regenerate operations/state-watchers-status.json"],
+            escalation_prompt="State watcher health cannot be trusted until the summary is readable again.",
+        )
+
+    generated_at = payload.get("generated_at")
+    evidence = [f"active_watchers={active_watchers}", f"generated_at={generated_at or 'missing'}"]
+    counts = payload.get("counts") or {}
+    if counts:
+        evidence.append(
+            "counts="
+            + ",".join(f"{key}:{int(value)}" for key, value in sorted(counts.items()))
+        )
+
+    status = "healthy"
+    severity = "info"
+    repair_plan: list[str] = []
+    generated_dt = None
+    if generated_at:
+        try:
+            generated_dt = dt.datetime.fromisoformat(str(generated_at).replace("Z", "+00:00"))
+        except Exception:
+            generated_dt = None
+    if not generated_dt or (dt.datetime.now(dt.UTC) - generated_dt).total_seconds() > 36 * 3600:
+        status = "degraded"
+        severity = "warn"
+        repair_plan.append("Refresh state watchers daily so repo/API/expiry drift stays explicit")
+
+    if int(counts.get("critical") or 0) > 0:
+        status = "critical"
+        severity = "error"
+        repair_plan.append("Resolve the critical state watchers immediately")
+    elif int(counts.get("degraded") or 0) > 0 and status == "healthy":
+        status = "degraded"
+        severity = "warn"
+        repair_plan.append("Resolve degraded state watchers before they become hard failures")
+
+    return DoctorCheck(
+        id="runtime.state_watchers",
+        tier="runtime",
+        status=status,
+        severity=severity,
+        summary="State watchers look healthy" if status == "healthy" else "State watchers need attention",
+        evidence=evidence,
+        repair_plan=repair_plan,
+        escalation_prompt=(
+            "State watchers detected live drift or expiry risk across repo/cron/API/environment surfaces."
+        ) if status != "healthy" else "",
+    )
+
+
+def check_automation_telemetry(days: int = 7) -> DoctorCheck:
+    db_path = NEXO_HOME / "data" / "nexo.db"
+    if not db_path.is_file():
+        return DoctorCheck(
+            id="runtime.automation_telemetry",
+            tier="runtime",
+            status="degraded",
+            severity="warn",
+            summary="Automation telemetry DB is missing",
+            evidence=[str(db_path)],
+            repair_plan=["Run NEXO once so migrations create the shared runtime DB"],
+            escalation_prompt="Cost and parity telemetry cannot be trusted until the runtime DB exists.",
+        )
+
+    try:
+        conn = sqlite3.connect(str(db_path), timeout=2)
+        conn.row_factory = sqlite3.Row
+        table = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='automation_runs'"
+        ).fetchone()
+        if not table:
+            conn.close()
+            return DoctorCheck(
+                id="runtime.automation_telemetry",
+                tier="runtime",
+                status="degraded",
+                severity="warn",
+                summary="Automation telemetry schema is missing",
+                evidence=["table automation_runs not found"],
+                repair_plan=["Run NEXO migrations before trusting automation cost/parity metrics"],
+                escalation_prompt="Shared automation runs are happening without the telemetry table that release metrics depend on.",
+            )
+
+        row = conn.execute(
+            """
+            SELECT
+                COUNT(*) AS runs,
+                SUM(CASE WHEN (input_tokens + cached_input_tokens + output_tokens) > 0 THEN 1 ELSE 0 END) AS usage_runs,
+                SUM(CASE WHEN total_cost_usd IS NOT NULL THEN 1 ELSE 0 END) AS cost_runs,
+                SUM(CASE WHEN cost_source = 'pricing_unavailable' THEN 1 ELSE 0 END) AS pricing_gaps,
+                GROUP_CONCAT(DISTINCT backend) AS backends
+            FROM automation_runs
+            WHERE created_at >= datetime('now', ?)
+            """,
+            (f"-{days} days",),
+        ).fetchone()
+        conn.close()
+    except Exception as exc:
+        return DoctorCheck(
+            id="runtime.automation_telemetry",
+            tier="runtime",
+            status="degraded",
+            severity="warn",
+            summary="Automation telemetry is unreadable",
+            evidence=[str(exc)],
+            repair_plan=["Inspect the runtime DB and restore the automation_runs table"],
+            escalation_prompt="Automation cost and parity metrics are unreadable, so release numbers may be lying by omission.",
+        )
+
+    total_runs = int((row["runs"] if row else 0) or 0)
+    if total_runs == 0:
+        return DoctorCheck(
+            id="runtime.automation_telemetry",
+            tier="runtime",
+            status="healthy",
+            severity="info",
+            summary="No recent automation runs to score",
+            evidence=[f"window={days}d", "runs=0"],
+            repair_plan=[],
+            escalation_prompt="",
+        )
+
+    usage_runs = int((row["usage_runs"] if row else 0) or 0)
+    cost_runs = int((row["cost_runs"] if row else 0) or 0)
+    pricing_gaps = int((row["pricing_gaps"] if row else 0) or 0)
+    usage_coverage = round((usage_runs / total_runs) * 100, 1)
+    cost_coverage = round((cost_runs / total_runs) * 100, 1)
+    evidence = [
+        f"window={days}d",
+        f"runs={total_runs}",
+        f"usage_coverage={usage_coverage}%",
+        f"cost_coverage={cost_coverage}%",
+        f"pricing_gaps={pricing_gaps}",
+    ]
+    backends = str((row["backends"] if row else "") or "").strip()
+    if backends:
+        evidence.append(f"backends={backends}")
+
+    status = "healthy"
+    severity = "info"
+    repair_plan: list[str] = []
+    if usage_coverage < 100.0:
+        status = "degraded"
+        severity = "warn"
+        repair_plan.append("Restore backend usage parsing so automation runs always emit token telemetry")
+    if cost_coverage < 90.0:
+        status = "critical" if total_runs >= 3 else "degraded"
+        severity = "error" if status == "critical" else "warn"
+        repair_plan.append("Restore explicit backend cost or pricing coverage before trusting cost-per-task metrics")
+    if pricing_gaps:
+        status = "critical" if status != "critical" and total_runs >= 3 else status
+        severity = "error" if status == "critical" else severity
+        repair_plan.append("Add pricing coverage for new automation models or switch to backend-reported cost")
+
+    return DoctorCheck(
+        id="runtime.automation_telemetry",
+        tier="runtime",
+        status=status,
+        severity=severity,
+        summary="Automation telemetry looks healthy" if status == "healthy" else "Automation telemetry needs attention",
+        evidence=evidence,
+        repair_plan=repair_plan,
+        escalation_prompt=(
+            "Shared automation is running without enough telemetry coverage to defend parity/cost claims."
+        ) if status != "healthy" else "",
+    )
+
+
 def run_runtime_checks(fix: bool = False) -> list[DoctorCheck]:
     """Run all runtime-tier checks. Read-only by default."""
     return [
@@ -1718,10 +2626,13 @@ def run_runtime_checks(fix: bool = False) -> list[DoctorCheck]:
         check_client_backend_preferences(),
         check_client_bootstrap_parity(fix=fix),
         check_codex_session_parity(),
+        check_codex_conditioned_file_discipline(),
         check_claude_desktop_shared_brain(),
         check_transcript_source_parity(),
         check_client_assumption_regressions(),
         check_protocol_compliance(),
+        check_automation_telemetry(),
+        check_state_watchers(),
         check_release_artifact_sync(),
         check_launchagent_integrity(fix=fix),
         check_personal_script_registry(fix=fix),

@@ -18,6 +18,7 @@ from db import (
     approve_skill,
     collect_skill_improvement_candidates,
     collect_scriptable_skill_candidates,
+    create_skill,
     get_featured_skills,
     get_skill,
     get_skill_execution_spec,
@@ -32,6 +33,7 @@ from script_registry import doctor_script
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parent)))
+VALID_LEVELS = {"trace", "draft", "published", "stable", "archived"}
 
 
 def _parse_params(params) -> dict:
@@ -158,6 +160,155 @@ def get_featured_skill_summaries(limit: int = 5) -> list[dict]:
             }
         )
     return featured
+
+
+def _skill_json_list(skill: dict, key: str) -> list:
+    try:
+        value = json.loads(skill.get(key, "[]"))
+    except json.JSONDecodeError:
+        value = []
+    return value if isinstance(value, list) else []
+
+
+def test_skill(skill_id: str, params=None, mode: str = "auto", context: str = "") -> dict:
+    result = apply_skill(skill_id, params=params, mode=mode, dry_run=True, context=context or "skill_test")
+    result["tested"] = True
+    result["test_kind"] = "dry_run"
+    return result
+
+
+def promote_skill(skill_id: str, target_level: str = "published", reason: str = "") -> dict:
+    _ensure_ready()
+    sync_skill_directories()
+    skill = get_skill(skill_id)
+    if not skill:
+        return {"ok": False, "error": f"Skill {skill_id} not found"}
+    clean_target = str(target_level or "published").strip().lower()
+    if clean_target not in VALID_LEVELS:
+        return {"ok": False, "error": f"Unsupported target_level: {target_level}"}
+    if clean_target == "archived":
+        return {"ok": False, "error": "Use retire_skill to archive skills explicitly"}
+    updated = update_skill(skill_id, level=clean_target)
+    if "error" in updated:
+        return {"ok": False, "error": updated["error"]}
+    return {
+        "ok": True,
+        "skill_id": skill_id,
+        "previous_level": skill.get("level", ""),
+        "level": updated.get("level", clean_target),
+        "reason": str(reason or "").strip(),
+    }
+
+
+def retire_skill(skill_id: str, replacement_id: str = "", reason: str = "") -> dict:
+    _ensure_ready()
+    sync_skill_directories()
+    skill = get_skill(skill_id)
+    if not skill:
+        return {"ok": False, "error": f"Skill {skill_id} not found"}
+    replacement = None
+    clean_replacement = str(replacement_id or "").strip()
+    if clean_replacement:
+        replacement = get_skill(clean_replacement)
+        if not replacement:
+            return {"ok": False, "error": f"Replacement skill {clean_replacement} not found"}
+    updated = update_skill(skill_id, level="archived")
+    if "error" in updated:
+        return {"ok": False, "error": updated["error"]}
+    return {
+        "ok": True,
+        "skill_id": skill_id,
+        "level": updated.get("level", "archived"),
+        "replacement_id": clean_replacement,
+        "reason": str(reason or "").strip(),
+    }
+
+
+def compose_skills(
+    *,
+    new_skill_id: str,
+    name: str,
+    component_ids: list[str],
+    description: str = "",
+    level: str = "draft",
+    mode: str = "guide",
+    tags: list[str] | None = None,
+    trigger_patterns: list[str] | None = None,
+) -> dict:
+    _ensure_ready()
+    sync_skill_directories()
+    if get_skill(new_skill_id):
+        return {"ok": False, "error": f"Skill {new_skill_id} already exists"}
+    components = []
+    for skill_id in component_ids:
+        skill = get_skill(skill_id)
+        if not skill:
+            return {"ok": False, "error": f"Component skill {skill_id} not found"}
+        components.append(skill)
+    if not components:
+        return {"ok": False, "error": "At least one component skill is required"}
+
+    merged_steps: list[str] = []
+    merged_gotchas: list[str] = []
+    merged_tags = set(tags or [])
+    merged_triggers = set(trigger_patterns or [])
+    linked_learnings = set()
+    source_sessions = set()
+    content_lines = [f"# {name}", "", description or "Composite skill built from existing NEXO skills.", "", "## Components"]
+    for skill in components:
+        content_lines.append(f"- {skill['id']}: {skill['name']}")
+        for step in _skill_json_list(skill, "steps"):
+            if step and step not in merged_steps:
+                merged_steps.append(step)
+        for gotcha in _skill_json_list(skill, "gotchas"):
+            if gotcha and gotcha not in merged_gotchas:
+                merged_gotchas.append(gotcha)
+        for trigger in _skill_json_list(skill, "trigger_patterns"):
+            if trigger:
+                merged_triggers.add(trigger)
+        for tag in _skill_json_list(skill, "tags"):
+            if tag:
+                merged_tags.add(tag)
+        for item in _skill_json_list(skill, "linked_learnings"):
+            if item:
+                linked_learnings.add(item)
+        for item in _skill_json_list(skill, "source_sessions"):
+            if item:
+                source_sessions.add(item)
+
+    if merged_steps:
+        content_lines.extend(["", "## Steps"])
+        for index, step in enumerate(merged_steps, 1):
+            content_lines.append(f"{index}. {step}")
+    if merged_gotchas:
+        content_lines.extend(["", "## Gotchas"])
+        for gotcha in merged_gotchas:
+            content_lines.append(f"- {gotcha}")
+
+    created = create_skill(
+        skill_id=new_skill_id,
+        name=name,
+        description=description or f"Composite skill built from {', '.join(component_ids)}",
+        level=level,
+        tags=sorted(merged_tags),
+        trigger_patterns=sorted(merged_triggers),
+        source_sessions=sorted(source_sessions),
+        linked_learnings=sorted(linked_learnings),
+        steps=merged_steps,
+        gotchas=merged_gotchas,
+        content="\n".join(content_lines).strip() + "\n",
+        mode=mode,
+        source_kind="personal",
+    )
+    if "error" in created:
+        return {"ok": False, "error": created["error"]}
+    return {
+        "ok": True,
+        "skill_id": new_skill_id,
+        "component_ids": component_ids,
+        "level": created.get("level", level),
+        "mode": created.get("mode", mode),
+    }
 
 
 def apply_skill(skill_id: str, params=None, mode: str = "auto", dry_run: bool = False, context: str = "") -> dict:

@@ -30,6 +30,12 @@ AUTOMATION_BACKEND_KEYS = (
     CLIENT_CLAUDE_CODE,
     CLIENT_CODEX,
 )
+AUTOMATION_TASK_PROFILE_KEYS = (
+    "default",
+    "fast",
+    "balanced",
+    "deep",
+)
 INSTALL_PREFERENCE_KEYS = {
     "ask",
     "auto",
@@ -40,6 +46,10 @@ DEFAULT_CLAUDE_CODE_MODEL = "claude-opus-4-6[1m]"
 DEFAULT_CLAUDE_CODE_REASONING_EFFORT = ""
 DEFAULT_CODEX_MODEL = "gpt-5.4"
 DEFAULT_CODEX_REASONING_EFFORT = "xhigh"
+DEFAULT_FAST_MODEL = "gpt-5.4-mini"
+DEFAULT_FAST_REASONING_EFFORT = "medium"
+
+
 def _user_home() -> Path:
     return Path(os.environ.get("HOME", str(Path.home()))).expanduser()
 
@@ -77,6 +87,7 @@ def default_client_preferences() -> dict:
         "automation_enabled": True,
         "automation_backend": CLIENT_CLAUDE_CODE,
         "client_runtime_profiles": default_client_runtime_profiles(),
+        "automation_task_profiles": default_automation_task_profiles(),
         "client_install_preferences": {
             CLIENT_CLAUDE_CODE: "ask",
             CLIENT_CODEX: "ask",
@@ -237,6 +248,31 @@ def default_client_runtime_profiles() -> dict[str, dict[str, str]]:
     }
 
 
+def default_automation_task_profiles() -> dict[str, dict[str, str]]:
+    return {
+        "default": {
+            "backend": "",
+            "model": "",
+            "reasoning_effort": "",
+        },
+        "fast": {
+            "backend": CLIENT_CODEX,
+            "model": DEFAULT_FAST_MODEL,
+            "reasoning_effort": DEFAULT_FAST_REASONING_EFFORT,
+        },
+        "balanced": {
+            "backend": "",
+            "model": "",
+            "reasoning_effort": "",
+        },
+        "deep": {
+            "backend": CLIENT_CLAUDE_CODE,
+            "model": DEFAULT_CLAUDE_CODE_MODEL,
+            "reasoning_effort": DEFAULT_CLAUDE_CODE_REASONING_EFFORT,
+        },
+    }
+
+
 def _normalize_runtime_model(value, *, default: str) -> str:
     candidate = str(value or "").strip()
     return candidate or default
@@ -272,6 +308,31 @@ def normalize_client_runtime_profiles(value) -> dict[str, dict[str, str]]:
         normalized[client_key] = {
             "model": _normalize_runtime_model(raw_profile, default=defaults[client_key]["model"]),
             "reasoning_effort": defaults[client_key]["reasoning_effort"],
+        }
+    return normalized
+
+
+def normalize_automation_task_profiles(value) -> dict[str, dict[str, str]]:
+    defaults = default_automation_task_profiles()
+    normalized = {key: dict(profile) for key, profile in defaults.items()}
+    if not isinstance(value, dict):
+        return normalized
+
+    for raw_profile, raw_value in value.items():
+        profile_key = str(raw_profile or "").strip().lower()
+        if profile_key not in AUTOMATION_TASK_PROFILE_KEYS:
+            continue
+        if not isinstance(raw_value, dict):
+            continue
+        backend = normalize_backend_key(raw_value.get("backend"))
+        if backend == BACKEND_NONE:
+            backend = ""
+        normalized[profile_key] = {
+            "backend": backend or defaults[profile_key]["backend"],
+            "model": str(raw_value.get("model") or defaults[profile_key]["model"]).strip(),
+            "reasoning_effort": str(
+                raw_value.get("reasoning_effort") or defaults[profile_key]["reasoning_effort"]
+            ).strip().lower(),
         }
     return normalized
 
@@ -312,6 +373,9 @@ def normalize_client_preferences(
         "automation_enabled": automation_enabled,
         "automation_backend": automation_backend,
         "client_runtime_profiles": runtime_profiles,
+        "automation_task_profiles": normalize_automation_task_profiles(
+            schedule.get("automation_task_profiles")
+        ),
         "client_install_preferences": install_preferences,
     }
 
@@ -325,6 +389,7 @@ def apply_client_preferences(
     automation_enabled=None,
     automation_backend: str | None = None,
     client_runtime_profiles: dict | None = None,
+    automation_task_profiles: dict | None = None,
     client_install_preferences: dict | None = None,
 ) -> dict:
     merged = dict(schedule or {})
@@ -352,6 +417,11 @@ def apply_client_preferences(
         if client_runtime_profiles is not None
         else current["client_runtime_profiles"]
     )
+    merged["automation_task_profiles"] = normalize_automation_task_profiles(
+        automation_task_profiles
+        if automation_task_profiles is not None
+        else current["automation_task_profiles"]
+    )
     merged["client_install_preferences"] = normalize_client_install_preferences(
         client_install_preferences
         if client_install_preferences is not None
@@ -372,6 +442,7 @@ def save_client_preferences(
     automation_enabled=None,
     automation_backend: str | None = None,
     client_runtime_profiles: dict | None = None,
+    automation_task_profiles: dict | None = None,
     client_install_preferences: dict | None = None,
 ) -> Path:
     schedule = apply_client_preferences(
@@ -382,6 +453,7 @@ def save_client_preferences(
         automation_enabled=automation_enabled,
         automation_backend=automation_backend,
         client_runtime_profiles=client_runtime_profiles,
+        automation_task_profiles=automation_task_profiles,
         client_install_preferences=client_install_preferences,
     )
     return save_schedule_config(schedule)
@@ -476,4 +548,26 @@ def resolve_client_runtime_profile(
             profile.get("reasoning_effort"),
             default=defaults[client_key]["reasoning_effort"],
         ),
+    }
+
+
+def resolve_automation_task_profile(
+    profile: str | None,
+    *,
+    preferences: dict | None = None,
+) -> dict[str, str]:
+    normalized = preferences or load_client_preferences()
+    defaults = default_automation_task_profiles()
+    profile_key = str(profile or "").strip().lower() or "default"
+    if profile_key not in AUTOMATION_TASK_PROFILE_KEYS:
+        profile_key = "default"
+    configured = normalize_automation_task_profiles(normalized.get("automation_task_profiles"))
+    selected = dict(configured.get(profile_key) or defaults[profile_key])
+    backend = selected.get("backend") or resolve_automation_backend(normalized)
+    runtime_profile = resolve_client_runtime_profile(backend, preferences=normalized)
+    return {
+        "name": profile_key,
+        "backend": backend,
+        "model": selected.get("model") or runtime_profile["model"],
+        "reasoning_effort": selected.get("reasoning_effort") or runtime_profile["reasoning_effort"],
     }

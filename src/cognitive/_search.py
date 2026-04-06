@@ -542,18 +542,17 @@ def create_trigger(pattern: str, action: str, context: str = "") -> int:
     return cur.lastrowid
 
 
-def check_triggers(text: str, use_semantic: bool = False, semantic_threshold: float = 0.7) -> list[dict]:
-    """Check text against all armed triggers. Fires matches.
+def _match_triggers(
+    text: str,
+    *,
+    use_semantic: bool = False,
+    semantic_threshold: float = 0.7,
+    fire: bool = False,
+) -> list[dict]:
+    """Match armed prospective triggers against text.
 
-    Uses keyword matching by default. If use_semantic=True, also checks
-    semantic similarity (Vestige TriggerPattern.matches pattern).
-
-    Args:
-        text: Input text to check
-        use_semantic: Also do embedding similarity matching
-        semantic_threshold: Min cosine similarity for semantic match
-    Returns:
-        List of fired triggers with actions
+    When ``fire`` is False, matches are previewed without mutating trigger state.
+    When ``fire`` is True, matching armed triggers transition to fired.
     """
     if not text or not text.strip():
         return []
@@ -571,7 +570,7 @@ def check_triggers(text: str, use_semantic: bool = False, semantic_threshold: fl
     if use_semantic:
         text_vec = embed(text)
 
-    fired = []
+    matched_triggers = []
     now = datetime.utcnow().isoformat()
 
     for trigger in armed:
@@ -594,11 +593,12 @@ def check_triggers(text: str, use_semantic: bool = False, semantic_threshold: fl
                 match_type = f"semantic({sim:.3f})"
 
         if matched:
-            db.execute(
-                "UPDATE prospective_triggers SET status = 'fired', fired_at = ? WHERE id = ?",
-                (now, trigger["id"])
-            )
-            fired.append({
+            if fire:
+                db.execute(
+                    "UPDATE prospective_triggers SET status = 'fired', fired_at = ? WHERE id = ?",
+                    (now, trigger["id"])
+                )
+            matched_triggers.append({
                 "id": trigger["id"],
                 "pattern": trigger["trigger_pattern"],
                 "action": trigger["action"],
@@ -607,10 +607,30 @@ def check_triggers(text: str, use_semantic: bool = False, semantic_threshold: fl
                 "created_at": trigger["created_at"],
             })
 
-    if fired:
+    if fire and matched_triggers:
         db.commit()
 
-    return fired
+    return matched_triggers
+
+
+def preview_triggers(text: str, use_semantic: bool = False, semantic_threshold: float = 0.7) -> list[dict]:
+    """Preview trigger matches without consuming or firing them."""
+    return _match_triggers(
+        text,
+        use_semantic=use_semantic,
+        semantic_threshold=semantic_threshold,
+        fire=False,
+    )
+
+
+def check_triggers(text: str, use_semantic: bool = False, semantic_threshold: float = 0.7) -> list[dict]:
+    """Check text against all armed triggers and fire matching ones."""
+    return _match_triggers(
+        text,
+        use_semantic=use_semantic,
+        semantic_threshold=semantic_threshold,
+        fire=True,
+    )
 
 
 def list_triggers(status: str = "armed") -> list[dict]:

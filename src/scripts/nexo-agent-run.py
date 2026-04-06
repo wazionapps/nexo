@@ -29,6 +29,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--prompt", default="", help="Prompt text")
     parser.add_argument("--prompt-file", default="", help="Read prompt text from a file")
     parser.add_argument("--cwd", default="", help="Working directory for the backend")
+    parser.add_argument("--task-profile", default="", help="Automation task profile: default|fast|balanced|deep")
     parser.add_argument("--model", default="", help="Backend model hint")
     parser.add_argument("--reasoning-effort", default="", help="Backend reasoning effort/profile")
     parser.add_argument("--timeout", type=int, default=21600, help="Timeout in seconds")
@@ -51,6 +52,7 @@ def main(argv: list[str] | None = None) -> int:
         result = run_automation_prompt(
             prompt,
             cwd=args.cwd or None,
+            task_profile=args.task_profile,
             model=args.model,
             reasoning_effort=args.reasoning_effort,
             timeout=args.timeout,

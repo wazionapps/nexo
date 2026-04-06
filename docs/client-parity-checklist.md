@@ -27,7 +27,11 @@ These should be covered by tests, `nexo doctor`, or CI. If one of these is not a
 - [ ] Codex managed config still syncs model/reasoning defaults
 - [ ] Codex managed config still persists `mcp_servers.nexo`
 - [ ] Claude Desktop shared-brain metadata still syncs correctly
+- [ ] Managed Claude/Codex bootstraps still instruct long multi-step work to use the durable workflow runtime
 - [ ] Runtime doctor still audits recent Codex sessions for startup discipline
+- [ ] Runtime doctor still audits recent Codex sessions for conditioned-file discipline
+- [ ] Shared automation runner still records backend telemetry across Claude Code and Codex
+- [ ] Runtime doctor still audits automation telemetry coverage before release metrics are trusted
 - [ ] Runtime doctor still audits Claude Desktop shared-brain state
 - [ ] Runtime doctor still checks weekly protocol compliance summaries
 - [ ] Runtime doctor still detects release artifact drift before publish
@@ -46,6 +50,8 @@ Run this before a release whenever the touched area includes clients, startup, b
 - [ ] `nexo doctor --tier runtime`
 - [ ] Open a recent Codex session and verify it starts as NEXO
 - [ ] Verify Codex still has bootstrap + managed config + `mcp_servers.nexo`
+- [ ] Verify managed Claude/Codex bootstrap still mentions workflow runtime for long multi-step work
+- [ ] Verify at least one recent automation run has usage/cost telemetry in `automation_runs`
 - [ ] Verify Claude Desktop still points at the same shared brain
 - [ ] Confirm Deep Sleep still sees both transcript families
 - [ ] Confirm public capability matrix still matches reality
@@ -71,7 +77,7 @@ These are not “forgotten tasks”. NEXO already compensates as far as it reaso
 
 - [ ] Native hook parity with Claude Code
   - Claude Code still exposes hook surfaces that Codex does not expose the same way
-  - NEXO compensates with bootstrap, managed config, startup discipline, and doctor audits
+  - NEXO compensates with bootstrap, managed config, startup discipline, shared automation runner telemetry, and doctor audits
 - [ ] Claude Desktop deeper operational parity
   - shared-brain parity exists and is explicitly managed/audited
   - full terminal / automation / hook parity is outside the current Claude Desktop surface

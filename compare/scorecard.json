@@ -1,0 +1,141 @@
+{
+  "generated_at": "2026-04-06T14:42:36.783346+00:00",
+  "product_story": "NEXO is the local cognitive runtime that makes the model around your model smarter.",
+  "benchmarks": {
+    "locomo_rag": {
+      "available": true,
+      "benchmark": "LoCoMo (Snap Research, ACL 2024)",
+      "samples": 10,
+      "total_qa": 1986,
+      "overall_f1": 0.5875,
+      "overall_recall": 0.7487,
+      "open_domain_f1": 0.6366,
+      "multi_hop_f1": 0.3329,
+      "temporal_f1": 0.3258,
+      "adversarial_f1": 0.9327
+    },
+    "ablation_suite": {
+      "benchmark": "Combined external + NEXO ablation baselines",
+      "date": "2026-04-06",
+      "available": true,
+      "notes": [
+        "External baselines come from the public LoCoMo benchmark discussion referenced by the README badge.",
+        "Internal ablations come from NEXO's checked-in LoCoMo result artifacts.",
+        "Runtime guardrail coverage is measured separately in longitudinal local telemetry, not folded into LoCoMo F1."
+      ],
+      "modes": [
+        {
+          "id": "raw_model_gpt4_128k",
+          "label": "Raw model baseline (GPT-4 128K full context)",
+          "overall_f1": 0.379,
+          "source": "https://github.com/snap-research/locomo/issues/33"
+        },
+        {
+          "id": "gemini_pro_1_0",
+          "label": "Gemini Pro 1.0 baseline",
+          "overall_f1": 0.313,
+          "source": "https://github.com/snap-research/locomo/issues/33"
+        },
+        {
+          "id": "gpt35_contriever_rag",
+          "label": "Retrieval baseline (GPT-3.5 + Contriever RAG)",
+          "overall_f1": 0.283,
+          "source": "https://github.com/snap-research/locomo/issues/33"
+        },
+        {
+          "id": "nexo_memory_only",
+          "label": "NEXO memory-only mode (LoCoMo RAG)",
+          "overall_f1": 0.5875,
+          "source": "benchmarks/locomo/results/locomo_nexo_summary.json"
+        },
+        {
+          "id": "nexo_cognitive_cycle",
+          "label": "NEXO cognitive-cycle mode",
+          "overall_f1": 0.2931,
+          "source": "benchmarks/locomo/results/locomo_nexo_cognitive_metrics.json"
+        }
+      ]
+    }
+  },
+  "client_parity": {
+    "audit_script": "scripts/verify_client_parity.py",
+    "checklist": "docs/client-parity-checklist.md",
+    "runtime_guardrails": [
+      "managed bootstrap for Claude Code + Codex",
+      "transcript-aware Deep Sleep parity",
+      "runtime doctor parity audits"
+    ]
+  },
+  "longitudinal": [
+    {
+      "days": 30,
+      "available": true,
+      "closed_tasks": 1,
+      "task_success_rate_pct": 100.0,
+      "avg_time_to_close_minutes": 0.0,
+      "recovery_after_failure_pct": null,
+      "open_protocol_debt": 0,
+      "unnecessary_tool_call_rate_pct": 3.7,
+      "unnecessary_tool_call_detail": {
+        "candidate_calls": 49400,
+        "probable_duplicate_calls": 1823
+      },
+      "automation_runs": 2,
+      "cost_telemetry_coverage_pct": 100.0,
+      "cost_per_solved_task": 0.143791,
+      "notes": [
+        "unnecessary_tool_call_rate_pct is a conservative heuristic: duplicate successful non-housekeeping tool calls with identical input inside 5-minute bursts"
+      ]
+    },
+    {
+      "days": 60,
+      "available": true,
+      "closed_tasks": 1,
+      "task_success_rate_pct": 100.0,
+      "avg_time_to_close_minutes": 0.0,
+      "recovery_after_failure_pct": null,
+      "open_protocol_debt": 0,
+      "unnecessary_tool_call_rate_pct": 3.7,
+      "unnecessary_tool_call_detail": {
+        "candidate_calls": 49400,
+        "probable_duplicate_calls": 1823
+      },
+      "automation_runs": 2,
+      "cost_telemetry_coverage_pct": 100.0,
+      "cost_per_solved_task": 0.143791,
+      "notes": [
+        "unnecessary_tool_call_rate_pct is a conservative heuristic: duplicate successful non-housekeeping tool calls with identical input inside 5-minute bursts"
+      ]
+    },
+    {
+      "days": 90,
+      "available": true,
+      "closed_tasks": 1,
+      "task_success_rate_pct": 100.0,
+      "avg_time_to_close_minutes": 0.0,
+      "recovery_after_failure_pct": null,
+      "open_protocol_debt": 0,
+      "unnecessary_tool_call_rate_pct": 3.7,
+      "unnecessary_tool_call_detail": {
+        "candidate_calls": 49400,
+        "probable_duplicate_calls": 1823
+      },
+      "automation_runs": 2,
+      "cost_telemetry_coverage_pct": 100.0,
+      "cost_per_solved_task": 0.143791,
+      "notes": [
+        "unnecessary_tool_call_rate_pct is a conservative heuristic: duplicate successful non-housekeeping tool calls with identical input inside 5-minute bursts"
+      ]
+    }
+  ],
+  "public_api": {
+    "mcp_wrappers": [
+      "nexo_remember",
+      "nexo_memory_recall",
+      "nexo_consolidate",
+      "nexo_run_workflow"
+    ],
+    "python_sdk": "src/nexo_sdk.py",
+    "quickstart": "docs/quickstart-5-minutes.md"
+  }
+}

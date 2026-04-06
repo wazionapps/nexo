@@ -239,6 +239,60 @@ class TestSkillsRuntime:
         assert dry["ok"] is True
         assert dry["resolved_mode"] == "hybrid"
 
+    def test_skill_test_retire_promote_and_compose_cover_full_lifecycle(self, skills_env):
+        db, skills_runtime, _, _ = _reload_skill_stack()
+        db.init_db()
+
+        db.create_skill(
+            skill_id="SK-FIRST",
+            name="First Skill",
+            description="First component.",
+            level="draft",
+            content="# First Skill\n",
+            steps=["Open workflow"],
+            gotchas=["Check logs"],
+            trigger_patterns=["first flow"],
+            tags=["ops"],
+        )
+        db.create_skill(
+            skill_id="SK-SECOND",
+            name="Second Skill",
+            description="Second component.",
+            level="published",
+            content="# Second Skill\n",
+            steps=["Close workflow"],
+            trigger_patterns=["second flow"],
+            tags=["release"],
+        )
+
+        tested = skills_runtime.test_skill("SK-FIRST", mode="guide")
+        assert tested["ok"] is True
+        assert tested["tested"] is True
+        assert tested["test_kind"] == "dry_run"
+
+        promoted = skills_runtime.promote_skill("SK-FIRST", target_level="published", reason="Ready for broader use")
+        assert promoted["ok"] is True
+        assert promoted["level"] == "published"
+
+        composed = skills_runtime.compose_skills(
+            new_skill_id="SK-COMPOSED",
+            name="Composed Skill",
+            component_ids=["SK-FIRST", "SK-SECOND"],
+            description="Combined lifecycle",
+            mode="guide",
+            level="draft",
+        )
+        assert composed["ok"] is True
+        combo = db.get_skill("SK-COMPOSED")
+        assert combo is not None
+        assert "Open workflow" in combo["content"]
+        assert "Close workflow" in combo["content"]
+
+        retired = skills_runtime.retire_skill("SK-SECOND", replacement_id="SK-COMPOSED", reason="Superseded by composed skill")
+        assert retired["ok"] is True
+        archived = db.get_skill("SK-SECOND")
+        assert archived["level"] == "archived"
+
 
 class TestSkillsCli:
     def test_cli_sync_list_get_and_featured(self, skills_env):
@@ -312,3 +366,70 @@ class TestSkillsCli:
         approved_data = json.loads(approved.stdout)
         assert approved_data["approved_by"] == "Francisco"
         assert approved_data["approved_at"]
+
+    def test_cli_skill_lifecycle_commands(self, skills_env):
+        db, _, _, _ = _reload_skill_stack()
+        db.init_db()
+        db.create_skill(
+            skill_id="SK-CLI-A",
+            name="CLI A",
+            description="First CLI skill",
+            level="draft",
+            content="# CLI A\n",
+            steps=["Do A"],
+            trigger_patterns=["cli a"],
+        )
+        db.create_skill(
+            skill_id="SK-CLI-B",
+            name="CLI B",
+            description="Second CLI skill",
+            level="published",
+            content="# CLI B\n",
+            steps=["Do B"],
+            trigger_patterns=["cli b"],
+        )
+
+        tested = _run_cli(skills_env, "skills", "test", "SK-CLI-A", "--json")
+        assert tested.returncode == 0
+        tested_payload = json.loads(tested.stdout)
+        assert tested_payload["tested"] is True
+
+        promoted = _run_cli(
+            skills_env,
+            "skills",
+            "promote",
+            "SK-CLI-A",
+            "--target-level",
+            "published",
+            "--json",
+        )
+        assert promoted.returncode == 0
+        promoted_payload = json.loads(promoted.stdout)
+        assert promoted_payload["level"] == "published"
+
+        composed = _run_cli(
+            skills_env,
+            "skills",
+            "compose",
+            "SK-CLI-C",
+            "CLI Composed",
+            "--component-ids",
+            '["SK-CLI-A","SK-CLI-B"]',
+            "--json",
+        )
+        assert composed.returncode == 0
+        composed_payload = json.loads(composed.stdout)
+        assert composed_payload["skill_id"] == "SK-CLI-C"
+
+        retired = _run_cli(
+            skills_env,
+            "skills",
+            "retire",
+            "SK-CLI-B",
+            "--replacement-id",
+            "SK-CLI-C",
+            "--json",
+        )
+        assert retired.returncode == 0
+        retired_payload = json.loads(retired.stdout)
+        assert retired_payload["level"] == "archived"

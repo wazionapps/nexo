@@ -16,6 +16,7 @@ def test_init_db_creates_core_tables():
         "questions", "reminders", "followups", "learnings", "credentials",
         "task_history", "task_frequencies", "plugins", "entities",
         "preferences", "agents", "change_log", "decisions",
+        "protocol_tasks", "protocol_debt",
     }
     assert expected.issubset(tables), f"Missing tables: {expected - tables}"
 
@@ -25,7 +26,7 @@ def test_migrations_idempotent():
     db_mod.run_migrations()
     db_mod.run_migrations()
     version = db_mod.get_schema_version()
-    assert version >= 1
+    assert version >= 23
 
 
 def test_session_crud():
@@ -65,6 +66,33 @@ def test_learning_crud():
     db_mod.delete_learning(learning_id)
     found3 = db_mod.search_learnings("Updated Title")
     assert not any(l["id"] == learning_id for l in found3)
+
+
+def test_learning_supersede_lifecycle():
+    first = db_mod.create_learning(
+        category="test-cat",
+        title="Old canonical rule",
+        content="Do the old thing.",
+    )
+    second = db_mod.create_learning(
+        category="test-cat",
+        title="New canonical rule",
+        content="Do the new thing.",
+    )
+
+    superseded = db_mod.supersede_learning(first["id"], second["id"])
+    current = db_mod.get_db().execute(
+        "SELECT status FROM learnings WHERE id = ?",
+        (first["id"],),
+    ).fetchone()
+    replacement = db_mod.get_db().execute(
+        "SELECT supersedes_id FROM learnings WHERE id = ?",
+        (second["id"],),
+    ).fetchone()
+
+    assert superseded["status"] == "superseded"
+    assert current["status"] == "superseded"
+    assert replacement["supersedes_id"] == first["id"]
 
 
 def test_reminder_followup_crud():

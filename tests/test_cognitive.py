@@ -311,3 +311,22 @@ def test_rehearsal_profile_update_rewards_strong_recall():
     stable, difficulty = cognitive.rehearsal_profile_update(1.0, 0.6, 0.9)
     assert stable > 1.0
     assert difficulty < 0.6
+
+
+def test_preview_triggers_does_not_fire_them():
+    import cognitive
+
+    trigger_id = cognitive.create_trigger(
+        "release",
+        "Validate release readiness before launch.",
+        "Public release tasks need evidence first.",
+    )
+
+    preview = cognitive.preview_triggers("Prepare the release package today")
+    armed = cognitive.list_triggers("armed")
+    fired = cognitive.list_triggers("fired")
+
+    assert preview
+    assert preview[0]["id"] == trigger_id
+    assert any(trigger["id"] == trigger_id for trigger in armed)
+    assert all(trigger["id"] != trigger_id for trigger in fired)

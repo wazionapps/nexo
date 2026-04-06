@@ -29,7 +29,7 @@ from cognitive._search import (
     search, bm25_search, hyde_expand_query,
     record_co_activation,
     _kg_boost_results, _apply_temporal_boost,
-    create_trigger, check_triggers, list_triggers, delete_trigger, rearm_trigger,
+    create_trigger, preview_triggers, check_triggers, list_triggers, delete_trigger, rearm_trigger,
     # Constants
     CO_ACTIVATION_DECAY, CO_ACTIVATION_BOOST, CO_ACTIVATION_MIN_STRENGTH,
 )

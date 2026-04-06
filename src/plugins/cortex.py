@@ -15,6 +15,7 @@ v0.1: Single MCP tool + middleware validation.
 """
 
 import json
+import secrets
 import time
 
 
@@ -135,6 +136,51 @@ def _tools_for_mode(mode: str) -> list[str]:
         return ["all"]
 
 
+def _parse_json_list(value) -> list:
+    try:
+        parsed = json.loads(value) if isinstance(value, str) else value
+        return parsed if isinstance(parsed, list) else []
+    except (json.JSONDecodeError, TypeError):
+        return []
+
+
+def evaluate_cortex_state(state: dict) -> dict:
+    """Return structured Cortex evaluation for internal callers."""
+    result = _validate_state(state)
+    result["check_id"] = f"CTX-{int(time.time())}-{secrets.randbelow(100000)}"
+    result["expires_at_epoch"] = int(time.time()) + 1200
+    return result
+
+
+def _log_cortex_activation(goal: str, task_type: str, result: dict):
+    try:
+        conn = _get_db()
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS cortex_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                goal TEXT,
+                task_type TEXT,
+                mode TEXT,
+                warnings TEXT,
+                trust_score INTEGER,
+                created_at TEXT DEFAULT (datetime('now'))
+            )"""
+        )
+        conn.execute(
+            "INSERT INTO cortex_log (goal, task_type, mode, warnings, trust_score) VALUES (?, ?, ?, ?, ?)",
+            (
+                goal[:200],
+                task_type,
+                result["mode"],
+                json.dumps(result["warnings"]),
+                result["trust_score"],
+            ),
+        )
+        conn.commit()
+    except Exception:
+        pass
+
+
 def handle_cortex_check(
     goal: str,
     task_type: str = "answer",
@@ -172,31 +218,25 @@ def handle_cortex_check(
     Returns:
         Mode (ask/propose/act), available tools, warnings, and relevant Core Rules
     """
-    # Parse JSON arrays safely
-    def _parse(s):
-        try:
-            v = json.loads(s) if isinstance(s, str) else s
-            return v if isinstance(v, list) else []
-        except (json.JSONDecodeError, TypeError):
-            return []
-
     state = {
         "goal": goal.strip() if goal else "",
         "task_type": task_type if task_type in ("answer", "analyze", "edit", "execute", "delegate") else "answer",
-        "plan": _parse(plan),
-        "known_facts": _parse(known_facts),
-        "unknowns": _parse(unknowns),
-        "constraints": _parse(constraints),
-        "evidence_refs": _parse(evidence_refs),
+        "plan": _parse_json_list(plan),
+        "known_facts": _parse_json_list(known_facts),
+        "unknowns": _parse_json_list(unknowns),
+        "constraints": _parse_json_list(constraints),
+        "evidence_refs": _parse_json_list(evidence_refs),
         "verification_step": verification_step.strip() if verification_step else "",
     }
 
-    result = _validate_state(state)
+    result = evaluate_cortex_state(state)
 
     # Format response
     lines = [
         f"CORTEX CHECK — mode: {result['mode'].upper()}",
         f"Trust: {result['trust_score']}/100",
+        f"Check ID: {result['check_id']}",
+        f"Valid until epoch: {result['expires_at_epoch']}",
     ]
 
     if result["mode"] == "act":
@@ -223,27 +263,7 @@ def handle_cortex_check(
     lines.append("")
     lines.append(f"Tools available: {', '.join(result['tools_available'])}")
 
-    # Log cortex activation for metrics
-    try:
-        conn = _get_db()
-        conn.execute(
-            """CREATE TABLE IF NOT EXISTS cortex_log (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                goal TEXT,
-                task_type TEXT,
-                mode TEXT,
-                warnings TEXT,
-                trust_score INTEGER,
-                created_at TEXT DEFAULT (datetime('now'))
-            )"""
-        )
-        conn.execute(
-            "INSERT INTO cortex_log (goal, task_type, mode, warnings, trust_score) VALUES (?, ?, ?, ?, ?)",
-            (goal[:200], task_type, result["mode"], json.dumps(result["warnings"]), result["trust_score"])
-        )
-        conn.commit()
-    except Exception:
-        pass
+    _log_cortex_activation(goal, task_type, result)
 
     return "\n".join(lines)
 

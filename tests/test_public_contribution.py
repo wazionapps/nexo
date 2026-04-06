@@ -126,3 +126,32 @@ def test_can_run_public_contribution_reports_pending_auth(tmp_path, monkeypatch)
     assert ready is False
     assert "pending" in reason
     assert refreshed["status"] == "pending_auth"
+
+
+def test_refresh_public_contribution_state_degrades_cleanly_when_auth_disappears(tmp_path, monkeypatch):
+    import public_contribution
+
+    nexo_home = tmp_path / "nexo"
+    _patch_schedule_paths(monkeypatch, nexo_home)
+    config = public_contribution.normalize_public_contribution_config({
+        "enabled": True,
+        "mode": "draft_prs",
+        "status": "active",
+        "github_user": "alice",
+        "fork_repo": "alice/nexo",
+    })
+    public_contribution.save_public_contribution_config(config)
+    monkeypatch.setattr(
+        public_contribution,
+        "github_auth_status",
+        lambda: {"ok": False, "message": "gh auth token missing", "login": "", "code": "auth_missing"},
+    )
+
+    refreshed = public_contribution.refresh_public_contribution_state()
+    ready, reason, refreshed_again = public_contribution.can_run_public_contribution(refreshed)
+
+    assert refreshed["status"] == "pending_auth"
+    assert "gh auth token missing" in refreshed["last_result"]
+    assert ready is False
+    assert "gh auth token missing" in reason
+    assert refreshed_again["status"] == "pending_auth"

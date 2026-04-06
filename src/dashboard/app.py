@@ -240,6 +240,12 @@ def _summarize_engineering_loop(weekly: dict, monthly: dict) -> dict:
     protocol_delta = trend.get("protocol_compliance_delta")
     if isinstance(protocol_delta, (int, float)) and protocol_delta > 0:
         improving.append({"title": "Protocol", "detail": f"{protocol_delta:+.1f}%", "tone": "healthy", "meta": "vs previous window"})
+    duplicate_followup_delta = trend.get("followup_duplicate_open_delta")
+    if isinstance(duplicate_followup_delta, int) and duplicate_followup_delta < 0:
+        improving.append({"title": "Followup duplication", "detail": f"{duplicate_followup_delta:+d}", "tone": "healthy", "meta": "open duplicates"})
+    learning_noise_delta = trend.get("learning_noise_delta")
+    if isinstance(learning_noise_delta, int) and learning_noise_delta < 0:
+        improving.append({"title": "Learning noise", "detail": f"{learning_noise_delta:+d}", "tone": "healthy", "meta": "active noise pressure"})
     corrections_delta = trend.get("total_corrections_delta")
     if isinstance(corrections_delta, int) and corrections_delta < 0:
         improving.append({"title": "Corrections", "detail": f"{corrections_delta:+d}", "tone": "healthy", "meta": "lower is better"})
@@ -247,12 +253,133 @@ def _summarize_engineering_loop(weekly: dict, monthly: dict) -> dict:
     if isinstance(mood_delta, (int, float)) and mood_delta > 0:
         improving.append({"title": "Mood", "detail": f"{mood_delta:+.3f}", "tone": "healthy", "meta": "vs previous window"})
 
+    duplicate_followup_rate_delta = trend.get("followup_duplicate_rate_delta")
+    if isinstance(duplicate_followup_rate_delta, (int, float)) and duplicate_followup_rate_delta > 0:
+        drifting.append({"title": "followup_duplicates", "detail": f"{duplicate_followup_rate_delta:+.1f}%", "tone": "critical" if duplicate_followup_rate_delta >= 5 else "watch", "meta": "open duplicate rate"})
+    learning_noise_rate_delta = trend.get("learning_noise_rate_delta")
+    if isinstance(learning_noise_rate_delta, (int, float)) and learning_noise_rate_delta > 0:
+        drifting.append({"title": "learning_noise", "detail": f"{learning_noise_rate_delta:+.1f}%", "tone": "critical" if learning_noise_rate_delta >= 5 else "watch", "meta": "active noise rate"})
+
     return {
         "weekly": weekly,
         "monthly": monthly,
         "matters_now": matters_now[:4],
         "drifting": drifting[:4],
         "improving": improving[:4],
+    }
+
+
+def _safe_json(value, default):
+    if value in (None, ""):
+        return default
+    if isinstance(value, (list, dict)):
+        return value
+    try:
+        return json.loads(value)
+    except Exception:
+        return default
+
+
+def _protocol_explainability_snapshot(limit: int = 20) -> dict:
+    db = _db()
+    conn = db.get_db()
+    max_limit = max(5, min(int(limit or 20), 100))
+
+    protocol_summary = db.protocol_compliance_summary(7)
+    recent_tasks = []
+    for row in conn.execute(
+        """SELECT * FROM protocol_tasks
+           ORDER BY opened_at DESC
+           LIMIT ?""",
+        (max_limit,),
+    ).fetchall():
+        item = dict(row)
+        for field in (
+            "files",
+            "plan",
+            "known_facts",
+            "unknowns",
+            "constraints",
+            "evidence_refs",
+            "response_reasons",
+        ):
+            item[field] = _safe_json(item.get(field), [])
+        item["has_evidence"] = bool(str(item.get("close_evidence") or "").strip())
+        item["guarded_open"] = bool(item.get("opened_with_guard") or item.get("opened_with_rules"))
+        recent_tasks.append(item)
+
+    recent_debts = [dict(row) for row in conn.execute(
+        """SELECT * FROM protocol_debt
+           ORDER BY created_at DESC
+           LIMIT ?""",
+        (max_limit,),
+    ).fetchall()]
+
+    debt_summary = {"open_total": 0, "by_severity": {}, "by_type": {}}
+    for debt in recent_debts:
+        if debt.get("status") != "open":
+            continue
+        debt_summary["open_total"] += 1
+        severity = str(debt.get("severity") or "warn")
+        debt_type = str(debt.get("debt_type") or "unknown")
+        debt_summary["by_severity"][severity] = debt_summary["by_severity"].get(severity, 0) + 1
+        debt_summary["by_type"][debt_type] = debt_summary["by_type"].get(debt_type, 0) + 1
+
+    recent_runs = db.list_workflow_runs(include_closed=True, limit=max_limit)
+    workflow_summary = {
+        "total": len(recent_runs),
+        "open_runs": sum(1 for run in recent_runs if run.get("status") not in {"completed", "failed", "cancelled"}),
+        "blocked_runs": sum(1 for run in recent_runs if run.get("status") == "blocked"),
+        "waiting_approval": sum(1 for run in recent_runs if run.get("status") == "waiting_approval"),
+    }
+
+    recent_goals = db.list_workflow_goals(include_closed=True, limit=max_limit)
+    goal_summary = {
+        "total": len(recent_goals),
+        "active": sum(1 for goal in recent_goals if goal.get("status") == "active"),
+        "blocked": sum(1 for goal in recent_goals if goal.get("status") == "blocked"),
+        "closed": sum(1 for goal in recent_goals if goal.get("status") in {"completed", "cancelled", "abandoned"}),
+    }
+
+    guard_checks = [dict(row) for row in conn.execute(
+        """SELECT area, files, learnings_returned, blocking_rules_returned, created_at
+           FROM guard_checks
+           ORDER BY created_at DESC
+           LIMIT ?""",
+        (max_limit,),
+    ).fetchall()]
+    areas = {}
+    blocking_hits = 0
+    for check in guard_checks:
+        area = str(check.get("area") or "unknown")
+        areas[area] = areas.get(area, 0) + 1
+        blocking_hits += int(check.get("blocking_rules_returned") or 0)
+
+    conditioned_learnings = [dict(row) for row in conn.execute(
+        """SELECT id, title, applies_to, priority, status, weight, guard_hits, updated_at
+           FROM learnings
+           WHERE status = 'active' AND applies_to IS NOT NULL AND TRIM(applies_to) != ''
+           ORDER BY COALESCE(guard_hits, 0) DESC, updated_at DESC
+           LIMIT ?""",
+        (max_limit,),
+    ).fetchall()]
+
+    return {
+        "protocol_summary": protocol_summary,
+        "debt_summary": debt_summary,
+        "recent_tasks": recent_tasks,
+        "recent_debts": recent_debts,
+        "workflow_summary": workflow_summary,
+        "recent_runs": recent_runs,
+        "goal_summary": goal_summary,
+        "recent_goals": recent_goals,
+        "guard_summary": {
+            "recent_checks": len(guard_checks),
+            "blocking_hits": blocking_hits,
+            "areas": areas,
+        },
+        "guard_checks": guard_checks,
+        "conditioned_learnings": conditioned_learnings,
     }
 
 
@@ -320,6 +447,10 @@ async def page_trust():
 @app.get("/guard", response_class=HTMLResponse)
 async def page_guard():
     return _render("guard.html")
+
+@app.get("/protocol", response_class=HTMLResponse)
+async def page_protocol():
+    return _render("protocol.html", snapshot=_protocol_explainability_snapshot())
 
 @app.get("/cortex", response_class=HTMLResponse)
 async def page_cortex():
@@ -1295,6 +1426,15 @@ async def api_trust_events(limit: int = Query(50, ge=1, le=200)):
     rows = cog_conn.execute("SELECT * FROM trust_score ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()
     cog_conn.close()
     return {"events": [dict(r) for r in rows]}
+
+
+# ---------------------------------------------------------------------------
+# Protocol Explainability
+# ---------------------------------------------------------------------------
+
+@app.get("/api/protocol")
+async def api_protocol(limit: int = Query(20, ge=5, le=100)):
+    return _protocol_explainability_snapshot(limit=limit)
 
 
 # ---------------------------------------------------------------------------

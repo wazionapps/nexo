@@ -9,6 +9,7 @@ from pathlib import Path
 from db import (
     init_db, cron_runs_recent, cron_runs_summary,
     upsert_personal_script, register_personal_script_schedule,
+    get_personal_script_schedule,
 )
 from script_registry import (
     PERSONAL_SCHEDULE_MANAGED_ENV,
@@ -29,13 +30,18 @@ def handle_schedule_status(hours: int = 24, cron_id: str = '') -> str:
         runs = cron_runs_recent(hours, cron_id)
         if not runs:
             return f"No runs for '{cron_id}' in the last {hours}h."
+        schedule_meta = get_personal_script_schedule(cron_id) or {}
         lines = [f"CRON RUNS — {cron_id} (last {hours}h): {len(runs)} executions"]
         for r in runs:
-            status = "✅" if r.get("exit_code") == 0 else "❌"
-            dur = f"{r['duration_secs']:.0f}s" if r.get("duration_secs") else "running"
+            status, detail = _run_status_marker(r.get("exit_code"), r.get("summary"), schedule_meta=schedule_meta)
+            if schedule_meta.get("schedule_type") == "keep_alive" and r.get("exit_code") is None:
+                dur = "daemon active"
+            else:
+                dur = f"{r['duration_secs']:.0f}s" if r.get("duration_secs") else "running"
             summary = f" — {r['summary'][:100]}" if r.get("summary") else ""
             error = f" ERROR: {r['error'][:100]}" if r.get("error") else ""
-            lines.append(f"  {status} {r['started_at']} ({dur}){summary}{error}")
+            suffix = f" [{detail}]" if detail else ""
+            lines.append(f"  {status} {r['started_at']} ({dur}){summary}{error}{suffix}")
         return "\n".join(lines)
 
     # Summary view — one line per cron
@@ -45,13 +51,41 @@ def handle_schedule_status(hours: int = 24, cron_id: str = '') -> str:
 
     lines = [f"CRON STATUS (last {hours}h):"]
     for s in summary:
-        status = "✅" if s.get("last_exit_code") == 0 else "❌"
-        rate = f"{s['succeeded']}/{s['total_runs']}"
+        schedule_meta = get_personal_script_schedule(s["cron_id"]) or {}
+        status, detail = _run_status_marker(s.get("last_exit_code"), s.get("last_summary"), schedule_meta=schedule_meta)
+        if schedule_meta.get("schedule_type") == "keep_alive" and s.get("last_exit_code") is None:
+            rate = "daemon active"
+        else:
+            rate = f"{s['succeeded']}/{s['total_runs']}"
         dur = f"{s['avg_duration']:.0f}s avg" if s.get("avg_duration") else ""
         summary_txt = f" — {s['last_summary'][:80]}" if s.get("last_summary") else ""
-        lines.append(f"  {status} {s['cron_id']}: {rate} OK, {dur}{summary_txt}")
+        suffix = f" [{detail}]" if detail else ""
+        lines.append(f"  {status} {s['cron_id']}: {rate}, {dur}{summary_txt}{suffix}")
 
     return "\n".join(lines)
+
+
+def _summary_has_warning(summary: str = "") -> bool:
+    lowered = str(summary or "").strip().lower()
+    if not lowered:
+        return False
+    if "no warning" in lowered or "without warnings" in lowered:
+        return False
+    warning_tokens = ("warning", "warnings", "warn:", "degraded", "partial failure", "issues detected")
+    return any(token in lowered for token in warning_tokens)
+
+
+def _run_status_marker(exit_code, summary: str = "", *, schedule_meta: dict | None = None) -> tuple[str, str]:
+    schedule_meta = schedule_meta or {}
+    if schedule_meta.get("schedule_type") == "keep_alive" and exit_code is None:
+        return "🟢", "keep_alive daemon active"
+    if exit_code == 0 and _summary_has_warning(summary):
+        return "⚠", "exit 0 with warnings"
+    if exit_code == 0:
+        return "✅", "exit 0"
+    if exit_code is None:
+        return "❌", "missing exit code"
+    return "❌", f"exit {exit_code}"
 
 
 def handle_schedule_add(cron_id: str, script: str, schedule: str = '',

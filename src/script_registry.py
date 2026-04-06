@@ -662,6 +662,105 @@ def _canonical_schedule_value(schedule_type: str, schedule_value: str | dict | l
     return str(schedule_value or "")
 
 
+def _extract_launchctl_value(output: str, prefixes: str | tuple[str, ...]) -> str | None:
+    if isinstance(prefixes, str):
+        prefixes = (prefixes,)
+    for raw_line in output.splitlines():
+        line = raw_line.strip()
+        for prefix in prefixes:
+            if line.startswith(prefix):
+                return line[len(prefix):].strip()
+    return None
+
+
+def _launchctl_service_state(label: str) -> dict:
+    state = {
+        "loaded": None,
+        "pid": "",
+        "state": "",
+        "last_exit_status": "",
+        "error": "",
+    }
+    if platform.system() != "Darwin":
+        return state
+
+    try:
+        result = subprocess.run(
+            ["launchctl", "print", f"gui/{os.getuid()}/{label}"],
+            capture_output=True,
+            text=True,
+            timeout=3,
+        )
+    except Exception as exc:
+        return {**state, "loaded": False, "error": str(exc)}
+
+    output = (result.stdout or "") + (result.stderr or "")
+    if result.returncode != 0 or "Could not find service" in output:
+        return {**state, "loaded": False, "error": output.strip() or "not loaded"}
+
+    return {
+        "loaded": True,
+        "pid": _extract_launchctl_value(output, ("pid = ", "PID = ")) or "",
+        "state": _extract_launchctl_value(output, "state = ") or "",
+        "last_exit_status": _extract_launchctl_value(
+            output,
+            ("last exit code = ", "last exit status = ", "LastExitStatus = "),
+        ) or "",
+        "error": "",
+    }
+
+
+def _keep_alive_runtime_snapshot(record: dict) -> dict:
+    if record.get("schedule_type") != "keep_alive":
+        return {
+            "runtime_state": "unknown",
+            "runtime_summary": "",
+            "runtime_problems": [],
+        }
+
+    label = record.get("launchd_label") or f"com.nexo.{record.get('cron_id', '')}"
+    service = _launchctl_service_state(str(label))
+    problems: list[str] = []
+
+    if service.get("loaded") is False:
+        problems.append("keep_alive service not loaded in launchd")
+        return {
+            "runtime_state": "stale",
+            "runtime_summary": "keep_alive service not loaded",
+            "runtime_problems": problems,
+        }
+
+    pid = str(service.get("pid", "") or "").strip()
+    service_state = str(service.get("state", "") or "").strip().lower()
+    last_exit = str(service.get("last_exit_status", "") or "").strip()
+    if pid:
+        return {
+            "runtime_state": "alive",
+            "runtime_summary": f"running with pid {pid}",
+            "runtime_problems": [],
+        }
+    if service_state in {"running", "spawned"}:
+        return {
+            "runtime_state": "alive",
+            "runtime_summary": f"launchd state {service_state}",
+            "runtime_problems": [],
+        }
+    if last_exit and last_exit != "0":
+        problems.append(f"keep_alive daemon exited with status {last_exit}")
+        return {
+            "runtime_state": "degraded",
+            "runtime_summary": f"last exit {last_exit}",
+            "runtime_problems": problems,
+        }
+
+    problems.append("keep_alive service is loaded but has no active pid")
+    return {
+        "runtime_state": "degraded",
+        "runtime_summary": "loaded but not running",
+        "runtime_problems": problems,
+    }
+
+
 def _discover_personal_schedule_records() -> list[dict]:
     """Inspect macOS LaunchAgents and return raw personal schedule records."""
     if platform.system() != "Darwin":
@@ -737,6 +836,12 @@ def audit_personal_schedules() -> dict:
         "healthy": 0,
         "problems": 0,
         "managed_registered": 0,
+        "keep_alive": 0,
+        "runtime_alive": 0,
+        "runtime_degraded": 0,
+        "runtime_duplicated": 0,
+        "runtime_stale": 0,
+        "runtime_unknown": 0,
     }
 
     for record in _discover_personal_schedule_records():
@@ -790,6 +895,7 @@ def audit_personal_schedules() -> dict:
             schedule_state = "orphaned"
 
         audited_record = dict(record)
+        runtime_snapshot = _keep_alive_runtime_snapshot(record)
         audited_record.update({
             "schedule_origin": schedule_origin,
             "schedule_declared": declared_valid,
@@ -799,6 +905,7 @@ def audit_personal_schedules() -> dict:
             "problems": problems,
             "script_name": script.get("name", "") if script else "",
             "declared_schedule": declared if script else {},
+            **runtime_snapshot,
         })
         audited.append(audited_record)
         summary[schedule_origin] += 1
@@ -807,6 +914,41 @@ def audit_personal_schedules() -> dict:
             summary["managed_registered"] += 1
         else:
             summary["problems"] += 1
+
+    duplicate_cron_ids: dict[str, int] = {}
+    duplicate_script_paths: dict[str, int] = {}
+    for record in audited:
+        if record.get("schedule_type") != "keep_alive":
+            continue
+        cron_id = str(record.get("cron_id", "") or "")
+        script_path = str(record.get("script_path", "") or "")
+        if cron_id:
+            duplicate_cron_ids[cron_id] = duplicate_cron_ids.get(cron_id, 0) + 1
+        if script_path:
+            duplicate_script_paths[script_path] = duplicate_script_paths.get(script_path, 0) + 1
+
+    for record in audited:
+        if record.get("schedule_type") == "keep_alive":
+            cron_id = str(record.get("cron_id", "") or "")
+            script_path = str(record.get("script_path", "") or "")
+            duplicated = (
+                (cron_id and duplicate_cron_ids.get(cron_id, 0) > 1)
+                or (script_path and duplicate_script_paths.get(script_path, 0) > 1)
+            )
+            if duplicated:
+                runtime_problems = list(record.get("runtime_problems", []))
+                runtime_problems.append("duplicate keep_alive schedules discovered for the same cron/script")
+                record["runtime_state"] = "duplicated"
+                record["runtime_summary"] = "multiple keep_alive schedules discovered"
+                record["runtime_problems"] = runtime_problems
+
+        if record.get("schedule_type") == "keep_alive":
+            summary["keep_alive"] += 1
+            runtime_state = str(record.get("runtime_state", "unknown") or "unknown")
+            key = f"runtime_{runtime_state}"
+            if key not in summary:
+                summary[key] = 0
+            summary[key] += 1
 
     return {
         "schedules": audited,

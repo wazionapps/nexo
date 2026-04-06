@@ -150,6 +150,25 @@ nexo scripts call nexo_learning_search --input '{"query":"cron errors"}'
 nexo scripts call nexo_schedule_status --input '{"hours":24}' --json-output
 ```
 
+## Automation Task Profiles
+
+When a personal script needs intelligence from the automation backend, prefer task profiles over hardcoding a provider-specific command line. `nexo-agent-run.py` now accepts:
+
+```bash
+nexo-agent-run.py --task-profile fast --prompt "Summarize these logs"
+nexo-agent-run.py --task-profile deep --prompt-file prompt.md
+```
+
+Available profiles:
+
+| Profile | Intent |
+|---------|--------|
+| `fast` | Prefer the lower-latency / lower-cost backend path when available |
+| `balanced` | Use the configured default backend/runtime profile |
+| `deep` | Prefer the heavier reasoning path for high-stakes synthesis/review |
+
+If the selected backend is unavailable, NEXO now falls back safely to another installed terminal backend instead of failing half-configured.
+
 ## Environment Variables
 
 When running via `nexo scripts run`, these env vars are injected:

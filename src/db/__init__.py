@@ -44,7 +44,7 @@ from db._reminders import (
 
 # Learnings
 from db._learnings import (
-    create_learning, update_learning, delete_learning,
+    create_learning, update_learning, supersede_learning, delete_learning,
     search_learnings, list_learnings,
     extract_keywords, find_similar_learnings,
 )
@@ -91,6 +91,28 @@ from db._evolution import (
 # Cron execution history
 from db._cron_runs import (
     cron_run_start, cron_run_end, cron_runs_recent, cron_runs_summary,
+)
+
+# Protocol discipline runtime
+from db._protocol import (
+    create_protocol_task, get_protocol_task, close_protocol_task,
+    create_protocol_debt, resolve_protocol_debts, list_protocol_debts,
+    protocol_compliance_summary,
+)
+
+# Durable workflow runtime
+from db._workflow import (
+    create_workflow_run, get_workflow_run, list_workflow_runs,
+    list_workflow_steps, record_workflow_transition,
+    get_workflow_replay, get_workflow_resume_state,
+    create_workflow_goal, get_workflow_goal, list_workflow_goals,
+    update_workflow_goal,
+)
+
+# State watchers
+from db._watchers import (
+    create_state_watcher, get_state_watcher, list_state_watchers,
+    update_state_watcher, update_state_watcher_result,
 )
 
 # Personal scripts registry

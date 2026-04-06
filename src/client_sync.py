@@ -5,6 +5,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -308,6 +310,179 @@ def _write_json_object(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
 
 
+CORE_HOOK_SPECS = [
+    {
+        "event": "SessionStart",
+        "identity": "session-start-ts",
+        "timeout": 2,
+        "command_template": lambda nexo_home, _runtime_root, _hooks_dir: (
+            f"mkdir -p {shlex.quote(str(nexo_home / 'operations'))} && "
+            f"date +%s > {shlex.quote(str(nexo_home / 'operations' / '.session-start-ts'))}"
+        ),
+    },
+    {
+        "event": "SessionStart",
+        "identity": "daily-briefing-check.sh",
+        "timeout": 5,
+        "script": "daily-briefing-check.sh",
+    },
+    {
+        "event": "SessionStart",
+        "identity": "session-start.sh",
+        "timeout": 35,
+        "script": "session-start.sh",
+    },
+    {
+        "event": "Stop",
+        "identity": "session-stop.sh",
+        "timeout": 10,
+        "script": "session-stop.sh",
+    },
+    {
+        "event": "PostToolUse",
+        "identity": "capture-tool-logs.sh",
+        "timeout": 5,
+        "script": "capture-tool-logs.sh",
+    },
+    {
+        "event": "PostToolUse",
+        "identity": "capture-session.sh",
+        "timeout": 3,
+        "script": "capture-session.sh",
+    },
+    {
+        "event": "PostToolUse",
+        "identity": "inbox-hook.sh",
+        "timeout": 5,
+        "script": "inbox-hook.sh",
+    },
+    {
+        "event": "PostToolUse",
+        "identity": "protocol-guardrail.sh",
+        "timeout": 5,
+        "script": "protocol-guardrail.sh",
+    },
+    {
+        "event": "PreCompact",
+        "identity": "pre-compact.sh",
+        "timeout": 10,
+        "script": "pre-compact.sh",
+    },
+    {
+        "event": "PostCompact",
+        "identity": "post-compact.sh",
+        "timeout": 10,
+        "script": "post-compact.sh",
+    },
+]
+
+
+def _resolve_hook_source_dir(runtime_root: Path) -> Path:
+    direct = runtime_root / "hooks"
+    if direct.is_dir():
+        return direct
+    sibling = runtime_root.parent / "src" / "hooks"
+    if sibling.is_dir():
+        return sibling
+    fallback = runtime_root.parent / "hooks"
+    if fallback.is_dir():
+        return fallback
+    return direct
+
+
+def _render_hook_command(spec: dict, *, nexo_home: Path, runtime_root: Path, hooks_dir: Path) -> str:
+    command_template = spec.get("command_template")
+    if callable(command_template):
+        return command_template(nexo_home, runtime_root, hooks_dir)
+    script_name = spec.get("script", "").strip()
+    script_path = hooks_dir / script_name
+    return (
+        f"NEXO_HOME={shlex.quote(str(nexo_home))} "
+        f"NEXO_CODE={shlex.quote(str(runtime_root))} "
+        f"bash {shlex.quote(str(script_path))}"
+    )
+
+
+def _hook_identity(command: str) -> str:
+    text = str(command or "")
+    if ".session-start-ts" in text:
+        return "session-start-ts"
+    match = re.search(r"([A-Za-z0-9._-]+\.sh)\b", text)
+    if match:
+        return match.group(1)
+    return text.strip()
+
+
+def _normalize_hook_sections(entries) -> list[dict]:
+    normalized: list[dict] = []
+    for entry in entries or []:
+        if not isinstance(entry, dict):
+            continue
+        hooks = entry.get("hooks")
+        if isinstance(hooks, list):
+            normalized.append(
+                {
+                    "matcher": entry.get("matcher", "*") or "*",
+                    "hooks": [dict(hook) for hook in hooks if isinstance(hook, dict)],
+                }
+            )
+            continue
+        if entry.get("command"):
+            hook = {"type": entry.get("type", "command"), "command": entry["command"]}
+            if entry.get("timeout"):
+                hook["timeout"] = entry["timeout"]
+            normalized.append({"matcher": entry.get("matcher", "*") or "*", "hooks": [hook]})
+    return normalized
+
+
+def _merge_core_hooks(existing_hooks, *, runtime_root: Path, nexo_home: Path) -> tuple[dict, int]:
+    hooks_payload = dict(existing_hooks) if isinstance(existing_hooks, dict) else {}
+    hooks_dir = _resolve_hook_source_dir(runtime_root)
+    managed_count = 0
+
+    for spec in CORE_HOOK_SPECS:
+        event = spec["event"]
+        sections = _normalize_hook_sections(hooks_payload.get(event))
+        hooks_payload[event] = sections
+        command = _render_hook_command(spec, nexo_home=nexo_home, runtime_root=runtime_root, hooks_dir=hooks_dir)
+        identity = spec["identity"]
+
+        found = False
+        for section in sections:
+            for hook in section["hooks"]:
+                if _hook_identity(hook.get("command", "")) != identity:
+                    continue
+                hook["type"] = "command"
+                hook["command"] = command
+                if spec.get("timeout"):
+                    hook["timeout"] = spec["timeout"]
+                found = True
+                managed_count += 1
+                break
+            if found:
+                break
+
+        if found:
+            continue
+
+        target = None
+        for section in sections:
+            if section.get("matcher", "*") == "*":
+                target = section
+                break
+        if target is None:
+            target = {"matcher": "*", "hooks": []}
+            sections.append(target)
+
+        new_hook = {"type": "command", "command": command}
+        if spec.get("timeout"):
+            new_hook["timeout"] = spec["timeout"]
+        target["hooks"].append(new_hook)
+        managed_count += 1
+
+    return hooks_payload, managed_count
+
+
 def _sync_json_client(path: Path, server_config: dict, label: str, *, managed_metadata: dict | None = None) -> dict:
     payload = _load_json_object(path)
     mcp_servers = payload.setdefault("mcpServers", {})
@@ -343,6 +518,32 @@ def _claude_desktop_managed_metadata(server_config: dict, *, operator_name: str)
     }
 
 
+def _sync_claude_code_settings(path: Path, server_config: dict) -> dict:
+    payload = _load_json_object(path)
+    mcp_servers = payload.setdefault("mcpServers", {})
+    if not isinstance(mcp_servers, dict):
+        mcp_servers = {}
+        payload["mcpServers"] = mcp_servers
+    action = "updated" if "nexo" in mcp_servers else "created"
+    mcp_servers["nexo"] = server_config
+
+    runtime_root = Path(server_config.get("env", {}).get("NEXO_CODE", "")).expanduser()
+    nexo_home = Path(server_config.get("env", {}).get("NEXO_HOME", "")).expanduser()
+    payload["hooks"], managed_hook_count = _merge_core_hooks(
+        payload.get("hooks", {}),
+        runtime_root=runtime_root,
+        nexo_home=nexo_home,
+    )
+    _write_json_object(path, payload)
+    return {
+        "ok": True,
+        "client": "claude_code",
+        "action": action,
+        "path": str(path),
+        "managed_hook_count": managed_hook_count,
+    }
+
+
 def sync_claude_code(
     *,
     nexo_home: str | os.PathLike[str] | None = None,
@@ -358,10 +559,9 @@ def sync_claude_code(
         python_path=python_path,
         operator_name=operator_name,
     )
-    result = _sync_json_client(
+    result = _sync_claude_code_settings(
         _claude_code_settings_path(Path(user_home).expanduser() if user_home else None),
         server_config,
-        "claude_code",
     )
     bootstrap_result = sync_client_bootstrap(
         "claude_code",

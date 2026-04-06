@@ -1056,6 +1056,23 @@ def _skills_apply(args):
     return 0 if result.get("ok") else 1
 
 
+def _skills_test(args):
+    from skills_runtime import test_skill
+
+    try:
+        params = json.loads(args.params) if args.params else {}
+    except json.JSONDecodeError as e:
+        print(f"Invalid params JSON: {e}", file=sys.stderr)
+        return 1
+
+    result = test_skill(args.id, params=params, mode=args.mode, context=args.context)
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    else:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    return 0 if result.get("ok") else 1
+
+
 def _skills_sync(args):
     from skills_runtime import sync_skills
 
@@ -1101,6 +1118,62 @@ def _skills_evolution(args):
     else:
         print(json.dumps(result, indent=2, ensure_ascii=False))
     return 0
+
+
+def _skills_promote(args):
+    from skills_runtime import promote_skill
+
+    result = promote_skill(args.id, target_level=args.target_level, reason=args.reason)
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    else:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    return 0 if result.get("ok") else 1
+
+
+def _skills_retire(args):
+    from skills_runtime import retire_skill
+
+    result = retire_skill(args.id, replacement_id=args.replacement_id, reason=args.reason)
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    else:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    return 0 if result.get("ok") else 1
+
+
+def _skills_compose(args):
+    from skills_runtime import compose_skills
+
+    try:
+        component_ids = json.loads(args.component_ids) if args.component_ids.strip().startswith("[") else [
+            item.strip() for item in args.component_ids.split(",") if item.strip()
+        ]
+        tags = json.loads(args.tags) if args.tags.strip().startswith("[") else [
+            item.strip() for item in args.tags.split(",") if item.strip()
+        ]
+        trigger_patterns = json.loads(args.trigger_patterns) if args.trigger_patterns.strip().startswith("[") else [
+            item.strip() for item in args.trigger_patterns.split(",") if item.strip()
+        ]
+    except json.JSONDecodeError as e:
+        print(f"Invalid JSON: {e}", file=sys.stderr)
+        return 1
+
+    result = compose_skills(
+        new_skill_id=args.new_id,
+        name=args.name,
+        component_ids=component_ids,
+        description=args.description,
+        level=args.level,
+        mode=args.mode,
+        tags=tags,
+        trigger_patterns=trigger_patterns,
+    )
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    else:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    return 0 if result.get("ok") else 1
 
 
 def _print_help():
@@ -1248,6 +1321,13 @@ def main():
     skills_apply_p.add_argument("--context", default="", help="Usage context for feedback loop")
     skills_apply_p.add_argument("--json", action="store_true", help="JSON output")
 
+    skills_test_p = skills_sub.add_parser("test", help="Dry-run test a skill")
+    skills_test_p.add_argument("id", help="Skill ID")
+    skills_test_p.add_argument("--params", default="{}", help="JSON parameters")
+    skills_test_p.add_argument("--mode", default="auto", choices=["auto", "guide", "execute", "hybrid"])
+    skills_test_p.add_argument("--context", default="", help="Testing context")
+    skills_test_p.add_argument("--json", action="store_true", help="JSON output")
+
     skills_sync_p = skills_sub.add_parser("sync", help="Sync filesystem skills")
     skills_sync_p.add_argument("--json", action="store_true", help="JSON output")
 
@@ -1263,6 +1343,29 @@ def main():
 
     skills_evolution_p = skills_sub.add_parser("evolution", help="Evolution candidates")
     skills_evolution_p.add_argument("--json", action="store_true", help="JSON output")
+
+    skills_promote_p = skills_sub.add_parser("promote", help="Promote a skill lifecycle level")
+    skills_promote_p.add_argument("id", help="Skill ID")
+    skills_promote_p.add_argument("--target-level", default="published", choices=["draft", "published", "stable"])
+    skills_promote_p.add_argument("--reason", default="", help="Why promote this skill")
+    skills_promote_p.add_argument("--json", action="store_true", help="JSON output")
+
+    skills_retire_p = skills_sub.add_parser("retire", help="Archive a skill")
+    skills_retire_p.add_argument("id", help="Skill ID")
+    skills_retire_p.add_argument("--replacement-id", default="", help="Optional replacement skill ID")
+    skills_retire_p.add_argument("--reason", default="", help="Why retire this skill")
+    skills_retire_p.add_argument("--json", action="store_true", help="JSON output")
+
+    skills_compose_p = skills_sub.add_parser("compose", help="Compose multiple skills into one")
+    skills_compose_p.add_argument("new_id", help="New skill ID")
+    skills_compose_p.add_argument("name", help="New skill name")
+    skills_compose_p.add_argument("--component-ids", required=True, help="JSON array or comma-separated skill IDs")
+    skills_compose_p.add_argument("--description", default="", help="Composite skill description")
+    skills_compose_p.add_argument("--level", default="draft", choices=["trace", "draft", "published", "stable"])
+    skills_compose_p.add_argument("--mode", default="guide", choices=["guide", "hybrid"])
+    skills_compose_p.add_argument("--tags", default="[]", help="JSON array or comma-separated tags")
+    skills_compose_p.add_argument("--trigger-patterns", default="[]", help="JSON array or comma-separated trigger patterns")
+    skills_compose_p.add_argument("--json", action="store_true", help="JSON output")
 
     # -- dashboard --
     dashboard_parser = sub.add_parser("dashboard", help="Web dashboard control")
@@ -1332,6 +1435,8 @@ def main():
             return _skills_get(args)
         elif args.skills_command == "apply":
             return _skills_apply(args)
+        elif args.skills_command == "test":
+            return _skills_test(args)
         elif args.skills_command == "sync":
             return _skills_sync(args)
         elif args.skills_command == "approve":
@@ -1340,6 +1445,12 @@ def main():
             return _skills_featured(args)
         elif args.skills_command == "evolution":
             return _skills_evolution(args)
+        elif args.skills_command == "promote":
+            return _skills_promote(args)
+        elif args.skills_command == "retire":
+            return _skills_retire(args)
+        elif args.skills_command == "compose":
+            return _skills_compose(args)
         else:
             skills_parser.print_help()
             return 0

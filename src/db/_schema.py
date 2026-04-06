@@ -433,6 +433,247 @@ def _m20_personal_scripts_registry(conn):
     _migrate_add_index(conn, "idx_personal_script_schedules_enabled", "personal_script_schedules", "enabled")
 
 
+def _m22_protocol_discipline_tables(conn):
+    """Protocol discipline runtime: persistent task contracts + debt tracking."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS protocol_tasks (
+            task_id TEXT PRIMARY KEY,
+            session_id TEXT NOT NULL,
+            goal TEXT NOT NULL,
+            task_type TEXT NOT NULL DEFAULT 'answer',
+            area TEXT DEFAULT '',
+            project_hint TEXT DEFAULT '',
+            context_hint TEXT DEFAULT '',
+            files TEXT DEFAULT '[]',
+            plan TEXT DEFAULT '[]',
+            known_facts TEXT DEFAULT '[]',
+            unknowns TEXT DEFAULT '[]',
+            constraints TEXT DEFAULT '[]',
+            evidence_refs TEXT DEFAULT '[]',
+            verification_step TEXT DEFAULT '',
+            cortex_mode TEXT DEFAULT '',
+            cortex_check_id TEXT DEFAULT '',
+            cortex_blocked_reason TEXT DEFAULT '',
+            cortex_warnings TEXT DEFAULT '[]',
+            cortex_rules TEXT DEFAULT '[]',
+            opened_with_guard INTEGER NOT NULL DEFAULT 0,
+            opened_with_rules INTEGER NOT NULL DEFAULT 0,
+            guard_has_blocking INTEGER NOT NULL DEFAULT 0,
+            guard_summary TEXT DEFAULT '',
+            must_verify INTEGER NOT NULL DEFAULT 0,
+            must_change_log INTEGER NOT NULL DEFAULT 0,
+            must_learning_if_corrected INTEGER NOT NULL DEFAULT 1,
+            must_write_diary_on_close INTEGER NOT NULL DEFAULT 0,
+            status TEXT NOT NULL DEFAULT 'open',
+            close_evidence TEXT DEFAULT '',
+            files_changed TEXT DEFAULT '[]',
+            correction_happened INTEGER NOT NULL DEFAULT 0,
+            change_log_id INTEGER,
+            learning_id INTEGER,
+            followup_id TEXT DEFAULT '',
+            outcome_notes TEXT DEFAULT '',
+            opened_at TEXT DEFAULT (datetime('now')),
+            closed_at TEXT DEFAULT NULL
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS protocol_debt (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT DEFAULT '',
+            task_id TEXT DEFAULT '',
+            debt_type TEXT NOT NULL,
+            severity TEXT NOT NULL DEFAULT 'warn',
+            status TEXT NOT NULL DEFAULT 'open',
+            evidence TEXT DEFAULT '',
+            resolution TEXT DEFAULT '',
+            created_at TEXT DEFAULT (datetime('now')),
+            resolved_at TEXT DEFAULT NULL
+        )
+    """)
+    _migrate_add_index(conn, "idx_protocol_tasks_session", "protocol_tasks", "session_id")
+    _migrate_add_index(conn, "idx_protocol_tasks_status", "protocol_tasks", "status")
+    _migrate_add_index(conn, "idx_protocol_tasks_opened", "protocol_tasks", "opened_at")
+    _migrate_add_index(conn, "idx_protocol_debt_session", "protocol_debt", "session_id")
+    _migrate_add_index(conn, "idx_protocol_debt_task", "protocol_debt", "task_id")
+    _migrate_add_index(conn, "idx_protocol_debt_status", "protocol_debt", "status")
+    _migrate_add_index(conn, "idx_protocol_debt_created", "protocol_debt", "created_at")
+
+
+def _m23_learning_superseded_lifecycle(conn):
+    """Track canonical learning replacement instead of leaving rule drift implicit."""
+    _migrate_add_column(conn, "learnings", "supersedes_id", "INTEGER")
+    _migrate_add_index(conn, "idx_learnings_supersedes", "learnings", "supersedes_id")
+
+
+def _m24_durable_workflow_runtime(conn):
+    """Durable workflow execution runtime for long multi-step tasks."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS workflow_runs (
+            run_id TEXT PRIMARY KEY,
+            session_id TEXT DEFAULT '',
+            protocol_task_id TEXT DEFAULT '',
+            goal TEXT NOT NULL,
+            workflow_kind TEXT DEFAULT 'general',
+            status TEXT NOT NULL DEFAULT 'open',
+            priority TEXT NOT NULL DEFAULT 'normal',
+            idempotency_key TEXT DEFAULT '',
+            shared_state TEXT DEFAULT '{}',
+            next_action TEXT DEFAULT '',
+            current_step_key TEXT DEFAULT '',
+            last_checkpoint_label TEXT DEFAULT '',
+            owner TEXT DEFAULT '',
+            opened_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now')),
+            closed_at TEXT DEFAULT NULL
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS workflow_steps (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            run_id TEXT NOT NULL,
+            step_key TEXT NOT NULL,
+            title TEXT NOT NULL DEFAULT '',
+            step_index INTEGER NOT NULL DEFAULT 999,
+            status TEXT NOT NULL DEFAULT 'pending',
+            attempt_count INTEGER NOT NULL DEFAULT 0,
+            max_retries INTEGER NOT NULL DEFAULT 0,
+            retry_policy TEXT DEFAULT '',
+            retry_after TEXT DEFAULT '',
+            human_gate INTEGER NOT NULL DEFAULT 0,
+            requires_approval INTEGER NOT NULL DEFAULT 0,
+            compensation TEXT DEFAULT '',
+            last_summary TEXT DEFAULT '',
+            last_evidence TEXT DEFAULT '',
+            last_state_patch TEXT DEFAULT '{}',
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now')),
+            started_at TEXT DEFAULT NULL,
+            completed_at TEXT DEFAULT NULL,
+            UNIQUE(run_id, step_key)
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS workflow_checkpoints (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            run_id TEXT NOT NULL,
+            step_key TEXT DEFAULT '',
+            checkpoint_label TEXT NOT NULL DEFAULT 'checkpoint',
+            run_status TEXT DEFAULT '',
+            step_status TEXT DEFAULT '',
+            summary TEXT DEFAULT '',
+            shared_state TEXT DEFAULT '{}',
+            state_patch TEXT DEFAULT '{}',
+            evidence TEXT DEFAULT '',
+            next_action TEXT DEFAULT '',
+            retry_after TEXT DEFAULT '',
+            requires_approval INTEGER NOT NULL DEFAULT 0,
+            compensation_note TEXT DEFAULT '',
+            attempt INTEGER NOT NULL DEFAULT 0,
+            actor TEXT DEFAULT '',
+            created_at TEXT DEFAULT (datetime('now'))
+        )
+    """)
+    _migrate_add_index(conn, "idx_workflow_runs_session", "workflow_runs", "session_id")
+    _migrate_add_index(conn, "idx_workflow_runs_status", "workflow_runs", "status")
+    _migrate_add_index(conn, "idx_workflow_runs_updated", "workflow_runs", "updated_at")
+    _migrate_add_index(conn, "idx_workflow_runs_protocol_task", "workflow_runs", "protocol_task_id")
+    _migrate_add_index(conn, "idx_workflow_runs_idempotency", "workflow_runs", "idempotency_key")
+    _migrate_add_index(conn, "idx_workflow_steps_run", "workflow_steps", "run_id")
+    _migrate_add_index(conn, "idx_workflow_steps_status", "workflow_steps", "status")
+    _migrate_add_index(conn, "idx_workflow_checkpoints_run", "workflow_checkpoints", "run_id")
+    _migrate_add_index(conn, "idx_workflow_checkpoints_created", "workflow_checkpoints", "created_at")
+
+
+def _m25_workflow_goal_stack(conn):
+    """Durable goal stack linked to workflows."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS workflow_goals (
+            goal_id TEXT PRIMARY KEY,
+            session_id TEXT DEFAULT '',
+            title TEXT NOT NULL,
+            objective TEXT DEFAULT '',
+            parent_goal_id TEXT DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'active',
+            priority TEXT NOT NULL DEFAULT 'normal',
+            owner TEXT DEFAULT '',
+            next_action TEXT DEFAULT '',
+            success_signal TEXT DEFAULT '',
+            blocker_reason TEXT DEFAULT '',
+            shared_state TEXT DEFAULT '{}',
+            opened_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now')),
+            closed_at TEXT DEFAULT NULL
+        )
+    """)
+    _migrate_add_column(conn, "workflow_runs", "goal_id", "TEXT DEFAULT ''")
+    _migrate_add_index(conn, "idx_workflow_goals_status", "workflow_goals", "status")
+    _migrate_add_index(conn, "idx_workflow_goals_parent", "workflow_goals", "parent_goal_id")
+    _migrate_add_index(conn, "idx_workflow_goals_updated", "workflow_goals", "updated_at")
+    _migrate_add_index(conn, "idx_workflow_goals_session", "workflow_goals", "session_id")
+    _migrate_add_index(conn, "idx_workflow_runs_goal", "workflow_runs", "goal_id")
+
+
+def _m26_protocol_answer_confidence(conn):
+    """Persist answer/analyze response mode so discipline survives the prompt."""
+    _migrate_add_column(conn, "protocol_tasks", "response_mode", "TEXT DEFAULT ''")
+    _migrate_add_column(conn, "protocol_tasks", "response_confidence", "INTEGER DEFAULT 0")
+    _migrate_add_column(conn, "protocol_tasks", "response_reasons", "TEXT DEFAULT '[]'")
+    _migrate_add_column(conn, "protocol_tasks", "response_high_stakes", "INTEGER DEFAULT 0")
+
+
+def _m27_state_watchers(conn):
+    """Persistent state watchers for drift, health, and expiry tracking."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS state_watchers (
+            watcher_id TEXT PRIMARY KEY,
+            watcher_type TEXT NOT NULL,
+            title TEXT NOT NULL,
+            target TEXT DEFAULT '',
+            severity TEXT NOT NULL DEFAULT 'warn',
+            status TEXT NOT NULL DEFAULT 'active',
+            config TEXT DEFAULT '{}',
+            last_health TEXT NOT NULL DEFAULT 'unknown',
+            last_result TEXT DEFAULT '{}',
+            last_checked_at TEXT DEFAULT '',
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now'))
+        )
+    """)
+    _migrate_add_index(conn, "idx_state_watchers_type", "state_watchers", "watcher_type")
+    _migrate_add_index(conn, "idx_state_watchers_status", "state_watchers", "status")
+    _migrate_add_index(conn, "idx_state_watchers_health", "state_watchers", "last_health")
+
+
+def _m28_automation_runs(conn):
+    """Persist automation-backend telemetry for parity, degraded-mode audits, and cost metrics."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS automation_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            backend TEXT NOT NULL,
+            task_profile TEXT DEFAULT 'default',
+            model TEXT DEFAULT '',
+            reasoning_effort TEXT DEFAULT '',
+            cwd TEXT DEFAULT '',
+            output_format TEXT DEFAULT 'text',
+            prompt_chars INTEGER DEFAULT 0,
+            returncode INTEGER DEFAULT 0,
+            duration_ms INTEGER DEFAULT 0,
+            input_tokens INTEGER DEFAULT 0,
+            cached_input_tokens INTEGER DEFAULT 0,
+            output_tokens INTEGER DEFAULT 0,
+            total_cost_usd REAL,
+            telemetry_source TEXT DEFAULT '',
+            cost_source TEXT DEFAULT '',
+            status TEXT DEFAULT 'ok',
+            metadata TEXT DEFAULT '{}',
+            created_at TEXT DEFAULT (datetime('now'))
+        )
+    """)
+    _migrate_add_index(conn, "idx_automation_runs_backend", "automation_runs", "backend")
+    _migrate_add_index(conn, "idx_automation_runs_created", "automation_runs", "created_at")
+    _migrate_add_index(conn, "idx_automation_runs_status", "automation_runs", "status")
+
+
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
     (2, "followups_reasoning", _m2_followups_reasoning),
@@ -455,6 +696,13 @@ MIGRATIONS = [
     (19, "skills_v2", _m19_skills_v2),
     (20, "personal_scripts_registry", _m20_personal_scripts_registry),
     (21, "external_session_fields", _m21_external_session_fields),
+    (22, "protocol_discipline_tables", _m22_protocol_discipline_tables),
+    (23, "learning_superseded_lifecycle", _m23_learning_superseded_lifecycle),
+    (24, "durable_workflow_runtime", _m24_durable_workflow_runtime),
+    (25, "workflow_goal_stack", _m25_workflow_goal_stack),
+    (26, "protocol_answer_confidence", _m26_protocol_answer_confidence),
+    (27, "state_watchers", _m27_state_watchers),
+    (28, "automation_runs", _m28_automation_runs),
 ]
 
 

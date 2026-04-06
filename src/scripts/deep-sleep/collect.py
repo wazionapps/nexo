@@ -25,6 +25,7 @@ NEXO_CODE = Path(os.environ.get("NEXO_CODE", ""))
 DEEP_SLEEP_DIR = NEXO_HOME / "operations" / "deep-sleep"
 NEXO_DB = NEXO_HOME / "data" / "nexo.db"
 COGNITIVE_DB = NEXO_HOME / "data" / "cognitive.db"
+_TABLE_COLUMNS_CACHE: dict[tuple[str, str], set[str]] = {}
 
 MIN_USER_MESSAGES = 3  # Skip trivial sessions
 
@@ -304,6 +305,33 @@ def safe_query(db_path: Path, query: str, params: tuple = ()) -> list[dict]:
         return []
 
 
+def _table_columns(db_path: Path, table_name: str) -> set[str]:
+    cache_key = (str(db_path), table_name)
+    cached = _TABLE_COLUMNS_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+    if not db_path.exists():
+        _TABLE_COLUMNS_CACHE[cache_key] = set()
+        return set()
+    try:
+        conn = sqlite3.connect(str(db_path))
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+        conn.close()
+    except Exception:
+        _TABLE_COLUMNS_CACHE[cache_key] = set()
+        return set()
+    columns = {str(row["name"]) for row in rows}
+    _TABLE_COLUMNS_CACHE[cache_key] = columns
+    return columns
+
+
+def _optional_column_sql(db_path: Path, table_name: str, column_name: str, default_sql: str = "''") -> str:
+    if column_name in _table_columns(db_path, table_name):
+        return column_name
+    return f"{default_sql} AS {column_name}"
+
+
 def collect_followups() -> list[dict]:
     """Active followups from nexo.db."""
     return safe_query(
@@ -513,9 +541,13 @@ def _project_priority_signals(target_day: datetime, compact_diaries: list[dict])
         for project in candidates:
             bump(project, 3.0 * recency_bonus, "diary_sessions", "recent session diary activity")
 
+    learning_priority_sql = _optional_column_sql(NEXO_DB, "learnings", "priority", "'medium'")
+    learning_weight_sql = _optional_column_sql(NEXO_DB, "learnings", "weight", "0")
+    learning_applies_sql = _optional_column_sql(NEXO_DB, "learnings", "applies_to", "''")
     learning_rows = safe_query(
         NEXO_DB,
-        "SELECT category, title, content, created_at, updated_at, priority, weight, applies_to FROM learnings "
+        f"SELECT category, title, content, created_at, updated_at, {learning_priority_sql}, "
+        f"{learning_weight_sql}, {learning_applies_sql} FROM learnings "
         "ORDER BY COALESCE(updated_at, created_at) DESC LIMIT 160",
     )
     for row in learning_rows:
@@ -535,9 +567,12 @@ def _project_priority_signals(target_day: datetime, compact_diaries: list[dict])
         for project in matched:
             bump(project, score, "learnings", "recent leverage-bearing learning")
 
+    followup_priority_sql = _optional_column_sql(NEXO_DB, "followups", "priority", "'medium'")
+    followup_reasoning_sql = _optional_column_sql(NEXO_DB, "followups", "reasoning", "''")
     followup_rows = safe_query(
         NEXO_DB,
-        "SELECT id, description, date, status, priority, created_at, updated_at, reasoning FROM followups "
+        f"SELECT id, description, date, status, {followup_priority_sql}, created_at, updated_at, "
+        f"{followup_reasoning_sql} FROM followups "
         "WHERE status NOT IN ('COMPLETED', 'CANCELLED') ORDER BY date ASC, created_at ASC LIMIT 120",
     )
     for row in followup_rows:
@@ -565,9 +600,13 @@ def _project_priority_signals(target_day: datetime, compact_diaries: list[dict])
         for project in matched:
             bump(project, score, "followups", "open followup pressure")
 
+    decision_status_sql = _optional_column_sql(NEXO_DB, "decisions", "status", "''")
+    decision_reasoning_sql = _optional_column_sql(NEXO_DB, "decisions", "reasoning", "''")
+    decision_review_due_sql = _optional_column_sql(NEXO_DB, "decisions", "review_due_at", "NULL")
     decision_rows = safe_query(
         NEXO_DB,
-        "SELECT domain, outcome, status, reasoning, created_at, review_due_at FROM decisions "
+        f"SELECT domain, outcome, {decision_status_sql}, {decision_reasoning_sql}, decision, based_on, created_at, "
+        f"{decision_review_due_sql} FROM decisions "
         "ORDER BY COALESCE(created_at, review_due_at) DESC LIMIT 120",
     )
     for row in decision_rows:
@@ -579,6 +618,8 @@ def _project_priority_signals(target_day: datetime, compact_diaries: list[dict])
             " ".join(
                 [
                     str(row.get("reasoning", "") or ""),
+                    str(row.get("decision", "") or ""),
+                    str(row.get("based_on", "") or ""),
                     str(row.get("outcome", "") or ""),
                     str(row.get("status", "") or ""),
                 ]
@@ -647,9 +688,13 @@ def collect_long_horizon_context(
     recurring_states = Counter(row["mental_state"] for row in compact_diaries if row.get("mental_state"))
     recurring_critiques = Counter(row["self_critique"] for row in compact_diaries if row.get("self_critique"))
 
+    learning_reasoning_sql = _optional_column_sql(NEXO_DB, "learnings", "reasoning", "''")
+    learning_prevention_sql = _optional_column_sql(NEXO_DB, "learnings", "prevention", "''")
+    learning_applies_sql = _optional_column_sql(NEXO_DB, "learnings", "applies_to", "''")
     learning_rows = safe_query(
         NEXO_DB,
-        "SELECT category, title, content, created_at, updated_at, reasoning, prevention, applies_to "
+        f"SELECT category, title, content, created_at, updated_at, {learning_reasoning_sql}, "
+        f"{learning_prevention_sql}, {learning_applies_sql} "
         "FROM learnings ORDER BY COALESCE(updated_at, created_at) DESC LIMIT 120"
     )
     long_horizon_learnings = []

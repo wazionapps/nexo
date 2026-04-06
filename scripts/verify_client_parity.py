@@ -12,6 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 PARITY_TESTS = [
+    "tests/test_agent_runner.py",
     "tests/test_client_sync.py",
     "tests/test_doctor.py",
     "tests/test_client_parity_audit.py",
@@ -34,6 +35,7 @@ REQUIRED_DOC_SNIPPETS = {
         "Codex managed config still persists `mcp_servers.nexo`",
         "Runtime doctor still audits recent Codex sessions for startup discipline",
         "Deep Sleep still reads both Claude Code and Codex transcript sources",
+        "Shared automation runner still records backend telemetry across Claude Code and Codex",
     ],
 }
 

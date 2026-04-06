@@ -390,6 +390,68 @@ Quality over quantity. One strong improvement is better than three weak ones.
 """
 
 
+def build_public_pr_review_prompt(
+    *,
+    pr_number: int,
+    title: str,
+    author: str,
+    url: str,
+    body: str,
+    files: list[str],
+    diff_text: str,
+) -> str:
+    """Prompt for peer-reviewing another public evolution PR.
+
+    This is used only when this machine already has its own Draft PR open, so
+    Evolution can still add value without opening a second PR.
+    """
+
+    rendered_files = "\n".join(f"- {path}" for path in files[:40]) if files else "- (no file list provided)"
+    trimmed_diff = (diff_text or "").strip()
+    if len(trimmed_diff) > 80000:
+        trimmed_diff = trimmed_diff[:80000] + "\n\n[diff truncated by NEXO]"
+
+    return f"""You are NEXO Public Evolution Review.
+
+You are reviewing another opt-in public evolution PR. You must NOT merge, rebase,
+push, or edit the PR. Your only job is to decide whether it deserves an approval
+or whether it should receive a review comment without approval.
+
+STRICT RULES:
+- Review only this PR:
+  - Number: #{pr_number}
+  - Author: {author}
+  - URL: {url}
+- Base the review only on the provided title, body, file list, and diff
+- Do not assume hidden context
+- If confidence is not strong, choose `comment`, not `approve`
+- If the diff is too incomplete, too risky, or too ambiguous, choose `skip`
+- Never suggest merge authority; maintainers decide that later
+- Keep the review concise, technical, and useful
+
+PR TITLE:
+{title}
+
+PR BODY:
+{body or "(empty)"}
+
+FILES CHANGED:
+{rendered_files}
+
+DIFF:
+```diff
+{trimmed_diff or "(empty diff)"}
+```
+
+Return ONLY valid JSON:
+{{
+  "decision": "approve|comment|skip",
+  "summary": "one-line verdict",
+  "body": "the exact markdown text to post as the review body"
+}}
+"""
+
+
 def max_auto_changes(total_evolutions: int) -> int:
     """Progressive trust: 1 for first 4 cycles, 2 for next 4, then 3."""
     if total_evolutions < 4:

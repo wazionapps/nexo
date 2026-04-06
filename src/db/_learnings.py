@@ -13,6 +13,7 @@ def create_learning(
     reasoning: str = '',
     prevention: str = '',
     applies_to: str = '',
+    supersedes_id: int | None = None,
     status: str = 'active',
     review_due_at: float | None = None,
     last_reviewed_at: float | None = None,
@@ -22,11 +23,11 @@ def create_learning(
     now = now_epoch()
     cursor = conn.execute(
         "INSERT INTO learnings "
-        "(category, title, content, reasoning, prevention, applies_to, status, review_due_at, last_reviewed_at, created_at, updated_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "(category, title, content, reasoning, prevention, applies_to, supersedes_id, status, review_due_at, last_reviewed_at, created_at, updated_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             category, title, content, reasoning, prevention, applies_to,
-            status, review_due_at, last_reviewed_at, now, now,
+            supersedes_id, status, review_due_at, last_reviewed_at, now, now,
         )
     )
     conn.commit()
@@ -58,6 +59,33 @@ def update_learning(id: int, **kwargs) -> dict:
     r = dict(row)
     fts_upsert("learning", str(id), r.get("title", ""), f"{r.get('content', '')} {r.get('reasoning', '')}", r.get("category", ""), commit=False)
     return r
+
+
+def supersede_learning(old_id: int, new_id: int, note: str = '') -> dict:
+    """Mark an older learning as superseded by a newer canonical learning."""
+    conn = get_db()
+    old_row = conn.execute("SELECT * FROM learnings WHERE id = ?", (old_id,)).fetchone()
+    new_row = conn.execute("SELECT * FROM learnings WHERE id = ?", (new_id,)).fetchone()
+    if not old_row:
+        return {"error": f"Learning {old_id} not found"}
+    if not new_row:
+        return {"error": f"Learning {new_id} not found"}
+
+    old_reasoning = str(old_row["reasoning"] or "")
+    suffix = note.strip() if note.strip() else f"Superseded by learning #{new_id}."
+    combined_reasoning = f"{old_reasoning}\n{suffix}".strip() if old_reasoning else suffix
+    updated_at = now_epoch()
+    conn.execute(
+        "UPDATE learnings SET status = 'superseded', updated_at = ?, reasoning = ? WHERE id = ?",
+        (updated_at, combined_reasoning, old_id),
+    )
+    conn.execute(
+        "UPDATE learnings SET supersedes_id = ?, updated_at = ? WHERE id = ?",
+        (old_id, updated_at, new_id),
+    )
+    conn.commit()
+    row = conn.execute("SELECT * FROM learnings WHERE id = ?", (old_id,)).fetchone()
+    return dict(row)
 
 
 def delete_learning(id: int) -> bool:
@@ -165,5 +193,4 @@ def find_similar_learnings(new_id: int, title: str, content: str, category: str)
             results.append((row['id'], round(similarity, 2)))
     results.sort(key=lambda x: x[1], reverse=True)
     return results[:5]
-
 

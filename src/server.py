@@ -7,7 +7,15 @@ import sys
 
 from fastmcp import FastMCP
 from db import init_db, rebuild_fts_index, get_db, close_db, fts_add_dir, fts_remove_dir, fts_list_dirs
-from tools_sessions import handle_startup, handle_heartbeat, handle_status, handle_context_packet, handle_smart_startup_query
+from tools_sessions import (
+    handle_startup,
+    handle_heartbeat,
+    handle_status,
+    handle_context_packet,
+    handle_smart_startup_query,
+    handle_session_portable_context,
+    handle_session_export_bundle,
+)
 from user_context import get_context as _get_ctx
 from tools_coordination import (
     handle_track, handle_untrack, handle_files,
@@ -24,6 +32,7 @@ from tools_reminders_crud import (
 from tools_learnings import (
     handle_learning_add, handle_learning_search,
     handle_learning_update, handle_learning_delete, handle_learning_list,
+    handle_learning_quality,
 )
 from tools_credentials import (
     handle_credential_get, handle_credential_create,
@@ -164,6 +173,13 @@ mcp = FastMCP(
     instructions=(
         f"{_get_ctx().assistant_name} — cognitive co-operator. Save important info from tool results before they clear.\n\n"
         "## CRITICAL — do these or you WILL get corrected\n"
+        "- **Protocol (MANDATORY for non-trivial work):** `nexo_task_open(...)` at the start and `nexo_task_close(...)` before saying done. "
+        "For edit/execute/delegate tasks this is the default path. Never claim completion without evidence.\n"
+        "- **Answer discipline (MANDATORY for non-trivial factual answers):** run `nexo_confidence_check(...)` or use `nexo_task_open(task_type='answer'|'analyze', ...)`. "
+        "If the response mode is `verify`, `ask`, or `defer`, follow it instead of answering from memory.\n"
+        "- **Workflow runtime (MANDATORY for long multi-step or cross-session work):** open `nexo_goal_open(...)` when the objective must survive sessions, then `nexo_workflow_open(...)`, "
+        "update meaningful checkpoints with `nexo_workflow_update(...)`, then use `nexo_workflow_resume(...)` / "
+        "`nexo_workflow_replay(...)` instead of restarting blindly.\n"
         "- **Guard (MANDATORY before ANY code edit):** `nexo_guard_check(files='...', area='...')` BEFORE editing code. "
         "No exceptions. Blocking rules→resolve first. `nexo_track(sid=SID, paths=[...])` before shared files\n"
         "- **Skills (MANDATORY before multi-step tasks):** `nexo_skill_match(task)` to find reusable procedures. "
@@ -183,7 +199,7 @@ mcp = FastMCP(
         "Detect intent, not keywords — works in ALL languages.\n"
         "- **Delegate:** prefer direct. If needed: `nexo_context_packet(area)` + guard + 'if unsure STOP'\n"
         "- **Memory:** `nexo_recall` searches all. Capture: errors→`nexo_learning_add`, prefs, entities, decisions\n"
-        "- **Change log:** `nexo_change_log(...)` after production edits. NOT for config dir\n"
+        "- **Change log:** `nexo_task_close` should be the default closure path. If you bypass it, call `nexo_change_log(...)` after production edits. NOT for config dir\n"
         "- **Diary:** When user signals end of session (any language, any style — 'bye', 'done', 'cierro', etc.), "
         "write `nexo_session_diary_write(...)` with self_critique BEFORE responding. "
         "Detect intent, not keywords. If session closes without diary, auto_close handles it.\n"
@@ -272,6 +288,22 @@ def nexo_smart_startup() -> str:
     Returns up to 10 memories matching the current operational state.
     """
     return handle_smart_startup_query()
+
+
+@mcp.tool
+def nexo_session_portable_context(sid: str = "") -> str:
+    """Build a portable handoff packet for another client/runtime.
+
+    Use this when another client should continue the same work with explicit
+    task/checkpoint/goal/workflow context instead of relying on memory alone.
+    """
+    return handle_session_portable_context(sid)
+
+
+@mcp.tool
+def nexo_session_export_bundle(sid: str = "", path: str = "") -> str:
+    """Export a machine-readable session bundle for cross-client handoff or archival."""
+    return handle_session_export_bundle(sid, path)
 
 
 # ── Session Checkpoints (auto-compaction continuity) ──────────────
@@ -563,7 +595,17 @@ def nexo_followup_delete(id: str) -> str:
 # ── Learnings CRUD (5 tools) ──────────────────────────────────────
 
 @mcp.tool
-def nexo_learning_add(category: str, title: str, content: str, reasoning: str = "", priority: str = "medium") -> str:
+def nexo_learning_add(
+    category: str,
+    title: str,
+    content: str,
+    reasoning: str = "",
+    prevention: str = "",
+    applies_to: str = "",
+    review_days: int = 30,
+    priority: str = "medium",
+    supersedes_id: int = 0,
+) -> str:
     """Add a new learning (resolved error, pattern, gotcha).
 
     Args:
@@ -571,9 +613,17 @@ def nexo_learning_add(category: str, title: str, content: str, reasoning: str = 
         title: Short title for the learning.
         content: Full description with context and solution.
         reasoning: WHY this matters — what led to discovering this (optional).
+        prevention: Concrete rule/check that prevents repeating this mistake (optional).
+        applies_to: Files, systems, or areas this learning applies to (optional).
+        review_days: Days until this learning should be reviewed again (default 30).
         priority: critical, high, medium, low (default: medium). Critical/high never decay below floor.
+        supersedes_id: Existing learning ID this new canonical rule replaces (optional).
     """
-    return handle_learning_add(category, title, content, reasoning, priority=priority)
+    return handle_learning_add(
+        category, title, content, reasoning,
+        prevention=prevention, applies_to=applies_to,
+        review_days=review_days, priority=priority, supersedes_id=supersedes_id,
+    )
 
 
 @mcp.tool
@@ -588,7 +638,19 @@ def nexo_learning_search(query: str, category: str = "") -> str:
 
 
 @mcp.tool
-def nexo_learning_update(id: int, title: str = "", content: str = "", category: str = "", priority: str = "") -> str:
+def nexo_learning_update(
+    id: int,
+    title: str = "",
+    content: str = "",
+    category: str = "",
+    reasoning: str = "",
+    prevention: str = "",
+    applies_to: str = "",
+    status: str = "",
+    review_days: int = 0,
+    priority: str = "",
+    supersedes_id: int = 0,
+) -> str:
     """Update a learning entry. Only non-empty fields are changed.
 
     Args:
@@ -596,9 +658,20 @@ def nexo_learning_update(id: int, title: str = "", content: str = "", category: 
         title: New title (optional).
         content: New content (optional).
         category: New category (optional).
+        reasoning: New reasoning/context (optional).
+        prevention: New prevention rule (optional).
+        applies_to: New applies_to target(s) (optional).
+        status: New status such as active/superseded (optional).
+        review_days: New review interval in days (optional).
         priority: critical, high, medium, low (optional).
+        supersedes_id: Existing learning ID this updated canonical rule replaces (optional).
     """
-    return handle_learning_update(id, title, content, category, priority=priority)
+    return handle_learning_update(
+        id, title, content, category,
+        reasoning=reasoning, prevention=prevention, applies_to=applies_to,
+        status=status, review_days=review_days, priority=priority,
+        supersedes_id=supersedes_id,
+    )
 
 
 @mcp.tool
@@ -619,6 +692,19 @@ def nexo_learning_list(category: str = "") -> str:
         category: Filter by category (optional). If empty, shows all grouped.
     """
     return handle_learning_list(category)
+
+
+@mcp.tool
+def nexo_learning_quality(id: int = 0, category: str = "", status: str = "active", limit: int = 20) -> str:
+    """Score learning quality so fragile rules can be strengthened before they mislead guard or retrieval.
+
+    Args:
+        id: Specific learning ID to inspect (optional).
+        category: Filter by category (optional).
+        status: Filter by lifecycle status such as active/superseded (default active).
+        limit: Max learnings to score when listing (default 20).
+    """
+    return handle_learning_quality(id=id, category=category, status=status, limit=limit)
 
 
 # ── Search index ──────────────────────────────────────────────────

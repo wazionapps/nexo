@@ -5,8 +5,67 @@ and provides stats on error prevention effectiveness.
 """
 import json
 import os
+import re
 from datetime import datetime, timedelta
+from pathlib import Path
 from db import get_db, find_similar_learnings, extract_keywords, search_learnings, search_changes
+
+
+def _split_applies_to(applies_to: str) -> list[str]:
+    return [item.strip() for item in str(applies_to or "").split(",") if item.strip()]
+
+
+def _normalize_path_token(value: str) -> str:
+    return str(value or "").replace("\\", "/").rstrip("/").lower()
+
+
+def _applies_to_matches_file(applies_to: str, filepath: str) -> bool:
+    file_path = Path(filepath)
+    file_norm = _normalize_path_token(str(file_path))
+    parent_norm = _normalize_path_token(str(file_path.parent))
+    filename = file_path.name.lower()
+    stem = file_path.stem.lower()
+    parent_name = file_path.parent.name.lower()
+
+    for raw in _split_applies_to(applies_to):
+        token_norm = _normalize_path_token(raw)
+        if not token_norm:
+            continue
+        if "/" in token_norm:
+            if (
+                file_norm == token_norm
+                or file_norm.endswith(f"/{token_norm}")
+                or file_norm.startswith(f"{token_norm}/")
+                or parent_norm == token_norm
+                or parent_norm.endswith(f"/{token_norm}")
+            ):
+                return True
+            continue
+        if token_norm in {filename, stem, parent_name}:
+            return True
+    return False
+
+
+def _load_conditioned_learnings(conn, file_list: list[str]) -> dict[str, list[dict]]:
+    conditioned = {filepath: [] for filepath in file_list}
+    if not file_list:
+        return conditioned
+    rows = conn.execute(
+        """
+        SELECT id, category, title, content, prevention, applies_to,
+               COALESCE(priority, 'medium') as priority,
+               COALESCE(weight, 0.5) as weight
+        FROM learnings
+        WHERE status = 'active' AND COALESCE(applies_to, '') != ''
+        ORDER BY COALESCE(weight, 0.5) DESC, updated_at DESC
+        """
+    ).fetchall()
+    for row in rows:
+        entry = dict(row)
+        for filepath in file_list:
+            if _applies_to_matches_file(entry.get("applies_to", ""), filepath):
+                conditioned[filepath].append(entry)
+    return conditioned
 
 
 
@@ -69,17 +128,49 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
     result = {
         "learnings": [],
         "universal_rules": [],
+        "conditioned_learnings": [],
         "schemas": {},
         "area_repetition_rate": 0.0,
         "blocking_rules": [],
     }
 
     seen_ids = set()
+    conditioned_blocking_seen = set()
+    conditioned_by_file = _load_conditioned_learnings(conn, file_list) if file_list else {}
 
-    # 1. By file path — learnings mentioning the file name or parent directory
+    # 1. File-conditioned learnings — explicit applies_to guardrails for target files
     hit_ids = []
     for filepath in file_list:
-        from pathlib import Path
+        for row in conditioned_by_file.get(filepath, []):
+            if row["id"] not in seen_ids:
+                seen_ids.add(row["id"])
+                hit_ids.append(row["id"])
+                result["learnings"].append({
+                    "id": row["id"],
+                    "category": row["category"],
+                    "rule": row["title"],
+                    "priority": row.get("priority", "medium") or "medium",
+                    "weight": row.get("weight", 0.5) or 0.5,
+                })
+                result["conditioned_learnings"].append({
+                    "id": row["id"],
+                    "file": filepath,
+                    "category": row["category"],
+                    "rule": row["title"],
+                    "applies_to": row.get("applies_to", ""),
+                })
+            if row["id"] not in conditioned_blocking_seen:
+                conditioned_blocking_seen.add(row["id"])
+                result["blocking_rules"].append({
+                    "id": row["id"],
+                    "rule": row["title"],
+                    "repetitions": 0,
+                    "reason": "file_conditioned",
+                    "file": filepath,
+                })
+
+    # 2. By file path — learnings mentioning the file name or parent directory
+    for filepath in file_list:
         p = Path(filepath)
         filename = p.name
         parent_dir = p.parent.name
@@ -96,7 +187,7 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
                 w = r["weight"] or 0.5
                 result["learnings"].append({"id": r["id"], "category": r["category"], "rule": r["title"], "priority": pri, "weight": w})
 
-    # 2. By area/category
+    # 3. By area/category
     if area:
         rows = conn.execute(
             "SELECT id, category, title, content, priority, weight FROM learnings WHERE category = ?",
@@ -110,14 +201,14 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
                 w = r["weight"] or 0.5
                 result["learnings"].append({"id": r["id"], "category": r["category"], "rule": r["title"], "priority": pri, "weight": w})
 
-    # 3. Universal rules — only from matching area or nexo-ops (not ALL learnings)
+    # 4. Universal rules — only from matching area or nexo-ops (not ALL learnings)
     universal_categories = {"nexo-ops"}
     if area:
         universal_categories.add(area)
     placeholders = ",".join("?" for _ in universal_categories)
     rows = conn.execute(
         f"SELECT id, category, title, content, priority FROM learnings WHERE "
-        f"category IN ({placeholders}) AND ("
+        f"category IN ({placeholders}) AND COALESCE(applies_to, '') = '' AND ("
         f"content LIKE '%SIEMPRE%' OR content LIKE '%NUNCA%' OR content LIKE '%ANTES%' "
         f"OR content LIKE '%always%' OR content LIKE '%never%')",
         tuple(universal_categories)
@@ -127,7 +218,7 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
             seen_ids.add(r["id"])
             result["universal_rules"].append({"id": r["id"], "rule": r["title"], "category": r["category"], "priority": r["priority"] or "medium"})
 
-    # 4. DB schemas if files contain SQL keywords
+    # 5. DB schemas if files contain SQL keywords
     if include_schemas_bool and file_list:
         all_tables = set()
         for filepath in file_list:
@@ -149,7 +240,7 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
             elif "cloud_sql" in cache and table in cache["cloud_sql"]:
                 result["schemas"][table] = cache["cloud_sql"][table]
 
-    # 5. Check for blocking rules — two paths:
+    # 6. Check for blocking rules — two paths:
     #    (a) 5+ repetitions (existing behavior)
     #    (b) Learning contains NUNCA/NEVER/PROHIBIDO and matches semantically (aggressive mode)
     import re
@@ -160,7 +251,7 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
     # Check both learnings and universal_rules for blocking
     all_candidates = [(l, "learning") for l in result["learnings"]] + \
                      [(u, "universal") for u in result["universal_rules"]]
-    blocking_seen = set()
+    blocking_seen = set(conditioned_blocking_seen)
     for learning, source in all_candidates:
         lid = learning["id"]
         if lid in blocking_seen:
@@ -188,7 +279,7 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
                 "reason": "prohibition_keyword"
             })
 
-    # 5b. Behavioral rules — when called without files (session-level check)
+    # 6b. Behavioral rules — when called without files (session-level check)
     if not file_list:
         behavioral = conn.execute(
             """SELECT l.id, l.title, l.category, COUNT(e.id) as violations
@@ -205,7 +296,7 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
                 for r in behavioral
             ]
 
-    # 6. Area repetition rate
+    # 7. Area repetition rate
     if area:
         total_area = conn.execute(
             "SELECT COUNT(*) as cnt FROM learnings WHERE category = ?", (area,)
@@ -216,7 +307,7 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
         if total_area > 0:
             result["area_repetition_rate"] = round(reps_area / total_area, 2)
 
-    # 7. Cognitive metacognition — semantic search for related warnings
+    # 8. Cognitive metacognition — semantic search for related warnings
     #    Trust score modulates rigor: <40 = paranoid mode (more results, lower threshold)
     cognitive_warnings = []
     trust_note = ""
@@ -255,7 +346,7 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
     except Exception:
         pass  # Cognitive is optional
 
-    # 8. Somatic markers — risk score per file/area
+    # 9. Somatic markers — risk score per file/area
     somatic_risk = 0.0
     somatic_details = {}
     try:
@@ -297,10 +388,18 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
         lines.append("BLOCKING RULES (resolve BEFORE writing):")
         for r in result["blocking_rules"]:
             reason = r.get("reason", "repeated_error")
-            if reason == "prohibition_keyword":
+            if reason == "file_conditioned":
+                lines.append(f"  #{r['id']} [FILE RULE:{r.get('file', '')}]: {r['rule']}")
+            elif reason == "prohibition_keyword":
                 lines.append(f"  #{r['id']} [PROHIBIT]: {r['rule']}")
             else:
                 lines.append(f"  #{r['id']} ({r['repetitions']}x repeated): {r['rule']}")
+        lines.append("")
+
+    if result["conditioned_learnings"]:
+        lines.append(f"FILE-CONDITIONED LEARNINGS ({len(result['conditioned_learnings'])}):")
+        for item in result["conditioned_learnings"][:10]:
+            lines.append(f"  #{item['id']} [{item['file']}] {item['rule']}")
         lines.append("")
 
     if result["learnings"]:
@@ -609,9 +708,6 @@ def handle_guard_file_check(files: list) -> str:
     Args:
         files: List of file paths about to be edited
     """
-    from pathlib import Path
-    import re
-
     BLOCKING_KEYWORDS = re.compile(
         r'\bNUNCA\b|\bNEVER\b|\bPROHIBIDO\b|\bFORBIDDEN\b|\bBLOCKING\b',
         re.IGNORECASE
@@ -624,6 +720,8 @@ def handle_guard_file_check(files: list) -> str:
     recent_changes: dict = {}
     warnings: list = []
     seen_learning_ids: set = set()
+    conn = get_db()
+    conditioned_by_file = _load_conditioned_learnings(conn, files)
 
     for filepath in files:
         p = Path(filepath)
@@ -643,10 +741,28 @@ def handle_guard_file_check(files: list) -> str:
         file_results = []
         file_seen_ids: set = set()
 
+        for row in conditioned_by_file.get(filepath, []):
+            lid = row.get("id")
+            if lid and lid not in seen_learning_ids and lid not in file_seen_ids:
+                file_seen_ids.add(lid)
+                seen_learning_ids.add(lid)
+                file_results.append({
+                    "id": lid,
+                    "category": row.get("category", ""),
+                    "title": row.get("title", ""),
+                    "content": (row.get("content") or row.get("prevention") or "")[:300],
+                })
+            warnings.append(
+                f"[BLOCKING] #{row.get('id')} ({filepath}): conditioned learning — {row.get('title', '')}"
+            )
+
         for keyword in unique_keywords:
             try:
                 rows = search_learnings(keyword)
                 for r in rows:
+                    applies_to = str(r.get("applies_to") or "").strip()
+                    if applies_to and not _applies_to_matches_file(applies_to, filepath):
+                        continue
                     lid = r.get("id")
                     if lid and lid not in seen_learning_ids and lid not in file_seen_ids:
                         file_seen_ids.add(lid)

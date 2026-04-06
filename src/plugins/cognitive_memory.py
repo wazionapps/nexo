@@ -533,6 +533,23 @@ def handle_cognitive_trigger_check(text: str, use_semantic: bool = False) -> str
     return "\n".join(lines)
 
 
+def handle_cognitive_trigger_preview(text: str, use_semantic: bool = False) -> str:
+    """Preview prospective trigger matches without firing them."""
+    matches = cognitive.preview_triggers(text, use_semantic=use_semantic)
+    if not matches:
+        return "No anticipatory warnings."
+
+    lines = [f"ANTICIPATORY WARNINGS: {len(matches)}", ""]
+    for match in matches:
+        lines.append(f"  #{match['id']} [{match['match_type']}] pattern='{match['pattern']}'")
+        lines.append(f"    ACTION: {match['action']}")
+        if match.get("context"):
+            lines.append(f"    context: {match['context']}")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
 def handle_cognitive_trigger_delete(trigger_id: int) -> str:
     """Delete a prospective memory trigger.
 
@@ -570,6 +587,7 @@ TOOLS = [
     (handle_cognitive_quarantine_process, "nexo_cognitive_quarantine_process", "Run quarantine promotion cycle — evaluate pending items against policy."),
     (handle_cognitive_trigger_create, "nexo_cognitive_trigger_create", "Create a prospective memory trigger — 'when X is mentioned, remind about Y'."),
     (handle_cognitive_trigger_list, "nexo_cognitive_trigger_list", "List prospective triggers by status (armed/fired/all)."),
+    (handle_cognitive_trigger_preview, "nexo_cognitive_trigger_preview", "Preview anticipatory trigger matches without firing them."),
     (handle_cognitive_trigger_check, "nexo_cognitive_trigger_check", "Check text against armed triggers. Returns fired triggers with actions."),
     (handle_cognitive_trigger_delete, "nexo_cognitive_trigger_delete", "Delete a prospective trigger by ID."),
     (handle_cognitive_trigger_rearm, "nexo_cognitive_trigger_rearm", "Re-arm a fired trigger so it can fire again."),

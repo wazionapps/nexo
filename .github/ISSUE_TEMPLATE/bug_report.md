@@ -30,3 +30,7 @@ What actually happened.
 ```
 Paste relevant logs here
 ```
+
+## Doctor / Parity
+- `nexo doctor --tier runtime --json`:
+- Did this reproduce on another client/backend too? If yes, which one?

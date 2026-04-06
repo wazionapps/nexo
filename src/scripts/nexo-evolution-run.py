@@ -173,7 +173,8 @@ sys.path.insert(0, str(NEXO_CODE))
 from agent_runner import probe_automation_backend, run_automation_prompt
 from evolution_cycle import (
     load_objective, save_objective, get_week_data, build_evolution_prompt,
-    dry_run_restore_test, max_auto_changes, create_snapshot, build_public_contribution_prompt
+    dry_run_restore_test, max_auto_changes, create_snapshot,
+    build_public_contribution_prompt, build_public_pr_review_prompt,
 )
 from public_contribution import (
     CONTRIB_ARTIFACTS_DIR,
@@ -184,6 +185,7 @@ from public_contribution import (
     load_public_contribution_config,
     mark_active_pr,
     mark_public_contribution_result,
+    STATUS_PAUSED_OPEN_PR,
 )
 
 
@@ -430,6 +432,304 @@ def _write_public_artifacts(worktree_dir: Path, branch_name: str, summary: dict)
     return artifact_dir
 
 
+def _review_state(review: dict) -> str:
+    return str(review.get("state") or review.get("reviewState") or "").strip().upper()
+
+
+def _review_author(review: dict) -> str:
+    author = review.get("author") or {}
+    if isinstance(author, dict):
+        return str(author.get("login") or "").strip().lower()
+    return ""
+
+
+def _is_public_evolution_pr(details: dict) -> bool:
+    body = str(details.get("body") or "")
+    return "Source: automated public core evolution from an opt-in machine." in body
+
+
+def _review_already_left_by_user(details: dict, login: str) -> bool:
+    login = str(login or "").strip().lower()
+    if not login:
+        return False
+    for review in details.get("reviews") or []:
+        if _review_author(review) == login and _review_state(review) in {"APPROVED", "COMMENTED", "CHANGES_REQUESTED"}:
+            return True
+    return False
+
+
+def _candidate_paths(details: dict) -> list[str]:
+    paths = []
+    for item in details.get("files") or []:
+        if isinstance(item, dict):
+            path = str(item.get("path") or item.get("name") or "").strip()
+            if path:
+                paths.append(path)
+    return paths
+
+
+def _list_reviewable_public_prs(config: dict, limit: int = 3) -> list[dict]:
+    result = _gh(
+        "pr",
+        "list",
+        "--repo",
+        config["upstream_repo"],
+        "--state",
+        "open",
+        "--json",
+        "number,title,url,isDraft,author",
+        "--limit",
+        str(max(1, limit * 4)),
+        timeout=30,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.strip() or result.stdout.strip() or "gh pr list failed")
+
+    github_user = str(config.get("github_user") or "").strip().lower()
+    active_pr_number = config.get("active_pr_number")
+    candidates: list[dict] = []
+    for item in json.loads(result.stdout or "[]"):
+        if not item.get("isDraft", False):
+            continue
+        number = int(item.get("number") or 0)
+        if not number or number == active_pr_number:
+            continue
+        author = item.get("author") or {}
+        author_login = str(author.get("login") or "").strip().lower()
+        if github_user and author_login == github_user:
+            continue
+
+        details_result = _gh(
+            "pr",
+            "view",
+            str(number),
+            "--repo",
+            config["upstream_repo"],
+            "--json",
+            "number,title,body,url,isDraft,author,reviews,files",
+            timeout=30,
+        )
+        if details_result.returncode != 0:
+            continue
+        details = json.loads(details_result.stdout or "{}")
+        if not details.get("isDraft", False):
+            continue
+        if not _is_public_evolution_pr(details):
+            continue
+        if _review_already_left_by_user(details, github_user):
+            continue
+        paths = _candidate_paths(details)
+        if not paths or any(not _is_allowed_public_path(path) for path in paths):
+            continue
+
+        diff_result = _gh(
+            "pr",
+            "diff",
+            str(number),
+            "--repo",
+            config["upstream_repo"],
+            timeout=60,
+        )
+        if diff_result.returncode != 0:
+            continue
+        details["files_changed"] = paths
+        details["diff_text"] = diff_result.stdout or ""
+        candidates.append(details)
+        if len(candidates) >= limit:
+            break
+    return candidates
+
+
+_DEDUP_STOPWORDS = {
+    "the", "and", "for", "with", "from", "into", "after", "before", "public",
+    "core", "nexo", "fix", "feat", "chore", "docs", "tests", "runtime", "system",
+}
+
+
+def _proposal_tokens(text: str) -> set[str]:
+    return {
+        token
+        for token in re.findall(r"[a-z0-9]+", (text or "").lower())
+        if len(token) >= 3 and token not in _DEDUP_STOPWORDS
+    }
+
+
+def _public_pr_duplicate_candidate(config: dict, *, title: str, changed_files: list[str]) -> dict | None:
+    try:
+        candidates = _list_reviewable_public_prs(config, limit=12)
+    except Exception:
+        return None
+    wanted_files = {str(path).strip().lower() for path in (changed_files or []) if str(path).strip()}
+    wanted_tokens = _proposal_tokens(title)
+    best_match = None
+    best_score = 0.0
+    for candidate in candidates:
+        candidate_files = {
+            str(path).strip().lower() for path in (candidate.get("files_changed") or []) if str(path).strip()
+        }
+        shared_files = wanted_files & candidate_files
+        candidate_tokens = _proposal_tokens(str(candidate.get("title") or ""))
+        shared_tokens = wanted_tokens & candidate_tokens
+        token_score = 0.0
+        if wanted_tokens and candidate_tokens:
+            token_score = len(shared_tokens) / max(1, min(len(wanted_tokens), len(candidate_tokens)))
+        score = 0.0
+        if shared_files and token_score >= 0.34:
+            score = 1.0
+        elif shared_files:
+            score = 0.75
+        elif token_score >= 0.8:
+            score = 0.7
+        if score > best_score:
+            best_score = score
+            best_match = {
+                "number": candidate.get("number"),
+                "title": candidate.get("title"),
+                "url": candidate.get("url"),
+                "score": round(score, 2),
+                "shared_files": sorted(shared_files),
+                "shared_tokens": sorted(shared_tokens),
+            }
+    return best_match if best_score >= 0.75 else None
+
+
+def _parse_public_review_json(text: str) -> dict:
+    payload = text.strip()
+    if "```json" in payload:
+        payload = payload.split("```json", 1)[1].split("```", 1)[0]
+    elif "```" in payload:
+        payload = payload.split("```", 1)[1].split("```", 1)[0]
+    try:
+        data = json.loads(payload.strip())
+    except Exception:
+        data = {}
+    return data if isinstance(data, dict) else {}
+
+
+def _submit_public_pr_review(config: dict, pr_number: int, decision: str, body: str) -> str:
+    clean_decision = str(decision or "").strip().lower()
+    clean_body = str(body or "").strip()
+    if clean_decision == "approve":
+        result = _gh(
+            "pr",
+            "review",
+            str(pr_number),
+            "--repo",
+            config["upstream_repo"],
+            "--approve",
+            "--body",
+            clean_body or "Scoped public-core change looks correct from automated peer review.",
+            timeout=60,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr.strip() or result.stdout.strip() or "gh pr review --approve failed")
+        return "approved_review"
+    if clean_decision == "comment":
+        result = _gh(
+            "pr",
+            "review",
+            str(pr_number),
+            "--repo",
+            config["upstream_repo"],
+            "--comment",
+            "--body",
+            clean_body or "Automated peer review left a note but did not approve.",
+            timeout=60,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr.strip() or result.stdout.strip() or "gh pr review --comment failed")
+        return "commented_review"
+    return "review_skipped"
+
+
+def _write_public_review_artifacts(pr_number: int, candidate: dict, review: dict) -> Path:
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    artifact_dir = CONTRIB_ARTIFACTS_DIR / f"review-{timestamp}-pr{pr_number}"
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    (artifact_dir / "candidate.json").write_text(json.dumps(candidate, indent=2, ensure_ascii=False) + "\n")
+    (artifact_dir / "review.json").write_text(json.dumps(review, indent=2, ensure_ascii=False) + "\n")
+    (artifact_dir / "diff.patch").write_text(str(candidate.get("diff_text") or ""))
+    return artifact_dir
+
+
+def run_public_pr_validation_cycle(*, objective: dict, cycle_num: int, config: dict | None = None) -> int:
+    config = config or load_public_contribution_config()
+    if not verify_claude_cli():
+        log("Automation backend not available or not authenticated. Skipping peer PR validation.")
+        mark_public_contribution_result(result="skipped:peer_review_cli_unavailable", config=config)
+        return 0
+
+    _ensure_public_repo_cache(config)
+    candidates = _list_reviewable_public_prs(config, limit=3)
+    if not candidates:
+        log("No reviewable peer public-evolution PRs found.")
+        mark_public_contribution_result(result="skipped:no_peer_prs", config=config)
+        return 0
+
+    repo_root = str(CONTRIB_REPO_DIR if CONTRIB_REPO_DIR.exists() else Path.cwd())
+    conn = sqlite3.connect(str(NEXO_DB), timeout=10)
+    conn.execute("PRAGMA busy_timeout=5000")
+    reviewed = 0
+    try:
+        for candidate in candidates:
+            pr_number = int(candidate.get("number") or 0)
+            prompt = build_public_pr_review_prompt(
+                pr_number=pr_number,
+                title=str(candidate.get("title") or "").strip(),
+                author=str((candidate.get("author") or {}).get("login") or "").strip(),
+                url=str(candidate.get("url") or "").strip(),
+                body=str(candidate.get("body") or ""),
+                files=candidate.get("files_changed") or [],
+                diff_text=str(candidate.get("diff_text") or ""),
+            )
+            raw_review = call_public_claude_cli(prompt, cwd=Path(repo_root))
+            review = _parse_public_review_json(raw_review)
+            decision = str(review.get("decision") or "skip").strip().lower()
+            review_status = _submit_public_pr_review(config, pr_number, decision, str(review.get("body") or ""))
+            artifact_dir = _write_public_review_artifacts(pr_number, candidate, review)
+            conn.execute(
+                "INSERT INTO evolution_log (cycle_number, dimension, proposal, classification, reasoning, status, files_changed, test_result) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    cycle_num,
+                    "public_core",
+                    f"Review PR #{pr_number}: {str(candidate.get('title') or '').strip()}",
+                    "public_review",
+                    str(review.get("summary") or "Peer PR validation").strip(),
+                    review_status,
+                    json.dumps(candidate.get("files_changed") or []),
+                    json.dumps(
+                        {
+                            "pr_url": candidate.get("url"),
+                            "decision": decision,
+                            "artifact_dir": str(artifact_dir),
+                        }
+                    ),
+                ),
+            )
+            conn.commit()
+            reviewed += 1
+
+        if reviewed:
+            objective["last_evolution"] = str(date.today())
+            objective["total_evolutions"] = cycle_num
+            objective.setdefault("history", []).insert(0, {
+                "cycle": cycle_num,
+                "date": str(date.today()),
+                "mode": "public_core_review",
+                "proposals": 0,
+                "auto_count": 0,
+                "auto_applied": 0,
+                "analysis": f"Reviewed {reviewed} peer public-evolution PR(s).",
+            })
+            objective["history"] = objective["history"][:12]
+            save_objective(objective)
+            mark_public_contribution_result(result=f"peer_reviewed:{reviewed}", config=config)
+        return reviewed
+    finally:
+        conn.close()
+
+
 def _create_draft_pr(worktree_dir: Path, config: dict, branch_name: str, summary: dict) -> tuple[str, int | None]:
     title = str(summary.get("title") or "chore: public evolution contribution").strip()
     body_lines = [
@@ -482,6 +782,12 @@ def run_public_contribution_cycle(*, objective: dict, cycle_num: int) -> None:
     config = load_public_contribution_config()
     ready, reason, config = can_run_public_contribution(config)
     if not ready:
+        if config.get("status") == STATUS_PAUSED_OPEN_PR:
+            log(f"Public core contribution paused: {reason}. Switching to peer PR validation.")
+            reviewed = run_public_pr_validation_cycle(objective=objective, cycle_num=cycle_num, config=config)
+            if reviewed:
+                log(f"Peer public PR validation complete: reviewed {reviewed} PR(s).")
+            return
         log(f"Public core contribution paused: {reason}")
         mark_public_contribution_result(result=f"skipped:{reason}", config=config)
         return
@@ -510,6 +816,42 @@ def run_public_contribution_cycle(*, objective: dict, cycle_num: int) -> None:
         existing_tests = summary.get("tests")
         summary["tests"] = existing_tests if isinstance(existing_tests, list) and existing_tests else tests_run
         commit_title = str(summary.get("title") or "chore: public evolution contribution").strip()
+        duplicate = _public_pr_duplicate_candidate(config, title=commit_title, changed_files=changed_files)
+        if duplicate:
+            artifact_dir = _write_public_artifacts(
+                worktree_dir,
+                branch_name,
+                {
+                    **summary,
+                    "duplicate_of": duplicate,
+                    "tests": summary.get("tests", []),
+                    "changed_files": changed_files,
+                },
+            )
+            conn.execute(
+                "INSERT INTO evolution_log (cycle_number, dimension, proposal, classification, reasoning, status, files_changed, test_result) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    cycle_num,
+                    "public_core",
+                    commit_title,
+                    "draft_pr_dedup",
+                    f"Duplicate of open opt-in public PR #{duplicate.get('number')}: {duplicate.get('title')}",
+                    "skipped_duplicate_existing_pr",
+                    json.dumps(changed_files),
+                    json.dumps({"duplicate_of": duplicate, "artifact_dir": str(artifact_dir)}),
+                ),
+            )
+            conn.commit()
+            mark_public_contribution_result(
+                result=f"skipped:duplicate_pr:{duplicate.get('number')}",
+                config=config,
+            )
+            log(
+                "Public core contribution deduplicated against existing opt-in PR "
+                f"#{duplicate.get('number')} ({duplicate.get('url')})."
+            )
+            return
 
         add = _git(worktree_dir, "add", "--", *changed_files, timeout=60)
         if add.returncode != 0:

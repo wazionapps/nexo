@@ -64,8 +64,16 @@ def test_write_periodic_summaries_creates_weekly_and_monthly_outputs(monkeypatch
         ("Fix shared brain drift", "The dashboard deploy drifted again", "wazion", "high", 0.8, "2026-04-04 10:00:00", "2026-04-04 09:00:00"),
     )
     conn.execute(
+        "INSERT INTO learnings VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("Fix shared brain deploy drift", "Dashboard deploy drifted again and again", "wazion", "high", 0.7, "2026-04-04 10:30:00", "2026-04-04 09:30:00"),
+    )
+    conn.execute(
         "INSERT INTO followups VALUES (?, ?, ?, ?, ?, ?, ?)",
         ("Review dashboard deploy", "2026-04-05", "PENDING", "high", "2026-04-04 11:00:00", "2026-04-04 11:30:00", "dashboard remains critical"),
+    )
+    conn.execute(
+        "INSERT INTO followups VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("Review dashboard deployment", "2026-04-05", "PENDING", "high", "2026-04-04 11:10:00", "2026-04-04 11:35:00", "dashboard remains critical"),
     )
     conn.execute(
         "INSERT INTO decisions VALUES (?, ?, ?, ?, ?, ?)",
@@ -116,6 +124,20 @@ def test_write_periodic_summaries_creates_weekly_and_monthly_outputs(monkeypatch
                         "description": "Engineering guardrail for deploy drift",
                         "reasoning": "Engineering fix",
                     },
+                },
+                {
+                    "action_type": "followup_create",
+                    "details": {
+                        "description": "Review dashboard deploy",
+                        "reasoning": "Matched duplicate",
+                        "outcome": "matched_existing_followup",
+                    },
+                },
+                {
+                    "action_type": "learning_add",
+                    "details": {
+                        "outcome": "reinforced_learning",
+                    },
                 }
             ],
         }))
@@ -151,15 +173,39 @@ def test_write_periodic_summaries_creates_weekly_and_monthly_outputs(monkeypatch
             "skipped_dedupe": 2,
             "errors": 0,
         },
-        "applied_actions": [
-            {
-                "action_type": "followup_create",
-                "details": {
-                    "description": "Engineering fix for recurring deploy drift",
-                    "reasoning": "Engineering guardrail",
+            "applied_actions": [
+                {
+                    "action_type": "followup_create",
+                    "details": {
+                        "description": "Engineering fix for recurring deploy drift",
+                        "reasoning": "Engineering guardrail",
+                    },
                 },
-            }
-        ],
+                {
+                    "action_type": "learning_add",
+                    "details": {
+                        "outcome": "duplicate_learning",
+                    },
+                }
+            ],
+    }))
+
+    (deep_sleep_dir / "2026-W13-weekly-summary.json").write_text(json.dumps({
+        "label": "2026-W13",
+        "followup_deduplication": {
+            "open_followups": 5,
+            "duplicate_open_followups": 3,
+            "duplicate_rate_pct": 60.0,
+        },
+        "learning_consolidation": {
+            "active_learnings": 5,
+            "noise_pressure": 4,
+            "noise_rate_pct": 80.0,
+        },
+        "protocol_summary": {"overall_compliance_pct": 52.0},
+        "avg_mood_score": 0.65,
+        "avg_trust_score": 75.0,
+        "total_corrections": 4,
     }))
 
     outputs = apply_mod.write_periodic_summaries("2026-04-05", current_synthesis)
@@ -176,12 +222,21 @@ def test_write_periodic_summaries_creates_weekly_and_monthly_outputs(monkeypatch
     assert weekly_payload["top_patterns"][0]["pattern"] == "deploy drift"
     assert weekly_payload["protocol_summary"]["overall_compliance_pct"] == 64.1
     assert weekly_payload["delivery_metrics"]["engineering_followups"] == 3
+    assert weekly_payload["delivery_metrics"]["followup_dedupe_matches"] == 2
+    assert weekly_payload["delivery_metrics"]["learning_reinforcements"] == 2
+    assert weekly_payload["delivery_metrics"]["learning_duplicate_skips"] == 1
+    assert weekly_payload["followup_deduplication"]["duplicate_open_followups"] == 1
+    assert weekly_payload["learning_consolidation"]["noise_pressure"] >= 2
+    assert weekly_payload["trend"]["followup_duplicate_open_delta"] == -2
+    assert weekly_payload["trend"]["learning_noise_delta"] <= 0
     assert weekly_payload["project_pulse"][0]["project"] == "wazion"
 
     weekly_markdown = Path(outputs["weekly_markdown"]).read_text()
     assert "Top Projects" in weekly_markdown
     assert "Protocol Compliance" in weekly_markdown
     assert "Loop Output" in weekly_markdown
+    assert "Prevention Quality" in weekly_markdown
+    assert "Duplicate followups delta" in weekly_markdown
     assert "wazion" in weekly_markdown
 
 

@@ -2,10 +2,89 @@
   "hooks": {
     "SessionStart": [
       {
+        "matcher": "*",
         "hooks": [
           {
             "type": "command",
             "command": "diff -q \"${CLAUDE_PLUGIN_ROOT}/src/requirements.txt\" \"${CLAUDE_PLUGIN_DATA}/requirements.txt\" >/dev/null 2>&1 || (python3 -m venv \"${CLAUDE_PLUGIN_DATA}/.venv\" 2>/dev/null; cp \"${CLAUDE_PLUGIN_ROOT}/src/requirements.txt\" \"${CLAUDE_PLUGIN_DATA}/requirements.txt\"; \"${CLAUDE_PLUGIN_DATA}/.venv/bin/pip\" install --quiet -r \"${CLAUDE_PLUGIN_DATA}/requirements.txt\") || rm -f \"${CLAUDE_PLUGIN_DATA}/requirements.txt\""
+          },
+          {
+            "type": "command",
+            "command": "mkdir -p \"${CLAUDE_PLUGIN_DATA}/operations\" && date +%s > \"${CLAUDE_PLUGIN_DATA}/operations/.session-start-ts\"",
+            "timeout": 2
+          },
+          {
+            "type": "command",
+            "command": "NEXO_HOME=\"${CLAUDE_PLUGIN_DATA}\" NEXO_CODE=\"${CLAUDE_PLUGIN_ROOT}/src\" bash \"${CLAUDE_PLUGIN_ROOT}/src/hooks/daily-briefing-check.sh\"",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "NEXO_HOME=\"${CLAUDE_PLUGIN_DATA}\" NEXO_CODE=\"${CLAUDE_PLUGIN_ROOT}/src\" bash \"${CLAUDE_PLUGIN_ROOT}/src/hooks/session-start.sh\"",
+            "timeout": 35
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "NEXO_HOME=\"${CLAUDE_PLUGIN_DATA}\" NEXO_CODE=\"${CLAUDE_PLUGIN_ROOT}/src\" bash \"${CLAUDE_PLUGIN_ROOT}/src/hooks/session-stop.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "NEXO_HOME=\"${CLAUDE_PLUGIN_DATA}\" NEXO_CODE=\"${CLAUDE_PLUGIN_ROOT}/src\" bash \"${CLAUDE_PLUGIN_ROOT}/src/hooks/capture-tool-logs.sh\"",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "NEXO_HOME=\"${CLAUDE_PLUGIN_DATA}\" NEXO_CODE=\"${CLAUDE_PLUGIN_ROOT}/src\" bash \"${CLAUDE_PLUGIN_ROOT}/src/hooks/capture-session.sh\"",
+            "timeout": 3
+          },
+          {
+            "type": "command",
+            "command": "NEXO_HOME=\"${CLAUDE_PLUGIN_DATA}\" NEXO_CODE=\"${CLAUDE_PLUGIN_ROOT}/src\" bash \"${CLAUDE_PLUGIN_ROOT}/src/hooks/inbox-hook.sh\"",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "NEXO_HOME=\"${CLAUDE_PLUGIN_DATA}\" NEXO_CODE=\"${CLAUDE_PLUGIN_ROOT}/src\" bash \"${CLAUDE_PLUGIN_ROOT}/src/hooks/protocol-guardrail.sh\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "NEXO_HOME=\"${CLAUDE_PLUGIN_DATA}\" NEXO_CODE=\"${CLAUDE_PLUGIN_ROOT}/src\" bash \"${CLAUDE_PLUGIN_ROOT}/src/hooks/pre-compact.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "NEXO_HOME=\"${CLAUDE_PLUGIN_DATA}\" NEXO_CODE=\"${CLAUDE_PLUGIN_ROOT}/src\" bash \"${CLAUDE_PLUGIN_ROOT}/src/hooks/post-compact.sh\"",
+            "timeout": 10
           }
         ]
       }

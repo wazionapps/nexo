@@ -517,6 +517,18 @@ def get_personal_script_health_report(*, fix: bool = False) -> dict:
 
     for schedule in audit.get("schedules", []):
         checked += 1
+        if schedule.get("schedule_managed") and schedule.get("schedule_type") == "keep_alive":
+            runtime_state = str(schedule.get("runtime_state", "") or "")
+            runtime_summary = str(schedule.get("runtime_summary", "") or runtime_state or "runtime issue")
+            if runtime_state in {"degraded", "stale", "duplicated"}:
+                severity = "error" if runtime_state == "duplicated" else "warn"
+                issues.append({
+                    "script_id": schedule.get("script_name") or schedule.get("script_path") or schedule.get("cron_id"),
+                    "severity": severity,
+                    "message": (
+                        f"keep_alive runtime {schedule['cron_id']}: {runtime_summary}"
+                    ),
+                })
         if schedule.get("schedule_managed"):
             continue
 

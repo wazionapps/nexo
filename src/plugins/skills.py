@@ -19,9 +19,13 @@ from db import (
 from skills_runtime import (
     apply_skill,
     approve_skill_execution,
+    compose_skills,
     get_featured_skill_summaries,
     list_evolution_candidates,
+    promote_skill,
+    retire_skill,
     sync_skills,
+    test_skill,
 )
 
 
@@ -171,6 +175,10 @@ def handle_skill_apply(id: str, params: str = "{}", mode: str = "auto", dry_run:
     return json.dumps(apply_skill(id, params=params, mode=mode, dry_run=dry_run, context=context), ensure_ascii=False)
 
 
+def handle_skill_test(id: str, params: str = "{}", mode: str = "auto", context: str = "") -> str:
+    return json.dumps(test_skill(id, params=params, mode=mode, context=context), ensure_ascii=False)
+
+
 def handle_skill_approve(id: str, execution_level: str = "", approved_by: str = "") -> str:
     result = approve_skill_execution(id, execution_level=execution_level, approved_by=approved_by)
     if "error" in result:
@@ -196,6 +204,57 @@ def handle_skill_evolution_candidates() -> str:
     return json.dumps(list_evolution_candidates(), ensure_ascii=False)
 
 
+def handle_skill_promote(id: str, target_level: str = "published", reason: str = "") -> str:
+    return json.dumps(promote_skill(id, target_level=target_level, reason=reason), ensure_ascii=False)
+
+
+def handle_skill_retire(id: str, replacement_id: str = "", reason: str = "") -> str:
+    return json.dumps(retire_skill(id, replacement_id=replacement_id, reason=reason), ensure_ascii=False)
+
+
+def handle_skill_compose(
+    new_id: str,
+    name: str,
+    component_ids: str = "[]",
+    description: str = "",
+    level: str = "draft",
+    mode: str = "guide",
+    tags: str = "[]",
+    trigger_patterns: str = "[]",
+) -> str:
+    try:
+        component_list = json.loads(component_ids) if str(component_ids or "").strip().startswith("[") else [
+            item.strip() for item in str(component_ids or "").split(",") if item.strip()
+        ]
+    except json.JSONDecodeError:
+        component_list = []
+    try:
+        tags_list = json.loads(tags) if str(tags or "").strip().startswith("[") else [
+            item.strip() for item in str(tags or "").split(",") if item.strip()
+        ]
+    except json.JSONDecodeError:
+        tags_list = []
+    try:
+        trigger_list = json.loads(trigger_patterns) if str(trigger_patterns or "").strip().startswith("[") else [
+            item.strip() for item in str(trigger_patterns or "").split(",") if item.strip()
+        ]
+    except json.JSONDecodeError:
+        trigger_list = []
+    return json.dumps(
+        compose_skills(
+            new_skill_id=new_id,
+            name=name,
+            component_ids=component_list,
+            description=description,
+            level=level,
+            mode=mode,
+            tags=tags_list,
+            trigger_patterns=trigger_list,
+        ),
+        ensure_ascii=False,
+    )
+
+
 TOOLS = [
     (handle_skill_create, "nexo_skill_create",
      "Create a new skill with guide/execute/hybrid metadata, triggers, params schema, and execution level."),
@@ -213,6 +272,8 @@ TOOLS = [
      "Show aggregate skill statistics."),
     (handle_skill_apply, "nexo_skill_apply",
      "Apply a skill in guide, execute, or hybrid mode. Execution goes through the stable nexo scripts runtime."),
+    (handle_skill_test, "nexo_skill_test",
+     "Test a skill through the canonical runtime in dry-run mode before wider use."),
     (handle_skill_approve, "nexo_skill_approve",
      "Approve a local/remote executable skill so it can run."),
     (handle_skill_sync, "nexo_skill_sync",
@@ -221,4 +282,10 @@ TOOLS = [
      "Return featured published/stable skills for startup discovery."),
     (handle_skill_evolution_candidates, "nexo_skill_evolution_candidates",
      "Return candidates for skill improvement or text-to-script evolution."),
+    (handle_skill_promote, "nexo_skill_promote",
+     "Promote a skill to a stronger published/stable lifecycle stage."),
+    (handle_skill_retire, "nexo_skill_retire",
+     "Retire a skill cleanly so it leaves the active lifecycle."),
+    (handle_skill_compose, "nexo_skill_compose",
+     "Compose multiple existing skills into one higher-level reusable skill."),
 ]

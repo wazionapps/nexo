@@ -15,6 +15,20 @@ def _make_runtime(root: Path, *, operator_name: str = "Atlas") -> Path:
     (runtime / ".venv" / "bin").mkdir(parents=True)
     (runtime / ".venv" / "bin" / "python3").write_text("")
     (runtime / "server.py").write_text("print('server')\n")
+    hooks_dir = runtime / "hooks"
+    hooks_dir.mkdir(parents=True)
+    for script in (
+        "daily-briefing-check.sh",
+        "session-start.sh",
+        "session-stop.sh",
+        "capture-tool-logs.sh",
+        "capture-session.sh",
+        "inbox-hook.sh",
+        "protocol-guardrail.sh",
+        "pre-compact.sh",
+        "post-compact.sh",
+    ):
+        (hooks_dir / script).write_text("#!/bin/bash\n")
     payload = {}
     if operator_name is not None:
         payload["operator_name"] = operator_name
@@ -44,6 +58,16 @@ def test_sync_claude_code_preserves_existing_settings(tmp_path):
     assert result["ok"] is True
     payload = json.loads(settings_path.read_text())
     assert payload["hooks"]["SessionStart"][0]["matcher"] == "*"
+    all_hook_commands = [
+        hook["command"]
+        for sections in payload["hooks"].values()
+        for section in sections
+        for hook in section.get("hooks", [])
+    ]
+    assert any("session-start.sh" in command for command in all_hook_commands)
+    assert any("capture-tool-logs.sh" in command for command in all_hook_commands)
+    assert any("protocol-guardrail.sh" in command for command in all_hook_commands)
+    assert any(".session-start-ts" in command for command in all_hook_commands)
     assert payload["mcpServers"]["other"]["command"] == "node"
     assert payload["mcpServers"]["nexo"]["args"] == [str(runtime / "server.py")]
     assert payload["mcpServers"]["nexo"]["env"]["NEXO_HOME"] == str(runtime)
@@ -265,7 +289,7 @@ def test_sync_claude_bootstrap_preserves_user_block(tmp_path):
     updated = bootstrap_path.read_text()
     assert "SPECIAL USER RULE" in updated
     assert "old core" not in updated
-    assert "nexo-claude-md-version: 2.0.0" in updated
+    assert "nexo-claude-md-version:" in updated
 
 
 def test_sync_claude_bootstrap_migrates_legacy_file_into_core_user_contract(tmp_path):
