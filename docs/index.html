@@ -3,23 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Documentation hub for NEXO Brain. Redirects to the GitHub wiki for installation, configuration, shared-brain client setup, automation backends, and runtime operations.">
-    <meta name="robots" content="noindex, follow">
-    <meta http-equiv="refresh" content="2;url=https://github.com/wazionapps/nexo/wiki">
+    <meta name="description" content="Documentation hub for NEXO Brain. Quickstart, SDK, compare scorecard, client parity checklist, and the full GitHub wiki.">
+    <meta name="robots" content="index, follow">
     <title>Docs — NEXO Brain</title>
-    <link rel="canonical" href="https://github.com/wazionapps/nexo/wiki">
+    <link rel="canonical" href="https://nexo-brain.com/docs/">
 
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/docs/">
     <meta property="og:title" content="Docs — NEXO Brain">
-    <meta property="og:description" content="Documentation hub for NEXO Brain. Redirects to the GitHub wiki for install, configuration, and runtime docs.">
+    <meta property="og:description" content="Documentation hub for NEXO Brain. Quickstart, SDK, compare scorecard, and the full GitHub wiki.">
     <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
     <meta property="og:image:width" content="1536">
     <meta property="og:image:height" content="1024">
 
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Docs — NEXO Brain">
-    <meta name="twitter:description" content="Documentation hub for NEXO Brain. Redirects to the GitHub wiki for install, configuration, and runtime docs.">
+    <meta name="twitter:description" content="Documentation hub for NEXO Brain. Quickstart, SDK, compare scorecard, and the full GitHub wiki.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
 
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
@@ -35,7 +34,7 @@
         "@context": "https://schema.org",
         "@type": "WebPage",
         "name": "Docs — NEXO Brain",
-        "description": "Documentation hub for NEXO Brain. Redirects to the GitHub wiki for installation, configuration, shared-brain client setup, automation backends, and runtime operations.",
+        "description": "Documentation hub for NEXO Brain. Quickstart, SDK, compare scorecard, client parity checklist, and the full GitHub wiki.",
         "url": "https://nexo-brain.com/docs/",
         "isPartOf": {
             "@type": "WebSite",
@@ -48,14 +47,49 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
     <link rel="stylesheet" href="/assets/style.css">
 </head>
-<body style="display:flex;align-items:center;justify-content:center;min-height:100vh;text-align:center;">
-    <div>
-        <img src="/assets/logo-64.png" alt="NEXO Brain" style="width:48px;height:48px;border-radius:12px;margin-bottom:24px;">
-        <h1 style="font-size:24px;font-weight:700;margin-bottom:12px;">Redirecting to Documentation</h1>
-        <p style="color:var(--text-muted);font-size:16px;margin-bottom:24px;">Taking you to the NEXO Brain Wiki on GitHub...</p>
-        <div style="width:40px;height:40px;border:3px solid var(--dark-border);border-top-color:var(--purple);border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 24px;"></div>
-        <a href="https://github.com/wazionapps/nexo/wiki" style="font-size:14px;">Click here if not redirected</a>
+<body style="padding:48px 20px;">
+    <div style="max-width:960px;margin:0 auto;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;">
+            <img src="/assets/logo-64.png" alt="NEXO Brain" style="width:48px;height:48px;border-radius:12px;">
+            <div>
+                <div style="font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--purple-light);font-weight:700;">Docs</div>
+                <h1 style="font-size:32px;font-weight:700;margin:4px 0 0;">NEXO documentation hub</h1>
+            </div>
+        </div>
+        <p style="color:var(--text-muted);font-size:18px;max-width:760px;margin-bottom:32px;">
+            Start with the fast path, then go deeper only if you need it. NEXO now exposes a smaller public mental model on top of the full wiki and MCP surface.
+        </p>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:20px;">
+            <a href="https://github.com/wazionapps/nexo/blob/main/docs/quickstart-5-minutes.md" style="text-decoration:none;color:inherit;padding:24px;border:1px solid var(--dark-border);border-radius:20px;background:rgba(255,255,255,.02);display:block;">
+                <h2 style="font-size:20px;margin-bottom:8px;">5-minute quickstart</h2>
+                <p style="color:var(--text-muted);font-size:15px;">Install, verify, remember, recall, consolidate, and open your first durable workflow.</p>
+            </a>
+            <a href="https://github.com/wazionapps/nexo/blob/main/docs/memory-classes.md" style="text-decoration:none;color:inherit;padding:24px;border:1px solid var(--dark-border);border-radius:20px;background:rgba(255,255,255,.02);display:block;">
+                <h2 style="font-size:20px;margin-bottom:8px;">Memory classes</h2>
+                <p style="color:var(--text-muted);font-size:15px;">Working, session, episodic, semantic, procedural, graph, and shared-brain memory roles in one map.</p>
+            </a>
+            <a href="https://github.com/wazionapps/nexo/blob/main/docs/sdk-python.md" style="text-decoration:none;color:inherit;padding:24px;border:1px solid var(--dark-border);border-radius:20px;background:rgba(255,255,255,.02);display:block;">
+                <h2 style="font-size:20px;margin-bottom:8px;">Python SDK</h2>
+                <p style="color:var(--text-muted);font-size:15px;">Minimal wrapper for `remember`, `recall`, `consolidate`, and `run_workflow`.</p>
+            </a>
+            <a href="/compare/" style="text-decoration:none;color:inherit;padding:24px;border:1px solid var(--dark-border);border-radius:20px;background:rgba(255,255,255,.02);display:block;">
+                <h2 style="font-size:20px;margin-bottom:8px;">Compare scorecard</h2>
+                <p style="color:var(--text-muted);font-size:15px;">Measured LoCoMo benchmark, parity guardrails, and 30/60/90 day runtime windows.</p>
+            </a>
+            <a href="https://github.com/wazionapps/nexo/blob/main/docs/reference-verticals.md" style="text-decoration:none;color:inherit;padding:24px;border:1px solid var(--dark-border);border-radius:20px;background:rgba(255,255,255,.02);display:block;">
+                <h2 style="font-size:20px;margin-bottom:8px;">Reference verticals</h2>
+                <p style="color:var(--text-muted);font-size:15px;">Coding agent, release operator, and ops/automation owner paths where NEXO becomes useful quickly.</p>
+            </a>
+            <a href="https://github.com/wazionapps/nexo/blob/main/docs/client-parity-checklist.md" style="text-decoration:none;color:inherit;padding:24px;border:1px solid var(--dark-border);border-radius:20px;background:rgba(255,255,255,.02);display:block;">
+                <h2 style="font-size:20px;margin-bottom:8px;">Client parity checklist</h2>
+                <p style="color:var(--text-muted);font-size:15px;">The operational checklist that keeps Claude Code, Codex, and shared-brain behavior aligned.</p>
+            </a>
+        </div>
+        <div style="margin-top:32px;padding:24px;border:1px solid var(--dark-border);border-radius:20px;background:rgba(124,58,237,.06);">
+            <h2 style="font-size:22px;margin-bottom:10px;">Need the full surface?</h2>
+            <p style="color:var(--text-muted);font-size:16px;margin-bottom:16px;">The GitHub wiki still holds the deeper install, configuration, and runtime documentation.</p>
+            <a href="https://github.com/wazionapps/nexo/wiki" style="font-size:15px;">Open the full wiki</a>
+        </div>
     </div>
-    <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
 </body>
 </html>

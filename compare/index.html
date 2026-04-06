@@ -68,8 +68,39 @@
         <div class="section-label">Comparisons</div>
         <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">What NEXO Brain has that others don't</h1>
         <p class="section-subtitle">
-            Most AI memory tools store data. NEXO Brain thinks, forgets, learns overnight across a 60-day horizon, shares one brain across multiple clients, and operates as a cognitive co-pilot &mdash; not just a database.
+            Most AI memory tools store data. NEXO Brain thinks, forgets, learns overnight across a 60-day horizon, shares one brain across multiple clients, and now ships a measured compare scorecard, quickstart, and minimal public API &mdash; not just architecture claims.
         </p>
+    </div>
+</section>
+
+<section>
+    <div class="container">
+        <div class="section-label">Measured scorecard</div>
+        <h2 class="section-title">Public proof, not just product language</h2>
+        <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:24px;margin-top:32px;">
+            <div class="cognitive-card">
+                <h3 style="margin-bottom:8px;">LoCoMo benchmark</h3>
+                <p style="font-size:28px;font-weight:700;color:var(--purple-light);margin-bottom:8px;">F1 0.5875</p>
+                <p style="font-size:14px;color:var(--gray);">Measured on LoCoMo with 1,986 QA pairs. Open-domain F1 0.6366, multi-hop F1 0.3329, temporal F1 0.3258.</p>
+            </div>
+            <div class="cognitive-card">
+                <h3 style="margin-bottom:8px;">Longitudinal runtime windows</h3>
+                <p style="font-size:14px;color:var(--gray);">NEXO now publishes 30/60/90 day runtime slices from the local protocol/task history instead of relying only on release-note claims.</p>
+            </div>
+            <div class="cognitive-card">
+                <h3 style="margin-bottom:8px;">Client parity guardrails</h3>
+                <p style="font-size:14px;color:var(--gray);">Parity is enforced through a dedicated audit script, runtime doctor checks, and transcript-aware Deep Sleep coverage for Claude Code + Codex.</p>
+            </div>
+            <div class="cognitive-card">
+                <h3 style="margin-bottom:8px;">Minimal public surface</h3>
+                <p style="font-size:14px;color:var(--gray);">High-level entry points now exist for `remember`, `recall`, `consolidate`, and `run workflow`, plus a tiny Python SDK and a 5-minute quickstart.</p>
+            </div>
+        </div>
+        <div class="hero-actions" style="justify-content:flex-start;margin-top:28px;">
+            <a href="https://github.com/wazionapps/nexo/blob/main/compare/README.md" class="btn btn-primary">Open scorecard</a>
+            <a href="https://github.com/wazionapps/nexo/blob/main/docs/quickstart-5-minutes.md" class="btn btn-secondary">5-minute quickstart</a>
+            <a href="https://github.com/wazionapps/nexo/blob/main/docs/sdk-python.md" class="btn btn-secondary">Python SDK</a>
+        </div>
     </div>
 </section>
 
