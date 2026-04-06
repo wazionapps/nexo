@@ -54,26 +54,6 @@
 
     <link rel="stylesheet" href="/assets/style.css">
     <style>
-        .blog-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-            gap: 24px;
-            margin-top: 48px;
-        }
-        .blog-card {
-            background: var(--dark-card);
-            border: 1px solid var(--dark-border);
-            border-radius: 16px;
-            padding: 32px;
-            transition: all 0.3s;
-            display: flex;
-            flex-direction: column;
-        }
-        .blog-card:hover {
-            border-color: rgba(124, 58, 237, 0.3);
-            box-shadow: var(--glow);
-            transform: translateY(-4px);
-        }
         .blog-card-date {
             font-size: 13px;
             color: var(--text-muted);
@@ -113,7 +93,7 @@
         }
     </style>
 </head>
-<body>
+<body class="features-page">
 
 <nav>
     <div class="container">
@@ -138,13 +118,50 @@
 </nav>
 
 <!-- Header -->
-<section class="pt-nav" style="text-align:center;">
+<section class="pt-nav page-hero">
     <div class="container">
-        <div class="section-label">Insights</div>
-        <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Blog</h1>
-        <p class="section-subtitle">
-            Product updates, cognitive architecture notes, and field reports from building agents that actually remember, self-heal, and work across real client ecosystems.
-        </p>
+        <div class="blog-hero-grid">
+            <div class="page-hero-copy">
+                <div class="section-label">Insights</div>
+                <h1 class="section-title" style="font-size:clamp(34px,5vw,58px);">The <span class="gradient">NEXO</span> blog</h1>
+                <p class="section-subtitle">
+                    Product updates, cognitive architecture notes, field reports, and comparison guides from building an AI runtime that actually remembers, self-heals, and compounds over time.
+                </p>
+                <div class="page-chip-row">
+                    <span class="page-chip">Release notes</span>
+                    <span class="page-chip">Memory architecture</span>
+                    <span class="page-chip">Competitive analysis</span>
+                </div>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/mcp-memory-tools-compared-2026/" class="btn btn-primary">Read featured guide</a>
+                    <a href="/changelog/" class="btn btn-secondary">Latest release notes</a>
+                    <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
+                </div>
+            </div>
+            <div class="blog-featured-card">
+                <div class="section-label">Featured guide</div>
+                <div class="blog-featured-meta">
+                    <span class="compare-chip">April 6, 2026</span>
+                    <span class="compare-chip">Memory tools</span>
+                </div>
+                <h2>MCP Memory Tools Compared: A 2026 Guide for AI Agent Builders</h2>
+                <p>An honest field guide to mem0, Letta, Zep, mcp-memory, and NEXO Brain: what each one is really for, where each wins, and what category mistake most buyers make first.</p>
+                <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
+                    <a href="/blog/mcp-memory-tools-compared-2026/" class="btn btn-primary">Open article</a>
+                    <a href="/compare/" class="btn btn-secondary">Open compare hub</a>
+                </div>
+                <div class="blog-mini-stack">
+                    <div class="blog-mini-card">
+                        <strong>Latest release analysis</strong>
+                        <span><a href="/blog/nexo-2-7-0-engineering-loop-trust-release/">NEXO 2.7.0: engineering loop metrics and release discipline</a></span>
+                    </div>
+                    <div class="blog-mini-card">
+                        <strong>Why NEXO is different</strong>
+                        <span><a href="/blog/how-to-give-ai-persistent-memory/">Persistent memory</a>, <a href="/blog/why-ai-agents-need-to-forget/">forgetting</a>, and <a href="/evolution/">Evolution</a> as product loop.</span>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </section>
 

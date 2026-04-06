@@ -91,20 +91,48 @@
 </nav>
 
 
-<section class="pt-nav page-hero" style="text-align:center;">
+<section class="pt-nav page-hero">
     <div class="container">
-        <div class="section-label"><a href="/compare/" style="color:inherit;text-decoration:none;">Comparisons</a></div>
-        <h1 class="section-title" style="font-size:clamp(34px,5vw,58px);">NEXO Brain vs Zep / Graphiti</h1>
-        <p class="section-subtitle">Zep and Graphiti are strong if your center of gravity is graph memory or temporal knowledge graphs. NEXO is stronger if you want the broader local runtime around that memory layer.</p>
-        <div class="compare-hero-meta">
-            <span class="compare-chip">Updated April 6, 2026</span>
-            <span class="compare-chip">Temporal graph memory vs local cognitive runtime</span>
-            <span class="compare-chip">Best query: Zep or Graphiti alternative for local AI work</span>
+        <div class="page-hero-grid">
+            <div class="page-hero-copy">
+                <div class="section-label"><a href="/compare/" style="color:inherit;text-decoration:none;">Comparisons</a></div>
+                <h1 class="section-title" style="font-size:clamp(34px,5vw,58px);">NEXO Brain vs <span class="gradient">Zep / Graphiti</span></h1>
+                <p class="section-subtitle">Zep and Graphiti are strong if your center of gravity is graph memory or temporal knowledge graphs. NEXO is stronger if you want the broader local runtime around that memory layer.</p>
+                <div class="compare-hero-meta" style="justify-content:flex-start;">
+                    <span class="compare-chip">Updated April 6, 2026</span>
+                    <span class="compare-chip">Temporal graph memory vs local cognitive runtime</span>
+                    <span class="compare-chip">Best query: Zep or Graphiti alternative for local AI work</span>
+                </div>
+                <div class="hero-actions">
+                    <a href="#snapshot" class="btn btn-primary">See decision snapshot</a>
+                    <a href="#compare-table" class="btn btn-secondary">Open capability table</a>
+                    <a href="/compare/" class="btn btn-secondary">More comparisons</a>
+                </div>
+                <div class="compare-snapshot-grid">
+                    <div class="compare-snapshot-card"><strong>Category</strong><span>Zep / Graphiti is memory infrastructure. NEXO is a broader runtime where graph memory is only one layer.</span></div>
+                    <div class="compare-snapshot-card"><strong>NEXO wins when</strong><span>You need workflows, guardrails, overnight learning, and operations on top of memory instead of memory alone.</span></div>
+                    <div class="compare-snapshot-card"><strong>Zep / Graphiti wins when</strong><span>Temporal graphs and memory APIs are the center of your architecture, not a sub-layer of a bigger runtime.</span></div>
+                    <div class="compare-snapshot-card"><strong>Tradeoff</strong><span>Zep is sharper on graph specialization. NEXO is much stronger once the surrounding daily runtime matters too.</span></div>
+                </div>
+            </div>
+            <div class="page-visual">
+                <div class="compare-constellation">
+                    <div class="compare-constellation-ring ring-1"></div>
+                    <div class="compare-constellation-ring ring-2"></div>
+                    <div class="compare-constellation-link compare-link-a"></div>
+                    <div class="compare-constellation-link compare-link-b"></div>
+                    <div class="compare-constellation-link compare-link-c"></div>
+                    <div class="compare-node compare-node-primary"><strong>NEXO</strong><small>runtime around memory</small></div>
+                    <div class="compare-node compare-node-top-right"><span>Zep / Graphiti</span><small>temporal graph memory</small></div>
+                    <div class="compare-node compare-node-bottom-left"><span>Choose by</span><small>graph specialization vs runtime breadth</small></div>
+                    <div class="compare-node compare-node-bottom-right"><span>Fast rule</span><small>NEXO if memory is not the whole product</small></div>
+                </div>
+            </div>
         </div>
     </div>
 </section>
 
-<section>
+<section id="snapshot">
     <div class="container">
         <div class="section-label">Quick answer</div>
         <h2 class="section-title">Zep wins when graph memory is the product. NEXO wins when graph memory is only one layer of the runtime.</h2>
@@ -114,7 +142,7 @@
     </div>
 </section>
 
-<section>
+<section id="compare-table">
     <div class="container">
         <div class="section-label">Side-by-side</div>
         <h2 class="section-title">Capability comparison</h2>

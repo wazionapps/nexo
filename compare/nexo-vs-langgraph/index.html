@@ -91,20 +91,48 @@
 </nav>
 
 
-<section class="pt-nav page-hero" style="text-align:center;">
+<section class="pt-nav page-hero">
     <div class="container">
-        <div class="section-label"><a href="/compare/" style="color:inherit;text-decoration:none;">Comparisons</a></div>
-        <h1 class="section-title" style="font-size:clamp(34px,5vw,58px);">NEXO Brain vs LangGraph</h1>
-        <p class="section-subtitle">LangGraph is one of the best choices for durable agent orchestration inside custom apps. NEXO is stronger if you want a local cognitive runtime around your own daily AI work without assembling the stack first.</p>
-        <div class="compare-hero-meta">
-            <span class="compare-chip">Updated April 6, 2026</span>
-            <span class="compare-chip">Agent orchestration framework vs local cognitive runtime</span>
-            <span class="compare-chip">Best query: LangGraph alternative for persistent local AI work</span>
+        <div class="page-hero-grid">
+            <div class="page-hero-copy">
+                <div class="section-label"><a href="/compare/" style="color:inherit;text-decoration:none;">Comparisons</a></div>
+                <h1 class="section-title" style="font-size:clamp(34px,5vw,58px);">NEXO Brain vs <span class="gradient">LangGraph</span></h1>
+                <p class="section-subtitle">LangGraph is one of the best choices for durable agent orchestration inside custom apps. NEXO is stronger if you want a local cognitive runtime around your own daily AI work without assembling the stack first.</p>
+                <div class="compare-hero-meta" style="justify-content:flex-start;">
+                    <span class="compare-chip">Updated April 6, 2026</span>
+                    <span class="compare-chip">Agent orchestration framework vs local cognitive runtime</span>
+                    <span class="compare-chip">Best query: LangGraph alternative for persistent local AI work</span>
+                </div>
+                <div class="hero-actions">
+                    <a href="#snapshot" class="btn btn-primary">See decision snapshot</a>
+                    <a href="#compare-table" class="btn btn-secondary">Open capability table</a>
+                    <a href="/compare/" class="btn btn-secondary">More comparisons</a>
+                </div>
+                <div class="compare-snapshot-grid">
+                    <div class="compare-snapshot-card"><strong>Category</strong><span>LangGraph is a framework. NEXO is the assembled runtime on top of that kind of capability.</span></div>
+                    <div class="compare-snapshot-card"><strong>NEXO wins when</strong><span>You want memory, workflows, discipline, and shared-brain behavior already integrated for daily use.</span></div>
+                    <div class="compare-snapshot-card"><strong>LangGraph wins when</strong><span>You are building your own agent app and want graph-shaped execution as the core primitive.</span></div>
+                    <div class="compare-snapshot-card"><strong>Tradeoff</strong><span>LangGraph gives control and composition. NEXO gives a working local brain with less assembly burden.</span></div>
+                </div>
+            </div>
+            <div class="page-visual">
+                <div class="compare-constellation">
+                    <div class="compare-constellation-ring ring-1"></div>
+                    <div class="compare-constellation-ring ring-2"></div>
+                    <div class="compare-constellation-link compare-link-a"></div>
+                    <div class="compare-constellation-link compare-link-b"></div>
+                    <div class="compare-constellation-link compare-link-c"></div>
+                    <div class="compare-node compare-node-primary"><strong>NEXO</strong><small>assembled runtime</small></div>
+                    <div class="compare-node compare-node-top-right"><span>LangGraph</span><small>durable orchestration framework</small></div>
+                    <div class="compare-node compare-node-bottom-left"><span>Choose by</span><small>framework control vs ready brain</small></div>
+                    <div class="compare-node compare-node-bottom-right"><span>Fast rule</span><small>NEXO if you do not want to assemble the stack yourself</small></div>
+                </div>
+            </div>
         </div>
     </div>
 </section>
 
-<section>
+<section id="snapshot">
     <div class="container">
         <div class="section-label">Quick answer</div>
         <h2 class="section-title">LangGraph wins as a framework. NEXO wins as a working runtime.</h2>
@@ -114,7 +142,7 @@
     </div>
 </section>
 
-<section>
+<section id="compare-table">
     <div class="container">
         <div class="section-label">Side-by-side</div>
         <h2 class="section-title">Capability comparison</h2>

@@ -117,6 +117,21 @@
     </div>
 </section>
 
+<section class="section-tight section-flush-top">
+    <div class="container">
+        <div class="changelog-toolbar">
+            <div class="changelog-toolbar-copy">
+                <strong>Browse the changelog in pages</strong>
+                <span>The latest releases stay upfront; older eras are still here, just easier to navigate.</span>
+            </div>
+            <div>
+                <div id="changelog-page-meta" class="changelog-page-meta">Loading release pages…</div>
+                <div id="changelog-pager" class="changelog-pager" aria-label="Changelog pagination"></div>
+            </div>
+        </div>
+    </div>
+</section>
+
 <!-- v3.0.1 Python 3.10 Hotfix -->
 <section id="v301" class="section-compact" style="background:linear-gradient(135deg,#0d1120 0%,#15325a 100%);">
     <div class="container">
@@ -930,6 +945,49 @@
 </footer>
 
 <script>
+(function() {
+    const releases = Array.from(document.querySelectorAll('section[id^="v"]'));
+    const pager = document.getElementById('changelog-pager');
+    const meta = document.getElementById('changelog-page-meta');
+    if (!releases.length || !pager || !meta) return;
+
+    const pageSize = 6;
+    const pages = Math.ceil(releases.length / pageSize);
+    document.body.classList.add('changelog-hydrated');
+
+    releases.forEach((section, index) => {
+        section.dataset.releasePage = String(Math.floor(index / pageSize) + 1);
+    });
+
+    const hashTarget = window.location.hash.slice(1);
+    const hashSection = hashTarget ? releases.find(section => section.id === hashTarget) : null;
+    let currentPage = hashSection ? Number(hashSection.dataset.releasePage) : 1;
+
+    function render(page, shouldScroll) {
+        currentPage = page;
+        releases.forEach(section => {
+            section.classList.toggle('is-visible', Number(section.dataset.releasePage) === page);
+        });
+        meta.textContent = `Page ${page} of ${pages} · ${releases.filter(section => Number(section.dataset.releasePage) === page).length} releases visible`;
+        Array.from(pager.querySelectorAll('button')).forEach((button, index) => {
+            button.setAttribute('aria-current', index + 1 === page ? 'page' : 'false');
+        });
+        if (shouldScroll) {
+            window.scrollTo({ top: document.querySelector('.changelog-toolbar').offsetTop - 100, behavior: 'smooth' });
+        }
+    }
+
+    for (let page = 1; page <= pages; page += 1) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = page === 1 ? 'Latest' : `Page ${page}`;
+        button.addEventListener('click', () => render(page, true));
+        pager.appendChild(button);
+    }
+
+    render(currentPage, false);
+})();
+
 // Intersection Observer for scroll animations
 const observer = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
