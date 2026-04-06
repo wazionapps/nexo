@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>MCP Memory Tools Compared: A 2026 Guide for AI Agent Builders — NEXO Brain</title>
+    <meta name="description" content="An honest 2026 comparison of MCP-compatible memory tools for AI agents: mem0, Letta, Zep, mcp-memory, and NEXO Brain. Trade-offs, architecture, and when to choose which.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/blog/mcp-memory-tools-compared-2026/">
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/blog/mcp-memory-tools-compared-2026/">
+    <meta property="og:title" content="MCP Memory Tools Compared: A 2026 Guide for AI Agent Builders">
+    <meta property="og:description" content="An honest comparison of mem0, Letta, Zep, mcp-memory, and NEXO Brain for adding persistent memory to AI agents in 2026.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
+    <meta property="og:image:width" content="1536">
+    <meta property="og:image:height" content="1024">
+    <meta property="article:published_time" content="2026-04-06">
+    <meta property="article:author" content="Francisco Cerd&agrave; Puigserver">
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="MCP Memory Tools Compared: A 2026 Guide for AI Agent Builders">
+    <meta name="twitter:description" content="An honest comparison of mem0, Letta, Zep, mcp-memory, and NEXO Brain for adding persistent memory to AI agents in 2026.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
+
+    <!-- Google Analytics (GA4) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+
+    <link rel="stylesheet" href="/assets/style.css">
+
+    <!-- Schema.org BlogPosting -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "MCP Memory Tools Compared: A 2026 Guide for AI Agent Builders",
+        "description": "An honest 2026 comparison of MCP-compatible memory tools for AI agents: mem0, Letta, Zep, mcp-memory, and NEXO Brain. Trade-offs, architecture, and when to choose which.",
+        "datePublished": "2026-04-06",
+        "dateModified": "2026-04-06",
+        "author": {
+            "@type": "Person",
+            "name": "Francisco Cerd\u00e0 Puigserver"
+        },
+        "publisher": {
+            "@type": "Organization",
+            "name": "WAzion",
+            "url": "https://www.wazion.com"
+        },
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https://nexo-brain.com/blog/mcp-memory-tools-compared-2026/"
+        },
+        "url": "https://nexo-brain.com/blog/mcp-memory-tools-compared-2026/",
+        "image": "https://nexo-brain.com/assets/social-preview.png",
+        "keywords": ["MCP memory tools", "AI agent memory comparison", "mem0 vs Letta vs Zep", "NEXO Brain MCP", "persistent memory AI agents 2026"]
+    }
+    </script>
+
+    <style>
+        .article-header { padding-top: 128px; padding-bottom: 40px; text-align: center; }
+        .article-meta { font-size: 14px; color: var(--text-muted); margin-bottom: 16px; }
+        .article-meta a { color: var(--purple-light); }
+        .article-body {
+            max-width: 720px; margin: 0 auto; padding: 0 24px 80px;
+            font-size: 17px; line-height: 1.8; color: var(--text);
+        }
+        .article-body h2 {
+            font-size: 28px; font-weight: 700; margin: 48px 0 16px;
+            letter-spacing: -0.01em;
+        }
+        .article-body h3 {
+            font-size: 22px; font-weight: 700; margin: 36px 0 12px;
+        }
+        .article-body p { margin-bottom: 20px; color: var(--text-muted); }
+        .article-body strong { color: var(--text); }
+        .article-body a { color: var(--purple-light); }
+        .article-body a:hover { color: var(--pink); }
+        .article-body ul, .article-body ol {
+            margin: 0 0 20px 24px; color: var(--text-muted);
+        }
+        .article-body li { margin-bottom: 8px; }
+        .article-body code {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 14px; color: var(--pink);
+            background: rgba(236, 72, 153, 0.1);
+            padding: 2px 8px; border-radius: 4px;
+        }
+        .article-body pre {
+            background: var(--dark-card);
+            border: 1px solid var(--dark-border);
+            border-radius: 12px;
+            padding: 24px;
+            overflow-x: auto;
+            margin-bottom: 24px;
+        }
+        .article-body pre code {
+            background: none; padding: 0;
+            font-size: 15px; color: #22C55E;
+        }
+        .article-back {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 14px; font-weight: 600; color: var(--text-muted);
+            margin-bottom: 24px;
+        }
+        .article-back:hover { color: var(--purple-light); }
+        .memory-diagram {
+            display: flex; flex-direction: column; align-items: center; gap: 16px;
+            background: var(--dark-card); border: 1px solid var(--dark-border);
+            border-radius: 16px; padding: 32px; margin: 32px 0;
+        }
+        .memory-node {
+            padding: 14px 28px; border-radius: 12px; text-align: center;
+            font-weight: 600; font-size: 15px; width: 100%; max-width: 340px;
+        }
+        .memory-node small { display: block; font-weight: 400; font-size: 12px; opacity: 0.7; margin-top: 4px; }
+        .node-sensory { background: rgba(236, 72, 153, 0.12); border: 1px solid rgba(236, 72, 153, 0.3); color: var(--pink); }
+        .node-stm { background: rgba(124, 58, 237, 0.12); border: 1px solid rgba(124, 58, 237, 0.3); color: var(--purple-light); }
+        .node-ltm { background: rgba(34, 197, 94, 0.12); border: 1px solid rgba(34, 197, 94, 0.3); color: #22C55E; }
+        .memory-arrow { color: var(--text-muted); font-size: 20px; }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-64.png" alt="NEXO Brain" width="32" height="32">
+            NEXO Brain
+        </a>
+        <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/features/">Features</a>
+            <a href="/compare/">Compare</a>
+            <a href="/blog/">Blog</a>
+            <a href="/changelog/">Changelog</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<article>
+    <header class="article-header">
+        <div class="container">
+            <a href="/blog/" class="article-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg> Back to Blog</a>
+            <div class="article-meta">April 6, 2026 &middot; 6 min read</div>
+            <h1 class="section-title" style="font-size:clamp(28px,4.5vw,48px);max-width:800px;margin:0 auto 16px;">MCP Memory Tools Compared: A 2026 Guide for AI Agent Builders</h1>
+            <p class="section-subtitle">An honest look at mem0, Letta, Zep, mcp-memory and NEXO Brain — what each does well, where each falls short, and how to choose.</p>
+        </div>
+    </header>
+
+    <div class="article-body">
+
+        <h2>Why this comparison exists</h2>
+        <p>Every week brings a new "memory for AI agents" project. Some are battle-tested, some are weekend experiments. The Model Context Protocol (MCP) made it easy to plug any of them into Claude, Cursor, Codex or any other MCP-aware client &mdash; which is great, but it also made it harder to tell them apart from the outside. They all advertise <em>persistent memory</em>. They are not the same thing.</p>
+        <p>This is an honest field guide. We will not claim there is one winner. Each tool has a real use case. The point is to help you skip the trial-and-error phase and pick the one that fits the agent you are actually building.</p>
+
+        <h2>The five we keep seeing in the wild</h2>
+        <p>These are the projects that consistently show up in MCP setups in early 2026:</p>
+        <ul>
+            <li><strong>mem0</strong> &mdash; an opinionated extraction layer that summarises conversations into "facts" and stores them in a vector DB. Easy to drop in. SaaS-first with an open-source core.</li>
+            <li><strong>Letta</strong> (formerly MemGPT) &mdash; a stateful agent framework with hierarchical memory blocks (core, archival, recall). More than a tool: it is an agent runtime. Comes with its own server and UI.</li>
+            <li><strong>Zep</strong> &mdash; a temporal knowledge graph backed by Graphiti. Treats memory as a living timeline of entities and relationships. Strong on "what changed when".</li>
+            <li><strong>mcp-memory</strong> (Anthropic reference) &mdash; the simple knowledge graph server from the official MCP examples. Nodes, edges, observations. Minimal and easy to read end-to-end.</li>
+            <li><strong>NEXO Brain</strong> &mdash; a cognitive architecture with sensory buffer, STM, LTM, decay, trust scores and a sleep cycle. Built around the Atkinson&ndash;Shiffrin model and Ebbinghaus forgetting curves.</li>
+        </ul>
+
+        <h2>How they really differ</h2>
+        <p>Forget the marketing copy. The decisions that actually matter when you put one of these in production are <strong>storage shape</strong>, <strong>extraction philosophy</strong>, <strong>forgetting</strong>, and <strong>operational footprint</strong>.</p>
+        <p><strong>Storage shape.</strong> mem0 and the simpler MCP servers are vector-first: you query by similarity and hope the right facts come back. Letta uses tiered text blocks plus archival vectors. Zep models everything as a temporal graph: entities, relationships, and time edges. NEXO Brain combines a relational store (decisions, learnings, followups, entities) with a semantic index, a knowledge graph and a trust layer on top. Vector search alone is fast to ship but breaks down once memories contradict each other, age, or need provenance.</p>
+        <p><strong>Extraction philosophy.</strong> mem0 is aggressive: it summarises constantly and writes "facts" without much friction. mcp-memory is passive: you have to call <code>create_entities</code> yourself. Letta extracts into named blocks. Zep extracts entities and relationships using LLM passes. NEXO does extraction at session end (post&hyphen;mortem), distinguishes by category &mdash; learning, decision, preference, entity, followup &mdash; and routes each one differently.</p>
+        <p><strong>Forgetting.</strong> This is the line that separates toys from production tools. mem0 does not really forget. mcp-memory does not forget at all. Letta has a notion of summarisation but no real decay. Zep handles staleness through its temporal graph &mdash; old facts are superseded, not deleted. NEXO Brain implements <strong>Ebbinghaus decay</strong> with two half-lives (7 days for STM, 60 for LTM), access reinforcement, and a deep&hyphen;sleep cycle that consolidates and prunes overnight. If your agent is going to live for months, you want decay built in &mdash; otherwise the noise floor rises until retrieval becomes unusable.</p>
+        <p><strong>Operational footprint.</strong> mem0 and mcp-memory run as a single process. Letta wants its own server, web UI and database; nice if you adopt the whole stack, heavier if you just wanted a memory tool. Zep needs a graph database (Neo4j or Graphiti) running alongside. NEXO Brain ships as a single MCP server with a SQLite database, optional pgvector, and a few background jobs (sleep, decay, watchdog). No external services required to get started.</p>
+
+        <h2>How to pick</h2>
+        <p>Match the tool to the agent, not the other way around.</p>
+        <ul>
+            <li><strong>Prototyping a chatbot</strong> that just needs to remember a user's name and a few preferences across sessions &rarr; <strong>mem0</strong> or <strong>mcp-memory</strong>. Lowest friction, you can ship this afternoon.</li>
+            <li><strong>Building a long-running autonomous agent</strong> with its own runtime and you are happy to adopt a framework &rarr; <strong>Letta</strong>. You get the agent loop and the memory blocks together.</li>
+            <li><strong>Modelling people, companies and how they relate over time</strong> (CRM, support, legal) &rarr; <strong>Zep</strong>. Temporal graph is the right shape for your data.</li>
+            <li><strong>An AI that lives with you for months</strong>, accumulates corrections, learnings, decisions and project state, and has to stay coherent without you babysitting it &rarr; <strong>NEXO Brain</strong>. The decay model and trust layer are the things you will be glad you did not have to write yourself.</li>
+        </ul>
+
+        <h2>One thing none of them solves yet</h2>
+        <p>Across all five, the same gap remains: <strong>memory ownership across multiple clients</strong>. If you use Claude Code in the morning and Cursor in the afternoon, you want both to see the same memory. mem0, Letta and Zep solve this by hosting memory in a SaaS or self-hosted backend. mcp-memory leaves it to you. NEXO Brain takes a different approach: a single local SQLite brain shared by every MCP-aware client on the same machine, with a sync layer for multi-device. There is no consensus on the right answer yet. Watch this space.</p>
+
+        <h2>Bottom line</h2>
+        <p>If you are choosing today, the question is not "which one is best" but "which one fails in a way I can live with". mem0 fails by storing too much. mcp-memory fails by storing too little. Letta fails by being a whole framework when you just wanted a tool. Zep fails on simple linear conversations. NEXO Brain fails when you want something you can install in 30 seconds and forget about &mdash; it expects you to give it a real role and then it earns its keep over weeks.</p>
+        <p>Pick the failure mode you can tolerate. Then build.</p>
+
+    </div>
+</article>
+
+<!-- CTA -->
+<section class="cta-section">
+    <div class="container">
+        <h2 class="section-title">Give your agent a mind</h2>
+        <p class="section-subtitle" style="margin: 16px auto 48px;">
+            Open source, AGPL-3.0 licensed, and built for builders who want their AI to actually remember.
+        </p>
+        <div class="hero-actions">
+            <a href="https://github.com/wazionapps/nexo" class="btn btn-primary">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+                Star on GitHub
+            </a>
+            <a href="https://github.com/sponsors/wazionapps" class="btn btn-secondary" style="border-color: var(--pink); color: var(--pink);">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+                Sponsor
+            </a>
+            <a href="https://www.npmjs.com/package/nexo-brain" class="btn btn-secondary">
+                View on npm
+            </a>
+        </div>
+    </div>
+</section>
+
+<footer>
+    <div class="container">
+        <div class="footer-content">
+            <div class="footer-left">
+                Created by <strong>Francisco Cerd&agrave; Puigserver</strong> &amp; <strong>NEXO</strong> (Claude Opus) &bull; Built by <a href="https://www.wazion.com">WAzion</a> &bull; AGPL-3.0 License &bull; &copy; 2026
+            </div>
+            <div class="footer-links">
+                <a href="https://github.com/wazionapps/nexo">GitHub</a>
+                <a href="https://x.com/NEXOBRAIN">X / Twitter</a>
+                <a href="https://github.com/sponsors/wazionapps">Sponsor</a>
+                <a href="/docs/">Docs</a>
+                <a href="/compare/">Compare</a>
+                <a href="/blog/">Blog</a>
+                <a href="https://www.npmjs.com/package/nexo-brain">npm</a>
+                <a href="https://github.com/wazionapps/nexo/releases">Releases</a>
+            </div>
+            <div style="text-align:center;margin-top:12px;color:#6b7280;font-size:12px;">Last updated: April 2026</div>
+        </div>
+    </div>
+</footer>
+
+<!-- Cookie Consent (minimal, GDPR) -->
+<div id="cookie-consent" style="display:none;position:fixed;bottom:0;left:0;right:0;background:rgba(10,10,15,0.95);border-top:1px solid #1E1E2E;padding:12px 24px;z-index:200;font-size:13px;color:#94A3B8;text-align:center;">
+    This site uses analytics cookies to improve the experience. <a href="https://www.wazion.com/en/privacy" style="color:#A78BFA;">Privacy Policy</a>
+    <button onclick="document.getElementById('cookie-consent').style.display='none';localStorage.setItem('cc','1')" style="margin-left:16px;background:#7C3AED;color:#fff;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Accept</button>
+    <button onclick="document.getElementById('cookie-consent').style.display='none';localStorage.setItem('cc','0');window['ga-disable-G-1LNEMCJMS7']=true" style="margin-left:8px;background:transparent;color:#94A3B8;border:1px solid #333;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Decline</button>
+</div>
+<script>
+if(!localStorage.getItem('cc')){document.getElementById('cookie-consent').style.display='block';}
+else if(localStorage.getItem('cc')==='0'){window['ga-disable-G-1LNEMCJMS7']=true;}
+</script>
+
+<script>
+(function() {
+    var navLinks = document.querySelector('.nav-links');
+    var navToggle = document.querySelector('.nav-toggle');
+    navLinks.querySelectorAll('a').forEach(function(link) {
+        link.addEventListener('click', function() { navLinks.classList.remove('open'); });
+    });
+    document.addEventListener('click', function(e) {
+        if (navLinks.classList.contains('open') && !navLinks.contains(e.target) && !navToggle.contains(e.target)) {
+            navLinks.classList.remove('open');
+        }
+    });
+})();
+</script>
+
+</body>
+</html>
