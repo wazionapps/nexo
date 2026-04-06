@@ -89,6 +89,30 @@ class TestBootChecks:
         assert dir_check.fixed
         assert (nexo_home / "coordination").is_dir()
 
+    def test_config_parse_catches_broken_manifest(self, nexo_home):
+        (nexo_home / "crons" / "manifest.json").write_text("{not valid json")
+        from doctor.providers.boot import check_config_parse
+        check = check_config_parse()
+        assert check.status == "degraded"
+        assert any("crons/manifest.json" in ev for ev in check.evidence)
+
+    def test_config_parse_catches_broken_optionals(self, nexo_home):
+        (nexo_home / "config").mkdir(parents=True, exist_ok=True)
+        (nexo_home / "config" / "optionals.json").write_text("[]")  # wrong type
+        from doctor.providers.boot import check_config_parse
+        check = check_config_parse()
+        assert check.status == "degraded"
+        assert any("optionals.json" in ev for ev in check.evidence)
+
+    def test_config_parse_healthy_when_all_valid(self, nexo_home):
+        (nexo_home / "config").mkdir(parents=True, exist_ok=True)
+        (nexo_home / "config" / "schedule.json").write_text('{"automation_enabled": true}')
+        (nexo_home / "config" / "optionals.json").write_text('{"automation": true}')
+        from doctor.providers.boot import check_config_parse
+        check = check_config_parse()
+        assert check.status == "healthy"
+        assert set(check.evidence) == {"schedule.json", "optionals.json", "crons/manifest.json"}
+
 
 class TestRuntimeChecks:
     def test_fresh_immune(self, nexo_home):

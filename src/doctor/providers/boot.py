@@ -148,36 +148,78 @@ def check_python_runtime() -> DoctorCheck:
     )
 
 
+CRITICAL_CONFIG_FILES = (
+    ("schedule.json", ("config", "schedule.json")),
+    ("optionals.json", ("config", "optionals.json")),
+    ("crons/manifest.json", ("crons", "manifest.json")),
+)
+
+
 def check_config_parse() -> DoctorCheck:
-    """Check schedule.json parses correctly if present."""
-    schedule_file = NEXO_HOME / "config" / "schedule.json"
-    if not schedule_file.exists():
-        return DoctorCheck(
-            id="boot.config_parse",
-            tier="boot",
-            status="healthy",
-            severity="info",
-            summary="No schedule.json (using defaults)",
-        )
-    try:
-        import json
-        json.loads(schedule_file.read_text())
-        return DoctorCheck(
-            id="boot.config_parse",
-            tier="boot",
-            status="healthy",
-            severity="info",
-            summary="schedule.json parses OK",
-        )
-    except Exception as e:
+    """Validate that critical JSON config files parse correctly.
+
+    Covers schedule.json, optionals.json, and crons/manifest.json. A broken
+    manifest.json silently disables the entire cron catch-up pipeline
+    (load_enabled_crons swallows the parse error and returns []), so
+    catching corruption at boot tier prevents hours of silent reliability
+    loss. Missing files are fine — they fall back to code defaults.
+    """
+    import json
+
+    errors: list[str] = []
+    checked: list[str] = []
+    missing: list[str] = []
+
+    for label, relative in CRITICAL_CONFIG_FILES:
+        path = NEXO_HOME.joinpath(*relative)
+        if not path.exists():
+            missing.append(label)
+            continue
+        try:
+            data = json.loads(path.read_text())
+        except Exception as e:
+            errors.append(f"{label}: {e}")
+            continue
+        if not isinstance(data, dict):
+            errors.append(
+                f"{label}: expected JSON object, got {type(data).__name__}"
+            )
+            continue
+        checked.append(label)
+
+    if errors:
         return DoctorCheck(
             id="boot.config_parse",
             tier="boot",
             status="degraded",
             severity="warn",
-            summary=f"schedule.json parse error: {e}",
-            repair_plan=["Fix JSON syntax in schedule.json or delete to use defaults"],
+            summary=(
+                f"{len(errors)} config file parse error"
+                + ("s" if len(errors) != 1 else "")
+            ),
+            evidence=errors,
+            repair_plan=[
+                "Fix JSON syntax in the listed config files, or delete them to fall back to defaults",
+            ],
         )
+
+    if not checked:
+        return DoctorCheck(
+            id="boot.config_parse",
+            tier="boot",
+            status="healthy",
+            severity="info",
+            summary="No config files present (using defaults)",
+        )
+
+    return DoctorCheck(
+        id="boot.config_parse",
+        tier="boot",
+        status="healthy",
+        severity="info",
+        summary=f"{len(checked)} config file{'s' if len(checked) != 1 else ''} parse OK",
+        evidence=checked,
+    )
 
 
 def run_boot_checks(fix: bool = False) -> list[DoctorCheck]:
