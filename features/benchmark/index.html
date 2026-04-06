@@ -54,7 +54,7 @@
 
     <link rel="stylesheet" href="/assets/style.css">
 </head>
-<body>
+<body class="features-page">
 
 <nav>
     <div class="container">
@@ -68,6 +68,7 @@
         <div class="nav-links">
             <a href="/">Home</a>
             <a href="/features/">Features</a>
+            <a href="/evolution/">Evolution</a>
             <a href="/compare/">Compare</a>
             <a href="/blog/">Blog</a>
             <a href="/changelog/">Changelog</a>
@@ -78,13 +79,29 @@
 </nav>
 
 <!-- Header -->
-<section class="pt-nav" style="text-align:center;">
+<section class="pt-nav page-hero">
     <div class="container">
-        <div class="section-label">Benchmarks</div>
-        <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Benchmarked on LoCoMo <span style="font-size:16px;font-weight:400;color:var(--text-muted)">(ACL 2024)</span></h1>
-        <p class="section-subtitle">
-            1,986 questions &middot; 10 conversations &middot; Peer-reviewed dataset
-        </p>
+        <div class="page-hero-grid">
+            <div class="page-hero-copy">
+                <div class="section-label">Benchmarks</div>
+                <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Benchmarked on LoCoMo <span style="font-size:16px;font-weight:400;color:var(--text-muted)">(ACL 2024)</span></h1>
+                <p class="section-subtitle">
+                    1,986 questions &middot; 10 conversations &middot; Peer-reviewed dataset
+                </p>
+                <div class="page-chip-row">
+                    <span class="page-chip">F1 0.588</span>
+                    <span class="page-chip">CPU only</span>
+                    <span class="page-chip">+55% vs GPT-4 (128K)</span>
+                </div>
+            </div>
+            <div class="page-visual">
+                <div class="page-stack">
+                    <div class="page-stack-card"><strong>Benchmark target</strong><span>Long conversational memory under realistic retrieval pressure.</span></div>
+                    <div class="page-stack-card"><strong>Why it matters</strong><span>Public proof that NEXO is not just architecture talk or a marketing memory claim.</span></div>
+                    <div class="page-stack-card"><strong>What to read next</strong><span>Compare pages, feature map, and runtime scorecards for the live story.</span></div>
+                </div>
+            </div>
+        </div>
     </div>
 </section>
 

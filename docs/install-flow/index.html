@@ -51,16 +51,20 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
     <link rel="stylesheet" href="/assets/style.css">
 </head>
-<body>
+<body class="features-page">
 <nav>
     <div class="container">
         <a href="/" class="nav-logo">
             <img src="/assets/logo-64.png" alt="NEXO Brain logo">
             <span>NEXO Brain</span>
         </a>
+        <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
         <div class="nav-links">
             <a href="/">Home</a>
             <a href="/features/">Features</a>
+            <a href="/evolution/">Evolution</a>
             <a href="/compare/">Compare</a>
             <a href="/blog/">Blog</a>
             <a href="/changelog/">Changelog</a>
@@ -71,23 +75,37 @@
 </nav>
 
 <main class="pt-nav">
-    <section>
+    <section class="page-hero section-flush-top">
         <div class="container">
-            <div class="section-label">Install Flow</div>
-            <h1 style="font-size:clamp(34px,5vw,58px);margin-bottom:18px;text-align:center;">What Actually Happens When You Run <span class="gradient">npx nexo-brain</span></h1>
-            <p class="section-subtitle">This is the real product flow: not just “MCP setup”, but runtime installation, shared-brain configuration, client choice, automation choice, and recommended model profiles.</p>
-
-            <div class="code-block" style="max-width:820px;margin-bottom:36px;">
-                <div class="code-header">
-                    <span class="code-dot"></span><span class="code-dot"></span><span class="code-dot"></span>
-                    <span class="code-title">Terminal</span>
+            <div class="page-hero-grid">
+                <div class="page-hero-copy">
+                    <div class="section-label">Install Flow</div>
+                    <h1 class="section-title" style="font-size:clamp(34px,5vw,58px);">What Actually Happens When You Run <span class="gradient">npx nexo-brain</span></h1>
+                    <p class="section-subtitle">This is the real product flow: not just “MCP setup”, but runtime installation, shared-brain configuration, client choice, automation choice, and recommended model profiles.</p>
+                    <div class="page-chip-row">
+                        <span class="page-chip">Shared brain from day one</span>
+                        <span class="page-chip">Client and automation choices</span>
+                        <span class="page-chip">Recommended model profiles</span>
+                    </div>
+                    <div class="hero-actions" style="justify-content:flex-start;">
+                        <a href="https://www.npmjs.com/package/nexo-brain" class="btn btn-primary">Install from npm</a>
+                        <a href="/docs/" class="btn btn-secondary">Docs hub</a>
+                        <a href="/changelog/" class="btn btn-secondary">Release notes</a>
+                    </div>
                 </div>
-                <div class="code-body">
-                    <span style="color:#94A3B8"># install NEXO Brain</span><br>
-                    <span style="color:#22C55E">$</span> <span style="color:#A78BFA">npx nexo-brain</span>
+                <div class="page-visual">
+                    <div class="code-block" style="max-width:none;margin-bottom:0;">
+                        <div class="code-header">
+                            <span class="code-dot"></span><span class="code-dot"></span><span class="code-dot"></span>
+                            <span class="code-title">Terminal</span>
+                        </div>
+                        <div class="code-body">
+                            <span style="color:#94A3B8"># install NEXO Brain</span><br>
+                            <span style="color:#22C55E">$</span> <span style="color:#A78BFA">npx nexo-brain</span>
+                        </div>
+                    </div>
                 </div>
             </div>
-
             <div class="fit-grid">
                 <div class="fit-card">
                     <div class="fit-step">1</div>
@@ -144,5 +162,19 @@
         </div>
     </section>
 </main>
+<script>
+(function() {
+    var navLinks = document.querySelector('.nav-links');
+    var navToggle = document.querySelector('.nav-toggle');
+    navLinks.querySelectorAll('a').forEach(function(link) {
+        link.addEventListener('click', function() { navLinks.classList.remove('open'); });
+    });
+    document.addEventListener('click', function(e) {
+        if (navLinks.classList.contains('open') && !navLinks.contains(e.target) && !navToggle.contains(e.target)) {
+            navLinks.classList.remove('open');
+        }
+    });
+})();
+</script>
 </body>
 </html>

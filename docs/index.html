@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Documentation hub for NEXO Brain. Quickstart, SDK, compare scorecard, client parity checklist, and the full GitHub wiki.">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="description" content="Documentation hub for NEXO Brain. Quickstart, SDK, compare scorecard, client parity checklist, install flow, and the full GitHub wiki.">
     <meta name="robots" content="index, follow">
     <title>Docs — NEXO Brain</title>
     <link rel="canonical" href="https://nexo-brain.com/docs/">
@@ -11,14 +11,14 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/docs/">
     <meta property="og:title" content="Docs — NEXO Brain">
-    <meta property="og:description" content="Documentation hub for NEXO Brain. Quickstart, SDK, compare scorecard, and the full GitHub wiki.">
+    <meta property="og:description" content="Documentation hub for NEXO Brain. Quickstart, SDK, compare scorecard, install flow, and the full GitHub wiki.">
     <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
     <meta property="og:image:width" content="1536">
     <meta property="og:image:height" content="1024">
 
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Docs — NEXO Brain">
-    <meta name="twitter:description" content="Documentation hub for NEXO Brain. Quickstart, SDK, compare scorecard, and the full GitHub wiki.">
+    <meta name="twitter:description" content="Documentation hub for NEXO Brain. Quickstart, SDK, compare scorecard, install flow, and the full GitHub wiki.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
 
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
@@ -32,9 +32,9 @@
     <script type="application/ld+json">
     {
         "@context": "https://schema.org",
-        "@type": "WebPage",
+        "@type": "CollectionPage",
         "name": "Docs — NEXO Brain",
-        "description": "Documentation hub for NEXO Brain. Quickstart, SDK, compare scorecard, client parity checklist, and the full GitHub wiki.",
+        "description": "Documentation hub for NEXO Brain. Quickstart, SDK, compare scorecard, install flow, client parity checklist, and the full GitHub wiki.",
         "url": "https://nexo-brain.com/docs/",
         "isPartOf": {
             "@type": "WebSite",
@@ -45,51 +45,179 @@
     </script>
 
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
     <link rel="stylesheet" href="/assets/style.css">
 </head>
-<body style="padding:48px 20px;">
-    <div style="max-width:960px;margin:0 auto;">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;">
-            <img src="/assets/logo-64.png" alt="NEXO Brain" style="width:48px;height:48px;border-radius:12px;">
-            <div>
-                <div style="font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--purple-light);font-weight:700;">Docs</div>
-                <h1 style="font-size:32px;font-weight:700;margin:4px 0 0;">NEXO documentation hub</h1>
-            </div>
-        </div>
-        <p style="color:var(--text-muted);font-size:18px;max-width:760px;margin-bottom:32px;">
-            Start with the fast path, then go deeper only if you need it. NEXO now exposes a smaller public mental model on top of the full wiki and MCP surface.
-        </p>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:20px;">
-            <a href="https://github.com/wazionapps/nexo/blob/main/docs/quickstart-5-minutes.md" style="text-decoration:none;color:inherit;padding:24px;border:1px solid var(--dark-border);border-radius:20px;background:rgba(255,255,255,.02);display:block;">
-                <h2 style="font-size:20px;margin-bottom:8px;">5-minute quickstart</h2>
-                <p style="color:var(--text-muted);font-size:15px;">Install, verify, remember, recall, consolidate, and open your first durable workflow.</p>
-            </a>
-            <a href="https://github.com/wazionapps/nexo/blob/main/docs/memory-classes.md" style="text-decoration:none;color:inherit;padding:24px;border:1px solid var(--dark-border);border-radius:20px;background:rgba(255,255,255,.02);display:block;">
-                <h2 style="font-size:20px;margin-bottom:8px;">Memory classes</h2>
-                <p style="color:var(--text-muted);font-size:15px;">Working, session, episodic, semantic, procedural, graph, and shared-brain memory roles in one map.</p>
-            </a>
-            <a href="https://github.com/wazionapps/nexo/blob/main/docs/sdk-python.md" style="text-decoration:none;color:inherit;padding:24px;border:1px solid var(--dark-border);border-radius:20px;background:rgba(255,255,255,.02);display:block;">
-                <h2 style="font-size:20px;margin-bottom:8px;">Python SDK</h2>
-                <p style="color:var(--text-muted);font-size:15px;">Minimal wrapper for `remember`, `recall`, `consolidate`, and `run_workflow`.</p>
-            </a>
-            <a href="/compare/" style="text-decoration:none;color:inherit;padding:24px;border:1px solid var(--dark-border);border-radius:20px;background:rgba(255,255,255,.02);display:block;">
-                <h2 style="font-size:20px;margin-bottom:8px;">Compare scorecard</h2>
-                <p style="color:var(--text-muted);font-size:15px;">Measured LoCoMo benchmark, parity guardrails, and 30/60/90 day runtime windows.</p>
-            </a>
-            <a href="https://github.com/wazionapps/nexo/blob/main/docs/reference-verticals.md" style="text-decoration:none;color:inherit;padding:24px;border:1px solid var(--dark-border);border-radius:20px;background:rgba(255,255,255,.02);display:block;">
-                <h2 style="font-size:20px;margin-bottom:8px;">Reference verticals</h2>
-                <p style="color:var(--text-muted);font-size:15px;">Coding agent, release operator, and ops/automation owner paths where NEXO becomes useful quickly.</p>
-            </a>
-            <a href="https://github.com/wazionapps/nexo/blob/main/docs/client-parity-checklist.md" style="text-decoration:none;color:inherit;padding:24px;border:1px solid var(--dark-border);border-radius:20px;background:rgba(255,255,255,.02);display:block;">
-                <h2 style="font-size:20px;margin-bottom:8px;">Client parity checklist</h2>
-                <p style="color:var(--text-muted);font-size:15px;">The operational checklist that keeps Claude Code, Codex, and shared-brain behavior aligned.</p>
-            </a>
-        </div>
-        <div style="margin-top:32px;padding:24px;border:1px solid var(--dark-border);border-radius:20px;background:rgba(124,58,237,.06);">
-            <h2 style="font-size:22px;margin-bottom:10px;">Need the full surface?</h2>
-            <p style="color:var(--text-muted);font-size:16px;margin-bottom:16px;">The GitHub wiki still holds the deeper install, configuration, and runtime documentation.</p>
-            <a href="https://github.com/wazionapps/nexo/wiki" style="font-size:15px;">Open the full wiki</a>
+<body class="features-page">
+
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-64.png" alt="NEXO Brain" width="32" height="32">
+            NEXO Brain
+        </a>
+        <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/features/">Features</a>
+            <a href="/evolution/">Evolution</a>
+            <a href="/compare/">Compare</a>
+            <a href="/blog/">Blog</a>
+            <a href="/changelog/">Changelog</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>GitHub</a>
         </div>
     </div>
+</nav>
+
+<section class="pt-nav page-hero">
+    <div class="container">
+        <div class="page-hero-grid">
+            <div class="page-hero-copy">
+                <div class="section-label">Documentation hub</div>
+                <h1 class="section-title" style="font-size:clamp(34px,5vw,58px);">Docs</h1>
+                <p class="section-subtitle">
+                    Start with the fast path, then go deeper only if you need it. This is the clean public map of NEXO: install, memory model, SDKs, compare scorecard, and runtime parity.
+                </p>
+                <div class="page-chip-row">
+                    <span class="page-chip">Quickstart first</span>
+                    <span class="page-chip">Install flow explained</span>
+                    <span class="page-chip">SDK + runtime + compare surfaces</span>
+                </div>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="https://github.com/wazionapps/nexo/blob/main/docs/quickstart-5-minutes.md" class="btn btn-primary">Open quickstart</a>
+                    <a href="/docs/install-flow/" class="btn btn-secondary">See install flow</a>
+                    <a href="https://github.com/wazionapps/nexo/wiki" class="btn btn-secondary">Full wiki</a>
+                </div>
+            </div>
+            <div class="page-visual">
+                <div class="page-stack">
+                    <div class="page-stack-card">
+                        <strong>Get started</strong>
+                        <span>Install, verify, remember, recall, consolidate, and open your first workflow.</span>
+                    </div>
+                    <div class="page-stack-card">
+                        <strong>Understand the model</strong>
+                        <span>Memory classes, client parity, compare scorecards, and vertical reference paths.</span>
+                    </div>
+                    <div class="page-stack-card">
+                        <strong>Go deeper only when needed</strong>
+                        <span>The public docs stay lighter than the full GitHub wiki on purpose.</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section>
+    <div class="container">
+        <div class="section-label">Core paths</div>
+        <h2 class="section-title">Start with the docs that unblock real usage fastest</h2>
+        <div class="features-grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));">
+            <a href="https://github.com/wazionapps/nexo/blob/main/docs/quickstart-5-minutes.md" class="feature-card" style="text-decoration:none;color:inherit;">
+                <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></div>
+                <h3>5-minute quickstart</h3>
+                <p>Install, verify, remember, recall, consolidate, and open your first durable workflow.</p>
+            </a>
+            <a href="/docs/install-flow/" class="feature-card" style="text-decoration:none;color:inherit;">
+                <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18"/><path d="m5 10 7-7 7 7"/></svg></div>
+                <h3>Install flow</h3>
+                <p>See the actual runtime setup path: shared brain, clients, automation backend, and model profiles.</p>
+            </a>
+            <a href="https://github.com/wazionapps/nexo/blob/main/docs/sdk-python.md" class="feature-card" style="text-decoration:none;color:inherit;">
+                <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m8 3-4 9h5l-1 9 8-12h-5l3-6z"/></svg></div>
+                <h3>Python SDK</h3>
+                <p>Minimal wrapper for <code>remember</code>, <code>recall</code>, <code>consolidate</code>, and <code>run_workflow</code>.</p>
+            </a>
+            <a href="/compare/" class="feature-card" style="text-decoration:none;color:inherit;">
+                <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg></div>
+                <h3>Compare scorecard</h3>
+                <p>Benchmarks, baselines, ablations, and runtime windows for the public product story.</p>
+            </a>
+        </div>
+    </div>
+</section>
+
+<section>
+    <div class="container">
+        <div class="section-label">Reference docs</div>
+        <h2 class="section-title">The rest of the public mental model</h2>
+        <div class="features-grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr));">
+            <a href="https://github.com/wazionapps/nexo/blob/main/docs/memory-classes.md" class="feature-card" style="text-decoration:none;color:inherit;">
+                <h3>Memory classes</h3>
+                <p>Working, session, episodic, semantic, procedural, graph, and shared-brain memory roles in one map.</p>
+            </a>
+            <a href="https://github.com/wazionapps/nexo/blob/main/docs/reference-verticals.md" class="feature-card" style="text-decoration:none;color:inherit;">
+                <h3>Reference verticals</h3>
+                <p>Coding agent, release operator, and ops/automation owner paths where NEXO becomes useful quickly.</p>
+            </a>
+            <a href="https://github.com/wazionapps/nexo/blob/main/docs/client-parity-checklist.md" class="feature-card" style="text-decoration:none;color:inherit;">
+                <h3>Client parity checklist</h3>
+                <p>The operational checklist that keeps Claude Code, Codex, and shared-brain behavior aligned.</p>
+            </a>
+            <a href="/features/" class="feature-card" style="text-decoration:none;color:inherit;">
+                <h3>Feature map</h3>
+                <p>Architecture, benchmarks, tools, Deep Sleep, Evolution, and the wider runtime surface.</p>
+            </a>
+        </div>
+    </div>
+</section>
+
+<section class="cta-section">
+    <div class="container">
+        <h2 class="section-title">Need the full surface?</h2>
+        <p class="section-subtitle" style="margin:16px auto 48px;">The public docs stay tight. The GitHub wiki still holds deeper install, configuration, and runtime references when you want the full surface.</p>
+        <div class="hero-actions">
+            <a href="https://github.com/wazionapps/nexo/wiki" class="btn btn-primary">Open the full wiki</a>
+            <a href="https://github.com/wazionapps/nexo/blob/main/docs/quickstart-5-minutes.md" class="btn btn-secondary">Read quickstart</a>
+            <a href="/" class="btn btn-secondary">Back home</a>
+        </div>
+    </div>
+</section>
+
+<footer>
+    <div class="container">
+        <div class="footer-content">
+            <div class="footer-left">
+                Created by <strong>Francisco Cerd&agrave; Puigserver</strong> &amp; <strong>NEXO</strong> (Claude Opus) &bull; Built by <a href="https://www.wazion.com">WAzion</a> &bull; AGPL-3.0 License &bull; &copy; 2026
+            </div>
+            <div class="footer-links">
+                <a href="https://github.com/wazionapps/nexo">GitHub</a>
+                <a href="https://x.com/NEXOBRAIN">X / Twitter</a>
+                <a href="https://github.com/sponsors/wazionapps">Sponsor</a>
+                <a href="/features/">Features</a>
+                <a href="/compare/">Compare</a>
+                <a href="/changelog/">Changelog</a>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<div id="cookie-consent" style="display:none;position:fixed;bottom:0;left:0;right:0;background:rgba(10,10,15,0.95);border-top:1px solid #1E1E2E;padding:12px 24px;z-index:200;font-size:13px;color:#94A3B8;text-align:center;">
+    This site uses analytics cookies. <a href="https://www.wazion.com/en/privacy" style="color:#A78BFA;">Privacy Policy</a>
+    <button onclick="document.getElementById('cookie-consent').style.display='none';localStorage.setItem('cc','1')" style="margin-left:16px;background:#7C3AED;color:#fff;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Accept</button>
+    <button onclick="document.getElementById('cookie-consent').style.display='none';localStorage.setItem('cc','0');window['ga-disable-G-1LNEMCJMS7']=true" style="margin-left:8px;background:transparent;color:#94A3B8;border:1px solid #333;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Decline</button>
+</div>
+<script>
+if(!localStorage.getItem('cc')){document.getElementById('cookie-consent').style.display='block';}
+else if(localStorage.getItem('cc')==='0'){window['ga-disable-G-1LNEMCJMS7']=true;}
+
+(function() {
+    var navLinks = document.querySelector('.nav-links');
+    var navToggle = document.querySelector('.nav-toggle');
+    navLinks.querySelectorAll('a').forEach(function(link) {
+        link.addEventListener('click', function() { navLinks.classList.remove('open'); });
+    });
+    document.addEventListener('click', function(e) {
+        if (navLinks.classList.contains('open') && !navLinks.contains(e.target) && !navToggle.contains(e.target)) {
+            navLinks.classList.remove('open');
+        }
+    });
+})();
+</script>
 </body>
 </html>

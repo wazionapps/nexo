@@ -54,7 +54,7 @@
 
     <link rel="stylesheet" href="/assets/style.css">
 </head>
-<body>
+<body class="features-page">
 
 <nav>
     <div class="container">
@@ -68,6 +68,7 @@
         <div class="nav-links">
             <a href="/">Home</a>
             <a href="/features/">Features</a>
+            <a href="/evolution/">Evolution</a>
             <a href="/compare/">Compare</a>
             <a href="/blog/">Blog</a>
             <a href="/changelog/">Changelog</a>
@@ -78,13 +79,29 @@
 </nav>
 
 <!-- Header -->
-<section class="pt-nav" style="text-align:center;">
+<section class="pt-nav page-hero">
     <div class="container">
-        <div class="section-label">Since v0.5.0</div>
-        <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Cognitive Features</h1>
-        <p class="section-subtitle">
-            Thread-safe SQLite with WAL mode and connection pooling, passing 100% of concurrent stress tests. Built on formal schema migrations and trust auto-detection, on top of 21 cognitive tools implementing cognitive science concepts that go beyond basic memory storage.
-        </p>
+        <div class="page-hero-grid">
+            <div class="page-hero-copy">
+                <div class="section-label">Since v0.5.0</div>
+                <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Cognitive Features</h1>
+                <p class="section-subtitle">
+                    Thread-safe SQLite with WAL mode and connection pooling, passing 100% of concurrent stress tests. Built on formal schema migrations and trust auto-detection, on top of 21 cognitive tools implementing cognitive science concepts that go beyond basic memory storage.
+                </p>
+                <div class="page-chip-row">
+                    <span class="page-chip">Prediction error gating</span>
+                    <span class="page-chip">Trust + quarantine + retrieval</span>
+                    <span class="page-chip">Applied cognitive science</span>
+                </div>
+            </div>
+            <div class="page-visual">
+                <div class="page-stack">
+                    <div class="page-stack-card"><strong>Input pipeline</strong><span>Novelty filtering, security checks, quarantine, redaction.</span></div>
+                    <div class="page-stack-card"><strong>Memory management</strong><span>Pin, snooze, archive, merge, dream, consolidate.</span></div>
+                    <div class="page-stack-card"><strong>Retrieval + proactive</strong><span>HyDE, spreading activation, explanations, prospective memory.</span></div>
+                </div>
+            </div>
+        </div>
     </div>
 </section>
 

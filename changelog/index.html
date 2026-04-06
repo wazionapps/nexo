@@ -54,7 +54,7 @@
 
     <link rel="stylesheet" href="/assets/style.css">
 </head>
-<body>
+<body class="features-page">
 
 <nav>
     <div class="container">
@@ -68,6 +68,7 @@
         <div class="nav-links">
             <a href="/">Home</a>
             <a href="/features/">Features</a>
+            <a href="/evolution/">Evolution</a>
             <a href="/compare/">Compare</a>
             <a href="/blog/">Blog</a>
             <a href="/changelog/">Changelog</a>
@@ -78,11 +79,41 @@
 </nav>
 
 <!-- Header -->
-<section class="pt-nav" style="text-align:center;">
+<section class="pt-nav page-hero">
     <div class="container">
-        <div class="section-label">VERSION HISTORY</div>
-        <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
-        <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning.</p>
+        <div class="page-hero-grid">
+            <div class="page-hero-copy">
+                <div class="section-label">Version history</div>
+                <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
+                <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
+                <div class="page-chip-row">
+                    <span class="page-chip">v3.0.1 live</span>
+                    <span class="page-chip">Runtime + website + release artifacts</span>
+                    <span class="page-chip">From early memory stack to cognitive runtime</span>
+                </div>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="#v301" class="btn btn-primary">Start with v3.0.1</a>
+                    <a href="#v300" class="btn btn-secondary">See v3.0.0</a>
+                    <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
+                </div>
+            </div>
+            <div class="page-visual">
+                <div class="page-stack">
+                    <div class="page-stack-card">
+                        <strong>v3.0.1</strong>
+                        <span>Python 3.10 compatibility, stricter boot validation, smoother installs.</span>
+                    </div>
+                    <div class="page-stack-card">
+                        <strong>v3.0.0</strong>
+                        <span>Protocol discipline, durable workflows, public scorecards, conditioned learnings.</span>
+                    </div>
+                    <div class="page-stack-card">
+                        <strong>What changed most</strong>
+                        <span>NEXO stopped being “just memory” and became a stricter local cognitive runtime.</span>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </section>
 

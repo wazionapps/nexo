@@ -54,7 +54,7 @@
 
     <link rel="stylesheet" href="/assets/style.css">
 </head>
-<body>
+<body class="features-page">
 
 <nav>
     <div class="container">
@@ -68,6 +68,7 @@
         <div class="nav-links">
             <a href="/">Home</a>
             <a href="/features/">Features</a>
+            <a href="/evolution/">Evolution</a>
             <a href="/compare/">Compare</a>
             <a href="/blog/">Blog</a>
             <a href="/changelog/">Changelog</a>
@@ -78,13 +79,29 @@
 </nav>
 
 <!-- Header -->
-<section class="pt-nav" style="text-align:center;">
+<section class="pt-nav page-hero">
     <div class="container">
-        <div class="section-label">Architecture</div>
-        <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">How memory works</h1>
-        <p class="section-subtitle">
-            Based on the Atkinson-Shiffrin model from cognitive psychology, adapted for AI agents.
-        </p>
+        <div class="page-hero-grid">
+            <div class="page-hero-copy">
+                <div class="section-label">Architecture</div>
+                <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">How memory works</h1>
+                <p class="section-subtitle">
+                    Based on the Atkinson-Shiffrin model from cognitive psychology, adapted for AI agents.
+                </p>
+                <div class="page-chip-row">
+                    <span class="page-chip">Sensory register</span>
+                    <span class="page-chip">STM + rehearsal</span>
+                    <span class="page-chip">LTM + forgetting curve</span>
+                </div>
+            </div>
+            <div class="page-visual">
+                <div class="page-stack">
+                    <div class="page-stack-card"><strong>Sensory</strong><span>Raw input, attention filter, short retention.</span></div>
+                    <div class="page-stack-card"><strong>Short-term</strong><span>Working context, rehearsal, active manipulation.</span></div>
+                    <div class="page-stack-card"><strong>Long-term</strong><span>Consolidated memory with semantic structure and decay.</span></div>
+                </div>
+            </div>
+        </div>
     </div>
 </section>
 
