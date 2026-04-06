@@ -3,42 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>NEXO Brain vs Vestige &mdash; Comparison (2026)</title>
-    <meta name="description" content="NEXO Brain vs Vestige: 150+ MCP tools, shared-brain client coverage, automatic HyDE/spreading defaults, and long-horizon Deep Sleep vs a lean Rust binary with FSRS-6 spaced repetition and a 3D neural dashboard.">
+    <title>NEXO vs Vestige — Cognitive memory alternative</title>
+    <meta name="description" content="Honest NEXO Brain vs Vestige comparison. Vestige is attractive as a lean cognitive memory engine; NEXO is stronger when you want a broader local runtime with workflows, guardrails, and operational depth around memory.">
+    <meta name="keywords" content="NEXO vs Vestige, Vestige alternative, cognitive memory engine, local AI runtime, operational AI memory">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/compare/nexo-vs-vestige/">
 
-    <!-- Open Graph -->
     <meta property="og:type" content="article">
     <meta property="og:url" content="https://nexo-brain.com/compare/nexo-vs-vestige/">
-    <meta property="og:title" content="NEXO Brain vs Vestige — Comparison (2026)">
-    <meta property="og:description" content="Full operational stack with shared-brain client coverage, long-horizon Deep Sleep, and smarter retrieval defaults vs a lean Rust cognitive engine with FSRS-6 and 3D visualization.">
+    <meta property="og:title" content="NEXO vs Vestige — Cognitive memory alternative">
+    <meta property="og:description" content="Honest NEXO Brain vs Vestige comparison. Vestige is attractive as a lean cognitive memory engine; NEXO is stronger when you want a broader local runtime with workflows, guardrails, and operational depth around memory.">
     <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
     <meta property="og:image:width" content="1536">
     <meta property="og:image:height" content="1024">
 
-    <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="NEXO Brain vs Vestige — Comparison (2026)">
-    <meta name="twitter:description" content="Full operational stack with shared-brain client coverage, long-horizon Deep Sleep, and smarter retrieval defaults vs a lean Rust cognitive engine with FSRS-6 and 3D visualization.">
+    <meta name="twitter:title" content="NEXO vs Vestige — Cognitive memory alternative">
+    <meta name="twitter:description" content="Honest NEXO Brain vs Vestige comparison. Vestige is attractive as a lean cognitive memory engine; NEXO is stronger when you want a broader local runtime with workflows, guardrails, and operational depth around memory.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
 
-    <!-- Schema.org -->
-    <script type="application/ld+json">
-    {
-        "@context": "https://schema.org",
-        "@type": "Article",
-        "headline": "NEXO Brain vs Vestige — Comparison (2026)",
-        "description": "Full operational stack with 150+ tools, shared-brain client coverage, smarter retrieval defaults, and long-horizon Deep Sleep vs a lean Rust cognitive engine with FSRS-6 and 3D neural dashboard.",
-        "url": "https://nexo-brain.com/compare/nexo-vs-vestige/",
-        "datePublished": "2026-04-04",
-        "dateModified": "2026-04-04",
-        "author": { "@type": "Organization", "name": "WAzion", "url": "https://www.wazion.com" },
-        "publisher": { "@type": "Organization", "name": "WAzion", "url": "https://www.wazion.com" }
-    }
-    </script>
-
-    <!-- Google Analytics (GA4) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
     <script>
       window.dataLayer = window.dataLayer || [];
@@ -47,13 +30,41 @@
       gtag('config', 'G-1LNEMCJMS7');
     </script>
 
-    <!-- Favicon -->
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
     <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
-
     <link rel="stylesheet" href="/assets/style.css">
-    <style>@media(max-width:768px){.strengths-grid{grid-template-columns:1fr !important;}}</style>
+    <style>
+        .compare-chip {
+            display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:999px;
+            border:1px solid var(--dark-border);background:rgba(18,18,26,.8);font-size:13px;color:var(--text-muted);
+        }
+        .compare-hero-meta {
+            display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-top:18px;
+        }
+        .compare-split {
+            display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px;margin-top:28px;
+        }
+        .compare-panel {
+            background:var(--dark-card);border:1px solid var(--dark-border);border-radius:18px;padding:24px;
+        }
+        .compare-panel h3 {margin-bottom:14px;}
+        .compare-panel ul,.faq-list,.arch-list {padding-left:20px;}
+        .compare-panel li,.faq-list li,.arch-list li {margin:10px 0;color:var(--text-muted);}
+        .related-links {display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:24px;}
+        .related-links a {
+            display:block;padding:18px;border-radius:16px;border:1px solid var(--dark-border);
+            background:rgba(18,18,26,.82);color:var(--text);text-decoration:none;
+        }
+        .related-links a:hover {border-color:var(--purple-light);transform:translateY(-2px);}
+        .faq-item {padding:18px 0;border-bottom:1px solid var(--dark-border);}
+        .faq-item:last-child {border-bottom:none;}
+        .faq-item h3 {font-size:20px;margin-bottom:8px;}
+        .faq-item p {color:var(--text-muted);}
+    </style>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "Article", "headline": "NEXO vs Vestige — Cognitive memory alternative", "description": "Honest NEXO Brain vs Vestige comparison. Vestige is attractive as a lean cognitive memory engine; NEXO is stronger when you want a broader local runtime with workflows, guardrails, and operational depth around memory.", "url": "https://nexo-brain.com/compare/nexo-vs-vestige/", "datePublished": "2026-04-06", "dateModified": "2026-04-06", "author": {"@type": "Organization", "name": "WAzion", "url": "https://www.wazion.com"}, "publisher": {"@type": "Organization", "name": "WAzion", "url": "https://www.wazion.com"}}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "Home", "item": "https://nexo-brain.com"}, {"@type": "ListItem", "position": 2, "name": "Compare", "item": "https://nexo-brain.com/compare/"}, {"@type": "ListItem", "position": 3, "name": "NEXO vs Vestige", "item": "https://nexo-brain.com/compare/nexo-vs-vestige/"}]}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "Is Vestige more lightweight than NEXO?", "acceptedAnswer": {"@type": "Answer", "text": "Yes, that is the fair framing. The question is whether that lightness is an advantage or a limitation for your workflow."}}, {"@type": "Question", "name": "When is NEXO the better alternative?", "acceptedAnswer": {"@type": "Answer", "text": "When your workflow needs not only cognition, but the surrounding runtime: workflows, protocol discipline, learnings, and operational depth."}}, {"@type": "Question", "name": "Should NEXO claim Vestige has nothing useful?", "acceptedAnswer": {"@type": "Answer", "text": "No. The honest comparison is lighter cognitive engine versus broader local runtime."}}]}</script>
 </head>
 <body>
 
@@ -78,170 +89,136 @@
     </div>
 </nav>
 
-<!-- Header -->
+
 <section class="pt-nav" style="text-align:center;">
     <div class="container">
         <div class="section-label"><a href="/compare/" style="color:inherit;text-decoration:none;">Comparisons</a></div>
-        <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">NEXO Brain vs Vestige</h1>
-        <p class="section-subtitle">
-            Full operational stack with 150+ MCP tools, shared-brain client coverage, smarter retrieval defaults, and long-horizon overnight analysis vs. a lean Rust cognitive engine with FSRS-6 spaced repetition and a 3D neural dashboard.
-        </p>
+        <h1 class="section-title" style="font-size:clamp(34px,5vw,58px);">NEXO Brain vs Vestige</h1>
+        <p class="section-subtitle">Vestige is appealing when you want a leaner cognitive-memory product. NEXO is better when you want the heavier but broader local runtime around that memory.</p>
+        <div class="compare-hero-meta">
+            <span class="compare-chip">Updated April 6, 2026</span>
+            <span class="compare-chip">Lean cognitive engine vs broader local runtime</span>
+            <span class="compare-chip">Best query: Vestige alternative for more complete AI workflow support</span>
+        </div>
     </div>
 </section>
 
-<!-- Comparison Table -->
 <section>
     <div class="container">
-        <div style="overflow-x:auto;">
+        <div class="section-label">Quick answer</div>
+        <h2 class="section-title">Vestige is leaner. NEXO is broader and more operational.</h2>
+        <div class="compare-panel" style="margin-top:24px;">
+            <p style="color:var(--text-muted);font-size:16px;">Vestige is appealing if you want a lean cognitive memory engine with a tighter surface area. NEXO wins when you want the broader local runtime around memory: durable workflows, learnings, protocol discipline, operational tools, and one persistent shared brain across clients.</p>
+        </div>
+    </div>
+</section>
+
+<section>
+    <div class="container">
+        <div class="section-label">Side-by-side</div>
+        <h2 class="section-title">Capability comparison</h2>
+        <div style="overflow-x:auto;margin-top:28px;">
             <table class="psychology-table">
                 <thead>
                     <tr>
-                        <th>Feature</th>
+                        <th>Capability</th>
                         <th>NEXO Brain</th>
                         <th>Vestige</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <tr><td>Language</td><td>Python (MCP server)</td><td>Rust (single binary)</td></tr>
-                    <tr><td>Binary Size</td><td>Python ecosystem</td><td>~22 MB single binary</td></tr>
-                    <tr><td>MCP Tools</td><td>150+</td><td>~21</td></tr>
-                    <tr><td>Brain Modules</td><td>17 packages (db + cognitive)</td><td>29 brain modules</td></tr>
-                    <tr><td>Spaced Repetition</td><td>Ebbinghaus + per-memory stability/difficulty</td><td>FSRS-6 (Free Spaced Repetition Scheduler)</td></tr>
-                    <tr><td>Query Expansion / Spreading</td><td>Auto HyDE + spreading activation</td><td>Yes</td></tr>
-                    <tr><td>Visualization</td><td>&mdash;</td><td>3D neural dashboard</td></tr>
-                    <tr><td>Knowledge Graph</td><td>Yes</td><td>&mdash;</td></tr>
-                    <tr><td>Trust Scoring</td><td>Yes</td><td>&mdash;</td></tr>
-                    <tr><td>Personal Scripts</td><td>80+ personal, 13 core</td><td>&mdash;</td></tr>
-                    <tr><td>Operational Tools</td><td>Email, credentials, entities, decisions</td><td>Memory-focused</td></tr>
-                    <tr><td>Background Jobs</td><td>Recovery-aware (Deep Sleep 60d blend, consolidation)</td><td>&mdash;</td></tr>
-                    <tr><td>Published Benchmark</td><td>LoCoMo F1 0.588</td><td>&mdash;</td></tr>
-                    <tr><td>Performance</td><td>Python speed</td><td>Rust-native speed</td></tr>
-                    <tr><td>License</td><td>AGPL-3.0</td><td>MIT</td></tr>
+                    <tr><td>Core positioning</td><td>Local cognitive runtime</td><td>Lean cognitive memory engine</td></tr>
+<tr><td>Focus</td><td>Memory + workflows + operations</td><td>Memory / cognition first</td></tr>
+<tr><td>Durable workflows</td><td>Yes</td><td>No native workflow runtime</td></tr>
+<tr><td>Protocol discipline</td><td>Yes</td><td>Not the core product frame</td></tr>
+<tr><td>Overnight learning</td><td>Yes</td><td>No native equivalent</td></tr>
+<tr><td>Operational tools</td><td>150+ MCP tools</td><td>More focused surface</td></tr>
+<tr><td>Best fit</td><td>Persistent daily AI work</td><td>Lighter cognitive-memory stack</td></tr>
                 </tbody>
             </table>
         </div>
     </div>
 </section>
 
-<!-- Detailed Analysis -->
-<section style="background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
-    <div class="container">
-        <div class="section-label">Analysis</div>
-        <h2 class="section-title">Where each tool excels</h2>
-
-        <div class="strengths-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-top:32px;">
-            <div>
-                <h3 style="display:flex;align-items:center;gap:8px;color:var(--purple-light);margin-bottom:20px;font-size:20px;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> NEXO Brain advantages</h3>
-                <div style="display:flex;flex-direction:column;gap:16px;">
-                    <div style="background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);border-radius:12px;padding:16px;">
-                        <strong style="color:#fff;display:block;margin-bottom:4px;">150+ MCP tools</strong>
-                        <span style="color:var(--gray);font-size:14px;">Far beyond memory &mdash; email, credentials, entity tracking, decision logging, personal scripts, and operational workflows.</span>
-                    </div>
-                    <div style="background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);border-radius:12px;padding:16px;">
-                        <strong style="color:#fff;display:block;margin-bottom:4px;">Personal scripts registry</strong>
-                        <span style="color:var(--gray);font-size:14px;">80+ personal scripts and 13 core scripts managed through a registry database with scheduling and recovery.</span>
-                    </div>
-                    <div style="background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);border-radius:12px;padding:16px;">
-                        <strong style="color:#fff;display:block;margin-bottom:4px;">Trust scoring</strong>
-                        <span style="color:var(--gray);font-size:14px;">Sources are scored for reliability, ensuring high-confidence memories surface first.</span>
-                    </div>
-                    <div style="background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);border-radius:12px;padding:16px;">
-                        <strong style="color:#fff;display:block;margin-bottom:4px;">Smarter retrieval defaults</strong>
-                        <span style="color:var(--gray);font-size:14px;">NEXO now auto-enables HyDE and shallow spreading activation when the query shape benefits, while keeping exact lookups conservative.</span>
-                    </div>
-                    <div style="background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);border-radius:12px;padding:16px;">
-                        <strong style="color:#fff;display:block;margin-bottom:4px;">Long-horizon Deep Sleep</strong>
-                        <span style="color:var(--gray);font-size:14px;">Deep Sleep now blends recent and older context across a 60-day horizon, helping older patterns resurface when they become relevant again.</span>
-                    </div>
-                    <div style="background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);border-radius:12px;padding:16px;">
-                        <strong style="color:#fff;display:block;margin-bottom:4px;">Published benchmark</strong>
-                        <span style="color:var(--gray);font-size:14px;">LoCoMo F1 0.588 (+55% vs GPT-4) &mdash; independently verifiable retrieval quality.</span>
-                    </div>
-                </div>
-            </div>
-            <div>
-                <h3 style="display:flex;align-items:center;gap:8px;color:var(--gray);margin-bottom:20px;font-size:20px;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M5 7l7-4 7 4"/><path d="M5 7l-2 8h4z"/><path d="M19 7l2 8h-4z"/></svg> Vestige advantages</h3>
-                <div style="display:flex;flex-direction:column;gap:16px;">
-                    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;">
-                        <strong style="color:#fff;display:block;margin-bottom:4px;">Rust performance</strong>
-                        <span style="color:var(--gray);font-size:14px;">A 22 MB single binary with native speed. No interpreter overhead, no dependency management.</span>
-                    </div>
-                    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;">
-                        <strong style="color:#fff;display:block;margin-bottom:4px;">FSRS-6</strong>
-                        <span style="color:var(--gray);font-size:14px;">The Free Spaced Repetition Scheduler is a more sophisticated review-oriented memory model than classical Ebbinghaus when your product is explicitly centered on spaced repetition.</span>
-                    </div>
-                    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;">
-                        <strong style="color:#fff;display:block;margin-bottom:4px;">3D neural dashboard</strong>
-                        <span style="color:var(--gray);font-size:14px;">A visual interface for exploring your agent&rsquo;s memory state &mdash; something no other tool in this space offers.</span>
-                    </div>
-                    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;">
-                        <strong style="color:#fff;display:block;margin-bottom:4px;">29 brain modules</strong>
-                        <span style="color:var(--gray);font-size:14px;">A highly modular architecture with dedicated modules for different cognitive functions.</span>
-                    </div>
-                    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;">
-                        <strong style="color:#fff;display:block;margin-bottom:4px;">MIT license</strong>
-                        <span style="color:var(--gray);font-size:14px;">More permissive licensing for commercial and proprietary use.</span>
-                    </div>
-                    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;">
-                        <strong style="color:#fff;display:block;margin-bottom:4px;">Potentially faster retrieval</strong>
-                        <span style="color:var(--gray);font-size:14px;">Rust&rsquo;s performance characteristics may benefit latency-sensitive applications.</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- When to choose -->
 <section>
     <div class="container">
-        <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px;">
-            <div class="cognitive-card">
-                <h3>Choose NEXO Brain if&hellip;</h3>
-                <ul class="arch-list">
-                    <li>You need the full operational stack &mdash; not just memory, but email, credentials, scripts, entities</li>
-                    <li>Knowledge Graph-boosted search matters for your use case</li>
-                    <li>You want background consolidation and overnight learning with transcript-aware 60-day synthesis</li>
-                    <li>Trust scoring for information reliability is important</li>
-                    <li>You want a published, verifiable benchmark for retrieval quality</li>
-                </ul>
+        <div class="section-label">Honest take</div>
+        <h2 class="section-title">The honest framing: Vestige is leaner; NEXO is more complete around real work.</h2>
+        <div class="compare-split">
+            <div class="compare-panel">
+                <h3>NEXO advantages</h3>
+                <ul class="arch-list"><li>Better when you want the runtime around memory, not just the memory engine.</li>
+<li>Better when operational surfaces matter: followups, doctor, scripts, diary, workflows, and guardrails.</li>
+<li>Better when your actual workflow spans multiple clients and longer-running tasks.</li></ul>
             </div>
-            <div class="cognitive-card">
-                <h3>Choose Vestige if&hellip;</h3>
-                <ul class="arch-list">
-                    <li>Raw performance matters &mdash; Rust&rsquo;s speed is hard to beat</li>
-                    <li>You want a visual 3D dashboard to explore your agent&rsquo;s memory</li>
-                    <li>FSRS-6&rsquo;s review-oriented spaced repetition appeals to you more than NEXO&rsquo;s Ebbinghaus-plus-personalization model</li>
-                    <li>You prefer a lean cognitive engine without operational overhead</li>
-                    <li>MIT licensing is required for your project</li>
-                </ul>
+            <div class="compare-panel">
+                <h3>Vestige advantages</h3>
+                <ul class="arch-list"><li>Vestige is appealing if you want a leaner, more focused cognitive-memory stack.</li>
+<li>A tighter surface area can be an advantage when you want less runtime around the core memory engine.</li>
+<li>Some buyers prefer lighter tools even when they sacrifice broader operational depth.</li></ul>
             </div>
         </div>
     </div>
 </section>
 
-<!-- CTA -->
-<section class="cta-section">
+<section>
     <div class="container">
-        <h2 class="section-title">Give your agent a mind</h2>
-        <p class="section-subtitle" style="margin: 16px auto 48px;">
-            Open source, AGPL-3.0 licensed, and built for builders who want their AI to actually remember.
-        </p>
-        <div class="hero-actions">
-            <a href="https://github.com/wazionapps/nexo" class="btn btn-primary">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
-                Star on GitHub
-            </a>
-            <a href="https://github.com/sponsors/wazionapps" class="btn btn-secondary" style="border-color: var(--pink); color: var(--pink);">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-                Sponsor
-            </a>
-            <a href="https://www.npmjs.com/package/nexo-brain" class="btn btn-secondary">
-                View on npm
-            </a>
+        <div class="section-label">Decision rule</div>
+        <h2 class="section-title">Pick the runtime width that matches your workflow</h2>
+        <div class="compare-split">
+            <div class="compare-panel">
+                <h3>Choose NEXO if&hellip;</h3>
+                <ul class="arch-list"><li>You want the broader runtime around persistent memory.</li>
+<li>You need workflows, guardrails, and operational tooling, not only cognition.</li>
+<li>You care about one working brain across multiple clients and longer-lived tasks.</li></ul>
+            </div>
+            <div class="compare-panel">
+                <h3>Choose Vestige if&hellip;</h3>
+                <ul class="arch-list"><li>You prefer a leaner cognitive-memory engine.</li>
+<li>You do not want a wide operational/runtime surface.</li>
+<li>You are optimizing for focus over breadth.</li></ul>
+            </div>
         </div>
     </div>
 </section>
+
+<section>
+    <div class="container">
+        <div class="section-label">FAQ</div>
+        <h2 class="section-title">Questions that matter before you choose</h2>
+        <div class="compare-panel" style="margin-top:24px;">
+            <div class="faq-item"><h3>Is Vestige more lightweight than NEXO?</h3><p>Yes, that is the fair framing. The question is whether that lightness is an advantage or a limitation for your workflow.</p></div>
+<div class="faq-item"><h3>When is NEXO the better alternative?</h3><p>When your workflow needs not only cognition, but the surrounding runtime: workflows, protocol discipline, learnings, and operational depth.</p></div>
+<div class="faq-item"><h3>Should NEXO claim Vestige has nothing useful?</h3><p>No. The honest comparison is lighter cognitive engine versus broader local runtime.</p></div>
+        </div>
+    </div>
+</section>
+
+<section>
+    <div class="container">
+        <div class="section-label">Related pages</div>
+        <h2 class="section-title">Keep comparing</h2>
+        <div class="related-links">
+            <a href="/compare/nexo-vs-mem0/"><strong>NEXO vs Mem0</strong><br><span style="color:var(--text-muted);font-size:14px;">Memory layer vs local cognitive runtime</span></a>
+<a href="/compare/nexo-vs-letta/"><strong>NEXO vs Letta</strong><br><span style="color:var(--text-muted);font-size:14px;">Stateful agents vs local working brain</span></a>
+<a href="/compare/nexo-vs-langgraph/"><strong>NEXO vs LangGraph</strong><br><span style="color:var(--text-muted);font-size:14px;">Framework vs runtime</span></a>
+<a href="/compare/nexo-vs-zep/"><strong>NEXO vs Zep / Graphiti</strong><br><span style="color:var(--text-muted);font-size:14px;">Graph memory vs broader runtime</span></a>
+        </div>
+    </div>
+</section>
+
+<section class="cta-section">
+    <div class="container">
+        <h2 class="section-title">If you want the broader local stack around memory, NEXO is the better fit</h2>
+        <p class="section-subtitle" style="margin: 16px auto 48px;">Vestige can be the better lean option. NEXO becomes the better option when memory alone is no longer the whole problem.</p>
+        <div class="hero-actions">
+            <a href="https://github.com/wazionapps/nexo" class="btn btn-primary">Star on GitHub</a>
+            <a href="https://www.npmjs.com/package/nexo-brain" class="btn btn-secondary">View on npm</a>
+            <a href="/compare/" class="btn btn-secondary">More comparisons</a>
+        </div>
+    </div>
+</section>
+
 
 <footer>
     <div class="container">
@@ -259,10 +236,11 @@
                 <a href="https://www.npmjs.com/package/nexo-brain">npm</a>
                 <a href="https://github.com/wazionapps/nexo/releases">Releases</a>
             </div>
-            <div style="text-align:center;margin-top:12px;color:#6b7280;font-size:12px;">Last updated: April 2026</div>
+            <div style="text-align:center;margin-top:12px;color:#6b7280;font-size:12px;">Last updated: April 6, 2026</div>
         </div>
     </div>
 </footer>
+
 
 <script>
 const observer = new IntersectionObserver((entries) => {
@@ -273,6 +251,7 @@ const observer = new IntersectionObserver((entries) => {
         }
     });
 }, { threshold: 0.1 });
+
 document.querySelectorAll('.cognitive-card').forEach(el => {
     el.style.opacity = '0';
     el.style.transform = 'translateY(20px)';
@@ -282,7 +261,7 @@ document.querySelectorAll('.cognitive-card').forEach(el => {
 </script>
 
 <div id="cookie-consent" style="display:none;position:fixed;bottom:0;left:0;right:0;background:rgba(10,10,15,0.95);border-top:1px solid #1E1E2E;padding:12px 24px;z-index:200;font-size:13px;color:#94A3B8;text-align:center;">
-    This site uses analytics cookies to improve the experience. <a href="https://www.wazion.com/en/privacy" style="color:#A78BFA;">Privacy Policy</a>
+    This site uses analytics cookies. <a href="https://www.wazion.com/en/privacy" style="color:#A78BFA;">Privacy Policy</a>
     <button onclick="document.getElementById('cookie-consent').style.display='none';localStorage.setItem('cc','1')" style="margin-left:16px;background:#7C3AED;color:#fff;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Accept</button>
     <button onclick="document.getElementById('cookie-consent').style.display='none';localStorage.setItem('cc','0');window['ga-disable-G-1LNEMCJMS7']=true" style="margin-left:8px;background:transparent;color:#94A3B8;border:1px solid #333;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Decline</button>
 </div>
