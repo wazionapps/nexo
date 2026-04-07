@@ -85,13 +85,15 @@ jobs:
       # 3. Publish ClawHub skill
       - name: Publish ClawHub skill
         run: |
+          test -n "$CLAWHUB_TOKEN"
+          npx clawhub@latest login --token "$CLAWHUB_TOKEN" --no-browser
           npx clawhub@latest publish ./clawhub-skill \
             --slug nexo-brain \
             --name "NEXO Brain" \
             --version ${GITHUB_REF_NAME#v} \
             --tags latest \
             --changelog "Release ${GITHUB_REF_NAME}" \
-            --no-input || echo "ClawHub publish failed (may need auth)"
+            --no-input
         env:
           CLAWHUB_TOKEN: ${{ secrets.CLAWHUB_TOKEN }}
 
@@ -118,8 +120,8 @@ jobs:
             echo "ClawHub listing not updated yet (attempt $attempt/8). Waiting 20s..."
             sleep 20
           done
-          echo "::warning::ClawHub verification timed out waiting for version ${expected}. Publish step succeeded, but the public listing is still propagating."
-          exit 0
+          echo "::error::ClawHub verification timed out waiting for version ${expected}."
+          exit 1
 
       # 4. Create GitHub Release
       - name: Create GitHub Release
