@@ -669,6 +669,31 @@ The installer handles everything and syncs the same `nexo` MCP brain into Claude
   +----------------------------------------------------------+
 ```
 
+### Docker Compose
+
+If you want to run the MCP server in a container and keep the brain persistent across rebuilds and restarts, mount `NEXO_HOME` to a named volume instead of using the image filesystem:
+
+```yaml
+services:
+  nexo:
+    build: .
+    environment:
+      NEXO_HOME: /nexo-home
+    volumes:
+      - nexo_data:/nexo-home
+
+volumes:
+  nexo_data:
+```
+
+Then run the server with:
+
+```bash
+docker compose run --rm -T nexo
+```
+
+The `nexo_data` volume keeps `nexo.db`, `cognitive.db`, backups, and other runtime state persistent across container runs. For the full managed install, client sync, and `nexo chat` flow, use `npx nexo-brain` on the host.
+
 ### Starting a Session
 
 After install, use the runtime CLI:
