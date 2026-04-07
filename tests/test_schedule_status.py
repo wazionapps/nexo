@@ -52,3 +52,26 @@ def test_schedule_status_marks_exit_zero_with_warnings_as_warning(monkeypatch):
 
     assert "⚠ orchestrator-v2" in output
     assert "exit 0 with warnings" in output
+
+
+def test_schedule_status_marks_self_audit_findings_as_warning(monkeypatch):
+    from plugins import schedule
+
+    monkeypatch.setattr(
+        schedule,
+        "cron_runs_summary",
+        lambda hours: [{
+            "cron_id": "self-audit",
+            "succeeded": 1,
+            "total_runs": 1,
+            "avg_duration": 12.0,
+            "last_summary": "Self-audit completed with findings: 2 errors, 4 warnings, 3 info. Summary written to /tmp/self-audit-summary.json.",
+            "last_exit_code": 0,
+        }],
+    )
+    monkeypatch.setattr(schedule, "get_personal_script_schedule", lambda cron_id: {})
+
+    output = schedule.handle_schedule_status(hours=24)
+
+    assert "⚠ self-audit" in output
+    assert "exit 0 with warnings" in output

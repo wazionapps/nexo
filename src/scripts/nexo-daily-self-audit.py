@@ -1407,8 +1407,19 @@ def main():
     except Exception:
         pass
 
+    if errors or warns:
+        log(
+            f"Self-audit completed with findings: {errors} errors, {warns} warnings, {infos} info. "
+            f"Summary written to {summary_file}."
+        )
+    else:
+        log(
+            f"Self-audit completed cleanly: {errors} errors, {warns} warnings, {infos} info. "
+            f"Summary written to {summary_file}."
+        )
+
     log("=" * 60)
-    return 1 if errors > 0 else 0
+    return 0
 
 
 if __name__ == "__main__":

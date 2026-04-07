@@ -3,6 +3,7 @@
 import json
 import os
 import platform
+import re
 import subprocess
 from pathlib import Path
 
@@ -69,9 +70,20 @@ def _summary_has_warning(summary: str = "") -> bool:
     lowered = str(summary or "").strip().lower()
     if not lowered:
         return False
+    if re.search(r"\b[1-9]\d*\s+(errors?|warnings?)\b", lowered):
+        return True
     if "no warning" in lowered or "without warnings" in lowered:
         return False
-    warning_tokens = ("warning", "warnings", "warn:", "degraded", "partial failure", "issues detected")
+    warning_tokens = (
+        "warning",
+        "warnings",
+        "warn:",
+        "degraded",
+        "partial failure",
+        "issues detected",
+        "completed with findings",
+        "findings detected",
+    )
     return any(token in lowered for token in warning_tokens)
 
 

@@ -275,6 +275,62 @@ def test_write_horizon_summaries_creates_daily_weekly_monthly_outputs(self_audit
     assert monthly["source_daily_summaries"] == 3
 
 
+def test_main_returns_zero_and_writes_summary_when_findings_exist(self_audit_env, monkeypatch):
+    module = _load_self_audit_module()
+    module.findings.clear()
+    (self_audit_env / "operations").mkdir(parents=True, exist_ok=True)
+
+    no_op_checks = [
+        "check_overdue_reminders",
+        "check_overdue_followups",
+        "check_uncommitted_changes",
+        "check_cron_errors",
+        "check_evolution_health",
+        "check_disk_space",
+        "check_db_size",
+        "check_stale_sessions",
+        "check_repetition_rate",
+        "check_unused_learnings",
+        "check_memory_reviews",
+        "check_error_memory_loop",
+        "check_repair_changes_missing_learning_capture",
+        "check_unformalized_mentions",
+        "check_automation_opportunities",
+        "check_state_watchers",
+        "check_learning_contradictions",
+        "check_memory_quality_scores",
+        "check_codex_startup_discipline",
+        "check_codex_conditioned_file_discipline",
+        "check_watchdog_registry",
+        "check_snapshot_sync",
+        "check_restore_activity",
+        "check_runtime_preflight",
+        "run_watchdog_smoke",
+        "check_watchdog_smoke",
+        "check_cognitive_health",
+    ]
+    for name in no_op_checks:
+        monkeypatch.setattr(module, name, lambda: None)
+
+    monkeypatch.setattr(module, "check_bad_responses", lambda: module.finding("ERROR", "test", "boom"))
+    monkeypatch.setattr(module, "interpret_findings", lambda raw_findings: True)
+    monkeypatch.setattr(module, "write_horizon_summaries", lambda summary_payload, now=None: {})
+
+    result = module.main()
+
+    assert result == 0
+
+    summary = json.loads((self_audit_env / "logs" / "self-audit-summary.json").read_text())
+    assert summary["counts"] == {"error": 1, "warn": 0, "info": 0}
+    assert summary["findings"][0]["msg"] == "boom"
+
+    catchup_state = json.loads((self_audit_env / "operations" / ".catchup-state.json").read_text())
+    assert "self-audit" in catchup_state
+
+    log_body = (self_audit_env / "logs" / "self-audit.log").read_text()
+    assert "Self-audit completed with findings: 1 errors, 0 warnings, 0 info." in log_body
+
+
 def test_check_learning_contradictions_creates_followup(self_audit_env):
     module = _load_self_audit_module()
     module.findings.clear()
