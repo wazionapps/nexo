@@ -3,7 +3,14 @@ import math
 import re
 import sqlite3
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timezone
+
+
+def _utcnow_naive() -> datetime:
+    """Timezone-aware UTC clock returned as a naive datetime to preserve
+    the legacy ``datetime.utcnow()`` string format on disk.
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 from cognitive._core import (
     _get_db, embed, cosine_similarity, _blob_to_array, _array_to_blob,
     _get_model, _get_reranker, rerank_results, EMBEDDING_DIM,
@@ -461,7 +468,7 @@ def record_co_activation(memory_ids: list[tuple[str, int]]):
         return
 
     db = _get_db()
-    now = datetime.utcnow().isoformat()
+    now = _utcnow_naive().isoformat()
 
     hashes = [_canonical_co_id(store, mid) for store, mid in memory_ids]
 
@@ -571,7 +578,7 @@ def _match_triggers(
         text_vec = embed(text)
 
     matched_triggers = []
-    now = datetime.utcnow().isoformat()
+    now = _utcnow_naive().isoformat()
 
     for trigger in armed:
         pattern = trigger["trigger_pattern"].lower()
@@ -667,7 +674,7 @@ def rearm_trigger(trigger_id: int) -> str:
 
 def _auto_restore_snoozed(db: sqlite3.Connection):
     """Restore snoozed memories whose snooze_until date has passed."""
-    now = datetime.utcnow().isoformat()
+    now = _utcnow_naive().isoformat()
     for table in ("stm_memories", "ltm_memories"):
         db.execute(
             f"UPDATE {table} SET lifecycle_state = 'active', snooze_until = NULL "
@@ -682,7 +689,7 @@ def _rehearse_results(results: list[dict], skip_ids: set = None):
     if not results:
         return
     db = _get_db()
-    now = datetime.utcnow().isoformat()
+    now = _utcnow_naive().isoformat()
     skip = skip_ids or set()
     for r in results:
         if (r["store"], r["id"]) in skip:
