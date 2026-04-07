@@ -70,11 +70,15 @@ def _load_last_cron_run(cron_id: str) -> datetime | None:
     if not db_path.is_file():
         return None
     conn = sqlite3.connect(str(db_path))
-    row = conn.execute(
-        "SELECT started_at FROM cron_runs WHERE cron_id = ? ORDER BY started_at DESC LIMIT 1",
-        (cron_id,),
-    ).fetchone()
-    conn.close()
+    try:
+        row = conn.execute(
+            "SELECT started_at FROM cron_runs WHERE cron_id = ? ORDER BY started_at DESC LIMIT 1",
+            (cron_id,),
+        ).fetchone()
+    except Exception:
+        return None
+    finally:
+        conn.close()
     if not row or not row[0]:
         return None
     return _parse_dt(str(row[0]))
@@ -263,25 +267,26 @@ def _list_watchers(*, status: str) -> list[dict]:
     if not db_path.is_file():
         return []
     conn = sqlite3.connect(str(db_path))
-    conn.row_factory = sqlite3.Row
-    clauses = []
-    params = []
-    if status:
-        clauses.append("status = ?")
-        params.append(status)
-    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     try:
-        rows = conn.execute(
-            f"""SELECT watcher_id, watcher_type, title, target, severity, status, config, last_health, last_result, last_checked_at
-                FROM state_watchers
-                {where}
-                ORDER BY updated_at DESC, watcher_id DESC""",
-            tuple(params),
-        ).fetchall()
-    except sqlite3.OperationalError:
+        conn.row_factory = sqlite3.Row
+        clauses = []
+        params = []
+        if status:
+            clauses.append("status = ?")
+            params.append(status)
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        try:
+            rows = conn.execute(
+                f"""SELECT watcher_id, watcher_type, title, target, severity, status, config, last_health, last_result, last_checked_at
+                    FROM state_watchers
+                    {where}
+                    ORDER BY updated_at DESC, watcher_id DESC""",
+                tuple(params),
+            ).fetchall()
+        except sqlite3.OperationalError:
+            return []
+    finally:
         conn.close()
-        return []
-    conn.close()
     watchers = []
     for row in rows:
         watcher = dict(row)
@@ -298,19 +303,21 @@ def _persist_result(result: dict) -> None:
     if not db_path.is_file():
         return
     conn = sqlite3.connect(str(db_path))
-    conn.execute(
-        """UPDATE state_watchers
-           SET last_health = ?, last_result = ?, last_checked_at = ?, updated_at = datetime('now')
-           WHERE watcher_id = ?""",
-        (
-            result["health"],
-            json.dumps(result, ensure_ascii=False),
-            result["checked_at"],
-            result["watcher_id"],
-        ),
-    )
-    conn.commit()
-    conn.close()
+    try:
+        conn.execute(
+            """UPDATE state_watchers
+               SET last_health = ?, last_result = ?, last_checked_at = ?, updated_at = datetime('now')
+               WHERE watcher_id = ?""",
+            (
+                result["health"],
+                json.dumps(result, ensure_ascii=False),
+                result["checked_at"],
+                result["watcher_id"],
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def run_state_watchers(*, persist: bool = True, status: str = "active") -> dict:
