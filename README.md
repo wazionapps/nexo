@@ -982,6 +982,26 @@ If NEXO Brain is useful to you, consider:
 
 ## Changelog
 
+### v3.0.1 — Python 3.10 Compatibility Patch (2026-04-06)
+- Restored Python 3.10 compatibility by replacing Python 3.11-only `datetime.UTC` with `timezone.utc`.
+- Added `tomllib` → `tomli` fallback plus declared runtime dependency for Python < 3.11.
+- Boot doctor now validates all critical JSON config artifacts: `schedule.json`, `optionals.json`, `crons/manifest.json`.
+
+### v3.0.0 — Protocol Discipline, Durable Execution, Measured Runtime (2026-04-06)
+- **Protocol discipline runtime**: Enforceable `nexo_task_open`/`nexo_task_close`, persistent `protocol_debt`, `Cortex` gates with durable `check_id`, conditioned-file guardrails across Claude hooks and Codex transcript audits.
+- **Durable workflow runtime**: `nexo_workflow_open`/`update`/`resume`/`replay`/`list` with persistent runs, steps, checkpoints, replay history, retry bookkeeping, and idempotent open keys.
+- **Durable goals**: `nexo_goal_open`/`update`/`get`/`list` for long-running work that stays active/blocked/abandoned/completed.
+- **Operational truth**: Deep Sleep survives schema drift, `keep_alive` reports alive/degraded/duplicated honestly, warning storms no longer count as healthy.
+- **Measured product surface**: 5-minute quickstart, Python SDK, reference verticals, measured compare scorecard with LoCoMo baselines and `cost_per_solved_task`.
+- **Skill lifecycle**: Testing, promotion, retirement, and composition flows. Evolution public-core peer-review for opt-in PRs.
+
+### v2.7.0 — Shared Brain Baseline (2026-04-06)
+- Managed Claude Code + Codex bootstrap with explicit `CORE`/`USER` contract.
+- Codex config sync and transcript-aware Deep Sleep across both clients.
+- 60-day long-horizon analysis, weekly/monthly summary artifacts.
+- Retrieval auto-mode and first measured engineering loop.
+- `nexo chat` opens the configured client instead of assuming Claude Code.
+
 ### v2.6.9 — Integration Sync, CI/CD Pipeline (2026-04-04)
 - **Release artifact sync**: Automated version synchronization across Claude Code plugin, OpenClaw package, and ClawHub skill before every publish.
 - **CI/CD pipeline**: Full GitHub Actions workflow for publish + verification of all integration channels.
