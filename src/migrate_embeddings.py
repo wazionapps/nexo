@@ -30,15 +30,17 @@ MODELS = {
 def verify():
     """Check current embedding dimensions in the database."""
     conn = sqlite3.connect(DB_PATH)
-    for table in ["stm_memories", "ltm_memories"]:
-        count = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
-        if count == 0:
-            print(f"  {table}: {count} rows (empty)")
-            continue
-        row = conn.execute(f"SELECT embedding FROM {table} LIMIT 1").fetchone()
-        vec = np.frombuffer(row[0], dtype=np.float32)
-        print(f"  {table}: {count} rows, embedding dim = {len(vec)}")
-    conn.close()
+    try:
+        for table in ["stm_memories", "ltm_memories"]:
+            count = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+            if count == 0:
+                print(f"  {table}: {count} rows (empty)")
+                continue
+            row = conn.execute(f"SELECT embedding FROM {table} LIMIT 1").fetchone()
+            vec = np.frombuffer(row[0], dtype=np.float32)
+            print(f"  {table}: {count} rows, embedding dim = {len(vec)}")
+    finally:
+        conn.close()
 
 
 def upgrade():
@@ -62,31 +64,31 @@ def upgrade():
     model = TextEmbedding(model_name)
 
     conn = sqlite3.connect(DB_PATH)
+    try:
+        for table in ["stm_memories", "ltm_memories"]:
+            rows = conn.execute(f"SELECT id, content FROM {table}").fetchall()
+            if not rows:
+                print(f"\n{table}: empty, skipping")
+                continue
 
-    for table in ["stm_memories", "ltm_memories"]:
-        rows = conn.execute(f"SELECT id, content FROM {table}").fetchall()
-        if not rows:
-            print(f"\n{table}: empty, skipping")
-            continue
+            print(f"\n{table}: re-embedding {len(rows)} memories...")
+            t0 = time.time()
 
-        print(f"\n{table}: re-embedding {len(rows)} memories...")
-        t0 = time.time()
+            # Batch embed for speed
+            contents = [r[1] for r in rows]
+            ids = [r[0] for r in rows]
 
-        # Batch embed for speed
-        contents = [r[1] for r in rows]
-        ids = [r[0] for r in rows]
+            embeddings = list(model.embed(contents))
 
-        embeddings = list(model.embed(contents))
+            for mem_id, emb in zip(ids, embeddings):
+                blob = np.array(emb, dtype=np.float32).tobytes()
+                conn.execute(f"UPDATE {table} SET embedding = ? WHERE id = ?", (blob, mem_id))
 
-        for mem_id, emb in zip(ids, embeddings):
-            blob = np.array(emb, dtype=np.float32).tobytes()
-            conn.execute(f"UPDATE {table} SET embedding = ? WHERE id = ?", (blob, mem_id))
-
-        conn.commit()
-        elapsed = time.time() - t0
-        print(f"  Done: {len(rows)} memories in {elapsed:.1f}s ({elapsed/len(rows)*1000:.0f}ms/memory)")
-
-    conn.close()
+            conn.commit()
+            elapsed = time.time() - t0
+            print(f"  Done: {len(rows)} memories in {elapsed:.1f}s ({elapsed/len(rows)*1000:.0f}ms/memory)")
+    finally:
+        conn.close()
 
     print("\nAfter upgrade:")
     verify()
