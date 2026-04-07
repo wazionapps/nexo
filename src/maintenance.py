@@ -1,7 +1,7 @@
 """Opportunistic maintenance — run overdue tasks on MCP startup."""
 
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from db import get_db
 
 
@@ -16,7 +16,7 @@ def check_and_run_overdue():
         if last_run:
             try:
                 last_dt = datetime.strptime(last_run, "%Y-%m-%dT%H:%M:%S")
-                hours_since = (datetime.now(datetime.timezone.utc).replace(tzinfo=None) - last_dt).total_seconds() / 3600
+                hours_since = (datetime.now(timezone.utc).replace(tzinfo=None) - last_dt).total_seconds() / 3600
                 if hours_since < interval:
                     continue
             except (ValueError, TypeError):
@@ -28,7 +28,7 @@ def check_and_run_overdue():
             conn.execute(
                 "UPDATE maintenance_schedule SET last_run_at = ?, last_duration_ms = ?, "
                 "run_count = run_count + 1 WHERE task_name = ?",
-                (datetime.now(datetime.timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%dT%H:%M:%S"), duration_ms, task))
+                (datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%dT%H:%M:%S"), duration_ms, task))
             conn.commit()
             ran.append({"task": task, "duration_ms": duration_ms})
         except Exception as e:
