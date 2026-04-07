@@ -1,7 +1,14 @@
 """NEXO Cognitive — Memory operations: format, stats, consolidation, somatic."""
 import json, math, re
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
+
+def _utcnow_naive() -> datetime:
+    """Timezone-aware UTC clock returned as a naive datetime to preserve
+    the legacy ``datetime.utcnow()`` string format on disk.
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 from cognitive._core import _get_db, embed, cosine_similarity, _blob_to_array, _array_to_blob, EMBEDDING_DIM, DISCRIMINATING_ENTITIES
 from cognitive._ingest import _sanitize_memory_content
 
@@ -74,7 +81,7 @@ def get_metrics(days: int = 7) -> dict:
         score_distribution: histogram buckets [<0.5, 0.5-0.6, 0.6-0.7, 0.7-0.8, >0.8]
     """
     db = _get_db()
-    cutoff = (datetime.utcnow() - timedelta(days=days)).isoformat()
+    cutoff = (_utcnow_naive() - timedelta(days=days)).isoformat()
 
     rows = db.execute(
         "SELECT top_score FROM retrieval_log WHERE created_at >= ?", (cutoff,)
@@ -130,7 +137,7 @@ def check_repeat_errors() -> dict:
     Returns count of new learnings that are semantically duplicate (cosine > 0.8).
     """
     db = _get_db()
-    cutoff_7d = (datetime.utcnow() - timedelta(days=7)).isoformat()
+    cutoff_7d = (_utcnow_naive() - timedelta(days=7)).isoformat()
 
     # Recent learning STM entries
     new_learnings = db.execute(
@@ -192,7 +199,7 @@ def rehearse_by_content(content_keywords: str, source_type: str = ""):
         if np.linalg.norm(query_vec) == 0:
             return
 
-        now = datetime.utcnow().isoformat()
+        now = _utcnow_naive().isoformat()
 
         # Search both stores for matches >= 0.7
         for table in ("stm_memories", "ltm_memories"):
@@ -803,7 +810,7 @@ def security_scan(content: str) -> dict:
 def somatic_accumulate(target: str, target_type: str, delta: float):
     """Increase risk_score for a target (file or area). Capped at 1.0."""
     db = _get_db()
-    now = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
+    now = _utcnow_naive().strftime("%Y-%m-%dT%H:%M:%S")
     existing = db.execute(
         "SELECT id, risk_score, incident_count FROM somatic_markers WHERE target = ? AND target_type = ?",
         (target, target_type)
@@ -827,8 +834,8 @@ def somatic_accumulate(target: str, target_type: str, delta: float):
 def somatic_guard_decay(target: str, target_type: str):
     """Validated recovery: multiplicative x0.7 on successful guard check. Max once/day/target."""
     db = _get_db()
-    today = datetime.utcnow().strftime("%Y-%m-%d")
-    now = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
+    today = _utcnow_naive().strftime("%Y-%m-%d")
+    now = _utcnow_naive().strftime("%Y-%m-%dT%H:%M:%S")
     row = db.execute(
         "SELECT id, risk_score, last_guard_decay_date FROM somatic_markers WHERE target = ? AND target_type = ?",
         (target, target_type)
