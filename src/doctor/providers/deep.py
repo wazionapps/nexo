@@ -6,7 +6,7 @@ import os
 import time
 from pathlib import Path
 
-from doctor.models import DoctorCheck
+from doctor.models import DoctorCheck, safe_check
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 
@@ -284,9 +284,9 @@ def check_learning_count() -> DoctorCheck:
 def run_deep_checks(fix: bool = False) -> list[DoctorCheck]:
     """Run all deep-tier checks. Read-only."""
     return [
-        check_self_audit_summary(),
-        check_schema_version(),
-        check_preflight_summary(),
-        check_watchdog_smoke(),
-        check_learning_count(),
+        safe_check(check_self_audit_summary),
+        safe_check(check_schema_version),
+        safe_check(check_preflight_summary),
+        safe_check(check_watchdog_smoke),
+        safe_check(check_learning_count),
     ]
