@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Claude Code Memory — Persistent Local Memory with NEXO</title>
+    <meta name="description" content="Persistent local memory for Claude Code with NEXO Brain: shared brain, guard checks, workflows, doctor diagnostics, and review-gated Evolution in one libre/open-source runtime.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/solutions/claude-code-memory/">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/solutions/claude-code-memory/">
+    <meta property="og:title" content="Claude Code Memory — Persistent Local Memory with NEXO">
+    <meta property="og:description" content="What people usually mean by Claude Code memory: a real local runtime that remembers, checks known mistakes, and survives session resets.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Claude Code Memory — Persistent Local Memory with NEXO">
+    <meta name="twitter:description" content="A Claude Code memory layer that stays local, keeps operator context across sessions, and adds guard, workflows, doctor, and review-gated Evolution.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "TechArticle",
+        "headline": "Claude Code Memory with NEXO Brain",
+        "description": "Persistent local memory for Claude Code with shared-brain support, guard checks, workflows, doctor diagnostics, and review-gated Evolution.",
+        "url": "https://nexo-brain.com/solutions/claude-code-memory/"
+    }
+    </script>
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body class="features-page">
+<nav><div class="container"><a href="/" class="nav-logo"><img src="/assets/logo-64.png" alt="NEXO Brain" width="32" height="32">NEXO Brain</a><button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button><div class="nav-links"><a href="/">Home</a><a href="/features/">Features</a><a href="/evolution/">Evolution</a><a href="/compare/">Compare</a><a href="/blog/">Blog</a><a href="/changelog/">Changelog</a><a href="/docs/">Docs</a><a href="https://github.com/wazionapps/nexo" class="nav-cta">GitHub</a></div></div></nav>
+
+<section class="pt-nav page-hero">
+    <div class="container">
+        <div class="page-hero-grid">
+            <div class="page-hero-copy">
+                <div class="section-label">Claude Code memory</div>
+                <h1 class="section-title" style="font-size:clamp(34px,5vw,58px);">Persistent Claude Code memory, but with a real runtime around it</h1>
+                <p class="section-subtitle">
+                    When people search for Claude Code memory, they usually want more than saved snippets. They want the assistant to keep operator context across sessions, remember past decisions, avoid repeated mistakes, and stay local. That is where NEXO fits best today.
+                </p>
+                <div class="page-chip-row">
+                    <span class="page-chip">Deepest current fit</span>
+                    <span class="page-chip">Local shared brain</span>
+                    <span class="page-chip">Guard + doctor + workflows</span>
+                </div>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="https://www.npmjs.com/package/nexo-brain" class="btn btn-primary">Install from npm</a>
+                    <a href="/demos/shared-brain-claude-code-codex/" class="btn btn-secondary">See the demo</a>
+                </div>
+            </div>
+            <div class="page-visual">
+                <div class="code-block" style="max-width:none;">
+                    <div class="code-header"><span class="code-dot"></span><span class="code-dot"></span><span class="code-dot"></span><span class="code-title">Terminal</span></div>
+                    <div class="code-body"><span class="cmd">$</span> npx nexo-brain<br><span class="cmd">$</span> nexo remember "Release checklist changed"<br><span class="cmd">$</span> nexo recall "release checklist"</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section>
+    <div class="container">
+        <div class="fit-grid">
+            <div class="fit-card">
+                <div class="fit-step">1</div>
+                <h3>Memory that survives session resets</h3>
+                <p>NEXO persists memory locally instead of treating the current context window as the whole world. That matters when work spans many terminal sessions.</p>
+            </div>
+            <div class="fit-card">
+                <div class="fit-step">2</div>
+                <h3>Guard before action</h3>
+                <p>The runtime can surface relevant learnings and blocking rules before edits, which is more useful than simple retrieval after the mistake already happened.</p>
+            </div>
+            <div class="fit-card">
+                <div class="fit-step">3</div>
+                <h3>Operational surfaces included</h3>
+                <p>Claude Code gets more than memory: doctor diagnostics, durable workflows, personal scripts, followups, and review-gated Evolution all live in the same runtime.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section>
+    <div class="container">
+        <div class="section-label">What NEXO is and is not</div>
+        <div class="features-grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));">
+            <div class="feature-card">
+                <h3>It is strong for Claude Code today</h3>
+                <p>Claude Code remains the recommended path because it has the deepest shared-brain integration and the most complete operator workflow surface.</p>
+            </div>
+            <div class="feature-card">
+                <h3>It is still libre/open-source software</h3>
+                <p>The full source is inspectable, modifiable, and self-hosted on your own machine. There is no hidden hosted memory plane behind the integration.</p>
+            </div>
+            <div class="feature-card">
+                <h3>It is not only a memory plugin</h3>
+                <p>NEXO is a local cognitive runtime. Memory is central, but the surrounding reliability and workflow surfaces are part of the value.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="cta-section">
+    <div class="container">
+        <h2 class="section-title">Want the exact install and parity path?</h2>
+        <p class="section-subtitle" style="margin:16px auto 48px;">The docs go deeper on install flow, client parity, and how Claude Code shares the same brain with Codex and Claude Desktop.</p>
+        <div class="hero-actions">
+            <a href="/docs/install-flow/" class="btn btn-primary">Open install flow</a>
+            <a href="/solutions/" class="btn btn-secondary">Back to solutions</a>
+            <a href="/compare/" class="btn btn-secondary">Compare NEXO</a>
+        </div>
+    </div>
+</section>
+
+<footer><div class="container"><div class="footer-content"><div class="footer-left">Created by <strong>Francisco Cerd&agrave; Puigserver</strong> &amp; <strong>NEXO</strong> (Claude Opus) &bull; Built by <a href="https://www.wazion.com">WAzion</a> &bull; AGPL-3.0 License &bull; &copy; 2026</div><div class="footer-links"><a href="https://github.com/wazionapps/nexo">GitHub</a><a href="https://x.com/NEXOBRAIN">X / Twitter</a><a href="/features/">Features</a><a href="/compare/">Compare</a><a href="/changelog/">Changelog</a></div></div></div></footer>
+<div id="cookie-consent" style="display:none;position:fixed;bottom:0;left:0;right:0;background:rgba(10,10,15,0.95);border-top:1px solid #1E1E2E;padding:12px 24px;z-index:200;font-size:13px;color:#94A3B8;text-align:center;">This site uses analytics cookies. <a href="https://www.wazion.com/en/privacy" style="color:#A78BFA;">Privacy Policy</a><button onclick="document.getElementById('cookie-consent').style.display='none';localStorage.setItem('cc','1')" style="margin-left:16px;background:#7C3AED;color:#fff;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Accept</button><button onclick="document.getElementById('cookie-consent').style.display='none';localStorage.setItem('cc','0');window['ga-disable-G-1LNEMCJMS7']=true" style="margin-left:8px;background:transparent;color:#94A3B8;border:1px solid #333;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Decline</button></div>
+<script>if(!localStorage.getItem('cc')){document.getElementById('cookie-consent').style.display='block';}else if(localStorage.getItem('cc')==='0'){window['ga-disable-G-1LNEMCJMS7']=true;}(function(){var navLinks=document.querySelector('.nav-links');var navToggle=document.querySelector('.nav-toggle');navLinks.querySelectorAll('a').forEach(function(link){link.addEventListener('click',function(){navLinks.classList.remove('open');});});document.addEventListener('click',function(e){if(navLinks.classList.contains('open')&&!navLinks.contains(e.target)&&!navToggle.contains(e.target)){navLinks.classList.remove('open');}});})();</script>
+</body>
+</html>

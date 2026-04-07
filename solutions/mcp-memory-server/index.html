@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Open-Source MCP Memory Server — NEXO Brain</title>
+    <meta name="description" content="An open-source MCP memory server for AI agents with NEXO Brain: local persistence, shared brain, guard checks, workflows, and a runtime CLI instead of a thin endpoint only.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/solutions/mcp-memory-server/">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/solutions/mcp-memory-server/">
+    <meta property="og:title" content="Open-Source MCP Memory Server — NEXO Brain">
+    <meta property="og:description" content="A local-first MCP memory server for AI agents with persistent memory, guard checks, workflows, and a broader runtime around the protocol layer.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Open-Source MCP Memory Server — NEXO Brain">
+    <meta name="twitter:description" content="A local-first MCP memory server for AI agents with persistent memory, guard checks, workflows, and a broader runtime around the protocol layer.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "TechArticle",
+        "headline": "Open-source MCP memory server with NEXO Brain",
+        "description": "A local-first MCP memory server for AI agents with persistent memory, guard checks, workflows, and a runtime CLI.",
+        "url": "https://nexo-brain.com/solutions/mcp-memory-server/"
+    }
+    </script>
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body class="features-page">
+<nav><div class="container"><a href="/" class="nav-logo"><img src="/assets/logo-64.png" alt="NEXO Brain" width="32" height="32">NEXO Brain</a><button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button><div class="nav-links"><a href="/">Home</a><a href="/features/">Features</a><a href="/evolution/">Evolution</a><a href="/compare/">Compare</a><a href="/blog/">Blog</a><a href="/changelog/">Changelog</a><a href="/docs/">Docs</a><a href="https://github.com/wazionapps/nexo" class="nav-cta">GitHub</a></div></div></nav>
+
+<section class="pt-nav page-hero">
+    <div class="container">
+        <div class="page-hero-grid">
+            <div class="page-hero-copy">
+                <div class="section-label">MCP memory server</div>
+                <h1 class="section-title" style="font-size:clamp(34px,5vw,58px);">An open-source MCP memory server, plus the runtime most people end up needing</h1>
+                <p class="section-subtitle">
+                    If you are searching for an MCP memory server, the core need is usually local persistent memory for AI agents. NEXO does that, but it also adds the parts that become necessary in real use: guard checks, workflows, doctor diagnostics, scripts, and shared-brain coordination across clients.
+                </p>
+                <div class="page-chip-row">
+                    <span class="page-chip">MCP-compatible</span>
+                    <span class="page-chip">Local persistence</span>
+                    <span class="page-chip">Runtime, not endpoint only</span>
+                </div>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="https://www.npmjs.com/package/nexo-brain" class="btn btn-primary">Install from npm</a>
+                    <a href="/docs/" class="btn btn-secondary">Open docs</a>
+                </div>
+            </div>
+            <div class="page-visual">
+                <div class="page-stack">
+                    <div class="page-stack-card">
+                        <strong>Local by default</strong>
+                        <span>Memory stores, vectors, workflows, and operational state live on your machine instead of a hosted control plane.</span>
+                    </div>
+                    <div class="page-stack-card">
+                        <strong>Protocol compatible</strong>
+                        <span>NEXO exposes its cognitive capabilities through MCP so multiple clients can attach to the same brain.</span>
+                    </div>
+                    <div class="page-stack-card">
+                        <strong>Operationally broader</strong>
+                        <span>Doctor, followups, workflows, scripts, and Evolution exist because real agent operations need more than retrieval alone.</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section>
+    <div class="container">
+        <div class="features-grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));">
+            <div class="feature-card">
+                <h3>What you get at the memory layer</h3>
+                <p>Persistent memory, retrieval, consolidation, and a shared brain that more than one MCP-capable client can use.</p>
+            </div>
+            <div class="feature-card">
+                <h3>What you get around it</h3>
+                <p>Pre-action guard checks, runtime doctor diagnostics, reminders, workflows, and background tasks that make the memory layer operationally useful.</p>
+            </div>
+            <div class="feature-card">
+                <h3>Why the libre model matters</h3>
+                <p>You can inspect the full stack, fork it, and run it locally under AGPL-3.0 instead of depending on a closed memory control plane.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section>
+    <div class="container">
+        <div class="section-label">Best fit</div>
+        <div class="fit-grid">
+            <div class="fit-card">
+                <div class="fit-step">1</div>
+                <h3>People evaluating the category</h3>
+                <p>This page is for the person who knows they want MCP memory, but has not yet chosen between a thin endpoint and a fuller local runtime.</p>
+            </div>
+            <div class="fit-card">
+                <div class="fit-step">2</div>
+                <h3>Teams avoiding hosted dependency</h3>
+                <p>NEXO is strongest when local-first, inspectable, and self-managed behavior matters as much as the retrieval API itself.</p>
+            </div>
+            <div class="fit-card">
+                <div class="fit-step">3</div>
+                <h3>Operators with more than one client</h3>
+                <p>The shared-brain model is especially useful when Claude Code, Codex, and Claude Desktop should not each build isolated memory silos.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="cta-section">
+    <div class="container">
+        <h2 class="section-title">Need the shorter proof points?</h2>
+        <p class="section-subtitle" style="margin:16px auto 48px;">The demos and use-case pages show the same story in faster, lighter form.</p>
+        <div class="hero-actions">
+            <a href="/demos/" class="btn btn-primary">See demos</a>
+            <a href="/use-cases/" class="btn btn-secondary">Use cases</a>
+            <a href="/solutions/" class="btn btn-secondary">Back to solutions</a>
+        </div>
+    </div>
+</section>
+
+<footer><div class="container"><div class="footer-content"><div class="footer-left">Created by <strong>Francisco Cerd&agrave; Puigserver</strong> &amp; <strong>NEXO</strong> (Claude Opus) &bull; Built by <a href="https://www.wazion.com">WAzion</a> &bull; AGPL-3.0 License &bull; &copy; 2026</div><div class="footer-links"><a href="https://github.com/wazionapps/nexo">GitHub</a><a href="https://x.com/NEXOBRAIN">X / Twitter</a><a href="/features/">Features</a><a href="/compare/">Compare</a><a href="/changelog/">Changelog</a></div></div></div></footer>
+<div id="cookie-consent" style="display:none;position:fixed;bottom:0;left:0;right:0;background:rgba(10,10,15,0.95);border-top:1px solid #1E1E2E;padding:12px 24px;z-index:200;font-size:13px;color:#94A3B8;text-align:center;">This site uses analytics cookies. <a href="https://www.wazion.com/en/privacy" style="color:#A78BFA;">Privacy Policy</a><button onclick="document.getElementById('cookie-consent').style.display='none';localStorage.setItem('cc','1')" style="margin-left:16px;background:#7C3AED;color:#fff;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Accept</button><button onclick="document.getElementById('cookie-consent').style.display='none';localStorage.setItem('cc','0');window['ga-disable-G-1LNEMCJMS7']=true" style="margin-left:8px;background:transparent;color:#94A3B8;border:1px solid #333;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Decline</button></div>
+<script>if(!localStorage.getItem('cc')){document.getElementById('cookie-consent').style.display='block';}else if(localStorage.getItem('cc')==='0'){window['ga-disable-G-1LNEMCJMS7']=true;}(function(){var navLinks=document.querySelector('.nav-links');var navToggle=document.querySelector('.nav-toggle');navLinks.querySelectorAll('a').forEach(function(link){link.addEventListener('click',function(){navLinks.classList.remove('open');});});document.addEventListener('click',function(e){if(navLinks.classList.contains('open')&&!navLinks.contains(e.target)&&!navToggle.contains(e.target)){navLinks.classList.remove('open');}});})();</script>
+</body>
+</html>

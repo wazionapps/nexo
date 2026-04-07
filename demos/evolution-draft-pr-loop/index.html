@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Public Evolution Draft PR Loop</title>
+    <meta name="description" content="See how NEXO's opt-in public Evolution loop opens Draft PRs, pauses while they stay open, and reuses time for peer review until maintainers resolve them.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/demos/evolution-draft-pr-loop/">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/demos/evolution-draft-pr-loop/">
+    <meta property="og:title" content="Public Evolution Draft PR Loop">
+    <meta property="og:description" content="See how NEXO's opt-in public Evolution loop opens Draft PRs, pauses while they stay open, and reuses time for peer review until maintainers resolve them.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Public Evolution Draft PR Loop">
+    <meta name="twitter:description" content="See how NEXO's opt-in public Evolution loop opens Draft PRs, pauses while they stay open, and reuses time for peer review until maintainers resolve them.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body class="features-page">
+<nav><div class="container"><a href="/" class="nav-logo"><img src="/assets/logo-64.png" alt="NEXO Brain" width="32" height="32">NEXO Brain</a><button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button><div class="nav-links"><a href="/">Home</a><a href="/features/">Features</a><a href="/evolution/">Evolution</a><a href="/compare/">Compare</a><a href="/blog/">Blog</a><a href="/changelog/">Changelog</a><a href="/docs/">Docs</a><a href="https://github.com/wazionapps/nexo" class="nav-cta">GitHub</a></div></div></nav>
+
+<section class="pt-nav page-hero">
+    <div class="container">
+        <div class="page-hero-grid">
+            <div class="page-hero-copy">
+                <div class="section-label">Demo 3</div>
+                <h1 class="section-title" style="font-size:clamp(34px,5vw,58px);">Review-gated public Evolution</h1>
+                <p class="section-subtitle">
+                    Public Evolution is not "self-merging AI". The product contract is stricter: opt in, propose a bounded Draft PR, stay paused while it is open, help review other work, and resume only after maintainers merge or close it.
+                </p>
+                <div class="page-chip-row">
+                    <span class="page-chip">Opt-in only</span>
+                    <span class="page-chip">Draft PRs only</span>
+                    <span class="page-chip">Human maintainer decides</span>
+                </div>
+            </div>
+            <div class="page-visual">
+                <div class="page-stack">
+                    <div class="page-stack-card"><strong>Propose</strong><span>The machine works in an isolated public-core checkout and opens a Draft PR.</span></div>
+                    <div class="page-stack-card"><strong>Pause</strong><span>While that Draft PR stays open, the machine does not open another one of its own.</span></div>
+                    <div class="page-stack-card"><strong>Peer review</strong><span>During the pause, the cycle can review other opt-in PRs instead of idling.</span></div>
+                    <div class="page-stack-card"><strong>Resume</strong><span>Once maintainers merge or close the Draft PR, the machine becomes active again.</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section>
+    <div class="container">
+        <div class="fit-grid">
+            <div class="fit-card"><div class="fit-step">1</div><h3>Enable opt-in public contribution</h3><p>The user explicitly consents to public contribution. The machine is never supposed to start shipping public proposals without that opt-in gate.</p></div>
+            <div class="fit-card"><div class="fit-step">2</div><h3>Open a Draft PR</h3><p>The proposal is review-gated on purpose. Maintainers can inspect it, comment, merge it, or close it. The machine never auto-merges its own public work.</p></div>
+            <div class="fit-card"><div class="fit-step">3</div><h3>Stay paused while open</h3><p>The machine should not stack endless PRs. It waits while its own Draft PR is unresolved and reuses cycles for scoped peer review of other proposals.</p></div>
+            <div class="fit-card"><div class="fit-step">4</div><h3>Resume when maintainers resolve it</h3><p>Merge or close the Draft PR and the machine becomes active again. That is the real pause/resume contract and the part that makes the system maintainable.</p></div>
+        </div>
+    </div>
+</section>
+
+<section>
+    <div class="container">
+        <div class="section-label">Why it matters</div>
+        <div class="features-grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));">
+            <div class="feature-card"><h3>Safer public loop</h3><p>It avoids the category mistake of presenting self-improvement as autonomous self-merge. The human maintainer remains the final decision-maker.</p></div>
+            <div class="feature-card"><h3>Better maintainer workload</h3><p>While a proposal is open, other opt-in machines can help with peer review. That creates a more realistic contribution loop than just opening more PRs.</p></div>
+            <div class="feature-card"><h3>Clear product story</h3><p>This is one of the rarest credible differentiators in NEXO, so it deserves a short public explanation instead of being buried in implementation details.</p></div>
+        </div>
+    </div>
+</section>
+
+<section class="cta-section">
+    <div class="container">
+        <h2 class="section-title">Want the full procedure?</h2>
+        <p class="section-subtitle" style="margin:16px auto 48px;">The product-facing explanation lives here. The deeper operational rules still live in the public contribution docs.</p>
+        <div class="hero-actions">
+            <a href="/evolution/" class="btn btn-primary">Open Evolution page</a>
+            <a href="/docs/" class="btn btn-secondary">Back to docs</a>
+        </div>
+    </div>
+</section>
+
+<footer><div class="container"><div class="footer-content"><div class="footer-left">Created by <strong>Francisco Cerd&agrave; Puigserver</strong> &amp; <strong>NEXO</strong> (Claude Opus) &bull; Built by <a href="https://www.wazion.com">WAzion</a> &bull; AGPL-3.0 License &bull; &copy; 2026</div><div class="footer-links"><a href="https://github.com/wazionapps/nexo">GitHub</a><a href="https://x.com/NEXOBRAIN">X / Twitter</a><a href="/features/">Features</a><a href="/compare/">Compare</a><a href="/changelog/">Changelog</a></div></div></div></footer>
+<div id="cookie-consent" style="display:none;position:fixed;bottom:0;left:0;right:0;background:rgba(10,10,15,0.95);border-top:1px solid #1E1E2E;padding:12px 24px;z-index:200;font-size:13px;color:#94A3B8;text-align:center;">This site uses analytics cookies. <a href="https://www.wazion.com/en/privacy" style="color:#A78BFA;">Privacy Policy</a><button onclick="document.getElementById('cookie-consent').style.display='none';localStorage.setItem('cc','1')" style="margin-left:16px;background:#7C3AED;color:#fff;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Accept</button><button onclick="document.getElementById('cookie-consent').style.display='none';localStorage.setItem('cc','0');window['ga-disable-G-1LNEMCJMS7']=true" style="margin-left:8px;background:transparent;color:#94A3B8;border:1px solid #333;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Decline</button></div>
+<script>if(!localStorage.getItem('cc')){document.getElementById('cookie-consent').style.display='block';}else if(localStorage.getItem('cc')==='0'){window['ga-disable-G-1LNEMCJMS7']=true;}(function(){var navLinks=document.querySelector('.nav-links');var navToggle=document.querySelector('.nav-toggle');navLinks.querySelectorAll('a').forEach(function(link){link.addEventListener('click',function(){navLinks.classList.remove('open');});});document.addEventListener('click',function(e){if(navLinks.classList.contains('open')&&!navLinks.contains(e.target)&&!navToggle.contains(e.target)){navLinks.classList.remove('open');}});})();</script>
+</body>
+</html>

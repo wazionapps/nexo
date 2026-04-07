@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Shared Brain Across Claude Code and Codex</title>
+    <meta name="description" content="See how NEXO Brain keeps one local operator memory across Claude Code and Codex instead of making each session start from zero.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/demos/shared-brain-claude-code-codex/">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/demos/shared-brain-claude-code-codex/">
+    <meta property="og:title" content="Shared Brain Across Claude Code and Codex">
+    <meta property="og:description" content="See how NEXO Brain keeps one local operator memory across Claude Code and Codex instead of making each session start from zero.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Shared Brain Across Claude Code and Codex">
+    <meta name="twitter:description" content="See how NEXO Brain keeps one local operator memory across Claude Code and Codex instead of making each session start from zero.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body class="features-page">
+<nav><div class="container"><a href="/" class="nav-logo"><img src="/assets/logo-64.png" alt="NEXO Brain" width="32" height="32">NEXO Brain</a><button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button><div class="nav-links"><a href="/">Home</a><a href="/features/">Features</a><a href="/evolution/">Evolution</a><a href="/compare/">Compare</a><a href="/blog/">Blog</a><a href="/changelog/">Changelog</a><a href="/docs/">Docs</a><a href="https://github.com/wazionapps/nexo" class="nav-cta">GitHub</a></div></div></nav>
+
+<section class="pt-nav page-hero">
+    <div class="container">
+        <div class="page-hero-grid">
+            <div class="page-hero-copy">
+                <div class="section-label">Demo 2</div>
+                <h1 class="section-title" style="font-size:clamp(34px,5vw,58px);">One local brain, two terminal clients</h1>
+                <p class="section-subtitle">
+                    NEXO is not just "Claude memory" or "Codex memory". The stronger story is that the same local runtime can serve both, so operator memory and workflow state do not fracture every time you switch surfaces.
+                </p>
+                <div class="page-chip-row">
+                    <span class="page-chip">Claude Code</span>
+                    <span class="page-chip">Codex</span>
+                    <span class="page-chip">Same operator memory</span>
+                </div>
+            </div>
+            <div class="page-visual">
+                <div class="page-stack">
+                    <div class="page-stack-card"><strong>Client A</strong><span>Claude Code uses the managed shared-brain runtime through NEXO's bootstrap and MCP layer.</span></div>
+                    <div class="page-stack-card"><strong>Client B</strong><span>Codex uses the same shared-brain runtime, managed bootstrap, and automation-aware configuration.</span></div>
+                    <div class="page-stack-card"><strong>What carries across</strong><span>Memories, learnings, workflows, followups, and operational context survive the client switch because the runtime stays the same.</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section>
+    <div class="container">
+        <div class="fit-grid">
+            <div class="fit-card"><div class="fit-step">1</div><h3>Work in Claude Code</h3><p>Capture a decision, a correction, or a followup while doing real work. NEXO stores that in the same local brain rather than in a client-specific note file.</p></div>
+            <div class="fit-card"><div class="fit-step">2</div><h3>Switch to Codex</h3><p>Open the other client surface later. The same runtime can still recall the decision, enforce the same guardrails, and continue the same durable workflow state.</p></div>
+            <div class="fit-card"><div class="fit-step">3</div><h3>Keep automation aligned</h3><p>Background jobs, doctor checks, Deep Sleep, and public Evolution all still sit under one runtime truth instead of splitting by vendor-specific memory hacks.</p></div>
+        </div>
+    </div>
+</section>
+
+<section>
+    <div class="container">
+        <div class="section-label">Why it matters</div>
+        <div class="features-grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));">
+            <div class="feature-card"><h3>Less setup debt</h3><p>You do not need one memory pattern for Claude Code and another one for Codex. NEXO turns that into one runtime decision instead.</p></div>
+            <div class="feature-card"><h3>More honest parity</h3><p>NEXO explicitly says Claude Code and Codex are not identical surfaces. The point is not pretending they are the same, but keeping memory and operations aligned anyway.</p></div>
+            <div class="feature-card"><h3>Better story than "supports many clients"</h3><p>The phrase that lands better is: "one local brain across the clients you already use". That is much easier for people to understand and remember.</p></div>
+        </div>
+    </div>
+</section>
+
+<section class="cta-section">
+    <div class="container">
+        <h2 class="section-title">Next demo</h2>
+        <p class="section-subtitle" style="margin:16px auto 48px;">The unusual differentiator after shared brain is the public Evolution loop.</p>
+        <div class="hero-actions">
+            <a href="/demos/evolution-draft-pr-loop/" class="btn btn-primary">Open Evolution demo</a>
+            <a href="/demos/" class="btn btn-secondary">Back to demos</a>
+        </div>
+    </div>
+</section>
+
+<footer><div class="container"><div class="footer-content"><div class="footer-left">Created by <strong>Francisco Cerd&agrave; Puigserver</strong> &amp; <strong>NEXO</strong> (Claude Opus) &bull; Built by <a href="https://www.wazion.com">WAzion</a> &bull; AGPL-3.0 License &bull; &copy; 2026</div><div class="footer-links"><a href="https://github.com/wazionapps/nexo">GitHub</a><a href="https://x.com/NEXOBRAIN">X / Twitter</a><a href="/features/">Features</a><a href="/compare/">Compare</a><a href="/changelog/">Changelog</a></div></div></div></footer>
+<div id="cookie-consent" style="display:none;position:fixed;bottom:0;left:0;right:0;background:rgba(10,10,15,0.95);border-top:1px solid #1E1E2E;padding:12px 24px;z-index:200;font-size:13px;color:#94A3B8;text-align:center;">This site uses analytics cookies. <a href="https://www.wazion.com/en/privacy" style="color:#A78BFA;">Privacy Policy</a><button onclick="document.getElementById('cookie-consent').style.display='none';localStorage.setItem('cc','1')" style="margin-left:16px;background:#7C3AED;color:#fff;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Accept</button><button onclick="document.getElementById('cookie-consent').style.display='none';localStorage.setItem('cc','0');window['ga-disable-G-1LNEMCJMS7']=true" style="margin-left:8px;background:transparent;color:#94A3B8;border:1px solid #333;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Decline</button></div>
+<script>if(!localStorage.getItem('cc')){document.getElementById('cookie-consent').style.display='block';}else if(localStorage.getItem('cc')==='0'){window['ga-disable-G-1LNEMCJMS7']=true;}(function(){var navLinks=document.querySelector('.nav-links');var navToggle=document.querySelector('.nav-toggle');navLinks.querySelectorAll('a').forEach(function(link){link.addEventListener('click',function(){navLinks.classList.remove('open');});});document.addEventListener('click',function(e){if(navLinks.classList.contains('open')&&!navLinks.contains(e.target)&&!navToggle.contains(e.target)){navLinks.classList.remove('open');}});})();</script>
+</body>
+</html>
