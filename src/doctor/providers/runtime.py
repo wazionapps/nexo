@@ -406,21 +406,22 @@ def _load_active_conditioned_learnings() -> list[dict]:
         import sqlite3
 
         conn = sqlite3.connect(str(db_path), timeout=2)
-        conn.row_factory = sqlite3.Row
-        table = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='learnings'"
-        ).fetchone()
-        if not table:
+        try:
+            conn.row_factory = sqlite3.Row
+            table = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='learnings'"
+            ).fetchone()
+            if not table:
+                return []
+            rows = conn.execute(
+                """SELECT id, title, applies_to
+                   FROM learnings
+                   WHERE status = 'active' AND COALESCE(applies_to, '') != ''
+                   ORDER BY updated_at DESC, id DESC"""
+            ).fetchall()
+            return [dict(row) for row in rows]
+        finally:
             conn.close()
-            return []
-        rows = conn.execute(
-            """SELECT id, title, applies_to
-               FROM learnings
-               WHERE status = 'active' AND COALESCE(applies_to, '') != ''
-               ORDER BY updated_at DESC, id DESC"""
-        ).fetchall()
-        conn.close()
-        return [dict(row) for row in rows]
     except Exception:
         return []
 
@@ -595,22 +596,23 @@ def _open_protocol_debt_summary(*debt_types: str) -> dict:
 
     try:
         conn = sqlite3.connect(str(db_path), timeout=2)
-        conn.row_factory = sqlite3.Row
-        table = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='protocol_debt'"
-        ).fetchone()
-        if not table:
+        try:
+            conn.row_factory = sqlite3.Row
+            table = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='protocol_debt'"
+            ).fetchone()
+            if not table:
+                return summary
+            placeholders = ",".join("?" for _ in debt_types)
+            rows = conn.execute(
+                f"""SELECT debt_type, COUNT(*) AS total
+                    FROM protocol_debt
+                    WHERE status = 'open' AND debt_type IN ({placeholders})
+                    GROUP BY debt_type""",
+                tuple(debt_types),
+            ).fetchall()
+        finally:
             conn.close()
-            return summary
-        placeholders = ",".join("?" for _ in debt_types)
-        rows = conn.execute(
-            f"""SELECT debt_type, COUNT(*) AS total
-                FROM protocol_debt
-                WHERE status = 'open' AND debt_type IN ({placeholders})
-                GROUP BY debt_type""",
-            tuple(debt_types),
-        ).fetchall()
-        conn.close()
     except Exception:
         return summary
 
@@ -1172,14 +1174,16 @@ def check_stale_sessions() -> DoctorCheck:
                 summary="No DB to check sessions",
             )
         conn = sqlite3.connect(str(db_path), timeout=2)
-        conn.row_factory = sqlite3.Row
-        cutoff = time.time() - 7200
-        day_ago = time.time() - 86400
-        rows = conn.execute(
-            "SELECT COUNT(*) as cnt FROM sessions WHERE last_update_epoch < ? AND last_update_epoch > ?",
-            (cutoff, day_ago),
-        ).fetchone()
-        conn.close()
+        try:
+            conn.row_factory = sqlite3.Row
+            cutoff = time.time() - 7200
+            day_ago = time.time() - 86400
+            rows = conn.execute(
+                "SELECT COUNT(*) as cnt FROM sessions WHERE last_update_epoch < ? AND last_update_epoch > ?",
+                (cutoff, day_ago),
+            ).fetchone()
+        finally:
+            conn.close()
         count = rows["cnt"] if rows else 0
         if count > 0:
             return DoctorCheck(
@@ -1221,24 +1225,25 @@ def check_cron_freshness() -> DoctorCheck:
                 summary="No DB to check cron runs",
             )
         conn = sqlite3.connect(str(db_path), timeout=2)
-        # Check if cron_runs table exists
-        tables = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='cron_runs'"
-        ).fetchone()
-        if not tables:
+        try:
+            # Check if cron_runs table exists
+            tables = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='cron_runs'"
+            ).fetchone()
+            if not tables:
+                return DoctorCheck(
+                    id="runtime.cron_freshness",
+                    tier="runtime",
+                    status="healthy",
+                    severity="info",
+                    summary="No cron_runs table yet",
+                )
+            # Latest run per cron
+            rows = conn.execute(
+                "SELECT cron_id, MAX(started_at) as last_run FROM cron_runs GROUP BY cron_id"
+            ).fetchall()
+        finally:
             conn.close()
-            return DoctorCheck(
-                id="runtime.cron_freshness",
-                tier="runtime",
-                status="healthy",
-                severity="info",
-                summary="No cron_runs table yet",
-            )
-        # Latest run per cron
-        rows = conn.execute(
-            "SELECT cron_id, MAX(started_at) as last_run FROM cron_runs GROUP BY cron_id"
-        ).fetchall()
-        conn.close()
 
         stale = []
         expectations = _cron_expectations()
@@ -2167,32 +2172,36 @@ def check_protocol_compliance() -> DoctorCheck:
         db_path = NEXO_HOME / "data" / "nexo.db"
         if db_path.is_file():
             conn = sqlite3.connect(str(db_path), timeout=2)
-            conn.row_factory = sqlite3.Row
-            tables = {
-                row["name"]
-                for row in conn.execute(
-                    "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('protocol_tasks', 'protocol_debt')"
-                ).fetchall()
-            }
-            if {"protocol_tasks", "protocol_debt"}.issubset(tables):
-                window = "-7 days"
-                tasks = conn.execute(
-                    """SELECT * FROM protocol_tasks
-                       WHERE opened_at >= datetime('now', ?)
-                       ORDER BY opened_at DESC""",
-                    (window,),
-                ).fetchall()
-                debt_rows = conn.execute(
-                    """SELECT severity, debt_type, COUNT(*) AS total
-                       FROM protocol_debt
-                       WHERE status = 'open' AND created_at >= datetime('now', ?)
-                       GROUP BY severity, debt_type
-                       ORDER BY total DESC, debt_type ASC""",
-                    (window,),
-                ).fetchall()
+            try:
+                conn.row_factory = sqlite3.Row
+                tables = {
+                    row["name"]
+                    for row in conn.execute(
+                        "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('protocol_tasks', 'protocol_debt')"
+                    ).fetchall()
+                }
+                tasks = None
+                debt_rows = None
+                if {"protocol_tasks", "protocol_debt"}.issubset(tables):
+                    window = "-7 days"
+                    tasks = conn.execute(
+                        """SELECT * FROM protocol_tasks
+                           WHERE opened_at >= datetime('now', ?)
+                           ORDER BY opened_at DESC""",
+                        (window,),
+                    ).fetchall()
+                    debt_rows = conn.execute(
+                        """SELECT severity, debt_type, COUNT(*) AS total
+                           FROM protocol_debt
+                           WHERE status = 'open' AND created_at >= datetime('now', ?)
+                           GROUP BY severity, debt_type
+                           ORDER BY total DESC, debt_type ASC""",
+                        (window,),
+                    ).fetchall()
+            finally:
                 conn.close()
 
-                if tasks or debt_rows:
+            if tasks is not None and debt_rows is not None and (tasks or debt_rows):
                     closed_tasks = [row for row in tasks if row["status"] != "open"]
                     verify_required = [row for row in closed_tasks if row["must_verify"] and row["status"] == "done"]
                     verify_ok = [row for row in verify_required if (row["close_evidence"] or "").strip()]
@@ -2410,11 +2419,13 @@ def check_state_watchers() -> DoctorCheck:
     if db_path.is_file():
         try:
             conn = sqlite3.connect(str(db_path))
-            row = conn.execute(
-                "SELECT COUNT(*) FROM state_watchers WHERE status = 'active'"
-            ).fetchone()
-            conn.close()
-            active_watchers = int(row[0] or 0) if row else 0
+            try:
+                row = conn.execute(
+                    "SELECT COUNT(*) FROM state_watchers WHERE status = 'active'"
+                ).fetchone()
+                active_watchers = int(row[0] or 0) if row else 0
+            finally:
+                conn.close()
         except Exception:
             active_watchers = 0
 
@@ -2518,37 +2529,38 @@ def check_automation_telemetry(days: int = 7) -> DoctorCheck:
 
     try:
         conn = sqlite3.connect(str(db_path), timeout=2)
-        conn.row_factory = sqlite3.Row
-        table = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='automation_runs'"
-        ).fetchone()
-        if not table:
-            conn.close()
-            return DoctorCheck(
-                id="runtime.automation_telemetry",
-                tier="runtime",
-                status="degraded",
-                severity="warn",
-                summary="Automation telemetry schema is missing",
-                evidence=["table automation_runs not found"],
-                repair_plan=["Run NEXO migrations before trusting automation cost/parity metrics"],
-                escalation_prompt="Shared automation runs are happening without the telemetry table that release metrics depend on.",
-            )
+        try:
+            conn.row_factory = sqlite3.Row
+            table = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='automation_runs'"
+            ).fetchone()
+            if not table:
+                return DoctorCheck(
+                    id="runtime.automation_telemetry",
+                    tier="runtime",
+                    status="degraded",
+                    severity="warn",
+                    summary="Automation telemetry schema is missing",
+                    evidence=["table automation_runs not found"],
+                    repair_plan=["Run NEXO migrations before trusting automation cost/parity metrics"],
+                    escalation_prompt="Shared automation runs are happening without the telemetry table that release metrics depend on.",
+                )
 
-        row = conn.execute(
-            """
-            SELECT
-                COUNT(*) AS runs,
-                SUM(CASE WHEN (input_tokens + cached_input_tokens + output_tokens) > 0 THEN 1 ELSE 0 END) AS usage_runs,
-                SUM(CASE WHEN total_cost_usd IS NOT NULL THEN 1 ELSE 0 END) AS cost_runs,
-                SUM(CASE WHEN cost_source = 'pricing_unavailable' THEN 1 ELSE 0 END) AS pricing_gaps,
-                GROUP_CONCAT(DISTINCT backend) AS backends
-            FROM automation_runs
-            WHERE created_at >= datetime('now', ?)
-            """,
-            (f"-{days} days",),
-        ).fetchone()
-        conn.close()
+            row = conn.execute(
+                """
+                SELECT
+                    COUNT(*) AS runs,
+                    SUM(CASE WHEN (input_tokens + cached_input_tokens + output_tokens) > 0 THEN 1 ELSE 0 END) AS usage_runs,
+                    SUM(CASE WHEN total_cost_usd IS NOT NULL THEN 1 ELSE 0 END) AS cost_runs,
+                    SUM(CASE WHEN cost_source = 'pricing_unavailable' THEN 1 ELSE 0 END) AS pricing_gaps,
+                    GROUP_CONCAT(DISTINCT backend) AS backends
+                FROM automation_runs
+                WHERE created_at >= datetime('now', ?)
+                """,
+                (f"-{days} days",),
+            ).fetchone()
+        finally:
+            conn.close()
     except Exception as exc:
         return DoctorCheck(
             id="runtime.automation_telemetry",

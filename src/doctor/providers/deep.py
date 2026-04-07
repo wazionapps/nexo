@@ -106,8 +106,10 @@ def check_schema_version() -> DoctorCheck:
                 summary="No database to check schema",
             )
         conn = sqlite3.connect(str(db_path), timeout=2)
-        version = conn.execute("PRAGMA user_version").fetchone()[0]
-        conn.close()
+        try:
+            version = conn.execute("PRAGMA user_version").fetchone()[0]
+        finally:
+            conn.close()
         return DoctorCheck(
             id="deep.schema_version",
             tier="deep",
@@ -250,20 +252,21 @@ def check_learning_count() -> DoctorCheck:
                 summary="No DB to check learnings",
             )
         conn = sqlite3.connect(str(db_path), timeout=2)
-        tables = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='learnings'"
-        ).fetchone()
-        if not tables:
+        try:
+            tables = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='learnings'"
+            ).fetchone()
+            if not tables:
+                return DoctorCheck(
+                    id="deep.learning_count",
+                    tier="deep",
+                    status="healthy",
+                    severity="info",
+                    summary="No learnings table yet",
+                )
+            count = conn.execute("SELECT COUNT(*) FROM learnings WHERE archived=0").fetchone()[0]
+        finally:
             conn.close()
-            return DoctorCheck(
-                id="deep.learning_count",
-                tier="deep",
-                status="healthy",
-                severity="info",
-                summary="No learnings table yet",
-            )
-        count = conn.execute("SELECT COUNT(*) FROM learnings WHERE archived=0").fetchone()[0]
-        conn.close()
         return DoctorCheck(
             id="deep.learning_count",
             tier="deep",
