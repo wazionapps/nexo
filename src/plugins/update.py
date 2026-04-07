@@ -149,14 +149,21 @@ def _backup_databases() -> tuple[str, str | None]:
 
     for db_file in db_files:
         dest = backup_dir / db_file.name
+        src_conn = None
+        dst_conn = None
         try:
             src_conn = sqlite3.connect(str(db_file))
             dst_conn = sqlite3.connect(str(dest))
             src_conn.backup(dst_conn)
-            dst_conn.close()
-            src_conn.close()
         except Exception as e:
             return str(backup_dir), f"Failed to backup {db_file.name}: {e}"
+        finally:
+            for conn in (dst_conn, src_conn):
+                if conn is not None:
+                    try:
+                        conn.close()
+                    except Exception:
+                        pass
 
     return str(backup_dir), None
 
@@ -170,14 +177,21 @@ def _restore_databases(backup_dir: str):
         # Try to find original location
         for candidate in [DATA_DIR / db_backup.name, NEXO_HOME / db_backup.name, SRC_DIR / db_backup.name]:
             if candidate.is_file():
+                src_conn = None
+                dst_conn = None
                 try:
                     src_conn = sqlite3.connect(str(db_backup))
                     dst_conn = sqlite3.connect(str(candidate))
                     src_conn.backup(dst_conn)
-                    dst_conn.close()
-                    src_conn.close()
                 except Exception:
                     pass
+                finally:
+                    for conn in (dst_conn, src_conn):
+                        if conn is not None:
+                            try:
+                                conn.close()
+                            except Exception:
+                                pass
                 break
 
 
