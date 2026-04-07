@@ -233,6 +233,67 @@ def test_catchup_script_runs_directly_from_runtime_root(tmp_path):
     assert "ModuleNotFoundError" not in result.stderr
 
 
+def test_catchup_script_releases_lock_on_early_crash(tmp_path):
+    """Lock must be released even if _heal_personal_schedules or catchup_candidates crashes."""
+    repo_src = Path(__file__).resolve().parent.parent / "src"
+    runtime_root = tmp_path / "runtime"
+    (runtime_root / "scripts").mkdir(parents=True)
+    (runtime_root / "crons").mkdir(parents=True)
+    (runtime_root / "operations").mkdir(parents=True)
+    shutil.copy2(repo_src / "cron_recovery.py", runtime_root / "cron_recovery.py")
+    shutil.copy2(repo_src / "runtime_power.py", runtime_root / "runtime_power.py")
+    shutil.copy2(repo_src / "client_preferences.py", runtime_root / "client_preferences.py")
+    shutil.copy2(repo_src / "agent_runner.py", runtime_root / "agent_runner.py")
+    shutil.copy2(repo_src / "scripts" / "nexo-catchup.py", runtime_root / "scripts" / "nexo-catchup.py")
+    # Write a broken manifest that will cause catchup_candidates to fail
+    (runtime_root / "crons" / "manifest.json").write_text('{"crons":[{"id":"boom"}]}')
+    # Inject a cron_recovery that crashes in catchup_candidates
+    crash_module = runtime_root / "cron_recovery.py"
+    crash_module.write_text(
+        "def catchup_candidates(now=None):\n"
+        "    raise RuntimeError('simulated crash in catchup_candidates')\n"
+    )
+
+    home = tmp_path / "home"
+    home.mkdir()
+    lock_file = runtime_root / "operations" / ".catchup.lock"
+
+    # First run — should crash but release the lock
+    result = subprocess.run(
+        [sys.executable, str(runtime_root / "scripts" / "nexo-catchup.py")],
+        capture_output=True,
+        text=True,
+        timeout=10,
+        env={
+            **os.environ,
+            "HOME": str(home),
+            "NEXO_HOME": str(runtime_root),
+            "NEXO_CODE": str(runtime_root),
+        },
+    )
+    assert result.returncode != 0  # crashed
+
+    # Restore the real module for the second run
+    shutil.copy2(repo_src / "cron_recovery.py", runtime_root / "cron_recovery.py")
+    (runtime_root / "crons" / "manifest.json").write_text('{"crons":[]}')
+
+    # Second run — must NOT say "already running" (lock must have been released)
+    result2 = subprocess.run(
+        [sys.executable, str(runtime_root / "scripts" / "nexo-catchup.py")],
+        capture_output=True,
+        text=True,
+        timeout=10,
+        env={
+            **os.environ,
+            "HOME": str(home),
+            "NEXO_HOME": str(runtime_root),
+            "NEXO_CODE": str(runtime_root),
+        },
+    )
+    assert result2.returncode == 0, result2.stderr
+    assert "already running" not in result2.stdout
+
+
 def test_catchup_script_self_heals_personal_schedules(tmp_path):
     repo_src = Path(__file__).resolve().parent.parent / "src"
     runtime_root = tmp_path / "runtime"
