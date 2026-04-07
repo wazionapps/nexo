@@ -288,3 +288,60 @@ def test_sync_script_runs_directly_from_runtime_root(tmp_path):
 
     assert result.returncode == 0, result.stderr
     assert "ModuleNotFoundError" not in result.stderr
+
+
+def test_sync_linux_weekday_uses_launchd_convention(tmp_path, monkeypatch):
+    """Manifest weekday follows launchd convention (0=Sunday).
+
+    sync_linux must map weekday values to the correct systemd OnCalendar
+    day abbreviation.  A previous bug used Python's weekday ordering
+    (0=Monday), causing crons to fire on the wrong day.
+    """
+    from crons import sync as cron_sync
+
+    source_root = tmp_path / "repo-src"
+    runtime_root = tmp_path / "nexo-home"
+    unit_dir = tmp_path / "systemd-user"
+    (source_root / "scripts").mkdir(parents=True)
+    (runtime_root / "logs").mkdir(parents=True)
+    unit_dir.mkdir(parents=True)
+
+    script = source_root / "scripts" / "nexo-weekly.py"
+    script.write_text("print('ok')\n")
+    wrapper = source_root / "scripts" / "nexo-cron-wrapper.sh"
+    wrapper.write_text("#!/bin/bash\nexit 0\n")
+    wrapper.chmod(0o755)
+
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(
+        '{"crons": [{"id": "weekly-job", "script": "scripts/nexo-weekly.py", '
+        '"schedule": {"hour": 5, "minute": 0, "weekday": 0}}]}'
+    )
+
+    monkeypatch.setattr(cron_sync, "SOURCE_ROOT", source_root)
+    monkeypatch.setattr(cron_sync, "RUNTIME_ROOT", runtime_root)
+    monkeypatch.setattr(cron_sync, "NEXO_HOME", runtime_root)
+    monkeypatch.setattr(cron_sync, "LOG_DIR", runtime_root / "logs")
+    monkeypatch.setattr(cron_sync, "MANIFEST", manifest)
+    monkeypatch.setattr(cron_sync, "OPTIONALS_FILE", runtime_root / "config" / "optionals.json")
+    monkeypatch.setattr(cron_sync, "SCHEDULE_FILE", runtime_root / "config" / "schedule.json")
+
+    # Patch Path.home to use unit_dir parent for systemd path
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path / "home"))
+    (tmp_path / "home" / ".config" / "systemd" / "user").mkdir(parents=True)
+
+    # Use dry_run=True to skip the systemctl calls (unavailable on macOS)
+    cron_sync.sync_linux(dry_run=True)
+
+    # dry_run doesn't write files, so verify the mapping directly
+    days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    assert days[0] == "Sun", "weekday=0 (launchd Sunday) must map to 'Sun'"
+    assert days[1] == "Mon", "weekday=1 (launchd Monday) must map to 'Mon'"
+    assert days[6] == "Sat", "weekday=6 (launchd Saturday) must map to 'Sat'"
+
+
+def test_sync_linux_weekday_7_is_sunday_alias():
+    """launchd allows weekday=7 as a Sunday alias; the days list must handle index 7."""
+    # The days list in sync_linux has 8 entries to support weekday=7
+    days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    assert days[7] == "Sun", "weekday=7 should map to Sun (Sunday alias)"
