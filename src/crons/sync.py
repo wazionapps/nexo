@@ -446,7 +446,8 @@ StandardError=append:{stderr_log}
             s = cron["schedule"]
             h, m = s.get("hour", 0), s.get("minute", 0)
             if "weekday" in s:
-                days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+                # Manifest weekday uses launchd convention: 0=Sunday … 6=Saturday (7=Sunday alias)
+                days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
                 timer_spec = f"OnCalendar={days[s['weekday']]} *-*-* {h:02d}:{m:02d}:00"
             else:
                 timer_spec = f"OnCalendar=*-*-* {h:02d}:{m:02d}:00"
