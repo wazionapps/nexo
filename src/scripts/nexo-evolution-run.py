@@ -364,8 +364,6 @@ def _sanitize_public_diff(worktree_dir: Path, changed_files: list[str]) -> tuple
     private_markers = [
         str(Path.home()),
         str(NEXO_HOME),
-        "/Users/",
-        "/home/",
         "CLAUDE.md",
         "AGENTS.md",
         ".nexo/",
@@ -374,6 +372,14 @@ def _sanitize_public_diff(worktree_dir: Path, changed_files: list[str]) -> tuple
     for marker in private_markers:
         if marker and marker in diff_text:
             return False, f"Sanitization blocked private marker in diff: {marker}"
+    private_path_patterns = [
+        re.compile(r"/Users/[^/\s\"']+/"),
+        re.compile(r"/home/[^/\s\"']+/"),
+    ]
+    for pattern in private_path_patterns:
+        match = pattern.search(diff_text)
+        if match:
+            return False, f"Sanitization blocked private path in diff: {match.group(0)}"
     return True, ""
 
 

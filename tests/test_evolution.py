@@ -218,6 +218,44 @@ class TestManagedExecution:
 
 
 class TestPublicContributionExecution:
+    def test_sanitize_public_diff_allows_generic_linux_home_literal(self, evolution_env, monkeypatch):
+        _, runner = _load_runner_module(monkeypatch, evolution_env)
+
+        class Result:
+            def __init__(self, returncode=0, stdout="", stderr=""):
+                self.returncode = returncode
+                self.stdout = stdout
+                self.stderr = stderr
+
+        diff_text = """diff --git a/src/crons/sync.py b/src/crons/sync.py
++# Example Linux root path prefix: /home/
+"""
+        runner._git = lambda cwd, *args, **kwargs: Result(stdout=diff_text)
+
+        ok, reason = runner._sanitize_public_diff(evolution_env, ["src/crons/sync.py"])
+
+        assert ok is True
+        assert reason == ""
+
+    def test_sanitize_public_diff_blocks_user_home_paths(self, evolution_env, monkeypatch):
+        _, runner = _load_runner_module(monkeypatch, evolution_env)
+
+        class Result:
+            def __init__(self, returncode=0, stdout="", stderr=""):
+                self.returncode = returncode
+                self.stdout = stdout
+                self.stderr = stderr
+
+        diff_text = """diff --git a/src/file.py b/src/file.py
++# leaked path /home/alice/private
+"""
+        runner._git = lambda cwd, *args, **kwargs: Result(stdout=diff_text)
+
+        ok, reason = runner._sanitize_public_diff(evolution_env, ["src/file.py"])
+
+        assert ok is False
+        assert "private path" in reason
+
     def test_run_short_circuits_into_public_contribution_mode(self, evolution_env, monkeypatch):
         objective_file = evolution_env / "brain" / "evolution-objective.json"
         objective_file.write_text(json.dumps({
