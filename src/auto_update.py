@@ -626,6 +626,10 @@ def _run_file_migration(path: Path) -> tuple[bool, str]:
 def run_file_migrations() -> list[dict]:
     """Run any pending file-based migrations from the migrations/ directory.
 
+    Migrations are ordered and sequential: if migration N fails, all subsequent
+    migrations are skipped so that N is retried on the next startup and no
+    migration is permanently skipped by a version-pointer gap.
+
     Returns list of results: [{"version": N, "file": "...", "status": "ok"|"failed", "message": "..."}]
     """
     current_version = _get_applied_migration_version()
@@ -655,8 +659,7 @@ def run_file_migrations() -> list[dict]:
                 "message": message,
             })
             _log(f"Migration {path.name}: FAILED — {message}")
-            # Don't advance version past a failure, but continue trying others
-            # so independent migrations still run. Version stays at last success.
+            break  # Stop on first failure so it retries next startup
 
     return results
 
