@@ -226,6 +226,7 @@ def _ensure_followup(conn: sqlite3.Connection, *, prefix: str, description: str,
                      verification: str, reasoning: str, priority: str = "high") -> str:
     if not _table_exists(conn, "followups"):
         return ""
+    followup_id = f"NF-{prefix}-{hashlib.sha1(description.encode('utf-8')).hexdigest()[:8].upper()}"
     existing = conn.execute(
         """SELECT id FROM followups
            WHERE status NOT LIKE 'COMPLETED%'
@@ -236,10 +237,33 @@ def _ensure_followup(conn: sqlite3.Connection, *, prefix: str, description: str,
     ).fetchone()
     if existing:
         return str(existing["id"])
-
-    followup_id = f"NF-{prefix}-{hashlib.sha1(description.encode('utf-8')).hexdigest()[:8].upper()}"
     now_epoch = int(datetime.now().timestamp())
     columns = {row["name"] for row in conn.execute("PRAGMA table_info(followups)").fetchall()}
+    existing_id_row = conn.execute(
+        "SELECT id, status FROM followups WHERE id = ? LIMIT 1",
+        (followup_id,),
+    ).fetchone()
+    if existing_id_row:
+        update_fields = {
+            "description": description,
+            "verification": verification,
+            "reasoning": reasoning,
+            "updated_at": now_epoch,
+        }
+        if "priority" in columns:
+            update_fields["priority"] = priority
+        closed_status = str(existing_id_row["status"] or "").upper()
+        if closed_status.startswith("COMPLETED") or closed_status in {"DELETED", "ARCHIVED", "BLOCKED", "WAITING"}:
+            update_fields["status"] = "PENDING"
+        ordered_updates = [name for name in update_fields.keys() if name in columns]
+        if ordered_updates:
+            assignments = ", ".join(f"{name} = ?" for name in ordered_updates)
+            conn.execute(
+                f"UPDATE followups SET {assignments} WHERE id = ?",
+                [update_fields[name] for name in ordered_updates] + [followup_id],
+            )
+        return followup_id
+
     values = {
         "id": followup_id,
         "date": "",
