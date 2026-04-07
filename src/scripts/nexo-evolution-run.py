@@ -865,7 +865,7 @@ def run_public_contribution_cycle(*, objective: dict, cycle_num: int) -> None:
 
         pr_url, pr_number = _create_draft_pr(worktree_dir, config, branch_name, summary)
         artifact_dir = _write_public_artifacts(worktree_dir, branch_name, summary)
-        mark_active_pr(pr_url=pr_url, pr_number=pr_number, branch=branch_name, config=config)
+        config = mark_active_pr(pr_url=pr_url, pr_number=pr_number, branch=branch_name, config=config)
 
         conn.execute(
             "INSERT INTO evolution_log (cycle_number, dimension, proposal, classification, reasoning, status, files_changed, test_result) "

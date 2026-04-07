@@ -280,6 +280,70 @@ class TestPublicContributionExecution:
         assert called[0]["config"]["status"] == "paused_open_pr"
         assert marked == []
 
+    def test_public_contribution_run_preserves_active_pr_state_when_recording_result(self, evolution_env, monkeypatch):
+        _, runner = _load_runner_module(monkeypatch, evolution_env)
+        worktree_dir = evolution_env / "public-worktree"
+        worktree_dir.mkdir(parents=True, exist_ok=True)
+        artifact_dir = evolution_env / "operations" / "public-contrib" / "artifact"
+        artifact_dir.mkdir(parents=True, exist_ok=True)
+        objective = {
+            "history": [],
+            "total_evolutions": 0,
+            "total_proposals_made": 0,
+        }
+        config = {
+            "enabled": True,
+            "mode": "draft_prs",
+            "status": "active",
+            "github_user": "alice",
+            "fork_repo": "alice/nexo",
+            "upstream_repo": "wazionapps/nexo",
+            "machine_id": "machine-1",
+        }
+        captured = {}
+
+        class Result:
+            def __init__(self, returncode=0, stdout="", stderr=""):
+                self.returncode = returncode
+                self.stdout = stdout
+                self.stderr = stderr
+
+        runner.load_public_contribution_config = lambda: dict(config)
+        runner.can_run_public_contribution = lambda cfg: (True, "", dict(config))
+        runner.verify_claude_cli = lambda: True
+        runner._prepare_public_worktree = lambda cfg, title_hint="public-core": (worktree_dir, "contrib/machine-1/test-public-core")
+        runner._prime_public_git_identity = lambda worktree, cfg: None
+        runner.call_public_claude_cli = lambda prompt, cwd: json.dumps({
+            "title": "fix: sample public contribution",
+            "problem": "A small public bug",
+            "summary": "Fix it safely",
+            "tests": ["python3 -m py_compile src/maintenance.py"],
+            "risks": ["low"],
+        })
+        runner._changed_public_files = lambda worktree: ["src/maintenance.py"]
+        runner._sanitize_public_diff = lambda worktree, changed_files: (True, "")
+        runner._run_public_validation = lambda worktree, changed_files: ["python3 -m py_compile src/maintenance.py"]
+        runner._public_pr_duplicate_candidate = lambda cfg, title, changed_files: None
+        runner._git = lambda cwd, *args, **kwargs: Result()
+        runner._create_draft_pr = lambda worktree, cfg, branch_name, summary: ("https://github.com/wazionapps/nexo/pull/88", 88)
+        runner._write_public_artifacts = lambda worktree, branch_name, summary: artifact_dir
+        runner.mark_active_pr = lambda **kwargs: {
+            **config,
+            "active_pr_url": kwargs["pr_url"],
+            "active_pr_number": kwargs["pr_number"],
+            "active_branch": kwargs["branch"],
+            "status": "paused_open_pr",
+        }
+        runner.mark_public_contribution_result = lambda **kwargs: captured.setdefault("config", dict(kwargs["config"]))
+        runner.save_objective = lambda obj: captured.setdefault("objective", json.loads(json.dumps(obj)))
+        runner._remove_public_worktree = lambda worktree: None
+
+        runner.run_public_contribution_cycle(objective=objective, cycle_num=3)
+
+        assert captured["config"]["active_pr_number"] == 88
+        assert captured["config"]["status"] == "paused_open_pr"
+        assert captured["objective"]["history"][0]["pr_url"] == "https://github.com/wazionapps/nexo/pull/88"
+
     def test_list_reviewable_public_prs_filters_out_own_reviewed_or_unsafe_candidates(self, evolution_env, monkeypatch):
         _, runner = _load_runner_module(monkeypatch, evolution_env)
         config = {
