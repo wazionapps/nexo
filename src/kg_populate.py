@@ -147,25 +147,27 @@ def backfill_decisions() -> int:
 def backfill_somatic() -> int:
     """Read somatic_markers from cognitive.db → create file/area nodes with risk."""
     cdb = _cognitive_db()
-    rows = cdb.execute(
-        "SELECT target, target_type, risk_score, incident_count FROM somatic_markers"
-    ).fetchall()
-    count = 0
-    for row in rows:
-        target_type = row["target_type"] or "file"
-        node_ref = f"{target_type}:{row['target']}"
-        kg.upsert_node(
-            node_type=target_type,
-            node_ref=node_ref,
-            label=os.path.basename(row["target"]) or row["target"],
-            properties={
-                "risk_score": row["risk_score"],
-                "incident_count": row["incident_count"],
-            },
-        )
-        count += 1
-    cdb.close()
-    return count
+    try:
+        rows = cdb.execute(
+            "SELECT target, target_type, risk_score, incident_count FROM somatic_markers"
+        ).fetchall()
+        count = 0
+        for row in rows:
+            target_type = row["target_type"] or "file"
+            node_ref = f"{target_type}:{row['target']}"
+            kg.upsert_node(
+                node_type=target_type,
+                node_ref=node_ref,
+                label=os.path.basename(row["target"]) or row["target"],
+                properties={
+                    "risk_score": row["risk_score"],
+                    "incident_count": row["incident_count"],
+                },
+            )
+            count += 1
+        return count
+    finally:
+        cdb.close()
 
 
 def run_full_backfill() -> dict:

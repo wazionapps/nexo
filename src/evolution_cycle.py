@@ -120,52 +120,54 @@ def save_objective(obj: dict):
 def get_week_data(db_path: str) -> dict:
     """Gather last 7 days of learnings, decisions, changes, diaries."""
     conn = sqlite3.connect(db_path, timeout=10)
-    conn.row_factory = sqlite3.Row
-    cutoff_epoch = time.time() - 7 * 86400
-    cutoff_date = (date.today() - timedelta(days=7)).isoformat()
+    try:
+        conn.row_factory = sqlite3.Row
+        cutoff_epoch = time.time() - 7 * 86400
+        cutoff_date = (date.today() - timedelta(days=7)).isoformat()
 
-    data = {}
+        data = {}
 
-    rows = conn.execute(
-        "SELECT category, title, content FROM learnings WHERE created_at > ? ORDER BY created_at DESC LIMIT 50",
-        (cutoff_epoch,)
-    ).fetchall()
-    data["learnings"] = [dict(r) for r in rows]
+        rows = conn.execute(
+            "SELECT category, title, content FROM learnings WHERE created_at > ? ORDER BY created_at DESC LIMIT 50",
+            (cutoff_epoch,)
+        ).fetchall()
+        data["learnings"] = [dict(r) for r in rows]
 
-    rows = conn.execute(
-        "SELECT domain, decision, alternatives, based_on, confidence, outcome FROM decisions "
-        "WHERE created_at > ? ORDER BY created_at DESC LIMIT 20",
-        (cutoff_date,)
-    ).fetchall()
-    data["decisions"] = [dict(r) for r in rows]
+        rows = conn.execute(
+            "SELECT domain, decision, alternatives, based_on, confidence, outcome FROM decisions "
+            "WHERE created_at > ? ORDER BY created_at DESC LIMIT 20",
+            (cutoff_date,)
+        ).fetchall()
+        data["decisions"] = [dict(r) for r in rows]
 
-    rows = conn.execute(
-        "SELECT files, what_changed, why, affects, risks FROM change_log "
-        "WHERE created_at > ? ORDER BY created_at DESC LIMIT 30",
-        (cutoff_date,)
-    ).fetchall()
-    data["changes"] = [dict(r) for r in rows]
+        rows = conn.execute(
+            "SELECT files, what_changed, why, affects, risks FROM change_log "
+            "WHERE created_at > ? ORDER BY created_at DESC LIMIT 30",
+            (cutoff_date,)
+        ).fetchall()
+        data["changes"] = [dict(r) for r in rows]
 
-    rows = conn.execute(
-        "SELECT summary, decisions as diary_decisions, pending, mental_state, domain, user_signals "
-        "FROM session_diary WHERE created_at > ? ORDER BY created_at DESC LIMIT 20",
-        (cutoff_date,)
-    ).fetchall()
-    data["diaries"] = [dict(r) for r in rows]
+        rows = conn.execute(
+            "SELECT summary, decisions as diary_decisions, pending, mental_state, domain, user_signals "
+            "FROM session_diary WHERE created_at > ? ORDER BY created_at DESC LIMIT 20",
+            (cutoff_date,)
+        ).fetchall()
+        data["diaries"] = [dict(r) for r in rows]
 
-    rows = conn.execute(
-        "SELECT * FROM evolution_log ORDER BY id DESC LIMIT 20"
-    ).fetchall()
-    data["evolution_history"] = [dict(r) for r in rows]
+        rows = conn.execute(
+            "SELECT * FROM evolution_log ORDER BY id DESC LIMIT 20"
+        ).fetchall()
+        data["evolution_history"] = [dict(r) for r in rows]
 
-    rows = conn.execute(
-        "SELECT dimension, score, delta, measured_at FROM evolution_metrics "
-        "WHERE id IN (SELECT MAX(id) FROM evolution_metrics GROUP BY dimension)"
-    ).fetchall()
-    data["current_metrics"] = {r["dimension"]: dict(r) for r in rows}
+        rows = conn.execute(
+            "SELECT dimension, score, delta, measured_at FROM evolution_metrics "
+            "WHERE id IN (SELECT MAX(id) FROM evolution_metrics GROUP BY dimension)"
+        ).fetchall()
+        data["current_metrics"] = {r["dimension"]: dict(r) for r in rows}
 
-    conn.close()
-    return data
+        return data
+    finally:
+        conn.close()
 
 
 def create_snapshot(files_to_backup: list) -> str:
