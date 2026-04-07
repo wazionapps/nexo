@@ -197,14 +197,14 @@ def main():
         log("Catch-Up already running; skipping overlapping invocation.")
         return
 
-    _heal_personal_schedules()
-    state = load_state()
-    tasks = catchup_candidates()
-
     ran = 0
     skipped = 0
     skipped_out_of_window = 0
     try:
+        _heal_personal_schedules()
+        state = load_state()
+        tasks = catchup_candidates()
+
         for candidate in tasks:
             name = candidate["cron_id"]
             if not candidate.get("missed"):
@@ -221,19 +221,19 @@ def main():
             log(f"  {name} — missed scheduled run due at {due_at}, catching up...")
             if run_task(candidate, state):
                 ran += 1
+
+        if ran == 0 and skipped_out_of_window == 0:
+            log("All tasks up to date, nothing to catch up.")
+        elif ran >= 3:
+            # Many tasks caught up — ask CLI to assess system state
+            _cli_post_catchup_assessment(ran, skipped, state)
+        else:
+            suffix = f", {skipped_out_of_window} outside recovery window" if skipped_out_of_window else ""
+            log(f"Caught up {ran} tasks, {skipped} already current{suffix}.")
+
+        log("=== Catch-Up complete ===")
     finally:
         lock_handle.close()
-
-    if ran == 0 and skipped_out_of_window == 0:
-        log("All tasks up to date, nothing to catch up.")
-    elif ran >= 3:
-        # Many tasks caught up — ask CLI to assess system state
-        _cli_post_catchup_assessment(ran, skipped, state)
-    else:
-        suffix = f", {skipped_out_of_window} outside recovery window" if skipped_out_of_window else ""
-        log(f"Caught up {ran} tasks, {skipped} already current{suffix}.")
-
-    log("=== Catch-Up complete ===")
 
 
 def _cli_post_catchup_assessment(ran: int, skipped: int, state: dict):
