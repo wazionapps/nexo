@@ -1219,6 +1219,29 @@ class TestRuntimeChecks:
 
         assert check.status == "healthy"
 
+    def test_client_assumption_regressions_allows_runtime_detector_copy(self, nexo_home, monkeypatch, tmp_path):
+        from doctor.providers import runtime
+
+        runtime_home = tmp_path / "runtime"
+        src_root = runtime_home / "src"
+        detector_dir = src_root / "doctor" / "providers"
+        scripts_dir = src_root / "scripts" / "deep-sleep"
+        detector_dir.mkdir(parents=True, exist_ok=True)
+        scripts_dir.mkdir(parents=True, exist_ok=True)
+        (scripts_dir / "collect.py").write_text(
+            "CLAUDE='~/.claude/projects'\nCODEX='~/.codex/sessions'\nfind_codex_session_files=True\n"
+        )
+        (detector_dir / "runtime.py").write_text(
+            "if '.claude/projects' in text and '.codex' in text:\n    pass\n"
+        )
+
+        monkeypatch.setattr(runtime, "NEXO_HOME", runtime_home)
+        monkeypatch.setattr(runtime, "NEXO_CODE", runtime_home)
+
+        check = runtime.check_client_assumption_regressions()
+
+        assert check.status == "healthy"
+
     def test_launchagent_integrity_fix_bootstraps_real_plist(self, nexo_home, monkeypatch):
         from doctor.providers import runtime
 

@@ -627,11 +627,12 @@ def _client_assumption_regressions() -> list[str]:
     src_root = NEXO_CODE if (NEXO_CODE / "server.py").is_file() else (NEXO_CODE / "src")
     if not src_root.is_dir():
         return []
+    src_root = src_root.resolve()
     backup_root = (NEXO_HOME / "backups").resolve()
     contrib_root = (NEXO_HOME / "contrib").resolve()
-    allowed_claude_projects = {
-        (src_root / "scripts" / "deep-sleep" / "collect.py").resolve(),
-        Path(__file__).resolve(),
+    allowed_relative_paths = {
+        Path("scripts") / "deep-sleep" / "collect.py",
+        Path("doctor") / "providers" / "runtime.py",
     }
     offenders: list[str] = []
     for path in src_root.rglob("*.py"):
@@ -650,8 +651,12 @@ def _client_assumption_regressions() -> list[str]:
                 continue
         except Exception:
             pass
-        if ".claude/projects" in text and resolved not in allowed_claude_projects:
-            offenders.append(f"{path.relative_to(NEXO_CODE)} hardcodes ~/.claude/projects")
+        try:
+            relative_path = resolved.relative_to(src_root)
+        except Exception:
+            relative_path = path.relative_to(src_root)
+        if ".claude/projects" in text and relative_path not in allowed_relative_paths:
+            offenders.append(f"{relative_path} hardcodes ~/.claude/projects")
     collect_path = src_root / "scripts" / "deep-sleep" / "collect.py"
     try:
         collect_text = collect_path.read_text()

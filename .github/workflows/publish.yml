@@ -12,9 +12,9 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
@@ -31,13 +31,13 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: '22'
           registry-url: 'https://registry.npmjs.org'
@@ -85,25 +85,36 @@ jobs:
       # 3. Publish ClawHub skill
       - name: Publish ClawHub skill
         run: |
+          set -euo pipefail
           test -n "$CLAWHUB_TOKEN"
           npx clawhub@latest login --token "$CLAWHUB_TOKEN" --no-browser
+          publish_log="$(mktemp)"
+          publish_status=0
           npx clawhub@latest publish ./clawhub-skill \
             --slug nexo-brain \
             --name "NEXO Brain" \
             --version ${GITHUB_REF_NAME#v} \
             --tags latest \
             --changelog "Release ${GITHUB_REF_NAME}" \
-            --no-input
+            --no-input 2>&1 | tee "$publish_log" || publish_status=$?
+          if [ "$publish_status" -ne 0 ]; then
+            if grep -Fq "Version already exists" "$publish_log"; then
+              echo "ClawHub version ${GITHUB_REF_NAME#v} already exists; continuing to verification."
+            else
+              exit "$publish_status"
+            fi
+          fi
         env:
           CLAWHUB_TOKEN: ${{ secrets.CLAWHUB_TOKEN }}
 
       - name: Verify published ClawHub skill
         run: |
+          set -euo pipefail
           expected="${GITHUB_REF_NAME#v}"
-          for attempt in 1 2 3 4 5 6 7 8; do
+          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
             tmpdir="$(mktemp -d)"
-            npx clawhub@latest install nexo-brain --dir "$tmpdir" --force
-            if python3 - "$tmpdir" "$expected" <<'PY'
+            install_log="$(mktemp)"
+            if npx clawhub@latest install nexo-brain --dir "$tmpdir" --force >"$install_log" 2>&1 && python3 - "$tmpdir" "$expected" <<'PY'
           import json, pathlib, sys
           root = pathlib.Path(sys.argv[1]) / "nexo-brain"
           expected_version = sys.argv[2]
@@ -117,8 +128,9 @@ jobs:
               echo "ClawHub publish verified on attempt $attempt"
               exit 0
             fi
-            echo "ClawHub listing not updated yet (attempt $attempt/8). Waiting 20s..."
-            sleep 20
+            cat "$install_log"
+            echo "ClawHub listing not updated yet or still hidden (attempt $attempt/12). Waiting 30s..."
+            sleep 30
           done
           echo "::error::ClawHub verification timed out waiting for version ${expected}."
           exit 1
