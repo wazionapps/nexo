@@ -1462,6 +1462,44 @@ class TestOrchestrator:
         assert "runtime" in tiers
         assert "deep" in tiers
 
+    def test_invalid_tier_returns_critical(self, nexo_home):
+        from doctor.orchestrator import run_doctor
+        report = run_doctor(tier="nonexistent")
+        assert report.overall_status == "critical"
+        assert len(report.checks) == 1
+        assert report.checks[0].id == "orchestrator.invalid_tier"
+        assert "nonexistent" in report.checks[0].summary
+
+    def test_tier_crash_is_caught_and_reported(self, nexo_home, monkeypatch):
+        from doctor import orchestrator
+
+        def exploding_runner(fix=False):
+            raise RuntimeError("provider exploded")
+
+        monkeypatch.setitem(orchestrator._TIER_RUNNERS, "boot", exploding_runner)
+
+        report = orchestrator.run_doctor(tier="boot")
+        assert report.overall_status == "critical"
+        crash_checks = [c for c in report.checks if c.id == "orchestrator.boot_crashed"]
+        assert len(crash_checks) == 1
+        assert "RuntimeError" in crash_checks[0].summary
+        assert "provider exploded" in crash_checks[0].summary
+
+    def test_partial_tier_crash_preserves_other_tiers(self, nexo_home, monkeypatch):
+        from doctor import orchestrator
+
+        def exploding_runtime(fix=False):
+            raise ValueError("runtime blew up")
+
+        monkeypatch.setitem(orchestrator._TIER_RUNNERS, "runtime", exploding_runtime)
+
+        report = orchestrator.run_doctor(tier="all")
+        tiers = {c.tier for c in report.checks}
+        assert "boot" in tiers
+        assert "deep" in tiers
+        crash_checks = [c for c in report.checks if c.id == "orchestrator.runtime_crashed"]
+        assert len(crash_checks) == 1
+
 
 class TestFormatters:
     def test_json_format(self, nexo_home):
