@@ -80,7 +80,7 @@ def test_refresh_public_contribution_state_pauses_when_draft_pr_is_open(tmp_path
     assert refreshed["active_pr_number"] == 123
 
 
-def test_refresh_public_contribution_state_enters_cooldown_after_merge(tmp_path, monkeypatch):
+def test_refresh_public_contribution_state_resumes_after_merge(tmp_path, monkeypatch):
     import public_contribution
 
     nexo_home = tmp_path / "nexo"
@@ -104,10 +104,37 @@ def test_refresh_public_contribution_state_enters_cooldown_after_merge(tmp_path,
     monkeypatch.setattr(public_contribution, "_gh", lambda *args, **kwargs: Result())
 
     refreshed = public_contribution.refresh_public_contribution_state()
-    assert refreshed["status"] == "cooldown"
+    assert refreshed["status"] == "active"
     assert refreshed["active_pr_url"] == ""
     assert refreshed["active_pr_number"] is None
-    assert refreshed["cooldown_until"]
+    assert refreshed["cooldown_until"] == ""
+    assert refreshed["last_result"].startswith("resolved_pr:merged:")
+
+
+def test_refresh_public_contribution_state_clears_legacy_cooldown(tmp_path, monkeypatch):
+    import public_contribution
+
+    nexo_home = tmp_path / "nexo"
+    _patch_schedule_paths(monkeypatch, nexo_home)
+    config = public_contribution.normalize_public_contribution_config({
+        "enabled": True,
+        "mode": "draft_prs",
+        "status": "cooldown",
+        "github_user": "alice",
+        "fork_repo": "alice/nexo",
+        "cooldown_until": "2099-04-04T10:00:00+00:00",
+    })
+    public_contribution.save_public_contribution_config(config)
+    monkeypatch.setattr(
+        public_contribution,
+        "github_auth_status",
+        lambda: {"ok": True, "message": "", "login": "alice", "code": "ok"},
+    )
+
+    refreshed = public_contribution.refresh_public_contribution_state()
+
+    assert refreshed["status"] == "active"
+    assert refreshed["cooldown_until"] == ""
 
 
 def test_can_run_public_contribution_reports_pending_auth(tmp_path, monkeypatch):

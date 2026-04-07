@@ -14,7 +14,7 @@ import re
 import shutil
 import socket
 import subprocess
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 
 from runtime_power import load_schedule_config, save_schedule_config
@@ -33,8 +33,6 @@ STATUS_PENDING_AUTH = "pending_auth"
 STATUS_PAUSED_OPEN_PR = "paused_open_pr"
 STATUS_COOLDOWN = "cooldown"
 STATUS_OFF = "off"
-COOLDOWN_HOURS_MERGED = 168
-COOLDOWN_HOURS_CLOSED = 72
 VALID_MODES = {MODE_UNSET, MODE_OFF, MODE_DRAFT_PRS, MODE_PENDING_AUTH}
 VALID_STATUSES = {
     STATUS_UNSET,
@@ -224,10 +222,6 @@ def _parse_iso(ts: str | None) -> datetime | None:
         return None
 
 
-def _future_iso(hours: int) -> str:
-    return (_utcnow() + timedelta(hours=hours)).isoformat()
-
-
 def format_public_contribution_label(config: dict | None = None) -> str:
     cfg = normalize_public_contribution_config(config)
     if cfg["mode"] == MODE_DRAFT_PRS:
@@ -369,12 +363,13 @@ def refresh_public_contribution_state(config: dict | None = None) -> dict:
                 config["status"] = STATUS_PAUSED_OPEN_PR
                 save_public_contribution_config(config)
                 return config
+            resolution = "merged" if payload.get("mergedAt") else "closed"
             config["active_pr_url"] = ""
             config["active_pr_number"] = None
             config["active_branch"] = ""
-            cooldown_hours = COOLDOWN_HOURS_MERGED if payload.get("mergedAt") else COOLDOWN_HOURS_CLOSED
-            config["cooldown_until"] = _future_iso(cooldown_hours)
-            config["status"] = STATUS_COOLDOWN
+            config["cooldown_until"] = ""
+            config["status"] = STATUS_ACTIVE
+            config["last_result"] = f"resolved_pr:{resolution}:{payload.get('url') or ''}".rstrip(":")
             save_public_contribution_config(config)
             return config
         return _set_pending_auth(
@@ -384,7 +379,11 @@ def refresh_public_contribution_state(config: dict | None = None) -> dict:
 
     cooldown_until = _parse_iso(config.get("cooldown_until"))
     if cooldown_until and cooldown_until > _utcnow():
-        config["status"] = STATUS_COOLDOWN
+        # Legacy installs used a post-merge/close cooldown that blocked the next
+        # public contribution cycle even after maintainers resolved the Draft PR.
+        # Public contribution should pause only while the PR is still open.
+        config["cooldown_until"] = ""
+        config["status"] = STATUS_ACTIVE
         save_public_contribution_config(config)
         return config
 
@@ -430,9 +429,6 @@ def can_run_public_contribution(config: dict | None = None) -> tuple[bool, str, 
         return False, "public contribution is disabled", config
     if config["status"] == STATUS_PAUSED_OPEN_PR:
         return False, "an active Draft PR is already open for this machine", config
-    cooldown_until = _parse_iso(config.get("cooldown_until"))
-    if cooldown_until and cooldown_until > _utcnow():
-        return False, f"cooldown until {cooldown_until.isoformat()}", config
     return True, "", config
 
 

@@ -25,7 +25,8 @@ Rules:
 - never auto-merge
 - never publish personal scripts, local runtime data, prompts, logs, or secrets
 - only touch the allowed public-core paths
-- stay paused while its own Draft PR is still open
+- stay paused only while its own Draft PR is still open
+- resume once maintainers merge or close that Draft PR
 
 If the machine already has its own public Draft PR open, Evolution now reuses the cycle for **peer review** of other opt-in PRs instead of idling.
 
