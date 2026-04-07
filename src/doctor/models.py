@@ -1,7 +1,9 @@
 """Doctor data models — check results and report structure."""
 from __future__ import annotations
 
+import traceback
 from dataclasses import dataclass, field
+from typing import Callable
 
 
 @dataclass
@@ -42,3 +44,26 @@ class DoctorReport:
             "critical": statuses.count("critical"),
             "total": len(statuses),
         }
+
+
+def safe_check(fn: Callable[..., DoctorCheck], *args, **kwargs) -> DoctorCheck:
+    """Run a single check function, returning a crash DoctorCheck on exception.
+
+    This isolates individual checks so one failure doesn't take down
+    all sibling checks within a tier.
+    """
+    try:
+        return fn(*args, **kwargs)
+    except Exception as exc:
+        tb = traceback.format_exception(type(exc), exc, exc.__traceback__)
+        last_frame = tb[-1].strip() if tb else str(exc)
+        check_name = getattr(fn, "__name__", "unknown")
+        return DoctorCheck(
+            id=f"check.{check_name}_crashed",
+            tier="unknown",
+            status="critical",
+            severity="error",
+            summary=f"Check {check_name} crashed: {type(exc).__name__}: {exc}",
+            evidence=[last_frame],
+            repair_plan=[f"Investigate {check_name} — exception during check execution"],
+        )

@@ -6,7 +6,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from doctor.models import DoctorCheck
+from doctor.models import DoctorCheck, safe_check
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 
@@ -209,12 +209,12 @@ def check_config_parse() -> DoctorCheck:
 def run_boot_checks(fix: bool = False) -> list[DoctorCheck]:
     """Run all boot-tier checks."""
     checks = [
-        check_db_exists(),
-        check_required_dirs(),
-        check_disk_space(),
-        check_wrapper_scripts(),
-        check_python_runtime(),
-        check_config_parse(),
+        safe_check(check_db_exists),
+        safe_check(check_required_dirs),
+        safe_check(check_disk_space),
+        safe_check(check_wrapper_scripts),
+        safe_check(check_python_runtime),
+        safe_check(check_config_parse),
     ]
 
     if fix:

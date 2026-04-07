@@ -25,7 +25,7 @@ from client_preferences import (
     resolve_client_runtime_profile,
 )
 from cron_recovery import should_run_at_load
-from doctor.models import DoctorCheck
+from doctor.models import DoctorCheck, safe_check
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parents[2])))
@@ -2623,22 +2623,22 @@ def check_automation_telemetry(days: int = 7) -> DoctorCheck:
 def run_runtime_checks(fix: bool = False) -> list[DoctorCheck]:
     """Run all runtime-tier checks. Read-only by default."""
     return [
-        check_immune_status(),
-        check_watchdog_status(),
-        check_stale_sessions(),
-        check_cron_freshness(),
-        check_client_backend_preferences(),
-        check_client_bootstrap_parity(fix=fix),
-        check_codex_session_parity(),
-        check_codex_conditioned_file_discipline(),
-        check_claude_desktop_shared_brain(),
-        check_transcript_source_parity(),
-        check_client_assumption_regressions(),
-        check_protocol_compliance(),
-        check_automation_telemetry(),
-        check_state_watchers(),
-        check_release_artifact_sync(),
-        check_launchagent_integrity(fix=fix),
-        check_personal_script_registry(fix=fix),
-        check_skill_health(fix=fix),
+        safe_check(check_immune_status),
+        safe_check(check_watchdog_status),
+        safe_check(check_stale_sessions),
+        safe_check(check_cron_freshness),
+        safe_check(check_client_backend_preferences),
+        safe_check(check_client_bootstrap_parity, fix=fix),
+        safe_check(check_codex_session_parity),
+        safe_check(check_codex_conditioned_file_discipline),
+        safe_check(check_claude_desktop_shared_brain),
+        safe_check(check_transcript_source_parity),
+        safe_check(check_client_assumption_regressions),
+        safe_check(check_protocol_compliance),
+        safe_check(check_automation_telemetry),
+        safe_check(check_state_watchers),
+        safe_check(check_release_artifact_sync),
+        safe_check(check_launchagent_integrity, fix=fix),
+        safe_check(check_personal_script_registry, fix=fix),
+        safe_check(check_skill_health, fix=fix),
     ]

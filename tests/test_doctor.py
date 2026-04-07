@@ -1518,3 +1518,75 @@ class TestFormatters:
         output = format_report(report, fmt="text")
         assert "NEXO Doctor" in output
         assert "BOOT" in output
+
+
+class TestSafeCheck:
+    def test_safe_check_passes_through_normal_result(self):
+        from doctor.models import DoctorCheck, safe_check
+
+        def good_check():
+            return DoctorCheck(
+                id="test.good", tier="boot", status="healthy",
+                severity="info", summary="All fine",
+            )
+
+        result = safe_check(good_check)
+        assert result.id == "test.good"
+        assert result.status == "healthy"
+
+    def test_safe_check_catches_exception(self):
+        from doctor.models import safe_check
+
+        def bad_check():
+            raise RuntimeError("kaboom")
+
+        result = safe_check(bad_check)
+        assert result.status == "critical"
+        assert "bad_check" in result.id
+        assert "kaboom" in result.summary
+        assert result.evidence
+
+    def test_safe_check_forwards_args_and_kwargs(self):
+        from doctor.models import DoctorCheck, safe_check
+
+        def check_with_args(fix=False):
+            return DoctorCheck(
+                id="test.args", tier="boot", status="healthy",
+                severity="info", summary=f"fix={fix}",
+            )
+
+        result = safe_check(check_with_args, fix=True)
+        assert "fix=True" in result.summary
+
+    def test_boot_tier_survives_single_check_crash(self, nexo_home, monkeypatch):
+        from doctor.providers import boot
+
+        original_check_disk = boot.check_disk_space
+
+        def exploding_disk_check():
+            raise OSError("disk check exploded")
+
+        monkeypatch.setattr(boot, "check_disk_space", exploding_disk_check)
+        checks = boot.run_boot_checks()
+
+        ids = [c.id for c in checks]
+        assert "boot.db_exists" in ids
+        assert "boot.required_dirs" in ids
+        crash = [c for c in checks if "crashed" in c.id]
+        assert len(crash) == 1
+        assert "exploding_disk_check" in crash[0].id
+        assert crash[0].status == "critical"
+
+    def test_deep_tier_survives_single_check_crash(self, nexo_home, monkeypatch):
+        from doctor.providers import deep
+
+        def exploding_schema_check():
+            raise ValueError("schema check failed")
+
+        monkeypatch.setattr(deep, "check_schema_version", exploding_schema_check)
+        checks = deep.run_deep_checks()
+
+        crash = [c for c in checks if "crashed" in c.id]
+        assert len(crash) == 1
+        non_crash = [c for c in checks if "crashed" not in c.id]
+        assert len(non_crash) >= 3
