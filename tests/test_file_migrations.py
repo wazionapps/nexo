@@ -1,5 +1,6 @@
-"""Tests for file-based migration runner in auto_update."""
+"""Tests for file-based migration runner and DB backup/restore in auto_update."""
 import os
+import sqlite3
 import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
@@ -100,3 +101,96 @@ def test_run_file_migrations_all_succeed(tmp_path, monkeypatch):
     assert len(results) == 3
     assert all(r["status"] == "ok" for r in results)
     assert version_file.read_text().strip() == "3"
+
+
+# ── DB backup/restore connection safety ─────────────────────────────
+
+
+def test_backup_dbs_closes_connections_on_success(tmp_path, monkeypatch):
+    """_backup_dbs must close all SQLite connections even on success."""
+    import auto_update
+
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    db_file = data_dir / "nexo.db"
+    conn = sqlite3.connect(str(db_file))
+    conn.execute("CREATE TABLE t (x INTEGER)")
+    conn.close()
+
+    monkeypatch.setattr(auto_update, "DATA_DIR", data_dir)
+    monkeypatch.setattr(auto_update, "NEXO_HOME", tmp_path)
+    monkeypatch.setattr(auto_update, "SRC_DIR", tmp_path / "src_nonexistent")
+
+    backup_dir = auto_update._backup_dbs()
+
+    assert backup_dir is not None
+    backup_db = os.path.join(backup_dir, "nexo.db")
+    assert os.path.isfile(backup_db)
+
+    # Verify the backup is a valid DB (connections were closed properly)
+    verify = sqlite3.connect(backup_db)
+    tables = verify.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+    verify.close()
+    assert any(row[0] == "t" for row in tables)
+
+
+def test_backup_dbs_closes_connections_on_corrupt_source(tmp_path, monkeypatch):
+    """_backup_dbs must close connections even when the source DB is corrupt."""
+    import auto_update
+
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    # Write garbage to simulate a corrupt DB file
+    db_file = data_dir / "nexo.db"
+    db_file.write_bytes(b"this is not a valid sqlite database" * 100)
+
+    monkeypatch.setattr(auto_update, "DATA_DIR", data_dir)
+    monkeypatch.setattr(auto_update, "NEXO_HOME", tmp_path)
+    monkeypatch.setattr(auto_update, "SRC_DIR", tmp_path / "src_nonexistent")
+
+    # Should not raise — errors are logged and swallowed
+    backup_dir = auto_update._backup_dbs()
+    assert backup_dir is not None
+
+    # The key assertion: after returning, the source DB should not be locked.
+    # If connections leaked, this would fail on some platforms.
+    verify = sqlite3.connect(str(db_file))
+    verify.close()
+
+
+def test_restore_dbs_handles_missing_gracefully(tmp_path, monkeypatch):
+    """_restore_dbs must not crash and must close connections properly."""
+    import auto_update
+
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    backup_dir = tmp_path / "backup"
+    backup_dir.mkdir()
+
+    # Create valid source and backup DBs
+    db_file = data_dir / "nexo.db"
+    conn = sqlite3.connect(str(db_file))
+    conn.execute("CREATE TABLE t (x INTEGER)")
+    conn.execute("INSERT INTO t VALUES (42)")
+    conn.commit()
+    conn.close()
+
+    backup_file = backup_dir / "nexo.db"
+    src = sqlite3.connect(str(db_file))
+    dst = sqlite3.connect(str(backup_file))
+    src.backup(dst)
+    dst.close()
+    src.close()
+
+    monkeypatch.setattr(auto_update, "DATA_DIR", data_dir)
+    monkeypatch.setattr(auto_update, "NEXO_HOME", tmp_path)
+    monkeypatch.setattr(auto_update, "SRC_DIR", tmp_path / "src_nonexistent")
+
+    # Should not raise
+    auto_update._restore_dbs(str(backup_dir))
+
+    # Verify the restore actually worked and connections are clean
+    verify = sqlite3.connect(str(db_file))
+    row = verify.execute("SELECT x FROM t").fetchone()
+    verify.close()
+    assert row[0] == 42

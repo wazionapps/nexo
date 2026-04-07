@@ -21,10 +21,14 @@ def handle_backup_now() -> str:
     # Use SQLite backup API for consistency
     import sqlite3
     src_conn = sqlite3.connect(DB_PATH)
-    dst_conn = sqlite3.connect(dest)
-    src_conn.backup(dst_conn)
-    dst_conn.close()
-    src_conn.close()
+    try:
+        dst_conn = sqlite3.connect(dest)
+        try:
+            src_conn.backup(dst_conn)
+        finally:
+            dst_conn.close()
+    finally:
+        src_conn.close()
 
     size_kb = os.path.getsize(dest) / 1024
     _cleanup_old()
@@ -63,17 +67,25 @@ def handle_backup_restore(filename: str) -> str:
     safety = os.path.join(BACKUP_DIR, f"nexo-pre-restore-{time.strftime('%Y%m%d%H%M%S')}.db")
     import sqlite3
     src_conn = sqlite3.connect(DB_PATH)
-    dst_conn = sqlite3.connect(safety)
-    src_conn.backup(dst_conn)
-    dst_conn.close()
-    src_conn.close()
+    try:
+        dst_conn = sqlite3.connect(safety)
+        try:
+            src_conn.backup(dst_conn)
+        finally:
+            dst_conn.close()
+    finally:
+        src_conn.close()
 
     # Restore
     restore_conn = sqlite3.connect(src)
-    target_conn = sqlite3.connect(DB_PATH)
-    restore_conn.backup(target_conn)
-    target_conn.close()
-    restore_conn.close()
+    try:
+        target_conn = sqlite3.connect(DB_PATH)
+        try:
+            restore_conn.backup(target_conn)
+        finally:
+            target_conn.close()
+    finally:
+        restore_conn.close()
 
     # Invalidate shared connection so db.py reconnects to restored data
     import db
