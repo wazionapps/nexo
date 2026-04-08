@@ -181,3 +181,45 @@ def test_dashboard_move_preserves_source_as_deleted(isolated_db):
     assert old_row["status"] == "DELETED"
     assert any(event["event_type"] == "deleted" for event in old_row["history"])
     assert any("dashboard move" in (event.get("note") or "") for event in new_row["history"])
+
+
+def test_dashboard_status_filters_distinguish_all_deleted_and_history(isolated_db):
+    client = TestClient(app)
+
+    active = client.post(
+        "/api/reminders",
+        json={"description": "Active reminder", "date": "2026-04-09", "category": "tasks"},
+    ).json()["reminder"]["id"]
+    completed = client.post(
+        "/api/reminders",
+        json={"description": "Completed reminder", "date": "2026-04-10", "category": "tasks"},
+    ).json()["reminder"]["id"]
+    deleted = client.post(
+        "/api/reminders",
+        json={"description": "Deleted reminder", "date": "2026-04-11", "category": "tasks"},
+    ).json()["reminder"]["id"]
+
+    client.put(f"/api/reminders/{completed}", json={"status": "COMPLETED"})
+    client.delete(f"/api/reminders/{deleted}")
+
+    all_payload = client.get("/api/reminders?status=all").json()["reminders"]
+    deleted_payload = client.get("/api/reminders?status=deleted").json()["reminders"]
+    history_payload = client.get("/api/reminders?status=history").json()["reminders"]
+
+    all_ids = {item["id"] for item in all_payload}
+    deleted_ids = {item["id"] for item in deleted_payload}
+    history_ids = {item["id"] for item in history_payload}
+
+    assert active in all_ids
+    assert completed in all_ids
+    assert deleted not in all_ids
+    assert deleted_ids == {deleted}
+    assert {active, completed, deleted}.issubset(history_ids)
+
+
+def test_operations_page_exposes_deleted_and_history_filters():
+    client = TestClient(app)
+    page = client.get("/ops")
+    assert page.status_code == 200
+    assert 'value="deleted"' in page.text
+    assert 'value="history"' in page.text

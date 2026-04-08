@@ -22,6 +22,7 @@ from pathlib import Path
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 
 NEXO_DB = NEXO_HOME / "data" / "nexo.db"
+INACTIVE_STATUSES = {"DELETED", "ARCHIVED", "BLOCKED", "WAITING", "CANCELLED"}
 
 
 def get_db():
@@ -30,21 +31,27 @@ def get_db():
     return conn
 
 
+def _is_open_status(status: object) -> bool:
+    normalized = str(status or "").strip().upper()
+    if normalized.startswith("COMPLETED"):
+        return False
+    return normalized not in INACTIVE_STATUSES
+
+
 def check_overdue_followups() -> list[dict]:
     """Find followups that are overdue and not completed."""
     conn = get_db()
-    now_epoch = datetime.now().timestamp()
     rows = conn.execute("""
-        SELECT id, description, date, created_at, reasoning
+        SELECT id, description, date, created_at, reasoning, status
         FROM followups
-        WHERE status NOT LIKE 'COMPLETED%'
-        AND status NOT IN ('DELETED','archived','blocked','waiting')
-        AND date IS NOT NULL AND date != ''
+        WHERE date IS NOT NULL AND date != ''
         ORDER BY date ASC
     """).fetchall()
     conn.close()
     alerts = []
     for r in rows:
+        if not _is_open_status(r["status"]):
+            continue
         due_str = r["date"]
         try:
             due = datetime.fromisoformat(due_str) if due_str else None
@@ -68,13 +75,14 @@ def check_overdue_reminders() -> list[dict]:
     rows = conn.execute("""
         SELECT id, description, date, status
         FROM reminders
-        WHERE status NOT IN ('COMPLETED', 'CANCELLED')
-        AND date IS NOT NULL AND date != ''
+        WHERE date IS NOT NULL AND date != ''
         ORDER BY date ASC
     """).fetchall()
     conn.close()
     alerts = []
     for r in rows:
+        if not _is_open_status(r["status"]):
+            continue
         due_str = r["date"]
         try:
             due = datetime.fromisoformat(due_str) if due_str else None
@@ -96,16 +104,17 @@ def check_stale_ideas() -> list[dict]:
     """Find reminders/ideas without due dates that have been sitting for too long."""
     conn = get_db()
     rows = conn.execute("""
-        SELECT id, description, created_at
+        SELECT id, description, created_at, status
         FROM reminders
-        WHERE status NOT IN ('COMPLETED', 'CANCELLED')
-        AND (date IS NULL OR date = '')
+        WHERE date IS NULL OR date = ''
         ORDER BY created_at ASC
     """).fetchall()
     conn.close()
     alerts = []
     stale_count = 0
     for r in rows:
+        if not _is_open_status(r["status"]):
+            continue
         try:
             # created_at is epoch float
             created = datetime.fromtimestamp(r["created_at"])
