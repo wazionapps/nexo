@@ -2,15 +2,38 @@ from __future__ import annotations
 """NEXO DB — recent events + hot context for 24h operational continuity."""
 
 import json
+import importlib
 import re
+import sqlite3
+import sys
 import unicodedata
 from typing import Any
 
-from db._core import get_db, now_epoch
+
+def _core():
+    module = sys.modules.get("db._core")
+    if module is None:
+        module = importlib.import_module("db._core")
+    return module
 
 DEFAULT_CONTEXT_TTL_HOURS = 24
 MAX_CONTEXT_TTL_HOURS = 7 * 24
 ACTIVE_CONTEXT_STATES = {"active", "waiting_user", "waiting_third_party", "blocked"}
+
+
+def _table_exists(conn, table_name: str) -> bool:
+    try:
+        row = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name = ? LIMIT 1",
+            (table_name,),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return False
+    return row is not None
+
+
+def _hot_context_tables_available(conn) -> bool:
+    return _table_exists(conn, "hot_context") and _table_exists(conn, "recent_events")
 
 
 def _serialize_metadata(metadata: dict[str, Any] | None) -> str:
@@ -84,8 +107,10 @@ def derive_context_key(
 
 
 def cleanup_expired_hot_context(now: float | None = None) -> dict[str, int]:
-    conn = get_db()
-    ts = now if now is not None else now_epoch()
+    conn = _core().get_db()
+    if not _hot_context_tables_available(conn):
+        return {"deleted_events": 0, "deleted_contexts": 0}
+    ts = now if now is not None else _core().now_epoch()
     deleted_events = conn.execute(
         "DELETE FROM recent_events WHERE expires_at < ?",
         (ts,),
@@ -123,8 +148,10 @@ def remember_hot_context(
     if not clean_title:
         return {"error": "title is required"}
 
-    conn = get_db()
-    now = now_epoch()
+    conn = _core().get_db()
+    if not _table_exists(conn, "hot_context"):
+        return {"skipped": True, "reason": "hot_context table unavailable"}
+    now = _core().now_epoch()
     event_ts = float(last_event_at if last_event_at is not None else now)
     ttl = clamp_ttl_hours(ttl_hours)
     expires_at = max(event_ts, now) + ttl * 3600
@@ -226,8 +253,10 @@ def record_recent_event(
     if not clean_event:
         return {"error": "event_type is required"}
 
-    conn = get_db()
-    now = now_epoch()
+    conn = _core().get_db()
+    if not _table_exists(conn, "recent_events"):
+        return {"skipped": True, "reason": "recent_events table unavailable"}
+    now = _core().now_epoch()
     event_ts = float(created_at if created_at is not None else now)
     ttl = clamp_ttl_hours(ttl_hours)
     expires_at = max(event_ts, now) + ttl * 3600
@@ -282,6 +311,19 @@ def capture_context_event(
     created_at: float | None = None,
 ) -> dict:
     cleanup_expired_hot_context()
+    conn = _core().get_db()
+    if not _hot_context_tables_available(conn):
+        return {
+            "context_key": derive_context_key(
+                context_key=context_key,
+                topic=topic,
+                title=context_title or title or summary,
+                source_type=source_type,
+                source_id=source_id,
+            ),
+            "context": {"skipped": True, "reason": "hot_context tables unavailable"},
+            "event": {"skipped": True, "reason": "hot_context tables unavailable"},
+        }
     clean_key = derive_context_key(
         context_key=context_key,
         topic=topic,
@@ -324,7 +366,9 @@ def capture_context_event(
 
 def get_hot_context(context_key: str, include_events: bool = False, limit: int = 10) -> dict | None:
     cleanup_expired_hot_context()
-    conn = get_db()
+    conn = _core().get_db()
+    if not _table_exists(conn, "hot_context"):
+        return None
     row = conn.execute(
         "SELECT * FROM hot_context WHERE context_key = ?",
         ((context_key or "").strip(),),
@@ -363,8 +407,10 @@ def _score_text_match(query_tokens: set[str], haystack: str) -> float:
 
 def search_hot_context(query: str = "", *, hours: int = DEFAULT_CONTEXT_TTL_HOURS, limit: int = 10, state: str = "") -> list[dict]:
     cleanup_expired_hot_context()
-    conn = get_db()
-    ts = now_epoch() - clamp_ttl_hours(hours) * 3600
+    conn = _core().get_db()
+    if not _table_exists(conn, "hot_context"):
+        return []
+    ts = _core().now_epoch() - clamp_ttl_hours(hours) * 3600
     if state.strip():
         rows = conn.execute(
             "SELECT * FROM hot_context WHERE last_event_at >= ? AND state = ? ORDER BY last_event_at DESC LIMIT 200",
@@ -391,7 +437,8 @@ def search_hot_context(query: str = "", *, hours: int = DEFAULT_CONTEXT_TTL_HOUR
         score = _score_text_match(query_tokens, combined) if query_tokens else 0.5
         if query_tokens and score <= 0:
             continue
-        recency_boost = max(0.0, 1.0 - ((now_epoch() - float(item.get("last_event_at") or now_epoch())) / (clamp_ttl_hours(hours) * 3600)))
+        current_ts = _core().now_epoch()
+        recency_boost = max(0.0, 1.0 - ((current_ts - float(item.get("last_event_at") or current_ts)) / (clamp_ttl_hours(hours) * 3600)))
         item["_score"] = round(score + recency_boost * 0.35, 4)
         scored.append(item)
     scored.sort(key=lambda item: (item["_score"], item.get("last_event_at", 0)), reverse=True)
@@ -408,8 +455,10 @@ def search_recent_events(
     exclude_source: tuple[str, str] | None = None,
 ) -> list[dict]:
     cleanup_expired_hot_context()
-    conn = get_db()
-    ts = now_epoch() - clamp_ttl_hours(hours) * 3600
+    conn = _core().get_db()
+    if not _table_exists(conn, "recent_events"):
+        return []
+    ts = _core().now_epoch() - clamp_ttl_hours(hours) * 3600
     rows = conn.execute(
         "SELECT * FROM recent_events WHERE created_at >= ? ORDER BY created_at DESC LIMIT 400",
         (ts,),
@@ -444,7 +493,8 @@ def search_recent_events(
         score = _score_text_match(query_tokens, combined) if query_tokens else 0.35
         if query_tokens and score <= 0 and item.get("context_key") not in context_filter:
             continue
-        recency_boost = max(0.0, 1.0 - ((now_epoch() - float(item.get("created_at") or now_epoch())) / (clamp_ttl_hours(hours) * 3600)))
+        current_ts = _core().now_epoch()
+        recency_boost = max(0.0, 1.0 - ((current_ts - float(item.get("created_at") or current_ts)) / (clamp_ttl_hours(hours) * 3600)))
         item["_score"] = round(score + recency_boost * 0.45 + session_bonus, 4)
         scored.append(item)
     scored.sort(key=lambda item: (item["_score"], item.get("created_at", 0)), reverse=True)
@@ -452,7 +502,9 @@ def search_recent_events(
 
 
 def _find_related_items(table: str, query: str, *, hours: int = DEFAULT_CONTEXT_TTL_HOURS, limit: int = 5) -> list[dict]:
-    conn = get_db()
+    conn = _core().get_db()
+    if not _table_exists(conn, table):
+        return []
     query_tokens = _tokenize(query)
     if not query_tokens:
         return []

@@ -3,7 +3,54 @@
 This package replaces the monolithic db.py. All public functions are
 re-exported here for full backwards compatibility:
     from db import get_db, create_learning, ...
+
+Important:
+`importlib.reload(db)` must also refresh the concrete submodules. The test
+suite and several runtime repair flows rely on switching database paths or
+runtime roots mid-process. If the package only re-exported functions from
+already-imported submodules, those callables would keep pointing at stale
+module state (especially old `db._core` connection globals).
 """
+
+from __future__ import annotations
+
+import importlib
+import sys
+
+
+def _load_submodule(name: str):
+    """Import or reload a db submodule and expose it on the package."""
+    module = sys.modules.get(name)
+    if module is None:
+        return importlib.import_module(name)
+    return importlib.reload(module)
+
+
+def _module(name: str):
+    module = sys.modules.get(name)
+    if module is None:
+        module = importlib.import_module(name)
+    return module
+
+
+_core = _load_submodule("db._core")
+_fts = _load_submodule("db._fts")
+_schema = _load_submodule("db._schema")
+_sessions = _load_submodule("db._sessions")
+_reminders = _load_submodule("db._reminders")
+_learnings = _load_submodule("db._learnings")
+_credentials = _load_submodule("db._credentials")
+_tasks = _load_submodule("db._tasks")
+_entities = _load_submodule("db._entities")
+_episodic = _load_submodule("db._episodic")
+_evolution = _load_submodule("db._evolution")
+_cron_runs = _load_submodule("db._cron_runs")
+_protocol = _load_submodule("db._protocol")
+_workflow = _load_submodule("db._workflow")
+_watchers = _load_submodule("db._watchers")
+_personal_scripts = _load_submodule("db._personal_scripts")
+_skills = _load_submodule("db._skills")
+_hot_context = _load_submodule("db._hot_context")
 
 # Core: connection, constants, init, utils
 from db._core import (
@@ -150,3 +197,27 @@ from db._hot_context import (
     build_pre_action_context, format_pre_action_context_bundle,
     resolve_hot_context,
 )
+
+
+def get_db():
+    return _module("db._core").get_db()
+
+
+def close_db():
+    return _module("db._core").close_db()
+
+
+def init_db():
+    return _module("db._core").init_db()
+
+
+def now_epoch():
+    return _module("db._core").now_epoch()
+
+
+def run_migrations():
+    return _module("db._schema").run_migrations()
+
+
+def get_schema_version():
+    return _module("db._schema").get_schema_version()

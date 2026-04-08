@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.1.8] - 2026-04-08
+
+### Hot Context Release Stabilization
+- Promoted the hot-context memory release as `v3.1.8` after the first `v3.1.7` tag exposed CI-only regressions before public publication. The shipped release now matches the green test suite and release artifacts instead of leaving an orphan tag as the public truth.
+- Hardened the modular `db` package reload path so runtime/test DB switches no longer leak stale submodule state. `reload(db)` now refreshes the concrete submodules, and package-level core access resolves against the current live module state instead of captured references.
+- Made hot-context capture additive against partial/minimal schemas. If `hot_context` / `recent_events` tables are unavailable, reminder/followup creation and self-audit flows now degrade safely instead of crashing.
+- Updated learning and hot-context DB helpers to resolve `db._core` dynamically, eliminating connection drift that only appeared under the full suite and release CI order.
+
 ## [3.1.7] - 2026-04-08
 
 ### Hot Context Memory + Dashboard History Discipline
