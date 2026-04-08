@@ -51,7 +51,7 @@
         "operatingSystem": "macOS, Linux, Windows",
         "url": "https://nexo-brain.com",
         "downloadUrl": "https://www.npmjs.com/package/nexo-brain",
-        "softwareVersion": "3.1.8",
+        "softwareVersion": "3.1.9",
         "license": "https://www.gnu.org/licenses/agpl-3.0",
         "author": {
             "@type": "Organization",
@@ -697,7 +697,7 @@
     <div class="container">
         <div class="hero-badge fade-up">
             <span class="dot"></span>
-            <span id="version-badge">v3.1.8</span> &mdash; Hot Context stabilization: the 24h recent-memory release now ships with green CI, safe schema fallback, and reload-safe DB state
+            <span id="version-badge">v3.1.9</span> &mdash; Update bootstrap fix: hot context now reaches installed runtimes because `nexo update` copies new root modules dynamically
         </div>
         <div class="fade-up" style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;">
             <img src="https://img.shields.io/npm/v/nexo-brain?color=7C3AED&label=npm" alt="npm version">
@@ -1143,9 +1143,9 @@
 
         <div class="release-evolution-grid">
             <div class="release-evolution-card">
-                <div class="release-evolution-version">v3.1.8</div>
-                <h3>Hot context ships as the stable public release</h3>
-                <p>The recent-memory layer now ships with full-suite validation, reload-safe DB helpers, and safe fallback behavior on partial schemas, so the public release matches the actual green runtime instead of an aborted pre-release tag.</p>
+                <div class="release-evolution-version">v3.1.9</div>
+                <h3>Hot context now reaches installed runtimes reliably</h3>
+                <p>`nexo update` now discovers top-level runtime modules dynamically, so releases that add new root tools like `tools_hot_context.py` can actually land in live runtimes instead of stopping at import verification.</p>
             </div>
             <div class="release-evolution-card">
                 <div class="release-evolution-version">v2.7.0</div>

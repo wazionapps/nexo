@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v3.1.8.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v3.1.9.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v3.1.8.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v3.1.9.">
     <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
     <meta property="og:image:width" content="1536">
     <meta property="og:image:height" content="1024">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v3.1.8.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v3.1.9.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v3.1.8.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v3.1.9.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,12 +87,12 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v3.1.8 live</span>
+                    <span class="page-chip">v3.1.9 live</span>
                     <span class="page-chip">Runtime + website + release artifacts</span>
                     <span class="page-chip">From early memory stack to cognitive runtime</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v318" class="btn btn-primary">Start with v3.1.8</a>
+                    <a href="#v319" class="btn btn-primary">Start with v3.1.9</a>
                     <a href="#v310" class="btn btn-secondary">See v3.1.0</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -100,8 +100,8 @@
             <div class="page-visual">
                 <div class="page-stack">
                     <div class="page-stack-card">
-                        <strong>v3.1.8</strong>
-                        <span>Hot Context stabilization: the shared 24-hour recent-memory layer now ships with full-suite validation, reload-safe DB access, and safe partial-schema fallback.</span>
+                        <strong>v3.1.9</strong>
+                        <span>Update bootstrap fix: installed runtimes now receive new root modules automatically, so hot-context releases actually land end-to-end.</span>
                     </div>
                     <div class="page-stack-card">
                         <strong>v3.0.0</strong>
@@ -127,6 +127,24 @@
             <div>
                 <div id="changelog-page-meta" class="changelog-page-meta">Loading release pages…</div>
                 <div id="changelog-pager" class="changelog-pager" aria-label="Changelog pagination"></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v3.1.9 Update bootstrap fix -->
+<section id="v319" class="section-compact" style="background:linear-gradient(135deg,#111827 0%,#1d4ed8 100%);">
+    <div class="container">
+        <div class="section-label">New in v3.1.9 <span style="opacity:.5;font-weight:400;">&mdash; April 8, 2026</span></div>
+        <h2 class="section-title">Installed Runtimes Can Finally Receive New Root Modules</h2>
+        <p class="section-subtitle">
+            v3.1.9 closes the last gap in the hot-context rollout: `nexo update` now discovers root runtime modules dynamically, so adding a new top-level tool no longer breaks upgrade verification on already installed runtimes.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Dynamic Root Module Sync</h4><p>The updater no longer relies on a frozen allowlist for root `.py` modules. New runtime modules now ship automatically with normal updates.</p></div>
+                <div class="cognitive-card"><h4>Hot Context Reaches Live Installs</h4><p>This specifically fixes the bootstrap hole where `server.py` expected `tools_hot_context.py` but older installed updaters did not know how to copy it into the runtime.</p></div>
+                <div class="cognitive-card"><h4>Protected By Update Tests</h4><p>Runtime-update coverage now asserts that `tools_hot_context.py` is copied into installed runtimes, so future releases cannot silently regress the same delivery path.</p></div>
             </div>
         </div>
     </div>
