@@ -161,6 +161,26 @@ def _deep_sleep_dir() -> Path:
     return nexo_home / "operations" / "deep-sleep"
 
 
+def _normalize_item_status(status: object) -> str:
+    return str(status or "").strip().upper()
+
+
+def _dashboard_status_matches(status: object, requested: str | None) -> bool:
+    normalized = _normalize_item_status(status)
+    requested_key = str(requested or "").strip().lower()
+    if not requested_key:
+        return normalized != "DELETED"
+    if requested_key in {"any", "history"}:
+        return True
+    if requested_key == "all":
+        return normalized != "DELETED"
+    if requested_key == "completed":
+        return normalized.startswith("COMPLETED")
+    if requested_key == "deleted":
+        return normalized == "DELETED"
+    return normalized == requested_key.upper()
+
+
 def _latest_periodic_summary(kind: str) -> dict:
     root = _deep_sleep_dir()
     pattern = f"*-{kind}-summary.json"
@@ -745,18 +765,8 @@ async def api_reminders_list(
 ):
     """List reminders."""
     db = _db()
-    reminders = db.get_reminders("any")
-    if status:
-        if status in {"any", "all", "history"}:
-            pass
-        elif status == "completed":
-            reminders = [r for r in reminders if str(r.get("status") or "").startswith("COMPLETED")]
-        elif status == "deleted":
-            reminders = [r for r in reminders if r.get("status") == "DELETED"]
-        else:
-            reminders = [r for r in reminders if r.get("status") == status]
-    else:
-        reminders = [r for r in reminders if r.get("status") != "DELETED"]
+    reminders = db.get_reminders("history")
+    reminders = [r for r in reminders if _dashboard_status_matches(r.get("status"), status)]
     if category:
         reminders = [r for r in reminders if r.get("category") == category]
     reminders = sorted(reminders, key=lambda item: item.get("updated_at") or item.get("created_at") or 0, reverse=True)
@@ -851,18 +861,8 @@ async def api_followups_list(
 ):
     """List followups."""
     db = _db()
-    followups = db.get_followups("any")
-    if status:
-        if status in {"any", "all", "history"}:
-            pass
-        elif status == "completed":
-            followups = [r for r in followups if str(r.get("status") or "").startswith("COMPLETED")]
-        elif status == "deleted":
-            followups = [r for r in followups if r.get("status") == "DELETED"]
-        else:
-            followups = [r for r in followups if r.get("status") == status]
-    else:
-        followups = [r for r in followups if r.get("status") != "DELETED"]
+    followups = db.get_followups("history")
+    followups = [r for r in followups if _dashboard_status_matches(r.get("status"), status)]
     followups = sorted(followups, key=lambda item: item.get("updated_at") or item.get("created_at") or 0, reverse=True)
     return {"count": len(followups), "followups": followups}
 

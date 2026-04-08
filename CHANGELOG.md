@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.1.5] - 2026-04-08
+
+### Dashboard + Proactive History Hygiene
+- The dashboard operations view now treats completed, deleted, and full-history reminder/followup states explicitly instead of collapsing everything into a vague “all” bucket. Agents and operators can inspect soft-deleted past work without losing the default open-work view.
+- Reminder and followup API list filters now normalize status families consistently, so `completed`, `deleted`, `history`, and `all` mean the same thing across dashboard screens and backend endpoints.
+- The proactive dashboard no longer surfaces deleted, waiting, cancelled, archived, blocked, or completed reminders/followups as live overdue work, which removes another source of “zombie state” from the public operational surface.
+- Added regression coverage for the new dashboard filters and for proactive scans ignoring inactive reminder/followup states.
+
 ## [3.1.4] - 2026-04-08
 
 ### History Integrity Hotfix

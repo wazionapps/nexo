@@ -27,7 +27,9 @@
 >
   <option value="PENDING">Pending</option>
   <option value="all">All</option>
-  <option value="COMPLETED">Completed</option>
+  <option value="completed">Completed</option>
+  <option value="deleted">Deleted</option>
+  <option value="history">History</option>
 </select>
 {% endblock %}
 
@@ -328,7 +330,7 @@ function renderGroupedItems(items, type, containerId) {
 // -----------------------------------------------------------------------
 async function loadOpsData() {
   const status = document.getElementById('ops-status').value;
-  const statusParam = status !== 'all' ? '?status=' + status : '';
+  const statusParam = status ? '?status=' + encodeURIComponent(status) : '';
 
   const [remData, fupData] = await Promise.all([
     fetchJSON('/api/reminders' + statusParam),
@@ -429,7 +431,7 @@ function deleteItem(id, type) {
       const res = await fetch(url, { method: 'DELETE' });
       const data = await res.json();
       if (data.success) {
-        opsToast('Deleted ' + id);
+        opsToast('Marked ' + id + ' as deleted');
         loadOpsData();
       } else {
         opsToast(data.error || data.detail || 'Delete failed (HTTP ' + res.status + ')', 'error');
@@ -438,7 +440,7 @@ function deleteItem(id, type) {
       opsToast('Delete error: ' + err.message, 'error');
     }
   };
-  document.getElementById('confirm-message').textContent = 'Delete ' + id + '? This cannot be undone.';
+  document.getElementById('confirm-message').textContent = 'Delete ' + id + '? This marks it as DELETED and keeps its history.';
   document.getElementById('confirm-modal').classList.remove('hidden');
 }
 

@@ -211,6 +211,11 @@
 <script>
 function getToday() { return new Date().toISOString().split('T')[0]; }
 
+function isInactiveItemStatus(status) {
+  const normalized = String(status || '').trim().toUpperCase();
+  return normalized.startsWith('COMPLETED') || ['ARCHIVED', 'DELETED', 'BLOCKED', 'WAITING', 'CANCELLED'].includes(normalized);
+}
+
 // -----------------------------------------------------------------------
 // Modal
 // -----------------------------------------------------------------------
@@ -324,11 +329,10 @@ async function loadDashboardData() {
 
   // --- Overdue Items ---
   if (remindersData || followupsData) {
-    const excludeStatus = ['completed', 'COMPLETED', 'archived', 'deleted', 'DELETED', 'blocked', 'waiting'];
     const reminders = (remindersData?.reminders || []).filter(r =>
-      !excludeStatus.includes(r.status) && r.date && r.date <= today);
+      !isInactiveItemStatus(r.status) && r.date && r.date <= today);
     const followups = (followupsData?.followups || []).filter(f =>
-      !excludeStatus.includes(f.status) && f.date && f.date <= today);
+      !isInactiveItemStatus(f.status) && f.date && f.date <= today);
     const total = reminders.length + followups.length;
     const el = document.getElementById('overdue-count');
     el.textContent = total;
@@ -375,13 +379,11 @@ async function loadDashboardData() {
   const agendaList = document.getElementById('agenda-list');
   const agendaItems = [];
   if (remindersData?.reminders) {
-    const excludeStatus = ['completed', 'COMPLETED', 'archived', 'deleted', 'DELETED'];
-    remindersData.reminders.filter(r => !excludeStatus.includes(r.status) && r.date && r.date <= today)
+    remindersData.reminders.filter(r => !isInactiveItemStatus(r.status) && r.date && r.date <= today)
       .forEach(r => agendaItems.push({ text: r.description, type: 'reminder', date: r.date }));
   }
   if (followupsData?.followups) {
-    const excludeStatus = ['completed', 'COMPLETED', 'archived', 'deleted', 'DELETED'];
-    followupsData.followups.filter(f => !excludeStatus.includes(f.status) && f.date && f.date <= today)
+    followupsData.followups.filter(f => !isInactiveItemStatus(f.status) && f.date && f.date <= today)
       .forEach(f => agendaItems.push({ text: f.description, type: 'followup', date: f.date }));
   }
   if (agendaItems.length > 0) {
