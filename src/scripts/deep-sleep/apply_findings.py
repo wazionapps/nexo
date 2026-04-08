@@ -284,7 +284,14 @@ def _find_similar_followup(description: str, threshold: float = 0.58) -> dict | 
     return candidates[0]
 
 
-def _touch_existing_followup(existing: dict, *, description: str, date: str = "", reasoning_note: str = "") -> dict:
+def _touch_existing_followup(
+    existing: dict,
+    *,
+    description: str,
+    date: str = "",
+    reasoning_note: str = "",
+    status: str = "",
+) -> dict:
     cols = _table_columns(NEXO_DB, "followups")
     if not cols:
         return {"success": False, "error": "followups table not found"}
@@ -296,6 +303,9 @@ def _touch_existing_followup(existing: dict, *, description: str, date: str = ""
     preferred_date = _prefer_due_date(existing.get("date", ""), date)
     if preferred_date and preferred_date != str(existing.get("date", "") or "") and "date" in cols:
         updates["date"] = preferred_date
+    desired_status = (status or "").strip()
+    if desired_status and "status" in cols and desired_status != str(existing.get("status", "") or ""):
+        updates["status"] = desired_status
     note = reasoning_note or "Deep Sleep matched this followup semantically."
     changed = False
     if updates:
@@ -503,19 +513,23 @@ def add_learning(category: str, title: str, content: str) -> dict:
         return {"success": False, "error": str(e)}
 
 
-def create_followup(description: str, date: str = "", reasoning_note: str = "") -> dict:
+def create_followup(description: str, date: str = "", reasoning_note: str = "", status: str = "PENDING") -> dict:
     """Create a followup in nexo.db. Returns result dict."""
     if not NEXO_DB.exists():
         return {"success": False, "error": "nexo.db not found"}
     try:
-        matched = _find_similar_followup(description)
-        if matched:
-            return _touch_existing_followup(
-                matched,
-                description=description,
-                date=date,
-                reasoning_note=reasoning_note or "Deep Sleep matched this followup semantically.",
-            )
+        desired_status = (status or "PENDING").strip() or "PENDING"
+        is_abandoned = description.strip().startswith("[Abandoned]")
+        if not is_abandoned:
+            matched = _find_similar_followup(description)
+            if matched:
+                return _touch_existing_followup(
+                    matched,
+                    description=description,
+                    date=date,
+                    reasoning_note=reasoning_note or "Deep Sleep matched this followup semantically.",
+                    status=desired_status,
+                )
 
         # Generate a deterministic ID
         fid = "NF-DS-" + hashlib.md5(description.encode()).hexdigest()[:8].upper()
@@ -526,6 +540,7 @@ def create_followup(description: str, date: str = "", reasoning_note: str = "") 
                 description=description,
                 date=date,
                 reasoning_note=reasoning_note or "Deep Sleep revisited this deterministic followup.",
+                status=desired_status,
             )
 
         followup_result = nexo_db.create_followup(
@@ -533,11 +548,18 @@ def create_followup(description: str, date: str = "", reasoning_note: str = "") 
             description=description,
             date=date or None,
             verification="",
+            status=desired_status,
             reasoning=reasoning_note or "Deep Sleep v2 overnight analysis",
             recurrence=None,
         )
         if followup_result.get("error"):
             return {"success": False, "error": followup_result["error"]}
+        if desired_status != "PENDING":
+            nexo_db.add_followup_note(
+                fid,
+                f"Deep Sleep created this followup directly as {desired_status}.",
+                actor="deep-sleep",
+            )
         return {"success": True, "id": fid, "outcome": "new_followup"}
     except Exception as e:
         return {"success": False, "error": str(e)}
@@ -733,7 +755,9 @@ def create_abandoned_followups(synthesis: dict) -> list[dict]:
             continue
         result = create_followup(
             description=f"[Abandoned] {proj.get('description', '')}",
-            date=""  # No date — it's a discovered gap
+            date="",  # No date — it's a discovered gap
+            reasoning_note="Deep Sleep marked this as abandoned. Keep it as archived history, not active work.",
+            status="archived",
         )
         results.append(result)
     return results
