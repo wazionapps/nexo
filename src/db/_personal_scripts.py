@@ -62,8 +62,8 @@ def _safe_slug(value: str) -> str:
 
 def _ensure_script_id(conn, name: str, path: str) -> str:
     existing = conn.execute(
-        "SELECT id FROM personal_scripts WHERE path = ? OR name = ? ORDER BY path = ? DESC LIMIT 1",
-        (path, name, path),
+        "SELECT id FROM personal_scripts WHERE path = ? LIMIT 1",
+        (path,),
     ).fetchone()
     if existing:
         return existing["id"]

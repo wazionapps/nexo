@@ -383,6 +383,32 @@ class TestRegistrySync:
         assert len(schedules) == 1
         assert schedules[0]["cron_id"] == "backup"
 
+    def test_sync_personal_scripts_allows_duplicate_names_with_distinct_paths(self, scripts_dir, monkeypatch):
+        init_db()
+        python_script = scripts_dir / "shopify-delivery-times.py"
+        shell_script = scripts_dir / "shopify-delivery-times.sh"
+        python_script.write_text(
+            "# nexo: name=shopify-delivery-times\n"
+            "# nexo: runtime=python\n"
+            "print('ok')\n"
+        )
+        shell_script.write_text(
+            "#!/bin/bash\n"
+            "# nexo: name=shopify-delivery-times\n"
+            "# nexo: runtime=shell\n"
+            "echo ok\n"
+        )
+
+        monkeypatch.setattr("script_registry._discover_personal_schedule_records", lambda: [])
+
+        result = sync_personal_scripts()
+
+        assert result["scripts_upserted"] == 2
+        scripts = list_personal_scripts()
+        assert len(scripts) == 2
+        assert {script["path"] for script in scripts} == {str(python_script), str(shell_script)}
+        assert len({script["id"] for script in scripts}) == 2
+
     def test_ensure_personal_schedules_dry_run(self, scripts_dir, monkeypatch):
         import script_registry
 
