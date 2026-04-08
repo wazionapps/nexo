@@ -1,5 +1,11 @@
 # Changelog
 
+## [3.1.1] - 2026-04-08
+
+### Update Reliability Hotfix
+- Fixed personal script registry ID generation so `nexo update` and runtime reconciliation no longer fail when two distinct personal scripts share the same logical `name` but live at different paths, such as paired `.py` and `.sh` variants of the same workflow.
+- This specifically restores safe runtime updates on installations that keep both shell and Python implementations for the same personal automation.
+
 ## [3.1.0] - 2026-04-08
 
 ### Self-Audit Goes Corrective

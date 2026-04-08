@@ -19,7 +19,7 @@ Open the workflow:
 ```bash
 nexo call nexo_workflow_open --input '{
   "sid":"YOUR_SESSION_ID",
-  "goal":"Prepare and publish v3.1.0",
+  "goal":"Prepare and publish v3.1.1",
   "owner":"codex",
   "priority":"high",
   "workflow_kind":"release",
