@@ -289,6 +289,53 @@ def test_create_followup_consolidates_semantic_duplicates(monkeypatch, tmp_path)
     assert history[0][2] == "deep-sleep"
 
 
+def test_abandoned_followups_are_archived_not_active(monkeypatch, tmp_path):
+    apply_mod = _load_apply_module(monkeypatch, tmp_path)
+    nexo_home = Path(os.environ["NEXO_HOME"])
+    data_dir = nexo_home / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    import db
+
+    db.init_db()
+
+    results = apply_mod.create_abandoned_followups(
+        {
+            "abandoned_projects": [
+                {
+                    "description": "Canales YouTube de Francisco — preguntados pero no respondidos",
+                    "has_followup": False,
+                    "recommendation": "Archive as historical context.",
+                }
+            ]
+        }
+    )
+
+    assert results
+    assert results[0]["success"] is True
+
+    conn = sqlite3.connect(str(data_dir / "nexo.db"))
+    row = conn.execute(
+        "SELECT id, status, date, description FROM followups WHERE description LIKE '[Abandoned]%'"
+    ).fetchone()
+    history = conn.execute(
+        """SELECT event_type, note, actor
+           FROM item_history
+           WHERE item_type = 'followup' AND item_id = ?
+           ORDER BY id ASC""",
+        (row[0],),
+    ).fetchall()
+    conn.close()
+
+    assert row[1] == "archived"
+    assert row[2] is None
+    assert row[3].startswith("[Abandoned]")
+    assert any(event == "created" for event, _, _ in history)
+    assert any(
+        event == "note" and "directly as archived" in note and actor == "deep-sleep"
+        for event, note, actor in history
+    )
+
+
 def test_add_learning_reinforces_instead_of_duplication(monkeypatch, tmp_path):
     apply_mod = _load_apply_module(monkeypatch, tmp_path)
     nexo_home = Path(os.environ["NEXO_HOME"])

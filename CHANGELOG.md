@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.1.6] - 2026-04-08
+
+### Deep Sleep Abandoned Followups Hotfix
+- Deep Sleep no longer turns abandoned-project discoveries into live `PENDING` followups. New `[Abandoned]` items are created directly as archived historical context, which keeps the trail visible without polluting active work queues.
+- The archived creation path now records an explicit followup-history note so operators and agents can see that the item was intentionally stored as history instead of silently disappearing.
+- Added regression coverage so abandoned followups stay archived and non-actionable across future releases.
+
 ## [3.1.5] - 2026-04-08
 
 ### Dashboard + Proactive History Hygiene
