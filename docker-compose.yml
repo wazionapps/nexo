@@ -1,0 +1,26 @@
+services:
+  nexo:
+    build: .
+    container_name: nexo
+    environment:
+      NEXO_HOME: /nexo-home
+      NEXO_CODE: /app/src
+      NEXO_MCP_TRANSPORT: ${NEXO_MCP_TRANSPORT:-streamable-http}
+      NEXO_MCP_HOST: ${NEXO_MCP_HOST:-0.0.0.0}
+      NEXO_MCP_PORT: ${NEXO_MCP_PORT:-8000}
+      NEXO_MCP_PATH: ${NEXO_MCP_PATH:-/mcp}
+    ports:
+      - "${NEXO_MCP_PORT:-8000}:${NEXO_MCP_PORT:-8000}"
+    volumes:
+      - nexo_data:/nexo-home
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - python -c "import os,socket,sys; s=socket.socket(); s.settimeout(2); s.connect(('127.0.0.1', int(os.environ.get('NEXO_MCP_PORT','8000')))); s.close(); sys.exit(0)"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  nexo_data:

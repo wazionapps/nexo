@@ -308,6 +308,7 @@ def test_main_returns_zero_and_writes_summary_when_findings_exist(self_audit_env
         "run_watchdog_smoke",
         "check_watchdog_smoke",
         "check_cognitive_health",
+        "run_mechanical_autofixes",
     ]
     for name in no_op_checks:
         monkeypatch.setattr(module, name, lambda: None)
@@ -331,7 +332,7 @@ def test_main_returns_zero_and_writes_summary_when_findings_exist(self_audit_env
     assert "Self-audit completed with findings: 1 errors, 0 warnings, 0 info." in log_body
 
 
-def test_check_learning_contradictions_creates_followup(self_audit_env):
+def test_check_learning_contradictions_supersedes_older_rule_inline(self_audit_env):
     module = _load_self_audit_module()
     module.findings.clear()
 
@@ -343,30 +344,34 @@ def test_check_learning_contradictions_creates_followup(self_audit_env):
             content TEXT,
             applies_to TEXT,
             status TEXT,
-            updated_at REAL
+            updated_at REAL,
+            reasoning TEXT,
+            supersedes_id INTEGER
         )"""
     )
     conn.execute(
-        """CREATE TABLE followups (
-            id TEXT PRIMARY KEY,
-            date TEXT,
-            description TEXT,
-            verification TEXT,
-            status TEXT,
-            reasoning TEXT,
-            recurrence TEXT,
-            created_at REAL,
-            updated_at REAL,
-            priority TEXT
+        """CREATE TABLE evolution_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at TEXT DEFAULT (datetime('now')),
+            cycle_number INTEGER NOT NULL,
+            dimension TEXT NOT NULL,
+            proposal TEXT NOT NULL,
+            classification TEXT NOT NULL DEFAULT 'auto',
+            status TEXT DEFAULT 'pending',
+            files_changed TEXT,
+            snapshot_ref TEXT,
+            test_result TEXT,
+            impact INTEGER DEFAULT 0,
+            reasoning TEXT NOT NULL
         )"""
     )
     now_ts = datetime(2026, 4, 6, 8, 0, 0).timestamp()
     conn.execute(
-        "INSERT INTO learnings (id, title, content, applies_to, status, updated_at) VALUES (1, ?, ?, ?, 'active', ?)",
+        "INSERT INTO learnings (id, title, content, applies_to, status, updated_at, reasoning) VALUES (1, ?, ?, ?, 'active', ?, '')",
         ("Never edit protocol.py directly", "Never edit protocol.py directly in hotfixes.", "/repo/src/plugins/protocol.py", now_ts),
     )
     conn.execute(
-        "INSERT INTO learnings (id, title, content, applies_to, status, updated_at) VALUES (2, ?, ?, ?, 'active', ?)",
+        "INSERT INTO learnings (id, title, content, applies_to, status, updated_at, reasoning) VALUES (2, ?, ?, ?, 'active', ?, '')",
         ("Edit protocol.py directly for hotfixes", "Edit protocol.py directly for urgent hotfixes.", "/repo/src/plugins/protocol.py", now_ts),
     )
     conn.commit()
@@ -376,18 +381,23 @@ def test_check_learning_contradictions_creates_followup(self_audit_env):
 
     assert module.findings
     assert module.findings[-1]["area"] == "contradictions"
-    assert module.findings[-1]["severity"] == "ERROR"
+    assert module.findings[-1]["severity"] == "INFO"
 
     conn = sqlite3.connect(str(self_audit_env / "data" / "nexo.db"))
-    followup = conn.execute("SELECT description, priority FROM followups").fetchone()
+    statuses = dict(conn.execute("SELECT id, status FROM learnings").fetchall())
+    queued = conn.execute(
+        "SELECT classification, status, files_changed FROM evolution_log ORDER BY id DESC LIMIT 1"
+    ).fetchone()
     conn.close()
-    assert "Resolve contradictory active learnings" in followup[0]
-    assert "#1" in followup[0]
-    assert "#2" in followup[0]
-    assert followup[1] == "critical"
+    assert statuses[1] == "superseded"
+    assert statuses[2] == "active"
+    assert queued[0] == "public_port_queue"
+    assert queued[1] == "pending_public_port"
+    assert "/repo/src/plugins/protocol.py" not in queued[2]
+    assert "src/plugins/protocol.py" in queued[2]
 
 
-def test_check_error_memory_loop_creates_prevention_followup(self_audit_env):
+def test_check_error_memory_loop_creates_prevention_learning_inline(self_audit_env):
     module = _load_self_audit_module()
     module.findings.clear()
 
@@ -404,17 +414,35 @@ def test_check_error_memory_loop_creates_prevention_followup(self_audit_env):
         )"""
     )
     conn.execute(
-        """CREATE TABLE followups (
-            id TEXT PRIMARY KEY,
-            date TEXT,
-            description TEXT,
-            verification TEXT,
-            status TEXT,
+        """CREATE TABLE learnings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            category TEXT,
+            title TEXT,
+            content TEXT,
             reasoning TEXT,
-            recurrence TEXT,
+            prevention TEXT,
+            applies_to TEXT,
+            status TEXT,
             created_at REAL,
             updated_at REAL,
-            priority TEXT
+            priority TEXT,
+            weight REAL
+        )"""
+    )
+    conn.execute(
+        """CREATE TABLE evolution_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at TEXT DEFAULT (datetime('now')),
+            cycle_number INTEGER NOT NULL,
+            dimension TEXT NOT NULL,
+            proposal TEXT NOT NULL,
+            classification TEXT NOT NULL DEFAULT 'auto',
+            status TEXT DEFAULT 'pending',
+            files_changed TEXT,
+            snapshot_ref TEXT,
+            test_result TEXT,
+            impact INTEGER DEFAULT 0,
+            reasoning TEXT NOT NULL
         )"""
     )
     conn.execute(
@@ -432,13 +460,23 @@ def test_check_error_memory_loop_creates_prevention_followup(self_audit_env):
 
     assert module.findings
     assert module.findings[-1]["area"] == "prevention"
-    assert module.findings[-1]["severity"] == "WARN"
+    assert module.findings[-1]["severity"] == "INFO"
 
     conn = sqlite3.connect(str(self_audit_env / "data" / "nexo.db"))
-    followup = conn.execute("SELECT description, priority FROM followups").fetchone()
+    learning = conn.execute(
+        "SELECT category, title, applies_to, priority FROM learnings ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+    queued = conn.execute(
+        "SELECT classification, status, files_changed FROM evolution_log ORDER BY id DESC LIMIT 1"
+    ).fetchone()
     conn.close()
-    assert "repeated failed/blocked protocol tasks around /repo/src/plugins/workflow.py" in followup[0]
-    assert followup[1] == "high"
+    assert learning[0] == "nexo"
+    assert "repeated failures around /repo/src/plugins/workflow.py" in learning[1]
+    assert learning[2] == "/repo/src/plugins/workflow.py"
+    assert learning[3] == "high"
+    assert queued[0] == "public_port_queue"
+    assert queued[1] == "pending_public_port"
+    assert "src/plugins/workflow.py" in queued[2]
 
 
 def test_check_repair_changes_missing_learning_capture_creates_debt_and_followup(self_audit_env):
@@ -572,7 +610,7 @@ def test_check_repair_changes_missing_learning_capture_auto_captures_when_runtim
     assert debt == 0
 
 
-def test_check_unformalized_mentions_creates_formalization_followup(self_audit_env):
+def test_check_unformalized_mentions_creates_workflow_goal_inline(self_audit_env):
     module = _load_self_audit_module()
     module.findings.clear()
 
@@ -588,17 +626,21 @@ def test_check_unformalized_mentions_creates_formalization_followup(self_audit_e
         )"""
     )
     conn.execute(
-        """CREATE TABLE followups (
-            id TEXT PRIMARY KEY,
-            date TEXT,
-            description TEXT,
-            verification TEXT,
+        """CREATE TABLE workflow_goals (
+            goal_id TEXT PRIMARY KEY,
+            session_id TEXT,
+            title TEXT,
+            objective TEXT,
+            parent_goal_id TEXT,
             status TEXT,
-            reasoning TEXT,
-            recurrence TEXT,
-            created_at REAL,
-            updated_at REAL,
-            priority TEXT
+            priority TEXT,
+            owner TEXT,
+            next_action TEXT,
+            success_signal TEXT,
+            shared_state TEXT,
+            opened_at TEXT,
+            updated_at TEXT,
+            closed_at TEXT
         )"""
     )
     conn.execute(
@@ -616,14 +658,14 @@ def test_check_unformalized_mentions_creates_formalization_followup(self_audit_e
 
     assert module.findings
     assert module.findings[-1]["area"] == "formalization"
-    assert module.findings[-1]["severity"] == "WARN"
+    assert module.findings[-1]["severity"] == "INFO"
 
     conn = sqlite3.connect(str(self_audit_env / "data" / "nexo.db"))
-    followup = conn.execute("SELECT description, priority FROM followups").fetchone()
+    goal = conn.execute("SELECT title, priority, objective FROM workflow_goals").fetchone()
     conn.close()
-    assert "Formalize repeated unresolved theme in nexo" in followup[0]
-    assert "Prepare release readiness" in followup[0]
-    assert followup[1] == "high"
+    assert "Prepare release readiness" in goal[0]
+    assert goal[1] == "high"
+    assert "Recurring nexo theme detected by daily self-audit" in goal[2]
 
 
 def test_check_automation_opportunities_creates_opportunity_followup(self_audit_env):
@@ -771,3 +813,71 @@ def test_check_memory_quality_scores_creates_followup(self_audit_env):
     followup = conn.execute("SELECT description FROM followups").fetchone()
     conn.close()
     assert "Refresh low-quality conditioned learnings" in followup[0]
+
+
+def test_run_mechanical_autofixes_sanitizes_registry_and_refreshes_snapshots(self_audit_env, monkeypatch):
+    module = _load_self_audit_module()
+    module.findings[:] = [
+        {"severity": "ERROR", "area": "watchdog", "msg": "mutable files still protected: CLAUDE.md, AGENTS.md"},
+        {"severity": "WARN", "area": "snapshots", "msg": "golden snapshot drift: __init__.py, evolution_cycle.py"},
+    ]
+
+    scripts_dir = self_audit_env / "scripts"
+    scripts_dir.mkdir(parents=True, exist_ok=True)
+    (scripts_dir / ".watchdog-hashes").write_text(
+        "aaa /tmp/CLAUDE.md\nbbb /tmp/keep.py\nccc /tmp/server.py\n",
+    )
+
+    monkeypatch.setattr(module, "_sync_managed_bootstraps_inline", lambda: [])
+    monkeypatch.setattr(module, "_disable_broken_personal_plugins_inline", lambda conn: {"disabled": [], "registry_pruned": 0})
+
+    module.run_mechanical_autofixes()
+
+    registry_text = (scripts_dir / ".watchdog-hashes").read_text()
+    assert "CLAUDE.md" not in registry_text
+    assert "server.py" not in registry_text
+    assert "keep.py" in registry_text
+    assert any(item["area"] == "watchdog" and item["severity"] == "INFO" for item in module.findings)
+    assert any(item["area"] == "snapshots" and item["severity"] == "INFO" for item in module.findings)
+    assert not any(item["area"] == "watchdog" and "mutable files still protected" in item["msg"] for item in module.findings)
+    assert not any(item["area"] == "snapshots" and "golden snapshot drift" in item["msg"] for item in module.findings)
+    assert (self_audit_env / "snapshots" / "golden" / "files" / "claude" / "evolution_cycle.py").is_file()
+
+
+def test_run_mechanical_autofixes_disables_broken_personal_plugins(self_audit_env, monkeypatch):
+    module = _load_self_audit_module()
+    module.findings.clear()
+
+    conn = sqlite3.connect(str(self_audit_env / "data" / "nexo.db"))
+    conn.execute(
+        """CREATE TABLE plugins (
+            filename TEXT PRIMARY KEY,
+            tools_count INTEGER DEFAULT 0,
+            tool_names TEXT DEFAULT '',
+            loaded_at REAL,
+            created_by TEXT DEFAULT 'manual'
+        )"""
+    )
+    conn.execute(
+        "INSERT INTO plugins (filename, created_by) VALUES ('broken_plugin.py', 'personal')"
+    )
+    conn.commit()
+    conn.close()
+
+    plugins_dir = self_audit_env / "plugins"
+    plugins_dir.mkdir(parents=True, exist_ok=True)
+    (plugins_dir / "broken_plugin.py").write_text("def broken(:\n    pass\n")
+
+    monkeypatch.setattr(module, "_sync_managed_bootstraps_inline", lambda: [])
+    monkeypatch.setattr(module, "_sanitize_watchdog_registry_inline", lambda: {"ok": False, "removed": []})
+    monkeypatch.setattr(module, "_refresh_golden_snapshots_inline", lambda: {"ok": False, "refreshed": []})
+
+    module.run_mechanical_autofixes()
+
+    assert not (plugins_dir / "broken_plugin.py").exists()
+    assert (plugins_dir / "broken_plugin.py.disabled").exists()
+    conn = sqlite3.connect(str(self_audit_env / "data" / "nexo.db"))
+    remaining = conn.execute("SELECT COUNT(*) FROM plugins WHERE filename = 'broken_plugin.py'").fetchone()[0]
+    conn.close()
+    assert remaining == 0
+    assert any("plugin autofix" in item["msg"] for item in module.findings if item["area"] == "autofix")

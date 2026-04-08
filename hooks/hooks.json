@@ -38,6 +38,18 @@
         ]
       }
     ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|MultiEdit|Write|Delete",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "NEXO_HOME=\"${CLAUDE_PLUGIN_DATA}\" NEXO_CODE=\"${CLAUDE_PLUGIN_ROOT}/src\" bash \"${CLAUDE_PLUGIN_ROOT}/src/hooks/protocol-pretool-guardrail.sh\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "*",

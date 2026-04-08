@@ -20,12 +20,16 @@
 
 Start here:
 - [5-minute quickstart](docs/quickstart-5-minutes.md)
+- [Workflow quickstart](docs/workflows-quickstart.md)
+- [Supported client guides](docs/integrations/cursor.md)
+- [Docker setup](docs/docker-setup.md)
 - [Architecture visuals](docs/architecture-visuals.md)
 - [Memory classes](docs/memory-classes.md)
 - [Session portability](docs/session-portability.md)
 - [Python SDK](docs/sdk-python.md)
 - [Reference verticals](docs/reference-verticals.md)
 - [Measured compare scorecard](compare/README.md)
+- [Memory benchmark harness](benchmarks/README.md)
 - [Public contribution guide](docs/public-contribution.md)
 
 Every time you close a session, everything is lost. Your agent doesn't remember yesterday's decisions, repeats the same mistakes, and starts from zero. NEXO Brain fixes this with a cognitive architecture modeled after how human memory actually works.
@@ -88,6 +92,17 @@ Versions `3.0.0` and `3.0.1` close the next execution gap:
 | Native hook depth | Deepest | Partial, compensated | None |
 | Runtime doctor parity audit | Yes | Yes | Shared-brain only |
 | Recommended today | Yes | Supported | Shared-brain companion |
+
+### Supported Clients
+
+| Client | Status | Integration style | Notes |
+|--------|--------|-------------------|-------|
+| Claude Code | First-class | Managed install + hooks + bootstrap | Deepest NEXO parity today |
+| Codex | First-class | Managed install + bootstrap + transcript parity | Best non-Claude terminal path |
+| Claude Desktop | Companion | MCP-only shared brain | Useful as read/chat companion |
+| Cursor | Documented companion | MCP + `.cursor/rules` | Good editor pairing; no Deep Sleep transcript parity yet |
+| Windsurf | Documented companion | MCP + `.windsurf/rules` or repo `AGENTS.md` | Native MCP support, manual companion mode |
+| Gemini CLI | Adapter included | MCP + `GEMINI.md` | Best when you want Gemini as a shared-brain companion, not the primary NEXO runtime |
 
 ## The Problem
 
@@ -671,28 +686,24 @@ The installer handles everything and syncs the same `nexo` MCP brain into Claude
 
 ### Docker Compose
 
-If you want to run the MCP server in a container and keep the brain persistent across rebuilds and restarts, mount `NEXO_HOME` to a named volume instead of using the image filesystem:
+NEXO now ships a root-level [`docker-compose.yml`](docs/docker-setup.md) for a persistent containerized runtime. It does two things at once:
 
-```yaml
-services:
-  nexo:
-    build: .
-    environment:
-      NEXO_HOME: /nexo-home
-    volumes:
-      - nexo_data:/nexo-home
+- keeps `NEXO_HOME` on a named volume
+- exposes a remote MCP endpoint at `http://localhost:8000/mcp` for IDEs that support HTTP/SSE MCP
 
-volumes:
-  nexo_data:
-```
-
-Then run the server with:
+Start it with:
 
 ```bash
-docker compose run --rm -T nexo
+docker compose up -d
 ```
 
-The `nexo_data` volume keeps `nexo.db`, `cognitive.db`, backups, and other runtime state persistent across container runs. For the full managed install, client sync, and `nexo chat` flow, use `npx nexo-brain` on the host.
+For Claude Code and Codex, keep using stdio and point the MCP command at the running container:
+
+```bash
+docker compose exec -T nexo python src/server.py
+```
+
+That gives you the same persistent brain in the container while keeping terminal clients on their native stdio transport. The full step-by-step flow, health checks, and config examples live in [docs/docker-setup.md](docs/docker-setup.md).
 
 ### Starting a Session
 
@@ -921,6 +932,18 @@ When Claude Desktop is installed, `nexo-brain`, `nexo update`, and `nexo clients
 
 When Codex CLI is available, `nexo-brain`, `nexo update`, and `nexo clients sync` register the same `nexo` MCP server via `codex mcp add`, so Codex uses the same local memory store as Claude Code and Claude Desktop. If selected during install, `nexo chat` can open Codex directly and background automation can also run through Codex. Interactive `nexo chat` launches use Codex's aggressive no-confirmation mode so the session does not stall on repetitive approval prompts. The current recommended Codex profile is `gpt-5.4` with `xhigh` reasoning. Runtime Doctor also audits recent Codex sessions for NEXO startup markers and conditioned-file protocol discipline so parity drift does not hide behind the lack of native Claude-style hooks.
 
+### Cursor
+
+Cursor works well as a documented companion client. Point Cursor at the same local `nexo` MCP server and add a project rule that forces `nexo_startup`, `nexo_heartbeat`, and the protocol path on real work. See [docs/integrations/cursor.md](docs/integrations/cursor.md).
+
+### Windsurf
+
+Windsurf/Cascade supports MCP plus durable repo rules. Use the same local `nexo` server and add NEXO startup/protocol instructions in `.windsurf/rules/` or your repo `AGENTS.md`. See [docs/integrations/windsurf.md](docs/integrations/windsurf.md).
+
+### Gemini CLI
+
+Gemini CLI can share the same local NEXO brain through `mcpServers` in `~/.gemini/settings.json` plus a repo `GEMINI.md`. NEXO now ships a starter adapter in [adapters/gemini/README.md](adapters/gemini/README.md).
+
 ### OpenClaw
 
 NEXO Brain also works as a cognitive memory backend for [OpenClaw](https://github.com/openclaw/openclaw):
@@ -1004,6 +1027,20 @@ If NEXO Brain is useful to you, consider:
 - **Client parity / shared-brain maintenance** — see [docs/client-parity-checklist.md](docs/client-parity-checklist.md)
 
 [![Star History Chart](https://api.star-history.com/svg?repos=wazionapps/nexo&type=Date)](https://star-history.com/#wazionapps/nexo&Date)
+
+## Memory Benchmark Snapshot
+
+The full harness is in [benchmarks/README.md](benchmarks/README.md). The first checked-in micro-benchmark compares the NEXO runtime against a static `CLAUDE.md`-only baseline on five recall-heavy scenarios:
+
+| Scenario | NEXO full stack | Static `CLAUDE.md` | No memory |
+|----------|-----------------|--------------------|-----------|
+| Decision rationale recall | Pass | Partial | Fail |
+| User preference recall | Pass | Partial | Fail |
+| Repeat-error avoidance | Pass | Partial | Fail |
+| Resume interrupted task | Pass | Partial | Fail |
+| Related-context stitching | Pass | Fail | Fail |
+
+See [benchmarks/results/memory-recall-vs-static.md](benchmarks/results/memory-recall-vs-static.md) for the rubric, prompt shape, and first-run notes.
 
 ## Changelog
 

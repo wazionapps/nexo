@@ -343,6 +343,12 @@ CORE_HOOK_SPECS = [
         "script": "session-stop.sh",
     },
     {
+        "event": "PreToolUse",
+        "identity": "protocol-pretool-guardrail.sh",
+        "timeout": 5,
+        "script": "protocol-pretool-guardrail.sh",
+    },
+    {
         "event": "PostToolUse",
         "identity": "capture-tool-logs.sh",
         "timeout": 5,

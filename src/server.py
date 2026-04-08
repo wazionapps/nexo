@@ -213,6 +213,31 @@ mcp = FastMCP(
 )
 
 
+def _run_kwargs_from_env() -> dict:
+    transport = str(os.environ.get("NEXO_MCP_TRANSPORT", "stdio") or "stdio").strip().lower()
+    if transport in {"http", "streamable_http"}:
+        transport = "streamable-http"
+    if transport == "stdio":
+        return {"transport": "stdio"}
+
+    host = str(os.environ.get("NEXO_MCP_HOST", "127.0.0.1") or "127.0.0.1").strip()
+    port_text = str(os.environ.get("NEXO_MCP_PORT", "8000") or "8000").strip()
+    path = str(os.environ.get("NEXO_MCP_PATH", "/mcp") or "/mcp").strip() or "/mcp"
+    try:
+        port = int(port_text)
+    except Exception:
+        port = 8000
+
+    kwargs = {
+        "transport": transport,
+        "host": host,
+        "port": port,
+    }
+    if transport == "streamable-http":
+        kwargs["path"] = path
+    return kwargs
+
+
 # ── Session management (3 tools) ──────────────────────────────────
 
 @mcp.tool
@@ -912,4 +937,4 @@ def nexo_plugin_remove(filename: str) -> str:
 
 if __name__ == "__main__":
     _server_init()
-    mcp.run(transport="stdio")
+    mcp.run(**_run_kwargs_from_env())

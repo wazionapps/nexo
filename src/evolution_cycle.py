@@ -350,13 +350,39 @@ Max 3 proposals. Quality over quantity. If nothing needs improving, say so."""
     return prompt
 
 
-def build_public_contribution_prompt(*, repo_root: str, cycle_number: int) -> str:
+def build_public_contribution_prompt(
+    *,
+    repo_root: str,
+    cycle_number: int,
+    queued_candidate: dict | None = None,
+) -> str:
     """Prompt for the public-core contributor mode.
 
     This prompt must never rely on private runtime state. It should inspect only
     the isolated public repo checkout, make one coherent improvement, and end
     by returning machine-readable summary JSON.
     """
+
+    queued_section = ""
+    if queued_candidate:
+        queued_files = "\n".join(
+            f"- {path}" for path in (queued_candidate.get("files_changed") or [])[:20]
+        ) or "- (no files recorded)"
+        queued_source = str((queued_candidate.get("metadata") or {}).get("source") or "managed-runtime")
+        queued_section = f"""
+
+PRIORITY PUBLIC-PORT QUEUE ITEM:
+- Source: {queued_source}
+- Title: {str(queued_candidate.get("title") or "").strip()}
+- Why it matters: {str(queued_candidate.get("reasoning") or "").strip()}
+- Files originally touched:
+{queued_files}
+
+This item was already fixed or detected outside the public contribution runner.
+Before inventing another improvement, verify whether the public repository still
+needs the same change and port it if necessary. If the repo is already correct,
+make the smallest validating change that captures the same gap.
+"""
 
     return f"""You are NEXO Public Evolution.
 
@@ -389,6 +415,7 @@ What to do:
 
 Cycle: #{cycle_number}
 Quality over quantity. One strong improvement is better than three weak ones.
+{queued_section}
 """
 
 
