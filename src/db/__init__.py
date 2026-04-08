@@ -139,3 +139,14 @@ from db._skills import (
     collect_skill_improvement_candidates, materialize_personal_skill_definition,
     get_skill_health_report,
 )
+
+# Hot context / recent continuity
+from db._hot_context import (
+    DEFAULT_CONTEXT_TTL_HOURS,
+    derive_context_key, clamp_ttl_hours,
+    cleanup_expired_hot_context,
+    remember_hot_context, record_recent_event, capture_context_event,
+    get_hot_context, search_hot_context, search_recent_events,
+    build_pre_action_context, format_pre_action_context_bundle,
+    resolve_hot_context,
+)

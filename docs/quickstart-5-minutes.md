@@ -46,6 +46,8 @@ nexo call nexo_run_workflow --input '{
 
 For practical `open` / `update` / `resume` / `replay` examples, see [Workflow Quickstart](./workflows-quickstart.md).
 
+For 24-hour recent continuity across sessions and clients, see [Hot Context Memory](./hot-context-memory.md).
+
 ## 4. Use the protocol path for real work
 
 For anything non-trivial:

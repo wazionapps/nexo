@@ -126,6 +126,47 @@
   </div>
 </div>
 
+<!-- Hot Context -->
+<div class="mb-6">
+  <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between mb-3">
+    <div>
+      <h2 class="text-xs uppercase tracking-wider text-slate-500 font-semibold flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 glow-dot" style="color:#34d399"></span>
+        Hot Context 24h
+      </h2>
+      <p class="text-xs text-slate-600 mt-1">Recent operational memory shared across sessions, clients, and channels.</p>
+    </div>
+    <div class="flex items-center gap-2">
+      <input type="text" id="context-query" placeholder="Search recent context..."
+        class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 w-64"
+        onkeydown="if(event.key==='Enter')loadRecentContext()">
+      <button onclick="loadRecentContext()" class="px-3 py-1.5 text-xs bg-emerald-600 text-white rounded-lg hover:bg-emerald-500 transition-colors font-medium">Refresh</button>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 xl:grid-cols-2 gap-5">
+    <div class="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-4">
+      <div class="flex items-center justify-between mb-3">
+        <div class="text-xs uppercase tracking-wider text-emerald-400 font-semibold">Active Contexts</div>
+        <div class="text-[10px] text-slate-500 font-mono" id="hot-context-count">--</div>
+      </div>
+      <div class="space-y-2" id="hot-context-list">
+        <div class="text-xs text-slate-600 text-center py-6">Loading...</div>
+      </div>
+    </div>
+
+    <div class="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-4">
+      <div class="flex items-center justify-between mb-3">
+        <div class="text-xs uppercase tracking-wider text-emerald-400 font-semibold">Recent Events</div>
+        <div class="text-[10px] text-slate-500 font-mono" id="hot-event-count">--</div>
+      </div>
+      <div class="space-y-2" id="hot-event-list">
+        <div class="text-xs text-slate-600 text-center py-6">Loading...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Two-column: STM and LTM Recent -->
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6" id="columns-area">
   <!-- Recent STM -->
@@ -232,6 +273,65 @@
     </div>`;
   }
 
+  function recentTime(value) {
+    if (value === null || value === undefined || value === '') return '--';
+    if (typeof value === 'number') return relativeTime(new Date(value * 1000).toISOString());
+    if (/^\d+(\.\d+)?$/.test(String(value))) return relativeTime(new Date(parseFloat(value) * 1000).toISOString());
+    return relativeTime(value);
+  }
+
+  function renderHotContextCard(item) {
+    const title = item.title || item.context_key || '(untitled)';
+    const summary = item.summary || '';
+    const state = item.state || 'active';
+    const owner = item.owner || '';
+    const lastEvent = item.last_event_at ? recentTime(item.last_event_at) : '';
+    return `<div class="bg-slate-900/50 border border-emerald-500/15 rounded-xl p-4">
+      <div class="flex items-center gap-2 mb-2 flex-wrap">
+        <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-medium">${escapeHtml(state)}</span>
+        ${owner ? `<span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-500">${escapeHtml(owner)}</span>` : ''}
+        <span class="text-[10px] text-slate-600 ml-auto font-mono">${escapeHtml(lastEvent)}</span>
+      </div>
+      <div class="text-sm text-slate-200 leading-relaxed">${escapeHtml(title)}</div>
+      ${summary ? `<div class="text-xs text-slate-400 leading-relaxed mt-2">${escapeHtml(summary)}</div>` : ''}
+      <div class="text-[10px] text-slate-600 font-mono mt-2">${escapeHtml(item.context_key || '')}</div>
+    </div>`;
+  }
+
+  function renderHotEventCard(event) {
+    const title = event.title || event.context_key || '(event)';
+    const summary = event.summary || event.body || '';
+    const created = event.created_at ? recentTime(event.created_at) : '';
+    return `<div class="bg-slate-900/50 border border-emerald-500/15 rounded-xl p-4">
+      <div class="flex items-center gap-2 mb-2 flex-wrap">
+        <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-medium">${escapeHtml(event.event_type || 'event')}</span>
+        <span class="text-[10px] text-slate-600 ml-auto font-mono">${escapeHtml(created)}</span>
+      </div>
+      <div class="text-sm text-slate-200 leading-relaxed">${escapeHtml(title)}</div>
+      ${summary ? `<div class="text-xs text-slate-400 leading-relaxed mt-2 whitespace-pre-wrap">${escapeHtml(summary)}</div>` : ''}
+      <div class="text-[10px] text-slate-600 font-mono mt-2">${escapeHtml(event.context_key || '')}</div>
+    </div>`;
+  }
+
+  async function loadRecentContext() {
+    const q = document.getElementById('context-query').value.trim();
+    const url = '/api/recent-context?hours=24&limit=8' + (q ? `&query=${encodeURIComponent(q)}` : '');
+    const data = await fetchJSON(url);
+    if (!data) return;
+
+    document.getElementById('hot-context-count').textContent = formatNumber((data.counts && data.counts.contexts) || 0);
+    document.getElementById('hot-event-count').textContent = formatNumber((data.counts && data.counts.events) || 0);
+
+    const contexts = data.contexts || [];
+    const events = data.events || [];
+    document.getElementById('hot-context-list').innerHTML = contexts.length === 0
+      ? '<div class="text-xs text-slate-600 text-center py-6">No active hot context in the last 24h</div>'
+      : contexts.map(renderHotContextCard).join('');
+    document.getElementById('hot-event-list').innerHTML = events.length === 0
+      ? '<div class="text-xs text-slate-600 text-center py-6">No recent events in the last 24h</div>'
+      : events.map(renderHotEventCard).join('');
+  }
+
   async function loadFlow() {
     const data = await fetchJSON('/api/memory/flow');
     if (!data) return;
@@ -312,7 +412,9 @@
   }
 
   // Init
+  loadRecentContext();
   loadFlow();
+  setInterval(loadRecentContext, REFRESH_MS);
   setInterval(loadFlow, REFRESH_MS);
 </script>
 {% endblock %}

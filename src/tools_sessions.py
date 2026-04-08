@@ -14,7 +14,8 @@ from db import (
     get_inbox, get_pending_questions, now_epoch,
     SESSION_STALE_SECONDS, check_session_has_diary,
     save_checkpoint, read_checkpoint, increment_compaction_count,
-    get_db,
+    get_db, build_pre_action_context, format_pre_action_context_bundle,
+    capture_context_event,
 )
 
 # ── Session Keepalive ────────────────────────────────────────────────
@@ -131,6 +132,19 @@ def _session_portability_bundle(sid: str = "") -> dict:
             (session_id,),
         ).fetchall()
     ]
+    recent_query = " | ".join(
+        part for part in [
+            str(session_row["task"] or "").strip(),
+            str((checkpoint or {}).get("current_goal") or "").strip(),
+            str((draft or {}).get("last_context_hint") or "").strip(),
+        ] if part
+    )
+    recent_context = build_pre_action_context(
+        query=recent_query,
+        session_id=session_id,
+        hours=24,
+        limit=4,
+    ) if recent_query else {"has_matches": False}
     return {
         "ok": True,
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -146,6 +160,7 @@ def _session_portability_bundle(sid: str = "") -> dict:
         "checkpoint": dict(checkpoint) if checkpoint else {},
         "latest_diary": dict(diary) if diary else {},
         "diary_draft": dict(draft) if draft else {},
+        "recent_context": recent_context,
         "open_protocol_tasks": protocol_tasks,
         "open_workflow_goals": workflow_goals,
         "open_workflow_runs": workflow_runs,
@@ -199,6 +214,9 @@ def handle_session_portable_context(sid: str = "") -> str:
                 f"- Context hint: {draft.get('last_context_hint') or '(none)'}",
             ]
         )
+    recent_context = bundle.get("recent_context") or {}
+    if recent_context.get("has_matches"):
+        lines.extend(["", format_pre_action_context_bundle(recent_context, compact=True)])
 
     protocol_tasks = bundle.get("open_protocol_tasks") or []
     if protocol_tasks:
@@ -382,7 +400,7 @@ def handle_heartbeat(sid: str, task: str, context_hint: str = '') -> str:
     Args:
         sid: Session ID
         task: Current task description
-        context_hint: Optional — stored for diary draft context, not processed.
+        context_hint: Optional — stored for diary draft context and used for recent 24h continuity lookup.
     """
     from db import get_db
     update_session(sid, task)
@@ -403,6 +421,21 @@ def handle_heartbeat(sid: str, task: str, context_hint: str = '') -> str:
         for q in questions:
             age = _format_age(q["created_epoch"])
             parts.append(f"  {q['qid']} de {q['from_sid']} ({age}): {q['question']}")
+
+    recent_query = (context_hint or task or "").strip()
+    if recent_query:
+        try:
+            bundle = build_pre_action_context(
+                query=recent_query,
+                session_id=sid,
+                hours=24,
+                limit=4,
+            )
+            if bundle.get("has_matches"):
+                parts.append("")
+                parts.append(format_pre_action_context_bundle(bundle, compact=True))
+        except Exception:
+            pass
 
     # Incremental diary draft — accumulate every heartbeat, full UPSERT every 5
     _hb_count = 0  # Hoisted for Layer 3 DIARY_OVERDUE signal
@@ -462,6 +495,28 @@ def handle_heartbeat(sid: str, task: str, context_hint: str = '') -> str:
         )
     except Exception:
         pass  # Checkpoint update is best-effort
+
+    try:
+        capture_context_event(
+            event_type="heartbeat",
+            title=task[:160],
+            summary=(context_hint or task)[:600],
+            body=context_hint[:1600] if context_hint else "",
+            context_key=f"session:{sid}",
+            context_title=task[:160],
+            context_summary=(context_hint or task)[:600],
+            context_type="session_topic",
+            state="active",
+            owner="session",
+            actor=sid,
+            source_type="heartbeat",
+            source_id=sid,
+            session_id=sid,
+            metadata={"task": task[:160]},
+            ttl_hours=24,
+        )
+    except Exception:
+        pass
 
     # ── Layer 3: DIARY_OVERDUE signal based on heartbeat count + time ──
     conn = get_db()
@@ -555,7 +610,17 @@ def handle_context_packet(area: str, files: str = "") -> str:
     except Exception:
         pass
 
-    # 5. Cognitive memories for this area
+    # 5. Recent hot context in the last 24h
+    try:
+        hot_bundle = build_pre_action_context(query=area, hours=24, limit=4)
+        if hot_bundle.get("has_matches"):
+            parts.append("## RECENT HOT CONTEXT (24H)")
+            parts.append(format_pre_action_context_bundle(hot_bundle, compact=True))
+            parts.append("")
+    except Exception:
+        pass
+
+    # 6. Cognitive memories for this area
     try:
         import cognitive
         results = cognitive.search(
@@ -573,7 +638,7 @@ def handle_context_packet(area: str, files: str = "") -> str:
     except Exception:
         pass
 
-    # 6. Data flow tracing requirement (mandatory for all subagents)
+    # 7. Data flow tracing requirement (mandatory for all subagents)
     parts.append("## MANDATORY RULE: DATA FLOW TRACING")
     parts.append("BEFORE modifying any file or data, answer these 3 questions:")
     parts.append("  1. WHO PRODUCES this data? (which function/cron/endpoint generates it)")
@@ -716,6 +781,14 @@ def handle_smart_startup_query() -> str:
         lines.append(f"Query: {composite_query[:200]}...")
         lines.append("")
         lines.append(cognitive.format_results(results))
+
+        try:
+            hot_bundle = build_pre_action_context(query=composite_query, hours=24, limit=4)
+            if hot_bundle.get("has_matches"):
+                lines.append("")
+                lines.append(format_pre_action_context_bundle(hot_bundle, compact=True))
+        except Exception:
+            pass
 
         # Session tone from Deep Sleep (emotional intelligence layer)
         tone = _load_session_tone()

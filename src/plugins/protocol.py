@@ -13,6 +13,9 @@ from db import (
     create_followup,
     create_protocol_debt,
     create_protocol_task,
+    build_pre_action_context,
+    capture_context_event,
+    format_pre_action_context_bundle,
     get_db,
     get_protocol_task,
     list_workflow_goals,
@@ -484,6 +487,12 @@ def handle_task_open(
         verification_step=state["verification_step"],
         stakes=stakes,
     )
+    recent_bundle = build_pre_action_context(
+        query=" | ".join(part for part in [clean_goal, context_hint.strip()] if part),
+        session_id=sid.strip(),
+        hours=24,
+        limit=4,
+    )
     heartbeat_result = handle_heartbeat(sid, clean_goal[:120], context_hint=context_hint[:500])
     attention = _attention_snapshot(sid.strip())
     anticipatory_warnings = _preview_prospective_triggers(clean_goal, context_hint.strip(), files_list)
@@ -539,6 +548,29 @@ def handle_task_open(
         response_confidence=response_contract["confidence"],
         response_reasons=response_contract["reasons"],
         response_high_stakes=response_contract["high_stakes"],
+    )
+    protocol_context_key = f"protocol_task:{task['task_id']}"
+    capture_context_event(
+        event_type="protocol_task_opened",
+        title=clean_goal[:160],
+        summary=(context_hint or clean_goal)[:600],
+        body="\n".join(state["plan"][:5])[:1600] if state["plan"] else "",
+        context_key=protocol_context_key,
+        context_title=clean_goal[:160],
+        context_summary=(context_hint or clean_goal)[:600],
+        context_type="protocol_task",
+        state="active",
+        owner="nexo",
+        actor=sid,
+        source_type="protocol_task",
+        source_id=task["task_id"],
+        session_id=sid,
+        metadata={
+            "task_type": clean_type,
+            "area": area.strip(),
+            "files": files_list[:8],
+        },
+        ttl_hours=24,
     )
     blocking_rule_ids = _extract_guard_blocking_ids(guard_summary) if guard_has_blocking else []
     if guard_has_blocking:
@@ -605,6 +637,10 @@ def handle_task_open(
             ),
         },
         "response_contract": response_contract,
+        "recent_context": {
+            "has_matches": bool(recent_bundle.get("has_matches")),
+            "excerpt": format_pre_action_context_bundle(recent_bundle, compact=True) if recent_bundle.get("has_matches") else "",
+        },
         "contract": {
             "must_verify": must_verify,
             "must_change_log": must_change_log,
@@ -834,6 +870,29 @@ def handle_task_close(
         learning_id=learning_id,
         followup_id=created_followup_id,
         outcome_notes=outcome_notes,
+    )
+    capture_context_event(
+        event_type=f"protocol_task_{clean_outcome}",
+        title=(task.get("goal") or task_id)[:160],
+        summary=(outcome_notes or clean_evidence or clean_outcome)[:600],
+        body=(change_summary or change_why or "")[:1600],
+        context_key=f"protocol_task:{task_id}",
+        context_title=(task.get("goal") or task_id)[:160],
+        context_summary=(task.get("context_hint") or task.get("goal") or "")[:600],
+        context_type="protocol_task",
+        state="resolved" if clean_outcome in {"done", "cancelled"} else ("abandoned" if clean_outcome == "failed" else "blocked"),
+        owner="nexo",
+        actor=sid or task.get("session_id") or "nexo",
+        source_type="protocol_task",
+        source_id=task_id,
+        session_id=task.get("session_id") or sid,
+        metadata={
+            "outcome": clean_outcome,
+            "change_log_id": change_log_id,
+            "learning_id": learning_id,
+            "followup_id": created_followup_id,
+        },
+        ttl_hours=24,
     )
     open_debts = list_protocol_debts(status="open", task_id=task_id, limit=20)
 

@@ -16,6 +16,13 @@ from tools_sessions import (
     handle_session_portable_context,
     handle_session_export_bundle,
 )
+from tools_hot_context import (
+    handle_recent_context_capture,
+    handle_recent_context,
+    handle_pre_action_context,
+    handle_recent_context_resolve,
+    handle_hot_context_list,
+)
 from user_context import get_context as _get_ctx
 from tools_coordination import (
     handle_track, handle_untrack, handle_files,
@@ -200,7 +207,9 @@ mcp = FastMCP(
         "When you catch something the user missed→`nexo_cognitive_trust(event='proactive_action')`. "
         "Detect intent, not keywords — works in ALL languages.\n"
         "- **Delegate:** prefer direct. If needed: `nexo_context_packet(area)` + guard + 'if unsure STOP'\n"
-        "- **Memory:** `nexo_recall` searches all. Capture: errors→`nexo_learning_add`, prefs, entities, decisions\n"
+        "- **Memory:** `nexo_recall` searches all. For fresh 24h continuity use `nexo_pre_action_context(query='...')` before acting and "
+        "`nexo_recent_context_capture(...)` / `nexo_recent_context_resolve(...)` for important ongoing threads. "
+        "Capture: errors→`nexo_learning_add`, prefs, entities, decisions\n"
         "- **Change log:** `nexo_task_close` should be the default closure path. If you bypass it, call `nexo_change_log(...)` after production edits. NOT for config dir\n"
         "- **Diary:** When user signals end of session (any language, any style — 'bye', 'done', 'cierro', etc.), "
         "write `nexo_session_diary_write(...)` with self_critique BEFORE responding. "
@@ -305,6 +314,70 @@ def nexo_context_packet(area: str, files: str = "") -> str:
         files: Optional comma-separated file paths for additional context.
     """
     return handle_context_packet(area, files)
+
+
+@mcp.tool
+def nexo_recent_context_capture(
+    title: str,
+    summary: str = "",
+    details: str = "",
+    topic: str = "",
+    context_key: str = "",
+    state: str = "active",
+    owner: str = "",
+    source_type: str = "",
+    source_id: str = "",
+    session_id: str = "",
+    actor: str = "nexo",
+    ttl_hours: int = 24,
+    metadata: str = "",
+) -> str:
+    """Capture/update a recent 24h context item and append an event.
+
+    Use this for important ongoing threads that should stay mentally fresh across sessions/clients.
+    """
+    return handle_recent_context_capture(
+        title, summary, details, topic, context_key, state, owner,
+        source_type, source_id, session_id, actor, ttl_hours, metadata,
+    )
+
+
+@mcp.tool
+def nexo_recent_context(query: str = "", context_key: str = "", hours: int = 24, limit: int = 8) -> str:
+    """Read recent hot context and continuity events from the last N hours."""
+    return handle_recent_context(query, context_key, hours, limit)
+
+
+@mcp.tool
+def nexo_pre_action_context(query: str = "", context_key: str = "", session_id: str = "", hours: int = 24, limit: int = 8) -> str:
+    """Build the 24h recent-context bundle that should be reviewed before acting.
+
+    Especially useful for emails, orchestrators, and any work where the same topic may reappear hours later.
+    """
+    return handle_pre_action_context(query, context_key, session_id, hours, limit)
+
+
+@mcp.tool
+def nexo_recent_context_resolve(
+    context_key: str = "",
+    topic: str = "",
+    resolution: str = "",
+    actor: str = "nexo",
+    session_id: str = "",
+    source_type: str = "",
+    source_id: str = "",
+    ttl_hours: int = 24,
+) -> str:
+    """Resolve a recent hot-context item and append a resolution event."""
+    return handle_recent_context_resolve(
+        context_key, topic, resolution, actor, session_id, source_type, source_id, ttl_hours
+    )
+
+
+@mcp.tool
+def nexo_hot_context_list(hours: int = 24, limit: int = 10, state: str = "") -> str:
+    """List hot-context items currently alive in the recent continuity window."""
+    return handle_hot_context_list(hours, limit, state)
 
 
 @mcp.tool
