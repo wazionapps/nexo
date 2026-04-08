@@ -21,6 +21,7 @@ def _make_runtime(root: Path, *, operator_name: str = "Atlas") -> Path:
         "daily-briefing-check.sh",
         "session-start.sh",
         "session-stop.sh",
+        "protocol-pretool-guardrail.sh",
         "capture-tool-logs.sh",
         "capture-session.sh",
         "inbox-hook.sh",
@@ -65,6 +66,7 @@ def test_sync_claude_code_preserves_existing_settings(tmp_path):
         for hook in section.get("hooks", [])
     ]
     assert any("session-start.sh" in command for command in all_hook_commands)
+    assert any("protocol-pretool-guardrail.sh" in command for command in all_hook_commands)
     assert any("capture-tool-logs.sh" in command for command in all_hook_commands)
     assert any("protocol-guardrail.sh" in command for command in all_hook_commands)
     assert any(".session-start-ts" in command for command in all_hook_commands)

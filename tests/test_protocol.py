@@ -136,6 +136,25 @@ def test_task_open_with_blocking_guard_creates_guard_debt(monkeypatch):
     assert debt["status"] == "open"
 
 
+def test_task_open_requires_files_for_edit_in_strict_mode(monkeypatch):
+    import plugins.protocol as protocol
+
+    sid = _register_session("nexo-1004-2005")
+    monkeypatch.setattr(protocol, "get_protocol_strictness", lambda: "strict")
+    payload = json.loads(
+        protocol.handle_task_open(
+            sid=sid,
+            goal="Edit without explicit files",
+            task_type="edit",
+            area="nexo-ops",
+        )
+    )
+
+    assert payload["ok"] is False
+    assert payload["protocol_strictness"] == "strict"
+    assert "requires explicit `files`" in payload["error"]
+
+
 def test_task_acknowledge_guard_resolves_guard_debt(monkeypatch):
     from db import get_db
     from plugins.protocol import handle_task_open, handle_task_acknowledge_guard

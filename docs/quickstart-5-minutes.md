@@ -44,6 +44,8 @@ nexo call nexo_run_workflow --input '{
 }'
 ```
 
+For practical `open` / `update` / `resume` / `replay` examples, see [Workflow Quickstart](./workflows-quickstart.md).
+
 ## 4. Use the protocol path for real work
 
 For anything non-trivial:
@@ -58,6 +60,22 @@ Close it with evidence:
 nexo call nexo_task_close --input '{"sid":"YOUR_SESSION_ID","task_id":"PT-...","outcome":"done","evidence":"pytest -q ... passed","files_changed":["/abs/path/file.py"]}'
 ```
 
+Optional strictness for new users lives in `NEXO_HOME/brain/calibration.json`:
+
+```json
+{
+  "preferences": {
+    "protocol_strictness": "learning"
+  }
+}
+```
+
+Modes:
+
+- `lenient`: current default, warnings/debt first
+- `strict`: block writes before they happen if there is no open protocol task
+- `learning`: same block, but with a more explanatory message
+
 ## 5. Generate the public scorecard
 
 ```bash
@@ -65,3 +83,11 @@ python3 scripts/build_public_scorecard.py
 ```
 
 This writes measured compare artifacts to `compare/scorecard.json` and `compare/README.md`.
+
+## More setup paths
+
+- Docker / persistent container runtime: [docker-setup.md](./docker-setup.md)
+- Cursor companion setup: [integrations/cursor.md](./integrations/cursor.md)
+- Windsurf companion setup: [integrations/windsurf.md](./integrations/windsurf.md)
+- Gemini CLI adapter: [../adapters/gemini/README.md](../adapters/gemini/README.md)
+- Workflow examples: [workflows-quickstart.md](./workflows-quickstart.md)

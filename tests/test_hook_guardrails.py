@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import json
 import os
 import sys
 from pathlib import Path
@@ -40,6 +41,7 @@ def _reload_guardrail_stack():
 def guardrail_env(tmp_path, monkeypatch):
     home = tmp_path / "nexo"
     (home / "data").mkdir(parents=True, exist_ok=True)
+    (home / "brain").mkdir(parents=True, exist_ok=True)
     monkeypatch.setenv("NEXO_HOME", str(home))
     monkeypatch.setenv("NEXO_CODE", str(REPO_SRC))
     return home
@@ -160,3 +162,76 @@ def test_process_tool_event_records_debt_when_writing_before_guard_ack(guardrail
     ).fetchone()
     assert debt["task_id"] == task["task_id"]
     assert debt["severity"] == "error"
+
+
+def test_process_pre_tool_event_blocks_write_without_open_task_in_strict_mode(guardrail_env):
+    db, hook_guardrails = _reload_guardrail_stack()
+    db.init_db()
+    (guardrail_env / "brain" / "calibration.json").write_text(
+        json.dumps({"preferences": {"protocol_strictness": "strict"}})
+    )
+    db.register_session(
+        "nexo-2004-3004",
+        "strict edit",
+        external_session_id="claude-strict-1",
+        session_client="claude_code",
+    )
+
+    result = hook_guardrails.process_pre_tool_event(
+        {
+            "session_id": "claude-strict-1",
+            "tool_name": "Edit",
+            "tool_input": {"file_path": "/repo/src/plugins/protocol.py"},
+        }
+    )
+
+    assert result["status"] == "blocked"
+    assert result["strictness"] == "strict"
+    assert result["blocks"][0]["debt_type"] == "strict_protocol_write_without_task"
+    message = hook_guardrails.format_pretool_block_message(result)
+    assert "open `nexo_task_open" in message
+
+
+def test_process_pre_tool_event_learning_mode_explains_guard_ack_requirement(guardrail_env):
+    db, hook_guardrails = _reload_guardrail_stack()
+    db.init_db()
+    (guardrail_env / "brain" / "calibration.json").write_text(
+        json.dumps({"preferences": {"protocol_strictness": "learning"}})
+    )
+    sid = "nexo-2005-3005"
+    db.register_session(
+        sid,
+        "learning mode edit",
+        external_session_id="claude-learning-1",
+        session_client="claude_code",
+    )
+    task = db.create_protocol_task(
+        sid,
+        "Patch guard file",
+        task_type="edit",
+        files=["/repo/src/plugins/guard.py"],
+        opened_with_guard=True,
+        guard_has_blocking=True,
+        guard_summary="BLOCKING RULES",
+    )
+    db.create_protocol_debt(
+        sid,
+        "unacknowledged_guard_blocking",
+        severity="error",
+        task_id=task["task_id"],
+        evidence="Guard rule still unacknowledged for /repo/src/plugins/guard.py",
+    )
+
+    result = hook_guardrails.process_pre_tool_event(
+        {
+            "session_id": "claude-learning-1",
+            "tool_name": "Edit",
+            "tool_input": {"file_path": "/repo/src/plugins/guard.py"},
+        }
+    )
+
+    assert result["status"] == "blocked"
+    assert result["strictness"] == "learning"
+    assert result["blocks"][0]["debt_type"] == "strict_protocol_write_without_guard_ack"
+    message = hook_guardrails.format_pretool_block_message(result)
+    assert "nexo_task_acknowledge_guard" in message

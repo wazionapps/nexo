@@ -3,11 +3,13 @@ from __future__ import annotations
 """Post-tool guardrails for conditioned file learnings."""
 
 import json
+import os
 import sys
 from pathlib import Path
 
 from db import create_protocol_debt, get_db
 from plugins.guard import _load_conditioned_learnings, _normalize_path_token
+from protocol_settings import get_protocol_strictness
 
 READ_LIKE_TOOLS = {"Read"}
 WRITE_LIKE_TOOLS = {"Edit", "MultiEdit", "Write"}
@@ -94,6 +96,18 @@ def _find_open_task_for_file(conn, sid: str, filepath: str) -> dict | None:
     return None
 
 
+def _find_any_open_task(conn, sid: str) -> dict | None:
+    row = conn.execute(
+        """SELECT task_id, files, guard_has_blocking
+           FROM protocol_tasks
+           WHERE session_id = ? AND status = 'open'
+           ORDER BY opened_at DESC
+           LIMIT 1""",
+        (sid,),
+    ).fetchone()
+    return dict(row) if row else None
+
+
 def _find_open_debt(conn, *, session_id: str, task_id: str, debt_type: str, file_token: str) -> dict | None:
     row = conn.execute(
         """SELECT *
@@ -150,6 +164,136 @@ def _ensure_protocol_debt(
         task_id=task_id,
         evidence=evidence,
     )
+
+
+def process_pre_tool_event(payload: dict) -> dict:
+    strictness = get_protocol_strictness()
+    tool_name = str(payload.get("tool_name", "")).strip()
+    op = _operation_kind(tool_name)
+    if strictness == "lenient":
+        return {"ok": True, "skipped": True, "reason": "lenient mode", "strictness": strictness}
+    if op not in {"write", "delete"}:
+        return {"ok": True, "skipped": True, "reason": "operation not blocked", "strictness": strictness}
+
+    tool_input = payload.get("tool_input")
+    files = _extract_touched_files(tool_input)
+    conn = get_db()
+    sid = _resolve_nexo_sid(conn, str(payload.get("session_id", "")))
+    blocks: list[dict] = []
+
+    if not sid:
+        debt = _ensure_protocol_debt(
+            conn,
+            session_id="",
+            task_id="",
+            debt_type="strict_protocol_write_without_startup",
+            severity="error",
+            evidence=f"{tool_name} attempted before nexo_startup/session mapping.",
+            file_token="startup",
+        )
+        blocks.append(
+            {
+                "file": "",
+                "task_id": "",
+                "debt_id": debt.get("id"),
+                "debt_type": "strict_protocol_write_without_startup",
+                "reason_code": "missing_startup",
+            }
+        )
+        return {
+            "ok": True,
+            "session_id": sid,
+            "tool_name": tool_name,
+            "operation": op,
+            "strictness": strictness,
+            "blocks": blocks,
+            "status": "blocked",
+        }
+
+    if not files:
+        task = _find_any_open_task(conn, sid)
+        if not task:
+            debt = _ensure_protocol_debt(
+                conn,
+                session_id=sid,
+                task_id="",
+                debt_type="strict_protocol_write_without_task",
+                severity="error",
+                evidence=f"{tool_name} attempted without a detectable file path and without an open protocol task.",
+                file_token="unknown-target",
+            )
+            blocks.append(
+                {
+                    "file": "",
+                    "task_id": "",
+                    "debt_id": debt.get("id"),
+                    "debt_type": "strict_protocol_write_without_task",
+                    "reason_code": "missing_task",
+                }
+            )
+        return {
+            "ok": True,
+            "session_id": sid,
+            "tool_name": tool_name,
+            "operation": op,
+            "strictness": strictness,
+            "blocks": blocks,
+            "status": "blocked" if blocks else "clean",
+        }
+
+    for filepath in files:
+        task = _find_open_task_for_file(conn, sid, filepath)
+        if not task:
+            debt = _ensure_protocol_debt(
+                conn,
+                session_id=sid,
+                task_id="",
+                debt_type="strict_protocol_write_without_task",
+                severity="error",
+                evidence=f"{tool_name} attempted on {filepath} without an open protocol task for that file.",
+                file_token=filepath,
+            )
+            blocks.append(
+                {
+                    "file": filepath,
+                    "task_id": "",
+                    "debt_id": debt.get("id"),
+                    "debt_type": "strict_protocol_write_without_task",
+                    "reason_code": "missing_task",
+                }
+            )
+            continue
+
+        guard_debt = _find_task_guard_blocking_debt(conn, task["task_id"])
+        if guard_debt:
+            debt = _ensure_protocol_debt(
+                conn,
+                session_id=sid,
+                task_id=task["task_id"],
+                debt_type="strict_protocol_write_without_guard_ack",
+                severity="error",
+                evidence=f"{tool_name} attempted on {filepath} before acknowledging guard debt for task {task['task_id']}.",
+                file_token=filepath,
+            )
+            blocks.append(
+                {
+                    "file": filepath,
+                    "task_id": task["task_id"],
+                    "debt_id": debt.get("id"),
+                    "debt_type": "strict_protocol_write_without_guard_ack",
+                    "reason_code": "guard_unacknowledged",
+                }
+            )
+
+    return {
+        "ok": True,
+        "session_id": sid,
+        "tool_name": tool_name,
+        "operation": op,
+        "strictness": strictness,
+        "blocks": blocks,
+        "status": "blocked" if blocks else "clean",
+    }
 
 
 def process_tool_event(payload: dict) -> dict:
@@ -289,6 +433,38 @@ def format_hook_message(result: dict) -> str:
     return "\n".join(lines)
 
 
+def format_pretool_block_message(result: dict) -> str:
+    blocks = result.get("blocks") or []
+    if not blocks:
+        return ""
+    strictness = str(result.get("strictness") or "strict")
+    header = (
+        "NEXO LEARNING MODE BLOCKED THIS EDIT:"
+        if strictness == "learning"
+        else "NEXO STRICT MODE BLOCKED THIS EDIT:"
+    )
+    lines = [header]
+    for item in blocks:
+        file_note = item["file"] or "(unknown target)"
+        if item.get("reason_code") == "missing_startup":
+            lines.append(
+                f"- Start the shared-brain session first: call `nexo_startup`, then `nexo_task_open`, before editing {file_note}."
+            )
+        elif item.get("reason_code") == "guard_unacknowledged":
+            lines.append(
+                f"- {file_note}: task {item['task_id']} still has blocking guard debt. Acknowledge it with `nexo_task_acknowledge_guard` before retrying."
+            )
+        elif strictness == "learning":
+            lines.append(
+                f"- {file_note}: open `nexo_task_open(task_type='edit', files=['{file_note}'])` first, then rerun the edit."
+            )
+        else:
+            lines.append(
+                f"- {file_note}: open `nexo_task_open(... files=['{file_note}'])` before editing."
+            )
+    return "\n".join(lines)
+
+
 def main() -> int:
     raw = sys.stdin.read()
     if not raw.strip():
@@ -297,6 +473,12 @@ def main() -> int:
         payload = json.loads(raw)
     except Exception:
         return 0
+    if os.environ.get("NEXO_HOOK_PHASE", "").strip().lower() == "pre":
+        result = process_pre_tool_event(payload)
+        message = format_pretool_block_message(result)
+        if message:
+            print(message, file=sys.stderr)
+        return 2 if result.get("status") == "blocked" else 0
     result = process_tool_event(payload)
     message = format_hook_message(result)
     if message:

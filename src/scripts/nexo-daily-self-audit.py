@@ -19,7 +19,9 @@ Runs via launchd at 7:00 AM daily.
 import json
 import hashlib
 import os
+import py_compile
 import re
+import shutil
 import sqlite3
 import subprocess
 import sys
@@ -35,6 +37,7 @@ if str(NEXO_CODE) not in sys.path:
     sys.path.insert(0, str(NEXO_CODE))
 
 from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
+from public_evolution_queue import queue_public_port_candidate
 
 LOG_DIR = NEXO_HOME / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -287,6 +290,301 @@ def _ensure_followup(conn: sqlite3.Connection, *, prefix: str, description: str,
     return followup_id
 
 
+def _table_columns(conn: sqlite3.Connection, table_name: str) -> set[str]:
+    try:
+        rows = conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+    except Exception:
+        return set()
+    columns: set[str] = set()
+    for row in rows:
+        if isinstance(row, sqlite3.Row):
+            columns.add(str(row["name"]))
+        elif len(row) > 1:
+            columns.add(str(row[1]))
+    return columns
+
+
+def _append_note(existing: str, note: str) -> str:
+    current = str(existing or "").strip()
+    extra = str(note or "").strip()
+    if not extra:
+        return current
+    if not current:
+        return extra
+    if extra in current:
+        return current
+    return f"{current}\n{extra}"
+
+
+def _complete_matching_followup(conn: sqlite3.Connection, description: str, note: str) -> int:
+    if not _table_exists(conn, "followups"):
+        return 0
+    columns = _table_columns(conn, "followups")
+    rows = conn.execute(
+        """SELECT id, verification, reasoning
+           FROM followups
+           WHERE description = ?
+             AND status NOT LIKE 'COMPLETED%'
+             AND status NOT IN ('DELETED','archived','blocked','waiting')""",
+        (description,),
+    ).fetchall()
+    completed = 0
+    now_epoch = datetime.now().timestamp()
+    for row in rows:
+        updates = {"status": "COMPLETED"}
+        if "updated_at" in columns:
+            updates["updated_at"] = now_epoch
+        if "verification" in columns:
+            updates["verification"] = _append_note(row["verification"], note)
+        if "reasoning" in columns:
+            updates["reasoning"] = _append_note(row["reasoning"], note)
+        assignments = ", ".join(f"{column} = ?" for column in updates)
+        conn.execute(
+            f"UPDATE followups SET {assignments} WHERE id = ?",
+            [updates[column] for column in updates] + [row["id"]],
+        )
+        completed += 1
+    return completed
+
+
+def _upsert_inline_learning(
+    conn: sqlite3.Connection,
+    *,
+    category: str,
+    title: str,
+    content: str,
+    reasoning: str = "",
+    prevention: str = "",
+    applies_to: str = "",
+    priority: str = "high",
+) -> dict:
+    if not _table_exists(conn, "learnings"):
+        return {"ok": False, "reason": "learnings_missing"}
+
+    columns = _table_columns(conn, "learnings")
+    rows = conn.execute(
+        "SELECT * FROM learnings WHERE COALESCE(status, 'active') != 'superseded' ORDER BY updated_at DESC, id DESC LIMIT 200"
+    ).fetchall()
+    target_signature = _topic_signature(f"{title} {content}")
+    existing = None
+    for row in rows:
+        row_title = str(row["title"] or "").strip() if "title" in columns else ""
+        row_content = str(row["content"] or "").strip() if "content" in columns else ""
+        row_applies = str(row["applies_to"] or "").strip() if "applies_to" in columns else ""
+        row_category = str(row["category"] or "").strip() if "category" in columns else ""
+        if applies_to and row_applies and row_applies == applies_to:
+            existing = row
+            break
+        if row_title == title:
+            existing = row
+            break
+        if target_signature and _topic_signature(f"{row_title} {row_content}") == target_signature:
+            if not row_category or row_category == category:
+                existing = row
+                break
+
+    now_epoch = datetime.now().timestamp()
+    weight_map = {"critical": 0.9, "high": 0.7, "medium": 0.5, "low": 0.3}
+    if existing:
+        updates: dict[str, object] = {}
+        if "category" in columns and category:
+            updates["category"] = category
+        if "title" in columns:
+            updates["title"] = title
+        if "content" in columns:
+            updates["content"] = content
+        if "reasoning" in columns and reasoning:
+            updates["reasoning"] = _append_note(existing["reasoning"], reasoning)
+        if "prevention" in columns and prevention:
+            updates["prevention"] = prevention
+        if "applies_to" in columns and applies_to:
+            updates["applies_to"] = applies_to
+        if "priority" in columns and priority:
+            updates["priority"] = priority
+        if "weight" in columns and priority:
+            updates["weight"] = weight_map.get(priority, 0.5)
+        if "status" in columns:
+            updates["status"] = "active"
+        if "updated_at" in columns:
+            updates["updated_at"] = now_epoch
+        assignments = ", ".join(f"{column} = ?" for column in updates)
+        conn.execute(
+            f"UPDATE learnings SET {assignments} WHERE id = ?",
+            [updates[column] for column in updates] + [existing["id"]],
+        )
+        return {"ok": True, "action": "updated", "learning_id": int(existing["id"])}
+
+    values: dict[str, object] = {}
+    if "category" in columns:
+        values["category"] = category or "nexo-ops"
+    if "title" in columns:
+        values["title"] = title
+    if "content" in columns:
+        values["content"] = content
+    if "reasoning" in columns:
+        values["reasoning"] = reasoning
+    if "prevention" in columns:
+        values["prevention"] = prevention
+    if "applies_to" in columns and applies_to:
+        values["applies_to"] = applies_to
+    if "priority" in columns and priority:
+        values["priority"] = priority
+    if "weight" in columns and priority:
+        values["weight"] = weight_map.get(priority, 0.5)
+    if "status" in columns:
+        values["status"] = "active"
+    if "created_at" in columns:
+        values["created_at"] = now_epoch
+    if "updated_at" in columns:
+        values["updated_at"] = now_epoch
+    placeholders = ", ".join("?" for _ in values)
+    conn.execute(
+        f"INSERT INTO learnings ({', '.join(values)}) VALUES ({placeholders})",
+        list(values.values()),
+    )
+    learning_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    return {"ok": True, "action": "created", "learning_id": int(learning_id)}
+
+
+def _supersede_learning_inline(conn: sqlite3.Connection, *, keep_id: int, retire_id: int, note: str) -> bool:
+    if not _table_exists(conn, "learnings"):
+        return False
+    columns = _table_columns(conn, "learnings")
+    now_epoch = datetime.now().timestamp()
+    retire_row = conn.execute("SELECT * FROM learnings WHERE id = ?", (retire_id,)).fetchone()
+    keep_row = conn.execute("SELECT * FROM learnings WHERE id = ?", (keep_id,)).fetchone()
+    if not retire_row or not keep_row:
+        return False
+
+    retire_updates: dict[str, object] = {}
+    if "status" in columns:
+        retire_updates["status"] = "superseded"
+    if "reasoning" in columns:
+        retire_updates["reasoning"] = _append_note(retire_row["reasoning"], note)
+    if "updated_at" in columns:
+        retire_updates["updated_at"] = now_epoch
+    if retire_updates:
+        retire_assignments = ", ".join(f"{column} = ?" for column in retire_updates)
+        conn.execute(
+            f"UPDATE learnings SET {retire_assignments} WHERE id = ?",
+            [retire_updates[column] for column in retire_updates] + [retire_id],
+        )
+
+    keep_updates: dict[str, object] = {}
+    if "supersedes_id" in columns:
+        keep_updates["supersedes_id"] = retire_id
+    if "updated_at" in columns:
+        keep_updates["updated_at"] = now_epoch
+    if keep_updates:
+        keep_assignments = ", ".join(f"{column} = ?" for column in keep_updates)
+        conn.execute(
+            f"UPDATE learnings SET {keep_assignments} WHERE id = ?",
+            [keep_updates[column] for column in keep_updates] + [keep_id],
+        )
+    return True
+
+
+def _upsert_workflow_goal_inline(conn: sqlite3.Connection, *, area: str, sample_goal: str, count: int) -> dict:
+    if not _table_exists(conn, "workflow_goals"):
+        return {"ok": False, "reason": "workflow_goals_missing"}
+
+    columns = _table_columns(conn, "workflow_goals")
+    signature = _topic_signature(sample_goal)
+    rows = conn.execute(
+        """SELECT * FROM workflow_goals
+           WHERE status NOT IN ('completed', 'cancelled', 'abandoned')
+           ORDER BY updated_at DESC"""
+    ).fetchall()
+    existing = None
+    for row in rows:
+        title = str(row["title"] or "")
+        objective = str(row["objective"] or "")
+        if signature and signature == _topic_signature(f"{title} {objective}"):
+            existing = row
+            break
+
+    objective = (
+        f"Recurring {area} theme detected by daily self-audit. "
+        f"The theme '{sample_goal}' appeared {count} times without a durable goal, learning, or resolved workflow."
+    )
+    next_action = "Convert the recurring theme into an explicit workflow or close it as intentional noise."
+    success_signal = "The theme stops resurfacing in unresolved protocol tasks."
+    now_iso = datetime.now().isoformat(timespec="seconds")
+    if existing:
+        updates: dict[str, object] = {}
+        if "title" in columns:
+            updates["title"] = sample_goal[:140]
+        if "objective" in columns:
+            updates["objective"] = objective
+        if "priority" in columns:
+            updates["priority"] = "high"
+        if "owner" in columns:
+            updates["owner"] = "system:self-audit"
+        if "next_action" in columns:
+            updates["next_action"] = next_action
+        if "success_signal" in columns:
+            updates["success_signal"] = success_signal
+        if "updated_at" in columns:
+            updates["updated_at"] = now_iso
+        assignments = ", ".join(f"{column} = ?" for column in updates)
+        conn.execute(
+            f"UPDATE workflow_goals SET {assignments} WHERE goal_id = ?",
+            [updates[column] for column in updates] + [existing["goal_id"]],
+        )
+        return {"ok": True, "action": "updated", "goal_id": str(existing["goal_id"])}
+
+    goal_id = f"WG-AUDIT-{hashlib.sha1(f'{area}:{signature or sample_goal}'.encode('utf-8')).hexdigest()[:8].upper()}"
+    values: dict[str, object] = {"goal_id": goal_id}
+    if "session_id" in columns:
+        values["session_id"] = ""
+    if "title" in columns:
+        values["title"] = sample_goal[:140]
+    if "objective" in columns:
+        values["objective"] = objective
+    if "parent_goal_id" in columns:
+        values["parent_goal_id"] = ""
+    if "status" in columns:
+        values["status"] = "active"
+    if "priority" in columns:
+        values["priority"] = "high"
+    if "owner" in columns:
+        values["owner"] = "system:self-audit"
+    if "next_action" in columns:
+        values["next_action"] = next_action
+    if "success_signal" in columns:
+        values["success_signal"] = success_signal
+    if "shared_state" in columns:
+        values["shared_state"] = json.dumps({"area": area, "signature": signature, "source": "self-audit"})
+    if "opened_at" in columns:
+        values["opened_at"] = now_iso
+    if "updated_at" in columns:
+        values["updated_at"] = now_iso
+    placeholders = ", ".join("?" for _ in values)
+    conn.execute(
+        f"INSERT INTO workflow_goals ({', '.join(values)}) VALUES ({placeholders})",
+        list(values.values()),
+    )
+    return {"ok": True, "action": "created", "goal_id": goal_id}
+
+
+def _queue_public_core_handoff(
+    conn: sqlite3.Connection,
+    *,
+    title: str,
+    reasoning: str,
+    files_changed: list[str],
+    metadata: dict | None = None,
+) -> dict:
+    return queue_public_port_candidate(
+        conn,
+        title=title,
+        reasoning=reasoning,
+        files_changed=files_changed,
+        source="self-audit",
+        metadata=metadata or {},
+    )
+
+
 TOPIC_STOPWORDS = {
     "the", "and", "for", "with", "from", "that", "this", "into", "about", "after",
     "before", "again", "need", "needs", "task", "tasks", "work", "working",
@@ -376,7 +674,8 @@ def _learning_matches_change(row: sqlite3.Row, files: list[str], change_text: st
 
 def _attempt_repair_learning_auto_capture(row: sqlite3.Row) -> dict:
     try:
-        from tools_learnings import find_conflicting_active_learning, handle_learning_add
+        from tools_learnings import find_conflicting_active_learning, handle_learning_add, handle_learning_update
+        from db._learnings import search_learnings
     except Exception as exc:
         return {"ok": False, "error": f"learning runtime unavailable: {exc}"}
 
@@ -393,6 +692,46 @@ def _attempt_repair_learning_auto_capture(row: sqlite3.Row) -> dict:
     if not content:
         content = f"Repair-oriented change log entry #{row['id']} required a canonical learning."
     applies_to = ",".join(files)
+
+    # --- Search-then-supersede: find existing same-topic learnings first ---
+    search_query = _topic_signature(f"{title} {content}")
+    existing_same_topic = None
+    if search_query:
+        candidates = search_learnings(search_query, category="nexo-ops")
+        for candidate in candidates:
+            if candidate.get("status") != "active":
+                continue
+            # Check if it covers the same files or topic
+            candidate_applies = str(candidate.get("applies_to") or "")
+            candidate_text = f"{candidate.get('title', '')} {candidate.get('content', '')}"
+            candidate_sig = _topic_signature(candidate_text)
+            if candidate_sig == search_query:
+                existing_same_topic = candidate
+                break
+            if applies_to and candidate_applies and any(
+                f in candidate_applies for f in files
+            ):
+                existing_same_topic = candidate
+                break
+
+    # If a same-topic learning already exists, update it instead of creating a duplicate
+    if existing_same_topic:
+        existing_id = int(existing_same_topic["id"])
+        updated_content = existing_same_topic.get("content", "") + f"\n\n[Audit {datetime.now().strftime('%Y-%m-%d')}] {content}"
+        response = handle_learning_update(
+            id=existing_id,
+            content=updated_content[:2000],
+            reasoning=f"Updated by daily self-audit with evidence from repair change #{row['id']}.",
+        )
+        if "ERROR:" not in response:
+            return {
+                "ok": True,
+                "learning_id": existing_id,
+                "response": response,
+                "action": "updated_existing",
+            }
+
+    # Fall back to conflict check + new learning only if no same-topic match
     conflicting = find_conflicting_active_learning(
         category="nexo-ops",
         title=title,
@@ -416,6 +755,7 @@ def _attempt_repair_learning_auto_capture(row: sqlite3.Row) -> dict:
             "ok": True,
             "learning_id": int(match.group(1)),
             "response": response,
+            "action": "created_new",
         }
     return {"ok": False, "error": response}
 
@@ -619,25 +959,46 @@ def check_learning_contradictions():
             contradictions.append((left, right))
 
     if contradictions:
-        finding("ERROR", "contradictions", f"{len(contradictions)} contradictory active learning pair(s)")
-        for left, right in contradictions[:5]:
+        resolved = 0
+        completed_followups = 0
+        retired_ids: set[int] = set()
+        for left, right in contradictions:
+            keep, retire = left, right
+            if int(retire["id"]) in retired_ids or int(keep["id"]) in retired_ids:
+                continue
             description = (
                 f"Resolve contradictory active learnings #{left['id']} and #{right['id']} "
                 f"for {left['applies_to'] or right['applies_to']}"
             )
-            reasoning = (
-                "Daily self-audit found two active canonical rules that contradict each other. "
-                "One rule must be superseded or reconciled before the next edit repeats the error."
+            note = (
+                f"Resolved inline by daily self-audit: learning #{retire['id']} was superseded by "
+                f"canonical learning #{keep['id']}."
             )
-            _ensure_followup(
-                conn,
-                prefix="CONTRADICTION",
-                description=description,
-                verification="One canonical learning remains active and the conflicting rule is superseded or archived",
-                reasoning=reasoning,
-                priority="critical",
-            )
+            if _supersede_learning_inline(conn, keep_id=int(keep["id"]), retire_id=int(retire["id"]), note=note):
+                resolved += 1
+                retired_ids.add(int(retire["id"]))
+                applies_to = str(keep["applies_to"] or retire["applies_to"] or "").strip()
+                if applies_to:
+                    _queue_public_core_handoff(
+                        conn,
+                        title=f"Reconcile contradictory rule coverage for {applies_to[:120]}",
+                        reasoning=note,
+                        files_changed=_split_changed_files(applies_to),
+                        metadata={
+                            "kept_learning_id": int(keep["id"]),
+                            "retired_learning_id": int(retire["id"]),
+                        },
+                    )
+                completed_followups += _complete_matching_followup(conn, description, note)
         conn.commit()
+        if resolved:
+            message = f"{resolved} contradictory active learning pair(s) resolved inline"
+            if completed_followups:
+                message += f" | completed {completed_followups} legacy followup(s)"
+            finding("INFO", "contradictions", message)
+        remaining = max(0, len(contradictions) - resolved)
+        if remaining:
+            finding("WARN", "contradictions", f"{remaining} contradictory active learning pair(s) still need manual review")
     conn.close()
 
 
@@ -667,7 +1028,8 @@ def check_error_memory_loop():
 
     repeated = {signature: items for signature, items in grouped.items() if len(items) >= 2}
     if repeated:
-        finding("WARN", "prevention", f"{len(repeated)} repeated failure cluster(s) still lack canonical prevention learnings")
+        resolved = 0
+        completed_followups = 0
         for signature, items in list(repeated.items())[:5]:
             description = (
                 f"Mine a canonical prevention learning from repeated failed/blocked protocol tasks around {signature}"
@@ -676,15 +1038,59 @@ def check_error_memory_loop():
                 f"Daily self-audit found {len(items)} failed/blocked protocol tasks without a linked learning. "
                 "Turn the repeated failure into a prevention rule before it repeats again."
             )
-            _ensure_followup(
+            sample = items[0]
+            area = str(sample["area"] or "nexo-ops").strip() or "nexo-ops"
+            applies_to = signature if "/" in signature else ""
+            title = f"Prevention: repeated failures around {signature[:120]}"
+            clustered_tasks = "; ".join(
+                f"{str(item['task_id'])}: {str(item['goal'] or '').strip()[:80]}"
+                for item in items[:5]
+            )
+            content = (
+                f"Repeated failed/blocked protocol tasks detected around {signature}. "
+                f"Examples: {clustered_tasks}."
+            )
+            prevention = (
+                f"Before working around {signature}, review this cluster and capture the prevention rule in the task contract."
+            )
+            result = _upsert_inline_learning(
                 conn,
-                prefix="PREVENTION",
-                description=description,
-                verification="Canonical prevention learning captured and linked to the repeated failure pattern",
+                category=area,
+                title=title,
+                content=content,
                 reasoning=reasoning,
+                prevention=prevention,
+                applies_to=applies_to,
                 priority="high",
             )
+            if result.get("ok"):
+                resolved += 1
+                if applies_to:
+                    _queue_public_core_handoff(
+                        conn,
+                        title=f"Port prevention guard for {signature[:120]}",
+                        reasoning=reasoning,
+                        files_changed=_split_changed_files(applies_to),
+                        metadata={
+                            "learning_id": result.get("learning_id"),
+                            "cluster_size": len(items),
+                            "signature": signature,
+                        },
+                    )
+                completed_followups += _complete_matching_followup(
+                    conn,
+                    description,
+                    f"Resolved inline by daily self-audit via learning #{result.get('learning_id')}.",
+                )
         conn.commit()
+        if resolved:
+            message = f"{resolved} repeated failure cluster(s) converted into canonical prevention learnings inline"
+            if completed_followups:
+                message += f" | completed {completed_followups} legacy followup(s)"
+            finding("INFO", "prevention", message)
+        remaining = max(0, len(repeated) - resolved)
+        if remaining:
+            finding("WARN", "prevention", f"{remaining} repeated failure cluster(s) still lack inline prevention learnings")
     conn.close()
 
 
@@ -822,7 +1228,8 @@ def check_unformalized_mentions():
         if len(items) >= 2
     }
     if loose_topics:
-        finding("WARN", "formalization", f"{len(loose_topics)} repeated topic(s) keep being mentioned without durable formalization")
+        resolved = 0
+        completed_followups = 0
         for (area, signature), items in list(loose_topics.items())[:5]:
             sample_goal = str(items[0]["goal"] or "").strip()[:120]
             description = (
@@ -833,15 +1240,48 @@ def check_unformalized_mentions():
                 "Daily self-audit found the same theme recurring across protocol tasks without being "
                 "converted into a workflow goal, followup, or learning. Formalize it before it keeps resurfacing."
             )
-            _ensure_followup(
+            goal_result = _upsert_workflow_goal_inline(
                 conn,
-                prefix="FORMALIZE",
-                description=description,
-                verification="Theme converted into a durable goal, followup, or canonical learning",
+                area=area,
+                sample_goal=sample_goal,
+                count=len(items),
+            )
+            if goal_result.get("ok"):
+                resolved += 1
+                completed_followups += _complete_matching_followup(
+                    conn,
+                    description,
+                    f"Resolved inline by daily self-audit via workflow goal {goal_result.get('goal_id')}.",
+                )
+                continue
+            learning_result = _upsert_inline_learning(
+                conn,
+                category=area,
+                title=f"Formalized recurring theme: {sample_goal}",
+                content=(
+                    f"Recurring unresolved theme in {area}: '{sample_goal}' appeared {len(items)} times "
+                    "without a durable goal or learning."
+                ),
                 reasoning=reasoning,
+                prevention="Convert recurring themes into an explicit workflow goal before they keep resurfacing.",
                 priority="high",
             )
+            if learning_result.get("ok"):
+                resolved += 1
+                completed_followups += _complete_matching_followup(
+                    conn,
+                    description,
+                    f"Resolved inline by daily self-audit via learning #{learning_result.get('learning_id')}.",
+                )
         conn.commit()
+        if resolved:
+            message = f"{resolved} repeated unresolved theme(s) formalized inline"
+            if completed_followups:
+                message += f" | completed {completed_followups} legacy followup(s)"
+            finding("INFO", "formalization", message)
+        remaining = max(0, len(loose_topics) - resolved)
+        if remaining:
+            finding("WARN", "formalization", f"{remaining} repeated topic(s) still lack durable inline formalization")
     conn.close()
 
 
@@ -1285,6 +1725,169 @@ def check_codex_startup_discipline():
     finding(severity, "codex-startup", message)
 
 
+def _clear_findings(area: str, contains: str = "") -> int:
+    removed = 0
+    keep: list[dict] = []
+    for item in findings:
+        same_area = item.get("area") == area
+        same_fragment = not contains or contains in str(item.get("msg") or "")
+        if same_area and same_fragment:
+            removed += 1
+            continue
+        keep.append(item)
+    if removed:
+        findings[:] = keep
+    return removed
+
+
+def _sync_managed_bootstraps_inline() -> list[str]:
+    try:
+        from bootstrap_docs import sync_client_bootstrap
+        from client_preferences import CLIENT_CLAUDE_CODE, CLIENT_CODEX
+    except Exception:
+        return []
+
+    results: list[str] = []
+    for client in (CLIENT_CLAUDE_CODE, CLIENT_CODEX):
+        try:
+            outcome = sync_client_bootstrap(client, nexo_home=NEXO_HOME)
+        except Exception:
+            continue
+        if not outcome.get("ok"):
+            continue
+        action = str(outcome.get("action") or "")
+        if action and action != "unchanged":
+            results.append(f"{client}:{action}")
+    return results
+
+
+def _sanitize_watchdog_registry_inline() -> dict:
+    if not HASH_REGISTRY.exists():
+        return {"ok": False, "removed": []}
+    forbidden = ["CLAUDE.md", "AGENTS.md", "server.py", "plugin_loader.py"]
+    original_lines = HASH_REGISTRY.read_text(errors="ignore").splitlines()
+    kept_lines = []
+    removed: set[str] = set()
+    for line in original_lines:
+        if any(name in line for name in forbidden):
+            for name in forbidden:
+                if name in line:
+                    removed.add(name)
+            continue
+        kept_lines.append(line)
+    if not removed:
+        return {"ok": False, "removed": []}
+    new_text = "\n".join(kept_lines)
+    if kept_lines:
+        new_text += "\n"
+    HASH_REGISTRY.write_text(new_text)
+    return {"ok": True, "removed": sorted(removed)}
+
+
+def _refresh_golden_snapshots_inline() -> dict:
+    pairs = [
+        (NEXO_CODE / "db" / "__init__.py", SNAPSHOT_GOLDEN / "db" / "__init__.py"),
+        (NEXO_CODE / "evolution_cycle.py", SNAPSHOT_GOLDEN / "evolution_cycle.py"),
+    ]
+    refreshed: list[str] = []
+    for live, snap in pairs:
+        if not live.exists():
+            continue
+        if snap.exists() and _sha256(live) == _sha256(snap):
+            continue
+        snap.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(live, snap)
+        refreshed.append(live.name)
+    return {"ok": bool(refreshed), "refreshed": refreshed}
+
+
+def _disable_broken_personal_plugins_inline(conn: sqlite3.Connection | None) -> dict:
+    plugins_dir = NEXO_HOME / "plugins"
+    if not plugins_dir.exists():
+        return {"disabled": [], "registry_pruned": 0}
+
+    disabled: list[str] = []
+    registry_pruned = 0
+    personal_filenames: set[str] = set()
+    if conn is not None and _table_exists(conn, "plugins"):
+        try:
+            rows = conn.execute(
+                "SELECT filename, created_by FROM plugins WHERE created_by = 'personal'"
+            ).fetchall()
+            personal_filenames = {str(row["filename"] or "").strip() for row in rows if str(row["filename"] or "").strip()}
+        except Exception:
+            personal_filenames = set()
+
+    for plugin_file in sorted(plugins_dir.glob("*.py")):
+        try:
+            py_compile.compile(str(plugin_file), doraise=True)
+        except Exception:
+            disabled_path = plugin_file.with_name(plugin_file.name + ".disabled")
+            plugin_file.rename(disabled_path)
+            disabled.append(plugin_file.name)
+            if conn is not None and _table_exists(conn, "plugins"):
+                conn.execute("DELETE FROM plugins WHERE filename = ?", (plugin_file.name,))
+                registry_pruned += 1
+
+    if conn is not None and _table_exists(conn, "plugins"):
+        for filename in sorted(personal_filenames):
+            if not filename:
+                continue
+            if not (plugins_dir / filename).exists():
+                conn.execute("DELETE FROM plugins WHERE filename = ?", (filename,))
+                registry_pruned += 1
+    return {"disabled": disabled, "registry_pruned": registry_pruned}
+
+
+def run_mechanical_autofixes():
+    conn = None
+    try:
+        if NEXO_DB.exists():
+            conn = sqlite3.connect(str(NEXO_DB))
+            conn.row_factory = sqlite3.Row
+
+        bootstrap_actions = _sync_managed_bootstraps_inline()
+        if bootstrap_actions:
+            finding("INFO", "autofix", f"Managed bootstraps refreshed inline: {', '.join(bootstrap_actions)}")
+
+        registry_result = _sanitize_watchdog_registry_inline()
+        if registry_result.get("ok"):
+            _clear_findings("watchdog", "mutable files still protected")
+            finding(
+                "INFO",
+                "watchdog",
+                "Self-audit sanitized watchdog registry inline: "
+                + ", ".join(registry_result.get("removed") or []),
+            )
+
+        snapshot_result = _refresh_golden_snapshots_inline()
+        if snapshot_result.get("ok"):
+            _clear_findings("snapshots", "golden snapshot drift")
+            finding(
+                "INFO",
+                "snapshots",
+                "Self-audit refreshed golden snapshots inline: "
+                + ", ".join(snapshot_result.get("refreshed") or []),
+            )
+
+        plugin_result = _disable_broken_personal_plugins_inline(conn)
+        disabled = plugin_result.get("disabled") or []
+        pruned = int(plugin_result.get("registry_pruned") or 0)
+        if disabled or pruned:
+            details: list[str] = []
+            if disabled:
+                details.append(f"disabled {len(disabled)} personal plugin(s): {', '.join(disabled)}")
+            if pruned:
+                details.append(f"pruned {pruned} stale plugin registry entrie(s)")
+            finding("INFO", "autofix", "Self-audit plugin autofix: " + " | ".join(details))
+
+        if conn is not None:
+            conn.commit()
+    finally:
+        if conn is not None:
+            conn.close()
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Stage B: Interpretation (automation backend) — NEW in v2
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1306,7 +1909,17 @@ def interpret_findings(raw_findings: list) -> bool:
 
 You are NEXO's morning self-audit interpreter. The mechanical checks found
 {len(errors)} errors and {len(warns)} warnings. Your job is to UNDERSTAND what's
-actually wrong, not just list findings. Use nexo_learning_add for new findings and nexo_followup_create for action items.
+actually wrong, not just list findings.
+
+CRITICAL — SEARCH BEFORE CREATING LEARNINGS:
+Before calling nexo_learning_add, you MUST call nexo_learning_search with keywords
+from the finding's area and topic. If a matching active learning already exists:
+  - Call nexo_learning_update(id=<existing_id>, ...) to refresh it with the new
+    evidence/date instead of creating a duplicate.
+  - Only use nexo_learning_add (with supersedes_id=<old_id>) when the existing
+    learning is materially wrong or outdated, not just to add another observation.
+If no existing learning matches, then nexo_learning_add is appropriate.
+The same applies to nexo_followup_create — search existing followups first.
 
 RAW FINDINGS:
 {findings_json}
@@ -1400,6 +2013,7 @@ def main():
     run_watchdog_smoke()
     check_watchdog_smoke()
     check_cognitive_health()
+    run_mechanical_autofixes()
 
     errors = sum(1 for f in findings if f["severity"] == "ERROR")
     warns = sum(1 for f in findings if f["severity"] == "WARN")

@@ -187,6 +187,10 @@ from public_contribution import (
     mark_public_contribution_result,
     STATUS_PAUSED_OPEN_PR,
 )
+from public_evolution_queue import (
+    list_pending_public_port_candidates,
+    update_public_port_candidate,
+)
 
 
 # ── Consecutive failure tracking ─────────────────────────────────────────
@@ -807,10 +811,19 @@ def run_public_contribution_cycle(*, objective: dict, cycle_num: int) -> None:
     branch_name = ""
     summary: dict = {}
     conn = sqlite3.connect(str(NEXO_DB), timeout=10)
+    conn.row_factory = sqlite3.Row
+    queued_candidate: dict | None = None
     try:
+        pending_candidates = list_pending_public_port_candidates(conn, limit=1)
+        if pending_candidates:
+            queued_candidate = pending_candidates[0]
         worktree_dir, branch_name = _prepare_public_worktree(config, title_hint="public-core")
         _prime_public_git_identity(worktree_dir, config)
-        prompt = build_public_contribution_prompt(repo_root=str(worktree_dir), cycle_number=cycle_num)
+        prompt = build_public_contribution_prompt(
+            repo_root=str(worktree_dir),
+            cycle_number=cycle_num,
+            queued_candidate=queued_candidate,
+        )
         raw_response = call_public_claude_cli(prompt, cwd=worktree_dir)
         summary = _parse_summary_json(raw_response)
         changed_files = _changed_public_files(worktree_dir)
@@ -849,6 +862,14 @@ def run_public_contribution_cycle(*, objective: dict, cycle_num: int) -> None:
                 ),
             )
             conn.commit()
+            if queued_candidate:
+                update_public_port_candidate(
+                    conn,
+                    queued_candidate["id"],
+                    status="skipped_duplicate_existing_pr",
+                    metadata_patch={"duplicate_of": duplicate},
+                )
+                conn.commit()
             mark_public_contribution_result(
                 result=f"skipped:duplicate_pr:{duplicate.get('number')}",
                 config=config,
@@ -888,6 +909,19 @@ def run_public_contribution_cycle(*, objective: dict, cycle_num: int) -> None:
             ),
         )
         conn.commit()
+        if queued_candidate:
+            update_public_port_candidate(
+                conn,
+                queued_candidate["id"],
+                status="draft_pr_created",
+                metadata_patch={
+                    "pr_url": pr_url,
+                    "pr_number": pr_number,
+                    "branch": branch_name,
+                    "ported_via_cycle": cycle_num,
+                },
+            )
+            conn.commit()
 
         objective["last_evolution"] = str(date.today())
         objective["total_evolutions"] = cycle_num

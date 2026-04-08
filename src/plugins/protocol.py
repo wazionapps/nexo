@@ -23,6 +23,7 @@ from db import (
 )
 from plugins.cortex import evaluate_cortex_state
 from plugins.guard import handle_guard_check
+from protocol_settings import get_protocol_strictness
 from tools_sessions import handle_heartbeat
 
 
@@ -450,6 +451,18 @@ def handle_task_open(
 
     clean_type = task_type if task_type in {"answer", "analyze", "edit", "execute", "delegate"} else "answer"
     files_list = _parse_list(files)
+    protocol_strictness = get_protocol_strictness()
+    if protocol_strictness in {"strict", "learning"} and clean_type == "edit" and not files_list:
+        note = (
+            "Strict protocol mode requires explicit `files` for edit tasks."
+            if protocol_strictness == "strict"
+            else "Learning mode requires explicit `files` on edit tasks so NEXO can match the write against the open protocol task."
+        )
+        return json.dumps(
+            {"ok": False, "error": note, "protocol_strictness": protocol_strictness},
+            ensure_ascii=False,
+            indent=2,
+        )
     state = {
         "goal": clean_goal,
         "task_type": clean_type,
@@ -569,6 +582,7 @@ def handle_task_open(
         "session_id": sid,
         "goal": clean_goal,
         "task_type": clean_type,
+        "protocol_strictness": protocol_strictness,
         "mode": cortex["mode"],
         "check_id": cortex["check_id"],
         "blocked_reason": cortex.get("blocked_reason"),
@@ -596,6 +610,7 @@ def handle_task_open(
             "must_change_log": must_change_log,
             "must_learning_if_corrected": must_learning_if_corrected,
             "must_write_diary_on_close": must_write_diary_on_close,
+            "protocol_strictness": protocol_strictness,
         },
         "session_touch": heartbeat_result.splitlines()[0] if heartbeat_result else "",
         "open_debts": debts_created,
