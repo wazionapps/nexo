@@ -235,3 +235,61 @@ def test_process_pre_tool_event_learning_mode_explains_guard_ack_requirement(gua
     assert result["blocks"][0]["debt_type"] == "strict_protocol_write_without_guard_ack"
     message = hook_guardrails.format_pretool_block_message(result)
     assert "nexo_task_acknowledge_guard" in message
+
+
+def test_process_pre_tool_event_blocks_automation_write_to_live_repo(guardrail_env, monkeypatch):
+    db, hook_guardrails = _reload_guardrail_stack()
+    db.init_db()
+    monkeypatch.setenv("NEXO_AUTOMATION", "1")
+    monkeypatch.delenv("NEXO_PUBLIC_CONTRIBUTION", raising=False)
+    db.register_session(
+        "nexo-2006-3006",
+        "automation live repo edit",
+        external_session_id="claude-auto-1",
+        session_client="claude_code",
+    )
+
+    result = hook_guardrails.process_pre_tool_event(
+        {
+            "session_id": "claude-auto-1",
+            "tool_name": "Edit",
+            "tool_input": {"file_path": str(REPO_SRC / "server.py")},
+        }
+    )
+
+    assert result["status"] == "blocked"
+    assert result["blocks"][0]["debt_type"] == "automation_live_repo_write_blocked"
+    message = hook_guardrails.format_pretool_block_message(result)
+    assert "isolated checkout/worktree" in message
+    debt = db.get_db().execute(
+        "SELECT debt_type, severity FROM protocol_debt WHERE debt_type = 'automation_live_repo_write_blocked'"
+    ).fetchone()
+    assert debt["severity"] == "error"
+
+
+def test_process_pre_tool_event_allows_public_contribution_checkout(guardrail_env, monkeypatch):
+    db, hook_guardrails = _reload_guardrail_stack()
+    db.init_db()
+    monkeypatch.setenv("NEXO_AUTOMATION", "1")
+    monkeypatch.setenv("NEXO_PUBLIC_CONTRIBUTION", "1")
+    db.register_session(
+        "nexo-2007-3007",
+        "public contribution edit",
+        external_session_id="claude-auto-2",
+        session_client="claude_code",
+    )
+
+    result = hook_guardrails.process_pre_tool_event(
+        {
+            "session_id": "claude-auto-2",
+            "tool_name": "Edit",
+            "tool_input": {"file_path": str(REPO_SRC / "server.py")},
+        }
+    )
+
+    assert result["skipped"] is True
+    assert result["reason"] == "lenient mode"
+    debt = db.get_db().execute(
+        "SELECT COUNT(*) AS count FROM protocol_debt WHERE debt_type = 'automation_live_repo_write_blocked'"
+    ).fetchone()
+    assert debt["count"] == 0
