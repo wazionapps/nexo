@@ -51,9 +51,22 @@ def test_system_catalog_surfaces_new_core_tools_and_runtime_metadata(monkeypatch
     explain = tools_system_catalog.handle_tool_explain("nexo_system_catalog")
     assert "CATALOG ENTRY — nexo_system_catalog" in explain
     assert "live NEXO tool/capability" not in explain.lower()  # should be concrete, not fallback text
+    assert "Signature: nexo_system_catalog(" in explain
+    assert "Examples:" in explain
 
     scripts = tools_system_catalog.handle_system_catalog(section="scripts", limit=20)
     assert "wifi-check" in scripts
 
     projects = tools_system_catalog.handle_system_catalog(section="projects", limit=20)
     assert "nexo" in projects.lower()
+
+    learning_explain = tools_system_catalog.handle_tool_explain("mcp__nexo__nexo_learning_add")
+    assert "CATALOG ENTRY — nexo_learning_add" in learning_explain
+    assert "Required args:" in learning_explain
+    assert "applies_to" in learning_explain
+    assert "Learning ligado a archivo o patrón" in learning_explain
+    assert "severity" in learning_explain
+
+    reminder_explain = tools_system_catalog.handle_tool_explain("nexo_reminder_update")
+    assert "READ_TOKEN" in reminder_explain
+    assert "nexo_reminder_get" in reminder_explain

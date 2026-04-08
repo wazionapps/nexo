@@ -220,6 +220,7 @@ mcp = FastMCP(
         "`nexo_recent_context_capture(...)` / `nexo_recent_context_resolve(...)` for important ongoing threads. "
         "If that is not enough, use `nexo_transcript_search(...)` / `nexo_transcript_read(...)` as the raw fallback to full conversations. "
         "Use `nexo_system_catalog(...)` / `nexo_tool_explain(...)` when you need the live map of NEXO itself. "
+        "Before the first use of an unfamiliar NEXO tool, call `nexo_tool_explain(name)` to see its signature, examples, workflow notes, and common errors. "
         "Capture: errors→`nexo_learning_add`, prefs, entities, decisions\n"
         "- **Change log:** `nexo_task_close` should be the default closure path. If you bypass it, call `nexo_change_log(...)` after production edits. NOT for config dir\n"
         "- **Diary:** When user signals end of session (any language, any style — 'bye', 'done', 'cierro', etc.), "
