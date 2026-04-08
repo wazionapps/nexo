@@ -1,8 +1,16 @@
 from __future__ import annotations
 """NEXO DB — Learnings module."""
+import importlib
 import re, time
-from db._core import get_db, now_epoch
+import sys
 from db._fts import fts_upsert, fts_search
+
+
+def _core():
+    module = sys.modules.get("db._core")
+    if module is None:
+        module = importlib.import_module("db._core")
+    return module
 
 # ── Learnings ──────────────────────────────────────────────────────
 
@@ -19,8 +27,8 @@ def create_learning(
     last_reviewed_at: float | None = None,
 ) -> dict:
     """Create a new learning entry with optional reasoning."""
-    conn = get_db()
-    now = now_epoch()
+    conn = _core().get_db()
+    now = _core().now_epoch()
     cursor = conn.execute(
         "INSERT INTO learnings "
         "(category, title, content, reasoning, prevention, applies_to, supersedes_id, status, review_due_at, last_reviewed_at, created_at, updated_at) "
@@ -39,7 +47,7 @@ def create_learning(
 
 def update_learning(id: int, **kwargs) -> dict:
     """Update any fields of a learning: category, title, content, reasoning."""
-    conn = get_db()
+    conn = _core().get_db()
     row = conn.execute("SELECT * FROM learnings WHERE id = ?", (id,)).fetchone()
     if not row:
             return {"error": f"Learning {id} not found"}
@@ -50,7 +58,7 @@ def update_learning(id: int, **kwargs) -> dict:
     updates = {k: v for k, v in kwargs.items() if k in allowed}
     if not updates:
             return dict(row)
-    updates["updated_at"] = now_epoch()
+    updates["updated_at"] = _core().now_epoch()
     set_clause = ", ".join(f"{k} = ?" for k in updates)
     values = list(updates.values()) + [id]
     conn.execute(f"UPDATE learnings SET {set_clause} WHERE id = ?", values)
@@ -63,7 +71,7 @@ def update_learning(id: int, **kwargs) -> dict:
 
 def supersede_learning(old_id: int, new_id: int, note: str = '') -> dict:
     """Mark an older learning as superseded by a newer canonical learning."""
-    conn = get_db()
+    conn = _core().get_db()
     old_row = conn.execute("SELECT * FROM learnings WHERE id = ?", (old_id,)).fetchone()
     new_row = conn.execute("SELECT * FROM learnings WHERE id = ?", (new_id,)).fetchone()
     if not old_row:
@@ -74,7 +82,7 @@ def supersede_learning(old_id: int, new_id: int, note: str = '') -> dict:
     old_reasoning = str(old_row["reasoning"] or "")
     suffix = note.strip() if note.strip() else f"Superseded by learning #{new_id}."
     combined_reasoning = f"{old_reasoning}\n{suffix}".strip() if old_reasoning else suffix
-    updated_at = now_epoch()
+    updated_at = _core().now_epoch()
     conn.execute(
         "UPDATE learnings SET status = 'superseded', updated_at = ?, reasoning = ? WHERE id = ?",
         (updated_at, combined_reasoning, old_id),
@@ -90,7 +98,7 @@ def supersede_learning(old_id: int, new_id: int, note: str = '') -> dict:
 
 def delete_learning(id: int) -> bool:
     """Delete a learning entry."""
-    conn = get_db()
+    conn = _core().get_db()
     result = conn.execute("DELETE FROM learnings WHERE id = ?", (id,))
     conn.execute("DELETE FROM unified_search WHERE source = 'learning' AND source_id = ?", (str(id),))
     conn.commit()
@@ -103,7 +111,7 @@ def search_learnings(query: str, category: str = None) -> list[dict]:
     # Try FTS5 first
     fts_results = fts_search(query, source_filter="learning", limit=30)
     if fts_results:
-        conn = get_db()
+        conn = _core().get_db()
         ids = [int(r['source_id']) for r in fts_results]
         placeholders = ','.join('?' * len(ids))
         rows = conn.execute(
@@ -116,7 +124,7 @@ def search_learnings(query: str, category: str = None) -> list[dict]:
         return filtered
 
     # Fallback to LIKE
-    conn = get_db()
+    conn = _core().get_db()
     words = query.strip().split()
     if not words:
         return []
@@ -139,7 +147,7 @@ def search_learnings(query: str, category: str = None) -> list[dict]:
 
 def list_learnings(category: str = None) -> list[dict]:
     """List all learnings, optionally filtered by category."""
-    conn = get_db()
+    conn = _core().get_db()
     if category:
         rows = conn.execute(
             "SELECT * FROM learnings WHERE category = ? ORDER BY updated_at DESC",
@@ -176,7 +184,7 @@ def find_similar_learnings(new_id: int, title: str, content: str, category: str)
     keywords_new = set(extract_keywords(f"{title} {content}"))
     if not keywords_new:
         return []
-    conn = get_db()
+    conn = _core().get_db()
     rows = conn.execute(
         "SELECT id, title, content FROM learnings WHERE category = ? AND id != ?",
         (category, new_id)
@@ -193,4 +201,3 @@ def find_similar_learnings(new_id: int, title: str, content: str, category: str)
             results.append((row['id'], round(similarity, 2)))
     results.sort(key=lambda x: x[1], reverse=True)
     return results[:5]
-
