@@ -135,6 +135,25 @@ Resolve a live topic when it is clearly closed.
 
 List currently active hot contexts.
 
+## When hot context is not enough
+
+Hot context is the first recent-memory layer, not the last one.
+
+If the runtime knows a conversation happened recently but the hot-context layer does not have enough detail, use the transcript fallback tools:
+
+- `nexo_transcript_recent(...)`
+- `nexo_transcript_search(...)`
+- `nexo_transcript_read(...)`
+
+Those tools read the same Claude Code / Codex transcript families that Deep Sleep uses overnight, so the public fallback path and the overnight analysis path stay aligned.
+
+If the question is about NEXO itself rather than the operator's recent work, use the live system catalog:
+
+- `nexo_system_catalog(...)`
+- `nexo_tool_explain(...)`
+
+See [Recent Memory Fallbacks and the Live System Catalog](./recent-memory-fallbacks-and-system-catalog.md).
+
 ## Automatic feeders
 
 The core already feeds hot context from:
@@ -181,6 +200,8 @@ Personal or core automation scripts should use this pattern:
 1. `nexo_pre_action_context(...)` before taking action
 2. `nexo_recent_context_capture(...)` when a topic becomes active, blocked, or waiting
 3. `nexo_recent_context_resolve(...)` when the topic is clearly done
+4. `nexo_transcript_search(...)` / `nexo_transcript_read(...)` if the recent-memory layer is too thin but the transcript should still exist
+5. `nexo_system_catalog(...)` / `nexo_tool_explain(...)` when the automation needs a live map of NEXO itself
 
 This is the preferred replacement for giant prompt-only continuity rules.
 

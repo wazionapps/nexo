@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.2.0] - 2026-04-08
+
+### Recent Memory Fallbacks + Live System Catalog
+- Added public transcript fallback MCP tools: `nexo_transcript_recent`, `nexo_transcript_search`, and `nexo_transcript_read`. When hot context, recall, or diaries are not enough, agents can now search and read recent Claude Code / Codex transcripts directly instead of claiming the conversation is lost.
+- Extracted transcript parsing into a shared `transcript_utils.py` module and wired Deep Sleep to use the same parser as the public MCP surface. This removes parser drift between overnight analysis and operator-visible transcript fallback tools.
+- Added a live NEXO system catalog / ontology built from canonical sources at read time, not from a stale copied registry. New public tools `nexo_system_catalog` and `nexo_tool_explain` now expose the current map of core tools, plugin tools, skills, scripts, crons, projects, and artifacts.
+- Updated docs, quickstart, script guidance, and public release surfaces so the new recent-memory ladder is explicit: `hot context -> transcript fallback -> live system catalog for NEXO self-knowledge`.
+
 ## [3.1.9] - 2026-04-08
 
 ### Runtime Update Bootstrap Fix For Hot Context

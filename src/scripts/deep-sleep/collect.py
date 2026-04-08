@@ -19,6 +19,7 @@ import sys
 from collections import Counter
 from datetime import datetime, timedelta
 from pathlib import Path
+import transcript_utils as _transcripts
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 NEXO_CODE = Path(os.environ.get("NEXO_CODE", ""))
@@ -64,196 +65,22 @@ def _session_identifier(client: str, session_file: str) -> str:
 
 def find_claude_session_files() -> list[Path]:
     """Find Claude Code session JSONL files under ~/.claude/projects."""
-    claude_dir = Path.home() / ".claude" / "projects"
-    if not claude_dir.exists():
-        return []
-    return sorted(claude_dir.rglob("*.jsonl"))
+    return _transcripts.find_claude_session_files()
 
 
 def find_codex_session_files() -> list[Path]:
     """Find Codex session JSONL files under ~/.codex/sessions and archived_sessions."""
-    roots = [
-        Path.home() / ".codex" / "sessions",
-        Path.home() / ".codex" / "archived_sessions",
-    ]
-    files: list[Path] = []
-    seen: set[str] = set()
-    for root in roots:
-        if not root.exists():
-            continue
-        for jsonl in sorted(root.rglob("*.jsonl")):
-            key = jsonl.name
-            if key in seen:
-                continue
-            seen.add(key)
-            files.append(jsonl)
-    return files
+    return _transcripts.find_codex_session_files()
 
 
 def extract_claude_session(jsonl_path: Path) -> dict | None:
     """Extract clean transcript from a Claude Code JSONL session."""
-    messages = []
-    tool_uses = []
-    user_msg_count = 0
-
-    try:
-        with open(jsonl_path, "r") as f:
-            for line_no, line in enumerate(f, 1):
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    d = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-
-                msg_type = d.get("type")
-
-                # User messages
-                if msg_type == "user":
-                    content = d.get("message", {}).get("content", "")
-                    if isinstance(content, str) and content.strip():
-                        if content.startswith("<system-reminder>"):
-                            continue
-                        messages.append({
-                            "role": "user",
-                            "index": line_no,
-                            "text": _redact_sensitive(content[:5000]),
-                            "uuid": d.get("uuid", "")
-                        })
-                        user_msg_count += 1
-
-                # Assistant messages
-                elif msg_type in ("message", "assistant"):
-                    msg = d.get("message", {})
-                    content_blocks = msg.get("content", [])
-                    text_parts = []
-                    for block in content_blocks:
-                        if isinstance(block, dict):
-                            if block.get("type") == "text":
-                                text_parts.append(block.get("text", ""))
-                            elif block.get("type") == "tool_use":
-                                tool_input = block.get("input", {})
-                                raw_file = (
-                                    tool_input.get("file_path", "")
-                                    or str(tool_input.get("command", ""))[:100]
-                                ) if isinstance(tool_input, dict) else ""
-                                tool_uses.append({
-                                    "tool": block.get("name", ""),
-                                    "input_keys": list(tool_input.keys()) if isinstance(tool_input, dict) else [],
-                                    "file": _redact_sensitive(raw_file)
-                                })
-                    if text_parts:
-                        combined = "\n".join(text_parts)[:5000]
-                        combined = _redact_sensitive(combined)
-                        messages.append({
-                            "role": "assistant",
-                            "index": line_no,
-                            "text": combined
-                        })
-
-    except Exception as e:
-        print(f"  [collect] Error reading {jsonl_path}: {e}", file=sys.stderr)
-        return None
-
-    if user_msg_count < MIN_USER_MESSAGES:
-        return None
-
-    return {
-        "client": "claude_code",
-        "session_file": _session_identifier("claude_code", jsonl_path.name),
-        "display_name": jsonl_path.name,
-        "session_path": str(jsonl_path),
-        "message_count": len(messages),
-        "user_message_count": user_msg_count,
-        "tool_use_count": len(tool_uses),
-        "messages": messages,
-        "tool_uses": tool_uses,
-        "source": "claude_projects",
-    }
+    return _transcripts.extract_claude_session(jsonl_path)
 
 
 def extract_codex_session(jsonl_path: Path) -> dict | None:
     """Extract clean transcript from a Codex JSONL session."""
-    messages = []
-    tool_uses = []
-    user_msg_count = 0
-    session_meta: dict = {}
-
-    try:
-        with open(jsonl_path, "r") as f:
-            for line_no, line in enumerate(f, 1):
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    d = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-
-                item_type = d.get("type")
-                payload = d.get("payload", {})
-
-                if item_type == "session_meta" and isinstance(payload, dict):
-                    session_meta = payload
-                    continue
-
-                if item_type == "event_msg" and isinstance(payload, dict) and payload.get("type") == "user_message":
-                    content = str(payload.get("message", "") or "").strip()
-                    if not content or content.startswith("<environment_context>"):
-                        continue
-                    messages.append({
-                        "role": "user",
-                        "index": line_no,
-                        "text": _redact_sensitive(content[:5000]),
-                    })
-                    user_msg_count += 1
-                    continue
-
-                if item_type == "response_item" and isinstance(payload, dict):
-                    response_type = payload.get("type")
-                    role = payload.get("role")
-                    if response_type == "message" and role == "assistant":
-                        text_parts = []
-                        for block in payload.get("content", []) or []:
-                            if isinstance(block, dict) and block.get("type") == "output_text":
-                                text_parts.append(str(block.get("text", "")))
-                        combined = "\n".join(part for part in text_parts if part).strip()
-                        if combined:
-                            messages.append({
-                                "role": "assistant",
-                                "index": line_no,
-                                "text": _redact_sensitive(combined[:5000]),
-                            })
-                    elif response_type == "function_call":
-                        tool_uses.append({
-                            "tool": payload.get("name", ""),
-                            "input_keys": [],
-                            "file": _redact_sensitive(str(payload.get("arguments", ""))[:100]),
-                        })
-
-    except Exception as e:
-        print(f"  [collect] Error reading {jsonl_path}: {e}", file=sys.stderr)
-        return None
-
-    if user_msg_count < MIN_USER_MESSAGES:
-        return None
-
-    return {
-        "client": "codex",
-        "session_file": _session_identifier("codex", jsonl_path.name),
-        "display_name": jsonl_path.name,
-        "session_path": str(jsonl_path),
-        "message_count": len(messages),
-        "user_message_count": user_msg_count,
-        "tool_use_count": len(tool_uses),
-        "messages": messages,
-        "tool_uses": tool_uses,
-        "source": session_meta.get("source", "codex"),
-        "cwd": session_meta.get("cwd", ""),
-        "originator": session_meta.get("originator", ""),
-        "session_uid": session_meta.get("id", ""),
-    }
+    return _transcripts.extract_codex_session(jsonl_path)
 
 
 def collect_transcripts_since(since_iso: str, until_iso: str = "") -> list[dict]:
@@ -262,28 +89,7 @@ def collect_transcripts_since(since_iso: str, until_iso: str = "") -> list[dict]
     Uses a watermark approach: deep sleep tracks the last processed timestamp
     so nothing is missed regardless of when sessions happen (day, night, etc.).
     """
-    since_dt = datetime.fromisoformat(since_iso)
-    until_dt = datetime.fromisoformat(until_iso) if until_iso else datetime.now()
-
-    sessions = []
-    transcript_files: list[tuple[str, Path]] = [
-        ("claude_code", path) for path in find_claude_session_files()
-    ] + [
-        ("codex", path) for path in find_codex_session_files()
-    ]
-    for client, session_file in transcript_files:
-        try:
-            mtime = datetime.fromtimestamp(session_file.stat().st_mtime)
-        except OSError:
-            continue
-        if not (since_dt < mtime <= until_dt):
-            continue
-        session = extract_codex_session(session_file) if client == "codex" else extract_claude_session(session_file)
-        if session:
-            session["modified"] = mtime.isoformat()
-            sessions.append(session)
-    sessions.sort(key=lambda s: s["modified"])
-    return sessions
+    return _transcripts.collect_transcripts_since(since_iso, until_iso)
 
 
 # ── Database queries ──────────────────────────────────────────────────────
