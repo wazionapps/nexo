@@ -51,7 +51,7 @@
         "operatingSystem": "macOS, Linux, Windows",
         "url": "https://nexo-brain.com",
         "downloadUrl": "https://www.npmjs.com/package/nexo-brain",
-        "softwareVersion": "3.1.3",
+        "softwareVersion": "3.1.4",
         "license": "https://www.gnu.org/licenses/agpl-3.0",
         "author": {
             "@type": "Organization",
@@ -697,7 +697,7 @@
     <div class="container">
         <div class="hero-badge fade-up">
             <span class="dot"></span>
-            <span id="version-badge">v3.1.3</span> &mdash; Patch release: reminders and followups now keep history, soft-delete state, and read-before-mutate discipline
+            <span id="version-badge">v3.1.4</span> &mdash; Patch release: core automation now honors reminder/followup history end-to-end instead of bypassing it in internal scripts
         </div>
         <div class="fade-up" style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;">
             <img src="https://img.shields.io/npm/v/nexo-brain?color=7C3AED&label=npm" alt="npm version">
@@ -1143,9 +1143,9 @@
 
         <div class="release-evolution-grid">
             <div class="release-evolution-card">
-                <div class="release-evolution-version">v3.1.3</div>
-                <h3>Operational history becomes first-class</h3>
-                <p>Reminders and followups now preserve append-only history, soft-delete instead of disappearing, and require a history read before destructive mutations through the public MCP surface.</p>
+                <div class="release-evolution-version">v3.1.4</div>
+                <h3>Operational history reaches the internal loops</h3>
+                <p>Public MCP already enforced history-aware reminders and followups; now self-audit, Deep Sleep, hygiene jobs, and followup creation priority handling follow the same model instead of leaving silent blind spots in core automation.</p>
             </div>
             <div class="release-evolution-card">
                 <div class="release-evolution-version">v2.7.0</div>
