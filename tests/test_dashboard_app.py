@@ -136,3 +136,48 @@ def test_protocol_routes_render_and_return_snapshot():
     payload = api.json()
     assert "protocol_summary" in payload
     assert "recent_tasks" in payload
+
+
+def test_dashboard_reminder_delete_is_soft_and_history_visible(isolated_db):
+    client = TestClient(app)
+
+    created = client.post(
+        "/api/reminders",
+        json={"description": "Dashboard soft delete", "date": "2026-04-09", "category": "tasks"},
+    )
+    assert created.status_code == 200
+    rid = created.json()["reminder"]["id"]
+
+    deleted = client.delete(f"/api/reminders/{rid}")
+    assert deleted.status_code == 200
+
+    listing = client.get("/api/reminders")
+    assert listing.status_code == 200
+    assert all(item["id"] != rid for item in listing.json()["reminders"])
+
+    detail = client.get(f"/api/reminders/{rid}")
+    assert detail.status_code == 200
+    payload = detail.json()["reminder"]
+    assert payload["status"] == "DELETED"
+    assert any(event["event_type"] == "deleted" for event in payload["history"])
+
+
+def test_dashboard_move_preserves_source_as_deleted(isolated_db):
+    client = TestClient(app)
+
+    created = client.post(
+        "/api/reminders",
+        json={"description": "Move me to followup", "date": "2026-04-10", "category": "tasks"},
+    )
+    rid = created.json()["reminder"]["id"]
+
+    moved = client.post("/api/ops/move", json={"id": rid, "direction": "to_followup"})
+    assert moved.status_code == 200
+    fid = moved.json()["new_id"]
+
+    old_row = db.get_reminder(rid, include_history=True)
+    new_row = db.get_followup(fid, include_history=True)
+
+    assert old_row["status"] == "DELETED"
+    assert any(event["event_type"] == "deleted" for event in old_row["history"])
+    assert any("dashboard move" in (event.get("note") or "") for event in new_row["history"])

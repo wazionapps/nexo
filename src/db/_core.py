@@ -190,6 +190,26 @@ def init_db():
             updated_at REAL NOT NULL
         );
 
+        CREATE TABLE IF NOT EXISTS item_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            item_type TEXT NOT NULL,
+            item_id TEXT NOT NULL,
+            event_type TEXT NOT NULL,
+            note TEXT DEFAULT '',
+            actor TEXT DEFAULT '',
+            metadata TEXT DEFAULT '{}',
+            created_at REAL NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS item_read_tokens (
+            token TEXT PRIMARY KEY,
+            item_type TEXT NOT NULL,
+            item_id TEXT NOT NULL,
+            history_seq INTEGER DEFAULT 0,
+            issued_at REAL NOT NULL,
+            expires_at REAL NOT NULL
+        );
+
         CREATE TABLE IF NOT EXISTS learnings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             category TEXT NOT NULL,
@@ -415,4 +435,3 @@ def _multi_word_like(query: str, columns: list[str]) -> tuple[str, list]:
         word_conditions.append(f"({col_or})")
         params.extend([pattern] * len(columns))
     return " AND ".join(word_conditions), params
-

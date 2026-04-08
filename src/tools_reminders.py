@@ -19,16 +19,16 @@ def handle_reminders(filter_type: str = "due") -> str:
     """Read reminders and followups from SQLite, return relevant ones.
 
     Args:
-        filter_type: 'due' (vencidos/hoy), 'all' (todos activos), 'followups' (solo followups)
+        filter_type: 'due', 'all', 'followups', 'completed', 'deleted', 'history', 'any'
     """
     parts = []
 
-    if filter_type in ("due", "all"):
+    if filter_type in ("due", "all", "completed", "deleted", "history", "any"):
         r = _format_reminders(filter_type)
         if r:
             parts.append(r)
 
-    if filter_type in ("due", "all", "followups"):
+    if filter_type in ("due", "all", "followups", "completed", "deleted", "history", "any"):
         f = _format_followups(filter_type)
         if f:
             parts.append(f)
@@ -52,7 +52,8 @@ def _format_reminders(filter_type: str) -> str:
         desc = desc.replace("**", "")
         due_marker = " [DUE]" if _is_due(fecha) else ""
         fecha_display = f"({fecha})" if fecha else "(—)"
-        lines.append(f"  {rid} {fecha_display}{due_marker} — {desc[:120]}")
+        status_tag = f" [{status}]" if status and status != "PENDING" else ""
+        lines.append(f"  {rid} {fecha_display}{due_marker}{status_tag} — {desc[:120]}")
         if "RECURRENTE" in status.upper():
             lines.append(f"    Status: {status}")
 
@@ -81,6 +82,8 @@ def _format_followups(filter_type: str) -> str:
         pri = r.get("priority") or "medium"
         pri_icon = {"critical": "🔴", "high": "🟠", "medium": "", "low": "⚪"}.get(pri, "")
         pri_tag = f" {pri_icon}" if pri_icon else ""
-        lines.append(f"  {nfid} {fecha_display}{due_marker}{pri_tag}{rec_tag} — {desc[:120]}")
+        status = r.get("status") or ""
+        status_tag = f" [{status}]" if status and status != "PENDING" else ""
+        lines.append(f"  {nfid} {fecha_display}{due_marker}{pri_tag}{rec_tag}{status_tag} — {desc[:120]}")
 
     return "\n".join(lines)
