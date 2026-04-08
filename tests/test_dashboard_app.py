@@ -148,7 +148,8 @@ def test_dashboard_reminder_delete_is_soft_and_history_visible(isolated_db):
     assert created.status_code == 200
     rid = created.json()["reminder"]["id"]
 
-    deleted = client.delete(f"/api/reminders/{rid}")
+    token = client.get(f"/api/reminders/{rid}").json()["reminder"]["read_token"]
+    deleted = client.delete(f"/api/reminders/{rid}?read_token={token}")
     assert deleted.status_code == 200
 
     listing = client.get("/api/reminders")
@@ -171,7 +172,8 @@ def test_dashboard_move_preserves_source_as_deleted(isolated_db):
     )
     rid = created.json()["reminder"]["id"]
 
-    moved = client.post("/api/ops/move", json={"id": rid, "direction": "to_followup"})
+    token = client.get(f"/api/reminders/{rid}").json()["reminder"]["read_token"]
+    moved = client.post("/api/ops/move", json={"id": rid, "direction": "to_followup", "read_token": token})
     assert moved.status_code == 200
     fid = moved.json()["new_id"]
 
@@ -199,8 +201,10 @@ def test_dashboard_status_filters_distinguish_all_deleted_and_history(isolated_d
         json={"description": "Deleted reminder", "date": "2026-04-11", "category": "tasks"},
     ).json()["reminder"]["id"]
 
-    client.put(f"/api/reminders/{completed}", json={"status": "COMPLETED"})
-    client.delete(f"/api/reminders/{deleted}")
+    completed_token = client.get(f"/api/reminders/{completed}").json()["reminder"]["read_token"]
+    deleted_token = client.get(f"/api/reminders/{deleted}").json()["reminder"]["read_token"]
+    client.put(f"/api/reminders/{completed}", json={"status": "COMPLETED", "read_token": completed_token})
+    client.delete(f"/api/reminders/{deleted}?read_token={deleted_token}")
 
     all_payload = client.get("/api/reminders?status=all").json()["reminders"]
     deleted_payload = client.get("/api/reminders?status=deleted").json()["reminders"]
@@ -223,3 +227,72 @@ def test_operations_page_exposes_deleted_and_history_filters():
     assert page.status_code == 200
     assert 'value="deleted"' in page.text
     assert 'value="history"' in page.text
+
+
+def test_dashboard_recent_context_api_surfaces_hot_context(isolated_db):
+    client = TestClient(app)
+
+    db.capture_context_event(
+        event_type="context_capture",
+        title="Review DNS with Maria",
+        summary="Talked about registrar ownership and next step.",
+        body="Francisco said the domain is not his and Maria should handle it.",
+        topic="dns maria registrar",
+        context_key="topic:dns-maria-registrar",
+        context_title="Review DNS with Maria",
+        context_summary="Waiting Maria action on registrar side.",
+        context_type="topic",
+        state="waiting_third_party",
+        owner="maria",
+        actor="test",
+        source_type="email",
+        source_id="thread-1",
+        session_id="nexo-1-1",
+        ttl_hours=24,
+    )
+
+    res = client.get("/api/recent-context?query=dns maria")
+    assert res.status_code == 200
+    payload = res.json()
+    assert payload["has_matches"] is True
+    assert payload["counts"]["contexts"] >= 1
+    assert payload["contexts"][0]["context_key"] == "topic:dns-maria-registrar"
+    assert any(event["event_type"] == "context_capture" for event in payload["events"])
+
+
+def test_dashboard_reminder_update_requires_read_token(isolated_db):
+    client = TestClient(app)
+
+    rid = client.post(
+        "/api/reminders",
+        json={"description": "Need history first", "date": "2026-04-09", "category": "tasks"},
+    ).json()["reminder"]["id"]
+
+    denied = client.put(f"/api/reminders/{rid}", json={"status": "COMPLETED"})
+    assert denied.status_code == 409
+    assert "read_token" in denied.json()["error"].lower()
+
+    token = client.get(f"/api/reminders/{rid}").json()["reminder"]["read_token"]
+    allowed = client.put(f"/api/reminders/{rid}", json={"status": "COMPLETED", "read_token": token})
+    assert allowed.status_code == 200
+    assert allowed.json()["reminder"]["status"] == "COMPLETED"
+
+
+def test_dashboard_followup_move_requires_read_token(isolated_db):
+    client = TestClient(app)
+
+    fid = client.post(
+        "/api/followups",
+        json={"description": "Move only after reading", "date": "2026-04-10", "verification": "done"},
+    ).json()["followup"]["id"]
+
+    denied = client.post("/api/ops/move", json={"id": fid, "direction": "to_reminder"})
+    assert denied.status_code == 409
+    assert "read_token" in denied.json()["error"].lower()
+
+    token = client.get(f"/api/followups/{fid}").json()["followup"]["read_token"]
+    allowed = client.post("/api/ops/move", json={"id": fid, "direction": "to_reminder", "read_token": token})
+    assert allowed.status_code == 200
+    new_id = allowed.json()["new_id"]
+    moved = db.get_reminder(new_id, include_history=True)
+    assert moved["description"] == "Move only after reading"

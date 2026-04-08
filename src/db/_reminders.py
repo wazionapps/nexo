@@ -9,6 +9,7 @@ from typing import Any
 
 from db._core import get_db, now_epoch
 from db._fts import fts_upsert
+from db._hot_context import capture_context_event
 
 ACTIVE_EXCLUDED_STATUSES = {"DELETED", "archived", "blocked", "waiting"}
 READ_TOKEN_TTL_SECONDS = 30 * 60
@@ -190,6 +191,19 @@ def _active_status_where(column_name: str = "status") -> str:
     )
 
 
+def _context_state_from_status(status: str | None) -> str:
+    normalized = str(status or "PENDING").strip().upper()
+    if normalized.startswith("COMPLETED"):
+        return "resolved"
+    if normalized == "DELETED":
+        return "abandoned"
+    if normalized == "WAITING":
+        return "waiting_user"
+    if normalized == "BLOCKED":
+        return "blocked"
+    return "active"
+
+
 # ── Reminders ──────────────────────────────────────────────────────
 
 
@@ -221,6 +235,23 @@ def create_reminder(
         note=f"Reminder created. Category={category}. Date={date or '—'}.",
         actor="db",
     )
+    capture_context_event(
+        event_type="reminder_created",
+        title=description[:160],
+        summary=description[:600],
+        body=f"Category={category}. Date={date or '—'}.",
+        context_key=f"reminder:{id}",
+        context_title=description[:160],
+        context_summary=description[:600],
+        context_type="reminder",
+        state=_context_state_from_status(status),
+        owner="user",
+        actor="db",
+        source_type="reminder",
+        source_id=id,
+        metadata={"category": category, "status": status, "date": date or ""},
+        ttl_hours=24,
+    )
     return dict(row)
 
 
@@ -251,9 +282,27 @@ def update_reminder(
     conn.commit()
 
     new_row = conn.execute("SELECT * FROM reminders WHERE id = ?", (id,)).fetchone()
+    current = dict(new_row) if new_row else dict(row)
     if log_history:
         note = history_note or _format_changes(row, new_row, ["description", "date", "status", "category"])
         add_item_history("reminder", id, history_event, note=note or "Reminder updated.", actor=history_actor)
+    capture_context_event(
+        event_type=f"reminder_{history_event}",
+        title=(new_row["description"] if new_row else row["description"])[:160],
+        summary=((note if log_history else history_note) or "Reminder updated.")[:600],
+        body=((new_row["description"] if new_row else row["description"]) or "")[:1600],
+        context_key=f"reminder:{id}",
+        context_title=(new_row["description"] if new_row else row["description"])[:160],
+        context_summary=((new_row["description"] if new_row else row["description"]) or "")[:600],
+        context_type="reminder",
+        state=_context_state_from_status(current.get("status")),
+        owner="user",
+        actor=history_actor,
+        source_type="reminder",
+        source_id=id,
+        metadata={"status": current.get("status", ""), "date": current.get("date", "")},
+        ttl_hours=24,
+    )
     return dict(new_row)
 
 
@@ -267,6 +316,23 @@ def complete_reminder(id: str) -> dict:
     if "error" in result:
         return result
     add_item_history("reminder", id, "completed", note="Reminder marked COMPLETED.", actor="db")
+    capture_context_event(
+        event_type="reminder_completed",
+        title=(result.get("description") or id)[:160],
+        summary="Reminder marked COMPLETED.",
+        body=(result.get("description") or "")[:1600],
+        context_key=f"reminder:{id}",
+        context_title=(result.get("description") or id)[:160],
+        context_summary=(result.get("description") or "")[:600],
+        context_type="reminder",
+        state="resolved",
+        owner="user",
+        actor="db",
+        source_type="reminder",
+        source_id=id,
+        metadata={"status": "COMPLETED"},
+        ttl_hours=24,
+    )
     return result
 
 
@@ -280,6 +346,23 @@ def delete_reminder(id: str) -> bool:
     if "error" in result:
         return False
     add_item_history("reminder", id, "deleted", note="Reminder soft-deleted (status=DELETED).", actor="db")
+    capture_context_event(
+        event_type="reminder_deleted",
+        title=(result.get("description") or id)[:160],
+        summary="Reminder soft-deleted (status=DELETED).",
+        body=(result.get("description") or "")[:1600],
+        context_key=f"reminder:{id}",
+        context_title=(result.get("description") or id)[:160],
+        context_summary=(result.get("description") or "")[:600],
+        context_type="reminder",
+        state="abandoned",
+        owner="user",
+        actor="db",
+        source_type="reminder",
+        source_id=id,
+        metadata={"status": "DELETED"},
+        ttl_hours=24,
+    )
     return True
 
 
@@ -297,6 +380,23 @@ def restore_reminder(id: str) -> dict:
         return result
     previous = row.get("status") or "unknown"
     add_item_history("reminder", id, "restored", note=f"Reminder restored from {previous} to PENDING.", actor="db")
+    capture_context_event(
+        event_type="reminder_restored",
+        title=(result.get("description") or id)[:160],
+        summary=f"Reminder restored from {previous} to PENDING.",
+        body=(result.get("description") or "")[:1600],
+        context_key=f"reminder:{id}",
+        context_title=(result.get("description") or id)[:160],
+        context_summary=(result.get("description") or "")[:600],
+        context_type="reminder",
+        state="active",
+        owner="user",
+        actor="db",
+        source_type="reminder",
+        source_id=id,
+        metadata={"previous_status": previous, "status": "PENDING"},
+        ttl_hours=24,
+    )
     return result
 
 
@@ -305,7 +405,25 @@ def add_reminder_note(id: str, note: str, actor: str = "nexo") -> dict:
     row = get_reminder(id)
     if not row:
         return {"error": f"Reminder {id} not found"}
-    return add_item_history("reminder", id, "note", note=note, actor=actor)
+    history = add_item_history("reminder", id, "note", note=note, actor=actor)
+    capture_context_event(
+        event_type="reminder_note",
+        title=(row.get("description") or id)[:160],
+        summary=note[:600],
+        body=note[:1600],
+        context_key=f"reminder:{id}",
+        context_title=(row.get("description") or id)[:160],
+        context_summary=(row.get("description") or "")[:600],
+        context_type="reminder",
+        state=_context_state_from_status(row.get("status")),
+        owner="user",
+        actor=actor,
+        source_type="reminder",
+        source_id=id,
+        metadata={"status": row.get("status", "")},
+        ttl_hours=24,
+    )
+    return history
 
 
 def get_reminders(filter_type: str = "all") -> list[dict]:
@@ -450,6 +568,23 @@ def create_followup(
         note=f"Followup created. Date={date or '—'}. Recurrence={recurrence or '—'}.",
         actor="db",
     )
+    capture_context_event(
+        event_type="followup_created",
+        title=description[:160],
+        summary=description[:600],
+        body=f"Verification={verification[:240]}. Reasoning={reasoning[:240]}.",
+        context_key=f"followup:{id}",
+        context_title=description[:160],
+        context_summary=description[:600],
+        context_type="followup",
+        state=_context_state_from_status(status),
+        owner="nexo",
+        actor="db",
+        source_type="followup",
+        source_id=id,
+        metadata={"status": status, "date": date or "", "priority": priority or "medium"},
+        ttl_hours=24,
+    )
     result = dict(row)
     if warning:
         result["warning"] = warning
@@ -483,6 +618,7 @@ def update_followup(
     conn.commit()
 
     new_row = conn.execute("SELECT * FROM followups WHERE id = ?", (id,)).fetchone()
+    current = dict(new_row) if new_row else dict(row)
     if new_row and _table_exists(conn, "unified_search"):
         new_row_dict = dict(new_row)
         fts_upsert(
@@ -500,6 +636,27 @@ def update_followup(
             ["description", "date", "verification", "status", "reasoning", "recurrence", "priority"],
         )
         add_item_history("followup", id, history_event, note=note or "Followup updated.", actor=history_actor)
+    capture_context_event(
+        event_type=f"followup_{history_event}",
+        title=(new_row["description"] if new_row else row["description"])[:160],
+        summary=((note if log_history else history_note) or "Followup updated.")[:600],
+        body=((new_row["description"] if new_row else row["description"]) or "")[:1600],
+        context_key=f"followup:{id}",
+        context_title=(new_row["description"] if new_row else row["description"])[:160],
+        context_summary=((new_row["description"] if new_row else row["description"]) or "")[:600],
+        context_type="followup",
+        state=_context_state_from_status(current.get("status")),
+        owner="nexo",
+        actor=history_actor,
+        source_type="followup",
+        source_id=id,
+        metadata={
+            "status": current.get("status", ""),
+            "date": current.get("date", ""),
+            "priority": current.get("priority", ""),
+        },
+        ttl_hours=24,
+    )
     return dict(new_row)
 
 
@@ -572,6 +729,23 @@ def complete_followup(id: str, result: str = "") -> dict:
         note=result or "Followup marked COMPLETED.",
         actor="db",
     )
+    capture_context_event(
+        event_type="followup_completed",
+        title=(update_result.get("description") or id)[:160],
+        summary=(result or "Followup marked COMPLETED.")[:600],
+        body=(update_result.get("description") or "")[:1600],
+        context_key=f"followup:{id}",
+        context_title=(update_result.get("description") or id)[:160],
+        context_summary=(update_result.get("description") or "")[:600],
+        context_type="followup",
+        state="resolved",
+        owner="nexo",
+        actor="db",
+        source_type="followup",
+        source_id=id,
+        metadata={"status": "COMPLETED"},
+        ttl_hours=24,
+    )
 
     recurrence = row["recurrence"]
     if recurrence:
@@ -619,6 +793,23 @@ def complete_followup(id: str, result: str = "") -> dict:
                 actor="db",
                 metadata={"source_followup_id": archived_id},
             )
+            capture_context_event(
+                event_type="followup_recurrence_archived",
+                title=(archived_row["description"] or archived_id)[:160],
+                summary=f"Recurring followup archived as {archived_id}. Next occurrence spawned as {id} for {next_date}.",
+                body=(archived_row["description"] or "")[:1600],
+                context_key=f"followup:{archived_id}",
+                context_title=(archived_row["description"] or archived_id)[:160],
+                context_summary=(archived_row["description"] or "")[:600],
+                context_type="followup",
+                state="resolved",
+                owner="nexo",
+                actor="db",
+                source_type="followup",
+                source_id=archived_id,
+                metadata={"next_id": id, "next_date": next_date},
+                ttl_hours=24,
+            )
             return {
                 "id": archived_id,
                 "status": "COMPLETED",
@@ -636,6 +827,23 @@ def delete_followup(id: str) -> bool:
     if "error" in result:
         return False
     add_item_history("followup", id, "deleted", note="Followup soft-deleted (status=DELETED).", actor="db")
+    capture_context_event(
+        event_type="followup_deleted",
+        title=(result.get("description") or id)[:160],
+        summary="Followup soft-deleted (status=DELETED).",
+        body=(result.get("description") or "")[:1600],
+        context_key=f"followup:{id}",
+        context_title=(result.get("description") or id)[:160],
+        context_summary=(result.get("description") or "")[:600],
+        context_type="followup",
+        state="abandoned",
+        owner="nexo",
+        actor="db",
+        source_type="followup",
+        source_id=id,
+        metadata={"status": "DELETED"},
+        ttl_hours=24,
+    )
     return True
 
 
@@ -649,6 +857,23 @@ def restore_followup(id: str) -> dict:
         return result
     previous = row.get("status") or "unknown"
     add_item_history("followup", id, "restored", note=f"Followup restored from {previous} to PENDING.", actor="db")
+    capture_context_event(
+        event_type="followup_restored",
+        title=(result.get("description") or id)[:160],
+        summary=f"Followup restored from {previous} to PENDING.",
+        body=(result.get("description") or "")[:1600],
+        context_key=f"followup:{id}",
+        context_title=(result.get("description") or id)[:160],
+        context_summary=(result.get("description") or "")[:600],
+        context_type="followup",
+        state="active",
+        owner="nexo",
+        actor="db",
+        source_type="followup",
+        source_id=id,
+        metadata={"previous_status": previous, "status": "PENDING"},
+        ttl_hours=24,
+    )
     return result
 
 
@@ -657,7 +882,25 @@ def add_followup_note(id: str, note: str, actor: str = "nexo") -> dict:
     row = get_followup(id)
     if not row:
         return {"error": f"Followup {id} not found"}
-    return add_item_history("followup", id, "note", note=note, actor=actor)
+    history = add_item_history("followup", id, "note", note=note, actor=actor)
+    capture_context_event(
+        event_type="followup_note",
+        title=(row.get("description") or id)[:160],
+        summary=note[:600],
+        body=note[:1600],
+        context_key=f"followup:{id}",
+        context_title=(row.get("description") or id)[:160],
+        context_summary=(row.get("description") or "")[:600],
+        context_type="followup",
+        state=_context_state_from_status(row.get("status")),
+        owner="nexo",
+        actor=actor,
+        source_type="followup",
+        source_id=id,
+        metadata={"status": row.get("status", "")},
+        ttl_hours=24,
+    )
+    return history
 
 
 def get_followups(filter_type: str = "all") -> list[dict]:

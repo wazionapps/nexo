@@ -129,6 +129,7 @@
       </div>
       <input type="hidden" name="type" id="modal-type">
       <input type="hidden" name="edit_id" id="modal-edit-id">
+      <input type="hidden" name="read_token" id="modal-read-token">
       <div class="flex items-center justify-end gap-2 pt-1">
         <button type="button" onclick="closeModal()" class="text-xs px-3 py-1.5 rounded-lg bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200 transition-colors">
           Cancel
@@ -227,6 +228,24 @@ function opsRelativeDate(dateStr) {
   if (diff === 1) return 'tomorrow';
   if (diff <= 7) return diff + 'd';
   return d.toLocaleDateString('en', { month: 'short', day: 'numeric' });
+}
+
+async function fetchItemDetail(id, type) {
+  const url = type === 'reminder' ? '/api/reminders/' + id : '/api/followups/' + id;
+  const data = await fetchJSON(url);
+  if (!data || !data.success) {
+    throw new Error((data && (data.error || data.detail)) || 'Failed to read item history');
+  }
+  return type === 'reminder' ? data.reminder : data.followup;
+}
+
+async function fetchReadToken(id, type) {
+  const item = await fetchItemDetail(id, type);
+  const token = item.read_token;
+  if (!token) {
+    throw new Error('Missing read token for ' + id);
+  }
+  return { item, token };
 }
 
 // -----------------------------------------------------------------------
@@ -373,11 +392,12 @@ function filterOps() {
 // -----------------------------------------------------------------------
 async function completeItem(id, type) {
   try {
+    const { token } = await fetchReadToken(id, type);
     const url = type === 'reminder' ? '/api/reminders/' + id : '/api/followups/' + id;
     const res = await fetch(url, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'COMPLETED' })
+      body: JSON.stringify({ status: 'COMPLETED', read_token: token })
     });
     const data = await res.json();
     if (data.success) {
@@ -393,10 +413,12 @@ async function completeItem(id, type) {
 
 async function moveItem(id, direction) {
   try {
+    const type = direction === 'to_followup' ? 'reminder' : 'followup';
+    const { token } = await fetchReadToken(id, type);
     const res = await fetch('/api/ops/move', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, direction })
+      body: JSON.stringify({ id, direction, read_token: token })
     });
     const data = await res.json();
     if (data.success) {
@@ -428,7 +450,8 @@ function deleteItem(id, type) {
   pendingConfirmAction = async () => {
     try {
       const url = type === 'reminder' ? '/api/reminders/' + id : '/api/followups/' + id;
-      const res = await fetch(url, { method: 'DELETE' });
+      const { token } = await fetchReadToken(id, type);
+      const res = await fetch(url + '?read_token=' + encodeURIComponent(token), { method: 'DELETE' });
       const data = await res.json();
       if (data.success) {
         opsToast('Marked ' + id + ' as deleted');
@@ -462,6 +485,7 @@ function openCreate(type) {
   form.reset();
   document.getElementById('modal-type').value = type;
   document.getElementById('modal-edit-id').value = '';
+  document.getElementById('modal-read-token').value = '';
   document.getElementById('modal-title').textContent = type === 'reminder' ? 'New Reminder' : 'New Followup';
   document.getElementById('modal-submit-btn').textContent = 'Create';
   document.getElementById('category-group').classList.toggle('hidden', type !== 'reminder');
@@ -470,17 +494,23 @@ function openCreate(type) {
   document.getElementById('ops-modal').classList.remove('hidden');
 }
 
-function editItem(id, type) {
-  const source = type === 'reminder' ? allReminders : allFollowups;
-  const item = source.find(i => i.id === id);
-  if (!item) return;
-
+async function editItem(id, type) {
+  let item;
+  try {
+    const detail = await fetchReadToken(id, type);
+    item = detail.item;
+    document.getElementById('modal-read-token').value = detail.token;
+  } catch (err) {
+    opsToast('Read history failed: ' + err.message, 'error');
+    return;
+  }
   const form = document.getElementById('modal-form');
   form.reset();
   document.getElementById('modal-type').value = type;
   document.getElementById('modal-edit-id').value = id;
   document.getElementById('modal-title').textContent = 'Edit ' + id;
   document.getElementById('modal-submit-btn').textContent = 'Save';
+  document.getElementById('modal-read-token').value = item.read_token || '';
   document.getElementById('category-group').classList.toggle('hidden', type !== 'reminder');
   document.getElementById('verification-group').classList.toggle('hidden', type !== 'followup');
   document.getElementById('reasoning-group').classList.toggle('hidden', type !== 'followup');
@@ -500,6 +530,7 @@ function editItem(id, type) {
 
 function closeModal() {
   document.getElementById('ops-modal').classList.add('hidden');
+  document.getElementById('modal-read-token').value = '';
 }
 
 async function submitForm(e) {
@@ -509,6 +540,7 @@ async function submitForm(e) {
   const type = fd.get('type');
   const editId = fd.get('edit_id');
   const isEdit = !!editId;
+  const readToken = fd.get('read_token');
 
   let url, method, body;
 
@@ -529,6 +561,9 @@ async function submitForm(e) {
       verification: fd.get('verification') || null,
       reasoning: fd.get('reasoning') || null
     };
+  }
+  if (isEdit) {
+    body.read_token = readToken || '';
   }
 
   try {

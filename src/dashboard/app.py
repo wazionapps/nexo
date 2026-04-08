@@ -106,6 +106,7 @@ class ReminderUpdate(BaseModel):
     date: Optional[str] = None
     status: Optional[str] = None
     category: Optional[str] = None
+    read_token: Optional[str] = None
 
 class FollowupCreate(BaseModel):
     description: str
@@ -119,10 +120,12 @@ class FollowupUpdate(BaseModel):
     status: Optional[str] = None
     verification: Optional[str] = None
     reasoning: Optional[str] = None
+    read_token: Optional[str] = None
 
 class MoveRequest(BaseModel):
     id: str
     direction: str  # "to_followup" | "to_reminder"
+    read_token: Optional[str] = None
 
 class InboxCreate(BaseModel):
     direction: str  # "to_nexo" | "to_user"
@@ -179,6 +182,22 @@ def _dashboard_status_matches(status: object, requested: str | None) -> bool:
     if requested_key == "deleted":
         return normalized == "DELETED"
     return normalized == requested_key.upper()
+
+
+def _require_dashboard_item_read(item_type: str, item_id: str, read_token: str | None):
+    db = _db()
+    ok, message = db.validate_item_read_token(read_token or "", item_type, item_id)
+    if ok:
+        return None
+    prefix = "followup" if item_type == "followup" else "reminder"
+    return JSONResponse(
+        {
+            "error": f"{message} Read /api/{prefix}s/{item_id} first and reuse its read_token.",
+            "item_type": item_type,
+            "item_id": item_id,
+        },
+        status_code=409,
+    )
 
 
 def _latest_periodic_summary(kind: str) -> dict:
@@ -807,6 +826,9 @@ async def api_reminders_update(rid: str, body: ReminderUpdate):
     row = db.get_reminder(rid)
     if not row:
         return JSONResponse({"error": f"Reminder {rid} not found"}, status_code=404)
+    read_error = _require_dashboard_item_read("reminder", rid, body.read_token)
+    if read_error:
+        return read_error
     fields = {}
     if body.description is not None:
         fields["description"] = body.description
@@ -825,12 +847,15 @@ async def api_reminders_update(rid: str, body: ReminderUpdate):
 
 
 @app.delete("/api/reminders/{rid}")
-async def api_reminders_delete(rid: str):
+async def api_reminders_delete(rid: str, read_token: str = Query("", description="Read token from GET /api/reminders/{rid}")):
     """Soft-delete a reminder."""
     db = _db()
     row = db.get_reminder(rid)
     if not row:
         return JSONResponse({"error": f"Reminder {rid} not found"}, status_code=404)
+    read_error = _require_dashboard_item_read("reminder", rid, read_token)
+    if read_error:
+        return read_error
     db.add_reminder_note(rid, "Soft-deleted from dashboard.", actor="dashboard")
     db.delete_reminder(rid)
     return {"success": True, "deleted_id": rid}
@@ -902,6 +927,9 @@ async def api_followups_update(fid: str, body: FollowupUpdate):
     row = db.get_followup(fid)
     if not row:
         return JSONResponse({"error": f"Followup {fid} not found"}, status_code=404)
+    read_error = _require_dashboard_item_read("followup", fid, body.read_token)
+    if read_error:
+        return read_error
     fields = {}
     if body.description is not None:
         fields["description"] = body.description
@@ -922,12 +950,15 @@ async def api_followups_update(fid: str, body: FollowupUpdate):
 
 
 @app.delete("/api/followups/{fid}")
-async def api_followups_delete(fid: str):
+async def api_followups_delete(fid: str, read_token: str = Query("", description="Read token from GET /api/followups/{fid}")):
     """Soft-delete a followup."""
     db = _db()
     row = db.get_followup(fid)
     if not row:
         return JSONResponse({"error": f"Followup {fid} not found"}, status_code=404)
+    read_error = _require_dashboard_item_read("followup", fid, read_token)
+    if read_error:
+        return read_error
     db.add_followup_note(fid, "Soft-deleted from dashboard.", actor="dashboard")
     db.delete_followup(fid)
     return {"success": True, "deleted_id": fid}
@@ -947,6 +978,9 @@ async def api_ops_move(body: MoveRequest):
         item = db.get_reminder(body.id)
         if not item:
             return JSONResponse({"error": f"Reminder {body.id} not found"}, status_code=404)
+        read_error = _require_dashboard_item_read("reminder", body.id, body.read_token)
+        if read_error:
+            return read_error
         fid = _next_followup_id(conn)
         created = db.create_followup(
             fid,
@@ -965,6 +999,9 @@ async def api_ops_move(body: MoveRequest):
         item = db.get_followup(body.id)
         if not item:
             return JSONResponse({"error": f"Followup {body.id} not found"}, status_code=404)
+        read_error = _require_dashboard_item_read("followup", body.id, body.read_token)
+        if read_error:
+            return read_error
         rid = _next_reminder_id(conn)
         created = db.create_reminder(
             rid,
@@ -1386,6 +1423,33 @@ async def api_memory_flow():
 
     return {"counts": {"stm": stm, "ltm": ltm, "quarantine": quar, "promoted": promoted, "dreamed": dreamed},
             "stm_recent": stm_recent, "ltm_recent": ltm_recent, "quarantine": quarantine}
+
+
+@app.get("/api/recent-context")
+async def api_recent_context(
+    query: str = Query("", description="Optional search query for hot context"),
+    hours: int = Query(24, ge=1, le=168, description="How many recent hours to inspect"),
+    limit: int = Query(8, ge=1, le=25, description="Max contexts/events to return"),
+):
+    """Expose recent hot context and event timeline for the last N hours."""
+    db = _db()
+    bundle = db.build_pre_action_context(query=query, hours=hours, limit=limit)
+    return {
+        "query": bundle.get("query") or "",
+        "hours": bundle.get("hours") or hours,
+        "has_matches": bool(bundle.get("has_matches")),
+        "counts": {
+            "contexts": len(bundle.get("contexts") or []),
+            "events": len(bundle.get("events") or []),
+            "reminders": len(bundle.get("reminders") or []),
+            "followups": len(bundle.get("followups") or []),
+        },
+        "contexts": bundle.get("contexts") or [],
+        "events": bundle.get("events") or [],
+        "reminders": bundle.get("reminders") or [],
+        "followups": bundle.get("followups") or [],
+        "excerpt": db.format_pre_action_context_bundle(bundle, compact=True) if bundle.get("has_matches") else "No recent context.",
+    }
 
 
 # ---------------------------------------------------------------------------

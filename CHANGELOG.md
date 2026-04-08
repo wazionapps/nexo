@@ -1,5 +1,15 @@
 # Changelog
 
+## [3.1.7] - 2026-04-08
+
+### Hot Context Memory + Dashboard History Discipline
+- Added a first-class `hot context` / `recent events` layer for 24-hour operational continuity across sessions, clients, and channels. Core now persists active recent topics, recent timeline events, and a reusable pre-action bundle instead of relying only on long-term recall and diaries.
+- Added new MCP tools for this layer: `nexo_recent_context_capture`, `nexo_recent_context`, `nexo_pre_action_context`, `nexo_recent_context_resolve`, and `nexo_hot_context_list`.
+- Wired hot context into core runtime surfaces: `heartbeat`, `task_open`, `task_close`, reminders, and followups now all feed the same shared recent-memory substrate.
+- Added dashboard observability for `Hot Context 24h` and a public `/api/recent-context` endpoint so recent operational memory is visible and testable instead of being hidden in prompts.
+- Documented the separation between reminder/followup history and recent operational memory, including the expected script pattern for pre-action loading, capture, and resolution.
+- Closed a dashboard loophole: reminder/followup mutations and dashboard moves now require a fresh `READ_TOKEN`, so the official UI can no longer bypass the history-first discipline enforced by the MCP tools.
+
 ## [3.1.6] - 2026-04-08
 
 ### Deep Sleep Abandoned Followups Hotfix

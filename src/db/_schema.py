@@ -703,6 +703,55 @@ def _m29_item_history_and_soft_delete(conn):
     _migrate_add_index(conn, "idx_item_read_tokens_lookup", "item_read_tokens", "item_type, item_id, expires_at")
 
 
+def _m30_hot_context_memory(conn):
+    """Persist recent events + hot context for 24h operational continuity."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS hot_context (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            context_key TEXT NOT NULL UNIQUE,
+            title TEXT NOT NULL,
+            summary TEXT DEFAULT '',
+            context_type TEXT DEFAULT 'topic',
+            state TEXT DEFAULT 'active',
+            owner TEXT DEFAULT '',
+            source_type TEXT DEFAULT '',
+            source_id TEXT DEFAULT '',
+            session_id TEXT DEFAULT '',
+            metadata TEXT DEFAULT '{}',
+            first_seen_at REAL NOT NULL,
+            last_event_at REAL NOT NULL,
+            expires_at REAL NOT NULL,
+            created_at REAL NOT NULL,
+            updated_at REAL NOT NULL
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS recent_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            context_key TEXT DEFAULT '',
+            event_type TEXT NOT NULL,
+            title TEXT DEFAULT '',
+            summary TEXT DEFAULT '',
+            body TEXT DEFAULT '',
+            actor TEXT DEFAULT '',
+            source_type TEXT DEFAULT '',
+            source_id TEXT DEFAULT '',
+            session_id TEXT DEFAULT '',
+            metadata TEXT DEFAULT '{}',
+            created_at REAL NOT NULL,
+            expires_at REAL NOT NULL
+        )
+    """)
+    _migrate_add_index(conn, "idx_hot_context_last_event", "hot_context", "last_event_at")
+    _migrate_add_index(conn, "idx_hot_context_state", "hot_context", "state")
+    _migrate_add_index(conn, "idx_hot_context_source", "hot_context", "source_type, source_id")
+    _migrate_add_index(conn, "idx_hot_context_session", "hot_context", "session_id, last_event_at")
+    _migrate_add_index(conn, "idx_recent_events_created", "recent_events", "created_at")
+    _migrate_add_index(conn, "idx_recent_events_context", "recent_events", "context_key, created_at")
+    _migrate_add_index(conn, "idx_recent_events_source", "recent_events", "source_type, source_id, created_at")
+    _migrate_add_index(conn, "idx_recent_events_session", "recent_events", "session_id, created_at")
+
+
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
     (2, "followups_reasoning", _m2_followups_reasoning),
@@ -733,6 +782,7 @@ MIGRATIONS = [
     (27, "state_watchers", _m27_state_watchers),
     (28, "automation_runs", _m28_automation_runs),
     (29, "item_history_and_soft_delete", _m29_item_history_and_soft_delete),
+    (30, "hot_context_memory", _m30_hot_context_memory),
 ]
 
 

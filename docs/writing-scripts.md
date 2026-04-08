@@ -150,6 +150,44 @@ nexo scripts call nexo_learning_search --input '{"query":"cron errors"}'
 nexo scripts call nexo_schedule_status --input '{"hours":24}' --json-output
 ```
 
+## Hot Context Pattern for Automation
+
+If a script makes decisions across repeated runs, email cycles, or client handoffs, it should use the recent-memory layer explicitly.
+
+Use this pattern:
+
+1. `nexo_pre_action_context(...)` before acting
+2. `nexo_recent_context_capture(...)` when a topic becomes active, blocked, or waiting
+3. `nexo_recent_context_resolve(...)` when the topic is clearly done
+
+Example:
+
+```python
+from nexo_helper import call_tool_text
+
+bundle = call_tool_text("nexo_pre_action_context", {
+    "query": "francisco email dns recambiosbmw",
+    "hours": 24,
+    "limit": 6,
+})
+print(bundle)
+
+call_tool_text("nexo_recent_context_capture", {
+    "title": "Awaiting registrar action",
+    "summary": "Asked Maria to handle the registrar. Waiting external action.",
+    "topic": "dns recambiosbmw",
+    "state": "waiting_third_party",
+    "owner": "maria",
+    "source_type": "email",
+    "source_id": "thread-123",
+})
+```
+
+This is different from reminder/followup history:
+
+- reminder/followup history records changes to a specific item
+- hot context keeps the last 24 hours of live operational continuity fresh across channels
+
 ## Automation Task Profiles
 
 When a personal script needs intelligence from the automation backend, prefer task profiles over hardcoding a provider-specific command line. `nexo-agent-run.py` now accepts:
