@@ -51,7 +51,7 @@
         "operatingSystem": "macOS, Linux, Windows",
         "url": "https://nexo-brain.com",
         "downloadUrl": "https://www.npmjs.com/package/nexo-brain",
-        "softwareVersion": "3.1.2",
+        "softwareVersion": "3.1.3",
         "license": "https://www.gnu.org/licenses/agpl-3.0",
         "author": {
             "@type": "Organization",
@@ -697,7 +697,7 @@
     <div class="container">
         <div class="hero-badge fade-up">
             <span class="dot"></span>
-            <span id="version-badge">v3.1.2</span> &mdash; Patch release: spreads public Evolution across the week and keeps protocol runtime sync intact
+            <span id="version-badge">v3.1.3</span> &mdash; Patch release: reminders and followups now keep history, soft-delete state, and read-before-mutate discipline
         </div>
         <div class="fade-up" style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;">
             <img src="https://img.shields.io/npm/v/nexo-brain?color=7C3AED&label=npm" alt="npm version">
@@ -1143,9 +1143,9 @@
 
         <div class="release-evolution-grid">
             <div class="release-evolution-card">
-                <div class="release-evolution-version">v3.1.2</div>
-                <h3>Public Evolution stops bunching on Sunday</h3>
-                <p>This patch spreads managed Evolution runs across the week per machine, ships persistence verification for new learnings, and ensures `nexo update` carries the protocol guard modules that must stay aligned with the runtime.</p>
+                <div class="release-evolution-version">v3.1.3</div>
+                <h3>Operational history becomes first-class</h3>
+                <p>Reminders and followups now preserve append-only history, soft-delete instead of disappearing, and require a history read before destructive mutations through the public MCP surface.</p>
             </div>
             <div class="release-evolution-card">
                 <div class="release-evolution-version">v2.7.0</div>

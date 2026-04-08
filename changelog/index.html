@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v3.1.2.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v3.1.3.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v3.1.2.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v3.1.3.">
     <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
     <meta property="og:image:width" content="1536">
     <meta property="og:image:height" content="1024">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v3.1.2.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v3.1.3.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v3.1.2.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v3.1.3.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,12 +87,12 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v3.1.2 live</span>
+                    <span class="page-chip">v3.1.3 live</span>
                     <span class="page-chip">Runtime + website + release artifacts</span>
                     <span class="page-chip">From early memory stack to cognitive runtime</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v312" class="btn btn-primary">Start with v3.1.2</a>
+                    <a href="#v313" class="btn btn-primary">Start with v3.1.3</a>
                     <a href="#v310" class="btn btn-secondary">See v3.1.0</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -100,8 +100,8 @@
             <div class="page-visual">
                 <div class="page-stack">
                     <div class="page-stack-card">
-                        <strong>v3.1.2</strong>
-                        <span>Patch release: weekly Evolution is machine-staggered, updates sync the protocol guard modules, and new learnings verify persistence on write.</span>
+                        <strong>v3.1.3</strong>
+                        <span>Patch release: reminders and followups keep append-only history, soft-delete state, and read-before-mutate safety across MCP and dashboard surfaces.</span>
                     </div>
                     <div class="page-stack-card">
                         <strong>v3.0.0</strong>
@@ -127,6 +127,24 @@
             <div>
                 <div id="changelog-page-meta" class="changelog-page-meta">Loading release pages…</div>
                 <div id="changelog-pager" class="changelog-pager" aria-label="Changelog pagination"></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v3.1.3 History-aware reminders + followups -->
+<section id="v313" class="section-compact" style="background:linear-gradient(135deg,#111827 0%,#20556d 100%);">
+    <div class="container">
+        <div class="section-label">New in v3.1.3 <span style="opacity:.5;font-weight:400;">&mdash; April 8, 2026</span></div>
+        <h2 class="section-title">Operational History for Reminders + Followups</h2>
+        <p class="section-subtitle">
+            v3.1.3 turns reminders and followups into history-aware operational records instead of disposable rows: mutations are logged, delete becomes soft delete, and the public MCP surface now forces a read-before-mutate flow for risky changes.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Append-Only History</h4><p>Each reminder and followup now records created, updated, completed, deleted, restored, note, and recurring archive/spawn events so agents can see the operational timeline instead of overwriting context.</p></div>
+                <div class="cognitive-card"><h4>Soft Delete + Queryable Past</h4><p>Delete no longer destroys reminders or followups. Completed and deleted items remain available for later lookup, which lets NEXO reason over what happened before instead of forgetting it permanently.</p></div>
+                <div class="cognitive-card"><h4>Read Before Mutate</h4><p>New get/note/restore tools expose history and a short-lived read token. Update/delete/restore/note flows now require that token, so agents have to read the item history before changing it through MCP.</p></div>
             </div>
         </div>
     </div>
