@@ -1186,27 +1186,38 @@ def _source_repo_status(repo_dir: Path) -> dict:
     }
 
 
+def _discover_runtime_root_python_modules(base_dir: Path) -> list[str]:
+    """Return every top-level runtime `.py` module in the source/runtime root."""
+    if not base_dir.is_dir():
+        return []
+    modules: list[str] = []
+    for item in sorted(base_dir.iterdir(), key=lambda path: path.name):
+        if not item.is_file() or item.suffix != ".py":
+            continue
+        if item.name.startswith(".") or item.name == "__init__.py":
+            continue
+        modules.append(item.name)
+    return modules
+
+
+def _runtime_flat_files(base_dir: Path) -> list[str]:
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for name in _discover_runtime_root_python_modules(base_dir) + ["requirements.txt", "package.json", "version.json"]:
+        if name in seen:
+            continue
+        seen.add(name)
+        ordered.append(name)
+    return ordered
+
+
 def _backup_runtime_tree(dest: Path = NEXO_HOME) -> str:
     timestamp = time.strftime("%Y-%m-%d-%H%M%S")
     backup_dir = NEXO_HOME / "backups" / f"runtime-tree-{timestamp}"
     backup_dir.mkdir(parents=True, exist_ok=True)
 
     code_dirs = ["hooks", "plugins", "db", "cognitive", "dashboard", "rules", "crons", "scripts", "doctor", "skills-core"]
-    flat_files = [
-        "server.py", "plugin_loader.py", "knowledge_graph.py", "kg_populate.py",
-        "maintenance.py", "storage_router.py", "claim_graph.py", "hnsw_index.py",
-        "evolution_cycle.py", "migrate_embeddings.py", "auto_close_sessions.py",
-        "client_sync.py",
-        "client_preferences.py", "agent_runner.py", "bootstrap_docs.py",
-        "hook_guardrails.py", "protocol_settings.py", "public_evolution_queue.py",
-        "auto_update.py", "tools_sessions.py", "tools_coordination.py",
-        "tools_hot_context.py",
-        "tools_reminders.py", "tools_reminders_crud.py", "tools_learnings.py",
-        "tools_credentials.py", "tools_task_history.py", "tools_menu.py",
-        "cli.py", "script_registry.py", "skills_runtime.py", "user_context.py",
-        "public_contribution.py",
-        "cron_recovery.py", "runtime_power.py", "requirements.txt", "package.json", "version.json",
-    ]
+    flat_files = _runtime_flat_files(dest)
     for name in code_dirs:
         src = dest / name
         if src.is_dir():
@@ -1244,21 +1255,7 @@ def _copy_runtime_from_source(src_dir: Path, repo_dir: Path, dest: Path = NEXO_H
     import shutil
 
     packages = ["db", "cognitive", "doctor", "dashboard", "rules", "crons", "hooks"]
-    flat_files = [
-        "server.py", "plugin_loader.py", "knowledge_graph.py", "kg_populate.py",
-        "maintenance.py", "storage_router.py", "claim_graph.py", "hnsw_index.py",
-        "evolution_cycle.py", "migrate_embeddings.py", "auto_close_sessions.py",
-        "client_sync.py",
-        "client_preferences.py", "agent_runner.py", "bootstrap_docs.py",
-        "hook_guardrails.py", "protocol_settings.py", "public_evolution_queue.py",
-        "auto_update.py", "tools_sessions.py", "tools_coordination.py",
-        "tools_hot_context.py",
-        "tools_reminders.py", "tools_reminders_crud.py", "tools_learnings.py",
-        "tools_credentials.py", "tools_task_history.py", "tools_menu.py",
-        "cli.py", "script_registry.py", "skills_runtime.py", "user_context.py",
-        "public_contribution.py",
-        "cron_recovery.py", "runtime_power.py", "requirements.txt",
-    ]
+    flat_files = _runtime_flat_files(src_dir)
     copied_packages = 0
     copied_files = 0
 
