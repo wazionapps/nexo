@@ -9,6 +9,8 @@ import sqlite3
 import sys
 from pathlib import Path
 
+import importlib
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 APPLY_PATH = REPO_ROOT / "src" / "scripts" / "deep-sleep" / "apply_findings.py"
@@ -18,7 +20,11 @@ def _load_apply_module(monkeypatch, home: Path):
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("NEXO_HOME", str(home / "nexo-home"))
     monkeypatch.setenv("NEXO_CODE", str(REPO_ROOT / "src"))
+    monkeypatch.setenv("NEXO_DB", str(home / "nexo-home" / "data" / "nexo.db"))
+    monkeypatch.setenv("NEXO_TEST_DB", str(home / "nexo-home" / "data" / "nexo.db"))
     sys.modules.pop("deep_sleep_apply_test", None)
+    for name in ("db", "db._core", "db._schema", "db._reminders", "db._fts"):
+        sys.modules.pop(name, None)
     spec = importlib.util.spec_from_file_location("deep_sleep_apply_test", APPLY_PATH)
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
@@ -245,26 +251,16 @@ def test_create_followup_consolidates_semantic_duplicates(monkeypatch, tmp_path)
     nexo_home = Path(os.environ["NEXO_HOME"])
     data_dir = nexo_home / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
+    import db
 
-    conn = sqlite3.connect(str(data_dir / "nexo.db"))
-    conn.execute(
-        "CREATE TABLE followups (id TEXT PRIMARY KEY, description TEXT, date TEXT, status TEXT, verification TEXT, reasoning TEXT, created_at REAL, updated_at REAL)"
+    db.init_db()
+    db.create_followup(
+        id="NF-EXISTING",
+        description="Release reliability issue",
+        date="2026-04-08",
+        verification="",
+        reasoning="",
     )
-    conn.execute(
-        "INSERT INTO followups VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (
-            "NF-EXISTING",
-            "Release reliability issue",
-            "2026-04-08",
-            "PENDING",
-            "",
-            "",
-            1.0,
-            1.0,
-        ),
-    )
-    conn.commit()
-    conn.close()
 
     result = apply_mod.create_followup(
         "Add a release reliability validation checklist and script before publishing.",
@@ -278,10 +274,19 @@ def test_create_followup_consolidates_semantic_duplicates(monkeypatch, tmp_path)
 
     conn = sqlite3.connect(str(data_dir / "nexo.db"))
     row = conn.execute("SELECT description, date, reasoning FROM followups WHERE id = 'NF-EXISTING'").fetchone()
+    history = conn.execute(
+        """SELECT event_type, note, actor
+           FROM item_history
+           WHERE item_type = 'followup' AND item_id = 'NF-EXISTING'
+           ORDER BY id DESC"""
+    ).fetchall()
     conn.close()
     assert "validation checklist" in row[0].lower()
     assert row[1] == "2026-04-06"
-    assert "Recurring hotfix pattern" in row[2]
+    assert row[2] == ""
+    assert history[0][0] == "updated"
+    assert "Recurring hotfix pattern detected overnight." in history[0][1]
+    assert history[0][2] == "deep-sleep"
 
 
 def test_add_learning_reinforces_instead_of_duplication(monkeypatch, tmp_path):

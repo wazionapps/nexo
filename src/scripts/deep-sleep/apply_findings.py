@@ -30,6 +30,8 @@ NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parent
 if str(NEXO_CODE) not in sys.path:
     sys.path.insert(0, str(NEXO_CODE))
 
+import db as nexo_db
+
 DEEP_SLEEP_DIR = NEXO_HOME / "operations" / "deep-sleep"
 NEXO_DB = NEXO_HOME / "data" / "nexo.db"
 COGNITIVE_DB = NEXO_HOME / "data" / "cognitive.db"
@@ -294,25 +296,31 @@ def _touch_existing_followup(existing: dict, *, description: str, date: str = ""
     preferred_date = _prefer_due_date(existing.get("date", ""), date)
     if preferred_date and preferred_date != str(existing.get("date", "") or "") and "date" in cols:
         updates["date"] = preferred_date
-    if "reasoning" in cols and reasoning_note:
-        updates["reasoning"] = _append_note(existing.get("reasoning", ""), reasoning_note)
-    if "updated_at" in cols:
-        updates["updated_at"] = datetime.now().timestamp()
-
+    note = reasoning_note or "Deep Sleep matched this followup semantically."
+    changed = False
     if updates:
-        conn = sqlite3.connect(str(NEXO_DB))
-        set_clause = ", ".join(f"{column} = ?" for column in updates)
-        params = list(updates.values()) + [existing["id"]]
-        conn.execute(f"UPDATE followups SET {set_clause} WHERE id = ?", params)
-        conn.commit()
-        conn.close()
+        result = nexo_db.update_followup(
+            str(existing["id"]),
+            history_actor="deep-sleep",
+            history_event="updated",
+            history_note=note,
+            **updates,
+        )
+        if result.get("error"):
+            return {"success": False, "error": result["error"]}
+        changed = True
+    elif note:
+        note_result = nexo_db.add_followup_note(str(existing["id"]), note, actor="deep-sleep")
+        if note_result.get("error"):
+            return {"success": False, "error": note_result["error"]}
+        changed = True
 
     return {
         "success": True,
         "id": existing["id"],
         "outcome": "matched_existing_followup",
         "similarity": existing.get("_similarity", 1.0),
-        "updated_existing": bool(updates),
+        "updated_existing": changed,
     }
 
 
@@ -509,32 +517,27 @@ def create_followup(description: str, date: str = "", reasoning_note: str = "") 
                 reasoning_note=reasoning_note or "Deep Sleep matched this followup semantically.",
             )
 
-        now = datetime.now().timestamp()
         # Generate a deterministic ID
         fid = "NF-DS-" + hashlib.md5(description.encode()).hexdigest()[:8].upper()
-        columns = _table_columns(NEXO_DB, "followups")
-        payload = {
-            "id": fid,
-            "description": description,
-            "date": date,
-            "status": "PENDING",
-            "created_at": now,
-            "updated_at": now,
-        }
-        if "reasoning" in columns:
-            payload["reasoning"] = reasoning_note or "Deep Sleep v2 overnight analysis"
-        if "verification" in columns:
-            payload["verification"] = ""
-        insert_columns = [column for column in payload if column in columns]
-        values = [payload[column] for column in insert_columns]
+        existing = nexo_db.get_followup(fid)
+        if existing:
+            return _touch_existing_followup(
+                existing,
+                description=description,
+                date=date,
+                reasoning_note=reasoning_note or "Deep Sleep revisited this deterministic followup.",
+            )
 
-        conn = sqlite3.connect(str(NEXO_DB))
-        conn.execute(
-            f"INSERT OR IGNORE INTO followups ({', '.join(insert_columns)}) VALUES ({', '.join('?' for _ in insert_columns)})",
-            values,
+        followup_result = nexo_db.create_followup(
+            id=fid,
+            description=description,
+            date=date or None,
+            verification="",
+            reasoning=reasoning_note or "Deep Sleep v2 overnight analysis",
+            recurrence=None,
         )
-        conn.commit()
-        conn.close()
+        if followup_result.get("error"):
+            return {"success": False, "error": followup_result["error"]}
         return {"success": True, "id": fid, "outcome": "new_followup"}
     except Exception as e:
         return {"success": False, "error": str(e)}

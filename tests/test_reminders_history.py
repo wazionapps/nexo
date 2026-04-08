@@ -59,13 +59,16 @@ def test_followup_handlers_soft_delete_and_restore(isolated_db):
         date="2026-04-09",
         verification="Check the logs",
         reasoning="Regression coverage",
+        priority="high",
     )
     assert "Followup created." in created
+    assert "Priority: high." in created
 
     detail = reminders_tools.handle_followup_get("NF-HIST-1")
     token = _extract_read_token(detail)
     assert "Usage rules:" in detail
     assert "History:" in detail
+    assert "Priority: high" in detail
 
     deleted = reminders_tools.handle_followup_delete(id="NF-HIST-1", read_token=token)
     assert "soft-deleted" in deleted
