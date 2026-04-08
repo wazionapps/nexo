@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v3.1.5.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v3.1.6.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v3.1.5.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v3.1.6.">
     <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
     <meta property="og:image:width" content="1536">
     <meta property="og:image:height" content="1024">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v3.1.5.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v3.1.6.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v3.1.5.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v3.1.6.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,12 +87,12 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v3.1.5 live</span>
+                    <span class="page-chip">v3.1.6 live</span>
                     <span class="page-chip">Runtime + website + release artifacts</span>
                     <span class="page-chip">From early memory stack to cognitive runtime</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v315" class="btn btn-primary">Start with v3.1.5</a>
+                    <a href="#v316" class="btn btn-primary">Start with v3.1.6</a>
                     <a href="#v310" class="btn btn-secondary">See v3.1.0</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -100,8 +100,8 @@
             <div class="page-visual">
                 <div class="page-stack">
                     <div class="page-stack-card">
-                        <strong>v3.1.5</strong>
-                        <span>Patch release: dashboard filters and proactive scans now respect completed, deleted, and history-aware reminder/followup states instead of surfacing stale work.</span>
+                        <strong>v3.1.6</strong>
+                        <span>Patch release: Deep Sleep now archives abandoned followups as history instead of reviving them as live pending work.</span>
                     </div>
                     <div class="page-stack-card">
                         <strong>v3.0.0</strong>
@@ -132,8 +132,26 @@
     </div>
 </section>
 
+<!-- v3.1.6 Deep Sleep abandoned followups hotfix -->
+<section id="v316" class="section-compact" style="background:linear-gradient(135deg,#111827 0%,#17506b 100%);">
+    <div class="container">
+        <div class="section-label">New in v3.1.6 <span style="opacity:.5;font-weight:400;">&mdash; April 8, 2026</span></div>
+        <h2 class="section-title">Deep Sleep Abandoned Followups Stay Historical</h2>
+        <p class="section-subtitle">
+            v3.1.6 closes a subtle but public operational gap: abandoned-project discoveries are no longer created as live pending followups. They now land as archived historical context with an explicit note, so NEXO keeps the memory without polluting active queues.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>No More Zombie Abandonments</h4><p>Deep Sleep stops creating abandoned-project findings as active `PENDING` work, which removes another source of noisy resurfacing in followup-driven flows.</p></div>
+                <div class="cognitive-card"><h4>History Still Visible</h4><p>The item is still preserved as a followup row, but it starts archived and includes a history note explaining that Deep Sleep intentionally stored it as historical context.</p></div>
+                <div class="cognitive-card"><h4>Regression Coverage Added</h4><p>A dedicated regression test now asserts that abandoned followups stay archived and non-actionable across future releases.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
 <!-- v3.1.5 Dashboard and proactive history hygiene -->
-<section id="v315" class="section-compact" style="background:linear-gradient(135deg,#111827 0%,#17506b 100%);">
+<section id="v315" class="section-compact" style="background:linear-gradient(135deg,#111827 0%,#1c4d67 100%);">
     <div class="container">
         <div class="section-label">New in v3.1.5 <span style="opacity:.5;font-weight:400;">&mdash; April 8, 2026</span></div>
         <h2 class="section-title">Dashboard + Proactive History Hygiene</h2>
