@@ -44,6 +44,8 @@ nexo call nexo_run_workflow --input '{
 }'
 ```
 
+For practical `open` / `update` / `resume` / `replay` examples, see [Workflow Quickstart](./workflows-quickstart.md).
+
 ## 4. Use the protocol path for real work
 
 For anything non-trivial:
