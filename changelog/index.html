@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v3.1.6.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v3.1.8.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v3.1.6.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v3.1.8.">
     <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
     <meta property="og:image:width" content="1536">
     <meta property="og:image:height" content="1024">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v3.1.6.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v3.1.8.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v3.1.6.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v3.1.8.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,12 +87,12 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v3.1.6 live</span>
+                    <span class="page-chip">v3.1.8 live</span>
                     <span class="page-chip">Runtime + website + release artifacts</span>
                     <span class="page-chip">From early memory stack to cognitive runtime</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v316" class="btn btn-primary">Start with v3.1.6</a>
+                    <a href="#v318" class="btn btn-primary">Start with v3.1.8</a>
                     <a href="#v310" class="btn btn-secondary">See v3.1.0</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -100,8 +100,8 @@
             <div class="page-visual">
                 <div class="page-stack">
                     <div class="page-stack-card">
-                        <strong>v3.1.6</strong>
-                        <span>Patch release: Deep Sleep now archives abandoned followups as history instead of reviving them as live pending work.</span>
+                        <strong>v3.1.8</strong>
+                        <span>Hot Context stabilization: the shared 24-hour recent-memory layer now ships with full-suite validation, reload-safe DB access, and safe partial-schema fallback.</span>
                     </div>
                     <div class="page-stack-card">
                         <strong>v3.0.0</strong>
@@ -127,6 +127,42 @@
             <div>
                 <div id="changelog-page-meta" class="changelog-page-meta">Loading release pages…</div>
                 <div id="changelog-pager" class="changelog-pager" aria-label="Changelog pagination"></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v3.1.8 Hot context stabilization -->
+<section id="v318" class="section-compact" style="background:linear-gradient(135deg,#111827 0%,#14532d 100%);">
+    <div class="container">
+        <div class="section-label">New in v3.1.8 <span style="opacity:.5;font-weight:400;">&mdash; April 8, 2026</span></div>
+        <h2 class="section-title">Hot Context Stabilizes As The Public Release</h2>
+        <p class="section-subtitle">
+            The first hot-context tag exposed CI-only regressions before publication. v3.1.8 is the stable public release: the same 24-hour recent-memory model, now backed by a green full suite, reload-safe DB state, and additive fallback behavior when partial schemas exist.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Release Truth Matches Runtime Truth</h4><p>The public release now reflects the fully validated hot-context stack instead of an orphan pre-release tag that failed CI after the tag was already pushed.</p></div>
+                <div class="cognitive-card"><h4>Reload-Safe Modular DB</h4><p>The modular `db` package now refreshes submodules correctly and resolves live core access dynamically, so DB switches in tests and runtime repairs do not leak stale module state.</p></div>
+                <div class="cognitive-card"><h4>Safe Partial-Schema Fallback</h4><p>Hot-context capture degrades cleanly when minimal tables exist, which keeps self-audit and reminder/followup flows working even before the recent-memory tables are present.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v3.1.7 Hot context memory -->
+<section id="v317" class="section-compact" style="background:linear-gradient(135deg,#111827 0%,#17614f 100%);">
+    <div class="container">
+        <div class="section-label">New in v3.1.7 <span style="opacity:.5;font-weight:400;">&mdash; April 8, 2026</span></div>
+        <h2 class="section-title">Hot Context Makes Recent Memory Explicit</h2>
+        <p class="section-subtitle">
+            v3.1.7 adds a first-class recent-memory layer to NEXO. Instead of hoping the runtime can reconstruct the last few hours from diaries and durable recall alone, active topics now live in a shared hot-context substrate with recent events, pre-action loading, and dashboard visibility.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>24h Shared Operational Memory</h4><p>Core now persists hot contexts and recent events so the runtime can rehydrate what was actively happening in the last day across sessions, channels, and clients.</p></div>
+                <div class="cognitive-card"><h4>Pre-Action Context Bundle</h4><p>New MCP tools let agents load recent continuity before acting, capture active topics when work starts or blocks, and resolve them when the situation is actually closed.</p></div>
+                <div class="cognitive-card"><h4>Visible in the Dashboard</h4><p>The memory page now exposes `Hot Context 24h`, and the dashboard reminder/followup APIs no longer bypass history discipline because update/delete/move paths require a fresh `READ_TOKEN`.</p></div>
             </div>
         </div>
     </div>
