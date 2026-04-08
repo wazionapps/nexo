@@ -1,6 +1,6 @@
 {
   "name": "nexo-brain",
-  "version": "3.1.2",
+  "version": "3.1.3",
   "description": "Local cognitive runtime for Claude Code \u2014 persistent memory, overnight learning, doctor diagnostics, personal scripts, recovery-aware jobs, startup preflight, and optional dashboard/power helper.",
   "author": {
     "name": "NEXO Brain",

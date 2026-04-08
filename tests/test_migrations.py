@@ -16,7 +16,7 @@ def test_init_db_creates_core_tables():
         "questions", "reminders", "followups", "learnings", "credentials",
         "task_history", "task_frequencies", "plugins", "entities",
         "preferences", "agents", "change_log", "decisions",
-        "protocol_tasks", "protocol_debt",
+        "protocol_tasks", "protocol_debt", "item_history", "item_read_tokens",
     }
     assert expected.issubset(tables), f"Missing tables: {expected - tables}"
 
@@ -26,7 +26,7 @@ def test_migrations_idempotent():
     db_mod.run_migrations()
     db_mod.run_migrations()
     version = db_mod.get_schema_version()
-    assert version >= 23
+    assert version >= 29
 
 
 def test_session_crud():
@@ -98,21 +98,50 @@ def test_learning_supersede_lifecycle():
 def test_reminder_followup_crud():
     """Create and complete reminders and followups."""
     db_mod.create_reminder("R-TEST1", "Test reminder", date="2026-12-31")
-    reminder = db_mod.get_reminder("R-TEST1")
+    reminder = db_mod.get_reminder("R-TEST1", include_history=True)
     assert reminder is not None
     assert reminder["status"] == "PENDING"
+    assert reminder["history"][0]["event_type"] == "created"
+    assert reminder["read_token"].startswith("IRT-")
 
     db_mod.complete_reminder("R-TEST1")
-    reminder2 = db_mod.get_reminder("R-TEST1")
+    reminder2 = db_mod.get_reminder("R-TEST1", include_history=True)
     assert reminder2["status"] == "COMPLETED"
+    assert any(event["event_type"] == "completed" for event in reminder2["history"])
 
     db_mod.create_followup("NF-TEST1", "Test followup", date="2026-12-31")
-    followup = db_mod.get_followup("NF-TEST1")
+    followup = db_mod.get_followup("NF-TEST1", include_history=True)
     assert followup is not None
+    assert followup["history"][0]["event_type"] == "created"
 
     db_mod.complete_followup("NF-TEST1", result="done")
-    followup2 = db_mod.get_followup("NF-TEST1")
+    followup2 = db_mod.get_followup("NF-TEST1", include_history=True)
     assert followup2["status"] == "COMPLETED"
+    assert any(event["event_type"] == "completed" for event in followup2["history"])
+
+
+def test_soft_delete_restore_and_read_token_validation():
+    db_mod.create_reminder("R-TEST2", "Delete me", date="2026-12-31")
+    reminder = db_mod.get_reminder("R-TEST2", include_history=True)
+    token = reminder["read_token"]
+
+    ok, msg = db_mod.validate_item_read_token(token, "reminder", "R-TEST2")
+    assert ok is True
+    assert msg == ""
+
+    assert db_mod.delete_reminder("R-TEST2") is True
+    deleted = db_mod.get_reminder("R-TEST2", include_history=True)
+    assert deleted["status"] == "DELETED"
+    assert any(event["event_type"] == "deleted" for event in deleted["history"])
+
+    ok2, msg2 = db_mod.validate_item_read_token(token, "reminder", "R-TEST2")
+    assert ok2 is False
+    assert "History changed" in msg2
+
+    restored = db_mod.restore_reminder("R-TEST2")
+    assert restored["status"] == "PENDING"
+    restored_view = db_mod.get_reminder("R-TEST2", include_history=True)
+    assert any(event["event_type"] == "restored" for event in restored_view["history"])
 
 
 def test_recurring_followup():

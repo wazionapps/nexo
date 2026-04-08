@@ -24,10 +24,10 @@ from tools_coordination import (
 from tools_reminders import handle_reminders
 from tools_menu import handle_menu
 from tools_reminders_crud import (
-    handle_reminder_create, handle_reminder_update,
-    handle_reminder_complete, handle_reminder_delete,
-    handle_followup_create, handle_followup_update,
-    handle_followup_complete, handle_followup_delete,
+    handle_reminder_create, handle_reminder_get, handle_reminder_update,
+    handle_reminder_complete, handle_reminder_note, handle_reminder_restore, handle_reminder_delete,
+    handle_followup_create, handle_followup_get, handle_followup_update,
+    handle_followup_complete, handle_followup_note, handle_followup_restore, handle_followup_delete,
 )
 from tools_learnings import (
     handle_learning_add, handle_learning_search,
@@ -191,6 +191,8 @@ mcp = FastMCP(
         "React: DIARY REMINDER→write diary, VIBE:NEGATIVE→ultra-concise, AUTO-PRIME→read learnings\n"
         "- **Followups:** NEXO tasks, execute silently. 'done'/'all set'→`nexo_followup_complete` NOW. "
         "Reminders=user's, alert when due\n"
+        "- **Reminder/followup history:** before update/delete/restore/note, call the corresponding "
+        "`nexo_reminder_get` / `nexo_followup_get` first and use its `READ_TOKEN`.\n"
         "- **Observe:** correction→learning. 'tomorrow'→followup. person→entity. open topic→followup 3d\n"
         "- **Trust events:** When user expresses satisfaction/thanks (any language)→`nexo_cognitive_trust(event='explicit_thanks')`. "
         "When user corrects you→`nexo_cognitive_trust(event='correction')`. "
@@ -488,7 +490,7 @@ def nexo_reminders(filter: str = "due") -> str:
     """Check reminders and followups.
 
     Args:
-        filter: 'due' (vencidos/hoy), 'all' (todos activos), 'followups' (solo NEXO followups)
+        filter: 'due', 'all', 'followups', 'completed', 'deleted', 'history', or 'any'
     """
     return handle_reminders(filter)
 
@@ -503,7 +505,7 @@ def nexo_menu() -> str:
     return handle_menu()
 
 
-# ── Reminders CRUD (4 tools) ──────────────────────────────────────
+# ── Reminders CRUD (7 tools) ──────────────────────────────────────
 
 @mcp.tool
 def nexo_reminder_create(id: str, description: str, date: str = "", category: str = "general") -> str:
@@ -519,8 +521,26 @@ def nexo_reminder_create(id: str, description: str, date: str = "", category: st
 
 
 @mcp.tool
-def nexo_reminder_update(id: str, description: str = "", date: str = "", status: str = "", category: str = "") -> str:
+def nexo_reminder_get(id: str) -> str:
+    """Read a reminder with its history and usage rules.
+
+    IMPORTANT: before update/delete/restore/note, call this tool first and use the returned READ_TOKEN.
+    """
+    return handle_reminder_get(id)
+
+
+@mcp.tool
+def nexo_reminder_update(
+    id: str,
+    description: str = "",
+    date: str = "",
+    status: str = "",
+    category: str = "",
+    read_token: str = "",
+) -> str:
     """Update fields of an existing reminder. Only non-empty fields are changed.
+
+    IMPORTANT: call `nexo_reminder_get` first and pass its READ_TOKEN.
 
     Args:
         id: Reminder ID (e.g., R87).
@@ -528,8 +548,9 @@ def nexo_reminder_update(id: str, description: str = "", date: str = "", status:
         date: New date YYYY-MM-DD (optional).
         status: New status (optional).
         category: New category (optional).
+        read_token: Token returned by `nexo_reminder_get`.
     """
-    return handle_reminder_update(id, description, date, status, category)
+    return handle_reminder_update(id, description, date, status, category, read_token)
 
 
 @mcp.tool
@@ -543,16 +564,47 @@ def nexo_reminder_complete(id: str) -> str:
 
 
 @mcp.tool
-def nexo_reminder_delete(id: str) -> str:
-    """Delete a reminder permanently.
+def nexo_reminder_note(id: str, note: str, read_token: str = "", actor: str = "nexo") -> str:
+    """Append a note to reminder history.
+
+    IMPORTANT: call `nexo_reminder_get` first and pass its READ_TOKEN.
 
     Args:
         id: Reminder ID (e.g., R87).
+        note: Operational note to append to history.
+        read_token: Token returned by `nexo_reminder_get`.
+        actor: Actor label for the history note.
     """
-    return handle_reminder_delete(id)
+    return handle_reminder_note(id, note, read_token, actor)
 
 
-# ── Followups CRUD (4 tools) ──────────────────────────────────────
+@mcp.tool
+def nexo_reminder_restore(id: str, read_token: str = "") -> str:
+    """Restore a soft-deleted reminder back to PENDING.
+
+    IMPORTANT: call `nexo_reminder_get` first and pass its READ_TOKEN.
+
+    Args:
+        id: Reminder ID (e.g., R87).
+        read_token: Token returned by `nexo_reminder_get`.
+    """
+    return handle_reminder_restore(id, read_token)
+
+
+@mcp.tool
+def nexo_reminder_delete(id: str, read_token: str = "") -> str:
+    """Soft-delete a reminder.
+
+    IMPORTANT: call `nexo_reminder_get` first and pass its READ_TOKEN.
+
+    Args:
+        id: Reminder ID (e.g., R87).
+        read_token: Token returned by `nexo_reminder_get`.
+    """
+    return handle_reminder_delete(id, read_token)
+
+
+# ── Followups CRUD (7 tools) ──────────────────────────────────────
 
 @mcp.tool
 def nexo_followup_create(id: str, description: str, date: str = "", verification: str = "", reasoning: str = "", recurrence: str = "", priority: str = "medium") -> str:
@@ -577,8 +629,27 @@ def nexo_followup_create(id: str, description: str, date: str = "", verification
 
 
 @mcp.tool
-def nexo_followup_update(id: str, description: str = "", date: str = "", verification: str = "", status: str = "", priority: str = "") -> str:
+def nexo_followup_get(id: str) -> str:
+    """Read a followup with its history and usage rules.
+
+    IMPORTANT: before update/delete/restore/note, call this tool first and use the returned READ_TOKEN.
+    """
+    return handle_followup_get(id)
+
+
+@mcp.tool
+def nexo_followup_update(
+    id: str,
+    description: str = "",
+    date: str = "",
+    verification: str = "",
+    status: str = "",
+    priority: str = "",
+    read_token: str = "",
+) -> str:
     """Update fields of an existing followup. Only non-empty fields are changed.
+
+    IMPORTANT: call `nexo_followup_get` first and pass its READ_TOKEN.
 
     Args:
         id: Followup ID (e.g., NF45).
@@ -587,13 +658,9 @@ def nexo_followup_update(id: str, description: str = "", date: str = "", verific
         verification: New verification text (optional).
         status: New status (optional).
         priority: critical, high, medium, low (optional).
+        read_token: Token returned by `nexo_followup_get`.
     """
-    result = handle_followup_update(id, description, date, verification, status)
-    if priority in ('critical', 'high', 'medium', 'low'):
-        from db import get_db
-        get_db().execute("UPDATE followups SET priority = ? WHERE id = ?", (priority, id))
-        get_db().commit()
-    return result
+    return handle_followup_update(id, description, date, verification, status, priority, read_token)
 
 
 @mcp.tool
@@ -608,13 +675,44 @@ def nexo_followup_complete(id: str, result: str = "") -> str:
 
 
 @mcp.tool
-def nexo_followup_delete(id: str) -> str:
-    """Delete a followup permanently.
+def nexo_followup_note(id: str, note: str, read_token: str = "", actor: str = "nexo") -> str:
+    """Append a note to followup history.
+
+    IMPORTANT: call `nexo_followup_get` first and pass its READ_TOKEN.
 
     Args:
         id: Followup ID (e.g., NF45).
+        note: Operational note to append to history.
+        read_token: Token returned by `nexo_followup_get`.
+        actor: Actor label for the history note.
     """
-    return handle_followup_delete(id)
+    return handle_followup_note(id, note, read_token, actor)
+
+
+@mcp.tool
+def nexo_followup_restore(id: str, read_token: str = "") -> str:
+    """Restore a soft-deleted followup back to PENDING.
+
+    IMPORTANT: call `nexo_followup_get` first and pass its READ_TOKEN.
+
+    Args:
+        id: Followup ID (e.g., NF45).
+        read_token: Token returned by `nexo_followup_get`.
+    """
+    return handle_followup_restore(id, read_token)
+
+
+@mcp.tool
+def nexo_followup_delete(id: str, read_token: str = "") -> str:
+    """Soft-delete a followup.
+
+    IMPORTANT: call `nexo_followup_get` first and pass its READ_TOKEN.
+
+    Args:
+        id: Followup ID (e.g., NF45).
+        read_token: Token returned by `nexo_followup_get`.
+    """
+    return handle_followup_delete(id, read_token)
 
 
 # ── Learnings CRUD (5 tools) ──────────────────────────────────────

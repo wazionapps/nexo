@@ -745,18 +745,21 @@ async def api_reminders_list(
 ):
     """List reminders."""
     db = _db()
-    conn = db.get_db()
-    query = "SELECT * FROM reminders WHERE 1=1"
-    params = []
+    reminders = db.get_reminders("any")
     if status:
-        query += " AND status = ?"
-        params.append(status)
+        if status in {"any", "all", "history"}:
+            pass
+        elif status == "completed":
+            reminders = [r for r in reminders if str(r.get("status") or "").startswith("COMPLETED")]
+        elif status == "deleted":
+            reminders = [r for r in reminders if r.get("status") == "DELETED"]
+        else:
+            reminders = [r for r in reminders if r.get("status") == status]
+    else:
+        reminders = [r for r in reminders if r.get("status") != "DELETED"]
     if category:
-        query += " AND category = ?"
-        params.append(category)
-    query += " ORDER BY created_at DESC"
-    rows = conn.execute(query, params).fetchall()
-    reminders = [dict(r) for r in rows]
+        reminders = [r for r in reminders if r.get("category") == category]
+    reminders = sorted(reminders, key=lambda item: item.get("updated_at") or item.get("created_at") or 0, reverse=True)
     return {"count": len(reminders), "reminders": reminders}
 
 
@@ -766,59 +769,60 @@ async def api_reminders_create(body: ReminderCreate):
     db = _db()
     conn = db.get_db()
     rid = _next_reminder_id(conn)
-    now = time.time()
-    conn.execute(
-        "INSERT INTO reminders (id, description, date, status, category, created_at, updated_at) VALUES (?,?,?,?,?,?,?)",
-        (rid, body.description, body.date, "PENDING", body.category or "general", now, now),
+    result = db.create_reminder(
+        rid,
+        body.description,
+        date=body.date,
+        category=body.category or "general",
     )
-    conn.commit()
-    row = conn.execute("SELECT * FROM reminders WHERE id = ?", (rid,)).fetchone()
-    return {"success": True, "reminder": dict(row)}
+    if not result or "error" in result:
+        return JSONResponse({"error": result.get("error", "Failed to create reminder")}, status_code=400)
+    return {"success": True, "reminder": result}
+
+
+@app.get("/api/reminders/{rid}")
+async def api_reminders_get(rid: str):
+    """Get a reminder with history."""
+    db = _db()
+    row = db.get_reminder(rid, include_history=True)
+    if not row:
+        return JSONResponse({"error": f"Reminder {rid} not found"}, status_code=404)
+    return {"success": True, "reminder": row}
 
 
 @app.put("/api/reminders/{rid}")
 async def api_reminders_update(rid: str, body: ReminderUpdate):
     """Update a reminder."""
     db = _db()
-    conn = db.get_db()
-    row = conn.execute("SELECT * FROM reminders WHERE id = ?", (rid,)).fetchone()
+    row = db.get_reminder(rid)
     if not row:
         return JSONResponse({"error": f"Reminder {rid} not found"}, status_code=404)
-    fields = []
-    params = []
+    fields = {}
     if body.description is not None:
-        fields.append("description = ?")
-        params.append(body.description)
+        fields["description"] = body.description
     if body.date is not None:
-        fields.append("date = ?")
-        params.append(body.date)
+        fields["date"] = body.date
     if body.status is not None:
-        fields.append("status = ?")
-        params.append(body.status)
+        fields["status"] = body.status
     if body.category is not None:
-        fields.append("category = ?")
-        params.append(body.category)
+        fields["category"] = body.category
     if not fields:
-        return {"success": True, "reminder": dict(row)}
-    fields.append("updated_at = ?")
-    params.append(time.time())
-    params.append(rid)
-    conn.execute(f"UPDATE reminders SET {', '.join(fields)} WHERE id = ?", params)
-    conn.commit()
-    row = conn.execute("SELECT * FROM reminders WHERE id = ?", (rid,)).fetchone()
-    return {"success": True, "reminder": dict(row)}
+        return {"success": True, "reminder": row}
+    result = db.update_reminder(rid, history_actor="dashboard", **fields)
+    if not result or "error" in result:
+        return JSONResponse({"error": result.get("error", f"Reminder {rid} not found")}, status_code=400)
+    return {"success": True, "reminder": result}
 
 
 @app.delete("/api/reminders/{rid}")
 async def api_reminders_delete(rid: str):
-    """Delete a reminder."""
+    """Soft-delete a reminder."""
     db = _db()
-    conn = db.get_db()
-    row = conn.execute("SELECT * FROM reminders WHERE id = ?", (rid,)).fetchone()
+    row = db.get_reminder(rid)
     if not row:
         return JSONResponse({"error": f"Reminder {rid} not found"}, status_code=404)
-    conn.execute("DELETE FROM reminders WHERE id = ?", (rid,))
-    conn.commit()
+    db.add_reminder_note(rid, "Soft-deleted from dashboard.", actor="dashboard")
+    db.delete_reminder(rid)
     return {"success": True, "deleted_id": rid}
 
 
@@ -847,15 +851,19 @@ async def api_followups_list(
 ):
     """List followups."""
     db = _db()
-    conn = db.get_db()
-    query = "SELECT * FROM followups WHERE 1=1"
-    params = []
+    followups = db.get_followups("any")
     if status:
-        query += " AND status = ?"
-        params.append(status)
-    query += " ORDER BY created_at DESC"
-    rows = conn.execute(query, params).fetchall()
-    followups = [dict(r) for r in rows]
+        if status in {"any", "all", "history"}:
+            pass
+        elif status == "completed":
+            followups = [r for r in followups if str(r.get("status") or "").startswith("COMPLETED")]
+        elif status == "deleted":
+            followups = [r for r in followups if r.get("status") == "DELETED"]
+        else:
+            followups = [r for r in followups if r.get("status") == status]
+    else:
+        followups = [r for r in followups if r.get("status") != "DELETED"]
+    followups = sorted(followups, key=lambda item: item.get("updated_at") or item.get("created_at") or 0, reverse=True)
     return {"count": len(followups), "followups": followups}
 
 
@@ -865,62 +873,63 @@ async def api_followups_create(body: FollowupCreate):
     db = _db()
     conn = db.get_db()
     fid = _next_followup_id(conn)
-    now = time.time()
-    conn.execute(
-        "INSERT INTO followups (id, description, date, verification, status, reasoning, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)",
-        (fid, body.description, body.date, body.verification, "PENDING", body.reasoning, now, now),
+    result = db.create_followup(
+        fid,
+        body.description,
+        date=body.date,
+        verification=body.verification or "",
+        reasoning=body.reasoning or "",
     )
-    conn.commit()
-    row = conn.execute("SELECT * FROM followups WHERE id = ?", (fid,)).fetchone()
-    return {"success": True, "followup": dict(row)}
+    if not result or "error" in result:
+        return JSONResponse({"error": result.get("error", "Failed to create followup")}, status_code=400)
+    return {"success": True, "followup": result}
+
+
+@app.get("/api/followups/{fid}")
+async def api_followups_get(fid: str):
+    """Get a followup with history."""
+    db = _db()
+    row = db.get_followup(fid, include_history=True)
+    if not row:
+        return JSONResponse({"error": f"Followup {fid} not found"}, status_code=404)
+    return {"success": True, "followup": row}
 
 
 @app.put("/api/followups/{fid}")
 async def api_followups_update(fid: str, body: FollowupUpdate):
     """Update a followup."""
     db = _db()
-    conn = db.get_db()
-    row = conn.execute("SELECT * FROM followups WHERE id = ?", (fid,)).fetchone()
+    row = db.get_followup(fid)
     if not row:
         return JSONResponse({"error": f"Followup {fid} not found"}, status_code=404)
-    fields = []
-    params = []
+    fields = {}
     if body.description is not None:
-        fields.append("description = ?")
-        params.append(body.description)
+        fields["description"] = body.description
     if body.date is not None:
-        fields.append("date = ?")
-        params.append(body.date)
+        fields["date"] = body.date
     if body.status is not None:
-        fields.append("status = ?")
-        params.append(body.status)
+        fields["status"] = body.status
     if body.verification is not None:
-        fields.append("verification = ?")
-        params.append(body.verification)
+        fields["verification"] = body.verification
     if body.reasoning is not None:
-        fields.append("reasoning = ?")
-        params.append(body.reasoning)
+        fields["reasoning"] = body.reasoning
     if not fields:
-        return {"success": True, "followup": dict(row)}
-    fields.append("updated_at = ?")
-    params.append(time.time())
-    params.append(fid)
-    conn.execute(f"UPDATE followups SET {', '.join(fields)} WHERE id = ?", params)
-    conn.commit()
-    row = conn.execute("SELECT * FROM followups WHERE id = ?", (fid,)).fetchone()
-    return {"success": True, "followup": dict(row)}
+        return {"success": True, "followup": row}
+    result = db.update_followup(fid, history_actor="dashboard", **fields)
+    if not result or "error" in result:
+        return JSONResponse({"error": result.get("error", f"Followup {fid} not found")}, status_code=400)
+    return {"success": True, "followup": result}
 
 
 @app.delete("/api/followups/{fid}")
 async def api_followups_delete(fid: str):
-    """Delete a followup."""
+    """Soft-delete a followup."""
     db = _db()
-    conn = db.get_db()
-    row = conn.execute("SELECT * FROM followups WHERE id = ?", (fid,)).fetchone()
+    row = db.get_followup(fid)
     if not row:
         return JSONResponse({"error": f"Followup {fid} not found"}, status_code=404)
-    conn.execute("DELETE FROM followups WHERE id = ?", (fid,))
-    conn.commit()
+    db.add_followup_note(fid, "Soft-deleted from dashboard.", actor="dashboard")
+    db.delete_followup(fid)
     return {"success": True, "deleted_id": fid}
 
 
@@ -933,36 +942,49 @@ async def api_ops_move(body: MoveRequest):
     """Move an item between reminders and followups."""
     db = _db()
     conn = db.get_db()
-    now = time.time()
 
     if body.direction == "to_followup":
-        # Read from reminders
-        row = conn.execute("SELECT * FROM reminders WHERE id = ?", (body.id,)).fetchone()
-        if not row:
+        item = db.get_reminder(body.id)
+        if not item:
             return JSONResponse({"error": f"Reminder {body.id} not found"}, status_code=404)
-        item = dict(row)
         fid = _next_followup_id(conn)
-        conn.execute(
-            "INSERT INTO followups (id, description, date, status, created_at, updated_at) VALUES (?,?,?,?,?,?)",
-            (fid, item["description"], item.get("date"), "PENDING", now, now),
+        created = db.create_followup(
+            fid,
+            item["description"],
+            date=item.get("date"),
+            reasoning=f"Moved from reminder {body.id} via dashboard.",
         )
-        conn.execute("DELETE FROM reminders WHERE id = ?", (body.id,))
-        conn.commit()
+        if not created or "error" in created:
+            return JSONResponse({"error": created.get("error", "Failed to create followup")}, status_code=400)
+        db.add_followup_note(fid, f"Created from reminder {body.id} via dashboard move.", actor="dashboard")
+        db.add_reminder_note(body.id, f"Moved to followup {fid} via dashboard.", actor="dashboard")
+        db.delete_reminder(body.id)
         return {"success": True, "new_id": fid, "direction": "to_followup"}
 
     elif body.direction == "to_reminder":
-        # Read from followups
-        row = conn.execute("SELECT * FROM followups WHERE id = ?", (body.id,)).fetchone()
-        if not row:
+        item = db.get_followup(body.id)
+        if not item:
             return JSONResponse({"error": f"Followup {body.id} not found"}, status_code=404)
-        item = dict(row)
         rid = _next_reminder_id(conn)
-        conn.execute(
-            "INSERT INTO reminders (id, description, date, status, category, created_at, updated_at) VALUES (?,?,?,?,?,?,?)",
-            (rid, item["description"], item.get("date"), "PENDING", "general", now, now),
+        created = db.create_reminder(
+            rid,
+            item["description"],
+            date=item.get("date"),
+            category="general",
         )
-        conn.execute("DELETE FROM followups WHERE id = ?", (body.id,))
-        conn.commit()
+        if not created or "error" in created:
+            return JSONResponse({"error": created.get("error", "Failed to create reminder")}, status_code=400)
+        migration_note = f"Created from followup {body.id} via dashboard move."
+        extra = []
+        if item.get("verification"):
+            extra.append(f"Previous verification: {item['verification']}")
+        if item.get("reasoning"):
+            extra.append(f"Previous reasoning: {item['reasoning']}")
+        if extra:
+            migration_note += " " + " ".join(extra)
+        db.add_reminder_note(rid, migration_note, actor="dashboard")
+        db.add_followup_note(body.id, f"Moved to reminder {rid} via dashboard.", actor="dashboard")
+        db.delete_followup(body.id)
         return {"success": True, "new_id": rid, "direction": "to_reminder"}
 
     else:
@@ -977,7 +999,10 @@ async def api_ops_execute(fid: str):
     """Execute a followup by opening Terminal with the configured NEXO client."""
     db = _db()
     conn = db.get_db()
-    row = conn.execute("SELECT * FROM followups WHERE id = ?", (fid,)).fetchone()
+    row = conn.execute(
+        "SELECT * FROM followups WHERE id = ? AND status != 'DELETED'",
+        (fid,),
+    ).fetchone()
     if not row:
         return JSONResponse({"error": f"Followup {fid} not found"}, status_code=404)
     item = dict(row)
@@ -1092,12 +1117,12 @@ async def api_calendar(
     month_prefix = f"{year}-{month:02d}%"
 
     reminder_rows = conn.execute(
-        "SELECT *, 'reminder' as item_type FROM reminders WHERE date LIKE ? ORDER BY date ASC",
+        "SELECT *, 'reminder' as item_type FROM reminders WHERE date LIKE ? AND status != 'DELETED' ORDER BY date ASC",
         (month_prefix,),
     ).fetchall()
 
     followup_rows = conn.execute(
-        "SELECT *, 'followup' as item_type FROM followups WHERE date LIKE ? ORDER BY date ASC",
+        "SELECT *, 'followup' as item_type FROM followups WHERE date LIKE ? AND status != 'DELETED' ORDER BY date ASC",
         (month_prefix,),
     ).fetchall()
 

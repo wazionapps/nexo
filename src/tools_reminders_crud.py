@@ -2,11 +2,75 @@
 
 from db import (
     create_reminder, update_reminder, complete_reminder, delete_reminder,
-    get_reminders, get_reminder,
+    restore_reminder, add_reminder_note, get_reminder,
     create_followup, update_followup, complete_followup, delete_followup,
-    get_followups, get_followup,
+    restore_followup, add_followup_note, get_followup,
+    validate_item_read_token,
     find_decisions_by_context_ref, update_decision_outcome,
 )
+
+
+def _require_item_read(item_type: str, item_id: str, read_token: str) -> str | None:
+    ok, message = validate_item_read_token(read_token, item_type, item_id)
+    if ok:
+        return None
+    prefix = "followup" if item_type == "followup" else "reminder"
+    return f"ERROR: {message} Use nexo_{prefix}_get(id='{item_id}') first."
+
+
+def _history_lines(history: list[dict]) -> list[str]:
+    if not history:
+        return ["- (no history)"]
+    lines: list[str] = []
+    for event in history:
+        created_at = event.get("created_at") or "?"
+        event_type = event.get("event_type") or "event"
+        actor = event.get("actor") or "system"
+        note = (event.get("note") or "").strip()
+        suffix = f" — {note}" if note else ""
+        lines.append(f"- {created_at} [{event_type}] ({actor}){suffix}")
+    return lines
+
+
+def _format_reminder_payload(reminder: dict) -> str:
+    lines = [
+        f"REMINDER {reminder['id']}",
+        f"Description: {reminder.get('description') or ''}",
+        f"Date: {reminder.get('date') or '—'}",
+        f"Status: {reminder.get('status') or '—'}",
+        f"Category: {reminder.get('category') or 'general'}",
+    ]
+    history_rules = reminder.get("history_rules") or []
+    if history_rules:
+        lines.append("Usage rules:")
+        lines.extend(f"- {rule}" for rule in history_rules)
+    lines.append("History:")
+    lines.extend(_history_lines(reminder.get("history") or []))
+    if reminder.get("read_token"):
+        lines.append(f"READ_TOKEN: {reminder['read_token']}")
+    return "\n".join(lines)
+
+
+def _format_followup_payload(followup: dict) -> str:
+    lines = [
+        f"FOLLOWUP {followup['id']}",
+        f"Description: {followup.get('description') or ''}",
+        f"Date: {followup.get('date') or '—'}",
+        f"Status: {followup.get('status') or '—'}",
+        f"Verification: {followup.get('verification') or '—'}",
+        f"Reasoning: {followup.get('reasoning') or '—'}",
+        f"Recurrence: {followup.get('recurrence') or '—'}",
+        f"Priority: {followup.get('priority') or 'medium'}",
+    ]
+    history_rules = followup.get("history_rules") or []
+    if history_rules:
+        lines.append("Usage rules:")
+        lines.extend(f"- {rule}" for rule in history_rules)
+    lines.append("History:")
+    lines.extend(_history_lines(followup.get("history") or []))
+    if followup.get("read_token"):
+        lines.append(f"READ_TOKEN: {followup['read_token']}")
+    return "\n".join(lines)
 
 
 # ── Reminders ──────────────────────────────────────────────────────────────────
@@ -25,8 +89,27 @@ def handle_reminder_create(id: str, description: str, date: str = '', category: 
     return f"Reminder created. Date: {date_str}. Category: {category}."
 
 
-def handle_reminder_update(id: str, description: str = '', date: str = '', status: str = '', category: str = '') -> str:
+def handle_reminder_get(id: str) -> str:
+    """Read a reminder with history and return a read token for safe mutations."""
+    result = get_reminder(id=id, include_history=True)
+    if not result:
+        return f"ERROR: Reminder {id} not found."
+    return _format_reminder_payload(result)
+
+
+def handle_reminder_update(
+    id: str,
+    description: str = '',
+    date: str = '',
+    status: str = '',
+    category: str = '',
+    read_token: str = '',
+) -> str:
     """Update one or more fields of an existing reminder."""
+    error = _require_item_read("reminder", id, read_token)
+    if error:
+        return error
+
     fields: dict = {}
     if description:
         fields['description'] = description
@@ -41,8 +124,9 @@ def handle_reminder_update(id: str, description: str = '', date: str = '', statu
         return f"ERROR: No fields specified to update for {id}."
 
     result = update_reminder(id=id, **fields)
-    if not result:
-        return f"ERROR: Reminder {id} not found."
+    if not result or "error" in result:
+        error_msg = result.get("error", f"Reminder {id} not found.") if isinstance(result, dict) else f"Reminder {id} not found."
+        return f"ERROR: {error_msg}"
 
     changed = ', '.join(fields.keys())
     return f"Reminder {id} updated: {changed}."
@@ -57,13 +141,42 @@ def handle_reminder_complete(id: str) -> str:
     return f"Reminder {id} marked COMPLETED."
 
 
-def handle_reminder_delete(id: str) -> str:
-    """Delete a reminder permanently."""
+def handle_reminder_note(id: str, note: str, read_token: str = '', actor: str = 'nexo') -> str:
+    """Append a note to reminder history."""
+    if not note.strip():
+        return "ERROR: note is required."
+    error = _require_item_read("reminder", id, read_token)
+    if error:
+        return error
+    result = add_reminder_note(id=id, note=note.strip(), actor=actor or "nexo")
+    if not result or "error" in result:
+        error_msg = result.get("error", f"Reminder {id} not found.") if isinstance(result, dict) else f"Reminder {id} not found."
+        return f"ERROR: {error_msg}"
+    return f"Reminder {id} note added."
+
+
+def handle_reminder_restore(id: str, read_token: str = '') -> str:
+    """Restore a soft-deleted reminder."""
+    error = _require_item_read("reminder", id, read_token)
+    if error:
+        return error
+    result = restore_reminder(id=id)
+    if not result or "error" in result:
+        error_msg = result.get("error", f"Reminder {id} not found.") if isinstance(result, dict) else f"Reminder {id} not found."
+        return f"ERROR: {error_msg}"
+    return f"Reminder {id} restored to PENDING."
+
+
+def handle_reminder_delete(id: str, read_token: str = '') -> str:
+    """Soft-delete a reminder."""
+    error = _require_item_read("reminder", id, read_token)
+    if error:
+        return error
     result = delete_reminder(id=id)
     if not result:
         return f"ERROR: Reminder {id} not found."
 
-    return f"Reminder {id} deleted."
+    return f"Reminder {id} soft-deleted."
 
 
 # ── Followups ──────────────────────────────────────────────────────────────────
@@ -95,8 +208,28 @@ def handle_followup_create(id: str, description: str, date: str = '', verificati
     return f"Followup created. Date: {date_str}.{rec_str}{warn_str}"
 
 
-def handle_followup_update(id: str, description: str = '', date: str = '', verification: str = '', status: str = '') -> str:
+def handle_followup_get(id: str) -> str:
+    """Read a followup with history and return a read token for safe mutations."""
+    result = get_followup(id=id, include_history=True)
+    if not result:
+        return f"ERROR: Followup {id} not found."
+    return _format_followup_payload(result)
+
+
+def handle_followup_update(
+    id: str,
+    description: str = '',
+    date: str = '',
+    verification: str = '',
+    status: str = '',
+    priority: str = '',
+    read_token: str = '',
+) -> str:
     """Update one or more fields of an existing followup."""
+    error = _require_item_read("followup", id, read_token)
+    if error:
+        return error
+
     fields: dict = {}
     if description:
         fields['description'] = description
@@ -106,16 +239,19 @@ def handle_followup_update(id: str, description: str = '', date: str = '', verif
         fields['verification'] = verification
     if status:
         fields['status'] = status
+    if priority:
+        fields['priority'] = priority
 
     if not fields:
         return f"ERROR: No fields specified to update for {id}."
 
     result = update_followup(id=id, **fields)
-    if not result:
-        return f"ERROR: Followup {id} not found."
+    if not result or "error" in result:
+        error_msg = result.get("error", f"Followup {id} not found.") if isinstance(result, dict) else f"Followup {id} not found."
+        return f"ERROR: {error_msg}"
 
     changed = ', '.join(fields.keys())
-    return f"Followup updated: {changed}."
+    return f"Followup {id} updated: {changed}."
 
 
 def handle_followup_complete(id: str, result: str = '') -> str:
@@ -157,10 +293,39 @@ def handle_followup_complete(id: str, result: str = '') -> str:
     return msg
 
 
-def handle_followup_delete(id: str) -> str:
-    """Delete a followup permanently."""
+def handle_followup_note(id: str, note: str, read_token: str = '', actor: str = 'nexo') -> str:
+    """Append a note to followup history."""
+    if not note.strip():
+        return "ERROR: note is required."
+    error = _require_item_read("followup", id, read_token)
+    if error:
+        return error
+    result = add_followup_note(id=id, note=note.strip(), actor=actor or "nexo")
+    if not result or "error" in result:
+        error_msg = result.get("error", f"Followup {id} not found.") if isinstance(result, dict) else f"Followup {id} not found."
+        return f"ERROR: {error_msg}"
+    return f"Followup {id} note added."
+
+
+def handle_followup_restore(id: str, read_token: str = '') -> str:
+    """Restore a soft-deleted followup."""
+    error = _require_item_read("followup", id, read_token)
+    if error:
+        return error
+    result = restore_followup(id=id)
+    if not result or "error" in result:
+        error_msg = result.get("error", f"Followup {id} not found.") if isinstance(result, dict) else f"Followup {id} not found."
+        return f"ERROR: {error_msg}"
+    return f"Followup {id} restored to PENDING."
+
+
+def handle_followup_delete(id: str, read_token: str = '') -> str:
+    """Soft-delete a followup."""
+    error = _require_item_read("followup", id, read_token)
+    if error:
+        return error
     result = delete_followup(id=id)
     if not result:
         return f"ERROR: Followup {id} not found."
 
-    return f"Followup deleted."
+    return f"Followup {id} soft-deleted."

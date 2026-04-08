@@ -674,6 +674,35 @@ def _m28_automation_runs(conn):
     _migrate_add_index(conn, "idx_automation_runs_status", "automation_runs", "status")
 
 
+def _m29_item_history_and_soft_delete(conn):
+    """Persist reminder/followup history and read-before-mutate tokens."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS item_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            item_type TEXT NOT NULL,
+            item_id TEXT NOT NULL,
+            event_type TEXT NOT NULL,
+            note TEXT DEFAULT '',
+            actor TEXT DEFAULT '',
+            metadata TEXT DEFAULT '{}',
+            created_at REAL NOT NULL
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS item_read_tokens (
+            token TEXT PRIMARY KEY,
+            item_type TEXT NOT NULL,
+            item_id TEXT NOT NULL,
+            history_seq INTEGER DEFAULT 0,
+            issued_at REAL NOT NULL,
+            expires_at REAL NOT NULL
+        )
+    """)
+    _migrate_add_index(conn, "idx_item_history_lookup", "item_history", "item_type, item_id, created_at")
+    _migrate_add_index(conn, "idx_item_history_item", "item_history", "item_id")
+    _migrate_add_index(conn, "idx_item_read_tokens_lookup", "item_read_tokens", "item_type, item_id, expires_at")
+
+
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
     (2, "followups_reasoning", _m2_followups_reasoning),
@@ -703,6 +732,7 @@ MIGRATIONS = [
     (26, "protocol_answer_confidence", _m26_protocol_answer_confidence),
     (27, "state_watchers", _m27_state_watchers),
     (28, "automation_runs", _m28_automation_runs),
+    (29, "item_history_and_soft_delete", _m29_item_history_and_soft_delete),
 ]
 
 
