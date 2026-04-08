@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEXO Recent Memory, Transcript Fallback, and Live System Map</title>
+    <meta name="description" content="How NEXO keeps the last 24 hours fresh, falls back to full transcripts when needed, and exposes a live map of its own tools, scripts, skills, crons, projects, and artifacts.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/docs/recent-memory-and-system-map/">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/docs/recent-memory-and-system-map/">
+    <meta property="og:title" content="NEXO Recent Memory, Transcript Fallback, and Live System Map">
+    <meta property="og:description" content="The public mental model for NEXO's recent-memory ladder: hot context first, transcript fallback second, live system catalog for self-knowledge.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
+    <meta property="og:image:width" content="1536">
+    <meta property="og:image:height" content="1024">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO Recent Memory, Transcript Fallback, and Live System Map">
+    <meta name="twitter:description" content="The public mental model for NEXO's recent-memory ladder: hot context first, transcript fallback second, live system catalog for self-knowledge.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "TechArticle",
+        "headline": "NEXO Recent Memory, Transcript Fallback, and Live System Map",
+        "description": "How NEXO keeps the last 24 hours fresh, falls back to full transcripts when needed, and exposes a live map of its own runtime.",
+        "datePublished": "2026-04-08",
+        "dateModified": "2026-04-08",
+        "author": {
+            "@type": "Person",
+            "name": "Francisco Cerda Puigserver"
+        },
+        "publisher": {
+            "@type": "Organization",
+            "name": "WAzion",
+            "url": "https://www.wazion.com"
+        },
+        "url": "https://nexo-brain.com/docs/recent-memory-and-system-map/"
+    }
+    </script>
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body class="features-page">
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-64.png" alt="NEXO Brain logo">
+            <span>NEXO Brain</span>
+        </a>
+        <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/features/">Features</a>
+            <a href="/evolution/">Evolution</a>
+            <a href="/compare/">Compare</a>
+            <a href="/blog/">Blog</a>
+            <a href="/changelog/">Changelog</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta">GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<main class="pt-nav">
+    <section class="page-hero section-flush-top">
+        <div class="container">
+            <div class="page-hero-grid">
+                <div class="page-hero-copy">
+                    <div class="section-label">Recent memory</div>
+                    <h1 class="section-title" style="font-size:clamp(34px,5vw,58px);">Hot context first, transcripts second, live system map for self-knowledge</h1>
+                    <p class="section-subtitle">This is the public model for what happens when NEXO should still remember something from the last few hours, and what the runtime does when the first layer is not enough.</p>
+                    <div class="page-chip-row">
+                        <span class="page-chip">24h recent continuity</span>
+                        <span class="page-chip">Transcript fallback</span>
+                        <span class="page-chip">Live runtime ontology</span>
+                    </div>
+                    <div class="hero-actions" style="justify-content:flex-start;">
+                        <a href="https://github.com/wazionapps/nexo/blob/main/docs/recent-memory-fallbacks-and-system-catalog.md" class="btn btn-primary">Read the repo doc</a>
+                        <a href="/changelog/#v320" class="btn btn-secondary">See v3.2.0</a>
+                        <a href="/blog/nexo-3-2-0-recent-memory-transcript-fallback-system-catalog/" class="btn btn-secondary">Release article</a>
+                    </div>
+                </div>
+                <div class="page-visual">
+                    <div class="page-stack">
+                        <div class="page-stack-card">
+                            <strong>1. Hot context</strong>
+                            <span>Recent operational state stays fresh for the last 24 hours across sessions, clients, cron ticks, and channel changes.</span>
+                        </div>
+                        <div class="page-stack-card">
+                            <strong>2. Transcript fallback</strong>
+                            <span>If recent capture missed the detail, NEXO can now search and read recent Claude Code / Codex transcripts directly.</span>
+                        </div>
+                        <div class="page-stack-card">
+                            <strong>3. Live system map</strong>
+                            <span>When the question is about NEXO itself, the runtime can inspect its own current tools, scripts, skills, crons, projects, and artifacts.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="fit-grid">
+                <div class="fit-card">
+                    <div class="fit-step">1</div>
+                    <h3>Use recent memory first</h3>
+                    <p><code>nexo_pre_action_context</code> and <code>nexo_recent_context</code> are still the preferred continuity layer. They answer what is actively alive right now.</p>
+                </div>
+                <div class="fit-card">
+                    <div class="fit-step">2</div>
+                    <h3>Use transcript fallback when memory is thin</h3>
+                    <p><code>nexo_transcript_recent</code>, <code>nexo_transcript_search</code>, and <code>nexo_transcript_read</code> let the runtime recover the real conversation instead of pretending it is lost.</p>
+                </div>
+                <div class="fit-card">
+                    <div class="fit-step">3</div>
+                    <h3>Use the system catalog for self-knowledge</h3>
+                    <p><code>nexo_system_catalog</code> and <code>nexo_tool_explain</code> answer what NEXO currently exposes and where that capability comes from.</p>
+                </div>
+            </div>
+
+            <div class="features-grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));margin-top:40px;">
+                <div class="feature-card">
+                    <h3>Why this matters</h3>
+                    <p>Before this release, a recent conversation could exist in transcripts but still be unreachable through the public MCP surface. That gap is now closed.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Why the system map stays current</h3>
+                    <p>The catalog is generated from canonical sources at read time. It is not a stale copied registry or a hand-maintained markdown list.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>What counts as canonical</h3>
+                    <p>Core tools from <code>server.py</code>, plugin tools from the plugin registry, skills from the skill registry, scripts from the script registry, crons from the manifest, projects from the atlas, and artifacts from the artifact registry.</p>
+                </div>
+            </div>
+
+            <div class="code-block" style="max-width:none;margin-top:40px;">
+                <div class="code-header">
+                    <span class="code-dot"></span><span class="code-dot"></span><span class="code-dot"></span>
+                    <span class="code-title">Examples</span>
+                </div>
+                <div class="code-body">
+                    <span style="color:#94A3B8"># recent-memory bundle first</span><br>
+                    <span style="color:#22C55E">$</span> nexo call nexo_pre_action_context --input '{"query":"wifi digi","hours":24,"limit":6}'<br><br>
+                    <span style="color:#94A3B8"># raw fallback if that is not enough</span><br>
+                    <span style="color:#22C55E">$</span> nexo call nexo_transcript_search --input '{"query":"wifi digi","hours":24,"limit":5}'<br>
+                    <span style="color:#22C55E">$</span> nexo call nexo_transcript_read --input '{"session_ref":"claude_code:session-wifi.jsonl","max_messages":80}'<br><br>
+                    <span style="color:#94A3B8"># ask NEXO what it has right now</span><br>
+                    <span style="color:#22C55E">$</span> nexo call nexo_system_catalog --input '{"section":"core_tools","query":"transcript"}'<br>
+                    <span style="color:#22C55E">$</span> nexo call nexo_tool_explain --input '{"name":"nexo_pre_action_context"}'
+                </div>
+            </div>
+
+            <div class="release-evolution-actions" style="margin-top:34px;">
+                <a href="/docs/" class="btn btn-secondary">Back to docs</a>
+                <a href="/features/" class="btn btn-secondary">See features</a>
+                <a href="https://github.com/wazionapps/nexo" class="btn btn-primary">Open GitHub</a>
+            </div>
+        </div>
+    </section>
+</main>
+<script>
+(function() {
+    var navLinks = document.querySelector('.nav-links');
+    var navToggle = document.querySelector('.nav-toggle');
+    navLinks.querySelectorAll('a').forEach(function(link) {
+        link.addEventListener('click', function() { navLinks.classList.remove('open'); });
+    });
+    document.addEventListener('click', function(e) {
+        if (navLinks.classList.contains('open') && !navLinks.contains(e.target) && !navToggle.contains(e.target)) {
+            navLinks.classList.remove('open');
+        }
+    });
+})();
+</script>
+</body>
+</html>

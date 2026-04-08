@@ -1,8 +1,8 @@
 # NEXO Brain
 
-> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v2.6.21).
+> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v3.2.0).
 
-NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It adds a local shared brain across supported clients, configurable terminal and automation backends, recovery-aware background jobs, startup preflight, runtime self-healing, smarter retrieval defaults, long-horizon overnight analysis, and 150+ MCP tools.
+NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It adds a local shared brain across supported clients, configurable terminal and automation backends, recovery-aware background jobs, startup preflight, runtime self-healing, 24-hour recent memory, transcript fallback, a live system catalog, long-horizon overnight analysis, and 150+ MCP tools.
 
 ## Core Product Model
 
@@ -18,6 +18,9 @@ NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cogniti
 - Semantic search with local embeddings and optional HNSW acceleration
 - Claim graph, trust scoring, metacognitive guard, cognitive dissonance detection
 - Episodic memory, reminders, learnings, followups, and session continuity
+- 24-hour hot context for recent operational continuity across sessions and channels
+- Transcript fallback tools for recent Claude Code / Codex conversations when the memory layer is too thin
+- Live system catalog for tools, plugins, skills, scripts, crons, projects, and artifacts
 - Context continuity across Claude Code compaction via hooks
 - Shared-brain client sync for Claude Code, Codex, and Claude Desktop
 - Managed bootstrap parity for `~/.claude/CLAUDE.md` and `~/.codex/AGENTS.md`
@@ -35,9 +38,14 @@ NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cogniti
 - Deep Sleep transcript parity across Claude Code and Codex session stores
 - 60-day long-horizon Deep Sleep blend for recurring themes and older/current cross-domain connections
 - Weighted project-priority signals plus weekly/monthly Deep Sleep summary artifacts
+- Periodic Deep Sleep summaries with protocol compliance, engineering-loop output, project pulse, and trend-vs-previous data
 - Semantic Deep Sleep followup deduplication plus learning consolidation outcomes: duplicate, reinforcement, contradiction review, or genuinely new
 - Deep Sleep engineering followup backfill so recurring patterns turn into concrete scripts, hooks, checklists, and guardrails instead of only passive observations
 - Runtime doctor parity audits for recent Codex sessions and Claude Desktop shared-brain metadata
+- Runtime doctor audits weekly protocol compliance plus release artifact sync drift
+- Dashboard narratives for what matters now, what is drifting, and what is improving
+- Public `scripts/verify_release_readiness.py` validator for release discipline
+- Pending Codex launcher fixes included: client selection, launch mode, last terminal choice, interactive flags
 - Runtime CLI with `nexo chat`, `nexo update`, `nexo doctor`, and personal script management
 - Self-healing runtime with managed schedule reconciliation and KeepAlive daemon support
 - Personal scripts registry, dashboard, overnight learning, and recovery-aware jobs

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v3.1.9.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v3.2.0.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v3.1.9.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v3.2.0.">
     <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
     <meta property="og:image:width" content="1536">
     <meta property="og:image:height" content="1024">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v3.1.9.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v3.2.0.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v3.1.9.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v3.2.0.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,12 +87,12 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v3.1.9 live</span>
-                    <span class="page-chip">Runtime + website + release artifacts</span>
+                    <span class="page-chip">v3.2.0 live</span>
+                    <span class="page-chip">Recent memory + transcript fallback + system map</span>
                     <span class="page-chip">From early memory stack to cognitive runtime</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v319" class="btn btn-primary">Start with v3.1.9</a>
+                    <a href="#v320" class="btn btn-primary">Start with v3.2.0</a>
                     <a href="#v310" class="btn btn-secondary">See v3.1.0</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -100,8 +100,8 @@
             <div class="page-visual">
                 <div class="page-stack">
                     <div class="page-stack-card">
-                        <strong>v3.1.9</strong>
-                        <span>Update bootstrap fix: installed runtimes now receive new root modules automatically, so hot-context releases actually land end-to-end.</span>
+                        <strong>v3.2.0</strong>
+                        <span>Recent memory now has a proper fallback ladder: hot context, transcript search/read, and a live system map built from canonical runtime sources.</span>
                     </div>
                     <div class="page-stack-card">
                         <strong>v3.0.0</strong>
@@ -127,6 +127,24 @@
             <div>
                 <div id="changelog-page-meta" class="changelog-page-meta">Loading release pages…</div>
                 <div id="changelog-pager" class="changelog-pager" aria-label="Changelog pagination"></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v3.2.0 Recent memory fallback + live system map -->
+<section id="v320" class="section-compact" style="background:linear-gradient(135deg,#111827 0%,#4c1d95 100%);">
+    <div class="container">
+        <div class="section-label">New in v3.2.0 <span style="opacity:.5;font-weight:400;">&mdash; April 8, 2026</span></div>
+        <h2 class="section-title">Recent Memory Gets Honest Fallbacks And NEXO Gets A Live Self-Map</h2>
+        <p class="section-subtitle">
+            v3.2.0 closes the gap between "we definitely discussed this today" and "the runtime can actually recover it". Hot context remains the first recent-memory layer, but recent transcripts are now accessible through MCP when that layer is too thin, and NEXO can inspect its own runtime surface through a live generated catalog.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Transcript Fallback Tools</h4><p>New MCP tools <code>nexo_transcript_recent</code>, <code>nexo_transcript_search</code>, and <code>nexo_transcript_read</code> make recent Claude Code / Codex transcripts reachable when hot context and durable recall are not enough.</p></div>
+                <div class="cognitive-card"><h4>Shared Parser With Deep Sleep</h4><p>The public transcript fallback and overnight Deep Sleep now use the same transcript parser, which keeps operator-visible recovery and overnight analysis on the same raw session truth.</p></div>
+                <div class="cognitive-card"><h4>Live System Catalog</h4><p>New tools <code>nexo_system_catalog</code> and <code>nexo_tool_explain</code> generate a runtime map from canonical sources: core tools, plugins, skills, scripts, crons, projects, and artifacts.</p></div>
             </div>
         </div>
     </div>

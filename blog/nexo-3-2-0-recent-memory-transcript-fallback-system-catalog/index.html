@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXO 3.2.0: Recent Memory That Survives the Day, Transcript Fallback, and a Live Runtime Map</title>
+    <meta name="description" content="NEXO 3.2.0 adds a real recent-memory ladder: 24-hour hot context, transcript fallback for Claude Code and Codex, and a live system catalog generated from the runtime's canonical sources.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-3-2-0-recent-memory-transcript-fallback-system-catalog/">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/blog/nexo-3-2-0-recent-memory-transcript-fallback-system-catalog/">
+    <meta property="og:title" content="NEXO 3.2.0: Recent Memory That Survives the Day, Transcript Fallback, and a Live Runtime Map">
+    <meta property="og:description" content="NEXO now keeps the last 24 hours operationally explicit, can recover recent conversations from transcripts when needed, and can inspect its own current runtime surface through a live catalog.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/nexo-brain-infographic-v5.png">
+    <meta property="og:image:width" content="1536">
+    <meta property="og:image:height" content="1024">
+    <meta property="article:published_time" content="2026-04-08">
+    <meta property="article:author" content="Francisco Cerda Puigserver">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO 3.2.0: Recent Memory That Survives the Day, Transcript Fallback, and a Live Runtime Map">
+    <meta name="twitter:description" content="NEXO 3.2.0 adds a real recent-memory ladder: 24-hour hot context, transcript fallback for Claude Code and Codex, and a live system catalog generated from canonical runtime sources.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/nexo-brain-infographic-v5.png">
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "NEXO 3.2.0: Recent Memory That Survives the Day, Transcript Fallback, and a Live Runtime Map",
+        "description": "NEXO 3.2.0 adds a real recent-memory ladder: 24-hour hot context, transcript fallback for Claude Code and Codex, and a live system catalog generated from the runtime's canonical sources.",
+        "datePublished": "2026-04-08",
+        "dateModified": "2026-04-08",
+        "author": {
+            "@type": "Person",
+            "name": "Francisco Cerda Puigserver"
+        },
+        "publisher": {
+            "@type": "Organization",
+            "name": "WAzion",
+            "url": "https://www.wazion.com"
+        },
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https://nexo-brain.com/blog/nexo-3-2-0-recent-memory-transcript-fallback-system-catalog/"
+        },
+        "url": "https://nexo-brain.com/blog/nexo-3-2-0-recent-memory-transcript-fallback-system-catalog/",
+        "image": "https://nexo-brain.com/assets/nexo-brain-infographic-v5.png",
+        "keywords": ["NEXO 3.2.0", "recent memory", "transcript fallback", "system catalog", "ontology", "Claude Code memory", "Codex memory"]
+    }
+    </script>
+
+    <style>
+        .article-header { padding-top: 128px; padding-bottom: 40px; text-align: center; }
+        .article-meta { font-size: 14px; color: var(--text-muted); margin-bottom: 16px; }
+        .article-body {
+            max-width: 720px; margin: 0 auto; padding: 0 24px 80px;
+            font-size: 17px; line-height: 1.8; color: var(--text);
+        }
+        .article-body h2 { font-size: 28px; font-weight: 700; margin: 48px 0 16px; letter-spacing: -0.01em; }
+        .article-body p { margin-bottom: 20px; color: var(--text-muted); }
+        .article-body strong { color: var(--text); }
+        .article-body a { color: var(--purple-light); }
+        .article-body a:hover { color: var(--pink); }
+        .article-body ul { margin: 0 0 20px 24px; color: var(--text-muted); }
+        .article-body li { margin-bottom: 8px; }
+        .article-body code {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 14px; color: var(--pink);
+            background: rgba(236, 72, 153, 0.1);
+            padding: 2px 8px; border-radius: 4px;
+        }
+        .article-body pre {
+            background: var(--dark-card);
+            border: 1px solid var(--dark-border);
+            border-radius: 12px;
+            padding: 24px;
+            overflow-x: auto;
+            margin-bottom: 24px;
+        }
+        .article-body pre code {
+            background: none; padding: 0;
+            font-size: 15px; color: #22C55E;
+        }
+        .article-back {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 14px; font-weight: 600; color: var(--text-muted);
+            margin-bottom: 24px;
+        }
+        .article-back:hover { color: var(--purple-light); }
+        .article-visual {
+            margin: 32px 0 40px;
+            text-align: center;
+        }
+        .article-visual img {
+            max-width: 100%;
+            border-radius: 16px;
+            border: 1px solid var(--dark-border);
+            box-shadow: 0 8px 32px rgba(124,58,237,0.15);
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-64.png" alt="NEXO Brain" width="32" height="32">
+            NEXO Brain
+        </a>
+        <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/features/">Features</a>
+            <a href="/evolution/">Evolution</a>
+            <a href="/compare/">Compare</a>
+            <a href="/blog/">Blog</a>
+            <a href="/changelog/">Changelog</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<article>
+    <header class="article-header">
+        <div class="container">
+            <a href="/blog/" class="article-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg> Back to Blog</a>
+            <div class="article-meta">April 8, 2026 &middot; 7 min read</div>
+            <h1 class="section-title" style="font-size:clamp(28px,4.5vw,48px);max-width:860px;margin:0 auto 16px;">NEXO 3.2.0: Recent Memory That Survives the Day, Transcript Fallback, and a Live Runtime Map</h1>
+            <p class="section-subtitle">The runtime now has a proper ladder for "we definitely talked about this today", plus a live self-map for the question "what exactly does NEXO have right now?"</p>
+        </div>
+    </header>
+
+    <div class="article-body">
+        <p>NEXO already had durable memory, nightly transcript-aware Deep Sleep, diaries, reminders, followups, and a new hot-context layer for the last 24 hours. But there was still a real gap in practice: sometimes the operator knew the conversation happened today, the transcript existed on disk, and yet the public MCP surface had no direct fallback path to recover that conversation honestly.</p>
+
+        <div class="article-visual">
+            <img src="/assets/nexo-brain-infographic-v5.png" alt="NEXO Brain architecture overview">
+        </div>
+
+        <h2>The First Layer Is Still Hot Context</h2>
+        <p>The right first answer to recent continuity is not "search raw transcripts every time". That would be noisy and expensive. The first answer is still <strong>hot context</strong>: recent operational topics, states, and events that stay alive across sessions, clients, cron ticks, and channel changes.</p>
+        <p>That layer was already present in the 3.1.x line. It keeps active topics explicit instead of hoping the runtime can reconstruct the last few hours from diaries and durable recall alone.</p>
+
+        <h2>Now There Is A Public Fallback When That Layer Misses</h2>
+        <p>3.2.0 adds a second layer: recent transcript fallback through MCP.</p>
+        <p>New tools:</p>
+        <ul>
+            <li><code>nexo_transcript_recent</code></li>
+            <li><code>nexo_transcript_search</code></li>
+            <li><code>nexo_transcript_read</code></li>
+        </ul>
+        <p>This matters because there is a big difference between:</p>
+        <ul>
+            <li>"the runtime has no evidence this happened"</li>
+            <li>"the recent-memory layer is thin, but the conversation absolutely exists in the transcript store"</li>
+        </ul>
+        <p>With 3.2.0 the public MCP surface can now recover that second case directly. If hot context and recall are not enough, NEXO can search recent Claude Code and Codex transcripts and read the actual conversation.</p>
+
+        <h2>Deep Sleep And The Public Fallback Now Share The Same Parser</h2>
+        <p>This release also removes a quieter risk: parser drift. Deep Sleep already had transcript access internally, but a public fallback built on a different parser would slowly diverge.</p>
+        <p>Instead, 3.2.0 extracts transcript parsing into a shared module used by both Deep Sleep and the new public transcript tools. The overnight analyst and the operator-facing fallback now look at the same raw reality.</p>
+
+        <h2>NEXO Can Also Inspect Itself Now</h2>
+        <p>The second missing piece was not about user memory. It was about NEXO's self-knowledge.</p>
+        <p>People naturally ask things like:</p>
+        <ul>
+            <li>What tools does NEXO have right now?</li>
+            <li>What plugin exposes this behavior?</li>
+            <li>What scripts, skills, crons, projects, and artifacts exist in this runtime?</li>
+        </ul>
+        <p>Until now, the answer was scattered across docs, code, the plugin registry, the script registry, project atlas, and operator memory. 3.2.0 turns that into a first-class runtime surface through:</p>
+        <ul>
+            <li><code>nexo_system_catalog</code></li>
+            <li><code>nexo_tool_explain</code></li>
+        </ul>
+
+        <h2>Why We Call It A Live System Map</h2>
+        <p>This is not a hand-maintained markdown index pretending to be a runtime ontology.</p>
+        <p>The catalog is built from canonical sources at read time:</p>
+        <ul>
+            <li>core tools from <code>server.py</code></li>
+            <li>plugin tools from the plugin registry and live modules</li>
+            <li>skills from the skill registry</li>
+            <li>scripts from the script registry</li>
+            <li>crons from the cron manifest</li>
+            <li>projects from the project atlas</li>
+            <li>artifacts from the artifact registry</li>
+        </ul>
+        <p>So when the runtime changes, the map changes with it. That is the important product difference.</p>
+
+        <h2>The New Mental Model</h2>
+        <p>The practical ladder for recent continuity is now:</p>
+        <ul>
+            <li><strong>Hot context first</strong> for active recent work</li>
+            <li><strong>Transcript fallback second</strong> for "we know we discussed this today"</li>
+            <li><strong>Live system catalog</strong> when the question is about NEXO itself rather than the user's work</li>
+        </ul>
+        <p>That gives NEXO a much more honest answer to two common operator complaints: "you should still remember this from today" and "tell me what you actually have in this runtime."</p>
+
+        <h2>Install or Update</h2>
+        <p>New install:</p>
+        <pre><code>npx nexo-brain</code></pre>
+        <p>Existing installation:</p>
+        <pre><code>nexo update</code></pre>
+        <p>Then use the recent-memory doc, the changelog, or the new MCP tools directly if you want the runtime to recover a recent conversation or explain its own current surface more honestly.</p>
+    </div>
+</article>
+
+<section class="cta-section">
+    <div class="container">
+        <h2 class="section-title">Give the runtime a better answer than "I don't remember"</h2>
+        <p class="section-subtitle" style="margin: 16px auto 48px;">
+            Hot context now has a real fallback path, and NEXO can inspect its own live runtime surface too.
+        </p>
+        <div class="hero-actions">
+            <a href="https://github.com/wazionapps/nexo" class="btn btn-primary">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+                View on GitHub
+            </a>
+            <a href="/docs/recent-memory-and-system-map/" class="btn btn-secondary">Open the doc</a>
+            <a href="/" class="btn btn-secondary">Back to Home</a>
+        </div>
+    </div>
+</section>
+
+</body>
+</html>
