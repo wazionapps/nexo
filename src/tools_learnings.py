@@ -307,16 +307,26 @@ def handle_learning_add(category: str, title: str, content: str, reasoning: str 
         return f"ERROR: {result['error']}"
     if prevention or applies_to or review_days > 0 or priority != 'medium':
         initial_weight = {'critical': 0.9, 'high': 0.7, 'medium': 0.5, 'low': 0.3}[priority]
+        updated_at = now_epoch()
+        review_due_at = now_epoch() + (max(1, int(review_days)) * 86400)
         conn = get_db()
         conn.execute(
             "UPDATE learnings SET prevention = ?, applies_to = ?, status = COALESCE(status, 'active'), "
             "review_due_at = ?, updated_at = ?, priority = ?, weight = ? WHERE id = ?",
-            (prevention, applies_to, now_epoch() + (max(1, int(review_days)) * 86400), now_epoch(),
+            (prevention, applies_to, review_due_at, updated_at,
              priority, initial_weight, result["id"])
         )
         conn.commit()
-        result = conn.execute("SELECT * FROM learnings WHERE id = ?", (result["id"],)).fetchone()
         result = dict(result)
+        result.update({
+            "prevention": prevention,
+            "applies_to": applies_to,
+            "status": result.get("status") or "active",
+            "review_due_at": review_due_at,
+            "updated_at": updated_at,
+            "priority": priority,
+            "weight": initial_weight,
+        })
 
     # Cognitive ingest — embed learning for semantic search
     new_id = result["id"]

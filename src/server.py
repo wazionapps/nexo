@@ -620,12 +620,7 @@ def nexo_followup_create(id: str, description: str, date: str = "", verification
                     When completed, a new followup is auto-created with the next date. The completed one is archived with date suffix.
         priority: critical, high, medium, low (default: medium).
     """
-    result = handle_followup_create(id, description, date, verification, reasoning, recurrence)
-    if priority in ('critical', 'high', 'low') and 'created' in result:
-        from db import get_db
-        get_db().execute("UPDATE followups SET priority = ? WHERE id = ?", (priority, id))
-        get_db().commit()
-    return result
+    return handle_followup_create(id, description, date, verification, reasoning, recurrence, priority)
 
 
 @mcp.tool

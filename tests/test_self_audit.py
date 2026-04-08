@@ -6,6 +6,7 @@ import importlib.util
 import json
 import os
 import sqlite3
+import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -23,6 +24,8 @@ if str(REPO_SRC) not in sys.path:
 def _load_self_audit_module():
     module_name = "nexo_daily_self_audit_test"
     sys.modules.pop(module_name, None)
+    for name in ("db", "db._core", "db._schema", "db._reminders", "db._fts", "tools_learnings"):
+        sys.modules.pop(name, None)
     spec = importlib.util.spec_from_file_location(module_name, SCRIPT_PATH)
     module = importlib.util.module_from_spec(spec)
     assert spec and spec.loader
@@ -552,62 +555,77 @@ def test_check_repair_changes_missing_learning_capture_creates_debt_and_followup
 
 
 def test_check_repair_changes_missing_learning_capture_auto_captures_when_runtime_can_create_learning(self_audit_env):
-    import importlib
-    import db._core as db_core
-    import db._schema as db_schema
-    import db
-
-    importlib.reload(db_core)
-    importlib.reload(db_schema)
-    importlib.reload(db)
-    db.init_db()
-    module = _load_self_audit_module()
-    module.findings.clear()
-
-    conn = sqlite3.connect(str(self_audit_env / "data" / "nexo.db"))
-    conn.execute(
-        """CREATE TABLE IF NOT EXISTS change_log (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            session_id TEXT,
-            created_at TEXT,
-            files TEXT,
-            what_changed TEXT,
-            why TEXT
-        )"""
+    db_path = self_audit_env / "data" / "nexo.db"
+    script = f"""
+import importlib, importlib.util, json, os, sqlite3, sys
+from pathlib import Path
+src = Path({str(REPO_SRC)!r})
+db_path = Path({str(db_path)!r})
+os.environ['NEXO_HOME'] = {str(self_audit_env)!r}
+os.environ['NEXO_CODE'] = str(src)
+os.environ['NEXO_DB'] = str(db_path)
+os.environ['NEXO_TEST_DB'] = str(db_path)
+os.environ['HOME'] = {str(self_audit_env)!r}
+if str(src) not in sys.path:
+    sys.path.insert(0, str(src))
+for name in ('db','db._core','db._schema','db._reminders','db._fts','tools_learnings','nexo_daily_self_audit_test'):
+    sys.modules.pop(name, None)
+import db
+db.init_db()
+spec = importlib.util.spec_from_file_location('nexo_daily_self_audit_test', src / 'scripts' / 'nexo-daily-self-audit.py')
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+conn = sqlite3.connect(str(db_path))
+conn.execute(\"\"\"CREATE TABLE IF NOT EXISTS change_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT,
+    created_at TEXT,
+    files TEXT,
+    what_changed TEXT,
+    why TEXT
+)\"\"\")
+conn.execute(\"\"\"INSERT INTO change_log (session_id, files, what_changed, why, created_at)
+   VALUES ('sid-1', ?, ?, ?, datetime('now'))\"\"\", (
+    '/repo/src/plugins/protocol.py',
+    'Fixed protocol task close regression',
+    'Repair canonical close path before the bug repeats',
+))
+conn.commit()
+conn.close()
+module.check_repair_changes_missing_learning_capture()
+conn = sqlite3.connect(str(db_path))
+learning = conn.execute(
+    \"SELECT category, title, applies_to, status FROM learnings WHERE category = 'nexo-ops' ORDER BY id DESC LIMIT 1\"
+).fetchone()
+debt = conn.execute(
+    \"SELECT COUNT(*) FROM protocol_debt WHERE debt_type = 'repair_change_without_learning_capture'\"
+).fetchone()[0]
+conn.close()
+print(json.dumps({{
+    'findings': module.findings,
+    'learning': learning,
+    'debt': debt,
+}}))
+"""
+    completed = subprocess.run(
+        ["python3", "-c", script],
+        check=True,
+        text=True,
+        capture_output=True,
     )
-    conn.execute(
-        """INSERT INTO change_log (session_id, files, what_changed, why, created_at)
-           VALUES ('sid-1', ?, ?, ?, datetime('now'))""",
-        (
-            "/repo/src/plugins/protocol.py",
-            "Fixed protocol task close regression",
-            "Repair canonical close path before the bug repeats",
-        ),
-    )
-    conn.commit()
-    conn.close()
+    payload = json.loads(completed.stdout.strip().splitlines()[-1])
 
-    module.check_repair_changes_missing_learning_capture()
+    assert payload["findings"]
+    assert payload["findings"][-1]["area"] == "learning-capture"
+    assert payload["findings"][-1]["severity"] == "INFO"
 
-    assert module.findings
-    assert module.findings[-1]["area"] == "learning-capture"
-    assert module.findings[-1]["severity"] == "INFO"
-
-    conn = sqlite3.connect(str(self_audit_env / "data" / "nexo.db"))
-    learning = conn.execute(
-        "SELECT category, title, applies_to, status FROM learnings WHERE category = 'nexo-ops' ORDER BY id DESC LIMIT 1"
-    ).fetchone()
-    debt = conn.execute(
-        "SELECT COUNT(*) FROM protocol_debt WHERE debt_type = 'repair_change_without_learning_capture'"
-    ).fetchone()[0]
-    conn.close()
-
+    learning = payload["learning"]
     assert learning is not None
     assert learning[0] == "nexo-ops"
     assert "protocol task close regression" in learning[1].lower()
     assert learning[2] == "/repo/src/plugins/protocol.py"
     assert learning[3] == "active"
-    assert debt == 0
+    assert payload["debt"] == 0
 
 
 def test_check_unformalized_mentions_creates_workflow_goal_inline(self_audit_env):
@@ -813,6 +831,56 @@ def test_check_memory_quality_scores_creates_followup(self_audit_env):
     followup = conn.execute("SELECT description FROM followups").fetchone()
     conn.close()
     assert "Refresh low-quality conditioned learnings" in followup[0]
+
+
+def test_self_audit_followup_helpers_record_history(self_audit_env):
+    import importlib
+    import db._core as db_core
+    import db._schema as db_schema
+    import db
+
+    importlib.reload(db_core)
+    importlib.reload(db_schema)
+    importlib.reload(db)
+    db.init_db()
+
+    module = _load_self_audit_module()
+    conn = sqlite3.connect(str(self_audit_env / "data" / "nexo.db"))
+    conn.row_factory = sqlite3.Row
+
+    followup_id = module._ensure_followup(
+        conn,
+        prefix="TEST",
+        description="Capture self-audit canonical followup",
+        verification="History exists",
+        reasoning="Self-audit regression coverage",
+        priority="high",
+    )
+    completed = module._complete_matching_followup(
+        conn,
+        "Capture self-audit canonical followup",
+        "Resolved inline by self-audit test.",
+    )
+    conn.close()
+
+    assert followup_id.startswith("NF-TEST-")
+    assert completed == 1
+
+    conn = sqlite3.connect(str(self_audit_env / "data" / "nexo.db"))
+    status = conn.execute("SELECT status FROM followups WHERE id = ?", (followup_id,)).fetchone()[0]
+    history = conn.execute(
+        """SELECT event_type, actor, note
+           FROM item_history
+           WHERE item_type = 'followup' AND item_id = ?
+           ORDER BY id ASC""",
+        (followup_id,),
+    ).fetchall()
+    conn.close()
+
+    assert status == "COMPLETED"
+    assert [row[0] for row in history] == ["created", "completed"]
+    assert history[-1][1] == "db"
+    assert "Resolved inline by self-audit test." in history[-1][2]
 
 
 def test_run_mechanical_autofixes_sanitizes_registry_and_refreshes_snapshots(self_audit_env, monkeypatch):

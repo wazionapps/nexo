@@ -181,7 +181,15 @@ def handle_reminder_delete(id: str, read_token: str = '') -> str:
 
 # ── Followups ──────────────────────────────────────────────────────────────────
 
-def handle_followup_create(id: str, description: str, date: str = '', verification: str = '', reasoning: str = '', recurrence: str = '') -> str:
+def handle_followup_create(
+    id: str,
+    description: str,
+    date: str = '',
+    verification: str = '',
+    reasoning: str = '',
+    recurrence: str = '',
+    priority: str = 'medium',
+) -> str:
     """Create a new NEXO followup. id must start with 'NF'.
 
     Args:
@@ -196,16 +204,25 @@ def handle_followup_create(id: str, description: str, date: str = '', verificati
     if not id.startswith('NF'):
         return f"ERROR: Followup ID must start with 'NF' (received: '{id}')."
 
-    result = create_followup(id=id, description=description, date=date or None, verification=verification, reasoning=reasoning, recurrence=recurrence or None)
+    result = create_followup(
+        id=id,
+        description=description,
+        date=date or None,
+        verification=verification,
+        reasoning=reasoning,
+        recurrence=recurrence or None,
+        priority=priority or "medium",
+    )
     if not result or "error" in result:
         error_msg = result.get("error", "unknown") if isinstance(result, dict) else "unknown"
         return f"ERROR: {error_msg}"
 
     date_str = date if date else 'no date'
     rec_str = f" Recurrence: {recurrence}." if recurrence else ""
+    priority_str = f" Priority: {priority or 'medium'}."
     warning = result.get("warning", "")
     warn_str = f"\n{warning}" if warning else ""
-    return f"Followup created. Date: {date_str}.{rec_str}{warn_str}"
+    return f"Followup created. Date: {date_str}.{priority_str}{rec_str}{warn_str}"
 
 
 def handle_followup_get(id: str) -> str:

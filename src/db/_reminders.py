@@ -14,6 +14,14 @@ ACTIVE_EXCLUDED_STATUSES = {"DELETED", "archived", "blocked", "waiting"}
 READ_TOKEN_TTL_SECONDS = 30 * 60
 
 
+def _table_exists(conn: sqlite3.Connection, table_name: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type IN ('table', 'view') AND name = ? LIMIT 1",
+        (table_name,),
+    ).fetchone()
+    return bool(row)
+
+
 def _serialize_metadata(metadata: dict[str, Any] | None) -> str:
     if not metadata:
         return "{}"
@@ -63,6 +71,8 @@ def _history_rules(item_type: str) -> list[str]:
 
 
 def _latest_history_seq(conn, item_type: str, item_id: str) -> int:
+    if not _table_exists(conn, "item_history"):
+        return 0
     row = conn.execute(
         "SELECT MAX(id) AS max_id FROM item_history WHERE item_type = ? AND item_id = ?",
         (item_type, item_id),
@@ -82,6 +92,17 @@ def add_item_history(
 ) -> dict:
     """Append an event to reminder/followup history."""
     conn = get_db()
+    if not _table_exists(conn, "item_history"):
+        return {
+            "item_type": item_type,
+            "item_id": item_id,
+            "event_type": event_type,
+            "note": note or "",
+            "actor": actor,
+            "metadata": _serialize_metadata(metadata),
+            "created_at": created_at if created_at is not None else now_epoch(),
+            "skipped": True,
+        }
     ts = created_at if created_at is not None else now_epoch()
     conn.execute(
         "INSERT INTO item_history (item_type, item_id, event_type, note, actor, metadata, created_at) "
@@ -99,6 +120,8 @@ def add_item_history(
 def get_item_history(item_type: str, item_id: str, limit: int = 20) -> list[dict]:
     """Return latest history events for a reminder/followup."""
     conn = get_db()
+    if not _table_exists(conn, "item_history"):
+        return []
     rows = conn.execute(
         "SELECT * FROM item_history WHERE item_type = ? AND item_id = ? ORDER BY id DESC LIMIT ?",
         (item_type, item_id, limit),
@@ -376,6 +399,7 @@ def create_followup(
     status: str = "PENDING",
     reasoning: str = "",
     recurrence: str = None,
+    priority: str = "medium",
 ) -> dict:
     """Create a new followup with optional reasoning and recurrence."""
     conn = get_db()
@@ -389,14 +413,32 @@ def create_followup(
             f"(scores: {', '.join(str(s['_similarity']) for s in similar[:3])}). Consider updating instead."
         )
 
+    columns = {str(row["name"]) for row in conn.execute("PRAGMA table_info(followups)").fetchall()}
+    payload: dict[str, object] = {
+        "id": id,
+        "date": date,
+        "description": description,
+        "verification": verification,
+        "status": status,
+        "reasoning": reasoning,
+        "recurrence": recurrence,
+        "created_at": now,
+        "updated_at": now,
+    }
+    if "priority" in columns:
+        payload["priority"] = priority or "medium"
+
+    insert_columns = [column for column in payload if column in columns]
+    placeholders = ", ".join("?" for _ in insert_columns)
+
     try:
         conn.execute(
-            "INSERT INTO followups (id, date, description, verification, status, reasoning, recurrence, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (id, date, description, verification, status, reasoning, recurrence, now, now),
+            f"INSERT INTO followups ({', '.join(insert_columns)}) VALUES ({placeholders})",
+            [payload[column] for column in insert_columns],
         )
         conn.commit()
-        fts_upsert("followup", id, id, f"{description} {verification} {reasoning}", "followup", commit=False)
+        if _table_exists(conn, "unified_search"):
+            fts_upsert("followup", id, id, f"{description} {verification} {reasoning}", "followup", commit=False)
     except sqlite3.IntegrityError:
         return {"error": f"Followup {id} already exists. Use update instead."}
 
@@ -441,7 +483,7 @@ def update_followup(
     conn.commit()
 
     new_row = conn.execute("SELECT * FROM followups WHERE id = ?", (id,)).fetchone()
-    if new_row:
+    if new_row and _table_exists(conn, "unified_search"):
         new_row_dict = dict(new_row)
         fts_upsert(
             "followup",
@@ -541,9 +583,10 @@ def complete_followup(id: str, result: str = "") -> dict:
             _reassign_item_identity(conn, "followup", id, archived_id)
             conn.commit()
 
-            conn.execute("DELETE FROM unified_search WHERE source = 'followup' AND source_id = ?", (id,))
+            if _table_exists(conn, "unified_search"):
+                conn.execute("DELETE FROM unified_search WHERE source = 'followup' AND source_id = ?", (id,))
             archived_row = conn.execute("SELECT * FROM followups WHERE id = ?", (archived_id,)).fetchone()
-            if archived_row:
+            if archived_row and _table_exists(conn, "unified_search"):
                 fts_upsert(
                     "followup",
                     archived_id,

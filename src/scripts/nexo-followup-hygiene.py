@@ -18,6 +18,13 @@ from datetime import datetime, date, timedelta
 from pathlib import Path
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+_script_dir = Path(__file__).resolve().parent
+_repo_src = _script_dir.parent
+NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(_repo_src) if (_repo_src / "server.py").exists() else str(NEXO_HOME)))
+if str(NEXO_CODE) not in sys.path:
+    sys.path.insert(0, str(NEXO_CODE))
+
+import db as nexo_db
 
 NEXO_DB = NEXO_HOME / "data" / "nexo.db"
 COORD_DIR = NEXO_HOME / "coordination"
@@ -50,11 +57,31 @@ def main():
     dirty_r = conn.execute("SELECT COUNT(*) FROM reminders WHERE status LIKE 'COMPLETED %'").fetchone()[0]
 
     if dirty_f > 0:
-        conn.execute("UPDATE followups SET status='COMPLETED' WHERE status LIKE 'COMPLETED %'")
+        dirty_followups = conn.execute(
+            "SELECT id, status FROM followups WHERE status LIKE 'COMPLETED %'"
+        ).fetchall()
+        for row in dirty_followups:
+            nexo_db.update_followup(
+                str(row["id"]),
+                status="COMPLETED",
+                history_actor="followup-hygiene",
+                history_event="normalized",
+                history_note=f"Weekly hygiene normalized dirty status from {row['status']} to COMPLETED.",
+            )
         log(f"Normalized {dirty_f} dirty followup statuses")
 
     if dirty_r > 0:
-        conn.execute("UPDATE reminders SET status='COMPLETED' WHERE status LIKE 'COMPLETED %'")
+        dirty_reminders = conn.execute(
+            "SELECT id, status FROM reminders WHERE status LIKE 'COMPLETED %'"
+        ).fetchall()
+        for row in dirty_reminders:
+            nexo_db.update_reminder(
+                str(row["id"]),
+                status="COMPLETED",
+                history_actor="followup-hygiene",
+                history_event="normalized",
+                history_note=f"Weekly hygiene normalized dirty status from {row['status']} to COMPLETED.",
+            )
         log(f"Normalized {dirty_r} dirty reminder statuses")
 
     # 2. Flag stale followups (PENDING >14 days, no updates)

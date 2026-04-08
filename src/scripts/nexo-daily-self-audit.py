@@ -37,6 +37,7 @@ if str(NEXO_CODE) not in sys.path:
     sys.path.insert(0, str(NEXO_CODE))
 
 from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
+import db as nexo_db
 from public_evolution_queue import queue_public_port_candidate
 
 LOG_DIR = NEXO_HOME / "logs"
@@ -251,42 +252,36 @@ def _ensure_followup(conn: sqlite3.Connection, *, prefix: str, description: str,
             "description": description,
             "verification": verification,
             "reasoning": reasoning,
-            "updated_at": now_epoch,
         }
         if "priority" in columns:
             update_fields["priority"] = priority
         closed_status = str(existing_id_row["status"] or "").upper()
         if closed_status.startswith("COMPLETED") or closed_status in {"DELETED", "ARCHIVED", "BLOCKED", "WAITING"}:
             update_fields["status"] = "PENDING"
-        ordered_updates = [name for name in update_fields.keys() if name in columns]
-        if ordered_updates:
-            assignments = ", ".join(f"{name} = ?" for name in ordered_updates)
-            conn.execute(
-                f"UPDATE followups SET {assignments} WHERE id = ?",
-                [update_fields[name] for name in ordered_updates] + [followup_id],
-            )
+        conn.commit()
+        result = nexo_db.update_followup(
+            followup_id,
+            history_actor="self-audit",
+            history_event="updated",
+            history_note="Daily self-audit refreshed canonical followup coverage.",
+            **update_fields,
+        )
+        if result.get("error"):
+            return ""
         return followup_id
 
-    values = {
-        "id": followup_id,
-        "date": "",
-        "description": description,
-        "verification": verification,
-        "status": "PENDING",
-        "reasoning": reasoning,
-        "recurrence": None,
-        "created_at": now_epoch,
-        "updated_at": now_epoch,
-    }
-    if "priority" in columns:
-        values["priority"] = priority
-
-    ordered_columns = [name for name in values.keys() if name in columns]
-    placeholders = ", ".join("?" for _ in ordered_columns)
-    conn.execute(
-        f"INSERT INTO followups ({', '.join(ordered_columns)}) VALUES ({placeholders})",
-        [values[name] for name in ordered_columns],
+    conn.commit()
+    result = nexo_db.create_followup(
+        id=followup_id,
+        description=description,
+        date=None,
+        verification=verification,
+        reasoning=reasoning,
+        recurrence=None,
+        priority=priority,
     )
+    if result.get("error"):
+        return ""
     return followup_id
 
 
@@ -319,7 +314,6 @@ def _append_note(existing: str, note: str) -> str:
 def _complete_matching_followup(conn: sqlite3.Connection, description: str, note: str) -> int:
     if not _table_exists(conn, "followups"):
         return 0
-    columns = _table_columns(conn, "followups")
     rows = conn.execute(
         """SELECT id, verification, reasoning
            FROM followups
@@ -329,21 +323,11 @@ def _complete_matching_followup(conn: sqlite3.Connection, description: str, note
         (description,),
     ).fetchall()
     completed = 0
-    now_epoch = datetime.now().timestamp()
+    conn.commit()
     for row in rows:
-        updates = {"status": "COMPLETED"}
-        if "updated_at" in columns:
-            updates["updated_at"] = now_epoch
-        if "verification" in columns:
-            updates["verification"] = _append_note(row["verification"], note)
-        if "reasoning" in columns:
-            updates["reasoning"] = _append_note(row["reasoning"], note)
-        assignments = ", ".join(f"{column} = ?" for column in updates)
-        conn.execute(
-            f"UPDATE followups SET {assignments} WHERE id = ?",
-            [updates[column] for column in updates] + [row["id"]],
-        )
-        completed += 1
+        result = nexo_db.complete_followup(str(row["id"]), note)
+        if not result.get("error"):
+            completed += 1
     return completed
 
 
