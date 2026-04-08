@@ -14,6 +14,8 @@ from protocol_settings import get_protocol_strictness
 READ_LIKE_TOOLS = {"Read"}
 WRITE_LIKE_TOOLS = {"Edit", "MultiEdit", "Write"}
 DELETE_LIKE_TOOLS = {"Delete"}
+NEXO_CODE_ROOT = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parent))).expanduser().resolve()
+LIVE_REPO_ROOT = NEXO_CODE_ROOT.parent if NEXO_CODE_ROOT.name == "src" else NEXO_CODE_ROOT
 
 
 def _operation_kind(tool_name: str) -> str:
@@ -28,6 +30,37 @@ def _operation_kind(tool_name: str) -> str:
 
 def _normalize_file_path(path: str) -> str:
     return _normalize_path_token(str(Path(path)))
+
+
+def _resolve_runtime_path(path: str) -> Path:
+    candidate = Path(str(path or "")).expanduser()
+    if not candidate.is_absolute():
+        candidate = Path.cwd() / candidate
+    return candidate.resolve()
+
+
+def _is_relative_to(candidate: Path, root: Path) -> bool:
+    try:
+        candidate.relative_to(root)
+        return True
+    except ValueError:
+        return False
+
+
+def _automation_live_repo_guard_enabled() -> bool:
+    return (
+        os.environ.get("NEXO_AUTOMATION", "").strip() == "1"
+        and os.environ.get("NEXO_PUBLIC_CONTRIBUTION", "").strip() != "1"
+    )
+
+
+def _is_live_repo_path(path: str) -> bool:
+    if not str(path or "").strip():
+        return False
+    try:
+        return _is_relative_to(_resolve_runtime_path(path), LIVE_REPO_ROOT)
+    except Exception:
+        return False
 
 
 def _extract_touched_files(tool_input) -> list[str]:
@@ -166,19 +199,74 @@ def _ensure_protocol_debt(
     )
 
 
+def _collect_automation_live_repo_blocks(
+    conn,
+    *,
+    sid: str,
+    tool_name: str,
+    files: list[str],
+) -> list[dict]:
+    if not _automation_live_repo_guard_enabled():
+        return []
+    blocks: list[dict] = []
+    for filepath in files:
+        if not _is_live_repo_path(filepath):
+            continue
+        debt = _ensure_protocol_debt(
+            conn,
+            session_id=sid,
+            task_id="",
+            debt_type="automation_live_repo_write_blocked",
+            severity="error",
+            evidence=(
+                f"{tool_name} attempted on {filepath} from an automation session against the live NEXO repo. "
+                "Use an isolated checkout/worktree or the public contribution Draft PR flow instead."
+            ),
+            file_token=filepath,
+        )
+        blocks.append(
+            {
+                "file": filepath,
+                "task_id": "",
+                "debt_id": debt.get("id"),
+                "debt_type": "automation_live_repo_write_blocked",
+                "reason_code": "automation_live_repo",
+            }
+        )
+    return blocks
+
+
 def process_pre_tool_event(payload: dict) -> dict:
-    strictness = get_protocol_strictness()
     tool_name = str(payload.get("tool_name", "")).strip()
     op = _operation_kind(tool_name)
-    if strictness == "lenient":
-        return {"ok": True, "skipped": True, "reason": "lenient mode", "strictness": strictness}
     if op not in {"write", "delete"}:
-        return {"ok": True, "skipped": True, "reason": "operation not blocked", "strictness": strictness}
+        return {"ok": True, "skipped": True, "reason": "operation not blocked", "strictness": get_protocol_strictness()}
 
     tool_input = payload.get("tool_input")
     files = _extract_touched_files(tool_input)
+    strictness = get_protocol_strictness()
     conn = get_db()
     sid = _resolve_nexo_sid(conn, str(payload.get("session_id", "")))
+    automation_blocks = _collect_automation_live_repo_blocks(
+        conn,
+        sid=sid,
+        tool_name=tool_name,
+        files=files,
+    )
+    if automation_blocks:
+        return {
+            "ok": True,
+            "session_id": sid,
+            "tool_name": tool_name,
+            "operation": op,
+            "strictness": strictness,
+            "blocks": automation_blocks,
+            "status": "blocked",
+        }
+
+    if strictness == "lenient":
+        return {"ok": True, "skipped": True, "reason": "lenient mode", "strictness": strictness}
+
     blocks: list[dict] = []
 
     if not sid:
@@ -438,17 +526,25 @@ def format_pretool_block_message(result: dict) -> str:
     if not blocks:
         return ""
     strictness = str(result.get("strictness") or "strict")
-    header = (
-        "NEXO LEARNING MODE BLOCKED THIS EDIT:"
-        if strictness == "learning"
-        else "NEXO STRICT MODE BLOCKED THIS EDIT:"
-    )
+    if any(item.get("reason_code") == "automation_live_repo" for item in blocks):
+        header = "NEXO AUTOMATION SAFETY BLOCKED THIS EDIT:"
+    else:
+        header = (
+            "NEXO LEARNING MODE BLOCKED THIS EDIT:"
+            if strictness == "learning"
+            else "NEXO STRICT MODE BLOCKED THIS EDIT:"
+        )
     lines = [header]
     for item in blocks:
         file_note = item["file"] or "(unknown target)"
         if item.get("reason_code") == "missing_startup":
             lines.append(
                 f"- Start the shared-brain session first: call `nexo_startup`, then `nexo_task_open`, before editing {file_note}."
+            )
+        elif item.get("reason_code") == "automation_live_repo":
+            lines.append(
+                f"- {file_note}: automation sessions cannot write to the live NEXO repo. "
+                "Use an isolated checkout/worktree or the public contribution Draft PR flow."
             )
         elif item.get("reason_code") == "guard_unacknowledged":
             lines.append(

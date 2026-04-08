@@ -148,6 +148,7 @@ def test_run_automation_prompt_uses_claude_backend_command(monkeypatch, tmp_path
         "Read,Write",
     ]
     assert captured["env"]["NEXO_HEADLESS"] == "1"
+    assert captured["env"]["NEXO_AUTOMATION"] == "1"
     assert captured["cwd"] == str(tmp_path.resolve())
 
 
@@ -217,6 +218,43 @@ def test_run_automation_prompt_uses_codex_exec_output_file(monkeypatch, tmp_path
     assert "SYSTEM INSTRUCTIONS" in prompt
     assert "TOOLING SCOPE" in prompt
     assert "Summarize" in prompt
+    assert captured["cmd"][-1] == prompt
+
+
+def test_run_automation_prompt_marks_public_contribution_env(monkeypatch, tmp_path):
+    import agent_runner
+
+    monkeypatch.setattr(agent_runner, "_resolve_claude_cli", lambda: "/tmp/fake-claude")
+    monkeypatch.setattr(agent_runner, "_record_automation_run", lambda **kwargs: (True, ""))
+    monkeypatch.setattr(agent_runner, "load_client_preferences", lambda: {
+        "interactive_clients": {"claude_code": True, "codex": False, "claude_desktop": False},
+        "default_terminal_client": "claude_code",
+        "automation_enabled": True,
+        "automation_backend": "claude_code",
+        "client_runtime_profiles": {
+            "claude_code": {"model": "claude-opus-4-6[1m]", "reasoning_effort": ""},
+            "codex": {"model": "gpt-5.4", "reasoning_effort": "xhigh"},
+        },
+    })
+
+    captured = {}
+
+    def fake_run(cmd, **kwargs):
+        captured["env"] = kwargs["env"]
+        return subprocess.CompletedProcess(cmd, 0, _claude_json_result("ok"), "")
+
+    monkeypatch.setattr(agent_runner.subprocess, "run", fake_run)
+
+    result = agent_runner.run_automation_prompt(
+        "Public contribution path",
+        cwd=tmp_path,
+        env={"NEXO_PUBLIC_CONTRIBUTION": "1"},
+        output_format="text",
+    )
+
+    assert result.returncode == 0
+    assert captured["env"]["NEXO_AUTOMATION"] == "1"
+    assert captured["env"]["NEXO_PUBLIC_CONTRIBUTION"] == "1"
 
 
 def test_run_automation_prompt_uses_fast_task_profile_for_backend_and_reasoning(monkeypatch, tmp_path):

@@ -275,6 +275,7 @@ def _headless_env(env: dict | None = None) -> dict:
     if env:
         merged.update(env)
     merged["NEXO_HEADLESS"] = "1"
+    merged["NEXO_AUTOMATION"] = "1"
     merged.pop("CLAUDECODE", None)
     merged.pop("CLAUDE_CODE", None)
     return merged
