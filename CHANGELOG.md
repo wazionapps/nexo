@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.1.9] - 2026-04-08
+
+### Runtime Update Bootstrap Fix For Hot Context
+- Hardened `nexo update` so it no longer depends on a hand-maintained root-module list when new top-level runtime modules are introduced. The updater now discovers and copies all top-level `.py` runtime modules dynamically.
+- This specifically fixes the bootstrap gap where an installed runtime could copy the new `server.py` from the hot-context release but fail before importing because the old updater did not know it also had to copy `tools_hot_context.py`.
+- Added regression coverage for runtime updates copying the new `tools_hot_context.py` module into installed runtimes, so future public releases can add root runtime modules without silently breaking the upgrade path.
+
 ## [3.1.8] - 2026-04-08
 
 ### Hot Context Release Stabilization
