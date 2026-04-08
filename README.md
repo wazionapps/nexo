@@ -21,6 +21,7 @@
 Start here:
 - [5-minute quickstart](docs/quickstart-5-minutes.md)
 - [Workflow quickstart](docs/workflows-quickstart.md)
+- [Recent memory fallbacks + live system catalog](docs/recent-memory-fallbacks-and-system-catalog.md)
 - [Supported client guides](docs/integrations/cursor.md)
 - [Docker setup](docs/docker-setup.md)
 - [Architecture visuals](docs/architecture-visuals.md)
@@ -78,6 +79,13 @@ Versions `3.0.0` and `3.0.1` close the next execution gap:
   - external and internal ablations
   - `cost_per_solved_task`
   - SDK/API/quickstart surface
+
+Versions `3.1.7` through `3.2.0` close the recent-memory gap:
+
+- recent operational continuity is now first-class through `hot context` and `recent events`
+- the runtime can build a reusable pre-action bundle instead of reconstructing the last few hours from diaries and durable recall only
+- when even that misses, NEXO now exposes raw transcript fallback tools for Claude Code and Codex session stores
+- NEXO can now inspect itself through a live system catalog derived from canonical sources instead of relying only on stale docs or operator memory
 
 ### Client Capability Matrix
 
@@ -339,6 +347,15 @@ NEXO Brain provides **150+ MCP tools** across 23 categories. These features impl
 | **Auto-Migration** | Formal schema migration system (schema_migrations table) tracks all database changes. Safe, reversible schema evolution for production systems — upgrades never lose data. |
 | **Auto-Merge Duplicates** | Batch cosine deduplication during the 03:00 sleep cycle. Respects sibling discrimination — similar memories about different contexts are kept separate. |
 | **Memory Dreaming** | Discovers hidden connections between recent memories during the 03:00 sleep cycle and now feeds a 60-day long-horizon Deep Sleep blend, so older patterns can reappear when they become relevant again. |
+
+### Operational Continuity
+
+| Feature | What It Does |
+|---------|-------------|
+| **Hot Context 24h** | Keeps active topics, blockers, and waiting states fresh across sessions, clients, cron ticks, and channel changes. This is the shared recent-memory substrate for operational continuity. |
+| **Pre-Action Context Bundle** | Loads recent contexts, recent events, related reminders, and related followups before acting, so continuity is explicit instead of prompt-only. |
+| **Transcript Fallback** | When recent-memory capture is thin or missing, NEXO can now search and read recent Claude Code / Codex transcripts directly through MCP instead of pretending the conversation is lost. |
+| **Live System Catalog** | NEXO can now inspect its own current surface — core tools, plugin tools, skills, scripts, crons, projects, and artifacts — through a live catalog derived from canonical sources at read time. |
 
 ### Retrieval
 
@@ -724,10 +741,14 @@ Public entry points for the mental model now stay intentionally small:
 - `nexo_memory_recall`
 - `nexo_consolidate`
 - `nexo_run_workflow`
+- `nexo_pre_action_context`
+- `nexo_transcript_search`
+- `nexo_system_catalog`
 
 If you want the shell or Python wrappers instead of raw MCP tools:
 - [docs/quickstart-5-minutes.md](docs/quickstart-5-minutes.md)
 - [docs/memory-classes.md](docs/memory-classes.md)
+- [docs/recent-memory-fallbacks-and-system-catalog.md](docs/recent-memory-fallbacks-and-system-catalog.md)
 - [docs/sdk-python.md](docs/sdk-python.md)
 - [docs/reference-verticals.md](docs/reference-verticals.md)
 - [compare/README.md](compare/README.md)

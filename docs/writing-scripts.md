@@ -159,6 +159,8 @@ Use this pattern:
 1. `nexo_pre_action_context(...)` before acting
 2. `nexo_recent_context_capture(...)` when a topic becomes active, blocked, or waiting
 3. `nexo_recent_context_resolve(...)` when the topic is clearly done
+4. `nexo_transcript_search(...)` / `nexo_transcript_read(...)` when the script knows the discussion happened but recent-memory capture is incomplete
+5. `nexo_system_catalog(...)` / `nexo_tool_explain(...)` when the script needs a live map of NEXO's own tools, scripts, skills, crons, projects, or artifacts
 
 Example:
 
@@ -187,6 +189,28 @@ This is different from reminder/followup history:
 
 - reminder/followup history records changes to a specific item
 - hot context keeps the last 24 hours of live operational continuity fresh across channels
+
+## System Catalog Pattern
+
+Do not hardcode your mental model of NEXO forever inside one script.
+
+When a script needs to know what NEXO currently exposes, prefer:
+
+```python
+catalog = call_tool_text("nexo_system_catalog", {
+    "section": "scripts",
+    "query": "doctor",
+    "limit": 10,
+})
+print(catalog)
+
+tool_help = call_tool_text("nexo_tool_explain", {
+    "name": "nexo_pre_action_context",
+})
+print(tool_help)
+```
+
+The system catalog is generated from live canonical sources. It updates as core tools, plugins, skills, scripts, crons, projects, and artifacts change.
 
 ## Automation Task Profiles
 

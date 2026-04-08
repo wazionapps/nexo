@@ -48,6 +48,8 @@ For practical `open` / `update` / `resume` / `replay` examples, see [Workflow Qu
 
 For 24-hour recent continuity across sessions and clients, see [Hot Context Memory](./hot-context-memory.md).
 
+For transcript fallback and the live self-map of NEXO itself, see [Recent Memory Fallbacks and the Live System Catalog](./recent-memory-fallbacks-and-system-catalog.md).
+
 ## 4. Use the protocol path for real work
 
 For anything non-trivial:

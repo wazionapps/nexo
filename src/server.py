@@ -23,6 +23,15 @@ from tools_hot_context import (
     handle_recent_context_resolve,
     handle_hot_context_list,
 )
+from tools_transcripts import (
+    handle_transcript_recent,
+    handle_transcript_search,
+    handle_transcript_read,
+)
+from tools_system_catalog import (
+    handle_system_catalog,
+    handle_tool_explain,
+)
 from user_context import get_context as _get_ctx
 from tools_coordination import (
     handle_track, handle_untrack, handle_files,
@@ -209,6 +218,8 @@ mcp = FastMCP(
         "- **Delegate:** prefer direct. If needed: `nexo_context_packet(area)` + guard + 'if unsure STOP'\n"
         "- **Memory:** `nexo_recall` searches all. For fresh 24h continuity use `nexo_pre_action_context(query='...')` before acting and "
         "`nexo_recent_context_capture(...)` / `nexo_recent_context_resolve(...)` for important ongoing threads. "
+        "If that is not enough, use `nexo_transcript_search(...)` / `nexo_transcript_read(...)` as the raw fallback to full conversations. "
+        "Use `nexo_system_catalog(...)` / `nexo_tool_explain(...)` when you need the live map of NEXO itself. "
         "Capture: errors→`nexo_learning_add`, prefs, entities, decisions\n"
         "- **Change log:** `nexo_task_close` should be the default closure path. If you bypass it, call `nexo_change_log(...)` after production edits. NOT for config dir\n"
         "- **Diary:** When user signals end of session (any language, any style — 'bye', 'done', 'cierro', etc.), "
@@ -378,6 +389,36 @@ def nexo_recent_context_resolve(
 def nexo_hot_context_list(hours: int = 24, limit: int = 10, state: str = "") -> str:
     """List hot-context items currently alive in the recent continuity window."""
     return handle_hot_context_list(hours, limit, state)
+
+
+@mcp.tool
+def nexo_transcript_recent(hours: int = 24, client: str = "", limit: int = 10) -> str:
+    """List recent Claude Code / Codex transcripts visible to NEXO."""
+    return handle_transcript_recent(hours, client, limit)
+
+
+@mcp.tool
+def nexo_transcript_search(query: str = "", hours: int = 24, client: str = "", limit: int = 10) -> str:
+    """Search recent transcripts directly when recall/hot-context are not enough."""
+    return handle_transcript_search(query, hours, client, limit)
+
+
+@mcp.tool
+def nexo_transcript_read(session_ref: str = "", transcript_path: str = "", client: str = "", max_messages: int = 80) -> str:
+    """Read a full transcript fallback by session id, transcript display name, session_uid, or exact path."""
+    return handle_transcript_read(session_ref, transcript_path, client, max_messages)
+
+
+@mcp.tool
+def nexo_system_catalog(section: str = "", query: str = "", limit: int = 20) -> str:
+    """Read NEXO's live system catalog built from core tools, plugins, skills, scripts, crons, projects, and artifacts."""
+    return handle_system_catalog(section, query, limit)
+
+
+@mcp.tool
+def nexo_tool_explain(name: str) -> str:
+    """Explain a live NEXO tool/capability from the generated system catalog."""
+    return handle_tool_explain(name)
 
 
 @mcp.tool
