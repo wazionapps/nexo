@@ -141,6 +141,7 @@ class TestRuntimeUpdate:
             "evolution_cycle.py", "migrate_embeddings.py", "auto_close_sessions.py",
             "client_sync.py",
             "client_preferences.py", "agent_runner.py", "bootstrap_docs.py",
+            "hook_guardrails.py", "protocol_settings.py", "public_evolution_queue.py",
             "auto_update.py", "tools_sessions.py", "tools_coordination.py",
             "tools_reminders.py", "tools_reminders_crud.py", "tools_learnings.py",
             "tools_credentials.py", "tools_task_history.py", "tools_menu.py",
@@ -175,6 +176,9 @@ class TestRuntimeUpdate:
         assert (runtime_home / "db" / "__init__.py").read_text() == "x = 1\n"
         assert (runtime_home / "public_contribution.py").read_text() == "x = 1\n"
         assert (runtime_home / "cron_recovery.py").read_text() == "x = 1\n"
+        assert (runtime_home / "hook_guardrails.py").read_text() == "x = 1\n"
+        assert (runtime_home / "protocol_settings.py").read_text() == "x = 1\n"
+        assert (runtime_home / "public_evolution_queue.py").read_text() == "x = 1\n"
         assert (runtime_home / "scripts" / "nexo-watchdog.sh").read_text() == "#!/bin/bash\nexit 0\n"
 
     def test_installed_runtime_update_repairs_missing_public_contribution_module(self, tmp_path):

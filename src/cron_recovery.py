@@ -6,6 +6,8 @@ import os
 import plistlib
 import sqlite3
 import contextlib
+import hashlib
+import socket
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -29,6 +31,55 @@ def _load_json(path: Path, default):
     except Exception:
         pass
     return default
+
+
+def _schedule_machine_id() -> str:
+    schedule = _load_json(SCHEDULE_FILE, {})
+    if isinstance(schedule, dict):
+        public = schedule.get("public_contribution")
+        if isinstance(public, dict):
+            candidate = str(public.get("machine_id") or "").strip().lower()
+            if candidate:
+                return candidate
+    candidate = socket.gethostname().strip().lower()
+    return candidate or "nexo-machine"
+
+
+def _stable_schedule_bucket(key: str, modulo: int) -> int:
+    if modulo <= 0:
+        return 0
+    digest = hashlib.sha256(f"{_schedule_machine_id()}::{key}".encode("utf-8")).digest()
+    return int.from_bytes(digest[:8], "big") % modulo
+
+
+def resolve_declared_schedule(cron: dict) -> dict:
+    schedule = cron.get("schedule")
+    if not isinstance(schedule, dict):
+        return {}
+
+    resolved = dict(schedule)
+    strategy = str(cron.get("schedule_strategy") or resolved.pop("strategy", "")).strip().lower()
+    if strategy != "machine_weekly_spread":
+        return resolved
+
+    if not {"hour", "minute", "weekday"} <= resolved.keys():
+        return resolved
+
+    total_week_minutes = 7 * 24 * 60
+    base_total = (
+        (int(resolved.get("weekday", 0)) % 7) * 1440
+        + (int(resolved.get("hour", 0)) % 24) * 60
+        + (int(resolved.get("minute", 0)) % 60)
+    )
+    offset = _stable_schedule_bucket(str(cron.get("id") or "cron"), total_week_minutes)
+    slot_total = (base_total + offset) % total_week_minutes
+    weekday, minute_of_day = divmod(slot_total, 1440)
+    hour, minute = divmod(minute_of_day, 60)
+    return {
+        "weekday": weekday,
+        "hour": hour,
+        "minute": minute,
+    }
 
 
 def load_enabled_crons() -> list[dict]:
@@ -215,7 +266,7 @@ def effective_schedule(cron: dict) -> dict:
         return {
             "source": "manifest",
             "schedule_type": "calendar",
-            "calendar": cron["schedule"],
+            "calendar": resolve_declared_schedule(cron),
             "run_at_load": should_run_at_load(cron),
         }
     return {

@@ -107,6 +107,7 @@
     {
       "id": "evolution",
       "script": "scripts/nexo-evolution-run.py",
+      "schedule_strategy": "machine_weekly_spread",
       "schedule": {"hour": 5, "minute": 0, "weekday": 0},
       "description": "Weekly self-improvement cycle — propose and evaluate changes",
       "core": true,

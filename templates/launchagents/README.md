@@ -104,7 +104,7 @@ These agents power NEXO's learning and memory systems. Strongly recommended.
 
 | File | Schedule | What it does |
 |------|----------|-------------|
-| `com.nexo.evolution.plist` | Sundays 05:00 | Reviews the week's patterns and proposes improvements to NEXO's own configuration. Proposals are staged for user approval — nothing is applied autonomously. |
+| `com.nexo.evolution.plist` | Machine-staggered weekly (managed installs) | Reviews the week's patterns and proposes improvements to NEXO's own configuration. Managed installs spread each machine across the week to avoid PR spikes; the static plist template is only a manual fallback. |
 | `com.nexo.followup-hygiene.plist` | Sundays 05:00 | Cleans up stale followups and reminders. Archives long-pending items and deduplicates entries. Keeps the operational database noise-free. |
 
 ### Optional

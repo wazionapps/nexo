@@ -155,6 +155,42 @@ def test_build_plist_supports_interval_jobs_that_also_run_at_load(tmp_path, monk
     assert plist["StartInterval"] == 900
 
 
+def test_build_plist_uses_machine_staggered_weekly_schedule(tmp_path, monkeypatch):
+    import cron_recovery
+    from crons import sync as cron_sync
+
+    source_root = tmp_path / "repo-src"
+    runtime_root = tmp_path / "nexo-home"
+    schedule_file = runtime_root / "config" / "schedule.json"
+    (source_root / "scripts").mkdir(parents=True)
+    (runtime_root / "logs").mkdir(parents=True)
+    schedule_file.parent.mkdir(parents=True, exist_ok=True)
+    schedule_file.write_text('{"public_contribution":{"machine_id":"alpha-box"}}')
+
+    script = source_root / "scripts" / "nexo-evolution-run.py"
+    script.write_text("print('ok')\n")
+    wrapper = source_root / "scripts" / "nexo-cron-wrapper.sh"
+    wrapper.write_text("#!/bin/bash\nexit 0\n")
+    wrapper.chmod(0o755)
+
+    monkeypatch.setattr(cron_sync, "SOURCE_ROOT", source_root)
+    monkeypatch.setattr(cron_sync, "RUNTIME_ROOT", runtime_root)
+    monkeypatch.setattr(cron_sync, "NEXO_HOME", runtime_root)
+    monkeypatch.setattr(cron_sync, "LOG_DIR", runtime_root / "logs")
+    monkeypatch.setattr(cron_recovery, "SCHEDULE_FILE", schedule_file)
+
+    plist = cron_sync.build_plist(
+        {
+            "id": "evolution",
+            "script": "scripts/nexo-evolution-run.py",
+            "schedule_strategy": "machine_weekly_spread",
+            "schedule": {"hour": 5, "minute": 0, "weekday": 0},
+        }
+    )
+
+    assert plist["StartCalendarInterval"] == {"Hour": 3, "Minute": 33, "Weekday": 3}
+
+
 def test_load_manifest_skips_disabled_optionals(tmp_path, monkeypatch):
     from crons import sync as cron_sync
 

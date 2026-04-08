@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.1.2] - 2026-04-08
+
+### Evolution Load Balancing + Runtime Sync Fixes
+- Evolution cron scheduling is no longer hard-pinned to Sunday 05:00 for every managed install. Core cron sync now derives a stable machine-staggered weekly slot so public evolution PRs are distributed across the week instead of bunching on one day.
+- `nexo update` now includes top-level runtime modules such as `hook_guardrails.py`, `protocol_settings.py`, and `public_evolution_queue.py`, closing the gap where protocol-discipline and self-audit runtime behavior could drift locally even after a successful update.
+- Learning creation now verifies persistence immediately after insert and returns an explicit failure if the new active learning cannot be read back from storage.
+
 ## [3.1.1] - 2026-04-08
 
 ### Update Reliability Hotfix

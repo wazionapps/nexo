@@ -31,7 +31,7 @@ _runtime_root = Path(os.environ.get("NEXO_CODE", str(_DEFAULT_RUNTIME_ROOT)))
 if str(_runtime_root) not in sys.path:
     sys.path.insert(0, str(_runtime_root))
 
-from cron_recovery import should_run_at_load
+from cron_recovery import resolve_declared_schedule, should_run_at_load
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 SOURCE_ROOT = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parent.parent)))
@@ -242,7 +242,7 @@ def build_plist(cron: dict) -> dict:
         plist["StartInterval"] = cron["interval_seconds"]
     elif "schedule" in cron and not cron.get("keep_alive"):
         cal = {}
-        s = cron["schedule"]
+        s = resolve_declared_schedule(cron)
         if "hour" in s:
             cal["Hour"] = s["hour"]
         if "minute" in s:
@@ -443,7 +443,7 @@ StandardError=append:{stderr_log}
         elif "interval_seconds" in cron:
             timer_spec = f"OnUnitActiveSec={cron['interval_seconds']}s\nOnBootSec=60s"
         elif "schedule" in cron:
-            s = cron["schedule"]
+            s = resolve_declared_schedule(cron)
             h, m = s.get("hour", 0), s.get("minute", 0)
             if "weekday" in s:
                 # Manifest weekday uses launchd convention: 0=Sunday … 6=Saturday (7=Sunday alias)
