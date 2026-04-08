@@ -467,6 +467,39 @@ class TestRuntimeChecks:
         assert "watchdog" in expectations
         assert "autonomy-daemon" not in expectations
 
+    def test_launchagent_expectations_resolve_machine_staggered_weekly_schedule(self, nexo_home, monkeypatch):
+        from doctor.providers import runtime
+
+        (nexo_home / "config").mkdir(parents=True, exist_ok=True)
+        (nexo_home / "config" / "optionals.json").write_text("{}")
+        (nexo_home / "crons").mkdir(parents=True, exist_ok=True)
+        (nexo_home / "crons" / "manifest.json").write_text(json.dumps({
+            "crons": [
+                {
+                    "id": "evolution",
+                    "core": True,
+                    "schedule": {"hour": 5, "minute": 0, "weekday": 0},
+                    "schedule_strategy": "machine_weekly_spread",
+                }
+            ]
+        }))
+
+        monkeypatch.setattr(runtime, "NEXO_HOME", nexo_home)
+        monkeypatch.setattr(runtime, "OPTIONALS_FILE", nexo_home / "config" / "optionals.json")
+        monkeypatch.setattr(runtime, "SCHEDULE_FILE", nexo_home / "config" / "schedule.json")
+        monkeypatch.setattr(
+            runtime,
+            "resolve_declared_schedule",
+            lambda cron: {"weekday": 3, "hour": 3, "minute": 33},
+        )
+
+        expectations = runtime._launchagent_schedule_expectations()
+        assert expectations["evolution"]["StartCalendarInterval"] == {
+            "Hour": 3,
+            "Minute": 33,
+            "Weekday": 3,
+        }
+
     def test_launchagent_integrity_detects_keepalive_schedule_drift(self, nexo_home, monkeypatch):
         from doctor.providers import runtime
 

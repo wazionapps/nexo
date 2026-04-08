@@ -24,7 +24,7 @@ from client_preferences import (
     normalize_client_preferences,
     resolve_client_runtime_profile,
 )
-from cron_recovery import should_run_at_load
+from cron_recovery import resolve_declared_schedule, should_run_at_load
 from doctor.models import DoctorCheck, safe_check
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
@@ -865,7 +865,7 @@ def _launchagent_schedule_expectations() -> dict[str, dict]:
             expected["RunAtLoad"] = True if should_run_at_load(cron) else None
             expected["schedule_configured"] = True
         elif "schedule" in cron:
-            schedule = cron.get("schedule") or {}
+            schedule = resolve_declared_schedule(cron)
             cal = {}
             if "hour" in schedule:
                 cal["Hour"] = schedule["hour"]

@@ -376,6 +376,18 @@ def handle_learning_add(category: str, title: str, content: str, reasoning: str 
         if "error" in superseded:
             return f"ERROR: Learning #{new_id} created but supersede failed: {superseded['error']}"
 
+    # Post-insert verification: confirm the learning actually persisted
+    verify_conn = get_db()
+    verified = verify_conn.execute(
+        "SELECT id, title, category FROM learnings WHERE id = ? AND status = 'active'",
+        (result["id"],)
+    ).fetchone()
+    if not verified:
+        return (
+            f"⚠ PERSISTENCE FAILURE: Learning #{result['id']} was inserted but NOT found on verification read. "
+            f"Retry nexo_learning_add or investigate DB integrity."
+        )
+
     meta = []
     if prevention:
         meta.append("with prevention")
@@ -384,7 +396,7 @@ def handle_learning_add(category: str, title: str, content: str, reasoning: str 
     if supersedes_id:
         meta.append(f"supersedes={int(supersedes_id)}")
     meta_str = f" ({', '.join(meta)})" if meta else ""
-    return f"Learning #{result['id']} added in {category}: {title}{meta_str}{repetition_msg}"
+    return f"Learning #{result['id']} added in {category}: {title}{meta_str} ✓verified{repetition_msg}"
 
 
 def handle_learning_search(query: str, category: str = '') -> str:

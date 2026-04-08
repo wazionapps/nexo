@@ -332,3 +332,24 @@ def test_catchup_script_self_heals_personal_schedules(tmp_path):
     assert result.returncode == 0, result.stderr
     assert marker.read_text() == "called"
     assert "Repaired declared personal schedules before catch-up: 1 created, 0 repaired." in result.stdout
+
+
+def test_resolve_declared_schedule_spreads_weekly_machine_schedule(tmp_path, monkeypatch):
+    import cron_recovery
+
+    schedule_file = tmp_path / "schedule.json"
+    schedule_file.write_text(json.dumps({
+        "public_contribution": {
+            "machine_id": "alpha-box",
+        }
+    }))
+
+    monkeypatch.setattr(cron_recovery, "SCHEDULE_FILE", schedule_file)
+
+    resolved = cron_recovery.resolve_declared_schedule({
+        "id": "evolution",
+        "schedule_strategy": "machine_weekly_spread",
+        "schedule": {"hour": 5, "minute": 0, "weekday": 0},
+    })
+
+    assert resolved == {"weekday": 3, "hour": 3, "minute": 33}

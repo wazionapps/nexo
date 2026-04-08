@@ -1,11 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- com.nexo.evolution
-     Runs nexo-evolution-run.py every Sunday at 05:00 to perform a weekly
-     evolution cycle. Reviews patterns from the past week, proposes
-     improvements to NEXO's own behavior and configuration, and stages
-     them as pending proposals for the user to approve. This is NEXO's
-     self-improvement mechanism — it cannot apply changes autonomously,
-     only propose them.
+     Static fallback template for the weekly evolution cycle.
+     Managed installs now derive a machine-staggered weekly slot from the
+     cron manifest to avoid bunching public evolution PRs on Sunday.
+     If you install this plist manually, customize Weekday/Hour/Minute
+     yourself instead of assuming the managed stagger applies here.
 -->
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
