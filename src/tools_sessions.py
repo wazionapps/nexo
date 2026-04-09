@@ -542,6 +542,17 @@ def handle_heartbeat(sid: str, task: str, context_hint: str = '') -> str:
         except Exception:
             pass  # guard_log table may not exist in older installs
 
+    if context_hint and _hint_suggests_correction(context_hint):
+        try:
+            if not _recent_learning_capture_exists(conn, sid, window_seconds=300):
+                parts.append("")
+                parts.append(
+                    "⚠ LEARNING REMINDER: This looks like a user correction and no recent learning was captured. "
+                    "If it revealed a reusable pattern, write `nexo_learning_add` NOW."
+                )
+        except Exception:
+            pass  # Best-effort reminder only
+
     return "\n".join(parts)
 
 
@@ -814,6 +825,64 @@ def _hint_suggests_code_edit(hint: str) -> bool:
                     'change code', 'update script', 'write code', '.py', '.js', '.ts', '.php',
                     'commit', 'arregl', 'modific', 'implement', 'correg']
     return any(signal in hint_lower for signal in edit_signals)
+
+
+def _hint_suggests_correction(hint: str) -> bool:
+    """Detect explicit user correction signals in a heartbeat context hint."""
+    hint_lower = hint.lower()
+    correction_signals = [
+        "that's wrong",
+        "that is wrong",
+        "wrong approach",
+        "not like that",
+        "fix this",
+        "fix it",
+        "está mal",
+        "esta mal",
+        "mal hecho",
+        "incorrecto",
+        "te equivocas",
+        "te has equivocado",
+        "lo hiciste mal",
+        "no era eso",
+        "corrige esto",
+        "corrígelo",
+        "corrigelo",
+        "ya te dije",
+        "otra vez el mismo",
+        "de nuevo el mismo",
+        "no deberías",
+        "no deberias",
+        "shouldn't have",
+        "should not have",
+    ]
+    return any(signal in hint_lower for signal in correction_signals)
+
+
+def _recent_learning_capture_exists(conn, sid: str, window_seconds: int = 300) -> bool:
+    """Check whether a recent learning was captured manually or via protocol task close."""
+    cutoff_epoch = time.time() - window_seconds
+
+    row = conn.execute(
+        "SELECT 1 FROM learnings WHERE created_at >= ? LIMIT 1",
+        (cutoff_epoch,),
+    ).fetchone()
+    if row:
+        return True
+
+    row = conn.execute(
+        """
+        SELECT 1
+        FROM protocol_tasks
+        WHERE session_id = ?
+          AND learning_id IS NOT NULL
+          AND closed_at IS NOT NULL
+          AND CAST(strftime('%s', closed_at) AS INTEGER) >= ?
+        LIMIT 1
+        """,
+        (sid, int(cutoff_epoch)),
+    ).fetchone()
+    return bool(row)
 
 
 def _toolbox_summary(conn) -> str:
