@@ -75,7 +75,7 @@ class TestScriptsCreateAndSync:
             "Backup data daily",
         )
         assert result.returncode == 0
-        created = nexo_home / "scripts" / "daily-backup.py"
+        created = nexo_home / "scripts" / "ps-daily-backup.py"
         assert created.is_file()
 
     def test_sync_registry_json(self, nexo_home):

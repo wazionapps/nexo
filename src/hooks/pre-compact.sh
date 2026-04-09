@@ -5,6 +5,7 @@
 # 2. Injects a systemMessage telling the operator to save any WIP via MCP tools
 set -uo pipefail
 
+HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
 NEXO_HOME="${NEXO_HOME:-$HOME/.nexo}"
 NEXO_DB="$NEXO_HOME/data/nexo.db"
 mkdir -p "$NEXO_HOME/data"
@@ -140,6 +141,23 @@ conn.execute('''
     VALUES (?, ?, '', ?, ?, 'auto-generated', 'auto', '', ?, 'pre-compact-hook')
 ''', (sid, decisions, pending, context_next, summary))
 conn.commit()
+
+# Layer 3: structured auto-flush for continuity and inspectability
+try:
+    import os
+    sys.path.insert(0, os.path.abspath(os.path.join('$HOOK_DIR', '..')))
+    import compaction_memory
+    compaction_memory.record_auto_flush(
+        session_id=sid,
+        task=task,
+        current_goal='',
+        log_file=log_file,
+        last_diary_ts=last_diary_ts,
+        source='pre-compact-hook',
+    )
+except Exception:
+    pass
+
 conn.close()
 " 2>/dev/null || true
 fi

@@ -467,6 +467,7 @@ def _recent_codex_conditioned_file_discipline_status(*, days: int = 7, max_files
 
     for file_mtime, path in files:
         cwd = ""
+        protocol_active = False
         protocol_files: set[str] = set()
         guard_files: set[str] = set()
         guard_ack = False
@@ -497,9 +498,15 @@ def _recent_codex_conditioned_file_discipline_status(*, days: int = 7, max_files
                     args = _parse_jsonish_arguments(payload.get("arguments"))
 
                     if name in {"mcp__nexo__nexo_task_open", "nexo_task_open"}:
+                        protocol_active = True
                         protocol_files.update(_extract_declared_file_targets(args, cwd))
                         continue
-                    if name in {"mcp__nexo__nexo_guard_check", "nexo_guard_check"}:
+                    if name in {
+                        "mcp__nexo__nexo_guard_check",
+                        "nexo_guard_check",
+                        "mcp__nexo__nexo_guard_file_check",
+                        "nexo_guard_file_check",
+                    }:
                         guard_files.update(_extract_declared_file_targets(args, cwd))
                         continue
                     if name in {"mcp__nexo__nexo_task_acknowledge_guard", "nexo_task_acknowledge_guard"}:
@@ -523,8 +530,10 @@ def _recent_codex_conditioned_file_discipline_status(*, days: int = 7, max_files
                         session_touches += 1
                         status["conditioned_touches"] += 1
                         normalized = _normalize_path_token(touched)
+                        has_protocol = protocol_active or normalized in protocol_files
+                        has_guard_review = normalized in guard_files
                         if operation == "read":
-                            if normalized not in protocol_files and normalized not in guard_files:
+                            if not has_protocol and not has_guard_review:
                                 status["read_without_protocol"] += 1
                                 age_seconds = (
                                     event_age_seconds
@@ -538,7 +547,7 @@ def _recent_codex_conditioned_file_discipline_status(*, days: int = 7, max_files
                                     {"kind": "read_without_protocol", "file": touched, "tool": name}
                                 )
                         elif operation in {"write", "delete"}:
-                            if normalized not in protocol_files:
+                            if not has_protocol and not has_guard_review:
                                 status["write_without_protocol"] += 1
                                 if operation == "delete":
                                     status["delete_without_protocol"] += 1
@@ -2065,21 +2074,32 @@ def check_codex_conditioned_file_discipline() -> DoctorCheck:
     if not repair_plan:
         repair_plan.append("Keep using managed Codex bootstrap so conditioned-file discipline remains visible in transcripts")
 
+    no_open_conditioned_debt = debt_summary["available"] and debt_summary["open_total"] == 0
     historical_read_only = (
-        audit["read_without_protocol"] > 0
+        no_open_conditioned_debt
+        and audit["read_without_protocol"] > 0
         and audit["write_without_protocol"] == 0
         and audit["write_without_guard_ack"] == 0
         and audit["delete_without_protocol"] == 0
         and audit["delete_without_guard_ack"] == 0
-        and debt_summary["available"]
-        and debt_summary["open_total"] == 0
+    )
+    historical_write_drift = (
+        no_open_conditioned_debt
         and audit.get("latest_violation_age_seconds") is not None
-        and float(audit["latest_violation_age_seconds"]) >= 7200
+        and float(audit["latest_violation_age_seconds"]) >= 172800
+        and audit["write_without_protocol"] > 0
+        and audit["write_without_guard_ack"] == 0
+        and audit["delete_without_protocol"] == 0
+        and audit["delete_without_guard_ack"] == 0
     )
 
     if audit["write_without_protocol"] or audit["write_without_guard_ack"]:
-        status = "critical"
-        severity = "error"
+        if historical_write_drift:
+            status = "healthy"
+            severity = "info"
+        else:
+            status = "critical"
+            severity = "error"
     elif historical_read_only:
         status = "healthy"
         severity = "info"
@@ -2097,7 +2117,7 @@ def check_codex_conditioned_file_discipline() -> DoctorCheck:
         severity=severity,
         summary=(
             "Historical Codex conditioned-file drift has no open protocol debt"
-            if historical_read_only
+            if historical_read_only or historical_write_drift
             else "Recent Codex sessions respect conditioned-file discipline"
             if status == "healthy"
             else "Recent Codex sessions are bypassing conditioned-file discipline"

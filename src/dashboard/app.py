@@ -14,6 +14,7 @@ import subprocess
 import sys
 import time
 import webbrowser
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
 
@@ -30,14 +31,8 @@ if _PARENT not in sys.path:
 
 from agent_runner import AgentRunnerError, build_followup_terminal_shell_command
 
-app = FastAPI(title="NEXO Brain Dashboard", version="3.0.1")
-
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 STATIC_DIR = Path(__file__).resolve().parent / "static"
-
-# Mount static files
-STATIC_DIR.mkdir(exist_ok=True)
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 # Jinja2 environment
 jinja_env = Environment(
@@ -45,12 +40,7 @@ jinja_env = Environment(
     autoescape=True,
 )
 
-# ---------------------------------------------------------------------------
-# Startup — create dashboard_notes table
-# ---------------------------------------------------------------------------
-
-@app.on_event("startup")
-async def create_tables():
+def _create_tables() -> None:
     db = _db()
     conn = db.get_db()
     conn.execute("""
@@ -69,6 +59,19 @@ async def create_tables():
     except Exception:
         conn.execute("ALTER TABLE dashboard_notes ADD COLUMN reply_to INTEGER DEFAULT NULL")
     conn.commit()
+
+
+@asynccontextmanager
+async def _dashboard_lifespan(_: FastAPI):
+    _create_tables()
+    yield
+
+
+app = FastAPI(title="NEXO Brain Dashboard", version="3.0.1", lifespan=_dashboard_lifespan)
+
+# Mount static files
+STATIC_DIR.mkdir(exist_ok=True)
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
 # ---------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 """NEXO Cognitive — Trust scoring, sentiment, dissonance."""
 import re
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from cognitive._core import _get_db, embed, cosine_similarity, _blob_to_array
 from cognitive._core import POSITIVE_SIGNALS, NEGATIVE_SIGNALS, URGENCY_SIGNALS
 
@@ -412,7 +412,7 @@ def adjust_trust(event: str, context: str = "", custom_delta: float = None) -> d
 def get_trust_history(days: int = 7) -> dict:
     """Get trust score history and sentiment summary."""
     db = _get_db()
-    cutoff = (datetime.utcnow() - timedelta(days=days)).isoformat()
+    cutoff = (datetime.now(UTC) - timedelta(days=days)).isoformat()
 
     # Trust events
     events = db.execute(

@@ -39,6 +39,72 @@ def _blob_to_array(blob: bytes) -> np.ndarray:
     return np.frombuffer(blob, dtype=np.float32)
 
 
+def _table_columns(table_name: str) -> set[str]:
+    db = _get_db()
+    rows = db.execute(f"PRAGMA table_info({table_name})").fetchall()
+    return {str(row["name"]) for row in rows}
+
+
+def _ensure_column(table_name: str, column_sql: str) -> None:
+    name = column_sql.split()[0]
+    if name in _table_columns(table_name):
+        return
+    db = _get_db()
+    db.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_sql}")
+    db.commit()
+
+
+def _parse_timestamp(raw: str | None) -> datetime | None:
+    if not raw:
+        return None
+    value = str(raw).strip().replace("Z", "+00:00")
+    try:
+        dt = datetime.fromisoformat(value)
+    except Exception:
+        try:
+            dt = datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+        except Exception:
+            return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def _compute_freshness(row: dict) -> tuple[float, str, int]:
+    freshness_days = max(1, int(row.get("freshness_days") or 30))
+    status = str(row.get("verification_status") or "unverified")
+    anchor = (
+        _parse_timestamp(row.get("verified_at"))
+        or _parse_timestamp(row.get("last_reviewed_at"))
+        or _parse_timestamp(row.get("updated_at"))
+        or _parse_timestamp(row.get("created_at"))
+        or datetime.now(timezone.utc)
+    )
+    age_days = max(0, int((datetime.now(timezone.utc) - anchor).total_seconds() // 86400))
+    score = max(0.0, 1.0 - (age_days / float(freshness_days)))
+    if status == "contradicted":
+        score = min(score, 0.05)
+    elif status == "outdated":
+        score = min(score, 0.25)
+    if age_days > freshness_days:
+        state = "stale"
+    elif age_days > max(1, freshness_days // 2):
+        state = "aging"
+    else:
+        state = "fresh"
+    return round(score, 3), state, age_days
+
+
+def _claim_with_derived_fields(row: dict) -> dict:
+    item = dict(row)
+    item.pop("embedding", None)
+    score, state, age_days = _compute_freshness(item)
+    item["freshness_score"] = score
+    item["freshness_state"] = state
+    item["age_days"] = age_days
+    return item
+
+
 def init_tables():
     """Create claim graph tables if they don't exist."""
     db = _get_db()
@@ -55,6 +121,10 @@ def init_tables():
             verification_status TEXT DEFAULT 'unverified',
             verified_at TEXT,
             domain TEXT DEFAULT '',
+            evidence TEXT DEFAULT '',
+            freshness_days INTEGER DEFAULT 30,
+            freshness_score REAL DEFAULT 1.0,
+            last_reviewed_at TEXT,
             created_at TEXT DEFAULT (datetime('now')),
             updated_at TEXT DEFAULT (datetime('now'))
         );
@@ -75,12 +145,17 @@ def init_tables():
         CREATE INDEX IF NOT EXISTS idx_claim_links_source ON claim_links(source_claim_id);
         CREATE INDEX IF NOT EXISTS idx_claim_links_target ON claim_links(target_claim_id);
     """)
+    _ensure_column("claims", "evidence TEXT DEFAULT ''")
+    _ensure_column("claims", "freshness_days INTEGER DEFAULT 30")
+    _ensure_column("claims", "freshness_score REAL DEFAULT 1.0")
+    _ensure_column("claims", "last_reviewed_at TEXT")
     db.commit()
 
 
 def add_claim(text: str, source_type: str = "", source_id: str = "",
               source_memory_store: str = "", source_memory_id: int = 0,
-              confidence: float = 1.0, domain: str = "") -> dict:
+              confidence: float = 1.0, domain: str = "",
+              evidence: str = "", freshness_days: int = 30) -> dict:
     """Add an atomic claim to the graph.
 
     Returns the claim dict with id, or existing claim if duplicate detected.
@@ -98,17 +173,23 @@ def add_claim(text: str, source_type: str = "", source_id: str = "",
         # Update confidence if new source provides additional evidence
         dup = existing[0]
         new_conf = min(1.0, dup["confidence"] + 0.1)
-        db.execute("UPDATE claims SET confidence = ?, updated_at = datetime('now') WHERE id = ?",
-                   (new_conf, dup["id"]))
+        merged_evidence = str(dup.get("evidence") or "").strip()
+        new_evidence = str(evidence or "").strip()
+        if new_evidence and new_evidence not in merged_evidence:
+            merged_evidence = f"{merged_evidence}\n{new_evidence}".strip()
+        db.execute(
+            "UPDATE claims SET confidence = ?, evidence = ?, freshness_days = ?, freshness_score = 1.0, updated_at = datetime('now') WHERE id = ?",
+            (new_conf, merged_evidence, max(1, int(freshness_days or 30)), dup["id"]),
+        )
         db.commit()
         return {"id": dup["id"], "action": "merged", "confidence": new_conf}
 
     cursor = db.execute(
         """INSERT INTO claims (text, embedding, source_type, source_id,
-           source_memory_store, source_memory_id, confidence, domain)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+           source_memory_store, source_memory_id, confidence, domain, evidence, freshness_days, freshness_score)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1.0)""",
         (text, blob, source_type, source_id, source_memory_store,
-         source_memory_id, confidence, domain)
+         source_memory_id, confidence, domain, str(evidence or "").strip(), max(1, int(freshness_days or 30)))
     )
     db.commit()
     return {"id": cursor.lastrowid, "action": "added", "confidence": confidence}
@@ -131,8 +212,7 @@ def find_similar_claims(text: str, threshold: float = 0.8, limit: int = 10) -> l
         vec = _blob_to_array(row["embedding"])
         score = _cosine_similarity(query_vec, vec)
         if score >= threshold:
-            d = dict(row)
-            d.pop("embedding", None)
+            d = _claim_with_derived_fields(dict(row))
             d["similarity"] = round(score, 4)
             results.append(d)
 
@@ -225,15 +305,13 @@ def verify_claim(claim_id: int, status: str = "confirmed") -> dict:
 
     db.execute(
         "UPDATE claims SET verification_status = ?, verified_at = datetime('now'), "
-        "updated_at = datetime('now') WHERE id = ?",
+        "last_reviewed_at = datetime('now'), freshness_score = 1.0, updated_at = datetime('now') WHERE id = ?",
         (status, claim_id)
     )
     db.commit()
     row = db.execute("SELECT * FROM claims WHERE id = ?", (claim_id,)).fetchone()
     if row:
-        d = dict(row)
-        d.pop("embedding", None)
-        return d
+        return _claim_with_derived_fields(dict(row))
     return {"error": f"Claim {claim_id} not found"}
 
 
@@ -246,8 +324,7 @@ def get_claim(claim_id: int) -> Optional[dict]:
     if not row:
         return None
 
-    d = dict(row)
-    d.pop("embedding", None)
+    d = _claim_with_derived_fields(dict(row))
 
     # Get links
     outgoing = db.execute(
@@ -290,7 +367,41 @@ def search_claims(query: str = "", domain: str = "", status: str = "",
         f"domain, created_at FROM claims WHERE {where} ORDER BY created_at DESC LIMIT ?",
         params + [limit]
     ).fetchall()
-    return [dict(r) for r in rows]
+    return [_claim_with_derived_fields(dict(r)) for r in rows]
+
+
+def lint_claims(max_age_days: int = 30, limit: int = 20) -> list[dict]:
+    """Return stale, weak, or contradictory claims that need review."""
+    db = _get_db()
+    init_tables()
+
+    rows = db.execute(
+        "SELECT * FROM claims ORDER BY updated_at DESC, created_at DESC LIMIT 500"
+    ).fetchall()
+    results = []
+    for row in rows:
+        item = _claim_with_derived_fields(dict(row))
+        reasons = []
+        if item["verification_status"] == "unverified" and item["age_days"] >= max_age_days:
+            reasons.append("unverified-too-old")
+        if item["freshness_state"] == "stale":
+            reasons.append("stale")
+        if item["verification_status"] in {"contradicted", "outdated"}:
+            reasons.append(item["verification_status"])
+        if not str(item.get("evidence") or "").strip():
+            reasons.append("missing-evidence")
+        if reasons:
+            item["lint_reasons"] = reasons
+            results.append(item)
+    results.sort(
+        key=lambda item: (
+            "contradicted" not in item["lint_reasons"],
+            "stale" not in item["lint_reasons"],
+            item["freshness_score"],
+            -item["age_days"],
+        )
+    )
+    return results[: max(1, int(limit or 20))]
 
 
 def stats() -> dict:
@@ -313,6 +424,7 @@ def stats() -> dict:
     contradictions = db.execute(
         "SELECT COUNT(*) FROM claim_links WHERE relation = 'contradicts'"
     ).fetchone()[0]
+    stale = len(lint_claims(max_age_days=30, limit=10000))
 
     return {
         "total_claims": total,
@@ -320,4 +432,5 @@ def stats() -> dict:
         "by_domain": by_domain,
         "total_links": links,
         "contradictions": contradictions,
+        "lint_attention": stale,
     }

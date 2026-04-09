@@ -330,3 +330,34 @@ def test_preview_triggers_does_not_fire_them():
     assert preview[0]["id"] == trigger_id
     assert any(trigger["id"] == trigger_id for trigger in armed)
     assert all(trigger["id"] != trigger_id for trigger in fired)
+
+
+def test_cognitive_retrieve_forwards_public_search_knobs(monkeypatch):
+    import plugins.cognitive_memory as plugin
+
+    captured = {}
+
+    def _fake_search(**kwargs):
+        captured.update(kwargs)
+        return [{"score": 0.83, "domain": "nexo"}]
+
+    monkeypatch.setattr(plugin.cognitive, "search", _fake_search)
+    monkeypatch.setattr(plugin.cognitive, "format_results", lambda results: "ok")
+
+    output = plugin.handle_cognitive_retrieve(
+        "find recent claims",
+        hybrid_alpha=0.75,
+        decompose=False,
+        exclude_dreams=False,
+        exclude_dormant=False,
+    )
+
+    assert captured["query_text"] == "find recent claims"
+    assert captured["hybrid_alpha"] == 0.75
+    assert captured["decompose"] is False
+    assert captured["exclude_dreams"] is False
+    assert captured["exclude_dormant"] is False
+    assert "hybrid_alpha=0.75" in output
+    assert "decompose=OFF" in output
+    assert "dreams=ON" in output
+    assert "dormant=ON" in output
