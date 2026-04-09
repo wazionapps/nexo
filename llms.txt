@@ -1,8 +1,8 @@
 # NEXO Brain
 
-> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v3.2.0).
+> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v4.0.0).
 
-NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It adds a local shared brain across supported clients, configurable terminal and automation backends, recovery-aware background jobs, startup preflight, runtime self-healing, 24-hour recent memory, transcript fallback, a live system catalog, long-horizon overnight analysis, and 150+ MCP tools.
+NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It adds a local shared brain across supported clients, configurable terminal and automation backends, recovery-aware background jobs, startup preflight, runtime self-healing, multimodal memory refs, pre-compaction auto-flush, a public claim wiki, readable memory export, richer user-state adaptation, long-horizon overnight analysis, and 150+ MCP tools.
 
 ## Core Product Model
 
@@ -17,6 +17,13 @@ NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cogniti
 - Three-store memory: Sensory Register, Short-Term Memory, Long-Term Memory
 - Semantic search with local embeddings and optional HNSW acceleration
 - Claim graph, trust scoring, metacognitive guard, cognitive dissonance detection
+- Multimodal memory references for images, audio, video, PDFs, and other non-text artifacts
+- Structured auto-flush before compaction so actionable continuity survives compression
+- Public claim/wiki tools with evidence, freshness, verification state, and linting
+- Readable markdown memory export for auditability
+- Stronger inspectable user-state model beyond shallow sentiment heuristics
+- Public retrieval knobs for hybrid weighting, decomposition, dream exclusion, and dormant-memory handling
+- Explicit backend contract/status for newer memory layers
 - Episodic memory, reminders, learnings, followups, and session continuity
 - 24-hour hot context for recent operational continuity across sessions and channels
 - Transcript fallback tools for recent Claude Code / Codex conversations when the memory layer is too thin

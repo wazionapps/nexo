@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v3.2.0.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v4.0.0.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v3.2.0.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v4.0.0.">
     <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
     <meta property="og:image:width" content="1536">
     <meta property="og:image:height" content="1024">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v3.2.0.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v4.0.0.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v3.2.0.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v4.0.0.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,12 +87,12 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v3.2.0 live</span>
-                    <span class="page-chip">Recent memory + transcript fallback + system map</span>
+                    <span class="page-chip">v4.0.0 live</span>
+                    <span class="page-chip">Multimodal memory + claim wiki + auto-flush</span>
                     <span class="page-chip">From early memory stack to cognitive runtime</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v320" class="btn btn-primary">Start with v3.2.0</a>
+                    <a href="#v400" class="btn btn-primary">Start with v4.0.0</a>
                     <a href="#v310" class="btn btn-secondary">See v3.1.0</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -100,16 +100,16 @@
             <div class="page-visual">
                 <div class="page-stack">
                     <div class="page-stack-card">
-                        <strong>v3.2.0</strong>
-                        <span>Recent memory now has a proper fallback ladder: hot context, transcript search/read, and a live system map built from canonical runtime sources.</span>
+                        <strong>v4.0.0</strong>
+                        <span>Multimodal refs, pre-compaction auto-flush, a public claim wiki, readable export, and a stronger user-state model.</span>
                     </div>
                     <div class="page-stack-card">
-                        <strong>v3.0.0</strong>
-                        <span>Protocol discipline, durable workflows, public scorecards, conditioned learnings.</span>
+                        <strong>v3.2.0</strong>
+                        <span>Recent memory fallback ladder: hot context, transcript search/read, and a live system map built from canonical runtime sources.</span>
                     </div>
                     <div class="page-stack-card">
                         <strong>What changed most</strong>
-                        <span>NEXO stopped being “just memory” and became a stricter local cognitive runtime.</span>
+                        <span>NEXO stopped being “just memory” and became a broader, more inspectable local cognitive runtime.</span>
                     </div>
                 </div>
             </div>
@@ -127,6 +127,27 @@
             <div>
                 <div id="changelog-page-meta" class="changelog-page-meta">Loading release pages…</div>
                 <div id="changelog-pager" class="changelog-pager" aria-label="Changelog pagination"></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v4.0.0 Memory surfaces -->
+<section id="v400" class="section-compact" style="background:linear-gradient(135deg,#111827 0%,#6d28d9 100%);">
+    <div class="container">
+        <div class="section-label">New in v4.0.0 <span style="opacity:.5;font-weight:400;">&mdash; April 9, 2026</span></div>
+        <h2 class="section-title">Memory Stops Hiding Behind Internals</h2>
+        <p class="section-subtitle">
+            v4.0.0 turns more of NEXO memory into explicit product surfaces instead of hidden implementation detail: multimodal artifact references, structured continuity before compaction, a public claim wiki, readable memory export, richer user-state adaptation, and clearer retrieval/backend controls.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Multimodal Memory Refs</h4><p>New tools <code>nexo_media_memory_add</code>, <code>search</code>, <code>get</code>, and <code>stats</code> give screenshots, PDFs, audio, video, and other non-text artifacts a first-class home in the memory model.</p></div>
+                <div class="cognitive-card"><h4>Auto-Flush Before Compaction</h4><p>The pre-compact hook now writes structured continuity records and feeds recent context through <code>nexo_auto_flush_recent</code> and <code>nexo_auto_flush_stats</code>, so important session state is less likely to vanish during compression.</p></div>
+                <div class="cognitive-card"><h4>Claim Wiki + Readable Export</h4><p>The claim graph is now a public provenance/freshness surface through <code>nexo_claim_*</code>, and <code>nexo_memory_export</code> can emit an auditable markdown bundle instead of forcing operators to trust only hidden DB state.</p></div>
+                <div class="cognitive-card"><h4>Stronger User-State Model</h4><p><code>nexo_user_state</code> combines trust, correction fatigue, sentiment, diary signals, and hot-context pressure into an inspectable adaptive surface, not just keyword mood detection.</p></div>
+                <div class="cognitive-card"><h4>Public Retrieval Controls</h4><p><code>nexo_cognitive_retrieve</code> now exposes more public control over hybrid weighting, decomposition, dream exclusion, and dormant-memory handling instead of keeping those decisions buried internally.</p></div>
+                <div class="cognitive-card"><h4>Release Also Includes Pending Fixes</h4><p>v4.0.0 also folds in the unreleased post-3.2.0 work: safer live-repo automation boundaries, richer tool explanations, the Deep Sleep import-path repair, and stronger core-vs-personal ownership around updater/doctor LaunchAgent handling.</p></div>
             </div>
         </div>
     </div>

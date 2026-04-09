@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>NEXO Brain — Libre Shared Brain for Claude Code, Codex, and MCP Agents</title>
-    <meta name="description" content="Libre/open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients. Persistent memory, configurable automation, review-gated Evolution, release discipline, and 150+ MCP tools.">
+    <meta name="description" content="Libre/open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients. Multimodal memory refs, pre-compaction auto-flush, claim wiki, inspectable user-state, configurable automation, and 150+ MCP tools.">
     <meta name="keywords" content="AI memory, cognitive architecture, MCP, Claude Code, Codex, Claude Desktop, agent memory, vector search, AI agents, shared brain, open source">
     <meta name="author" content="WAzion">
     <meta name="robots" content="index, follow">
@@ -14,7 +14,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com">
     <meta property="og:title" content="NEXO Brain — Libre Shared Brain for Claude Code, Codex, and MCP Agents">
-    <meta property="og:description" content="Libre/open-source cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Recent memory, transcript fallback, a live system map, configurable automation, review-gated Evolution, and 150+ MCP tools.">
+    <meta property="og:description" content="Libre/open-source cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Multimodal memory refs, pre-compaction auto-flush, claim wiki, inspectable user-state, configurable automation, and 150+ MCP tools.">
     <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
     <meta property="og:image:width" content="1536">
     <meta property="og:image:height" content="1024">
@@ -22,7 +22,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="NEXO Brain — Libre Shared Brain for Claude Code, Codex, and MCP Agents">
-    <meta name="twitter:description" content="Libre/open-source cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Recent memory, transcript fallback, a live system map, configurable automation, review-gated Evolution, and 150+ MCP tools.">
+    <meta name="twitter:description" content="Libre/open-source cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Multimodal memory refs, pre-compaction auto-flush, claim wiki, inspectable user-state, configurable automation, and 150+ MCP tools.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
 
     <!-- Google Analytics (GA4) -->
@@ -46,12 +46,12 @@
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
         "name": "NEXO Brain",
-        "description": "Libre/open-source local cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Persistent memory, 24-hour recent memory, transcript fallback, a live system map, configurable automation backend, review-gated Evolution, doctor diagnostics, personal scripts, and 150+ MCP tools.",
+        "description": "Libre/open-source local cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Persistent memory, multimodal refs, auto-flush before compaction, claim wiki, inspectable user-state, configurable automation backend, and 150+ MCP tools.",
         "applicationCategory": "DeveloperApplication",
         "operatingSystem": "macOS, Linux, Windows",
         "url": "https://nexo-brain.com",
         "downloadUrl": "https://www.npmjs.com/package/nexo-brain",
-        "softwareVersion": "3.2.0",
+        "softwareVersion": "4.0.0",
         "license": "https://www.gnu.org/licenses/agpl-3.0",
         "author": {
             "@type": "Organization",
@@ -88,7 +88,7 @@
         "@type": "WebSite",
         "name": "NEXO Brain",
         "url": "https://nexo-brain.com",
-        "description": "Libre/open-source local cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Persistent memory, 24-hour recent memory, transcript fallback, a live system map, configurable automation backend, review-gated Evolution, doctor diagnostics, personal scripts, and 150+ MCP tools.",
+        "description": "Libre/open-source local cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Persistent memory, multimodal refs, auto-flush before compaction, claim wiki, inspectable user-state, configurable automation backend, and 150+ MCP tools.",
         "publisher": {
             "@type": "Organization",
             "name": "WAzion",
@@ -697,7 +697,7 @@
     <div class="container">
         <div class="hero-badge fade-up">
             <span class="dot"></span>
-            <span id="version-badge">v3.2.0</span> &mdash; Recent memory now has a full fallback ladder: hot context, transcript search/read, and a live system map of the runtime
+            <span id="version-badge">v4.0.0</span> &mdash; Memory now has multimodal refs, pre-compaction auto-flush, a claim wiki, readable export, and a stronger user-state model
         </div>
         <div class="fade-up" style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;">
             <img src="https://img.shields.io/npm/v/nexo-brain?color=7C3AED&label=npm" alt="npm version">
@@ -711,7 +711,7 @@
         </h1>
 
         <p class="hero-subtitle fade-up">
-            A libre/open-source cognitive runtime that gives Claude Code, Codex, Claude Desktop, and other MCP clients the same local brain. Persistent memory, 24-hour recent memory, transcript fallback, a live system map, enforceable protocol discipline, durable workflow execution, configurable automation, review-gated Evolution, and recovery-aware self-healing on top of 150+ MCP tools.
+            A libre/open-source cognitive runtime that gives Claude Code, Codex, Claude Desktop, and other MCP clients the same local brain. Persistent memory, multimodal memory refs, pre-compaction auto-flush, a public claim wiki, readable memory export, inspectable user-state adaptation, enforceable protocol discipline, durable workflow execution, configurable automation, and recovery-aware self-healing on top of 150+ MCP tools.
         </p>
 
         <div class="fade-up" style="display:flex;gap:16px;justify-content:center;margin-top:12px;margin-bottom:24px;flex-wrap:wrap;">
@@ -1139,9 +1139,14 @@
     <div class="container">
         <div class="section-label">Recent Evolution</div>
         <h2 class="section-title">The runtime has moved fast without losing the plot</h2>
-        <p class="section-subtitle">Instead of burying the home page in long release writeups, here is the short version: NEXO now behaves much more like a real shared-brain runtime across clients, with enforceable protocol discipline, durable execution, stricter operational truth, and public measurement surfaces that match what the runtime can actually do.</p>
+        <p class="section-subtitle">Instead of burying the home page in long release writeups, here is the short version: NEXO now behaves much more like a real shared-brain runtime across clients, with stronger memory surfaces, enforceable protocol discipline, durable execution, and public product surfaces that match what the runtime can actually do.</p>
 
         <div class="release-evolution-grid">
+            <div class="release-evolution-card">
+                <div class="release-evolution-version">v4.0.0</div>
+                <h3>Memory becomes a full product surface</h3>
+                <p>NEXO can now store multimodal artifact references, auto-flush session state before compaction, expose a public claim wiki with freshness/evidence, export readable memory bundles, and adapt from a richer inspectable user-state model.</p>
+            </div>
             <div class="release-evolution-card">
                 <div class="release-evolution-version">v3.2.0</div>
                 <h3>Recent memory now has a real fallback ladder</h3>
@@ -1177,7 +1182,7 @@
         <div class="release-evolution-actions">
             <a href="/evolution/" class="btn btn-primary">How Evolution works</a>
             <a href="/changelog/" class="btn btn-secondary">Read the full changelog</a>
-            <a href="/changelog/#v300" class="btn btn-secondary">Read the latest release notes</a>
+            <a href="/changelog/#v400" class="btn btn-secondary">Read the latest release notes</a>
         </div>
     </div>
 </section>

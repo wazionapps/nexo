@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXO 4.0.0: Multimodal Memory, Pre-Compaction Auto-Flush, and a Real Memory Surface</title>
+    <meta name="description" content="NEXO 4.0.0 adds multimodal memory refs, structured pre-compaction auto-flush, a public claim wiki, readable memory export, richer inspectable user-state adaptation, and public retrieval/backend controls.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-4-0-0-memory-surface-release/">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/blog/nexo-4-0-0-memory-surface-release/">
+    <meta property="og:title" content="NEXO 4.0.0: Multimodal Memory, Pre-Compaction Auto-Flush, and a Real Memory Surface">
+    <meta property="og:description" content="NEXO 4.0.0 turns memory into a broader product surface: non-text artifacts, structured auto-flush before compaction, a public claim wiki, readable exports, and a stronger user-state model.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/nexo-brain-infographic-v5.png">
+    <meta property="og:image:width" content="1536">
+    <meta property="og:image:height" content="1024">
+    <meta property="article:published_time" content="2026-04-09">
+    <meta property="article:author" content="Francisco Cerda Puigserver">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO 4.0.0: Multimodal Memory, Pre-Compaction Auto-Flush, and a Real Memory Surface">
+    <meta name="twitter:description" content="NEXO 4.0.0 adds multimodal memory refs, structured auto-flush, a public claim wiki, readable memory export, richer user-state adaptation, and public retrieval/backend controls.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/nexo-brain-infographic-v5.png">
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "NEXO 4.0.0: Multimodal Memory, Pre-Compaction Auto-Flush, and a Real Memory Surface",
+        "description": "NEXO 4.0.0 adds multimodal memory refs, structured pre-compaction auto-flush, a public claim wiki, readable memory export, richer inspectable user-state adaptation, and public retrieval/backend controls.",
+        "datePublished": "2026-04-09",
+        "dateModified": "2026-04-09",
+        "author": {
+            "@type": "Person",
+            "name": "Francisco Cerda Puigserver"
+        },
+        "publisher": {
+            "@type": "Organization",
+            "name": "WAzion",
+            "url": "https://www.wazion.com"
+        },
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https://nexo-brain.com/blog/nexo-4-0-0-memory-surface-release/"
+        },
+        "url": "https://nexo-brain.com/blog/nexo-4-0-0-memory-surface-release/",
+        "image": "https://nexo-brain.com/assets/nexo-brain-infographic-v5.png",
+        "keywords": ["NEXO 4.0.0", "multimodal memory", "claim wiki", "auto-flush", "user-state model", "AI memory", "MCP memory"]
+    }
+    </script>
+
+    <style>
+        .article-header { padding-top: 128px; padding-bottom: 40px; text-align: center; }
+        .article-meta { font-size: 14px; color: var(--text-muted); margin-bottom: 16px; }
+        .article-body {
+            max-width: 720px; margin: 0 auto; padding: 0 24px 80px;
+            font-size: 17px; line-height: 1.8; color: var(--text);
+        }
+        .article-body h2 { font-size: 28px; font-weight: 700; margin: 48px 0 16px; letter-spacing: -0.01em; }
+        .article-body p { margin-bottom: 20px; color: var(--text-muted); }
+        .article-body strong { color: var(--text); }
+        .article-body a { color: var(--purple-light); }
+        .article-body a:hover { color: var(--pink); }
+        .article-body ul { margin: 0 0 20px 24px; color: var(--text-muted); }
+        .article-body li { margin-bottom: 8px; }
+        .article-body code {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 14px; color: var(--pink);
+            background: rgba(236, 72, 153, 0.1);
+            padding: 2px 8px; border-radius: 4px;
+        }
+        .article-body pre {
+            background: var(--dark-card);
+            border: 1px solid var(--dark-border);
+            border-radius: 12px;
+            padding: 24px;
+            overflow-x: auto;
+            margin-bottom: 24px;
+        }
+        .article-body pre code {
+            background: none; padding: 0;
+            font-size: 15px; color: #22C55E;
+        }
+        .article-back {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 14px; font-weight: 600; color: var(--text-muted);
+            margin-bottom: 24px;
+        }
+        .article-back:hover { color: var(--purple-light); }
+        .article-visual {
+            margin: 32px 0 40px;
+            text-align: center;
+        }
+        .article-visual img {
+            max-width: 100%;
+            border-radius: 16px;
+            border: 1px solid var(--dark-border);
+            box-shadow: 0 8px 32px rgba(124,58,237,0.15);
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-64.png" alt="NEXO Brain" width="32" height="32">
+            NEXO Brain
+        </a>
+        <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/features/">Features</a>
+            <a href="/evolution/">Evolution</a>
+            <a href="/compare/">Compare</a>
+            <a href="/blog/">Blog</a>
+            <a href="/changelog/">Changelog</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<article>
+    <header class="article-header">
+        <div class="container">
+            <a href="/blog/" class="article-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg> Back to Blog</a>
+            <div class="article-meta">April 9, 2026 &middot; 8 min read</div>
+            <h1 class="section-title" style="font-size:clamp(28px,4.5vw,48px);max-width:880px;margin:0 auto 16px;">NEXO 4.0.0: Multimodal Memory, Pre-Compaction Auto-Flush, and a Real Memory Surface</h1>
+            <p class="section-subtitle">NEXO now treats more of memory as a product surface instead of a hidden implementation detail: non-text artifacts, claims, continuity before compaction, readable exports, and richer user-state adaptation.</p>
+        </div>
+    </header>
+
+    <div class="article-body">
+        <p>NEXO already had strong durable memory, recent-memory continuity, transcript fallback, Deep Sleep, trust, and a live system catalog. But there was still an uncomfortable gap between what the runtime knew internally and what it exposed as an operator-visible memory product.</p>
+
+        <div class="article-visual">
+            <img src="/assets/nexo-brain-infographic-v5.png" alt="NEXO Brain architecture overview">
+        </div>
+
+        <h2>Non-Text Artifacts Finally Belong To Memory</h2>
+        <p>Until now, screenshots, diagrams, PDFs, audio clips, and other non-text artifacts mostly lived outside the real memory model. You could describe them in text, but that is not the same as giving them a first-class identity.</p>
+        <p>4.0.0 adds a lightweight multimodal reference layer through:</p>
+        <ul>
+            <li><code>nexo_media_memory_add</code></li>
+            <li><code>nexo_media_memory_search</code></li>
+            <li><code>nexo_media_memory_get</code></li>
+            <li><code>nexo_media_memory_stats</code></li>
+        </ul>
+        <p>The first step is deliberately practical: artifact references plus structured metadata, linked back into the wider memory system. That gives NEXO a real upgrade path toward deeper multimodal retrieval later without pretending it already ships a full vision embedding stack.</p>
+
+        <h2>Compaction No Longer Depends Only On Discipline</h2>
+        <p>Before this release, NEXO had checkpoints and emergency continuity paths, but there was still too much reliance on remembering to save the right thing at the right moment before context compression.</p>
+        <p>4.0.0 adds structured pre-compaction auto-flush. The pre-compact hook now captures a summary, next step, and tool-activity bundle into a dedicated continuity layer, feeds that into recent context, and exposes it through:</p>
+        <ul>
+            <li><code>nexo_auto_flush_recent</code></li>
+            <li><code>nexo_auto_flush_stats</code></li>
+        </ul>
+        <p>The important change is not just persistence. It is that this persistence is now visible, queryable, and testable instead of living as a private best effort.</p>
+
+        <h2>The Claim Graph Now Feels Like A Public Knowledge Wiki</h2>
+        <p>NEXO already had ingredients for factual memory and contradiction handling, but too much of that lived in separate layers and internal surfaces. 4.0.0 turns claims into a clearer public product with evidence, freshness, verification state, linting, and explicit linking.</p>
+        <p>New public surface:</p>
+        <ul>
+            <li><code>nexo_claim_add</code></li>
+            <li><code>nexo_claim_search</code></li>
+            <li><code>nexo_claim_get</code></li>
+            <li><code>nexo_claim_link</code></li>
+            <li><code>nexo_claim_verify</code></li>
+            <li><code>nexo_claim_lint</code></li>
+            <li><code>nexo_claim_stats</code></li>
+        </ul>
+        <p>This is the closest NEXO has come so far to an inspectable internal wiki of what it currently believes, why it believes it, and how stale that belief may already be.</p>
+
+        <h2>You Can Read The Memory Bundle Now</h2>
+        <p>One of the oldest objections to serious memory systems is simple: "show me." If the memory is only visible through database tables and ad-hoc queries, it is harder to trust and harder to audit.</p>
+        <p>4.0.0 adds <code>nexo_memory_export</code>, which writes a readable markdown bundle covering learnings, decisions, claims, media memories, auto-flush records, user-state, and cognitive stats. The database stays the source of truth, but the runtime now has a human-readable export surface on purpose.</p>
+
+        <h2>User Adaptation Gets A Stronger State Model</h2>
+        <p>Sentiment alone is too shallow for a serious operator model. 4.0.0 adds a stronger inspectable user-state surface that combines trust, corrections, hot-context pressure, diary signals, and sentiment distribution.</p>
+        <p>That surfaces as:</p>
+        <ul>
+            <li><code>nexo_user_state</code></li>
+            <li><code>nexo_user_state_history</code></li>
+            <li><code>nexo_user_state_stats</code></li>
+        </ul>
+        <p>The goal is not pseudo-psychology. The goal is a better runtime answer to questions like: is the user in flow, urgent, frustrated, overloaded, or stable, and how should the system adapt without becoming opaque?</p>
+
+        <h2>Retrieval And Backend Assumptions Are Clearer Too</h2>
+        <p>Two other improvements matter because they reduce hidden magic.</p>
+        <ul>
+            <li><strong>Retrieval knobs:</strong> <code>nexo_cognitive_retrieve</code> now exposes more public control over hybrid weighting, decomposition, dream exclusion, and dormant-memory handling.</li>
+            <li><strong>Backend contract:</strong> newer memory layers now declare an explicit backend contract instead of silently assuming one storage shape forever, surfaced through <code>nexo_memory_backend_status</code>.</li>
+        </ul>
+        <p>Neither change is flashy on its own. Together they make the system more legible and more evolvable.</p>
+
+        <h2>Also Included: The Unreleased Work Since 3.2.0</h2>
+        <p>4.0.0 is not only the new memory-surface package. It also folds in the unreleased changes that were already sitting after 3.2.0: stronger protection around live-repo automation writes, richer tool explanation output, the Deep Sleep collection import-path fix, and the core-vs-personal ownership hardening that makes updater and doctor boundaries more explicit around scripts and auxiliary LaunchAgents.</p>
+
+        <h2>The Practical Upgrade</h2>
+        <p>New install:</p>
+        <pre><code>npx nexo-brain</code></pre>
+        <p>Existing installation:</p>
+        <pre><code>nexo update</code></pre>
+        <p>If you want the exact release contents, open the 4.0.0 section of the changelog. If you want the short product story, it is this: NEXO memory is now broader, more inspectable, and more honest before, during, and after active work.</p>
+    </div>
+</article>
+
+<section class="cta-section">
+    <div class="container">
+        <h2 class="section-title">Upgrade the brain, not just the prompt</h2>
+        <p class="section-subtitle" style="margin: 16px auto 48px;">
+            NEXO 4.0.0 gives memory more visible product surfaces: artifacts, claims, compaction continuity, readable export, and adaptive state.
+        </p>
+        <div class="hero-actions">
+            <a href="https://github.com/wazionapps/nexo" class="btn btn-primary">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+                View on GitHub
+            </a>
+            <a href="/changelog/#v400" class="btn btn-secondary">Open the changelog</a>
+            <a href="/" class="btn btn-secondary">Back to Home</a>
+        </div>
+    </div>
+</section>
+
+</body>
+</html>
