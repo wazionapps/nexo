@@ -1198,13 +1198,18 @@
         }
 
         .blog-card {
+            position: relative;
             border-radius: 22px;
             overflow: hidden;
+            padding: 28px 26px;
+            border: 1px solid rgba(167, 139, 250, 0.12);
             background:
                 linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0)),
                 linear-gradient(145deg, rgba(124, 58, 237, 0.08), transparent 52%, rgba(236, 72, 153, 0.06)),
                 rgba(18,18,26,0.92);
             box-shadow: 0 22px 56px rgba(0,0,0,0.22);
+            display: flex;
+            flex-direction: column;
         }
 
         .blog-card::before {
