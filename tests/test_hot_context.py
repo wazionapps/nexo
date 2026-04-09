@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 import json
+import time
 
 
 def _register_session(sid: str):
@@ -111,3 +112,56 @@ def test_followup_and_reminder_changes_feed_hot_context(isolated_db):
     assert followup_contexts
     assert reminder_contexts
     assert any(event["event_type"] == "followup_note" for event in bundle["events"])
+
+
+def test_heartbeat_warns_when_user_correction_has_no_recent_learning(isolated_db):
+    import tools_sessions
+
+    importlib.reload(tools_sessions)
+
+    sid = _register_session("nexo-3001-4001")
+    output = tools_sessions.handle_heartbeat(
+        sid,
+        "Ajustar flujo",
+        "Eso está mal, corrige esto y no repitas el mismo error.",
+    )
+
+    assert "LEARNING REMINDER" in output
+    assert "nexo_learning_add" in output
+
+
+def test_heartbeat_skips_learning_reminder_when_recent_learning_exists(isolated_db):
+    import db
+    import tools_sessions
+
+    importlib.reload(tools_sessions)
+
+    sid = _register_session("nexo-3002-4002")
+    now = time.time()
+    conn = db.get_db()
+    conn.execute(
+        """
+        INSERT INTO learnings (category, title, content, reasoning, prevention, applies_to, status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            "nexo",
+            "Recent correction learning",
+            "Keep correction learnings fresh.",
+            "",
+            "",
+            "",
+            "active",
+            now,
+            now,
+        ),
+    )
+    conn.commit()
+
+    output = tools_sessions.handle_heartbeat(
+        sid,
+        "Ajustar flujo",
+        "Wrong approach. Corrígelo y evita repetirlo.",
+    )
+
+    assert "LEARNING REMINDER" not in output
