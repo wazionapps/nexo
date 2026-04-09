@@ -197,3 +197,39 @@ def test_startup_preflight_reports_personal_schedule_heal(tmp_path, monkeypatch)
 
     assert "db+personal-sync" in result["actions"]
     assert "personal-schedules-healed:1" in result["actions"]
+
+
+def test_copy_runtime_from_source_preserves_personal_script_collision(tmp_path, monkeypatch):
+    import auto_update
+
+    runtime_home = tmp_path / "runtime"
+    src_dir = tmp_path / "repo" / "src"
+    repo_dir = tmp_path / "repo"
+    (runtime_home / "scripts").mkdir(parents=True)
+    (src_dir / "scripts").mkdir(parents=True)
+    (src_dir / "hooks").mkdir(parents=True)
+    (src_dir / "plugins").mkdir(parents=True)
+    (repo_dir / "templates").mkdir(parents=True)
+
+    personal_script = runtime_home / "scripts" / "email-triage-agent.py"
+    personal_script.write_text("# personal\n")
+    (runtime_home / "scripts" / "nexo-watchdog.sh").write_text("#!/bin/bash\necho ok\n")
+    (src_dir / "scripts" / "email-triage-agent.py").write_text("# core candidate\n")
+    (src_dir / "scripts" / "nexo-watchdog.sh").write_text("#!/bin/bash\necho core\n")
+
+    monkeypatch.setattr(auto_update, "NEXO_HOME", runtime_home)
+    monkeypatch.setattr(
+        auto_update,
+        "_installed_scripts_classification",
+        lambda dest: {
+            "email-triage-agent.py": "personal",
+            "nexo-watchdog.sh": "ignored",
+        },
+    )
+
+    stats = auto_update._copy_runtime_from_source(src_dir, repo_dir, runtime_home)
+
+    assert personal_script.read_text() == "# personal\n"
+    assert stats["scripts"] == 1
+    assert len(stats["script_conflicts"]) == 1
+    assert stats["script_conflicts"][0]["name"] == "email-triage-agent.py"

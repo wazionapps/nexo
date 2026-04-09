@@ -41,6 +41,7 @@ PROTECTED_MACOS_ROOTS = (
 IMMUNE_FRESHNESS = 3600  # 1 hour (runs every 30 min)
 WATCHDOG_FRESHNESS = 3600  # 1 hour (runs every 30 min)
 DEFAULT_CRON_THRESHOLD = 7200  # Fallback when manifest data is unavailable
+AUXILIARY_CORE_LAUNCHAGENT_IDS = {"dashboard", "prevent-sleep", "tcc-approve"}
 SPECIAL_LAUNCHAGENT_IDS = {"prevent-sleep", "tcc-approve"}
 SPECIAL_ENV_NORMALIZE_IDS = SPECIAL_LAUNCHAGENT_IDS
 OPTIONALS_FILE = NEXO_HOME / "config" / "optionals.json"
@@ -884,7 +885,7 @@ def _launchagent_schedule_expectations() -> dict[str, dict]:
 
 
 def _managed_launchagent_plists() -> list[tuple[str, Path]]:
-    ids = set(SPECIAL_LAUNCHAGENT_IDS)
+    ids = set(AUXILIARY_CORE_LAUNCHAGENT_IDS)
     for cron_id, expected in _launchagent_schedule_expectations().items():
         if expected.get("schedule_configured"):
             ids.add(cron_id)
@@ -895,6 +896,60 @@ def _managed_launchagent_plists() -> list[tuple[str, Path]]:
         if plist_path.is_file():
             plists.append((cron_id, plist_path))
     return plists
+
+
+def _known_nexo_launchagent_ids() -> set[str]:
+    ids = set(AUXILIARY_CORE_LAUNCHAGENT_IDS)
+    for cron_id, expected in _launchagent_schedule_expectations().items():
+        if expected.get("schedule_configured"):
+            ids.add(cron_id)
+    try:
+        from db import init_db, list_personal_script_schedules
+
+        init_db()
+        for schedule in list_personal_script_schedules():
+            cron_id = str(schedule.get("cron_id", "") or "").strip()
+            if cron_id:
+                ids.add(cron_id)
+    except Exception:
+        pass
+    return ids
+
+
+def _discover_actual_nexo_launchagent_ids() -> tuple[set[str], dict[str, str]]:
+    ids: set[str] = set()
+    evidence: dict[str, str] = {}
+
+    if LAUNCH_AGENTS_DIR.is_dir():
+        for plist_path in sorted(LAUNCH_AGENTS_DIR.glob("com.nexo.*.plist")):
+            cron_id = plist_path.stem.removeprefix("com.nexo.")
+            ids.add(cron_id)
+            evidence.setdefault(cron_id, f"plist on disk: {plist_path}")
+
+    if platform.system() != "Darwin":
+        return ids, evidence
+
+    try:
+        result = subprocess.run(
+            ["launchctl", "list"],
+            capture_output=True,
+            text=True,
+            timeout=3,
+        )
+    except Exception:
+        return ids, evidence
+
+    for raw_line in (result.stdout or "").splitlines():
+        parts = raw_line.split()
+        if not parts:
+            continue
+        label = parts[-1].strip()
+        if not label.startswith("com.nexo."):
+            continue
+        cron_id = label.removeprefix("com.nexo.")
+        ids.add(cron_id)
+        evidence.setdefault(cron_id, f"loaded in launchctl: {label}")
+    return ids, evidence
 
 
 def _extract_launchctl_value(output: str, prefix: str) -> str | None:
@@ -1462,6 +1517,58 @@ def check_launchagent_integrity(fix: bool = False) -> DoctorCheck:
     return check
 
 
+def check_launchagent_inventory() -> DoctorCheck:
+    """Check that every discovered com.nexo LaunchAgent is known to core or the personal registry."""
+    if platform.system() != "Darwin":
+        return DoctorCheck(
+            id="runtime.launchagent_inventory",
+            tier="runtime",
+            status="healthy",
+            severity="info",
+            summary="LaunchAgent inventory check skipped on non-macOS",
+        )
+
+    actual_ids, actual_evidence = _discover_actual_nexo_launchagent_ids()
+    if not actual_ids:
+        return DoctorCheck(
+            id="runtime.launchagent_inventory",
+            tier="runtime",
+            status="healthy",
+            severity="info",
+            summary="No com.nexo LaunchAgents discovered on this Mac",
+        )
+
+    known_ids = _known_nexo_launchagent_ids()
+    unknown_ids = sorted(actual_ids - known_ids)
+    if not unknown_ids:
+        return DoctorCheck(
+            id="runtime.launchagent_inventory",
+            tier="runtime",
+            status="healthy",
+            severity="info",
+            summary=f"LaunchAgent inventory aligned ({len(actual_ids)} discovered, all known to NEXO)",
+        )
+
+    evidence = [actual_evidence.get(cron_id, f"com.nexo.{cron_id}") for cron_id in unknown_ids[:10]]
+    return DoctorCheck(
+        id="runtime.launchagent_inventory",
+        tier="runtime",
+        status="degraded",
+        severity="warn",
+        summary=f"Unknown com.nexo LaunchAgents detected ({len(unknown_ids)})",
+        evidence=evidence,
+        repair_plan=[
+            "If it is a personal automation, register/sync it through nexo scripts sync/reconcile",
+            "If it is a core helper, add it to the core LaunchAgent inventory instead of leaving it implicit",
+            "If it is retired, boot it out and remove its plist through the owning flow rather than editing plists by hand",
+        ],
+        escalation_prompt=(
+            "There are active or installed com.nexo LaunchAgents that NEXO cannot explain from the core manifest, "
+            "auxiliary core services, or the personal script registry."
+        ),
+    )
+
+
 def check_skill_health(fix: bool = False) -> DoctorCheck:
     """Check executable skill consistency and approval state."""
     try:
@@ -1567,6 +1674,7 @@ def check_personal_script_registry(fix: bool = False) -> DoctorCheck:
             "Run nexo scripts reconcile so declared schedules are recreated through the official flow",
             "Use nexo doctor --tier runtime --fix to apply the safe reconcile path for declared schedules",
             "Keep personal scripts in NEXO_HOME/scripts so updates do not collide with core",
+            "Prefer ps- prefixed filenames for new personal scripts so ownership stays obvious at a glance",
         ],
         escalation_prompt=(
             "Personal script metadata, files, and personal cron schedules are out of sync. "
@@ -2655,6 +2763,7 @@ def run_runtime_checks(fix: bool = False) -> list[DoctorCheck]:
         safe_check(check_automation_telemetry),
         safe_check(check_state_watchers),
         safe_check(check_release_artifact_sync),
+        safe_check(check_launchagent_inventory),
         safe_check(check_launchagent_integrity, fix=fix),
         safe_check(check_personal_script_registry, fix=fix),
         safe_check(check_skill_health, fix=fix),

@@ -448,6 +448,19 @@ class TestRuntimeChecks:
         managed = runtime._managed_launchagent_plists()
         assert ("catchup", launch_agents / "com.nexo.catchup.plist") in managed
 
+    def test_managed_launchagents_include_auxiliary_core_services(self, nexo_home, monkeypatch):
+        from doctor.providers import runtime
+
+        launch_agents = nexo_home / "launchagents"
+        launch_agents.mkdir()
+        (launch_agents / "com.nexo.dashboard.plist").write_text("<plist/>")
+
+        monkeypatch.setattr(runtime, "LAUNCH_AGENTS_DIR", launch_agents)
+        monkeypatch.setattr(runtime, "_launchagent_schedule_expectations", lambda: {})
+
+        managed = runtime._managed_launchagent_plists()
+        assert ("dashboard", launch_agents / "com.nexo.dashboard.plist") in managed
+
     def test_launchagent_expectations_skip_disabled_optional_jobs(self, nexo_home, monkeypatch):
         from doctor.providers import runtime
 
@@ -624,6 +637,59 @@ class TestRuntimeChecks:
         check = runtime.check_personal_script_registry()
         assert check.status == "degraded"
         assert "keep_alive runtime wake-recovery" in check.evidence[0]
+
+    def test_launchagent_inventory_accepts_auxiliary_and_personal_labels(self, nexo_home, monkeypatch):
+        import db
+        from doctor.providers import runtime
+
+        launch_agents = nexo_home / "launchagents"
+        launch_agents.mkdir()
+        (launch_agents / "com.nexo.dashboard.plist").write_text("<plist/>")
+        (launch_agents / "com.nexo.email-monitor.plist").write_text("<plist/>")
+
+        monkeypatch.setattr(runtime, "LAUNCH_AGENTS_DIR", launch_agents)
+        monkeypatch.setattr(runtime.platform, "system", lambda: "Darwin")
+        monkeypatch.setattr(runtime, "_launchagent_schedule_expectations", lambda: {})
+        monkeypatch.setattr(db, "init_db", lambda: None)
+        monkeypatch.setattr(
+            db,
+            "list_personal_script_schedules",
+            lambda: [{"cron_id": "email-monitor"}],
+        )
+
+        def fake_run(args, **kwargs):
+            return SimpleNamespace(
+                returncode=0,
+                stdout="123\t0\tcom.nexo.dashboard\n124\t0\tcom.nexo.email-monitor\n",
+                stderr="",
+            )
+
+        monkeypatch.setattr(runtime.subprocess, "run", fake_run)
+        check = runtime.check_launchagent_inventory()
+        assert check.status == "healthy"
+
+    def test_launchagent_inventory_warns_on_unknown_label(self, nexo_home, monkeypatch):
+        import db
+        from doctor.providers import runtime
+
+        launch_agents = nexo_home / "launchagents"
+        launch_agents.mkdir()
+        (launch_agents / "com.nexo.legacy-shadow.plist").write_text("<plist/>")
+
+        monkeypatch.setattr(runtime, "LAUNCH_AGENTS_DIR", launch_agents)
+        monkeypatch.setattr(runtime.platform, "system", lambda: "Darwin")
+        monkeypatch.setattr(runtime, "_launchagent_schedule_expectations", lambda: {})
+        monkeypatch.setattr(db, "init_db", lambda: None)
+        monkeypatch.setattr(db, "list_personal_script_schedules", lambda: [])
+        monkeypatch.setattr(
+            runtime.subprocess,
+            "run",
+            lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout="", stderr=""),
+        )
+
+        check = runtime.check_launchagent_inventory()
+        assert check.status == "degraded"
+        assert "legacy-shadow" in check.evidence[0]
 
     def test_client_backend_preferences_warns_when_selected_client_missing(self, nexo_home, monkeypatch):
         from doctor.providers import runtime

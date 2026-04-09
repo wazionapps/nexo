@@ -1211,6 +1211,28 @@ def _runtime_flat_files(base_dir: Path) -> list[str]:
     return ordered
 
 
+def _installed_scripts_classification(dest: Path) -> dict[str, str]:
+    scripts_dest = dest / "scripts"
+    if dest != NEXO_HOME or not scripts_dest.is_dir():
+        return {}
+    try:
+        from script_registry import classify_scripts_dir
+
+        entries = classify_scripts_dir().get("entries", [])
+    except Exception as e:
+        _log(f"script ownership inspection skipped: {e}")
+        return {}
+
+    ownership: dict[str, str] = {}
+    for entry in entries:
+        path_value = entry.get("path")
+        classification = str(entry.get("classification", "") or "")
+        if not path_value or not classification:
+            continue
+        ownership[Path(str(path_value)).name] = classification
+    return ownership
+
+
 def _backup_runtime_tree(dest: Path = NEXO_HOME) -> str:
     timestamp = time.strftime("%Y-%m-%d-%H%M%S")
     backup_dir = NEXO_HOME / "backups" / f"runtime-tree-{timestamp}"
@@ -1258,6 +1280,9 @@ def _copy_runtime_from_source(src_dir: Path, repo_dir: Path, dest: Path = NEXO_H
     flat_files = _runtime_flat_files(src_dir)
     copied_packages = 0
     copied_files = 0
+    copied_scripts = 0
+    script_conflicts: list[dict[str, str]] = []
+    installed_script_classes = _installed_scripts_classification(dest)
 
     _emit_progress(progress_fn, "Copying core packages...")
     for pkg in packages:
@@ -1303,9 +1328,27 @@ def _copy_runtime_from_source(src_dir: Path, repo_dir: Path, dest: Path = NEXO_H
                     shutil.rmtree(str(dst), ignore_errors=True)
                 shutil.copytree(str(item), str(dst), ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
             elif item.is_file():
+                existing_class = installed_script_classes.get(item.name, "")
+                if dst.exists() and existing_class in {"personal", "non-script"}:
+                    script_conflicts.append(
+                        {
+                            "name": item.name,
+                            "path": str(dst),
+                            "classification": existing_class,
+                            "reason": "existing runtime entry is not core-managed",
+                        }
+                    )
+                    continue
                 shutil.copy2(str(item), str(dst))
                 if item.suffix == ".sh":
                     dst.chmod(0o755)
+                copied_scripts += 1
+
+    if script_conflicts:
+        _emit_progress(
+            progress_fn,
+            f"Preserved {len(script_conflicts)} personal runtime script collision(s); core scripts were not overwritten.",
+        )
 
     _emit_progress(progress_fn, "Copying templates and version metadata...")
     templates_src = repo_dir / "templates"
@@ -1345,6 +1388,8 @@ def _copy_runtime_from_source(src_dir: Path, repo_dir: Path, dest: Path = NEXO_H
     return {
         "packages": copied_packages,
         "files": copied_files,
+        "scripts": copied_scripts,
+        "script_conflicts": script_conflicts,
         "source": str(src_dir),
         "repo": str(repo_dir),
     }
@@ -1597,10 +1642,18 @@ def manual_sync_update(*, interactive: bool = False, allow_source_pull: bool = T
             "updated": True,
             "packages": copy_stats["packages"],
             "files": copy_stats["files"],
+            "scripts": copy_stats.get("scripts", 0),
             "actions": actions,
+            "warnings": [],
+            "script_conflicts": copy_stats.get("script_conflicts", []),
             "source": copy_stats["source"],
             "repo": copy_stats["repo"],
         })
+        if copy_stats.get("script_conflicts"):
+            sync_result["actions"].append(f"preserved-personal-scripts:{len(copy_stats['script_conflicts'])}")
+            sync_result["warnings"].append(
+                f"Preserved {len(copy_stats['script_conflicts'])} personal runtime script collision(s) in NEXO_HOME/scripts"
+            )
         _emit_progress(progress_fn, "Runtime update completed.")
     except Exception as e:
         _emit_progress(progress_fn, "Update failed; restoring previous runtime state...")
