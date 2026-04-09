@@ -332,11 +332,35 @@ class TestRegistrySync:
         init_db()
         result = create_script("My Script", description="Created by test", runtime="python")
         assert result["ok"] is True
+        assert result["name"] == "my-script"
+        assert result["filename"] == "ps-my-script.py"
+        assert result["requested_name"] == "My Script"
+        assert os.path.basename(result["path"]) == "ps-my-script.py"
 
         registered = get_personal_script(result["path"])
         assert registered is not None
         assert registered["description"] == "Created by test"
         assert registered["runtime"] == "python"
+
+    def test_classify_scripts_dir_marks_legacy_personal_filename_policy(self, scripts_dir):
+        script = scripts_dir / "legacy-tool.py"
+        script.write_text("# nexo: name=legacy-tool\nprint('hi')\n")
+
+        report = classify_scripts_dir()
+        entry = next(item for item in report["entries"] if item["name"] == "legacy-tool")
+        assert entry["classification"] == "personal"
+        assert entry["filename_prefixed"] is False
+        assert entry["naming_policy"] == "legacy-nonprefixed"
+
+    def test_classify_scripts_dir_marks_prefixed_personal_filename_policy(self, scripts_dir):
+        script = scripts_dir / "ps-fresh-tool.py"
+        script.write_text("# nexo: name=fresh-tool\nprint('hi')\n")
+
+        report = classify_scripts_dir()
+        entry = next(item for item in report["entries"] if item["name"] == "fresh-tool")
+        assert entry["classification"] == "personal"
+        assert entry["filename_prefixed"] is True
+        assert entry["naming_policy"] == "preferred"
 
     def test_sync_personal_scripts_links_schedule(self, scripts_dir, monkeypatch):
         import script_registry

@@ -77,6 +77,7 @@ METADATA_KEYS = {
 SUPPORTED_RUNTIMES = {"python", "shell", "node", "php", "unknown"}
 PERSONAL_SCHEDULE_MANAGED_ENV = "NEXO_MANAGED_PERSONAL_CRON"
 SUPPORTED_RECOVERY_POLICIES = {"none", "run_once_on_wake", "catchup", "restart", "restart_daemon"}
+PERSONAL_SCRIPT_FILENAME_PREFIX = "ps-"
 
 
 def get_nexo_home() -> Path:
@@ -246,6 +247,17 @@ def _safe_slug(value: str) -> str:
             chars.append("-")
     slug = "".join(chars).strip("-")
     return slug or "script"
+
+
+def has_personal_script_filename_prefix(value: str) -> bool:
+    return _safe_slug(value).startswith(PERSONAL_SCRIPT_FILENAME_PREFIX)
+
+
+def _logical_personal_script_name(name: str) -> str:
+    slug = _safe_slug(name)
+    if slug.startswith(PERSONAL_SCRIPT_FILENAME_PREFIX):
+        slug = slug[len(PERSONAL_SCRIPT_FILENAME_PREFIX):]
+    return slug or "personal-script"
 
 
 def get_declared_schedule(metadata: dict, default_name: str = "") -> dict:
@@ -460,7 +472,7 @@ def get_declared_schedule(metadata: dict, default_name: str = "") -> dict:
 def _script_entry(path: Path, meta: dict, *, is_core: bool, classification: str, reason: str = "") -> dict:
     runtime = classify_runtime(path, meta)
     name = meta.get("name", path.stem)
-    return {
+    entry = {
         "name": name,
         "runtime": runtime,
         "description": meta.get("description", ""),
@@ -470,7 +482,11 @@ def _script_entry(path: Path, meta: dict, *, is_core: bool, classification: str,
         "classification": classification,
         "reason": reason,
         "declared_schedule": get_declared_schedule(meta, name),
+        "filename_prefixed": has_personal_script_filename_prefix(path.stem),
     }
+    if classification == "personal":
+        entry["naming_policy"] = "preferred" if entry["filename_prefixed"] else "legacy-nonprefixed"
+    return entry
 
 
 def classify_scripts_dir() -> dict:
@@ -1173,13 +1189,7 @@ def _template_path(filename: str) -> Path | None:
 
 
 def _script_filename_from_name(name: str, runtime: str) -> str:
-    slug = []
-    for ch in name.strip().lower():
-        if ch.isalnum():
-            slug.append(ch)
-        elif ch in {" ", "-", "_"}:
-            slug.append("-")
-    stem = "".join(slug).strip("-") or "personal-script"
+    stem = _safe_slug(name) or "personal-script"
     ext = {
         "python": ".py",
         "shell": ".sh",
@@ -1189,6 +1199,11 @@ def _script_filename_from_name(name: str, runtime: str) -> str:
     return stem + ext
 
 
+def _personal_script_filename_from_name(name: str, runtime: str) -> str:
+    logical_name = _logical_personal_script_name(name)
+    return _script_filename_from_name(f"{PERSONAL_SCRIPT_FILENAME_PREFIX}{logical_name}", runtime)
+
+
 def create_script(name: str, *, description: str = "", runtime: str = "python", force: bool = False) -> dict:
     runtime = runtime if runtime in SUPPORTED_RUNTIMES else "python"
     if runtime == "unknown":
@@ -1196,7 +1211,8 @@ def create_script(name: str, *, description: str = "", runtime: str = "python", 
 
     scripts_dir = get_scripts_dir()
     scripts_dir.mkdir(parents=True, exist_ok=True)
-    filename = _script_filename_from_name(name, runtime)
+    logical_name = _logical_personal_script_name(name)
+    filename = _personal_script_filename_from_name(name, runtime)
     path = scripts_dir / filename
     if path.exists() and not force:
         raise FileExistsError(f"Script already exists: {path}")
@@ -1226,10 +1242,9 @@ def create_script(name: str, *, description: str = "", runtime: str = "python", 
             "print('hello')\n"
         )
 
-    script_name = Path(filename).stem
-    content = content.replace("example-script", script_name)
-    content = content.replace("Example personal script using the stable NEXO CLI", description or f"Personal script: {script_name}")
-    content = content.replace("Example shell script using NEXO", description or f"Personal script: {script_name}")
+    content = content.replace("example-script", logical_name)
+    content = content.replace("Example personal script using the stable NEXO CLI", description or f"Personal script: {logical_name}")
+    content = content.replace("Example shell script using NEXO", description or f"Personal script: {logical_name}")
 
     path.write_text(content)
     if runtime in {"shell", "python"}:
@@ -1237,8 +1252,10 @@ def create_script(name: str, *, description: str = "", runtime: str = "python", 
     sync_result = sync_personal_scripts()
     return {
         "ok": True,
-        "name": script_name,
+        "name": logical_name,
+        "requested_name": name,
         "path": str(path),
+        "filename": filename,
         "runtime": runtime,
         "description": description,
         "sync": sync_result,
