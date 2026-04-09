@@ -293,3 +293,40 @@ def test_process_pre_tool_event_allows_public_contribution_checkout(guardrail_en
         "SELECT COUNT(*) AS count FROM protocol_debt WHERE debt_type = 'automation_live_repo_write_blocked'"
     ).fetchone()
     assert debt["count"] == 0
+
+
+def test_process_pre_tool_event_does_not_treat_runtime_home_as_live_repo_when_not_git_checkout(
+    guardrail_env,
+    monkeypatch,
+):
+    runtime_file = guardrail_env / "operations" / "orchestrator-state.json"
+    runtime_file.parent.mkdir(parents=True, exist_ok=True)
+    runtime_file.write_text("{}")
+    (guardrail_env / ".git").write_text("gitdir: /tmp/fake-git\n")
+
+    monkeypatch.setenv("NEXO_CODE", str(guardrail_env))
+    monkeypatch.setenv("NEXO_AUTOMATION", "1")
+    monkeypatch.delenv("NEXO_PUBLIC_CONTRIBUTION", raising=False)
+    db, hook_guardrails = _reload_guardrail_stack()
+    db.init_db()
+    db.register_session(
+        "nexo-2008-3008",
+        "automation runtime write",
+        external_session_id="claude-auto-3",
+        session_client="claude_code",
+    )
+
+    result = hook_guardrails.process_pre_tool_event(
+        {
+            "session_id": "claude-auto-3",
+            "tool_name": "Edit",
+            "tool_input": {"file_path": str(runtime_file)},
+        }
+    )
+
+    assert result["skipped"] is True
+    assert result["reason"] == "lenient mode"
+    debt = db.get_db().execute(
+        "SELECT COUNT(*) AS count FROM protocol_debt WHERE debt_type = 'automation_live_repo_write_blocked'"
+    ).fetchone()
+    assert debt["count"] == 0

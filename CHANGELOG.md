@@ -1,5 +1,13 @@
 # Changelog
 
+## [4.0.1] - 2026-04-09
+
+### Release Alignment + Protocol Reminder
+- Published the post-`v4.0.0` mainline fix as a real patch release so git installs, npm installs, GitHub Releases, and the public website converge on the same shipped state instead of leaving `main` ahead of the public release tag.
+- Added a correction-aware heartbeat reminder in `tools_sessions`: when the operator clearly corrects the agent and no recent learning was captured, NEXO now emits a `LEARNING REMINDER` instead of relying on model discipline alone.
+- Finished the `datetime.UTC` cleanup in the trust-history and user-state paths, so the shipped runtime now matches the Python 3.14 warning cleanup already claimed by the 4.0 release notes.
+- Kept the broader `4.0.0` memory-surface package intact while making the public release channels honest again about what is actually shipped.
+
 ## [4.0.0] - 2026-04-09
 
 ### Memory Surfaces Become Product Surfaces
