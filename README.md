@@ -87,7 +87,7 @@ Versions `3.1.7` through `3.2.0` close the recent-memory gap:
 - when even that misses, NEXO now exposes raw transcript fallback tools for Claude Code and Codex session stores
 - NEXO can now inspect itself through a live system catalog derived from canonical sources instead of relying only on stale docs or operator memory
 
-Version `4.0.0` closes the next memory-surface gap:
+Version `4.0.1` keeps the 4.0 release aligned across channels while preserving the next memory-surface gap closure:
 
 - non-text artifacts now have a first-class multimodal reference layer instead of living outside the memory model
 - pre-compaction auto-flush now persists actionable session state before context compression can erase it

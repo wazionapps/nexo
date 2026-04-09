@@ -16,6 +16,28 @@ WRITE_LIKE_TOOLS = {"Edit", "MultiEdit", "Write"}
 DELETE_LIKE_TOOLS = {"Delete"}
 NEXO_CODE_ROOT = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parent))).expanduser().resolve()
 LIVE_REPO_ROOT = NEXO_CODE_ROOT.parent if NEXO_CODE_ROOT.name == "src" else NEXO_CODE_ROOT
+PUBLIC_REPO_DIRS = {
+    ".claude-plugin",
+    ".github",
+    "bin",
+    "clawhub-skill",
+    "community",
+    "docs",
+    "hooks",
+    "openclaw-plugin",
+    "src",
+    "templates",
+    "tests",
+}
+PUBLIC_REPO_FILES = {
+    ".mcp.json",
+    "CHANGELOG.md",
+    "LICENSE",
+    "README.md",
+    "docker-compose.yml",
+    "package-lock.json",
+    "package.json",
+}
 
 
 def _operation_kind(tool_name: str) -> str:
@@ -54,11 +76,31 @@ def _automation_live_repo_guard_enabled() -> bool:
     )
 
 
+def _has_git_marker(root: Path) -> bool:
+    return (root / ".git").exists()
+
+
+def _is_public_repo_surface(candidate: Path) -> bool:
+    try:
+        relative = candidate.relative_to(LIVE_REPO_ROOT)
+    except ValueError:
+        return False
+
+    parts = relative.parts
+    if not parts:
+        return False
+    if parts[0] in PUBLIC_REPO_DIRS:
+        return True
+    return len(parts) == 1 and parts[0] in PUBLIC_REPO_FILES
+
+
 def _is_live_repo_path(path: str) -> bool:
     if not str(path or "").strip():
         return False
     try:
-        return _is_relative_to(_resolve_runtime_path(path), LIVE_REPO_ROOT)
+        if not _has_git_marker(LIVE_REPO_ROOT):
+            return False
+        return _is_public_repo_surface(_resolve_runtime_path(path))
     except Exception:
         return False
 

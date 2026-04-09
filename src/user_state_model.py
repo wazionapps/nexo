@@ -3,7 +3,7 @@ from __future__ import annotations
 """Inspectable user-state model built from multiple NEXO signals."""
 
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import cognitive
 from db import get_db
@@ -32,7 +32,7 @@ def init_tables() -> None:
 
 
 def _recent_correction_count(days: int) -> int:
-    cutoff = (datetime.now(UTC) - timedelta(days=days)).isoformat()
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
     row = cognitive._get_db().execute(
         "SELECT COUNT(*) FROM memory_corrections WHERE created_at >= ?",
         (cutoff,),
@@ -41,7 +41,7 @@ def _recent_correction_count(days: int) -> int:
 
 
 def _recent_trust_event_count(days: int, event_name: str) -> int:
-    cutoff = (datetime.now(UTC) - timedelta(days=days)).isoformat()
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
     row = cognitive._get_db().execute(
         "SELECT COUNT(*) FROM trust_score WHERE created_at >= ? AND event = ?",
         (cutoff, event_name),
@@ -50,7 +50,7 @@ def _recent_trust_event_count(days: int, event_name: str) -> int:
 
 
 def _recent_diary_signal_count(days: int) -> int:
-    cutoff = (datetime.now(UTC) - timedelta(days=days)).isoformat(timespec="seconds")
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat(timespec="seconds")
     row = get_db().execute(
         "SELECT COUNT(*) FROM session_diary WHERE created_at >= ? AND user_signals != ''",
         (cutoff,),
@@ -157,7 +157,7 @@ def list_user_state_snapshots(limit: int = 20) -> list[dict]:
 
 def user_state_stats(days: int = 30) -> dict:
     init_tables()
-    cutoff = (datetime.now(UTC) - timedelta(days=days)).isoformat(timespec="seconds")
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat(timespec="seconds")
     rows = get_db().execute(
         "SELECT state_label, COUNT(*) AS cnt FROM user_state_snapshots WHERE created_at >= ? GROUP BY state_label",
         (cutoff,),
