@@ -518,6 +518,23 @@ def handle_heartbeat(sid: str, task: str, context_hint: str = '') -> str:
     except Exception:
         pass
 
+    # ── Drive/Curiosity: detect signals from context_hint (best-effort) ──
+    try:
+        if context_hint and len(context_hint.strip()) >= 15:
+            from tools_drive import detect_drive_signal as _detect_drive
+            _drive_result = _detect_drive(context_hint, source="heartbeat", source_id=sid)
+            if _drive_result:
+                # Check for READY signals relevant to current area
+                from db import get_drive_signals as _get_drive
+                _ready = _get_drive(status="ready", limit=3)
+                if _ready:
+                    parts.append("")
+                    parts.append(f"DRIVE: {len(_ready)} mature signal(s) ready for investigation")
+                    for _ds in _ready[:2]:
+                        parts.append(f"  [{_ds['id']}] {_ds['signal_type']}: {_ds['summary'][:80]}")
+    except Exception:
+        pass  # Drive detection is best-effort, never block heartbeat
+
     # ── Layer 3: DIARY_OVERDUE signal based on heartbeat count + time ──
     conn = get_db()
     row = conn.execute("SELECT started_epoch FROM sessions WHERE sid = ?", (sid,)).fetchone()

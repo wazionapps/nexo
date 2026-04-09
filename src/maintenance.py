@@ -55,5 +55,8 @@ def _run_task(task_name: str):
             prune_adaptive_log()
         except Exception:
             pass
+    elif task_name == "drive_decay":
+        from db import decay_drive_signals
+        decay_drive_signals()
     elif task_name == "graph_maintenance":
         pass  # Future: orphan cleanup, consolidation

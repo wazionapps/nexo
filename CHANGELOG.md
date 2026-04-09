@@ -1,5 +1,19 @@
 # Changelog
 
+## [4.1.0] - 2026-04-09
+
+### Drive/Curiosity — Autonomous Investigation Signals
+- Added a first-class Drive/Curiosity layer that accumulates tension-based signals during normal work (heartbeat, task close) and investigates autonomously when signals mature. Five signal types: anomaly, pattern, connection, gap, and opportunity.
+- New MCP tools `nexo_drive_signals`, `nexo_drive_reinforce`, `nexo_drive_act`, and `nexo_drive_dismiss` expose the drive surface publicly while internal detection runs passively from heartbeat and task close context hints.
+- Signals follow a lifecycle: latent (noise filtering) → rising (reinforced 2+ times) → ready (investigated silently) → acted/dismissed. Ready signals do not decay. Latent and rising signals decay daily, enforced by the maintenance scheduler.
+- Deep Sleep synthesis now includes a Drive phase that investigates ready signals, promotes rising signals with cross-area connections, and dismisses stale signals overnight. The apply phase executes drive synthesis findings automatically.
+- Heartbeat now surfaces mature drive signals in its response when relevant to the current work area, so the agent is aware of accumulated curiosity without blocking the operator.
+- Detection uses deterministic heuristics (regex patterns for anomalies, recurring patterns, knowledge gaps, and opportunities) to avoid adding latency or model calls to the heartbeat path.
+- Maximum 30 active signals enforced, with weakest latent signals dropped when the cap is reached.
+
+### Validation
+- Added comprehensive test coverage for drive signals: creation, reinforcement, tension promotion, decay, status transitions, similarity deduplication, max cap enforcement, detection heuristics, and MCP handler integration. 38 new tests, 444 total suite green.
+
 ## [4.0.1] - 2026-04-09
 
 ### Release Alignment + Protocol Reminder
