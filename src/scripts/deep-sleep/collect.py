@@ -19,10 +19,15 @@ import sys
 from collections import Counter
 from datetime import datetime, timedelta
 from pathlib import Path
+
+_DEFAULT_RUNTIME_ROOT = Path(__file__).resolve().parents[2]
+NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(_DEFAULT_RUNTIME_ROOT)))
+if str(NEXO_CODE) not in sys.path:
+    sys.path.insert(0, str(NEXO_CODE))
+
 import transcript_utils as _transcripts
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
-NEXO_CODE = Path(os.environ.get("NEXO_CODE", ""))
 DEEP_SLEEP_DIR = NEXO_HOME / "operations" / "deep-sleep"
 NEXO_DB = NEXO_HOME / "data" / "nexo.db"
 COGNITIVE_DB = NEXO_HOME / "data" / "cognitive.db"
