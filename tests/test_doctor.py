@@ -1107,6 +1107,62 @@ class TestRuntimeChecks:
         assert check.status == "critical"
         assert any("write touches without protocol task: 1" in item for item in check.evidence)
 
+    def test_codex_conditioned_file_discipline_heals_old_write_drift_without_open_debt(self, nexo_home, monkeypatch):
+        from doctor.providers import runtime
+
+        schedule_file = nexo_home / "config" / "schedule.json"
+        schedule_file.parent.mkdir(parents=True, exist_ok=True)
+        schedule_file.write_text(json.dumps({
+            "interactive_clients": {
+                "claude_code": False,
+                "codex": True,
+                "claude_desktop": False,
+            },
+            "default_terminal_client": "codex",
+            "automation_enabled": False,
+            "automation_backend": "none",
+        }))
+        db_path = nexo_home / "data" / "nexo.db"
+        _create_learnings_table(db_path)
+        _create_protocol_tables(db_path)
+        conn = sqlite3.connect(str(db_path))
+        conn.execute(
+            """INSERT INTO learnings (category, title, content, status, applies_to)
+               VALUES (?, ?, ?, 'active', ?)""",
+            (
+                "nexo-ops",
+                "Protocol-first edits for runtime.py",
+                "Open protocol before patching runtime.py.",
+                "/repo/src/doctor/providers/runtime.py",
+            ),
+        )
+        conn.commit()
+        conn.close()
+
+        codex_file = nexo_home / ".codex" / "sessions" / "2026" / "04" / "06" / "discipline-old-write.jsonl"
+        codex_file.parent.mkdir(parents=True, exist_ok=True)
+        codex_file.write_text(
+            json.dumps({"type": "session_meta", "payload": {"originator": "codex_cli_rs", "cwd": "/repo"}}) + "\n"
+            + json.dumps({
+                "type": "response_item",
+                "payload": {
+                    "type": "function_call",
+                    "name": "apply_patch",
+                    "arguments": "*** Begin Patch\n*** Update File: src/doctor/providers/runtime.py\n@@\n-old\n+new\n*** End Patch\n",
+                },
+            }) + "\n"
+        )
+        old_time = time.time() - 172900
+        os.utime(codex_file, (old_time, old_time))
+
+        monkeypatch.setattr(runtime, "SCHEDULE_FILE", schedule_file)
+        monkeypatch.setattr(runtime.Path, "home", lambda: nexo_home)
+
+        check = runtime.check_codex_conditioned_file_discipline()
+        assert check.status == "healthy"
+        assert "Historical Codex conditioned-file drift has no open protocol debt" in check.summary
+        assert any("write touches without protocol task: 1" in item for item in check.evidence)
+
     def test_codex_conditioned_file_discipline_accepts_protocol_open_and_guard_ack(self, nexo_home, monkeypatch):
         from doctor.providers import runtime
 
@@ -1148,6 +1204,82 @@ class TestRuntimeChecks:
                     "type": "function_call",
                     "name": "mcp__nexo__nexo_task_open",
                     "arguments": json.dumps({"goal": "Patch runtime audit", "task_type": "edit", "files": "src/doctor/providers/runtime.py"}),
+                },
+            }) + "\n"
+            + json.dumps({
+                "type": "response_item",
+                "payload": {
+                    "type": "function_call",
+                    "name": "mcp__nexo__nexo_task_acknowledge_guard",
+                    "arguments": json.dumps({"task_id": "task-1", "learning_ids": "41"}),
+                },
+            }) + "\n"
+            + json.dumps({
+                "type": "response_item",
+                "payload": {
+                    "type": "function_call",
+                    "name": "apply_patch",
+                    "arguments": "*** Begin Patch\n*** Update File: src/doctor/providers/runtime.py\n@@\n-old\n+new\n*** End Patch\n",
+                },
+            }) + "\n"
+        )
+
+        monkeypatch.setattr(runtime, "SCHEDULE_FILE", schedule_file)
+        monkeypatch.setattr(runtime.Path, "home", lambda: nexo_home)
+
+        check = runtime.check_codex_conditioned_file_discipline()
+        assert check.status == "healthy"
+        assert any("conditioned touches: 1" in item for item in check.evidence)
+
+    def test_codex_conditioned_file_discipline_accepts_session_task_open_plus_guard_file_check(self, nexo_home, monkeypatch):
+        from doctor.providers import runtime
+
+        schedule_file = nexo_home / "config" / "schedule.json"
+        schedule_file.parent.mkdir(parents=True, exist_ok=True)
+        schedule_file.write_text(json.dumps({
+            "interactive_clients": {
+                "claude_code": False,
+                "codex": True,
+                "claude_desktop": False,
+            },
+            "default_terminal_client": "codex",
+            "automation_enabled": False,
+            "automation_backend": "none",
+        }))
+        db_path = nexo_home / "data" / "nexo.db"
+        _create_learnings_table(db_path)
+        conn = sqlite3.connect(str(db_path))
+        conn.execute(
+            """INSERT INTO learnings (category, title, content, status, applies_to)
+               VALUES (?, ?, ?, 'active', ?)""",
+            (
+                "nexo-ops",
+                "Guarded runtime.py edits",
+                "Open protocol and review runtime.py before patching.",
+                "/repo/src/doctor/providers/runtime.py",
+            ),
+        )
+        conn.commit()
+        conn.close()
+
+        codex_file = nexo_home / ".codex" / "sessions" / "2026" / "04" / "06" / "discipline-session-open-guard-file-check.jsonl"
+        codex_file.parent.mkdir(parents=True, exist_ok=True)
+        codex_file.write_text(
+            json.dumps({"type": "session_meta", "payload": {"originator": "codex_cli_rs", "cwd": "/repo"}}) + "\n"
+            + json.dumps({
+                "type": "response_item",
+                "payload": {
+                    "type": "function_call",
+                    "name": "mcp__nexo__nexo_task_open",
+                    "arguments": json.dumps({"goal": "Patch runtime audit", "task_type": "edit"}),
+                },
+            }) + "\n"
+            + json.dumps({
+                "type": "response_item",
+                "payload": {
+                    "type": "function_call",
+                    "name": "mcp__nexo__nexo_guard_file_check",
+                    "arguments": json.dumps({"files": ["/repo/src/doctor/providers/runtime.py"]}),
                 },
             }) + "\n"
             + json.dumps({

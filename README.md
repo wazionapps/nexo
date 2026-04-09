@@ -87,6 +87,16 @@ Versions `3.1.7` through `3.2.0` close the recent-memory gap:
 - when even that misses, NEXO now exposes raw transcript fallback tools for Claude Code and Codex session stores
 - NEXO can now inspect itself through a live system catalog derived from canonical sources instead of relying only on stale docs or operator memory
 
+Version `4.0.0` closes the next memory-surface gap:
+
+- non-text artifacts now have a first-class multimodal reference layer instead of living outside the memory model
+- pre-compaction auto-flush now persists actionable session state before context compression can erase it
+- the claim graph now behaves like a public knowledge wiki with evidence, freshness, verification state, and linting
+- operators can export a readable markdown memory bundle instead of trusting only opaque database state
+- user adaptation now uses a richer inspectable user-state model instead of leaning only on shallow sentiment heuristics
+- retrieval exposes more public knobs for hybrid weighting, decomposition, dreams, and dormant-memory handling
+- newer memory layers now declare an explicit backend contract rather than silently hardcoding storage assumptions forever
+
 ### Client Capability Matrix
 
 | Capability | Claude Code | Codex | Claude Desktop |

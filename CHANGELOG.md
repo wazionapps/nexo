@@ -1,5 +1,26 @@
 # Changelog
 
+## [4.0.0] - 2026-04-09
+
+### Memory Surfaces Become Product Surfaces
+- Added a first-class multimodal reference layer for non-text artifacts with new MCP tools `nexo_media_memory_add`, `nexo_media_memory_search`, `nexo_media_memory_get`, and `nexo_media_memory_stats`. Screenshots, PDFs, audio, video, and other non-text artifacts can now live in NEXO as structured memory objects instead of being reduced to ad-hoc notes.
+- Added structured pre-compaction auto-flush so session context is no longer left to discipline alone. The pre-compact hook now persists actionable summaries and next steps into a dedicated `session_auto_flush` layer, feeds recent-context continuity, and exposes audit tools `nexo_auto_flush_recent` and `nexo_auto_flush_stats`.
+- Promoted the claim graph into a public knowledge-wiki surface with provenance, evidence, verification state, freshness scoring, linting, and linking through new MCP tools `nexo_claim_add`, `nexo_claim_search`, `nexo_claim_get`, `nexo_claim_link`, `nexo_claim_verify`, `nexo_claim_lint`, and `nexo_claim_stats`.
+- Added readable memory export via `nexo_memory_export`, producing an auditable markdown bundle for learnings, decisions, claims, media memories, auto-flush records, user-state snapshots, and cognitive stats instead of forcing operators to trust only hidden database state.
+- Added a stronger inspectable user-state model through `nexo_user_state`, `nexo_user_state_history`, and `nexo_user_state_stats`, combining trust, sentiment, correction fatigue, diary signals, and hot-context pressure into one explicit adaptive surface.
+- Exposed more retrieval controls publicly through `nexo_cognitive_retrieve`, including `hybrid_alpha`, `decompose`, `exclude_dreams`, and `exclude_dormant`, so operators can tune retrieval behavior without touching internal code paths.
+- Added an explicit memory-backend contract and status surface through `nexo_memory_backend_status`, formalizing how newer memory layers declare capabilities while SQLite + FTS5 remains the default production backend.
+
+### Included Since v3.2.0
+- Included the unreleased protection for live-repo automation writes, so managed automation stops relying on weak path conventions around mutable runtime copies.
+- Included the public tool-explanation enrichment pass, making `nexo_tool_explain` more useful as a runtime self-knowledge surface.
+- Included the Deep Sleep import-path fix that restores stable collection startup by resolving the shared transcript parser correctly in both source and installed runtime layouts.
+- Included the core-vs-personal ownership hardening from the updater/doctor path, so git-based installs preserve personal script collisions, auxiliary core LaunchAgents are inventoried explicitly, and runtime audits stop treating that boundary as soft convention.
+
+### Validation
+- Added targeted regression coverage for claims/wiki, multimodal memory, user-state snapshots, pre-compaction auto-flush, readable memory export, public retrieval knobs, and backend contract status.
+- Cleaned newly introduced UTC handling to avoid Python 3.14 deprecation warnings in the richer user-state path and trust-history lookups.
+
 ## [3.2.0] - 2026-04-08
 
 ### Recent Memory Fallbacks + Live System Catalog

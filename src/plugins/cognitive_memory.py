@@ -21,6 +21,10 @@ def handle_cognitive_retrieve(
     include_archived: bool = False,
     use_hyde: bool | None = None,
     spreading_depth: int | None = None,
+    hybrid_alpha: float = 0.6,
+    decompose: bool = True,
+    exclude_dreams: bool = True,
+    exclude_dormant: bool = True,
 ) -> str:
     """RAG query over cognitive memory (STM + LTM). Triggers rehearsal on retrieved memories.
 
@@ -34,6 +38,10 @@ def handle_cognitive_retrieve(
         include_archived: If True, also search archived memories (default False)
         use_hyde: If True/False, force HyDE on/off. If omitted, NEXO auto-enables it for conceptual queries.
         spreading_depth: If >0, boost co-activated neighbors directly. If omitted, NEXO may auto-enable shallow spreading for multi-hop queries.
+        hybrid_alpha: Weight for vector vs BM25 fusion (default 0.6)
+        decompose: If True, decompose complex queries into sub-queries (default True)
+        exclude_dreams: If True, exclude dream insights from retrieval by default
+        exclude_dormant: If True, keep dormant LTM out of results unless explicitly requested
     """
     if not query or not query.strip():
         return "ERROR: query is required."
@@ -43,12 +51,15 @@ def handle_cognitive_retrieve(
         top_k=top_k,
         min_score=min_score,
         stores=stores,
-        exclude_dormant=True,
+        exclude_dormant=exclude_dormant,
         rehearse=True,
         source_type_filter=source_type,
         include_archived=include_archived,
         use_hyde=use_hyde,
         spreading_depth=spreading_depth,
+        hybrid_alpha=hybrid_alpha,
+        decompose=decompose,
+        exclude_dreams=exclude_dreams,
     )
 
     # Apply domain filter post-search (cognitive.search doesn't filter by domain natively)
@@ -65,6 +76,10 @@ def handle_cognitive_retrieve(
         mode_parts.append(f"spreading={spreading_depth}")
     elif spreading_depth is None:
         mode_parts.append("spreading=AUTO")
+    mode_parts.append(f"hybrid_alpha={hybrid_alpha}")
+    mode_parts.append(f"decompose={'ON' if decompose else 'OFF'}")
+    mode_parts.append(f"dreams={'OFF' if exclude_dreams else 'ON'}")
+    mode_parts.append(f"dormant={'OFF' if exclude_dormant else 'ON'}")
     if results:
         top_score = float(results[0].get("score", 0.0) or 0.0)
         confidence = "high" if top_score >= 0.82 else "medium" if top_score >= 0.66 else "low"
