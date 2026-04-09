@@ -894,6 +894,22 @@ def handle_task_close(
         },
         ttl_hours=24,
     )
+    # ── Drive/Curiosity: detect signals from task evidence (best-effort) ──
+    try:
+        _drive_text = " ".join(filter(None, [
+            outcome_notes, clean_evidence, change_summary, change_why,
+        ]))
+        if _drive_text and len(_drive_text.strip()) >= 15:
+            from tools_drive import detect_drive_signal as _detect_drive
+            _detect_drive(
+                _drive_text[:600],
+                source="task_close",
+                source_id=task_id,
+                area=task.get("area", ""),
+            )
+    except Exception:
+        pass  # Drive detection is best-effort
+
     open_debts = list_protocol_debts(status="open", task_id=task_id, limit=20)
 
     response = {

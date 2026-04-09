@@ -752,6 +752,37 @@ def _m30_hot_context_memory(conn):
     _migrate_add_index(conn, "idx_recent_events_session", "recent_events", "session_id, created_at")
 
 
+def _m31_drive_signals(conn):
+    """Drive/Curiosity layer — autonomous tension-based investigation signals."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS drive_signals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            signal_type TEXT NOT NULL,
+            source TEXT NOT NULL,
+            source_id TEXT DEFAULT '',
+            area TEXT DEFAULT '',
+            summary TEXT NOT NULL,
+            tension REAL DEFAULT 0.3,
+            evidence TEXT DEFAULT '[]',
+            status TEXT DEFAULT 'latent',
+            first_seen TEXT DEFAULT (datetime('now')),
+            last_reinforced TEXT,
+            acted_at TEXT,
+            outcome TEXT,
+            decay_rate REAL DEFAULT 0.05
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_drive_status ON drive_signals(status)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_drive_area ON drive_signals(area)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_drive_tension ON drive_signals(tension)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_drive_first_seen ON drive_signals(first_seen)")
+    # Register drive_decay in maintenance_schedule
+    conn.execute(
+        "INSERT OR IGNORE INTO maintenance_schedule (task_name, interval_hours) VALUES (?, ?)",
+        ('drive_decay', 24),
+    )
+
+
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
     (2, "followups_reasoning", _m2_followups_reasoning),
@@ -783,6 +814,7 @@ MIGRATIONS = [
     (28, "automation_runs", _m28_automation_runs),
     (29, "item_history_and_soft_delete", _m29_item_history_and_soft_delete),
     (30, "hot_context_memory", _m30_hot_context_memory),
+    (31, "drive_signals", _m31_drive_signals),
 ]
 
 

@@ -2039,6 +2039,29 @@ def main():
     except Exception as e:
         print(f"  Skill autopromotion error: {e}", file=sys.stderr)
 
+    # Apply drive synthesis (investigate/dismiss/promote signals)
+    drive_synthesis = synthesis.get("drive_synthesis", {})
+    if drive_synthesis:
+        print("[apply] Processing drive synthesis...")
+        try:
+            from db import update_drive_signal_status, reinforce_drive_signal
+            for item in drive_synthesis.get("investigated", []):
+                signal_id = item.get("signal_id")
+                action_taken = item.get("action_taken", "acted")
+                outcome = item.get("outcome", item.get("finding", ""))
+                if signal_id and outcome:
+                    update_drive_signal_status(signal_id, action_taken, outcome[:500])
+                    stats["applied"] += 1
+                    print(f"  Drive signal #{signal_id}: {action_taken}")
+            for item in drive_synthesis.get("promoted", []):
+                signal_id = item.get("signal_id")
+                reason = item.get("reason", "promoted by Deep Sleep")
+                if signal_id:
+                    reinforce_drive_signal(signal_id, f"Deep Sleep promotion: {reason}"[:500])
+                    print(f"  Drive signal #{signal_id}: promoted")
+        except Exception as e:
+            print(f"  Drive synthesis error: {e}", file=sys.stderr)
+
     # Create followups for abandoned projects
     abandoned_results = create_abandoned_followups(synthesis)
     for r in abandoned_results:

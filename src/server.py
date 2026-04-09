@@ -32,6 +32,12 @@ from tools_system_catalog import (
     handle_system_catalog,
     handle_tool_explain,
 )
+from tools_drive import (
+    handle_drive_signals,
+    handle_drive_reinforce,
+    handle_drive_act,
+    handle_drive_dismiss,
+)
 from user_context import get_context as _get_ctx
 from tools_coordination import (
     handle_track, handle_untrack, handle_files,
@@ -1141,6 +1147,62 @@ def nexo_plugin_remove(filename: str) -> str:
         return f"Plugin {filename} unregistered (had no registered tools)."
     except Exception as e:
         return f"Error removing plugin {filename}: {e}"
+
+
+# ── Drive / Curiosity (4 tools) ──────────────────────────────────
+
+@mcp.tool
+def nexo_drive_signals(status: str = "", area: str = "", limit: int = 20) -> str:
+    """List autonomous drive/curiosity signals.
+
+    Drive signals are observations NEXO accumulates during normal work.
+    When tension crosses threshold, NEXO investigates silently.
+
+    Args:
+        status: Filter by status (latent, rising, ready, acted, dismissed). Default: active only.
+        area: Filter by operational area (shopify, google-ads, wazion, nexo, etc.).
+        limit: Max signals to return (default 20).
+    """
+    return handle_drive_signals(status, area, limit)
+
+
+@mcp.tool
+def nexo_drive_reinforce(signal_id: int, observation: str) -> str:
+    """Reinforce a drive signal with a new observation.
+
+    Increases tension and may promote the signal status (latent → rising → ready).
+
+    Args:
+        signal_id: Signal ID to reinforce.
+        observation: New observation that supports this signal.
+    """
+    return handle_drive_reinforce(signal_id, observation)
+
+
+@mcp.tool
+def nexo_drive_act(signal_id: int, outcome: str) -> str:
+    """Mark a drive signal as investigated with an outcome.
+
+    Call this after NEXO has autonomously investigated a READY signal.
+
+    Args:
+        signal_id: Signal ID that was investigated.
+        outcome: What was found during investigation.
+    """
+    return handle_drive_act(signal_id, outcome)
+
+
+@mcp.tool
+def nexo_drive_dismiss(signal_id: int, reason: str) -> str:
+    """Dismiss a drive signal (archived, not deleted).
+
+    Call this when a signal is not worth investigating.
+
+    Args:
+        signal_id: Signal ID to dismiss.
+        reason: Why this signal was dismissed.
+    """
+    return handle_drive_dismiss(signal_id, reason)
 
 
 if __name__ == "__main__":

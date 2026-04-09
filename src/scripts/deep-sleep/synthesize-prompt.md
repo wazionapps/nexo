@@ -143,6 +143,16 @@ When generating `followup_create`, prefer descriptions that start with a concret
 
 Avoid vague followups that merely restate the diagnosis.
 
+### 10. Drive/Curiosity Synthesis
+Review the active drive signals (accessible via `nexo_drive_signals`). For each READY signal:
+- Investigate silently: check metrics, recall memory, cross-reference learnings
+- If the investigation yields an actionable finding, create an action item and mark the signal as `acted`
+- If the signal is stale or no longer relevant, dismiss it with a reason
+- Cross-reference RISING signals across areas — if two signals from different domains converge, promote to READY
+- Apply decay to LATENT signals that have no recent reinforcement
+
+Drive signals represent NEXO's autonomous curiosity. Treat them as leads worth investigating, not noise to dismiss.
+
 ## Output Format
 
 Return ONLY valid JSON. No markdown code fences. No explanation text.
@@ -272,6 +282,30 @@ Return ONLY valid JSON. No markdown code fences. No explanation text.
       "recommendation": "Create followup, or ignore, or already handled"
     }
   ],
+
+  "drive_synthesis": {
+    "investigated": [
+      {
+        "signal_id": 1,
+        "summary": "What the signal was about",
+        "finding": "What investigation revealed",
+        "action_taken": "acted|dismissed",
+        "outcome": "Concrete result or reason for dismissal"
+      }
+    ],
+    "promoted": [
+      {
+        "signal_id": 2,
+        "reason": "Why this signal was promoted from rising to ready"
+      }
+    ],
+    "cross_area_connections": [
+      {
+        "signal_ids": [3, 7],
+        "connection": "How these signals from different areas relate"
+      }
+    ]
+  },
 
   "trust_calibration": {
     "score": 72,

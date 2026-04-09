@@ -51,6 +51,7 @@ _watchers = _load_submodule("db._watchers")
 _personal_scripts = _load_submodule("db._personal_scripts")
 _skills = _load_submodule("db._skills")
 _hot_context = _load_submodule("db._hot_context")
+_drive = _load_submodule("db._drive")
 
 # Core: connection, constants, init, utils
 from db._core import (
@@ -185,6 +186,13 @@ from db._skills import (
     import_skill_from_directory, approve_skill, collect_scriptable_skill_candidates,
     collect_skill_improvement_candidates, materialize_personal_skill_definition,
     get_skill_health_report,
+)
+
+# Drive / Curiosity signals
+from db._drive import (
+    create_drive_signal, reinforce_drive_signal, get_drive_signals,
+    get_drive_signal, update_drive_signal_status, decay_drive_signals,
+    find_similar_drive_signal, drive_signal_stats,
 )
 
 # Hot context / recent continuity
