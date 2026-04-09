@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXO 4.0.1: Release Alignment and a Correction-Aware Learning Reminder</title>
+    <meta name="description" content="NEXO 4.0.1 aligns the full 4.0 release across git, npm, GitHub Releases, and the public website, and adds a heartbeat reminder after visible user corrections without nearby learning capture.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-4-0-1-release-alignment-heartbeat-reminder/">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/blog/nexo-4-0-1-release-alignment-heartbeat-reminder/">
+    <meta property="og:title" content="NEXO 4.0.1: Release Alignment and a Correction-Aware Learning Reminder">
+    <meta property="og:description" content="The post-4.0.0 mainline fix is now a real public patch release, so git installs, npm, GitHub Releases, and the website tell the same story.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/nexo-brain-infographic-v5.png">
+    <meta property="article:published_time" content="2026-04-09">
+    <meta property="article:author" content="Francisco Cerda Puigserver">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO 4.0.1: Release Alignment and a Correction-Aware Learning Reminder">
+    <meta name="twitter:description" content="NEXO 4.0.1 aligns the 4.0 public release across all channels and adds a heartbeat reminder when a user correction lands without nearby learning capture.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/nexo-brain-infographic-v5.png">
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "NEXO 4.0.1: Release Alignment and a Correction-Aware Learning Reminder",
+        "description": "NEXO 4.0.1 aligns the full 4.0 release across git, npm, GitHub Releases, and the public website, and adds a heartbeat reminder after visible user corrections without nearby learning capture.",
+        "datePublished": "2026-04-09",
+        "dateModified": "2026-04-09",
+        "author": {
+            "@type": "Person",
+            "name": "Francisco Cerda Puigserver"
+        },
+        "publisher": {
+            "@type": "Organization",
+            "name": "WAzion",
+            "url": "https://www.wazion.com"
+        },
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https://nexo-brain.com/blog/nexo-4-0-1-release-alignment-heartbeat-reminder/"
+        },
+        "url": "https://nexo-brain.com/blog/nexo-4-0-1-release-alignment-heartbeat-reminder/",
+        "image": "https://nexo-brain.com/assets/nexo-brain-infographic-v5.png",
+        "keywords": ["NEXO 4.0.1", "release alignment", "heartbeat reminder", "AI memory", "MCP"]
+    }
+    </script>
+
+    <style>
+        .article-header { padding-top: 128px; padding-bottom: 40px; text-align: center; }
+        .article-meta { font-size: 14px; color: var(--text-muted); margin-bottom: 16px; }
+        .article-body {
+            max-width: 720px; margin: 0 auto; padding: 0 24px 80px;
+            font-size: 17px; line-height: 1.8; color: var(--text);
+        }
+        .article-body h2 { font-size: 28px; font-weight: 700; margin: 48px 0 16px; letter-spacing: -0.01em; }
+        .article-body p { margin-bottom: 20px; color: var(--text-muted); }
+        .article-body strong { color: var(--text); }
+        .article-body a { color: var(--purple-light); }
+        .article-body a:hover { color: var(--pink); }
+        .article-body ul { margin: 0 0 20px 24px; color: var(--text-muted); }
+        .article-body li { margin-bottom: 8px; }
+        .article-body code {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 14px; color: var(--pink);
+            background: rgba(236, 72, 153, 0.1);
+            padding: 2px 8px; border-radius: 4px;
+        }
+        .article-back {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 14px; font-weight: 600; color: var(--text-muted);
+            margin-bottom: 24px;
+        }
+        .article-back:hover { color: var(--purple-light); }
+        .article-visual {
+            margin: 32px 0 40px;
+            text-align: center;
+        }
+        .article-visual img {
+            max-width: 100%;
+            border-radius: 16px;
+            border: 1px solid var(--dark-border);
+            box-shadow: 0 8px 32px rgba(124,58,237,0.15);
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/nexo-logo.png" alt="NEXO Brain" class="logo-image">
+            <span class="logo-text">NEXO Brain</span>
+        </a>
+        <button class="mobile-menu-toggle" aria-label="Toggle navigation" onclick="toggleMobileMenu()">
+            <span></span><span></span><span></span>
+        </button>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/features/">Features</a>
+            <a href="/evolution/">Evolution</a>
+            <a href="/compare/">Compare</a>
+            <a href="/blog/">Blog</a>
+            <a href="/changelog/">Changelog</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta">GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<section class="article-header">
+    <div class="container">
+        <a href="/blog/" class="article-back">← Back to blog</a>
+        <div class="article-meta">April 9, 2026 · Patch release</div>
+        <h1 class="section-title" style="font-size:clamp(28px,4.5vw,48px);max-width:880px;margin:0 auto 16px;">NEXO 4.0.1: Release Alignment and a Correction-Aware Learning Reminder</h1>
+        <p class="section-subtitle" style="max-width:760px;margin:0 auto;">This patch does not replace the broader 4.0 memory-surface story. It makes that story ship honestly across every public channel and adds one more protocol nudge when operator corrections land without nearby learning capture.</p>
+    </div>
+</section>
+
+<section>
+    <div class="article-body">
+        <div class="article-visual">
+            <img src="/assets/nexo-brain-infographic-v5.png" alt="NEXO Brain release alignment">
+        </div>
+
+        <p><strong>The practical reason for 4.0.1 is simple:</strong> after <code>v4.0.0</code> was published, <code>main</code> received one more public fix. Git installs following <code>main</code> could receive that state through <code>nexo update</code>, while the published release tag, npm package, and website still described the earlier snapshot. That is the kind of drift that creates operator doubt, even when the code itself is fine.</p>
+
+        <h2>What 4.0.1 actually changes</h2>
+        <ul>
+            <li>It packages the post-<code>v4.0.0</code> mainline fix as a real patch release instead of leaving it implicit in <code>main</code>.</li>
+            <li>It adds a correction-aware <code>LEARNING REMINDER</code> in <code>tools_sessions</code> when an operator clearly corrects the agent and no recent learning capture appears nearby.</li>
+            <li>It updates the public release surfaces so git installs, npm, GitHub Releases, and the website describe the same shipped state again.</li>
+        </ul>
+
+        <h2>What it does not change</h2>
+        <p><code>4.0.1</code> does <strong>not</strong> walk back the broader <code>4.0.0</code> memory release. Multimodal refs, pre-compaction auto-flush, the public claim wiki, readable memory export, richer inspectable user-state adaptation, and public retrieval/backend controls remain the core product story of the 4.0 line.</p>
+
+        <h2>Why the reminder matters</h2>
+        <p>NEXO already had protocol tools for learnings, but that still left a small discipline gap: a user correction could be visible in the session without producing a durable learning. The new heartbeat reminder is a narrow but useful fix. It does not invent a learning on its own. It simply makes the omission harder to ignore while the correction is still fresh.</p>
+
+        <p>If you want the complete 4.0 memory-surface story, read the <a href="/blog/nexo-4-0-0-memory-surface-release/">4.0.0 article</a>. If you want the exact public release record, open the <a href="/changelog/#v401">4.0.1 changelog section</a>.</p>
+    </div>
+</section>
+
+<script src="/assets/script.js"></script>
+</body>
+</html>

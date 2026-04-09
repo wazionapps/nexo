@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v4.0.0.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v4.0.1.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v4.0.0.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v4.0.1.">
     <meta property="og:image" content="https://nexo-brain.com/assets/social-preview.png">
     <meta property="og:image:width" content="1536">
     <meta property="og:image:height" content="1024">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v4.0.0.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v4.0.1.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/social-preview.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v4.0.0.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Every feature, fix, and improvement from v0.8.10 to v4.0.1.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,12 +87,12 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v4.0.0 live</span>
-                    <span class="page-chip">Multimodal memory + claim wiki + auto-flush</span>
+                    <span class="page-chip">v4.0.1 live</span>
+                    <span class="page-chip">Release alignment + learning reminder</span>
                     <span class="page-chip">From early memory stack to cognitive runtime</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v400" class="btn btn-primary">Start with v4.0.0</a>
+                    <a href="#v401" class="btn btn-primary">Start with v4.0.1</a>
                     <a href="#v310" class="btn btn-secondary">See v3.1.0</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -100,12 +100,12 @@
             <div class="page-visual">
                 <div class="page-stack">
                     <div class="page-stack-card">
-                        <strong>v4.0.0</strong>
-                        <span>Multimodal refs, pre-compaction auto-flush, a public claim wiki, readable export, and a stronger user-state model.</span>
+                        <strong>v4.0.1</strong>
+                        <span>The full 4.0 memory package now ships consistently across git, npm, GitHub Releases, and the public site, with a correction-aware learning reminder layered on top.</span>
                     </div>
                     <div class="page-stack-card">
-                        <strong>v3.2.0</strong>
-                        <span>Recent memory fallback ladder: hot context, transcript search/read, and a live system map built from canonical runtime sources.</span>
+                        <strong>v4.0.0</strong>
+                        <span>Multimodal refs, pre-compaction auto-flush, a public claim wiki, readable export, and a stronger user-state model.</span>
                     </div>
                     <div class="page-stack-card">
                         <strong>What changed most</strong>
@@ -127,6 +127,24 @@
             <div>
                 <div id="changelog-page-meta" class="changelog-page-meta">Loading release pages…</div>
                 <div id="changelog-pager" class="changelog-pager" aria-label="Changelog pagination"></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v4.0.1 Release alignment -->
+<section id="v401" class="section-compact" style="background:linear-gradient(135deg,#111827 0%,#7c2d12 100%);">
+    <div class="container">
+        <div class="section-label">New in v4.0.1 <span style="opacity:.5;font-weight:400;">&mdash; April 9, 2026</span></div>
+        <h2 class="section-title">The 4.0 Release Stops Drifting Across Channels</h2>
+        <p class="section-subtitle">
+            v4.0.1 is the patch that makes the public truth catch up with <code>main</code>. The full 4.0 memory-surface release now ships coherently across git installs, npm, GitHub Releases, and the public website, and it adds a correction-aware reminder so learning capture stops depending only on model discipline.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Release Channels Re-Aligned</h4><p>The post-<code>v4.0.0</code> fix that landed on <code>main</code> is now packaged as a real patch release instead of leaving git installs ahead of the published tag and site copy.</p></div>
+                <div class="cognitive-card"><h4>Correction-Aware Learning Reminder</h4><p><code>tools_sessions</code> now emits a <code>LEARNING REMINDER</code> when an operator correction is visible and no recent learning capture appears nearby, making the protocol more self-enforcing.</p></div>
+                <div class="cognitive-card"><h4>4.0 Memory Surface Preserved</h4><p>This patch does not shrink the broader 4.0 package. Multimodal refs, pre-compaction auto-flush, the public claim wiki, readable export, user-state inspection, and retrieval/backend controls all remain the current public story.</p></div>
             </div>
         </div>
     </div>
