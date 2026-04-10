@@ -87,6 +87,11 @@ Versions `3.1.7` through `3.2.0` close the recent-memory gap:
 - when even that misses, NEXO now exposes raw transcript fallback tools for Claude Code and Codex session stores
 - NEXO can now inspect itself through a live system catalog derived from canonical sources instead of relying only on stale docs or operator memory
 
+Version `5.0.2` closes the small post-5.0.1 doctor drift:
+
+- deep doctor now reads the live `learnings` schema correctly whether the install uses `status` or the older `archived` flag
+- a real upgraded runtime was revalidated with `nexo update`, `nexo doctor --tier deep`, `nexo doctor --tier all`, and a fresh Claude Code startup smoke
+
 Version `5.0.1` hardens the live 5.0 upgrade path:
 
 - managed Claude Code hooks are now cleaned up when an older release left obsolete core-managed entries behind

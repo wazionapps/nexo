@@ -1741,6 +1741,57 @@ class TestDeepChecks:
         check = check_watchdog_smoke()
         assert check.status == "critical"
 
+    def test_learning_count_uses_status_column(self, nexo_home):
+        db_path = nexo_home / "data" / "nexo.db"
+        _create_learnings_table(db_path)
+        conn = sqlite3.connect(str(db_path))
+        conn.execute(
+            "INSERT INTO learnings (category, title, content, status) VALUES (?, ?, ?, ?)",
+            ("ops", "Active", "content", "active"),
+        )
+        conn.execute(
+            "INSERT INTO learnings (category, title, content, status) VALUES (?, ?, ?, ?)",
+            ("ops", "Archived", "content", "archived"),
+        )
+        conn.commit()
+        conn.close()
+
+        from doctor.providers.deep import check_learning_count
+
+        check = check_learning_count()
+        assert check.status == "healthy"
+        assert check.summary == "1 non-archived learnings in memory"
+
+    def test_learning_count_supports_legacy_archived_column(self, nexo_home):
+        db_path = nexo_home / "data" / "nexo.db"
+        conn = sqlite3.connect(str(db_path))
+        conn.execute("DROP TABLE IF EXISTS learnings")
+        conn.execute(
+            """CREATE TABLE learnings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                category TEXT NOT NULL,
+                title TEXT NOT NULL,
+                content TEXT NOT NULL,
+                archived INTEGER DEFAULT 0
+            )"""
+        )
+        conn.execute(
+            "INSERT INTO learnings (category, title, content, archived) VALUES (?, ?, ?, ?)",
+            ("ops", "Active", "content", 0),
+        )
+        conn.execute(
+            "INSERT INTO learnings (category, title, content, archived) VALUES (?, ?, ?, ?)",
+            ("ops", "Archived", "content", 1),
+        )
+        conn.commit()
+        conn.close()
+
+        from doctor.providers.deep import check_learning_count
+
+        check = check_learning_count()
+        assert check.status == "healthy"
+        assert check.summary == "1 non-archived learnings in memory"
+
 
 class TestOrchestrator:
     def test_boot_tier(self, nexo_home):
