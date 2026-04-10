@@ -52,6 +52,7 @@ _personal_scripts = _load_submodule("db._personal_scripts")
 _skills = _load_submodule("db._skills")
 _hot_context = _load_submodule("db._hot_context")
 _drive = _load_submodule("db._drive")
+_outcomes = _load_submodule("db._outcomes")
 
 # Core: connection, constants, init, utils
 from db._core import (
@@ -204,6 +205,15 @@ from db._hot_context import (
     get_hot_context, search_hot_context, search_recent_events,
     build_pre_action_context, format_pre_action_context_bundle,
     resolve_hot_context,
+)
+
+# Outcomes
+from db._outcomes import (
+    VALID_METRIC_SOURCES as OUTCOME_METRIC_SOURCES,
+    VALID_TARGET_OPERATORS as OUTCOME_TARGET_OPERATORS,
+    create_outcome, get_outcome, list_outcomes,
+    cancel_outcome, evaluate_outcome, pending_outcomes_due,
+    find_pending_outcomes_by_action, set_linked_outcomes_met,
 )
 
 

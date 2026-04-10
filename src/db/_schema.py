@@ -783,6 +783,37 @@ def _m31_drive_signals(conn):
     )
 
 
+def _m32_outcomes(conn):
+    """Outcome tracker v1 — close action -> expected result -> actual result loops."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS outcomes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            action_type TEXT NOT NULL,
+            action_id TEXT DEFAULT '',
+            session_id TEXT DEFAULT '',
+            description TEXT NOT NULL,
+            expected_result TEXT NOT NULL,
+            metric_source TEXT NOT NULL DEFAULT 'manual',
+            metric_query TEXT DEFAULT '',
+            baseline_value REAL,
+            target_value REAL,
+            target_operator TEXT NOT NULL DEFAULT 'gte',
+            actual_value REAL,
+            actual_value_text TEXT DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'pending',
+            deadline TEXT NOT NULL,
+            checked_at TEXT DEFAULT NULL,
+            notes TEXT DEFAULT '',
+            learning_id INTEGER,
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now'))
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_outcomes_status ON outcomes(status)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_outcomes_deadline ON outcomes(deadline)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_outcomes_action ON outcomes(action_type, action_id)")
+
+
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
     (2, "followups_reasoning", _m2_followups_reasoning),
@@ -815,6 +846,7 @@ MIGRATIONS = [
     (29, "item_history_and_soft_delete", _m29_item_history_and_soft_delete),
     (30, "hot_context_memory", _m30_hot_context_memory),
     (31, "drive_signals", _m31_drive_signals),
+    (32, "outcomes", _m32_outcomes),
 ]
 
 

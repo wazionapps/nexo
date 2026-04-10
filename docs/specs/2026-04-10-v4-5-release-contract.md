@@ -129,7 +129,15 @@ Must prove:
 - golden paths pass end to end
 - no critical runtime drift remains
 
-### Gate H - Release Package
+### Gate H - CLI Core Runtime
+
+Must prove:
+
+- personal scripts can call core tools through the canonical CLI path
+- cron/subprocess runtime is covered, not only interactive Claude Code runtime
+- no runtime drift such as missing `fastmcp` remains in the CLI -> core path
+
+### Gate I - Release Package
 
 Must prove:
 

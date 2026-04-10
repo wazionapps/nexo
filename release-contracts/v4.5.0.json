@@ -43,7 +43,7 @@
     {
       "id": "outcome_loop",
       "title": "Outcome Loop",
-      "status": "pending",
+      "status": "complete",
       "evidence_required": [
         "Outcome Tracker exists",
         "At least two real integration points",
@@ -84,6 +84,16 @@
       "evidence_required": [
         "Golden paths pass",
         "No critical runtime drift"
+      ]
+    },
+    {
+      "id": "cli_mcp_runtime",
+      "title": "CLI Core Runtime",
+      "status": "pending",
+      "evidence_required": [
+        "Personal scripts can call core tools via the canonical CLI path",
+        "Cron/subprocess path is tested, not only interactive runtime",
+        "No ModuleNotFoundError or equivalent runtime drift remains"
       ]
     },
     {
