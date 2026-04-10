@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.0.0 with goal-driven decisions, outcome learning, skill evolution, and stronger public proof.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.0.1 with upgrade-path hardening on top of the goal-driven 5.0 runtime line.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.0.0 with goal-driven decisions, outcome learning, skill evolution, and stronger public proof.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.0.1 with upgrade-path hardening on top of the goal-driven 5.0 runtime line.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.0.0 with goal-driven decisions, outcome learning, skill evolution, and stronger public proof.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.0.1 with upgrade-path hardening on top of the goal-driven 5.0 runtime line.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v5.0.0 with goal-driven decisions, outcome learning, skill evolution, and stronger public proof.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v5.0.1 with upgrade-path hardening on top of the goal-driven 5.0 runtime line.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,12 +87,12 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v5.0.0 live</span>
-                    <span class="page-chip">Goal-driven decisions</span>
-                    <span class="page-chip">Outcome-backed learning</span>
+                    <span class="page-chip">v5.0.1 live</span>
+                    <span class="page-chip">Upgrade-path hardening</span>
+                    <span class="page-chip">Goal-driven runtime intact</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v500" class="btn btn-primary">Start with v5.0.0</a>
+                    <a href="#v501" class="btn btn-primary">Start with v5.0.1</a>
                     <a href="#v400" class="btn btn-secondary">See v4.0.0</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -100,16 +100,16 @@
             <div class="page-visual">
                 <div class="page-stack">
                     <div class="page-stack-card">
+                        <strong>v5.0.1</strong>
+                        <span>Legacy managed Claude Code hooks are purged safely on upgrade, so real installs stop carrying warning drift from older releases.</span>
+                    </div>
+                    <div class="page-stack-card">
                         <strong>v5.0.0</strong>
                         <span>Goal profiles, Decision Cortex v2, structured outcome learning, and skill evolution now close the loop between choice, result, and reuse.</span>
                     </div>
                     <div class="page-stack-card">
                         <strong>v4.1.0</strong>
                         <span>Drive/Curiosity: tension-based signals that accumulate during work and mature into autonomous investigations.</span>
-                    </div>
-                    <div class="page-stack-card">
-                        <strong>v4.0.0</strong>
-                        <span>Multimodal refs, pre-compaction auto-flush, a public claim wiki, readable export, and a stronger user-state model.</span>
                     </div>
                     <div class="page-stack-card">
                         <strong>What changed most</strong>
@@ -132,6 +132,36 @@
                 <div id="changelog-page-meta" class="changelog-page-meta">Loading release pages…</div>
                 <div id="changelog-pager" class="changelog-pager" aria-label="Changelog pagination"></div>
             </div>
+        </div>
+    </div>
+</section>
+
+<!-- v5.0.1 Upgrade-path hardening -->
+<section id="v501" class="section-compact" style="background:linear-gradient(135deg,#111827 0%,#1d4ed8 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.0.1 <span style="opacity:.5;font-weight:400;">&mdash; April 10, 2026</span></div>
+        <h2 class="section-title">The 5.0 Runtime Now Upgrades Cleanly</h2>
+        <p class="section-subtitle">
+            v5.0.1 is a hotfix release focused on the live upgrade path. Older installs could preserve obsolete managed Claude Code hooks and show warning storms that looked like a hung runtime even when the core system was healthy. This patch removes only that stale managed drift and revalidates the path on a real install.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h3>Legacy Managed Hooks Are Purged</h3>
+                    <p><code>client_sync</code> now removes obsolete managed Claude Code hook identities, such as the old <code>heartbeat-guard.sh</code> path, when they no longer belong to the published core hook set.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Custom Hooks Stay Intact</h3>
+                    <p>The cleanup is narrow on purpose: custom local hooks remain untouched while stale core-managed entries are removed, so operators do not lose their own local behavior.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Real Runtime Revalidation</h3>
+                    <p>The corrected path was re-tested on a live install with client sync, Codex and Claude Code headless runtime access, email-monitor recovery, lifecycle health checks, and a full <code>nexo update</code>.</p>
+                </div>
+            </div>
+        </div>
+        <div style="margin-top:24px;font-size:14px;opacity:.6;">
+            Legacy hook drift removed &bull; custom hooks preserved &bull; live install path revalidated end to end
         </div>
     </div>
 </section>
