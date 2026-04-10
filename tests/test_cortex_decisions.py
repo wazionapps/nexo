@@ -197,6 +197,155 @@ def test_cortex_decide_without_explicit_profile_resolves_context_profile():
     assert payload["goal_profile"]["resolved_by"] == "task_type"
 
 
+def test_cortex_history_threshold_is_visible_before_it_affects_ranking():
+    from db import create_outcome, evaluate_outcome
+    from plugins.cortex import handle_cortex_decide
+
+    alternatives = json.dumps([
+        {
+            "name": "staged_validation",
+            "description": "Validate in staging with smoke tests, rollback ready, monitor and reconcile before moving.",
+        },
+        {
+            "name": "direct_growth_push",
+            "description": "Deploy release directly to production, ship fast, automate launch, integrate immediately and skip manual review.",
+        },
+    ])
+
+    missed_outcome = create_outcome(
+        "manual_review",
+        "Historical miss for growth push",
+        "The direct growth push succeeds",
+        metric_source="manual",
+        target_value=1,
+        target_operator="gte",
+        deadline="2000-01-01T00:00:00",
+    )
+    seeded = json.loads(
+        handle_cortex_decide(
+            goal="Maximize growth from this launch window",
+            task_type="execute",
+            impact_level="critical",
+            area="business",
+            linked_outcome_id=missed_outcome["id"],
+            alternatives=alternatives,
+            goal_profile_id="business_growth",
+        )
+    )
+    assert seeded["recommendation"] == "direct_growth_push"
+    evaluate_outcome(missed_outcome["id"], actual_value=0.0)
+
+    fresh = json.loads(
+        handle_cortex_decide(
+            goal="Maximize growth from this launch window",
+            task_type="execute",
+            impact_level="critical",
+            area="business",
+            alternatives=alternatives,
+            goal_profile_id="business_growth",
+        )
+    )
+
+    assert fresh["ok"] is True
+    assert fresh["recommendation"] == "direct_growth_push"
+    direct = next(item for item in fresh["scores"] if item["name"] == "direct_growth_push")
+    assert direct["historical_signal"]["resolved_outcomes"] == 1
+    assert direct["historical_signal"]["threshold"] == 2
+    assert direct["historical_signal"]["active"] is False
+
+
+def test_cortex_history_can_flip_recommendation_with_resolved_outcomes():
+    from db import create_outcome, evaluate_outcome
+    from plugins.cortex import handle_cortex_decide, handle_cortex_override
+
+    alternatives = json.dumps([
+        {
+            "name": "staged_validation",
+            "description": "Validate in staging with smoke tests, rollback ready, monitor and reconcile before moving.",
+        },
+        {
+            "name": "direct_growth_push",
+            "description": "Deploy release directly to production, ship fast, automate launch, integrate immediately and skip manual review.",
+        },
+    ])
+
+    for idx in range(2):
+        missed_outcome = create_outcome(
+            "manual_review",
+            f"Historical miss for growth push #{idx}",
+            "The direct growth push succeeds",
+            metric_source="manual",
+            target_value=1,
+            target_operator="gte",
+            deadline="2000-01-01T00:00:00",
+        )
+        seeded = json.loads(
+            handle_cortex_decide(
+                goal="Maximize growth from this launch window",
+                task_type="execute",
+                impact_level="critical",
+                area="business",
+                linked_outcome_id=missed_outcome["id"],
+                alternatives=alternatives,
+                goal_profile_id="business_growth",
+            )
+        )
+        assert seeded["recommendation"] == "direct_growth_push"
+        evaluate_outcome(missed_outcome["id"], actual_value=0.0)
+
+    for idx in range(2):
+        met_outcome = create_outcome(
+            "manual_review",
+            f"Historical success for staged validation #{idx}",
+            "The staged validation succeeds",
+            metric_source="manual",
+            target_value=1,
+            target_operator="gte",
+            deadline="2099-01-01T00:00:00",
+        )
+        seeded = json.loads(
+            handle_cortex_decide(
+                goal="Maximize growth from this launch window",
+                task_type="execute",
+                impact_level="critical",
+                area="business",
+                linked_outcome_id=met_outcome["id"],
+                alternatives=alternatives,
+                goal_profile_id="business_growth",
+            )
+        )
+        overridden = json.loads(
+            handle_cortex_override(
+                evaluation_id=seeded["evaluation_id"],
+                chosen="staged_validation",
+                reason="Se eligió validación escalonada para proteger reputación y fiabilidad.",
+            )
+        )
+        assert overridden["ok"] is True
+        evaluate_outcome(met_outcome["id"], actual_value=1.0)
+
+    fresh = json.loads(
+        handle_cortex_decide(
+            goal="Maximize growth from this launch window",
+            task_type="execute",
+            impact_level="critical",
+            area="business",
+            alternatives=alternatives,
+            goal_profile_id="business_growth",
+        )
+    )
+
+    assert fresh["ok"] is True
+    assert fresh["recommendation"] == "staged_validation"
+    staged = next(item for item in fresh["scores"] if item["name"] == "staged_validation")
+    direct = next(item for item in fresh["scores"] if item["name"] == "direct_growth_push")
+    assert staged["historical_signal"]["active"] is True
+    assert staged["historical_signal"]["met"] == 2
+    assert direct["historical_signal"]["active"] is True
+    assert direct["historical_signal"]["missed"] == 2
+    assert staged["total_score"] > direct["total_score"]
+
+
 def test_cortex_quality_summarises_acceptance_override_and_linked_outcomes():
     from db import create_outcome, evaluate_outcome
     from plugins.cortex import handle_cortex_decide, handle_cortex_override, handle_cortex_quality

@@ -82,6 +82,8 @@ STOP_WORDS = {
     "there", "their", "would", "while", "using", "used", "from", "with",
     "that", "this", "into", "over", "have", "must", "will", "your",
 }
+HISTORICAL_OUTCOME_MIN_RESOLVED = 2
+HISTORICAL_OUTCOME_LOOKBACK = 12
 
 
 def _term_hits(text: str, terms: set[str]) -> int:
@@ -318,6 +320,94 @@ def _history_signal(text: str, *, area: str = "", goal: str = "") -> dict:
     }
 
 
+def _historical_outcome_signal(
+    choice_name: str,
+    *,
+    area: str = "",
+    task_type: str = "",
+    goal_profile_id: str = "",
+) -> dict:
+    conn = _get_db()
+    clean_choice = (choice_name or "").strip().lower()
+    if not clean_choice:
+        return {
+            "active": False,
+            "threshold": HISTORICAL_OUTCOME_MIN_RESOLVED,
+            "resolved_outcomes": 0,
+            "met": 0,
+            "missed": 0,
+            "success_rate": None,
+            "success_adjustment": 0.0,
+            "risk_adjustment": 0.0,
+        }
+
+    has_eval = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='cortex_evaluations'"
+    ).fetchone()
+    has_outcomes = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='outcomes'"
+    ).fetchone()
+    if not has_eval or not has_outcomes:
+        return {
+            "active": False,
+            "threshold": HISTORICAL_OUTCOME_MIN_RESOLVED,
+            "resolved_outcomes": 0,
+            "met": 0,
+            "missed": 0,
+            "success_rate": None,
+            "success_adjustment": 0.0,
+            "risk_adjustment": 0.0,
+        }
+
+    clauses = [
+        "lower(e.selected_choice) = ?",
+        "o.status IN ('met', 'missed')",
+    ]
+    params: list[object] = [clean_choice]
+    if (area or "").strip():
+        clauses.append("e.area = ?")
+        params.append(area.strip())
+    if (task_type or "").strip():
+        clauses.append("e.task_type = ?")
+        params.append(task_type.strip())
+    if (goal_profile_id or "").strip():
+        clauses.append("e.goal_profile_id = ?")
+        params.append(goal_profile_id.strip())
+
+    rows = conn.execute(
+        f"""SELECT o.status
+            FROM cortex_evaluations e
+            JOIN outcomes o ON o.id = e.linked_outcome_id
+            WHERE {' AND '.join(clauses)}
+            ORDER BY e.created_at DESC, e.id DESC
+            LIMIT ?""",
+        params + [HISTORICAL_OUTCOME_LOOKBACK],
+    ).fetchall()
+    met = sum(1 for row in rows if (row["status"] or "").lower() == "met")
+    missed = sum(1 for row in rows if (row["status"] or "").lower() == "missed")
+    resolved = met + missed
+    active = resolved >= HISTORICAL_OUTCOME_MIN_RESOLVED
+    success_rate = round(met / resolved, 3) if resolved else None
+
+    success_adjustment = 0.0
+    risk_adjustment = 0.0
+    if active and success_rate is not None:
+        centered = success_rate - 0.5
+        success_adjustment = round(centered * 5.0, 2)
+        risk_adjustment = round((0.5 - success_rate) * 3.6, 2)
+
+    return {
+        "active": active,
+        "threshold": HISTORICAL_OUTCOME_MIN_RESOLVED,
+        "resolved_outcomes": resolved,
+        "met": met,
+        "missed": missed,
+        "success_rate": success_rate,
+        "success_adjustment": success_adjustment,
+        "risk_adjustment": risk_adjustment,
+    }
+
+
 def _somatic_penalty(*parts: str) -> float:
     conn = _get_db()
     if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='somatic_events'").fetchone():
@@ -444,6 +534,28 @@ def _score_alternative(
     if history["negative"]:
         reasons.append("histórico parecido conflictivo")
 
+    historical = _historical_outcome_signal(
+        alternative.get("name", ""),
+        area=area,
+        task_type=task_type,
+        goal_profile_id=(goal_profile.get("profile_id") or ""),
+    )
+    if historical["active"]:
+        success += historical["success_adjustment"]
+        risk += historical["risk_adjustment"]
+        if historical["success_adjustment"] > 0:
+            reasons.append(
+                f"histórico resuelto favorable ({historical['met']}/{historical['resolved_outcomes']} met)"
+            )
+        elif historical["success_adjustment"] < 0:
+            reasons.append(
+                f"histórico resuelto flojo ({historical['missed']}/{historical['resolved_outcomes']} missed)"
+            )
+    elif historical["resolved_outcomes"] > 0:
+        reasons.append(
+            f"histórico insuficiente aún ({historical['resolved_outcomes']}/{historical['threshold']} outcomes)"
+        )
+
     constraint_penalty, constraint_reasons = _constraint_penalty(lowered, constraints)
     if constraint_penalty:
         risk += constraint_penalty
@@ -470,6 +582,7 @@ def _score_alternative(
             "decisions": history["matched_decisions"],
             "outcomes": history["matched_outcomes"],
         },
+        "historical_signal": historical,
     }
 
 
@@ -512,9 +625,15 @@ def _log_cortex_activation(goal: str, task_type: str, result: dict):
 
 def _format_decision_summary(recommended: dict, alternatives_scored: list[dict]) -> str:
     notes = ", ".join(recommended.get("notes") or []) or "balance general más sólido"
+    historical = recommended.get("historical_signal") or {}
     second_gap = 0.0
     if len(alternatives_scored) > 1:
         second_gap = recommended["total_score"] - alternatives_scored[1]["total_score"]
+    if historical.get("active"):
+        notes = (
+            f"{notes}; histórico resuelto {historical.get('met', 0)}/"
+            f"{historical.get('resolved_outcomes', 0)} favorable en contexto comparable"
+        )
     if second_gap > 0.2:
         return f"Recomendada por margen claro ({second_gap:.2f}) y porque {notes}."
     return f"Recomendada por el mejor balance entre impacto, éxito, riesgo y huella somática; {notes}."
