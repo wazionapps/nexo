@@ -87,6 +87,12 @@ Versions `3.1.7` through `3.2.0` close the recent-memory gap:
 - when even that misses, NEXO now exposes raw transcript fallback tools for Claude Code and Codex session stores
 - NEXO can now inspect itself through a live system catalog derived from canonical sources instead of relying only on stale docs or operator memory
 
+Version `5.0.1` hardens the live 5.0 upgrade path:
+
+- managed Claude Code hooks are now cleaned up when an older release left obsolete core-managed entries behind
+- upgrades no longer preserve the stale `heartbeat-guard.sh` path that could create warning storms and fake "hung" symptoms after `nexo update`
+- the corrected path has been revalidated on a real install with `nexo clients sync`, Codex/Claude Code headless runtime access, email-monitor recovery, and a full `nexo update`
+
 Version `5.0.0` closes the loop between memory, decisions, outcomes, and reusable behavior:
 
 - goal profiles are now explicit and auditable instead of living as hidden heuristics
