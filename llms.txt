@@ -1,8 +1,8 @@
 # NEXO Brain
 
-> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v4.0.0).
+> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v5.0.0).
 
-NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It adds a local shared brain across supported clients, configurable terminal and automation backends, recovery-aware background jobs, startup preflight, runtime self-healing, multimodal memory refs, pre-compaction auto-flush, a public claim wiki, readable memory export, richer user-state adaptation, long-horizon overnight analysis, and 150+ MCP tools.
+NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. Version 5.0.0 closes more of the loop between goals, decisions, outcomes, reusable skills, and public proof, while keeping the local shared-brain model across supported clients, configurable terminal and automation backends, recovery-aware background jobs, startup preflight, runtime self-healing, multimodal memory refs, pre-compaction auto-flush, a public claim wiki, readable memory export, richer user-state adaptation, long-horizon overnight analysis, and 150+ MCP tools.
 
 ## Core Product Model
 
@@ -11,6 +11,13 @@ NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cogniti
 - Claude Code remains the recommended path because it has the deepest hook and headless automation integration.
 - Codex is supported as both terminal client and automation backend.
 - Claude Desktop can share the same brain through MCP.
+
+## Current Release Focus
+
+- Goal profiles and Decision Cortex v2 shape higher-stakes recommendations instead of leaving strategy selection to raw prompting.
+- Outcomes, impact scoring, and structured pattern capture connect action, result, and future prioritization more tightly.
+- Repeated winning patterns can seed or promote reusable skills, while poor evidence can demote or retire them.
+- Public proof now combines the LoCoMo memory result with a broader operator runtime pack so the website reflects more than one memory benchmark.
 
 ## Key Features
 

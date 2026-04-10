@@ -212,9 +212,15 @@
   </url>
   <url>
     <loc>https://nexo-brain.com/llms.txt</loc>
-    <lastmod>2026-04-08</lastmod>
-    <changefreq>monthly</changefreq>
+    <lastmod>2026-04-10</lastmod>
+    <changefreq>weekly</changefreq>
     <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://nexo-brain.com/.well-known/llms.txt</loc>
+    <lastmod>2026-04-10</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
   </url>
   <url>
     <loc>https://nexo-brain.com/compare/</loc>
