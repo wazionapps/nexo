@@ -7,6 +7,8 @@ heartbeat, task_close, and diary consolidation.
 
 import json
 import re
+import unicodedata
+
 from db import (
     create_drive_signal, reinforce_drive_signal, get_drive_signals,
     get_drive_signal, update_drive_signal_status, decay_drive_signals,
@@ -14,46 +16,224 @@ from db import (
 )
 
 
-# ── Heuristic detection keywords ─────────────────────────────────────
+# ── Semantic signal detection ────────────────────────────────────────
 
-_ANOMALY_PATTERNS = [
-    re.compile(r"\b(subió|bajó|cayó|subi[oó]|baj[oó]|dropped|spiked|jumped)\b.*\b\d+%", re.I),
-    re.compile(r"\b(inesperado|unexpected|anomal|raro|weird|strange)\b", re.I),
-    re.compile(r"\b(error rate|tasa de error|failure|fallo)\b.*\b(subi|increas|grew)\b", re.I),
-]
+# Primary path: concept-level semantic scoring with multilingual cue families.
+# Regex remains as explicit fallback only when the semantic scorer cannot
+# separate the classes with enough confidence.
 
-_PATTERN_INDICATORS = [
-    re.compile(r"\b(otra vez|again|de nuevo|siempre pasa|keeps happening|recurring)\b", re.I),
-    re.compile(r"\b(cada vez que|every time|whenever)\b", re.I),
-    re.compile(r"\b(mismo (problema|error|issue)|same (problem|error|issue))\b", re.I),
-]
+_SEMANTIC_THRESHOLD = 0.75
+_SEMANTIC_MARGIN = 0.15
 
-_GAP_INDICATORS = [
-    re.compile(r"\b(no sé cómo|don'?t know how|no entiendo|unclear how)\b", re.I),
-    re.compile(r"\b(falta documentación|missing docs|undocumented)\b", re.I),
-]
+_SIGNAL_CUES = {
+    "anomaly": {
+        "metric": (
+            "cpc", "ctr", "roas", "conversion", "conversiones", "revenue",
+            "ingresos", "traffic", "trafico", "latency", "latencia",
+            "error", "erro", "fehler", "failure", "fallo", "falla",
+            "incident", "incidente", "kpi", "metric", "metrica",
+        ),
+        "change": (
+            "subio*", "bajo*", "cayo*", "aumento*", "disminu*", "crecio*",
+            "drop*", "spik*", "jump*", "rose", "fell", "grew", "surg*",
+            "subiu*", "caiu*", "baixou*", "aumentou*", "stieg*", "fiel*",
+            "gesunk*", "anstieg*", "einbruch*", "regression*",
+        ),
+        "unexpected": (
+            "inesperad*", "unexpected*", "anom*", "raro*", "weird",
+            "strange", "estranh*", "seltsam*", "ungewohn*", "anomalia*",
+            "outlier*", "desviacion*", "abweich*",
+        ),
+        "degradation": (
+            "degrad*", "timeout*", "slow*", "lento*", "caida*", "degraded",
+            "down", "outage", "rot*", "broken", "rompio*", "broke",
+            "schlecht*", "falha*", "incidencia*",
+        ),
+    },
+    "pattern": {
+        "recurrence": (
+            "otra vez", "de nuevo", "again", "again and again", "recurr*",
+            "repe*", "keeps happ*", "siempre pasa", "vuelve a pasar",
+            "sempre", "sempre que", "de novo", "wieder", "immer wieder",
+            "wiederholt*", "stuck in a loop", "reincid*",
+        ),
+        "cadence": (
+            "cada vez que", "every time", "whenever", "cada semana",
+            "cada mes", "once more", "toda vez que", "jedes mal",
+            "wann immer", "all the time", "constantemente",
+        ),
+        "same_issue": (
+            "mismo problema", "mismo error", "same problem", "same issue",
+            "same error", "lo mismo", "same thing", "same blocker",
+            "mesmo problema", "gleiches problem", "gleicher fehler",
+        ),
+    },
+    "gap": {
+        "uncertainty": (
+            "no se como", "no entiendo", "no tengo claro", "unclear how",
+            "dont know how", "not sure how", "i do not know how",
+            "sem saber como", "nao sei como", "ich weiss nicht wie",
+            "ich weiß nicht wie", "unklar wie", "blocked by not knowing",
+        ),
+        "missing_knowledge": (
+            "falta documentacion", "missing docs", "missing documentation",
+            "undocumented", "not documented", "sin documentar", "sin guia",
+            "no hay runbook", "no hay playbook", "sem documentacao",
+            "fehlt dokumentation", "kein runbook", "unknown process",
+        ),
+        "blocked_execution": (
+            "bloqueado porque", "blocked because", "cannot proceed",
+            "no puedo seguir", "cant continue", "nao consigo avanzar",
+            "komme nicht weiter", "stuck because",
+        ),
+    },
+    "opportunity": {
+        "benchmark_gap": (
+            "media del sector", "industry average", "below peers",
+            "por debajo", "underperform*", "lagging", "low compared",
+            "abaixo do benchmark", "unter benchmark", "unter dem schnitt",
+        ),
+        "improvement": (
+            "automatiz*", "optimiz*", "mejor*", "improv*", "streamlin*",
+            "simplif*", "scale*", "accelerat*", "reduce manual",
+            "automat*", "melhor*", "verbesser*", "effizien*",
+        ),
+        "potential": (
+            "podriamos", "se podria", "could", "we could", "opportunity",
+            "worth exploring", "room to", "potencial", "oportunidade",
+            "chance to", "could unlock", "konnten", "man koennte",
+        ),
+    },
+}
 
-_OPPORTUNITY_INDICATORS = [
-    re.compile(r"\b(benchmark|media del sector|industry average)\b.*\b(bajo|low|por debajo|below)\b", re.I),
-    re.compile(r"\b(podríamos|could|se podría|we could|opportunity)\b.*\b(automatiz|improve|mejorar|optimiz)\b", re.I),
-]
+_SIGNAL_FAMILY_WEIGHTS = {
+    "anomaly": {"metric": 0.28, "change": 0.38, "unexpected": 0.30, "degradation": 0.28},
+    "pattern": {"recurrence": 0.36, "cadence": 0.34, "same_issue": 0.34},
+    "gap": {"uncertainty": 0.78, "missing_knowledge": 0.52, "blocked_execution": 0.36},
+    "opportunity": {"benchmark_gap": 0.78, "improvement": 0.38, "potential": 0.32},
+}
+
+_FALLBACK_PATTERNS = {
+    "anomaly": (
+        re.compile(r"\b(subió|bajó|cayó|dropped|spiked|jumped)\b.*\b\d+%", re.I),
+        re.compile(r"\b(inesperado|unexpected|anomal|raro|weird|strange)\b", re.I),
+    ),
+    "pattern": (
+        re.compile(r"\b(otra vez|again|de nuevo|siempre pasa|keeps happening|recurring)\b", re.I),
+        re.compile(r"\b(cada vez que|every time|whenever)\b", re.I),
+    ),
+    "gap": (
+        re.compile(r"\b(no sé cómo|don'?t know how|no entiendo|unclear how)\b", re.I),
+        re.compile(r"\b(falta documentación|missing docs|undocumented)\b", re.I),
+    ),
+    "opportunity": (
+        re.compile(r"\b(benchmark|media del sector|industry average)\b.*\b(bajo|low|por debajo|below)\b", re.I),
+        re.compile(r"\b(podríamos|could|se podría|we could|opportunity)\b.*\b(automatiz|improve|mejorar|optimiz)\b", re.I),
+    ),
+}
+
+
+def _normalize_text(text: str) -> str:
+    lowered = (text or "").lower().replace("ß", "ss").replace("'", "")
+    lowered = unicodedata.normalize("NFKD", lowered)
+    lowered = "".join(ch for ch in lowered if not unicodedata.combining(ch))
+    lowered = re.sub(r"[^a-z0-9%+\s]", " ", lowered)
+    return re.sub(r"\s+", " ", lowered).strip()
+
+
+def _tokenize(text: str) -> list[str]:
+    return [token for token in text.split() if token]
+
+
+def _matches_cue(cue: str, text_norm: str, tokens: list[str]) -> bool:
+    cue_norm = _normalize_text(cue)
+    if not cue_norm:
+        return False
+    if cue_norm.endswith("*"):
+        stem = cue_norm[:-1]
+        return bool(stem) and any(token.startswith(stem) for token in tokens)
+    if " " in cue_norm:
+        return cue_norm in text_norm
+    return cue_norm in tokens or any(token.startswith(cue_norm) for token in tokens if len(cue_norm) >= 5)
+
+
+def _has_numeric_signal(tokens: list[str]) -> bool:
+    for token in tokens:
+        raw = token.rstrip("%")
+        try:
+            float(raw)
+            return True
+        except ValueError:
+            continue
+    return False
+
+
+def _semantic_signal_scores(text: str) -> dict[str, float]:
+    text_norm = _normalize_text(text)
+    tokens = _tokenize(text_norm)
+    if not tokens:
+        return {}
+
+    numeric_signal = _has_numeric_signal(tokens)
+    scores = {signal_type: 0.0 for signal_type in _SIGNAL_CUES}
+    family_hits: dict[str, set[str]] = {signal_type: set() for signal_type in _SIGNAL_CUES}
+
+    for signal_type, families in _SIGNAL_CUES.items():
+        weights = _SIGNAL_FAMILY_WEIGHTS[signal_type]
+        for family_name, cues in families.items():
+            matches = [cue for cue in cues if _matches_cue(cue, text_norm, tokens)]
+            if not matches:
+                continue
+            family_hits[signal_type].add(family_name)
+            bonus = min(0.12, 0.04 * max(0, len(matches) - 1))
+            scores[signal_type] += weights[family_name] + bonus
+
+    anomaly_hits = family_hits["anomaly"]
+    if "metric" in anomaly_hits and "change" in anomaly_hits:
+        scores["anomaly"] += 0.22
+    if numeric_signal and ("change" in anomaly_hits or "metric" in anomaly_hits):
+        scores["anomaly"] += 0.14
+    if "unexpected" in anomaly_hits and ("change" in anomaly_hits or "degradation" in anomaly_hits):
+        scores["anomaly"] += 0.12
+    if "unexpected" in anomaly_hits and "metric" in anomaly_hits:
+        scores["anomaly"] += 0.10
+
+    pattern_hits = family_hits["pattern"]
+    if "recurrence" in pattern_hits and ("cadence" in pattern_hits or "same_issue" in pattern_hits):
+        scores["pattern"] += 0.18
+
+    gap_hits = family_hits["gap"]
+    if "uncertainty" in gap_hits and ("missing_knowledge" in gap_hits or "blocked_execution" in gap_hits):
+        scores["gap"] += 0.18
+
+    opportunity_hits = family_hits["opportunity"]
+    if "benchmark_gap" in opportunity_hits:
+        scores["opportunity"] += 0.16
+    if "improvement" in opportunity_hits and "potential" in opportunity_hits:
+        scores["opportunity"] += 0.18
+
+    return scores
+
+
+def _regex_fallback_classify(text: str) -> str | None:
+    for signal_type, patterns in _FALLBACK_PATTERNS.items():
+        if any(pattern.search(text) for pattern in patterns):
+            return signal_type
+    return None
 
 
 def _classify_signal(text: str) -> str | None:
     """Classify text into a signal type, or None if nothing interesting."""
-    for pattern in _ANOMALY_PATTERNS:
-        if pattern.search(text):
-            return "anomaly"
-    for pattern in _PATTERN_INDICATORS:
-        if pattern.search(text):
-            return "pattern"
-    for pattern in _GAP_INDICATORS:
-        if pattern.search(text):
-            return "gap"
-    for pattern in _OPPORTUNITY_INDICATORS:
-        if pattern.search(text):
-            return "opportunity"
-    return None
+    scores = _semantic_signal_scores(text)
+    if scores:
+        ordered = sorted(scores.items(), key=lambda item: item[1], reverse=True)
+        winner, winner_score = ordered[0]
+        runner_up = ordered[1][1] if len(ordered) > 1 else 0.0
+        if winner_score >= _SEMANTIC_THRESHOLD and (winner_score - runner_up) >= _SEMANTIC_MARGIN:
+            return winner
+        if winner_score >= 0.35:
+            return None
+    return _regex_fallback_classify(text)
 
 
 def _infer_area(text: str) -> str:

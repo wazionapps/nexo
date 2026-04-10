@@ -190,10 +190,24 @@ class TestDetection:
         )
         assert result is not None
 
+    def test_pattern_detected_in_portuguese(self):
+        result = detect_drive_signal(
+            "O mesmo problema volta a acontecer sempre que sincronizamos o catalogo",
+            source="heartbeat", source_id="test-sid",
+        )
+        assert result is not None
+
     def test_gap_detected(self):
         result = detect_drive_signal(
             "No sé cómo funciona el pricing de ICNEA para las agencias",
             source="task_close", source_id="task-123",
+        )
+        assert result is not None
+
+    def test_gap_detected_in_german(self):
+        result = detect_drive_signal(
+            "Ich weiss nicht wie dieser Checkout Flow dokumentiert ist y no puedo seguir",
+            source="task_close", source_id="task-123-de",
         )
         assert result is not None
 
@@ -204,10 +218,31 @@ class TestDetection:
         )
         assert result is not None
 
+    def test_opportunity_detected_in_english(self):
+        result = detect_drive_signal(
+            "We could automate invoice reconciliation because peers handle this much faster",
+            source="task_close", source_id="task-456-en",
+        )
+        assert result is not None
+
+    def test_anomaly_detected_in_english(self):
+        result = detect_drive_signal(
+            "Revenue dropped 18% after yesterday deploy and that looks unexpected",
+            source="heartbeat", source_id="test-sid-en",
+        )
+        assert result is not None
+
     def test_normal_text_ignored(self):
         result = detect_drive_signal(
             "Procesando los emails de hoy, todo normal",
             source="heartbeat", source_id="test-sid",
+        )
+        assert result is None
+
+    def test_recurrence_without_problem_is_ignored(self):
+        result = detect_drive_signal(
+            "Otra vez revisé el dashboard y todo sigue bien",
+            source="heartbeat", source_id="test-sid-neutral",
         )
         assert result is None
 

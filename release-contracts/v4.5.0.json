@@ -99,7 +99,7 @@
     {
       "id": "drive_signal_semantics",
       "title": "Drive Signal Semantics",
-      "status": "pending",
+      "status": "complete",
       "evidence_required": [
         "Drive signal detection no longer depends on hardcoded regex as the primary path",
         "Semantic classification is the authoritative detection path",
