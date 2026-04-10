@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXO vs OpenMemory — Local runtime vs MCP memory layer</title>
+    <meta name="description" content="Honest NEXO Brain vs OpenMemory comparison. OpenMemory is attractive as a local-first MCP memory layer; NEXO is stronger as a broader local cognitive runtime with workflows, discipline, outcomes, and operational tools.">
+    <meta name="keywords" content="NEXO vs OpenMemory, OpenMemory alternative, MCP memory layer, local-first memory, local cognitive runtime">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/compare/nexo-vs-openmemory/">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/compare/nexo-vs-openmemory/">
+    <meta property="og:title" content="NEXO vs OpenMemory — Local runtime vs MCP memory layer">
+    <meta property="og:description" content="OpenMemory is compelling when you want a simpler local-first memory layer with native MCP support. NEXO is stronger when you want the broader local runtime around that memory layer.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/og/og-compare.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO vs OpenMemory — Local runtime vs MCP memory layer">
+    <meta name="twitter:description" content="OpenMemory is compelling when you want a simpler local-first memory layer with native MCP support. NEXO is stronger when you want the broader local runtime around that memory layer.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-compare.png">
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+    <style>
+        .compare-chip { display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:999px;border:1px solid var(--dark-border);background:rgba(18,18,26,.8);font-size:13px;color:var(--text-muted); }
+        .compare-hero-meta { display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-top:18px; }
+        .compare-split { display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px;margin-top:28px; }
+        .compare-panel { background:var(--dark-card);border:1px solid var(--dark-border);border-radius:18px;padding:24px; }
+        .compare-panel h3 { margin-bottom:14px; }
+        .compare-panel ul,.faq-list,.arch-list { padding-left:20px; }
+        .compare-panel li,.faq-list li,.arch-list li { margin:10px 0;color:var(--text-muted); }
+        .related-links { display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:24px; }
+        .related-links a { display:block;padding:18px;border-radius:16px;border:1px solid var(--dark-border);background:rgba(18,18,26,.82);color:var(--text);text-decoration:none; }
+        .related-links a:hover { border-color:var(--purple-light);transform:translateY(-2px); }
+        .faq-item { padding:18px 0;border-bottom:1px solid var(--dark-border); }
+        .faq-item:last-child { border-bottom:none; }
+        .faq-item h3 { font-size:20px;margin-bottom:8px; }
+        .faq-item p { color:var(--text-muted); }
+    </style>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"NEXO vs OpenMemory — Local runtime vs MCP memory layer","description":"Honest NEXO Brain vs OpenMemory comparison. OpenMemory is attractive as a local-first MCP memory layer; NEXO is stronger as a broader local cognitive runtime with workflows, discipline, outcomes, and operational tools.","url":"https://nexo-brain.com/compare/nexo-vs-openmemory/","datePublished":"2026-04-10","dateModified":"2026-04-10","author":{"@type":"Organization","name":"WAzion","url":"https://www.wazion.com"},"publisher":{"@type":"Organization","name":"WAzion","url":"https://www.wazion.com"}}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://nexo-brain.com"},{"@type":"ListItem","position":2,"name":"Compare","item":"https://nexo-brain.com/compare/"},{"@type":"ListItem","position":3,"name":"NEXO vs OpenMemory","item":"https://nexo-brain.com/compare/nexo-vs-openmemory/"}]}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Is OpenMemory local-first?","acceptedAnswer":{"@type":"Answer","text":"Yes. OpenMemory explicitly positions itself as a local persistent memory store with native MCP support."}},{"@type":"Question","name":"When is NEXO the better OpenMemory alternative?","acceptedAnswer":{"@type":"Answer","text":"When you want the broader local runtime around memory: workflows, protocol discipline, shared brain across clients, outcomes, and operational tools."}},{"@type":"Question","name":"When should I choose OpenMemory instead of NEXO?","acceptedAnswer":{"@type":"Answer","text":"Choose OpenMemory if you mainly want a leaner local memory layer or MCP-friendly memory foundation rather than a fuller operator runtime."}}]}</script>
+</head>
+<body class="compare-page compare-detail-page">
+
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo"><img src="/assets/logo-64.png" alt="NEXO Brain" width="32" height="32">NEXO Brain</a>
+        <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <div class="nav-links">
+            <a href="/">Home</a><a href="/features/">Features</a><a href="/evolution/">Evolution</a><a href="/compare/">Compare</a><a href="/blog/">Blog</a><a href="/changelog/">Changelog</a><a href="/docs/">Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<section class="pt-nav page-hero">
+    <div class="container">
+        <div class="page-hero-grid">
+            <div class="page-hero-copy">
+                <div class="section-label"><a href="/compare/" style="color:inherit;text-decoration:none;">Comparisons</a></div>
+                <h1 class="section-title" style="font-size:clamp(34px,5vw,58px);">NEXO Brain vs <span class="gradient">OpenMemory</span></h1>
+                <p class="section-subtitle">OpenMemory is attractive when you want a leaner local-first memory layer with native MCP support. NEXO wins when you want the broader local runtime around that layer: workflows, protocol discipline, outcomes, and operational tools.</p>
+                <div class="compare-hero-meta" style="justify-content:flex-start;">
+                    <span class="compare-chip">Updated April 10, 2026</span>
+                    <span class="compare-chip">Local-first memory layer vs local cognitive runtime</span>
+                    <span class="compare-chip">Best query: OpenMemory alternative for daily AI work</span>
+                </div>
+                <div class="hero-actions">
+                    <a href="#snapshot" class="btn btn-primary">See decision snapshot</a>
+                    <a href="#compare-table" class="btn btn-secondary">Open capability table</a>
+                    <a href="/compare/" class="btn btn-secondary">More comparisons</a>
+                </div>
+                <div class="compare-snapshot-grid">
+                    <div class="compare-snapshot-card"><strong>Category</strong><span>OpenMemory is a local memory foundation. NEXO is the local working runtime around memory.</span></div>
+                    <div class="compare-snapshot-card"><strong>NEXO wins when</strong><span>You want shared brain, protocol discipline, workflows, CLI surfaces, and outcome-aware operations in one product.</span></div>
+                    <div class="compare-snapshot-card"><strong>OpenMemory wins when</strong><span>You mainly want a simpler local memory layer with native MCP support across tools.</span></div>
+                    <div class="compare-snapshot-card"><strong>Tradeoff</strong><span>OpenMemory is narrower and lighter. NEXO is heavier but much more complete for persistent daily AI work.</span></div>
+                </div>
+            </div>
+            <div class="page-visual">
+                <div class="compare-constellation">
+                    <div class="compare-constellation-ring ring-1"></div>
+                    <div class="compare-constellation-ring ring-2"></div>
+                    <div class="compare-constellation-link compare-link-a"></div>
+                    <div class="compare-constellation-link compare-link-b"></div>
+                    <div class="compare-constellation-link compare-link-c"></div>
+                    <div class="compare-node compare-node-primary"><strong>NEXO</strong><small>working runtime around memory</small></div>
+                    <div class="compare-node compare-node-top-right"><span>OpenMemory</span><small>local memory layer + MCP support</small></div>
+                    <div class="compare-node compare-node-bottom-left"><span>Choose by</span><small>memory foundation vs full operator runtime</small></div>
+                    <div class="compare-node compare-node-bottom-right"><span>Fast rule</span><small>NEXO if runtime breadth matters more than simplicity</small></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section id="snapshot">
+    <div class="container">
+        <div class="section-label">Quick answer</div>
+        <h2 class="section-title">OpenMemory is strong if memory is the product. NEXO is stronger if memory is only one layer of the working brain.</h2>
+        <div class="compare-panel" style="margin-top:24px;">
+            <p style="color:var(--text-muted);font-size:16px;">OpenMemory is attractive because it stays local-first and MCP-friendly from the start. That makes it easy to understand for buyers who mainly want a persistent memory layer. NEXO is better when the buyer actually wants the broader runtime around memory: one shared brain across clients, workflow durability, guardrails, CLI and doctor surfaces, and newer decision/outcome loops.</p>
+        </div>
+    </div>
+</section>
+
+<section id="compare-table">
+    <div class="container">
+        <div class="section-label">Side-by-side</div>
+        <h2 class="section-title">Capability comparison</h2>
+        <div style="overflow-x:auto;margin-top:28px;">
+            <table class="psychology-table">
+                <thead><tr><th>Capability</th><th>NEXO Brain</th><th>OpenMemory</th></tr></thead>
+                <tbody>
+                    <tr><td>Core positioning</td><td>Local cognitive runtime</td><td>Local persistent memory layer</td></tr>
+                    <tr><td>Deployment</td><td>Local-first runtime</td><td>Local-first memory engine</td></tr>
+                    <tr><td>Long-term memory</td><td>Built in</td><td>Built in</td></tr>
+                    <tr><td>MCP story</td><td>150+ MCP tools plus shared-brain runtime</td><td>Native MCP support for memory access</td></tr>
+                    <tr><td>Shared brain across clients</td><td>Yes</td><td>Memory can be shared, but not as a full operator runtime</td></tr>
+                    <tr><td>Durable workflows</td><td>Yes</td><td>No native workflow runtime</td></tr>
+                    <tr><td>Protocol discipline</td><td>Yes &mdash; runtime contract</td><td>No native operator protocol layer</td></tr>
+                    <tr><td>Operational tools</td><td>Yes &mdash; broader runtime tools</td><td>Memory-focused CLI and dashboard</td></tr>
+                    <tr><td>Best fit</td><td>Persistent daily AI work</td><td>Local memory foundation across tools</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+
+<section>
+    <div class="container">
+        <div class="section-label">Honest take</div>
+        <h2 class="section-title">The honest framing: OpenMemory is simpler to explain; NEXO is broader and more opinionated.</h2>
+        <div class="compare-split">
+            <div class="compare-panel">
+                <h3>NEXO advantages</h3>
+                <ul class="arch-list">
+                    <li>Better if you want memory plus workflow durability, protocol discipline, and operational tooling in one local runtime.</li>
+                    <li>Better if you want one shared brain across Claude Code, Codex, Claude Desktop, and automation surfaces.</li>
+                    <li>Better if you care about outcomes, prioritization, and richer runtime verification instead of memory alone.</li>
+                </ul>
+            </div>
+            <div class="compare-panel">
+                <h3>OpenMemory advantages</h3>
+                <ul class="arch-list">
+                    <li>Easier to position if the main requirement is a local-first memory layer with MCP support.</li>
+                    <li>Cleaner mental model if you do not need a broader runtime contract around workflows and operator discipline.</li>
+                    <li>A good fit when your main task is to expose memory across tools rather than manage a persistent operator workflow.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section>
+    <div class="container">
+        <div class="section-label">Decision rule</div>
+        <h2 class="section-title">Pick NEXO if the buyer wants the whole loop, not only memory recall</h2>
+        <div class="compare-split">
+            <div class="compare-panel">
+                <h3>Choose NEXO if&hellip;</h3>
+                <ul class="arch-list">
+                    <li>You want memory, workflows, doctor checks, CLI operations, and shared-brain continuity bundled together.</li>
+                    <li>You want a broader operator runtime instead of a narrower memory service.</li>
+                    <li>You care about high-stakes decision handling and outcome-aware behavior inside the same product.</li>
+                </ul>
+            </div>
+            <div class="compare-panel">
+                <h3>Choose OpenMemory if&hellip;</h3>
+                <ul class="arch-list">
+                    <li>You mainly want a local persistent memory layer with native MCP support.</li>
+                    <li>You prefer a lighter product surface and do not need a full runtime contract.</li>
+                    <li>You are comfortable building more of the workflow story around the memory layer yourself.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section>
+    <div class="container">
+        <div class="section-label">FAQ</div>
+        <h2 class="section-title">Questions that matter before you choose</h2>
+        <div class="compare-panel" style="margin-top:24px;">
+            <div class="faq-item"><h3>Is OpenMemory local-first?</h3><p>Yes. OpenMemory explicitly positions itself as a local persistent memory store with native MCP support.</p></div>
+            <div class="faq-item"><h3>When is NEXO the better OpenMemory alternative?</h3><p>When you want the broader local runtime around memory: workflows, protocol discipline, shared brain across clients, outcomes, and operational tools.</p></div>
+            <div class="faq-item"><h3>When should I choose OpenMemory instead of NEXO?</h3><p>Choose OpenMemory if you mainly want a leaner local memory layer or MCP-friendly memory foundation rather than a fuller operator runtime.</p></div>
+        </div>
+    </div>
+</section>
+
+<section>
+    <div class="container">
+        <div class="section-label">Related pages</div>
+        <h2 class="section-title">Keep comparing</h2>
+        <div class="related-links">
+            <a href="/compare/nexo-vs-mem0/"><strong>NEXO vs Mem0</strong><br><span style="color:var(--text-muted);font-size:14px;">Memory layer vs working runtime</span></a>
+            <a href="/compare/nexo-vs-langmem/"><strong>NEXO vs LangMem</strong><br><span style="color:var(--text-muted);font-size:14px;">SDK vs assembled runtime</span></a>
+            <a href="/compare/nexo-vs-cognee/"><strong>NEXO vs Cognee</strong><br><span style="color:var(--text-muted);font-size:14px;">Toolkit vs operator runtime</span></a>
+            <a href="/compare/nexo-vs-basic-memory/"><strong>NEXO vs Basic Memory</strong><br><span style="color:var(--text-muted);font-size:14px;">Transparent files vs self-managing runtime</span></a>
+        </div>
+    </div>
+</section>
+
+<section class="cta-section">
+    <div class="container">
+        <h2 class="section-title">If you want more than recall, NEXO is the stronger next step</h2>
+        <p class="section-subtitle" style="margin:16px auto 48px;">OpenMemory deserves respect for the local-first memory layer lane. If your real need is the persistent operator runtime around that layer, NEXO is the more complete choice.</p>
+        <div class="hero-actions">
+            <a href="https://github.com/wazionapps/nexo" class="btn btn-primary">Star on GitHub</a>
+            <a href="https://www.npmjs.com/package/nexo-brain" class="btn btn-secondary">View on npm</a>
+            <a href="/compare/" class="btn btn-secondary">More comparisons</a>
+        </div>
+    </div>
+</section>
+
+<footer>
+    <div class="container">
+        <div class="footer-content">
+            <div class="footer-left">Created by <strong>Francisco Cerd&agrave; Puigserver</strong> &amp; <strong>NEXO</strong> (Claude Opus) &bull; Built by <a href="https://www.wazion.com">WAzion</a> &bull; AGPL-3.0 License &bull; &copy; 2026</div>
+            <div class="footer-links"><a href="https://github.com/wazionapps/nexo">GitHub</a><a href="https://x.com/NEXOBRAIN">X / Twitter</a><a href="https://github.com/sponsors/wazionapps">Sponsor</a><a href="/docs/">Docs</a><a href="/compare/">Compare</a><a href="/blog/">Blog</a><a href="https://www.npmjs.com/package/nexo-brain">npm</a><a href="https://github.com/wazionapps/nexo/releases">Releases</a></div>
+            <div style="text-align:center;margin-top:12px;color:#6b7280;font-size:12px;">Last updated: April 10, 2026</div>
+        </div>
+    </div>
+</footer>
+
+<script>
+const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+        if (entry.isIntersecting) {
+            entry.target.style.opacity = '1';
+            entry.target.style.transform = 'translateY(0)';
+        }
+    });
+}, { threshold: 0.1 });
+document.querySelectorAll('.cognitive-card').forEach(el => {
+    el.style.opacity = '0';
+    el.style.transform = 'translateY(20px)';
+    el.style.transition = 'all 0.5s ease';
+    observer.observe(el);
+});
+</script>
+
+<div id="cookie-consent" style="display:none;position:fixed;bottom:0;left:0;right:0;background:rgba(10,10,15,0.95);border-top:1px solid #1E1E2E;padding:12px 24px;z-index:200;font-size:13px;color:#94A3B8;text-align:center;">
+    This site uses analytics cookies. <a href="https://www.wazion.com/en/privacy" style="color:#A78BFA;">Privacy Policy</a>
+    <button onclick="document.getElementById('cookie-consent').style.display='none';localStorage.setItem('cc','1')" style="margin-left:16px;background:#7C3AED;color:#fff;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Accept</button>
+    <button onclick="document.getElementById('cookie-consent').style.display='none';localStorage.setItem('cc','0');window['ga-disable-G-1LNEMCJMS7']=true" style="margin-left:8px;background:transparent;color:#94A3B8;border:1px solid #333;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Decline</button>
+</div>
+<script>
+if(!localStorage.getItem('cc')){document.getElementById('cookie-consent').style.display='block';}
+else if(localStorage.getItem('cc')==='0'){window['ga-disable-G-1LNEMCJMS7']=true;}
+</script>
+<script>
+(function() {
+    var navLinks = document.querySelector('.nav-links');
+    var navToggle = document.querySelector('.nav-toggle');
+    navLinks.querySelectorAll('a').forEach(function(link) {
+        link.addEventListener('click', function() { navLinks.classList.remove('open'); });
+    });
+    document.addEventListener('click', function(e) {
+        if (navLinks.classList.contains('open') && !navLinks.contains(e.target) && !navToggle.contains(e.target)) {
+            navLinks.classList.remove('open');
+        }
+    });
+})();
+</script>
+</body>
+</html>

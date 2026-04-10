@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXO vs LangMem — Cognitive runtime vs memory SDK</title>
+    <meta name="description" content="Honest NEXO Brain vs LangMem comparison. LangMem is strong as a memory SDK inside LangChain and LangGraph stacks; NEXO is stronger when you want an assembled local cognitive runtime instead of a library.">
+    <meta name="keywords" content="NEXO vs LangMem, LangMem alternative, LangChain memory SDK, LangGraph memory, local cognitive runtime">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/compare/nexo-vs-langmem/">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/compare/nexo-vs-langmem/">
+    <meta property="og:title" content="NEXO vs LangMem — Cognitive runtime vs memory SDK">
+    <meta property="og:description" content="LangMem is strong as a memory SDK inside LangChain and LangGraph stacks. NEXO is stronger when you want an assembled local runtime instead of a library surface.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/og/og-compare.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO vs LangMem — Cognitive runtime vs memory SDK">
+    <meta name="twitter:description" content="LangMem is strong as a memory SDK inside LangChain and LangGraph stacks. NEXO is stronger when you want an assembled local runtime instead of a library surface.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-compare.png">
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+    <style>
+        .compare-chip { display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:999px;border:1px solid var(--dark-border);background:rgba(18,18,26,.8);font-size:13px;color:var(--text-muted); }
+        .compare-hero-meta { display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-top:18px; }
+        .compare-split { display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px;margin-top:28px; }
+        .compare-panel { background:var(--dark-card);border:1px solid var(--dark-border);border-radius:18px;padding:24px; }
+        .compare-panel h3 { margin-bottom:14px; }
+        .compare-panel ul,.faq-list,.arch-list { padding-left:20px; }
+        .compare-panel li,.faq-list li,.arch-list li { margin:10px 0;color:var(--text-muted); }
+        .related-links { display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:24px; }
+        .related-links a { display:block;padding:18px;border-radius:16px;border:1px solid var(--dark-border);background:rgba(18,18,26,.82);color:var(--text);text-decoration:none; }
+        .related-links a:hover { border-color:var(--purple-light);transform:translateY(-2px); }
+        .faq-item { padding:18px 0;border-bottom:1px solid var(--dark-border); }
+        .faq-item:last-child { border-bottom:none; }
+        .faq-item h3 { font-size:20px;margin-bottom:8px; }
+        .faq-item p { color:var(--text-muted); }
+    </style>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"NEXO vs LangMem — Cognitive runtime vs memory SDK","description":"Honest NEXO Brain vs LangMem comparison. LangMem is strong as a memory SDK inside LangChain and LangGraph stacks; NEXO is stronger when you want an assembled local cognitive runtime instead of a library.","url":"https://nexo-brain.com/compare/nexo-vs-langmem/","datePublished":"2026-04-10","dateModified":"2026-04-10","author":{"@type":"Organization","name":"WAzion","url":"https://www.wazion.com"},"publisher":{"@type":"Organization","name":"WAzion","url":"https://www.wazion.com"}}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://nexo-brain.com"},{"@type":"ListItem","position":2,"name":"Compare","item":"https://nexo-brain.com/compare/"},{"@type":"ListItem","position":3,"name":"NEXO vs LangMem","item":"https://nexo-brain.com/compare/nexo-vs-langmem/"}]}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Is LangMem a full runtime?", "acceptedAnswer":{"@type":"Answer","text":"No. LangMem is better understood as a memory SDK and adaptive-memory toolkit inside LangChain or LangGraph stacks, not as a full local runtime."}},{"@type":"Question","name":"When is NEXO the better LangMem alternative?","acceptedAnswer":{"@type":"Answer","text":"When you want the assembled runtime itself: shared brain, CLI and doctor surfaces, workflow durability, operator discipline, and outcomes already wired together."}},{"@type":"Question","name":"When should I choose LangMem instead of NEXO?","acceptedAnswer":{"@type":"Answer","text":"Choose LangMem if you are already building in the LangChain ecosystem and mainly need memory tools or prompt optimization inside your own application code."}}]}</script>
+</head>
+<body class="compare-page compare-detail-page">
+<nav><div class="container"><a href="/" class="nav-logo"><img src="/assets/logo-64.png" alt="NEXO Brain" width="32" height="32">NEXO Brain</a><button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button><div class="nav-links"><a href="/">Home</a><a href="/features/">Features</a><a href="/evolution/">Evolution</a><a href="/compare/">Compare</a><a href="/blog/">Blog</a><a href="/changelog/">Changelog</a><a href="/docs/">Docs</a><a href="https://github.com/wazionapps/nexo" class="nav-cta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>GitHub</a></div></div></nav>
+
+<section class="pt-nav page-hero">
+    <div class="container">
+        <div class="page-hero-grid">
+            <div class="page-hero-copy">
+                <div class="section-label"><a href="/compare/" style="color:inherit;text-decoration:none;">Comparisons</a></div>
+                <h1 class="section-title" style="font-size:clamp(34px,5vw,58px);">NEXO Brain vs <span class="gradient">LangMem</span></h1>
+                <p class="section-subtitle">LangMem is strong if your center of gravity is the LangChain ecosystem and you want memory tools inside your own application code. NEXO wins when you want the assembled local runtime itself, not a library surface.</p>
+                <div class="compare-hero-meta" style="justify-content:flex-start;">
+                    <span class="compare-chip">Updated April 10, 2026</span>
+                    <span class="compare-chip">Memory SDK vs local cognitive runtime</span>
+                    <span class="compare-chip">Best query: LangMem alternative for local AI operations</span>
+                </div>
+                <div class="hero-actions">
+                    <a href="#snapshot" class="btn btn-primary">See decision snapshot</a>
+                    <a href="#compare-table" class="btn btn-secondary">Open capability table</a>
+                    <a href="/compare/" class="btn btn-secondary">More comparisons</a>
+                </div>
+                <div class="compare-snapshot-grid">
+                    <div class="compare-snapshot-card"><strong>Category</strong><span>LangMem is a toolkit. NEXO is the productized runtime around the toolkit layer.</span></div>
+                    <div class="compare-snapshot-card"><strong>NEXO wins when</strong><span>You want shared brain, local runtime operations, workflows, doctor checks, and decision/outcome surfaces already assembled.</span></div>
+                    <div class="compare-snapshot-card"><strong>LangMem wins when</strong><span>You are already building inside LangChain or LangGraph and mainly need memory primitives or prompt optimization.</span></div>
+                    <div class="compare-snapshot-card"><strong>Tradeoff</strong><span>LangMem is cleaner for developers embedding memory into their own app. NEXO is more opinionated but much more complete.</span></div>
+                </div>
+            </div>
+            <div class="page-visual">
+                <div class="compare-constellation">
+                    <div class="compare-constellation-ring ring-1"></div><div class="compare-constellation-ring ring-2"></div><div class="compare-constellation-link compare-link-a"></div><div class="compare-constellation-link compare-link-b"></div><div class="compare-constellation-link compare-link-c"></div>
+                    <div class="compare-node compare-node-primary"><strong>NEXO</strong><small>assembled local runtime</small></div>
+                    <div class="compare-node compare-node-top-right"><span>LangMem</span><small>memory tools inside app code</small></div>
+                    <div class="compare-node compare-node-bottom-left"><span>Choose by</span><small>product runtime vs SDK building block</small></div>
+                    <div class="compare-node compare-node-bottom-right"><span>Fast rule</span><small>NEXO if you do not want to assemble the stack yourself</small></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section id="snapshot"><div class="container"><div class="section-label">Quick answer</div><h2 class="section-title">LangMem is great inside a LangChain stack. NEXO is better when you want the full local runtime already built.</h2><div class="compare-panel" style="margin-top:24px;"><p style="color:var(--text-muted);font-size:16px;">LangMem is attractive because it gives developers memory tools and adaptive-memory patterns where they already build agents. NEXO is better when the buyer wants the day-to-day operator product instead: one local brain, CLI and doctor surfaces, workflow durability, and a broader runtime contract with guardrails and outcomes.</p></div></div></section>
+
+<section id="compare-table"><div class="container"><div class="section-label">Side-by-side</div><h2 class="section-title">Capability comparison</h2><div style="overflow-x:auto;margin-top:28px;"><table class="psychology-table"><thead><tr><th>Capability</th><th>NEXO Brain</th><th>LangMem</th></tr></thead><tbody>
+<tr><td>Core positioning</td><td>Local cognitive runtime</td><td>Memory SDK / toolkit</td></tr>
+<tr><td>Default deployment</td><td>Local-first runtime</td><td>Inside LangChain or LangGraph application code</td></tr>
+<tr><td>Long-term memory</td><td>Built in</td><td>Tooling and stores for app-level memory</td></tr>
+<tr><td>Procedural or adaptive memory</td><td>Yes &mdash; learnings, skills, evolution, outcomes</td><td>Yes &mdash; memory tools and prompt optimization</td></tr>
+<tr><td>Shared brain across interactive clients</td><td>Yes</td><td>Not the core product promise</td></tr>
+<tr><td>Durable workflows</td><td>Yes</td><td>App-dependent</td></tr>
+<tr><td>Protocol discipline</td><td>Yes &mdash; runtime contract</td><td>No native operator protocol layer</td></tr>
+<tr><td>Operational tools</td><td>Yes &mdash; 150+ MCP tools</td><td>Library surface, not an assembled operator runtime</td></tr>
+<tr><td>Best fit</td><td>Persistent daily AI work</td><td>Memory inside a LangChain or LangGraph app</td></tr>
+</tbody></table></div></div></section>
+
+<section><div class="container"><div class="section-label">Honest take</div><h2 class="section-title">The honest framing: LangMem is a great substrate; NEXO is the product built around a broader operator loop.</h2><div class="compare-split"><div class="compare-panel"><h3>NEXO advantages</h3><ul class="arch-list"><li>Better if you want an assembled product for daily work instead of assembling your own runtime around library primitives.</li><li>Better if you want cross-client continuity, workflow durability, CLI operations, doctor checks, and protocol discipline in one place.</li><li>Better if your buyer is an advanced operator or small team, not only an app developer embedding memory.</li></ul></div><div class="compare-panel"><h3>LangMem advantages</h3><ul class="arch-list"><li>Excellent if you already live inside the LangChain ecosystem and want memory tooling close to your own code.</li><li>Cleaner fit if you only need memory tools or prompt optimization inside a custom app.</li><li>Less opinionated if you explicitly do not want a broader runtime contract around the agent.</li></ul></div></div></div></section>
+
+<section><div class="container"><div class="section-label">Decision rule</div><h2 class="section-title">Choose NEXO if you want the product surface, not only the SDK surface</h2><div class="compare-split"><div class="compare-panel"><h3>Choose NEXO if&hellip;</h3><ul class="arch-list"><li>You want the local runtime itself: shared brain, workflows, outcomes, doctor, and operational tooling already wired.</li><li>You want memory to compound through daily use without building a broader runtime around it yourself.</li><li>You want one product that spans interactive clients and automation surfaces.</li></ul></div><div class="compare-panel"><h3>Choose LangMem if&hellip;</h3><ul class="arch-list"><li>You are already building in LangChain or LangGraph and want memory tools in that ecosystem.</li><li>You mainly need a library or SDK, not a local operator runtime.</li><li>You prefer to assemble the broader workflow and operational story yourself.</li></ul></div></div></div></section>
+
+<section><div class="container"><div class="section-label">FAQ</div><h2 class="section-title">Questions that matter before you choose</h2><div class="compare-panel" style="margin-top:24px;"><div class="faq-item"><h3>Is LangMem a full runtime?</h3><p>No. LangMem is better understood as a memory SDK and adaptive-memory toolkit inside LangChain or LangGraph stacks, not as a full local runtime.</p></div><div class="faq-item"><h3>When is NEXO the better LangMem alternative?</h3><p>When you want the assembled runtime itself: shared brain, CLI and doctor surfaces, workflow durability, operator discipline, and outcomes already wired together.</p></div><div class="faq-item"><h3>When should I choose LangMem instead of NEXO?</h3><p>Choose LangMem if you are already building in the LangChain ecosystem and mainly need memory tools or prompt optimization inside your own application code.</p></div></div></div></section>
+
+<section><div class="container"><div class="section-label">Related pages</div><h2 class="section-title">Keep comparing</h2><div class="related-links"><a href="/compare/nexo-vs-langgraph/"><strong>NEXO vs LangGraph</strong><br><span style="color:var(--text-muted);font-size:14px;">Framework vs runtime</span></a><a href="/compare/nexo-vs-openmemory/"><strong>NEXO vs OpenMemory</strong><br><span style="color:var(--text-muted);font-size:14px;">Memory layer vs runtime</span></a><a href="/compare/nexo-vs-cognee/"><strong>NEXO vs Cognee</strong><br><span style="color:var(--text-muted);font-size:14px;">Toolkit vs operator runtime</span></a><a href="/compare/nexo-vs-mem0/"><strong>NEXO vs Mem0</strong><br><span style="color:var(--text-muted);font-size:14px;">Memory platform vs runtime</span></a></div></div></section>
+
+<section class="cta-section"><div class="container"><h2 class="section-title">If you want the local runtime already assembled, NEXO is the stronger next step</h2><p class="section-subtitle" style="margin:16px auto 48px;">LangMem deserves respect as a toolkit. If your buyer actually wants the daily operator product around memory, NEXO is the more complete choice.</p><div class="hero-actions"><a href="https://github.com/wazionapps/nexo" class="btn btn-primary">Star on GitHub</a><a href="https://www.npmjs.com/package/nexo-brain" class="btn btn-secondary">View on npm</a><a href="/compare/" class="btn btn-secondary">More comparisons</a></div></div></section>
+
+<footer><div class="container"><div class="footer-content"><div class="footer-left">Created by <strong>Francisco Cerd&agrave; Puigserver</strong> &amp; <strong>NEXO</strong> (Claude Opus) &bull; Built by <a href="https://www.wazion.com">WAzion</a> &bull; AGPL-3.0 License &bull; &copy; 2026</div><div class="footer-links"><a href="https://github.com/wazionapps/nexo">GitHub</a><a href="https://x.com/NEXOBRAIN">X / Twitter</a><a href="https://github.com/sponsors/wazionapps">Sponsor</a><a href="/docs/">Docs</a><a href="/compare/">Compare</a><a href="/blog/">Blog</a><a href="https://www.npmjs.com/package/nexo-brain">npm</a><a href="https://github.com/wazionapps/nexo/releases">Releases</a></div><div style="text-align:center;margin-top:12px;color:#6b7280;font-size:12px;">Last updated: April 10, 2026</div></div></div></footer>
+<script>const observer=new IntersectionObserver((entries)=>{entries.forEach(entry=>{if(entry.isIntersecting){entry.target.style.opacity='1';entry.target.style.transform='translateY(0)';}})},{threshold:0.1});document.querySelectorAll('.cognitive-card').forEach(el=>{el.style.opacity='0';el.style.transform='translateY(20px)';el.style.transition='all 0.5s ease';observer.observe(el);});</script>
+<div id="cookie-consent" style="display:none;position:fixed;bottom:0;left:0;right:0;background:rgba(10,10,15,0.95);border-top:1px solid #1E1E2E;padding:12px 24px;z-index:200;font-size:13px;color:#94A3B8;text-align:center;">This site uses analytics cookies. <a href="https://www.wazion.com/en/privacy" style="color:#A78BFA;">Privacy Policy</a><button onclick="document.getElementById('cookie-consent').style.display='none';localStorage.setItem('cc','1')" style="margin-left:16px;background:#7C3AED;color:#fff;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Accept</button><button onclick="document.getElementById('cookie-consent').style.display='none';localStorage.setItem('cc','0');window['ga-disable-G-1LNEMCJMS7']=true" style="margin-left:8px;background:transparent;color:#94A3B8;border:1px solid #333;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Decline</button></div>
+<script>if(!localStorage.getItem('cc')){document.getElementById('cookie-consent').style.display='block';}else if(localStorage.getItem('cc')==='0'){window['ga-disable-G-1LNEMCJMS7']=true;}(function(){var navLinks=document.querySelector('.nav-links');var navToggle=document.querySelector('.nav-toggle');navLinks.querySelectorAll('a').forEach(function(link){link.addEventListener('click',function(){navLinks.classList.remove('open');});});document.addEventListener('click',function(e){if(navLinks.classList.contains('open')&&!navLinks.contains(e.target)&&!navToggle.contains(e.target)){navLinks.classList.remove('open');}});})();</script>
+</body>
+</html>
