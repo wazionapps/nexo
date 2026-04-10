@@ -162,6 +162,13 @@ def get_featured_skill_summaries(limit: int = 5) -> list[dict]:
                 "source_kind": skill.get("source_kind", "personal"),
                 "trust_score": skill.get("trust_score", 0),
                 "trigger_patterns": triggers[:3],
+                "outcome_review": {
+                    "has_evidence": bool((skill.get("_outcome_review") or {}).get("has_evidence")),
+                    "recommended_action": (skill.get("_outcome_review") or {}).get("recommended_action", "observe"),
+                    "success_rate": (skill.get("_outcome_review") or {}).get("success_rate"),
+                    "resolved_outcomes": (skill.get("_outcome_review") or {}).get("resolved_outcomes", 0),
+                    "ranking_weight": float(skill.get("_outcome_rank", 0.0)),
+                },
             }
         )
     return featured

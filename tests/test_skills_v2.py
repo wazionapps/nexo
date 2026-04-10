@@ -432,6 +432,39 @@ class TestSkillsRuntime:
         assert matches[0]["_outcome_rank"] > 0
         assert matches[1]["_outcome_review"]["recommended_action"] == "retire"
 
+    def test_outcome_promoted_skill_improves_featured_discovery(self, skills_env):
+        db, skills_runtime, _, _ = _reload_skill_stack()
+        db.init_db()
+
+        db.create_skill(
+            skill_id="SK-HIGH-TRUST-GENERIC",
+            name="High Trust Generic",
+            description="Strong generic skill with no outcome evidence.",
+            level="published",
+            content="# High Trust Generic\n",
+            trigger_patterns=["generic"],
+            trust_score=95,
+        )
+        _seed_outcome_pattern(db, selected_choice="staged_validation", count=6)
+        pattern_key = next(
+            item["pattern_key"]
+            for item in skills_runtime.list_evolution_candidates()["outcome_patterns"]
+            if item["selected_choice"] == "staged_validation"
+        )
+        seeded = skills_runtime.materialize_outcome_pattern_skill(pattern_key)
+        skill_id = seeded["skill"]["id"]
+
+        before = skills_runtime.get_featured_skill_summaries(limit=5)
+        promoted = skills_runtime.review_skill_outcomes(skill_id, auto_apply=True)
+        after = skills_runtime.get_featured_skill_summaries(limit=5)
+
+        assert all(item["id"] != skill_id for item in before)
+        assert promoted["auto_applied"] is True
+        assert promoted["level"] == "published"
+        assert after[0]["id"] == skill_id
+        assert after[0]["outcome_review"]["has_evidence"] is True
+        assert after[0]["outcome_review"]["ranking_weight"] > 0
+
 
 class TestSkillsCli:
     def test_cli_sync_list_get_and_featured(self, skills_env):

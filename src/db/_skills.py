@@ -73,6 +73,7 @@ OUTCOME_SKILL_DEPRIORITIZE_MAX_SUCCESS_RATE = 0.5
 
 SKILL_DEFINITION_FILENAME = "skill.json"
 SOURCE_PRIORITY = {"community": 1, "core": 2, "personal": 3}
+LEVEL_PRIORITY = {"trace": 0, "draft": 1, "published": 2, "stable": 3, "archived": 4}
 
 
 # ── Helpers ────────────────────────────────────────────────────────
@@ -238,11 +239,13 @@ def _skill_outcome_ranking_weight(*, resolved: int, success_rate: float) -> floa
 
 
 def _preserve_level(existing_level: str, requested_level: str) -> str:
-    if existing_level == "archived":
+    clean_existing = _normalize_level(existing_level)
+    clean_requested = _normalize_level(requested_level)
+    if clean_existing == "archived":
         return "archived"
-    if existing_level == "stable" and requested_level != "archived":
-        return "stable"
-    return requested_level
+    if LEVEL_PRIORITY.get(clean_existing, 0) > LEVEL_PRIORITY.get(clean_requested, 0):
+        return clean_existing
+    return clean_requested
 
 
 def _resolve_approval(mode: str, execution_level: str, approval_required=0, approved_at: str = "", approved_by: str = "") -> tuple[int, str, str]:
@@ -960,9 +963,26 @@ def get_featured_skills(limit: int = 5) -> list[dict]:
                     trust_score DESC,
                     COALESCE(last_used_at, created_at) DESC
            LIMIT ?""",
-        (limit,),
+        (max(5, int(limit) * 4),),
     ).fetchall()
-    return [dict(row) for row in rows]
+    featured = []
+    for row in rows:
+        skill = dict(row)
+        review = get_skill_outcome_evidence(skill["id"])
+        skill["_outcome_review"] = review
+        skill["_outcome_rank"] = float(review.get("ranking_weight") or 0.0)
+        featured.append(skill)
+
+    featured.sort(
+        key=lambda skill: (
+            0 if skill.get("source_kind") == "personal" else 1 if skill.get("source_kind") == "core" else 2,
+            0 if skill.get("level") == "stable" else 1,
+            -float(skill.get("_outcome_rank", 0.0)),
+            -int(skill.get("trust_score", 0)),
+            skill.get("name", ""),
+        )
+    )
+    return featured[: max(1, int(limit))]
 
 
 def get_skill_outcome_evidence(skill_id: str, *, pattern_limit: int = 200) -> dict:
