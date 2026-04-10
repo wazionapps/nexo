@@ -1,0 +1,132 @@
+{
+  "release_line": "v5.0",
+  "version": "5.0.2",
+  "generated_at": "2026-04-10T18:56:29.930589+00:00",
+  "ok": true,
+  "groups": [
+    {
+      "id": "goal_engine",
+      "description": "goal profiles exist, resolve coherently, and show up in cortex traces",
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_goal_engine.py"
+      ],
+      "targets": [
+        "tests/test_goal_engine.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 2.95,
+      "stdout": "...                                                                      [100%]Running teardown with pytest sessionfinish...\n\n3 passed in 0.22s\n",
+      "stderr": ""
+    },
+    {
+      "id": "decision_cortex_v2",
+      "description": "decision cortex ranks alternatives with outcomes, goals, and structured signals",
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_cortex_decisions.py",
+        "tests/test_protocol.py"
+      ],
+      "targets": [
+        "tests/test_cortex_decisions.py",
+        "tests/test_protocol.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 80.92,
+      "stdout": ".............................                                            [100%]Running teardown with pytest sessionfinish...\n\n29 passed in 79.05s (0:01:19)\n",
+      "stderr": ""
+    },
+    {
+      "id": "structured_learning",
+      "description": "repeated outcome patterns become learnings and can influence later decisions",
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_outcomes.py",
+        "tests/test_cortex_decisions.py"
+      ],
+      "targets": [
+        "tests/test_outcomes.py",
+        "tests/test_cortex_decisions.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 4.03,
+      "stdout": "................                                                         [100%]Running teardown with pytest sessionfinish...\n\n16 passed in 1.08s\n",
+      "stderr": ""
+    },
+    {
+      "id": "skill_evolution",
+      "description": "skills can be seeded, promoted, ranked, or retired from outcome-backed evidence",
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_skills_v2.py"
+      ],
+      "targets": [
+        "tests/test_skills_v2.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 3.42,
+      "stdout": "..............                                                           [100%]Running teardown with pytest sessionfinish...\n\n14 passed in 1.42s\n",
+      "stderr": ""
+    },
+    {
+      "id": "benchmark_pack",
+      "description": "runtime benchmark pack and public scorecard builders stay reproducible",
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_build_runtime_benchmark_pack.py",
+        "tests/test_build_public_scorecard.py"
+      ],
+      "targets": [
+        "tests/test_build_runtime_benchmark_pack.py",
+        "tests/test_build_public_scorecard.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 2.37,
+      "stdout": "....                                                                     [100%]Running teardown with pytest sessionfinish...\n\n4 passed in 0.20s\n",
+      "stderr": ""
+    },
+    {
+      "id": "runtime_audit",
+      "description": "protocol debt maintenance, doctor scoring, and update/cron integrity remain healthy",
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_protocol.py",
+        "tests/test_doctor.py",
+        "tests/test_cron_sync.py"
+      ],
+      "targets": [
+        "tests/test_protocol.py",
+        "tests/test_doctor.py",
+        "tests/test_cron_sync.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 96.7,
+      "stdout": "........................................................................ [ 65%]\n......................................                                   [100%]Running teardown with pytest sessionfinish...\n\n110 passed in 94.76s (0:01:34)\n",
+      "stderr": ""
+    }
+  ]
+}

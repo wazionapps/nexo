@@ -1,5 +1,15 @@
 # Changelog
 
+## [5.0.2] - 2026-04-10
+
+### Doctor Schema Drift Hotfix
+- Fixed the deep-doctor learning-count check so it reads the live `learnings` schema correctly on both current installs (`status`) and older installs (`archived`) instead of reporting a misleading skipped check on healthy runtimes.
+- Revalidated the corrected path on a real upgraded install: `nexo update`, `nexo doctor --tier deep`, and `nexo doctor --tier all` all pass cleanly after the sync.
+- Re-ran a real Claude Code startup smoke after the runtime sync so the patch ships with fresh evidence that the corrected install path still boots cleanly end to end.
+
+### Validation
+- Added regression coverage for both schema variants in the deep doctor suite, so future releases cannot silently drift back to the stale `archived`-only assumption.
+
 ## [5.0.1] - 2026-04-10
 
 ### Upgrade Path + Client Sync Hardening

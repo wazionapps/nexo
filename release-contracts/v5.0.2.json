@@ -1,0 +1,58 @@
+{
+  "release_line": "v5.0",
+  "target_version": "5.0.2",
+  "scope_owner": "NEXO",
+  "distribution": {
+    "git_updates_on": "merge_to_main",
+    "packaged_release_on": "tag_publish"
+  },
+  "required_repo_files": [
+    "scripts/verify_release_readiness.py",
+    "scripts/run_v5_0_smoke.py",
+    "release-contracts/v5.0.2.json",
+    "src/doctor/providers/deep.py",
+    "tests/test_doctor.py",
+    "compare/README.md",
+    "compare/scorecard.json"
+  ],
+  "required_website_files": [
+    "index.html",
+    "changelog/index.html",
+    "compare/index.html",
+    "docs/index.html"
+  ],
+  "gates": [
+    {
+      "id": "doctor_schema_drift",
+      "title": "Deep doctor reads both current and legacy learnings schemas",
+      "status": "complete",
+      "evidence_required": [
+        "status-column schema reports non-archived learnings cleanly",
+        "legacy archived-column schema still passes",
+        "real upgraded runtime no longer shows the archived-column warning"
+      ]
+    },
+    {
+      "id": "runtime_revalidation",
+      "title": "Live runtime revalidated after sync",
+      "status": "complete",
+      "evidence_required": [
+        "nexo update passes on a real install",
+        "nexo doctor --tier deep passes cleanly",
+        "nexo doctor --tier all stays healthy",
+        "Claude Code startup smoke returns OK STARTUP"
+      ]
+    },
+    {
+      "id": "release_package",
+      "title": "Release package aligned",
+      "status": "complete",
+      "evidence_required": [
+        "Version and changelog aligned",
+        "Release artifacts synced",
+        "Website home and changelog updated to v5.0.2",
+        "Smoke + readiness checks pass"
+      ]
+    }
+  ]
+}

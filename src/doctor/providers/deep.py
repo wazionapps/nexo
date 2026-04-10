@@ -264,7 +264,20 @@ def check_learning_count() -> DoctorCheck:
                     severity="info",
                     summary="No learnings table yet",
                 )
-            count = conn.execute("SELECT COUNT(*) FROM learnings WHERE archived=0").fetchone()[0]
+            columns = {
+                row[1]
+                for row in conn.execute("PRAGMA table_info(learnings)").fetchall()
+            }
+            if "status" in columns:
+                count = conn.execute(
+                    "SELECT COUNT(*) FROM learnings WHERE COALESCE(status, 'active') != 'archived'"
+                ).fetchone()[0]
+            elif "archived" in columns:
+                count = conn.execute(
+                    "SELECT COUNT(*) FROM learnings WHERE archived=0"
+                ).fetchone()[0]
+            else:
+                count = conn.execute("SELECT COUNT(*) FROM learnings").fetchone()[0]
         finally:
             conn.close()
         return DoctorCheck(
@@ -272,15 +285,16 @@ def check_learning_count() -> DoctorCheck:
             tier="deep",
             status="healthy",
             severity="info",
-            summary=f"{count} active learnings in memory",
+            summary=f"{count} non-archived learnings in memory",
         )
     except Exception as e:
         return DoctorCheck(
             id="deep.learning_count",
             tier="deep",
-            status="healthy",
-            severity="info",
-            summary=f"Learning check skipped: {e}",
+            status="degraded",
+            severity="warn",
+            summary=f"Learning check unreadable: {e}",
+            evidence=[str(e)],
         )
 
 
