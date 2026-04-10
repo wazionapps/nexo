@@ -72,11 +72,16 @@ def _score_baseline(run: dict, scenario_ids: list[str], baseline: dict) -> dict:
 def build_runtime_pack(catalog_path: Path = CATALOG_PATH, results_dir: Path = RESULTS_DIR) -> dict:
     catalog = load_catalog(catalog_path)
     runs = load_runs(results_dir)
-    scenario_ids = [item["id"] for item in catalog["scenarios"]]
+    catalog_scenarios = catalog["scenarios"]
+    catalog_lookup = {item["id"]: item for item in catalog_scenarios}
 
     rendered_runs = []
     for run in runs:
-        baselines = [_score_baseline(run, scenario_ids, baseline) for baseline in run.get("baselines") or []]
+        run_scenario_ids = run.get("scenarios") or list(catalog_lookup)
+        unknown_ids = [scenario_id for scenario_id in run_scenario_ids if scenario_id not in catalog_lookup]
+        if unknown_ids:
+            raise ValueError(f"run '{run.get('run_id', '')}' references unknown scenarios: {', '.join(unknown_ids)}")
+        baselines = [_score_baseline(run, run_scenario_ids, baseline) for baseline in run.get("baselines") or []]
         baselines.sort(key=lambda item: (-item["score_pct"], item["label"]))
         rendered_runs.append(
             {
@@ -85,7 +90,10 @@ def build_runtime_pack(catalog_path: Path = CATALOG_PATH, results_dir: Path = RE
                 "date": run.get("date", ""),
                 "grading": run.get("grading", "manual_rubric"),
                 "source_markdown": run.get("source_markdown", ""),
-                "scenario_count": len(scenario_ids),
+                "notes": run.get("notes") or [],
+                "scenario_ids": run_scenario_ids,
+                "scenario_count": len(run_scenario_ids),
+                "scenarios": [catalog_lookup[scenario_id] for scenario_id in run_scenario_ids],
                 "baselines": baselines,
             }
         )
@@ -97,7 +105,8 @@ def build_runtime_pack(catalog_path: Path = CATALOG_PATH, results_dir: Path = RE
         "benchmark": catalog.get("benchmark", "nexo_runtime_pack"),
         "catalog_version": catalog.get("catalog_version", ""),
         "scope_note": catalog.get("scope_note", ""),
-        "scenarios": catalog.get("scenarios", []),
+        "catalog_scenario_count": len(catalog_scenarios),
+        "scenarios": catalog_scenarios,
         "runs": rendered_runs,
         "latest_run": latest,
     }
@@ -130,6 +139,7 @@ def render_markdown(summary: dict) -> str:
             "",
             f"- Date: {latest.get('date', 'unknown')}",
             f"- Grading: {latest.get('grading', 'unknown')}",
+            f"- Scenario count: {latest.get('scenario_count', 0)}",
             f"- Source markdown: `{latest.get('source_markdown', '')}`",
             "",
             "| Baseline | Score % | Pass | Partial | Fail |",
@@ -140,6 +150,12 @@ def render_markdown(summary: dict) -> str:
         lines.append(
             f"| {baseline['label']} | {baseline['score_pct']} | {baseline['pass_count']} | {baseline['partial_count']} | {baseline['fail_count']} |"
         )
+
+    notes = latest.get("notes") or []
+    if notes:
+        lines.extend(["", "### Latest run notes", ""])
+        for note in notes:
+            lines.append(f"- {note}")
 
     lines.extend(
         [

@@ -1,6 +1,6 @@
 # NEXO Runtime Benchmark Pack
 
-Generated: 2026-04-10T13:18:49.320070+00:00
+Generated: 2026-04-10T13:29:22.815763+00:00
 
 ## What this is
 
@@ -20,18 +20,40 @@ Generated: 2026-04-10T13:18:49.320070+00:00
   - Detail: `benchmarks/scenarios/interrupted-task-resume.md`
 - `related_context_stitching` — Related-context stitching (cross_thread_continuity)
   - Detail: `benchmarks/scenarios/related-context-stitching.md`
+- `contradiction_latest_wins` — Contradiction latest-wins (contradiction_handling)
+  - Detail: `benchmarks/scenarios/contradiction-latest-wins.md`
+- `temporal_reasoning_recall` — Temporal reasoning recall (temporal_reasoning)
+  - Detail: `benchmarks/scenarios/temporal-reasoning-recall.md`
+- `structured_domain_recall` — Structured domain recall (structured_recall)
+  - Detail: `benchmarks/scenarios/structured-domain-recall.md`
+- `adversarial_noise_rejection` — Adversarial / noise rejection (retrieval_hygiene)
+  - Detail: `benchmarks/scenarios/adversarial-noise-rejection.md`
+- `multi_session_continuity` — Multi-session continuity (multi_session)
+  - Detail: `benchmarks/scenarios/multi-session-continuity.md`
+- `cross_client_continuity` — Cross-client continuity (client_parity)
+  - Detail: `benchmarks/scenarios/cross-client-continuity.md`
+- `outcome_loop_advantage` — Outcome-loop advantage (outcome_optimization)
+  - Detail: `benchmarks/scenarios/outcome-loop-advantage.md`
+- `prioritization_quality` — Prioritization quality (queue_optimization)
+  - Detail: `benchmarks/scenarios/prioritization-quality.md`
 
-## Latest run — Memory Recall vs Static CLAUDE.md
+## Latest run — Operator Runtime Matrix v5 Foundations
 
-- Date: 2026-04-08
+- Date: 2026-04-10
 - Grading: manual_rubric
-- Source markdown: `benchmarks/results/memory-recall-vs-static.md`
+- Scenario count: 13
+- Source markdown: `benchmarks/results/operator-runtime-matrix-v5-foundations.md`
 
 | Baseline | Score % | Pass | Partial | Fail |
 |----------|---------|------|---------|------|
-| NEXO full stack | 100.0 | 5 | 0 | 0 |
-| Static CLAUDE.md | 40.0 | 0 | 4 | 1 |
-| No memory | 0.0 | 0 | 0 | 5 |
+| NEXO full stack | 92.3 | 11 | 2 | 0 |
+| Static CLAUDE.md | 42.3 | 0 | 11 | 2 |
+| No memory | 0.0 | 0 | 0 | 13 |
+
+### Latest run notes
+
+- Second checked-in runtime-pack run: expands the benchmark matrix to contradiction, temporal, structured recall, multi-session, cross-client, outcome-loop, and prioritization.
+- Conservative grading: NEXO is still only partial on outcome-loop advantage and prioritization quality because field evidence is younger than the continuity surfaces.
 
 ## Methodology
 
@@ -43,4 +65,4 @@ Generated: 2026-04-10T13:18:49.320070+00:00
 
 - Catalog: `benchmarks/runtime_pack/scenario_catalog.json`
 - Latest summary: `benchmarks/runtime_pack/results/latest_summary.json`
-- Latest run file: `benchmarks/runtime_pack/results/2026-04-08-memory-recall-vs-static.json`
+- Latest run file: `benchmarks/runtime_pack/results/2026-04-10-operator-runtime-matrix-v5-foundations.json`

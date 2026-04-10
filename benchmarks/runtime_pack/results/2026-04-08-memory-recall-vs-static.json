@@ -3,6 +3,17 @@
   "title": "Memory Recall vs Static CLAUDE.md",
   "date": "2026-04-08",
   "grading": "manual_rubric",
+  "notes": [
+    "First checked-in micro-benchmark answering whether a large static CLAUDE.md can substitute for a shared brain.",
+    "Uses only the original five recall/continuity scenarios; newer runtime-pack scenarios were added later."
+  ],
+  "scenarios": [
+    "decision_rationale_recall",
+    "user_preference_recall",
+    "repeat_error_avoidance",
+    "interrupted_task_resume",
+    "related_context_stitching"
+  ],
   "baselines": [
     {
       "id": "nexo_full_stack",

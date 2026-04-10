@@ -2,7 +2,7 @@
 
 NEXO is the local cognitive runtime that makes the model around your model smarter.
 
-Generated: 2026-04-10T13:18:57.924730+00:00
+Generated: 2026-04-10T13:29:22.840492+00:00
 
 ## What this scorecard is
 
@@ -49,16 +49,16 @@ Generated: 2026-04-10T13:18:57.924730+00:00
 - NEXO cognitive-cycle mode: F1 0.2931
 
 ## Operator runtime pack
-- Memory Recall vs Static CLAUDE.md (2026-04-08)
+- Operator Runtime Matrix v5 Foundations (2026-04-10)
 - Scope: Small reproducible operator benchmark focused on runtime-backed recall and continuity, not a universal agent benchmark.
-- NEXO full stack: score 100.0% | pass 5 | partial 0 | fail 0
-- Static CLAUDE.md: score 40.0% | pass 0 | partial 4 | fail 1
-- No memory: score 0.0% | pass 0 | partial 0 | fail 5
+- NEXO full stack: score 92.3% | pass 11 | partial 2 | fail 0
+- Static CLAUDE.md: score 42.3% | pass 0 | partial 11 | fail 2
+- No memory: score 0.0% | pass 0 | partial 0 | fail 13
 
 ## Longitudinal local runtime metrics
-- 30d: success 16.7% | avg close 8.4 min | recovery 67.3% | open protocol debt 17 | unnecessary tool 3.4% | cost/solved 17.264899 USD
-- 60d: success 16.7% | avg close 8.4 min | recovery 67.3% | open protocol debt 17 | unnecessary tool 3.4% | cost/solved 17.264899 USD
-- 90d: success 16.7% | avg close 8.4 min | recovery 67.3% | open protocol debt 17 | unnecessary tool 3.4% | cost/solved 17.264899 USD
+- 30d: success 17.1% | avg close 8.4 min | recovery 66.9% | open protocol debt 17 | unnecessary tool 3.4% | cost/solved 17.00106 USD
+- 60d: success 17.1% | avg close 8.4 min | recovery 66.9% | open protocol debt 17 | unnecessary tool 3.4% | cost/solved 17.00106 USD
+- 90d: success 17.1% | avg close 8.4 min | recovery 66.9% | open protocol debt 17 | unnecessary tool 3.4% | cost/solved 17.00106 USD
 
 ## System On Top Of Model
 ![NEXO system on top of model](../assets/nexo-brain-architecture.png)

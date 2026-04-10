@@ -1,0 +1,85 @@
+{
+  "run_id": "2026-04-10-operator-runtime-matrix-v5-foundations",
+  "title": "Operator Runtime Matrix v5 Foundations",
+  "date": "2026-04-10",
+  "grading": "manual_rubric",
+  "notes": [
+    "Second checked-in runtime-pack run: expands the benchmark matrix to contradiction, temporal, structured recall, multi-session, cross-client, outcome-loop, and prioritization.",
+    "Conservative grading: NEXO is still only partial on outcome-loop advantage and prioritization quality because field evidence is younger than the continuity surfaces."
+  ],
+  "scenarios": [
+    "decision_rationale_recall",
+    "user_preference_recall",
+    "repeat_error_avoidance",
+    "interrupted_task_resume",
+    "related_context_stitching",
+    "contradiction_latest_wins",
+    "temporal_reasoning_recall",
+    "structured_domain_recall",
+    "adversarial_noise_rejection",
+    "multi_session_continuity",
+    "cross_client_continuity",
+    "outcome_loop_advantage",
+    "prioritization_quality"
+  ],
+  "baselines": [
+    {
+      "id": "nexo_full_stack",
+      "label": "NEXO full stack",
+      "scenario_results": {
+        "decision_rationale_recall": "pass",
+        "user_preference_recall": "pass",
+        "repeat_error_avoidance": "pass",
+        "interrupted_task_resume": "pass",
+        "related_context_stitching": "pass",
+        "contradiction_latest_wins": "pass",
+        "temporal_reasoning_recall": "pass",
+        "structured_domain_recall": "pass",
+        "adversarial_noise_rejection": "pass",
+        "multi_session_continuity": "pass",
+        "cross_client_continuity": "pass",
+        "outcome_loop_advantage": "partial",
+        "prioritization_quality": "partial"
+      }
+    },
+    {
+      "id": "static_claude_md",
+      "label": "Static CLAUDE.md",
+      "scenario_results": {
+        "decision_rationale_recall": "partial",
+        "user_preference_recall": "partial",
+        "repeat_error_avoidance": "partial",
+        "interrupted_task_resume": "partial",
+        "related_context_stitching": "fail",
+        "contradiction_latest_wins": "partial",
+        "temporal_reasoning_recall": "partial",
+        "structured_domain_recall": "partial",
+        "adversarial_noise_rejection": "partial",
+        "multi_session_continuity": "partial",
+        "cross_client_continuity": "partial",
+        "outcome_loop_advantage": "fail",
+        "prioritization_quality": "partial"
+      }
+    },
+    {
+      "id": "no_memory",
+      "label": "No memory",
+      "scenario_results": {
+        "decision_rationale_recall": "fail",
+        "user_preference_recall": "fail",
+        "repeat_error_avoidance": "fail",
+        "interrupted_task_resume": "fail",
+        "related_context_stitching": "fail",
+        "contradiction_latest_wins": "fail",
+        "temporal_reasoning_recall": "fail",
+        "structured_domain_recall": "fail",
+        "adversarial_noise_rejection": "fail",
+        "multi_session_continuity": "fail",
+        "cross_client_continuity": "fail",
+        "outcome_loop_advantage": "fail",
+        "prioritization_quality": "fail"
+      }
+    }
+  ],
+  "source_markdown": "benchmarks/results/operator-runtime-matrix-v5-foundations.md"
+}
