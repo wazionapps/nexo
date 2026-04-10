@@ -5,7 +5,8 @@
   "grading": "manual_rubric",
   "notes": [
     "Second checked-in runtime-pack run: expands the benchmark matrix to contradiction, temporal, structured recall, multi-session, cross-client, outcome-loop, and prioritization.",
-    "Conservative grading: NEXO is still only partial on outcome-loop advantage and prioritization quality because field evidence is younger than the continuity surfaces."
+    "Outcome-loop advantage now reaches pass: persisted outcome history plus captured outcome-pattern learnings change the ranking path with checked-in regression coverage.",
+    "Prioritization quality stays partial: impact scoring is real and persisted, but long-horizon comparative quality still needs more field data."
   ],
   "scenarios": [
     "decision_rationale_recall",
@@ -38,7 +39,7 @@
         "adversarial_noise_rejection": "pass",
         "multi_session_continuity": "pass",
         "cross_client_continuity": "pass",
-        "outcome_loop_advantage": "partial",
+        "outcome_loop_advantage": "pass",
         "prioritization_quality": "partial"
       }
     },

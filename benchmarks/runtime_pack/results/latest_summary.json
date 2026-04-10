@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-10T13:29:22.815763+00:00",
+  "generated_at": "2026-04-10T14:06:55.449677+00:00",
   "benchmark": "nexo_runtime_pack",
   "catalog_version": "2026-04-10",
   "scope_note": "Small reproducible operator benchmark focused on runtime-backed recall and continuity, not a universal agent benchmark.",
@@ -231,7 +231,8 @@
       "source_markdown": "benchmarks/results/operator-runtime-matrix-v5-foundations.md",
       "notes": [
         "Second checked-in runtime-pack run: expands the benchmark matrix to contradiction, temporal, structured recall, multi-session, cross-client, outcome-loop, and prioritization.",
-        "Conservative grading: NEXO is still only partial on outcome-loop advantage and prioritization quality because field evidence is younger than the continuity surfaces."
+        "Outcome-loop advantage now reaches pass: persisted outcome history plus captured outcome-pattern learnings change the ranking path with checked-in regression coverage.",
+        "Prioritization quality stays partial: impact scoring is real and persisted, but long-horizon comparative quality still needs more field data."
       ],
       "scenario_ids": [
         "decision_rationale_recall",
@@ -471,11 +472,11 @@
         {
           "id": "nexo_full_stack",
           "label": "NEXO full stack",
-          "pass_count": 11,
-          "partial_count": 2,
+          "pass_count": 12,
+          "partial_count": 1,
           "fail_count": 0,
-          "weighted_score": 12.0,
-          "score_pct": 92.3,
+          "weighted_score": 12.5,
+          "score_pct": 96.2,
           "scenario_results": [
             {
               "scenario_id": "decision_rationale_recall",
@@ -523,7 +524,7 @@
             },
             {
               "scenario_id": "outcome_loop_advantage",
-              "grade": "partial"
+              "grade": "pass"
             },
             {
               "scenario_id": "prioritization_quality",
@@ -864,7 +865,8 @@
     "source_markdown": "benchmarks/results/operator-runtime-matrix-v5-foundations.md",
     "notes": [
       "Second checked-in runtime-pack run: expands the benchmark matrix to contradiction, temporal, structured recall, multi-session, cross-client, outcome-loop, and prioritization.",
-      "Conservative grading: NEXO is still only partial on outcome-loop advantage and prioritization quality because field evidence is younger than the continuity surfaces."
+      "Outcome-loop advantage now reaches pass: persisted outcome history plus captured outcome-pattern learnings change the ranking path with checked-in regression coverage.",
+      "Prioritization quality stays partial: impact scoring is real and persisted, but long-horizon comparative quality still needs more field data."
     ],
     "scenario_ids": [
       "decision_rationale_recall",
@@ -1104,11 +1106,11 @@
       {
         "id": "nexo_full_stack",
         "label": "NEXO full stack",
-        "pass_count": 11,
-        "partial_count": 2,
+        "pass_count": 12,
+        "partial_count": 1,
         "fail_count": 0,
-        "weighted_score": 12.0,
-        "score_pct": 92.3,
+        "weighted_score": 12.5,
+        "score_pct": 96.2,
         "scenario_results": [
           {
             "scenario_id": "decision_rationale_recall",
@@ -1156,7 +1158,7 @@
           },
           {
             "scenario_id": "outcome_loop_advantage",
-            "grade": "partial"
+            "grade": "pass"
           },
           {
             "scenario_id": "prioritization_quality",

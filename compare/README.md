@@ -2,7 +2,7 @@
 
 NEXO is the local cognitive runtime that makes the model around your model smarter.
 
-Generated: 2026-04-10T13:29:22.840492+00:00
+Generated: 2026-04-10T14:06:55.452342+00:00
 
 ## What this scorecard is
 
@@ -51,14 +51,14 @@ Generated: 2026-04-10T13:29:22.840492+00:00
 ## Operator runtime pack
 - Operator Runtime Matrix v5 Foundations (2026-04-10)
 - Scope: Small reproducible operator benchmark focused on runtime-backed recall and continuity, not a universal agent benchmark.
-- NEXO full stack: score 92.3% | pass 11 | partial 2 | fail 0
+- NEXO full stack: score 96.2% | pass 12 | partial 1 | fail 0
 - Static CLAUDE.md: score 42.3% | pass 0 | partial 11 | fail 2
 - No memory: score 0.0% | pass 0 | partial 0 | fail 13
 
 ## Longitudinal local runtime metrics
-- 30d: success 17.1% | avg close 8.4 min | recovery 66.9% | open protocol debt 17 | unnecessary tool 3.4% | cost/solved 17.00106 USD
-- 60d: success 17.1% | avg close 8.4 min | recovery 66.9% | open protocol debt 17 | unnecessary tool 3.4% | cost/solved 17.00106 USD
-- 90d: success 17.1% | avg close 8.4 min | recovery 66.9% | open protocol debt 17 | unnecessary tool 3.4% | cost/solved 17.00106 USD
+- 30d: success 17.3% | avg close 8.3 min | recovery 64.2% | open protocol debt 16 | unnecessary tool 3.4% | cost/solved 16.267091 USD
+- 60d: success 17.3% | avg close 8.3 min | recovery 64.2% | open protocol debt 16 | unnecessary tool 3.4% | cost/solved 16.267091 USD
+- 90d: success 17.3% | avg close 8.3 min | recovery 64.2% | open protocol debt 16 | unnecessary tool 3.4% | cost/solved 16.267091 USD
 
 ## System On Top Of Model
 ![NEXO system on top of model](../assets/nexo-brain-architecture.png)

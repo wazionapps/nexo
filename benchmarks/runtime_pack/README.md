@@ -1,6 +1,6 @@
 # NEXO Runtime Benchmark Pack
 
-Generated: 2026-04-10T13:29:22.815763+00:00
+Generated: 2026-04-10T14:06:55.449677+00:00
 
 ## What this is
 
@@ -46,14 +46,15 @@ Generated: 2026-04-10T13:29:22.815763+00:00
 
 | Baseline | Score % | Pass | Partial | Fail |
 |----------|---------|------|---------|------|
-| NEXO full stack | 92.3 | 11 | 2 | 0 |
+| NEXO full stack | 96.2 | 12 | 1 | 0 |
 | Static CLAUDE.md | 42.3 | 0 | 11 | 2 |
 | No memory | 0.0 | 0 | 0 | 13 |
 
 ### Latest run notes
 
 - Second checked-in runtime-pack run: expands the benchmark matrix to contradiction, temporal, structured recall, multi-session, cross-client, outcome-loop, and prioritization.
-- Conservative grading: NEXO is still only partial on outcome-loop advantage and prioritization quality because field evidence is younger than the continuity surfaces.
+- Outcome-loop advantage now reaches pass: persisted outcome history plus captured outcome-pattern learnings change the ranking path with checked-in regression coverage.
+- Prioritization quality stays partial: impact scoring is real and persisted, but long-horizon comparative quality still needs more field data.
 
 ## Methodology
 

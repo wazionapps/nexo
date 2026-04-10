@@ -34,14 +34,14 @@ This checked-in run expands the first five-scenario micro-benchmark into a broad
 | Adversarial / noise rejection | Pass | Partial | Fail |
 | Multi-session continuity | Pass | Partial | Fail |
 | Cross-client continuity | Pass | Partial | Fail |
-| Outcome-loop advantage | Partial | Fail | Fail |
+| Outcome-loop advantage | Pass | Fail | Fail |
 | Prioritization quality | Partial | Partial | Fail |
 
 ## Notes
 
 - This run is intentionally conservative on the new v5.0 surfaces:
-  - `outcome_loop_advantage` is only `partial` for NEXO because the architecture exists, but live accumulated evidence is still young.
-  - `prioritization_quality` is `partial` because impact scoring is real and persisted, but long-horizon comparative quality still needs more field data.
+  - `outcome_loop_advantage` is now `pass` for NEXO because persisted outcome history and captured `outcome-pattern` learnings both change the ranking path, and the regression is checked in.
+  - `prioritization_quality` remains `partial` because impact scoring is real and persisted, but long-horizon comparative quality still needs more field data.
 - The point of this matrix is not to claim perfection. It is to show that the runtime already dominates on continuity-heavy and retrieval-backed operator work, while being explicit about where the next evidence has to accumulate.
 
 ## Why this run matters
@@ -58,5 +58,4 @@ The answer is yes, but not uniformly. The strongest lead is on:
 
 The still-maturing areas are exactly the ones v5.0 is supposed to harden further:
 
-- outcome-led strategy adjustment
 - prioritization quality over time

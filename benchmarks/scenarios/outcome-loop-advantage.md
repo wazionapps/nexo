@@ -20,6 +20,7 @@ Choose the strategy that has worked better historically and explain the evidence
 
 - `src/plugins/outcomes.py`
 - `src/plugins/cortex.py`
+- `tests/test_cortex_decisions.py`
 - `release-contracts/v4.5.0.json`
 
 ## Scoring
