@@ -625,6 +625,8 @@ Scripts in `NEXO_HOME/scripts/` are first-class managed entities:
 
 Personal scripts are completely separate from core NEXO processes. The `crons/manifest.json` defines core; everything in `NEXO_HOME/scripts/` is personal.
 
+If you need to decide between a personal script, skill, plugin, or schedule, use [docs/personal-artifacts-manual.md](docs/personal-artifacts-manual.md). That is the canonical operational guide.
+
 ## Recovery-Aware Background Jobs (v2.6.2)
 
 Core and personal jobs now declare explicit recovery contracts in `crons/manifest.json`:
@@ -835,9 +837,9 @@ nexo doctor --tier runtime --json  # Machine-readable health report
 nexo doctor --fix              # Apply deterministic repairs
 ```
 
-Personal scripts live in `NEXO_HOME/scripts/` with inline metadata. Their Python templates now include `run_automation_text(...)`, which routes work through the configured NEXO automation backend instead of hardcoding `claude -p` or provider-specific model names. `nexo-agent-run.py` now also supports task profiles (`fast`, `balanced`, `deep`) plus safe backend fallback, so automations can prefer cheaper/faster Codex paths or deeper Claude paths without hardcoding one provider forever. See `docs/writing-scripts.md` for details.
+Personal scripts live in `NEXO_HOME/scripts/` with inline metadata. Their Python templates now include `run_automation_text(...)`, which routes work through the configured NEXO automation backend instead of hardcoding `claude -p` or provider-specific model names. `nexo-agent-run.py` now also supports task profiles (`fast`, `balanced`, `deep`) plus safe backend fallback, so automations can prefer cheaper/faster Codex paths or deeper Claude paths without hardcoding one provider forever. See `docs/writing-scripts.md` for details and `docs/personal-artifacts-manual.md` for the canonical artifact decision guide.
 
-Skills v2 combine procedural guides with optional executable scripts. Personal skills live in `NEXO_HOME/skills/`, packaged core skills live in `NEXO_CODE/skills/` during development and `NEXO_HOME/skills-core/` in installed environments, and staged runtime copies live in `NEXO_HOME/skills-runtime/`. Execution is fully autonomous: Deep Sleep can evolve mature guide skills into executable drafts automatically, and runtime execution no longer waits for manual approval. See `docs/skills-v2.md` for the full model.
+Skills v2 combine procedural guides with optional executable scripts. Personal skills live in `NEXO_HOME/skills/`, packaged core skills live in `NEXO_CODE/skills/` during development and `NEXO_HOME/skills-core/` in installed environments, and staged runtime copies live in `NEXO_HOME/skills-runtime/`. Execution is fully autonomous: Deep Sleep can evolve mature guide skills into executable drafts automatically, and runtime execution no longer waits for manual approval. See `docs/skills-v2.md` for the full model and `docs/personal-artifacts-manual.md` for the boundary between skills, scripts, plugins, and schedules.
 
 The Doctor system reads existing health artifacts (immune, watchdog, self-audit) without triggering repairs in default mode.
 
@@ -913,6 +915,8 @@ TOOLS = [
 ```
 
 Reload without restarting: `nexo_plugin_load("my_plugin.py")`
+
+Use a personal plugin only when you need a new MCP tool in the runtime surface. If the real need is autonomous execution or scheduling, use a personal script plus managed schedule instead. The canonical decision guide is [docs/personal-artifacts-manual.md](docs/personal-artifacts-manual.md).
 
 ### Data Privacy
 

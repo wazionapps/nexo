@@ -1,5 +1,7 @@
 # Skills v2
 
+If you are deciding between a skill, a script, a plugin, or a schedule, read [Personal Artifacts Manual](./personal-artifacts-manual.md) first. Skills are the reusable procedure layer, not the generic answer to every automation problem.
+
 Skills v2 add three execution modes:
 - `guide`: text-only procedure
 - `execute`: script-backed skill
@@ -33,3 +35,19 @@ Deep Sleep now does two things automatically:
 - promotes mature guide skills (3+ successful uses, high trust, no script yet) into executable drafts under `NEXO_HOME/skills/`
 
 If Claude synthesis emits a concrete `script_body`, Deep Sleep materializes that script directly. If not, it still creates a deterministic executable draft so the skill enters the runtime loop immediately.
+
+## When To Use A Skill
+
+Use a skill when the primary output is a reusable procedure for the agent layer:
+
+- a guide the agent should follow repeatedly
+- a hybrid task with guide plus executable script
+- an execution wrapper that should be matched and applied by intent
+
+Do not use a skill when the real need is:
+
+- a background cron
+- a file/system automation job
+- a new MCP tool exposed to the runtime
+
+Those belong to personal scripts, schedules, or plugins, as defined in the canonical manual.

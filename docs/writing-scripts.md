@@ -2,6 +2,8 @@
 
 Personal scripts extend NEXO with custom automation. They live in `NEXO_HOME/scripts/`, use the stable CLI as their interface, and are registered in NEXO's personal script registry so updates and scheduling don't get confused with core jobs.
 
+If you are not sure whether you need a script, a skill, a plugin, or only a schedule, read [Personal Artifacts Manual](./personal-artifacts-manual.md) first. That document is the canonical decision guide.
+
 ## Quick Start
 
 1. Copy the template:
@@ -127,6 +129,18 @@ This does three things in order:
 
 NEXO must never invent a core cron by touching `crons/manifest.json` for a personal script.
 
+### Monthly Jobs
+
+The declared schedule parser does not support a dedicated `monthly:1` syntax.
+
+The canonical monthly pattern is:
+
+1. declare a daily calendar schedule such as `schedule=09:00`
+2. keep `schedule_required=true`
+3. self-gate inside the script so it only performs real work on the intended day-of-month unless forced
+
+This is cleaner than manual plist editing and matches how current monthly jobs already work in production.
+
 ## Calling NEXO Tools
 
 Use the `nexo_helper.py` module (in `NEXO_HOME/templates/`):
@@ -248,9 +262,12 @@ When running via `nexo scripts run`, these env vars are injected:
 - **DO** use `nexo scripts call` or `nexo_helper.py` for NEXO interaction
 - **DO** use argparse for script arguments
 - **DO** return clean exit codes (0 = success)
+- **DO** use `nexo scripts reconcile` as the official path for declared schedules
 - **DON'T** import `db`, `server`, `cognitive`, or other NEXO internals
 - **DON'T** access `nexo.db` or `cognitive.db` directly
 - **DON'T** use `sqlite3` to query NEXO databases
+- **DON'T** edit personal LaunchAgents manually
+- **DON'T** document unsupported schedule syntax such as `monthly:1`
 
 The `nexo scripts doctor` command checks for these violations.
 
