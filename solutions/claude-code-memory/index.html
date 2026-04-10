@@ -55,7 +55,7 @@
             <div class="page-visual">
                 <div class="code-block" style="max-width:none;">
                     <div class="code-header"><span class="code-dot"></span><span class="code-dot"></span><span class="code-dot"></span><span class="code-title">Terminal</span></div>
-                    <div class="code-body"><span class="cmd">$</span> npx nexo-brain<br><span class="cmd">$</span> nexo remember "Release checklist changed"<br><span class="cmd">$</span> nexo recall "release checklist"</div>
+                    <div class="code-body"><span class="cmd">$</span> npx nexo-brain<br><span class="cmd">$</span> nexo scripts call nexo_remember --input '{"content":"Release checklist changed"}'<br><span class="cmd">$</span> nexo scripts call nexo_memory_recall --input '{"query":"release checklist"}'</div>
                 </div>
             </div>
         </div>
