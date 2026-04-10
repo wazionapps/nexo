@@ -128,6 +128,12 @@ Must prove:
 - compare scorecard is current
 - public claims map to measured or inspectable artifacts
 
+Current v4.5 implementation path:
+
+- `scripts/build_public_scorecard.py` refreshes `compare/scorecard.json` and `compare/README.md`
+- the scorecard now carries an explicit claim map, artifact map, and scope limits
+- public website surfaces point to the scorecard/benchmark artifacts instead of relying only on prose
+
 ### Gate G - Reliability
 
 Must prove:

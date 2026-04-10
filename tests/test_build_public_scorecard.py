@@ -139,7 +139,19 @@ def test_render_markdown_includes_core_sections():
     module = _load_module()
     markdown = module.render_markdown(
         {
+            "generated_at": "2026-04-10T12:00:00+00:00",
             "product_story": "NEXO makes the model around your model smarter.",
+            "artifacts": {
+                "compare_scorecard": "compare/scorecard.json",
+                "locomo_summary": "benchmarks/locomo/results/locomo_nexo_summary.json",
+            },
+            "claim_map": [
+                {
+                    "claim": "NEXO publishes a measured long-conversation memory result.",
+                    "evidence": ["compare/scorecard.json"],
+                    "scope_note": "Memory benchmark only.",
+                }
+            ],
             "benchmarks": {
                 "locomo_rag": {"available": True, "overall_f1": 0.58, "overall_recall": 0.74, "open_domain_f1": 0.63, "multi_hop_f1": 0.33, "temporal_f1": 0.32},
                 "ablation_suite": {
@@ -157,6 +169,9 @@ def test_render_markdown_includes_core_sections():
     )
 
     assert "# NEXO Compare Scorecard" in markdown
+    assert "## Claims you can inspect today" in markdown
+    assert "Memory benchmark only." in markdown
+    assert "## What this scorecard does not claim" in markdown
     assert "LoCoMo overall F1: 0.58" in markdown
     assert "Ablation / baseline suite" in markdown
     assert "Raw model baseline: success 20.0%" in markdown
@@ -165,3 +180,4 @@ def test_render_markdown_includes_core_sections():
     assert "cost/solved 0.42 USD" in markdown
     assert "nexo-brain-architecture.png" in markdown
     assert "nexo_remember" in markdown
+    assert "## Artifact map" in markdown

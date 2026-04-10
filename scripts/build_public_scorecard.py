@@ -332,6 +332,17 @@ def collect_longitudinal_metrics(db_path: Path = NEXO_DB, tool_log_dir: Path = T
 
 
 def build_scorecard() -> dict:
+    artifacts = {
+        "locomo_summary": "benchmarks/locomo/results/locomo_nexo_summary.json",
+        "ablation_summary": "benchmarks/runtime_ablations/results/ablation_summary.json",
+        "compare_readme": "compare/README.md",
+        "compare_scorecard": "compare/scorecard.json",
+        "benchmark_page": "features/benchmark/index.html",
+        "parity_audit": "scripts/verify_client_parity.py",
+        "parity_checklist": "docs/client-parity-checklist.md",
+        "quickstart": "docs/quickstart-5-minutes.md",
+        "python_sdk": "src/nexo_sdk.py",
+    }
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "product_story": "NEXO is the local cognitive runtime that makes the model around your model smarter.",
@@ -339,6 +350,33 @@ def build_scorecard() -> dict:
             "locomo_rag": load_locomo_summary(),
             "ablation_suite": load_ablation_summary(),
         },
+        "artifacts": artifacts,
+        "claim_map": [
+            {
+                "id": "locomo_memory",
+                "claim": "NEXO publishes a measured long-conversation memory result on LoCoMo instead of relying only on architecture claims.",
+                "evidence": [artifacts["locomo_summary"], artifacts["benchmark_page"]],
+                "scope_note": "Benchmark result is memory-specific; it is not a universal score for every runtime capability.",
+            },
+            {
+                "id": "ablations_and_baselines",
+                "claim": "NEXO shows external baselines and internal ablations side by side so the score is easier to interpret.",
+                "evidence": [artifacts["ablation_summary"], artifacts["compare_scorecard"]],
+                "scope_note": "External baselines come from the public LoCoMo discussion; internal ablations come from checked-in NEXO artifacts.",
+            },
+            {
+                "id": "client_parity_guardrails",
+                "claim": "Client parity across Claude Code and Codex is audited by code and docs, not left as a vague promise.",
+                "evidence": [artifacts["parity_audit"], artifacts["parity_checklist"]],
+                "scope_note": "Parity claims refer to the audited runtime surfaces listed in the checklist and script output.",
+            },
+            {
+                "id": "local_runtime_telemetry",
+                "claim": "NEXO publishes longitudinal local runtime telemetry separately from benchmark scores.",
+                "evidence": [artifacts["compare_scorecard"], artifacts["compare_readme"]],
+                "scope_note": "Runtime windows are local operational telemetry; they are not folded into LoCoMo F1.",
+            },
+        ],
         "client_parity": {
             "audit_script": "scripts/verify_client_parity.py",
             "checklist": "docs/client-parity-checklist.md",
@@ -365,13 +403,45 @@ def _fmt_metric(value, suffix: str = "") -> str:
 
 def render_markdown(scorecard: dict) -> str:
     locomo = ((scorecard.get("benchmarks") or {}).get("locomo_rag") or {})
+    artifacts = scorecard.get("artifacts") or {}
+    claim_map = scorecard.get("claim_map") or []
     lines = [
         "# NEXO Compare Scorecard",
         "",
         scorecard["product_story"],
         "",
-        "## Measured benchmark",
+        f"Generated: {scorecard.get('generated_at', 'unknown')}",
+        "",
+        "## What this scorecard is",
+        "",
+        "- A public proof surface for the claims NEXO makes most often.",
+        "- A mix of benchmark data, internal ablations, runtime telemetry, and parity guardrails.",
+        "- A map of inspectable artifacts, not a substitute for reading the underlying files.",
+        "",
+        "## Claims you can inspect today",
     ]
+    for item in claim_map:
+        evidence = ", ".join(f"`{ref}`" for ref in item.get("evidence") or [])
+        lines.extend(
+            [
+                f"- {item.get('claim', 'Unnamed claim')}",
+                f"  - Evidence: {evidence or 'n/a'}",
+                f"  - Scope: {item.get('scope_note', 'n/a')}",
+            ]
+        )
+
+    lines.extend(
+        [
+            "",
+            "## What this scorecard does not claim",
+            "",
+            "- It is not a universal winner-takes-all benchmark for every agent workload.",
+            "- LoCoMo measures long-conversation memory, not the full product surface.",
+            "- Longitudinal runtime windows come from local operator telemetry and should be read as operational evidence, not as a public SaaS benchmark.",
+            "",
+        "## Measured benchmark",
+        ]
+    )
     if locomo.get("available"):
         lines.extend(
             [
@@ -435,8 +505,12 @@ def render_markdown(scorecard: dict) -> str:
             "- `scripts/verify_client_parity.py`",
             "- `docs/client-parity-checklist.md`",
             "- runtime doctor parity audits",
+            "",
+            "## Artifact map",
         ]
     )
+    for key, value in artifacts.items():
+        lines.append(f"- `{key}`: `{value}`")
     return "\n".join(lines) + "\n"
 
 

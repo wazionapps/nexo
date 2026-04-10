@@ -71,7 +71,7 @@
     {
       "id": "public_proof",
       "title": "Public Proof",
-      "status": "pending",
+      "status": "complete",
       "evidence_required": [
         "Compare scorecard is refreshed",
         "Public claims map to artifacts"
