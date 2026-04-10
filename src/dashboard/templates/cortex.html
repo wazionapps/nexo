@@ -191,6 +191,13 @@
           </div>
         </div>
         ${item.recommended_reasoning ? `<p class="text-xs text-slate-400 mb-2">${escapeHtml(item.recommended_reasoning)}</p>` : ''}
+        ${item.goal_profile_id ? `
+          <div class="mt-2 bg-slate-900/40 rounded px-2 py-1.5">
+            <p class="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-0.5">Goal Profile</p>
+            <p class="text-xs text-nexo-300 font-semibold">${escapeHtml(item.goal_profile_id)}</p>
+            ${Array.isArray(item.goal_profile_labels) && item.goal_profile_labels.length ? `<p class="text-[10px] text-slate-400 mt-1">${escapeHtml(item.goal_profile_labels.join(' · '))}</p>` : ''}
+          </div>
+        ` : ''}
         ${item.linked_outcome_id ? `
           <div class="mt-2 text-[10px] text-slate-500">
             outcome #${escapeHtml(String(item.linked_outcome_id))}

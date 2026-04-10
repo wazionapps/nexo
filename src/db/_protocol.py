@@ -136,6 +136,9 @@ def create_cortex_evaluation(
     recommended_choice: str,
     recommended_reasoning: str,
     linked_outcome_id: int | None = None,
+    goal_profile_id: str = "",
+    goal_profile_labels=None,
+    goal_profile_weights=None,
     selected_choice: str = "",
     selection_reason: str = "",
     selection_source: str = "recommended",
@@ -146,8 +149,9 @@ def create_cortex_evaluation(
         """INSERT INTO cortex_evaluations (
                session_id, task_id, goal, task_type, area, impact_level, context_hint,
                alternatives, scores, recommended_choice, recommended_reasoning, linked_outcome_id,
+               goal_profile_id, goal_profile_labels, goal_profile_weights,
                selected_choice, selection_reason, selection_source
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             session_id.strip(),
             task_id.strip(),
@@ -161,6 +165,9 @@ def create_cortex_evaluation(
             recommended_choice.strip(),
             recommended_reasoning.strip(),
             int(linked_outcome_id) if linked_outcome_id else None,
+            goal_profile_id.strip(),
+            _as_json(goal_profile_labels or []),
+            _as_json(goal_profile_weights or {}),
             (selected_choice or recommended_choice).strip(),
             (selection_reason or recommended_reasoning).strip(),
             (selection_source or "recommended").strip(),

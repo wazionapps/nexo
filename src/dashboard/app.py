@@ -1566,8 +1566,12 @@ async def api_guard(limit: int = Query(100, ge=1, le=500)):
 async def api_cortex(limit: int = Query(50, ge=1, le=200)):
     db = _db()
     conn = db.get_db()
-    logs = [dict(r) for r in conn.execute("SELECT * FROM cortex_log ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()]
-    decisions = [dict(r) for r in conn.execute("SELECT * FROM decisions ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()]
+    logs = []
+    decisions = []
+    if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='cortex_log'").fetchone():
+        logs = [dict(r) for r in conn.execute("SELECT * FROM cortex_log ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()]
+    if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='decisions'").fetchone():
+        decisions = [dict(r) for r in conn.execute("SELECT * FROM decisions ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()]
     evaluations = []
     if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='cortex_evaluations'").fetchone():
         evaluations = [
@@ -1576,6 +1580,18 @@ async def api_cortex(limit: int = Query(50, ge=1, le=200)):
                 (limit,),
             ).fetchall()
         ]
+        for item in evaluations:
+            for key, default in (("goal_profile_labels", []), ("goal_profile_weights", {})):
+                raw = item.get(key)
+                if raw in (None, ""):
+                    item[key] = default
+                    continue
+                if isinstance(raw, (list, dict)):
+                    continue
+                try:
+                    item[key] = json.loads(raw)
+                except Exception:
+                    item[key] = default
         linked_outcome_ids = sorted(
             {
                 int(item.get("linked_outcome_id"))

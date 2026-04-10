@@ -53,6 +53,7 @@ _skills = _load_submodule("db._skills")
 _hot_context = _load_submodule("db._hot_context")
 _drive = _load_submodule("db._drive")
 _outcomes = _load_submodule("db._outcomes")
+_goal_profiles = _load_submodule("db._goal_profiles")
 
 # Core: connection, constants, init, utils
 from db._core import (
@@ -218,6 +219,13 @@ from db._outcomes import (
     create_outcome, get_outcome, list_outcomes,
     cancel_outcome, evaluate_outcome, pending_outcomes_due,
     find_pending_outcomes_by_action, set_linked_outcomes_met,
+)
+
+# Goal Engine v1
+from db._goal_profiles import (
+    DEFAULT_GOAL_PROFILES,
+    ensure_default_goal_profiles, get_goal_profile, list_goal_profiles,
+    upsert_goal_profile, resolve_goal_profile,
 )
 
 

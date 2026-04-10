@@ -857,6 +857,35 @@ def _m35_cortex_evaluation_outcome_link(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_cortex_evaluations_outcome ON cortex_evaluations(linked_outcome_id)")
 
 
+def _m36_goal_profiles(conn):
+    """Goal Engine v1 — explicit optimization profiles resolved by context."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS goal_profiles (
+            profile_id TEXT PRIMARY KEY,
+            profile_name TEXT NOT NULL,
+            description TEXT DEFAULT '',
+            scope_type TEXT NOT NULL DEFAULT 'default',
+            scope_value TEXT DEFAULT '',
+            goal_labels TEXT DEFAULT '[]',
+            weights TEXT NOT NULL DEFAULT '{}',
+            status TEXT NOT NULL DEFAULT 'active',
+            source TEXT DEFAULT '',
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now'))
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_goal_profiles_scope ON goal_profiles(scope_type, scope_value)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_goal_profiles_status ON goal_profiles(status)")
+
+
+def _m37_cortex_goal_profile_trace(conn):
+    """Persist which goal profile influenced each important Cortex decision."""
+    _migrate_add_column(conn, "cortex_evaluations", "goal_profile_id", "TEXT DEFAULT ''")
+    _migrate_add_column(conn, "cortex_evaluations", "goal_profile_labels", "TEXT DEFAULT '[]'")
+    _migrate_add_column(conn, "cortex_evaluations", "goal_profile_weights", "TEXT DEFAULT '{}'")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_cortex_evaluations_goal_profile ON cortex_evaluations(goal_profile_id)")
+
+
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
     (2, "followups_reasoning", _m2_followups_reasoning),
@@ -893,6 +922,8 @@ MIGRATIONS = [
     (33, "followup_impact_scoring", _m33_followup_impact_scoring),
     (34, "cortex_evaluations", _m34_cortex_evaluations),
     (35, "cortex_evaluation_outcome_link", _m35_cortex_evaluation_outcome_link),
+    (36, "goal_profiles", _m36_goal_profiles),
+    (37, "cortex_goal_profile_trace", _m37_cortex_goal_profile_trace),
 ]
 
 

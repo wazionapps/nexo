@@ -84,6 +84,11 @@ STOP_WORDS = {
 }
 
 
+def _term_hits(text: str, terms: set[str]) -> int:
+    lowered = (text or "").lower()
+    return sum(1 for term in terms if term in lowered)
+
+
 def _validate_state(state: dict) -> dict:
     """Validate cognitive state and determine action mode.
 
@@ -379,6 +384,7 @@ def _score_alternative(
     impact_level: str,
     constraints: list[str],
     evidence_refs: list[str],
+    goal_profile: dict,
 ) -> dict:
     text = " ".join([
         alternative.get("name", ""),
@@ -391,20 +397,44 @@ def _score_alternative(
     success = 5.0 + min(2.0, len(evidence_refs) * 0.4)
     risk = 2.5
     reasons: list[str] = []
+    weights = goal_profile.get("weights") or {}
+    direct_hits = _term_hits(lowered, DIRECT_IMPACT_TERMS)
+    safe_hits = _term_hits(lowered, SAFE_TERMS)
+    risk_hits = _term_hits(lowered, RISK_TERMS)
+    focus = max(weights, key=weights.get) if weights else "impact"
 
-    if _contains_any(lowered, DIRECT_IMPACT_TERMS):
-        impact += 0.8
+    if direct_hits:
+        impact += min(1.6, direct_hits * 0.4)
         reasons.append("apunta directo al objetivo")
-    if _contains_any(lowered, SAFE_TERMS):
-        success += 1.6
-        risk = max(1.0, risk - 0.8)
+    if safe_hits:
+        success += min(1.8, safe_hits * 0.45)
+        risk = max(1.0, risk - min(1.1, safe_hits * 0.35))
         reasons.append("incluye verificación o despliegue seguro")
-    if not _contains_any(lowered, SAFE_TERMS) and task_type in {"edit", "execute"}:
+    if not safe_hits and task_type in {"edit", "execute"}:
         risk += 1.2
         reasons.append("no explicita verificación")
-    if _contains_any(lowered, RISK_TERMS):
-        risk += 2.2
+    if risk_hits:
+        risk += min(2.8, risk_hits * 0.7)
         reasons.append("contiene señales de alto riesgo")
+
+    if focus == "impact" and direct_hits:
+        impact += 0.45
+        risk = max(1.0, risk - 0.35)
+        reasons.append("el perfil activo prioriza impacto")
+    elif focus == "impact":
+        impact = max(1.0, impact - 0.35)
+        reasons.append("el perfil activo penaliza opciones de bajo empuje")
+    elif focus == "success" and safe_hits:
+        success += 0.45
+        reasons.append("el perfil activo prioriza exito verificable")
+    elif focus == "risk":
+        if safe_hits:
+            risk = max(1.0, risk - 0.4)
+        if risk_hits:
+            risk += 0.8
+        reasons.append("el perfil activo penaliza riesgo")
+    elif focus == "somatic":
+        reasons.append("el perfil activo da peso a la huella somática")
 
     history = _history_signal(lowered, area=area, goal=goal)
     success += history["positive"]
@@ -420,7 +450,13 @@ def _score_alternative(
         reasons.extend(constraint_reasons)
 
     somatic = _somatic_penalty(area, goal, lowered)
-    total = round((impact * 0.35) + (success * 0.30) - (risk * 0.20) - (somatic * 0.15), 3)
+    total = round(
+        (impact * float(weights.get("impact", 0.35)))
+        + (success * float(weights.get("success", 0.30)))
+        - (risk * float(weights.get("risk", 0.20)))
+        - (somatic * float(weights.get("somatic", 0.15))),
+        3,
+    )
     return {
         "name": alternative.get("name", ""),
         "impact": round(max(1.0, min(10.0, impact)), 2),
@@ -429,6 +465,7 @@ def _score_alternative(
         "somatic_penalty": round(max(0.0, min(5.0, somatic)), 2),
         "total_score": total,
         "notes": reasons[:4],
+        "goal_profile_focus": focus,
         "history_matches": {
             "decisions": history["matched_decisions"],
             "outcomes": history["matched_outcomes"],
@@ -627,6 +664,8 @@ def handle_cortex_decide(
     session_id: str = "",
     task_id: str = "",
     linked_outcome_id: int = 0,
+    goal_profile_id: str = "",
+    goal_id: str = "",
 ) -> str:
     """Evaluate concrete alternatives for a high-impact task using the existing Cortex."""
     clean_goal = (goal or "").strip()
@@ -648,6 +687,17 @@ def handle_cortex_decide(
     clean_level = impact_level if impact_level in {"medium", "high", "critical"} else "high"
     parsed_constraints = _parse_json_list(constraints)
     parsed_evidence = _parse_json_list(evidence_refs)
+    try:
+        from db import resolve_goal_profile
+
+        resolved_goal_profile = resolve_goal_profile(
+            profile_id=goal_profile_id,
+            area=area.strip(),
+            task_type=clean_type,
+            goal_id=goal_id,
+        )
+    except Exception as exc:
+        return json.dumps({"ok": False, "error": f"Failed to resolve goal profile: {exc}"}, ensure_ascii=False, indent=2)
 
     scored = [
         _score_alternative(
@@ -658,6 +708,7 @@ def handle_cortex_decide(
             impact_level=clean_level,
             constraints=parsed_constraints,
             evidence_refs=parsed_evidence,
+            goal_profile=resolved_goal_profile,
         )
         for item in parsed_alternatives
     ]
@@ -685,6 +736,9 @@ def handle_cortex_decide(
             recommended_choice=recommended["name"],
             recommended_reasoning=reasoning,
             linked_outcome_id=resolved_outcome_id,
+            goal_profile_id=resolved_goal_profile.get("profile_id", ""),
+            goal_profile_labels=resolved_goal_profile.get("goal_labels", []),
+            goal_profile_weights=resolved_goal_profile.get("weights", {}),
             selected_choice=recommended["name"],
             selection_reason=reasoning,
             selection_source="recommended",
@@ -711,6 +765,13 @@ def handle_cortex_decide(
             "selected_choice": record.get("selected_choice"),
             "selection_source": record.get("selection_source"),
             "linked_outcome_id": record.get("linked_outcome_id"),
+            "goal_profile": {
+                "profile_id": resolved_goal_profile.get("profile_id", ""),
+                "profile_name": resolved_goal_profile.get("profile_name", ""),
+                "resolved_by": resolved_goal_profile.get("resolved_by", ""),
+                "goal_labels": resolved_goal_profile.get("goal_labels", []),
+                "weights": resolved_goal_profile.get("weights", {}),
+            },
             "alternatives": parsed_alternatives,
             "scores": scored,
             "next_action": "Apply the recommended choice or call nexo_cortex_override if you intentionally choose another option.",
