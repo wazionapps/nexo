@@ -822,6 +822,34 @@ def _m33_followup_impact_scoring(conn):
     _migrate_add_index(conn, "idx_followups_impact_score", "followups", "impact_score")
 
 
+def _m34_cortex_evaluations(conn):
+    """Persist high-impact alternative evaluations on top of the existing Cortex."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS cortex_evaluations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT DEFAULT '',
+            task_id TEXT DEFAULT '',
+            goal TEXT NOT NULL,
+            task_type TEXT DEFAULT '',
+            area TEXT DEFAULT '',
+            impact_level TEXT NOT NULL DEFAULT 'high',
+            context_hint TEXT DEFAULT '',
+            alternatives TEXT NOT NULL DEFAULT '[]',
+            scores TEXT NOT NULL DEFAULT '[]',
+            recommended_choice TEXT DEFAULT '',
+            recommended_reasoning TEXT DEFAULT '',
+            selected_choice TEXT DEFAULT '',
+            selection_reason TEXT DEFAULT '',
+            selection_source TEXT NOT NULL DEFAULT 'recommended',
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now'))
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_cortex_evaluations_task ON cortex_evaluations(task_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_cortex_evaluations_session ON cortex_evaluations(session_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_cortex_evaluations_created ON cortex_evaluations(created_at)")
+
+
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
     (2, "followups_reasoning", _m2_followups_reasoning),
@@ -856,6 +884,7 @@ MIGRATIONS = [
     (31, "drive_signals", _m31_drive_signals),
     (32, "outcomes", _m32_outcomes),
     (33, "followup_impact_scoring", _m33_followup_impact_scoring),
+    (34, "cortex_evaluations", _m34_cortex_evaluations),
 ]
 
 

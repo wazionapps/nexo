@@ -31,7 +31,7 @@
 <!-- Stats row -->
 <div class="grid grid-cols-4 gap-4 mb-6">
   <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-5 card">
-    <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1">Total Decisions</p>
+    <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1">Alt Evaluations</p>
     <p class="text-2xl font-display font-bold text-slate-100" id="stat-decisions">--</p>
   </div>
   <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-5 card">
@@ -43,8 +43,8 @@
     <p class="text-2xl font-display font-bold text-slate-100" id="stat-logs">--</p>
   </div>
   <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-5 card">
-    <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1">Success Rate</p>
-    <p class="text-2xl font-display font-bold text-emerald-400" id="stat-success">--</p>
+    <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1">Overrides</p>
+    <p class="text-2xl font-display font-bold text-amber-400" id="stat-success">--</p>
   </div>
 </div>
 
@@ -77,7 +77,7 @@
       <span class="text-[10px] text-slate-600 font-mono" id="decisions-count">--</span>
     </div>
     <div id="decisions-list" class="space-y-3 max-h-[600px] overflow-y-auto pr-1">
-      <div class="py-12 text-center text-sm text-slate-500">Loading decisions...</div>
+      <div class="py-12 text-center text-sm text-slate-500">Loading decision support...</div>
     </div>
   </div>
 </div>
@@ -94,6 +94,7 @@
 <script>
   let allLogs = [];
   let allDecisions = [];
+  let allEvaluations = [];
 
   const modeColors = {
     conservative: { bg: 'bg-blue-500/15', text: 'text-blue-400', border: 'border-blue-500/30' },
@@ -156,16 +157,56 @@
     }).join('');
   }
 
-  function renderDecisions(decisions) {
+  function renderDecisions(evaluations, decisions) {
     const container = document.getElementById('decisions-list');
-    document.getElementById('decisions-count').textContent = `${decisions.length} decisions`;
+    document.getElementById('decisions-count').textContent = `${evaluations.length} evaluations / ${decisions.length} decisions`;
 
-    if (!decisions.length) {
-      container.innerHTML = '<div class="py-12 text-center text-sm text-slate-500">No decisions recorded</div>';
+    if (!evaluations.length && !decisions.length) {
+      container.innerHTML = '<div class="py-12 text-center text-sm text-slate-500">No decision support recorded</div>';
       return;
     }
 
-    container.innerHTML = decisions.slice(0, 50).map((d, i) => `
+    const evaluationCards = evaluations.slice(0, 25).map((item, i) => {
+      const scores = Array.isArray(item.scores) ? item.scores : JSON.parse(item.scores || '[]');
+      const top = scores[0] || null;
+      const selectedChanged = item.selection_source === 'override';
+      return `
+      <div class="bg-slate-800/30 rounded-lg p-4 hover:bg-slate-800/50 transition-colors border border-transparent hover:border-slate-700/50 animate-fade-in" style="animation-delay: ${i * 35}ms">
+        <div class="flex items-center justify-between mb-2 gap-2">
+          <div class="flex items-center gap-2 flex-wrap">
+            ${item.impact_level ? `<span class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-red-500/15 text-red-300 uppercase tracking-wider">${escapeHtml(item.impact_level)}</span>` : ''}
+            ${item.area ? `<span class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-nexo-500/15 text-nexo-400 uppercase tracking-wider">${escapeHtml(item.area)}</span>` : ''}
+          </div>
+          <span class="text-[10px] text-slate-600">${relativeTime(item.created_at)}</span>
+        </div>
+        <p class="text-sm text-slate-200 mb-2">${escapeHtml(item.goal || '--')}</p>
+        <div class="grid grid-cols-2 gap-2 mb-2">
+          <div class="bg-slate-900/40 rounded-md p-2">
+            <p class="text-[10px] uppercase tracking-wider text-slate-500 mb-1">Recommended</p>
+            <p class="text-xs text-emerald-400 font-semibold">${escapeHtml(item.recommended_choice || '--')}</p>
+          </div>
+          <div class="bg-slate-900/40 rounded-md p-2">
+            <p class="text-[10px] uppercase tracking-wider text-slate-500 mb-1">Selected</p>
+            <p class="text-xs ${selectedChanged ? 'text-amber-400' : 'text-slate-200'} font-semibold">${escapeHtml(item.selected_choice || '--')}</p>
+          </div>
+        </div>
+        ${item.recommended_reasoning ? `<p class="text-xs text-slate-400 mb-2">${escapeHtml(item.recommended_reasoning)}</p>` : ''}
+        ${selectedChanged && item.selection_reason ? `
+          <div class="mt-2 bg-amber-500/10 rounded px-2 py-1.5">
+            <p class="text-[10px] text-amber-400 font-semibold uppercase tracking-wider mb-0.5">Override</p>
+            <p class="text-xs text-amber-200/90">${escapeHtml(item.selection_reason)}</p>
+          </div>
+        ` : ''}
+        ${top ? `
+          <div class="mt-2 text-[10px] text-slate-500 font-mono">
+            top=${Number(top.total_score || 0).toFixed(2)} impact=${Number(top.impact || 0).toFixed(1)} success=${Number(top.success_probability || 0).toFixed(1)} risk=${Number(top.risk_level || 0).toFixed(1)}
+          </div>
+        ` : ''}
+      </div>
+      `;
+    }).join('');
+
+    const decisionCards = decisions.slice(0, 20).map((d, i) => `
       <div class="bg-slate-800/30 rounded-lg p-4 hover:bg-slate-800/50 transition-colors border border-transparent hover:border-slate-700/50 animate-fade-in" style="animation-delay: ${i * 40}ms">
         <div class="flex items-center justify-between mb-2">
           <div class="flex items-center gap-2">
@@ -190,6 +231,15 @@
         </div>
       </div>
     `).join('');
+
+    const decisionSection = decisionCards ? `
+      <div class="pt-3 mt-3 border-t border-slate-800/80">
+        <p class="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-3">Decision Log</p>
+        <div class="space-y-3">${decisionCards}</div>
+      </div>
+    ` : '';
+
+    container.innerHTML = evaluationCards + decisionSection;
   }
 
   function renderConfidenceChart(decisions) {
@@ -217,9 +267,10 @@
 
     const filteredLogs = modeFilter ? allLogs.filter(l => l.mode === modeFilter) : allLogs;
     const filteredDecisions = domainFilter ? allDecisions.filter(d => d.domain === domainFilter) : allDecisions;
+    const filteredEvaluations = domainFilter ? allEvaluations.filter(e => e.area === domainFilter) : allEvaluations;
 
     renderLogs(filteredLogs);
-    renderDecisions(filteredDecisions);
+    renderDecisions(filteredEvaluations, filteredDecisions);
   }
 
   async function loadData() {
@@ -228,16 +279,20 @@
 
     allLogs = data.cortex_logs || [];
     allDecisions = data.decisions || [];
+    allEvaluations = data.evaluations || [];
 
     // Populate domain filter
-    const domains = [...new Set(allDecisions.map(d => d.domain).filter(Boolean))];
+    const domains = [...new Set([
+      ...allDecisions.map(d => d.domain).filter(Boolean),
+      ...allEvaluations.map(e => e.area).filter(Boolean),
+    ])];
     const domainSelect = document.getElementById('filter-domain');
     const currentDomain = domainSelect.value;
     domainSelect.innerHTML = '<option value="">All Domains</option>' +
       domains.map(d => `<option value="${escapeHtml(d)}" ${d === currentDomain ? 'selected' : ''}>${escapeHtml(d)}</option>`).join('');
 
     // Stats
-    document.getElementById('stat-decisions').textContent = formatNumber(allDecisions.length);
+    document.getElementById('stat-decisions').textContent = formatNumber(allEvaluations.length);
     document.getElementById('stat-logs').textContent = formatNumber(allLogs.length);
 
     const confidences = allDecisions.filter(d => d.confidence != null).map(d => {
@@ -247,10 +302,8 @@
     const avgConf = confidences.length ? (confidences.reduce((a, b) => a + b, 0) / confidences.length) : 0;
     document.getElementById('stat-confidence').textContent = avgConf.toFixed(0) + '%';
 
-    const outcomes = allDecisions.filter(d => d.outcome);
-    const successes = outcomes.filter(d => d.outcome === 'success' || d.outcome === 'positive' || d.outcome === 'good');
-    const successRate = outcomes.length ? ((successes.length / outcomes.length) * 100) : 0;
-    document.getElementById('stat-success').textContent = successRate.toFixed(0) + '%';
+    const overrides = allEvaluations.filter(e => e.selection_source === 'override').length;
+    document.getElementById('stat-success').textContent = formatNumber(overrides);
 
     renderConfidenceChart(allDecisions);
     applyFilters();

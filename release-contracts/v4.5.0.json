@@ -62,7 +62,7 @@
     {
       "id": "decision_loop",
       "title": "Decision Loop",
-      "status": "pending",
+      "status": "complete",
       "evidence_required": [
         "Cortex evaluates alternatives",
         "Recommendation and override are logged"

@@ -107,6 +107,29 @@ def test_task_open_persists_defer_mode_for_high_stakes_answer():
     assert row["response_high_stakes"] == 1
 
 
+def test_task_open_requires_decision_support_for_high_stakes_action():
+    from plugins.protocol import handle_task_open
+
+    sid = _register_session("nexo-1012-2012")
+    payload = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Run the production release migration",
+            task_type="execute",
+            area="release",
+            plan='["prepare", "migrate", "verify"]',
+            evidence_refs='["release contract", "staging smoke"]',
+            verification_step="run production smoke checks",
+            stakes="high",
+        )
+    )
+
+    assert payload["ok"] is True
+    assert payload["decision_support"]["required"] is True
+    assert payload["decision_support"]["tool"] == "nexo_cortex_decide"
+    assert "alternatives" in payload["next_action"].lower()
+
+
 def test_task_open_with_blocking_guard_creates_guard_debt(monkeypatch):
     from db import get_db
     from plugins.protocol import handle_task_open
@@ -306,6 +329,84 @@ def test_task_close_auto_captures_learning_when_correction_has_no_learning():
     assert learning["status"] == "active"
     assert learning["title"] == "Reduced guard false positives"
     assert "/Users/franciscoc/Documents/_PhpstormProjects/nexo/src/plugins/guard.py" in learning["applies_to"]
+
+
+def test_high_stakes_action_close_opens_debt_without_cortex_evaluation():
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1013-2013")
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Deploy the production release package",
+            task_type="execute",
+            area="release",
+            plan='["prepare", "deploy", "verify"]',
+            evidence_refs='["release contract", "staging green"]',
+            verification_step="run post-release smoke tests",
+            stakes="high",
+        )
+    )
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="done",
+            evidence="test staging production changelog version all checked",
+            outcome_notes="Release executed without alternative evaluation.",
+        )
+    )
+
+    assert closed["status"] == "debt-open"
+    debt_types = {item["debt_type"] for item in closed["open_debts"]}
+    assert "missing_cortex_evaluation" in debt_types
+
+
+def test_high_stakes_action_close_stays_clean_with_cortex_evaluation():
+    from plugins.cortex import handle_cortex_decide
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1014-2014")
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Deploy the production release package",
+            task_type="execute",
+            area="release",
+            plan='["prepare", "deploy", "verify"]',
+            evidence_refs='["release contract", "staging green"]',
+            verification_step="run post-release smoke tests",
+            stakes="high",
+        )
+    )
+    evaluation = json.loads(
+        handle_cortex_decide(
+            goal="Deploy the production release package",
+            task_type="execute",
+            impact_level="critical",
+            area="release",
+            session_id=sid,
+            task_id=opened["task_id"],
+            evidence_refs='["release contract", "staging green"]',
+            alternatives=json.dumps([
+                {"name": "canary_release", "description": "Deploy staged canary release with smoke tests and rollback ready"},
+                {"name": "direct_release", "description": "Deploy directly to production without staged verification"},
+            ]),
+        )
+    )
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="done",
+            evidence="test staging production changelog version all checked",
+            outcome_notes="Release executed with persisted cortex evaluation.",
+        )
+    )
+
+    assert evaluation["ok"] is True
+    assert closed["status"] == "clean"
+    assert closed["cortex_evaluation"]["task_id"] == opened["task_id"]
 
 
 def test_task_close_explicit_learning_supersedes_conflicting_file_rule():

@@ -1568,7 +1568,15 @@ async def api_cortex(limit: int = Query(50, ge=1, le=200)):
     conn = db.get_db()
     logs = [dict(r) for r in conn.execute("SELECT * FROM cortex_log ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()]
     decisions = [dict(r) for r in conn.execute("SELECT * FROM decisions ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()]
-    return {"cortex_logs": logs, "decisions": decisions}
+    evaluations = []
+    if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='cortex_evaluations'").fetchone():
+        evaluations = [
+            dict(r) for r in conn.execute(
+                "SELECT * FROM cortex_evaluations ORDER BY created_at DESC, id DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        ]
+    return {"cortex_logs": logs, "decisions": decisions, "evaluations": evaluations}
 
 
 # ---------------------------------------------------------------------------

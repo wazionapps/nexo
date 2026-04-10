@@ -115,6 +115,12 @@ Must prove:
 - cortex can evaluate alternatives for high-impact work
 - recommendation and override are both logged
 
+Current v4.5 implementation path:
+
+- `nexo_cortex_decide` ranks 2+ alternatives on top of the existing Cortex
+- `nexo_cortex_override` preserves intentional human/operator overrides
+- `nexo_task_close` opens protocol debt on high-stakes action tasks if no Cortex evaluation was persisted
+
 ### Gate F - Public Proof
 
 Must prove:

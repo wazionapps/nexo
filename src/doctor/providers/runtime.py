@@ -2331,6 +2331,19 @@ def check_protocol_compliance() -> DoctorCheck:
                            ORDER BY total DESC, debt_type ASC""",
                         (window,),
                     ).fetchall()
+                    has_cortex_evaluations = bool(
+                        conn.execute(
+                            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='cortex_evaluations'"
+                        ).fetchone()
+                    )
+                    covered_tasks = set()
+                    if has_cortex_evaluations:
+                        covered_tasks = {
+                            row["task_id"]
+                            for row in conn.execute(
+                                "SELECT DISTINCT task_id FROM cortex_evaluations WHERE task_id != ''"
+                            ).fetchall()
+                        }
             finally:
                 conn.close()
 
@@ -2344,6 +2357,9 @@ def check_protocol_compliance() -> DoctorCheck:
                     learning_ok = [row for row in learning_required if row["learning_id"]]
                     action_tasks = [row for row in tasks if row["task_type"] in ("edit", "execute", "delegate")]
                     cortex_ok = [row for row in action_tasks if row["cortex_mode"] == "act"]
+                    has_response_high_stakes = bool(tasks) and "response_high_stakes" in tasks[0].keys()
+                    high_stakes_action_tasks = [row for row in action_tasks if row["response_high_stakes"]] if has_response_high_stakes else []
+                    decision_ok = [row for row in high_stakes_action_tasks if row["task_id"] in covered_tasks]
 
                     score_parts = []
                     if verify_required:
@@ -2354,6 +2370,8 @@ def check_protocol_compliance() -> DoctorCheck:
                         score_parts.append((len(learning_ok) / len(learning_required)) * 100)
                     if action_tasks:
                         score_parts.append((len(cortex_ok) / len(action_tasks)) * 100)
+                    if high_stakes_action_tasks:
+                        score_parts.append((len(decision_ok) / len(high_stakes_action_tasks)) * 100)
 
                     base_score = (sum(score_parts) / len(score_parts)) if score_parts else (100.0 if tasks else 0.0)
                     warn_debt = sum(row["total"] for row in debt_rows if row["severity"] == "warn")
@@ -2370,6 +2388,8 @@ def check_protocol_compliance() -> DoctorCheck:
                         evidence.append(f"learning-after-correction: {len(learning_ok)}/{len(learning_required)}")
                     if action_tasks:
                         evidence.append(f"action tasks Cortex-cleared: {len(cortex_ok)}/{len(action_tasks)}")
+                    if high_stakes_action_tasks:
+                        evidence.append(f"high-stakes action tasks with alternative evaluation: {len(decision_ok)}/{len(high_stakes_action_tasks)}")
                     for row in debt_rows[:5]:
                         evidence.append(f"open {row['severity']} debt — {row['debt_type']}: {row['total']}")
 

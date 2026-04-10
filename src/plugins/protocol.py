@@ -12,6 +12,7 @@ import time
 from db import (
     close_protocol_task,
     create_followup,
+    latest_cortex_evaluation_for_task,
     create_protocol_debt,
     create_protocol_task,
     build_pre_action_context,
@@ -26,6 +27,7 @@ from db import (
     log_change,
     resolve_protocol_debts,
     search_learnings,
+    task_has_cortex_evaluation,
 )
 from plugins.cortex import evaluate_cortex_state
 from plugins.guard import handle_guard_check
@@ -83,6 +85,10 @@ def _parse_bool(value) -> bool:
 def _detect_high_stakes(*parts: str) -> bool:
     combined = " ".join((part or "").strip().lower() for part in parts if part)
     return any(keyword in combined for keyword in HIGH_STAKES_KEYWORDS)
+
+
+def _decision_support_required(*, task_type: str, high_stakes: bool) -> bool:
+    return task_type in ACTION_TASKS and high_stakes
 
 
 def evaluate_response_confidence(
@@ -599,6 +605,18 @@ def handle_task_open(
         )
 
     cortex = evaluate_cortex_state(state)
+    decision_support = {
+        "required": _decision_support_required(
+            task_type=clean_type,
+            high_stakes=response_contract["high_stakes"],
+        ),
+        "tool": "nexo_cortex_decide",
+        "reason": (
+            "High-stakes action task detected. Rank at least 2 alternatives before acting."
+            if clean_type in ACTION_TASKS and response_contract["high_stakes"]
+            else "Alternative ranking not required for this task."
+        ),
+    }
     must_verify = clean_type in ACTION_TASKS or response_contract["mode"] == "verify"
     must_change_log = clean_type in {"edit", "execute"} and bool(files_list)
     must_learning_if_corrected = True
@@ -688,6 +706,8 @@ def handle_task_open(
         next_action = attention["recommended_action"]
     elif anticipatory_warnings:
         next_action = "Review the anticipatory warnings before proceeding."
+    elif decision_support["required"]:
+        next_action = "Generate 2-3 concrete alternatives and run nexo_cortex_decide before acting."
     elif cortex["mode"] == "ask":
         next_action = "Ask for the missing information before acting."
     elif cortex["mode"] == "propose":
@@ -724,6 +744,7 @@ def handle_task_open(
             ),
         },
         "response_contract": response_contract,
+        "decision_support": decision_support,
         "recent_context": {
             "has_matches": bool(recent_bundle.get("has_matches")),
             "excerpt": format_pre_action_context_bundle(recent_bundle, compact=True) if recent_bundle.get("has_matches") else "",
@@ -791,6 +812,10 @@ def handle_task_close(
     learning_id = None
     created_followup_id = ""
     debts_created: list[dict] = []
+    requires_decision_support = _decision_support_required(
+        task_type=task.get("task_type", ""),
+        high_stakes=bool(task.get("response_high_stakes")),
+    )
 
     # ── Evidence enforcement: reject 'done' without proof in strict mode ──
     if task.get("must_verify") and clean_outcome == "done":
@@ -982,6 +1007,23 @@ def handle_task_close(
                 debts=debts_created,
             )
 
+    if requires_decision_support and clean_outcome in {"done", "partial", "failed"}:
+        if task_has_cortex_evaluation(task_id):
+            resolve_protocol_debts(
+                task_id=task_id,
+                debt_types=["missing_cortex_evaluation"],
+                resolution="High-stakes action task has a persisted Cortex evaluation.",
+            )
+        else:
+            _record_debt(
+                task["session_id"],
+                task_id,
+                "missing_cortex_evaluation",
+                severity="error",
+                evidence="High-stakes action task closed without nexo_cortex_decide / persisted evaluation.",
+                debts=debts_created,
+            )
+
     task = close_protocol_task(
         task_id,
         outcome=clean_outcome,
@@ -1041,6 +1083,7 @@ def handle_task_close(
         "change_log_id": change_log_id,
         "learning_id": learning_id,
         "followup_id": created_followup_id,
+        "cortex_evaluation": latest_cortex_evaluation_for_task(task_id) if requires_decision_support else None,
         "debts_created": debts_created,
         "open_debts": [
             {
