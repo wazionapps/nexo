@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXO 5.0.0: Goals, Decisions, Outcomes, and Public Proof Finally Match</title>
+    <meta name="description" content="NEXO 5.0.0 connects goal profiles, Decision Cortex v2, measured outcomes, reusable skill evolution, and a stronger benchmark/release surface, so the runtime behaves like one closed loop instead of powerful pieces loosely tied together.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-5-0-0-goal-driven-runtime-close-loops/">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/blog/nexo-5-0-0-goal-driven-runtime-close-loops/">
+    <meta property="og:title" content="NEXO 5.0.0: Goals, Decisions, Outcomes, and Public Proof Finally Match">
+    <meta property="og:description" content="NEXO 5.0.0 closes the loop between choice, result, reuse, and public proof. Goal profiles, Decision Cortex v2, outcome-backed skill evolution, and a stronger release/runtime contract all ship together.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+    <meta property="article:published_time" content="2026-04-10">
+    <meta property="article:author" content="Francisco Cerda Puigserver">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO 5.0.0: Goals, Decisions, Outcomes, and Public Proof Finally Match">
+    <meta name="twitter:description" content="Goal profiles, Decision Cortex v2, measured outcomes, reusable skill evolution, and a stronger benchmark/release surface now ship as one coherent runtime story.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "NEXO 5.0.0: Goals, Decisions, Outcomes, and Public Proof Finally Match",
+        "description": "NEXO 5.0.0 connects goal profiles, Decision Cortex v2, measured outcomes, reusable skill evolution, and a stronger benchmark/release surface, so the runtime behaves like one closed loop instead of powerful pieces loosely tied together.",
+        "datePublished": "2026-04-10",
+        "dateModified": "2026-04-10",
+        "author": {
+            "@type": "Person",
+            "name": "Francisco Cerda Puigserver"
+        },
+        "publisher": {
+            "@type": "Organization",
+            "name": "WAzion",
+            "url": "https://www.wazion.com"
+        },
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https://nexo-brain.com/blog/nexo-5-0-0-goal-driven-runtime-close-loops/"
+        },
+        "url": "https://nexo-brain.com/blog/nexo-5-0-0-goal-driven-runtime-close-loops/",
+        "image": "https://nexo-brain.com/assets/nexo-brain-infographic-v5.png",
+        "keywords": ["NEXO 5.0.0", "Decision Cortex", "Goal Engine", "outcome learning", "skill evolution", "benchmark pack"]
+    }
+    </script>
+
+    <style>
+        .article-header { padding-top: 128px; padding-bottom: 40px; text-align: center; }
+        .article-meta { font-size: 14px; color: var(--text-muted); margin-bottom: 16px; }
+        .article-body {
+            max-width: 720px; margin: 0 auto; padding: 0 24px 80px;
+            font-size: 17px; line-height: 1.8; color: var(--text);
+        }
+        .article-body h2 { font-size: 28px; font-weight: 700; margin: 48px 0 16px; letter-spacing: -0.01em; }
+        .article-body p { margin-bottom: 20px; color: var(--text-muted); }
+        .article-body strong { color: var(--text); }
+        .article-body a { color: var(--purple-light); }
+        .article-body a:hover { color: var(--pink); }
+        .article-body ul { margin: 0 0 20px 24px; color: var(--text-muted); }
+        .article-body li { margin-bottom: 8px; }
+        .article-body code {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 14px; color: var(--pink);
+            background: rgba(236, 72, 153, 0.1);
+            padding: 2px 8px; border-radius: 4px;
+        }
+        .article-back {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 14px; font-weight: 600; color: var(--text-muted);
+            margin-bottom: 24px;
+        }
+        .article-back:hover { color: var(--purple-light); }
+        .article-visual {
+            margin: 32px 0 40px;
+            text-align: center;
+        }
+        .article-visual img {
+            max-width: 100%;
+            border-radius: 16px;
+            border: 1px solid var(--dark-border);
+            box-shadow: 0 8px 32px rgba(124,58,237,0.15);
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-64.png" alt="NEXO Brain" class="logo-image">
+            <span class="logo-text">NEXO Brain</span>
+        </a>
+        <button class="mobile-menu-toggle" aria-label="Toggle navigation" onclick="toggleMobileMenu()">
+            <span></span><span></span><span></span>
+        </button>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/features/">Features</a>
+            <a href="/evolution/">Evolution</a>
+            <a href="/compare/">Compare</a>
+            <a href="/blog/">Blog</a>
+            <a href="/changelog/">Changelog</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta">GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<section class="article-header">
+    <div class="container">
+        <a href="/blog/" class="article-back">← Back to blog</a>
+        <div class="article-meta">April 10, 2026 · Major release</div>
+        <h1 class="section-title" style="font-size:clamp(28px,4.5vw,48px);max-width:920px;margin:0 auto 16px;">NEXO 5.0.0: Goals, Decisions, Outcomes, and Public Proof Finally Match</h1>
+        <p class="section-subtitle" style="max-width:760px;margin:0 auto;">This is the release where NEXO stops feeling like a collection of powerful subsystems and starts behaving much more like one closed-loop runtime: goals shape decisions, decisions connect to results, results can seed reusable skills, and the public story now matches what the runtime actually does.</p>
+    </div>
+</section>
+
+<section>
+    <div class="article-body">
+        <div class="article-visual">
+            <img src="/assets/nexo-brain-infographic-v5.png" alt="NEXO Brain 5.0.0 release">
+        </div>
+
+        <p><strong>The core change in 5.0.0 is not “more layers”.</strong> It is better closure. Earlier versions already had strong memory, shared-brain continuity, protocol discipline, skills, Deep Sleep, and a broad runtime surface. The weaker point was the space between them: how goals influenced choices, how results changed future behavior, and how public proof tracked the broader runtime instead of only one memory benchmark.</p>
+
+        <h2>What 5.0.0 adds</h2>
+        <ul>
+            <li><strong>Goal profiles</strong> that explicitly shape decision evaluation instead of pretending every task has the same optimization target.</li>
+            <li><strong>Decision Cortex v2</strong> behavior that keeps stronger alternative ranking and recommendation trace linked to goal context.</li>
+            <li><strong>Outcome-backed learning</strong> so repeated successful strategies can harden into reusable procedural assets rather than staying as isolated anecdotes.</li>
+            <li><strong>Skill evolution from evidence</strong>, including the ability to promote good patterns and retire weak ones more honestly.</li>
+            <li><strong>A refreshed runtime benchmark pack</strong> now scoring NEXO full stack at <strong>96.2%</strong> across 13 checked-in operator scenarios, while LoCoMo remains the memory-specific benchmark.</li>
+        </ul>
+
+        <h2>What changed operationally</h2>
+        <p>There is also a less glamorous but equally important shift: <code>release</code>, <code>doctor</code>, <code>update</code>, protocol debt handling, and public website surfaces are treated as one contract. That means less drift between what the runtime does locally, what the repo says, what the changelog claims, and what the public site presents.</p>
+
+        <h2>Why the benchmark story matters more now</h2>
+        <p>NEXO still publishes the LoCoMo result because memory performance matters. But <strong>5.0.0 stops pretending that one benchmark explains the whole product</strong>. The runtime pack covers a different slice: contradiction handling, continuity across sessions and clients, guarded execution, and the newer decision/outcome/prioritization loop. That is a fairer way to show why NEXO is stronger as a local cognitive runtime, not just a memory layer.</p>
+
+        <h2>What did not change</h2>
+        <p>NEXO did not abandon the earlier layers to get here. The 4.x line still matters: multimodal memory refs, pre-compaction auto-flush, public claim/wiki surfaces, recent-memory fallback, transcript access, Drive/Curiosity, and the broader operator runtime are all still part of the product. 5.0.0 is the release that ties more of that together coherently.</p>
+
+        <p>If you want the exact release record, open the <a href="/changelog/#v500">5.0.0 changelog section</a>. If you want the public proof surface, start from <a href="/features/benchmark/">Benchmarks and public proof</a> or the <a href="/compare/">compare hub</a>.</p>
+    </div>
+</section>
+
+<script src="/assets/script.js"></script>
+</body>
+</html>
