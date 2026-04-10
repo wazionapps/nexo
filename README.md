@@ -87,15 +87,14 @@ Versions `3.1.7` through `3.2.0` close the recent-memory gap:
 - when even that misses, NEXO now exposes raw transcript fallback tools for Claude Code and Codex session stores
 - NEXO can now inspect itself through a live system catalog derived from canonical sources instead of relying only on stale docs or operator memory
 
-Version `4.0.1` keeps the 4.0 release aligned across channels while preserving the next memory-surface gap closure:
+Version `5.0.0` closes the loop between memory, decisions, outcomes, and reusable behavior:
 
-- non-text artifacts now have a first-class multimodal reference layer instead of living outside the memory model
-- pre-compaction auto-flush now persists actionable session state before context compression can erase it
-- the claim graph now behaves like a public knowledge wiki with evidence, freshness, verification state, and linting
-- operators can export a readable markdown memory bundle instead of trusting only opaque database state
-- user adaptation now uses a richer inspectable user-state model instead of leaning only on shallow sentiment heuristics
-- retrieval exposes more public knobs for hybrid weighting, decomposition, dreams, and dormant-memory handling
-- newer memory layers now declare an explicit backend contract rather than silently hardcoding storage assumptions forever
+- goal profiles are now explicit and auditable instead of living as hidden heuristics
+- the Cortex can rank alternatives with goals, outcomes, overrides, and structured penalties
+- repeated outcome patterns can become durable learnings that influence later decisions
+- outcome-backed evidence can seed, promote, demote, or retire reusable skills
+- the runtime benchmark pack now shows the operator/runtime advantage with checked-in artifacts instead of relying only on prose
+- personal-script/core runtime paths, protocol debt maintenance, and release doctoring are now strong enough that the live install path can be audited honestly before release
 
 ### Client Capability Matrix
 

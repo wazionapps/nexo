@@ -1,0 +1,109 @@
+{
+  "release_line": "v5.0",
+  "target_version": "5.0.0",
+  "scope_owner": "NEXO",
+  "distribution": {
+    "git_updates_on": "merge_to_main",
+    "packaged_release_on": "tag_publish"
+  },
+  "required_repo_files": [
+    "docs/personal-artifacts-manual.md",
+    "docs/specs/2026-04-10-v5-0-release-contract.md",
+    "scripts/verify_release_readiness.py",
+    "scripts/run_v5_0_smoke.py",
+    "benchmarks/runtime_pack/README.md",
+    "compare/README.md",
+    "compare/scorecard.json"
+  ],
+  "required_website_files": [
+    "index.html",
+    "compare/index.html",
+    "features/benchmark/index.html",
+    "blog/index.html",
+    "changelog/index.html",
+    "docs/index.html"
+  ],
+  "gates": [
+    {
+      "id": "foundation_closure",
+      "title": "Foundation Closure",
+      "status": "complete",
+      "evidence_required": [
+        "v4.5 closed for real",
+        "Final runtime audit green",
+        "No unsupported high-data component is activated"
+      ]
+    },
+    {
+      "id": "goal_engine",
+      "title": "Goal Engine",
+      "status": "complete",
+      "evidence_required": [
+        "Goal profiles exist",
+        "Goal trace appears in decision data",
+        "Goal profile changes recommendation"
+      ]
+    },
+    {
+      "id": "decision_cortex_v2",
+      "title": "Decision Cortex v2",
+      "status": "complete",
+      "evidence_required": [
+        "Alternatives ranked with outcomes and goals",
+        "Override and later outcome links stored",
+        "Quality metrics exposed"
+      ]
+    },
+    {
+      "id": "structured_learning",
+      "title": "Structured Learning",
+      "status": "complete",
+      "evidence_required": [
+        "Repeated patterns become learnings",
+        "Captured pattern influences a later decision",
+        "Thresholds are explicit"
+      ]
+    },
+    {
+      "id": "skill_evolution",
+      "title": "Skill Evolution",
+      "status": "complete",
+      "evidence_required": [
+        "Outcome evidence can seed/promote skills",
+        "Poor evidence can demote/retire skills",
+        "A product-facing reuse surface changes from that evidence"
+      ]
+    },
+    {
+      "id": "benchmark_pack",
+      "title": "Benchmark Pack",
+      "status": "complete",
+      "evidence_required": [
+        "Runtime benchmark pack refreshed",
+        "Compare artifacts regenerated",
+        "Public proof is inspectable and scoped"
+      ]
+    },
+    {
+      "id": "system_coherence",
+      "title": "System Coherence",
+      "status": "complete",
+      "evidence_required": [
+        "No contradictions between runtime, website, and claims",
+        "No critical debt remains open",
+        "Update path safe for existing installs"
+      ]
+    },
+    {
+      "id": "release_package",
+      "title": "Release Package",
+      "status": "pending",
+      "evidence_required": [
+        "Version and changelog aligned",
+        "Release notes exist",
+        "Website/blog/changelog updated",
+        "Post-release smoke checks"
+      ]
+    }
+  ]
+}
