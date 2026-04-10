@@ -386,6 +386,32 @@ CORE_HOOK_SPECS = [
     },
 ]
 
+LEGACY_CORE_HOOK_IDENTITIES_BY_EVENT = {
+    "PostToolUse": {
+        "heartbeat-guard.sh",
+    },
+}
+
+
+def _current_core_hook_identities_by_event() -> dict[str, set[str]]:
+    identities: dict[str, set[str]] = {}
+    for spec in CORE_HOOK_SPECS:
+        identities.setdefault(spec["event"], set()).add(spec["identity"])
+    return identities
+
+
+CURRENT_CORE_HOOK_IDENTITIES_BY_EVENT = _current_core_hook_identities_by_event()
+
+
+def _managed_core_hook_identities_by_event() -> dict[str, set[str]]:
+    managed = {event: set(identities) for event, identities in CURRENT_CORE_HOOK_IDENTITIES_BY_EVENT.items()}
+    for event, identities in LEGACY_CORE_HOOK_IDENTITIES_BY_EVENT.items():
+        managed.setdefault(event, set()).update(identities)
+    return managed
+
+
+MANAGED_CORE_HOOK_IDENTITIES_BY_EVENT = _managed_core_hook_identities_by_event()
+
 
 def _resolve_hook_source_dir(runtime_root: Path) -> Path:
     direct = runtime_root / "hooks"
@@ -449,6 +475,25 @@ def _merge_core_hooks(existing_hooks, *, runtime_root: Path, nexo_home: Path) ->
     hooks_payload = dict(existing_hooks) if isinstance(existing_hooks, dict) else {}
     hooks_dir = _resolve_hook_source_dir(runtime_root)
     managed_count = 0
+
+    for event, managed_identities in MANAGED_CORE_HOOK_IDENTITIES_BY_EVENT.items():
+        sections = _normalize_hook_sections(hooks_payload.get(event))
+        desired_identities = CURRENT_CORE_HOOK_IDENTITIES_BY_EVENT.get(event, set())
+        cleaned_sections: list[dict] = []
+        for section in sections:
+            cleaned_hooks = []
+            for hook in section["hooks"]:
+                identity = _hook_identity(hook.get("command", ""))
+                if identity in managed_identities and identity not in desired_identities:
+                    continue
+                cleaned_hooks.append(hook)
+            cleaned_sections.append(
+                {
+                    "matcher": section.get("matcher", "*") or "*",
+                    "hooks": cleaned_hooks,
+                }
+            )
+        hooks_payload[event] = cleaned_sections
 
     for spec in CORE_HOOK_SPECS:
         event = spec["event"]

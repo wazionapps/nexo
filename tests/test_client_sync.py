@@ -83,6 +83,54 @@ def test_sync_claude_code_preserves_existing_settings(tmp_path):
     assert "Evolution" in bootstrap_text
 
 
+def test_sync_claude_code_removes_legacy_managed_hooks_but_keeps_custom_hooks(tmp_path):
+    import client_sync
+
+    runtime = _make_runtime(tmp_path)
+    home = tmp_path / "home"
+    settings_path = home / ".claude" / "settings.json"
+    settings_path.parent.mkdir(parents=True)
+    settings_path.write_text(json.dumps({
+        "hooks": {
+            "PostToolUse": [
+                {
+                    "matcher": "*",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": "NEXO_HOME=/Users/franciscoc/claude bash /Users/franciscoc/claude/hooks/heartbeat-guard.sh",
+                            "timeout": 5,
+                        },
+                        {
+                            "type": "command",
+                            "command": "bash /tmp/custom-post-tool.sh",
+                            "timeout": 9,
+                        },
+                    ],
+                }
+            ]
+        }
+    }))
+
+    result = client_sync.sync_claude_code(
+        nexo_home=runtime,
+        runtime_root=runtime,
+        operator_name="Atlas",
+        user_home=home,
+    )
+
+    assert result["ok"] is True
+    payload = json.loads(settings_path.read_text())
+    post_tool_hooks = payload["hooks"]["PostToolUse"][0]["hooks"]
+    commands = [hook["command"] for hook in post_tool_hooks]
+    assert not any("heartbeat-guard.sh" in command for command in commands)
+    assert any("custom-post-tool.sh" in command for command in commands)
+    assert any("capture-tool-logs.sh" in command for command in commands)
+    assert any("capture-session.sh" in command for command in commands)
+    assert any("inbox-hook.sh" in command for command in commands)
+    assert any("protocol-guardrail.sh" in command for command in commands)
+
+
 def test_sync_claude_desktop_preserves_preferences(tmp_path):
     import client_sync
 

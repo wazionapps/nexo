@@ -1,5 +1,17 @@
 # Changelog
 
+## [5.0.1] - 2026-04-10
+
+### Upgrade Path + Client Sync Hardening
+- Fixed `client_sync` so managed Claude Code hooks from older releases are purged when they no longer belong to the current core hook set, instead of surviving forever as stale managed entries.
+- Eliminated the legacy `heartbeat-guard.sh` drift path that could leave upgraded installs showing noisy PostToolUse errors and an apparent "NEXO is hanging" symptom even though the runtime itself was still healthy.
+- Kept custom operator hooks intact while removing only obsolete managed identities, so hook cleanup does not regress local customizations.
+- Revalidated the live upgrade path on a real install after the fix: client sync, Codex/Claude Code headless runtime access, inbox processing, email monitor health, and `nexo update` all pass again on the corrected runtime.
+
+### Validation
+- Added a dedicated regression test proving that sync removes obsolete managed Claude Code hooks while preserving custom hooks.
+- Refreshed the v5 smoke artifact and release contract so the shipped evidence reflects the real post-5.0 upgrade path instead of only the original feature-line release.
+
 ## [5.0.0] - 2026-04-10
 
 ### Goal-Driven Decisions + Outcome Learning

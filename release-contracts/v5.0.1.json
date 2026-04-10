@@ -1,0 +1,57 @@
+{
+  "release_line": "v5.0",
+  "target_version": "5.0.1",
+  "scope_owner": "NEXO",
+  "distribution": {
+    "git_updates_on": "merge_to_main",
+    "packaged_release_on": "tag_publish"
+  },
+  "required_repo_files": [
+    "scripts/verify_release_readiness.py",
+    "scripts/run_v5_0_smoke.py",
+    "release-contracts/v5.0.1.json",
+    "src/client_sync.py",
+    "tests/test_client_sync.py",
+    "compare/README.md",
+    "compare/scorecard.json"
+  ],
+  "required_website_files": [
+    "index.html",
+    "changelog/index.html",
+    "compare/index.html",
+    "docs/index.html"
+  ],
+  "gates": [
+    {
+      "id": "legacy_hook_cleanup",
+      "title": "Legacy managed hooks are purged safely",
+      "status": "complete",
+      "evidence_required": [
+        "Stale managed Claude Code hooks are removed",
+        "Custom hooks remain intact",
+        "Live client sync no longer references heartbeat-guard.sh"
+      ]
+    },
+    {
+      "id": "runtime_revalidation",
+      "title": "Runtime and automation paths revalidated",
+      "status": "complete",
+      "evidence_required": [
+        "Codex headless runtime access works",
+        "Claude Code headless runtime access works",
+        "Email monitor and lifecycle watcher recover to healthy"
+      ]
+    },
+    {
+      "id": "release_package",
+      "title": "Release package aligned",
+      "status": "complete",
+      "evidence_required": [
+        "Version and changelog aligned",
+        "Release artifacts synced",
+        "Website home and changelog updated to v5.0.1",
+        "Smoke + readiness checks pass"
+      ]
+    }
+  ]
+}
