@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.0.1 with upgrade-path hardening on top of the goal-driven 5.0 runtime line.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.0.2 with a deep-doctor schema-drift hotfix on top of the goal-driven 5.0 runtime line.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.0.1 with upgrade-path hardening on top of the goal-driven 5.0 runtime line.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.0.2 with a deep-doctor schema-drift hotfix on top of the goal-driven 5.0 runtime line.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.0.1 with upgrade-path hardening on top of the goal-driven 5.0 runtime line.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.0.2 with a deep-doctor schema-drift hotfix on top of the goal-driven 5.0 runtime line.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v5.0.1 with upgrade-path hardening on top of the goal-driven 5.0 runtime line.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v5.0.2 with a deep-doctor schema-drift hotfix on top of the goal-driven 5.0 runtime line.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,12 +87,12 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v5.0.1 live</span>
-                    <span class="page-chip">Upgrade-path hardening</span>
+                    <span class="page-chip">v5.0.2 live</span>
+                    <span class="page-chip">Doctor drift hotfix</span>
                     <span class="page-chip">Goal-driven runtime intact</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v501" class="btn btn-primary">Start with v5.0.1</a>
+                    <a href="#v502" class="btn btn-primary">Start with v5.0.2</a>
                     <a href="#v400" class="btn btn-secondary">See v4.0.0</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -100,12 +100,12 @@
             <div class="page-visual">
                 <div class="page-stack">
                     <div class="page-stack-card">
-                        <strong>v5.0.1</strong>
-                        <span>Legacy managed Claude Code hooks are purged safely on upgrade, so real installs stop carrying warning drift from older releases.</span>
+                        <strong>v5.0.2</strong>
+                        <span>Deep doctor now reads both current and legacy learnings schemas correctly, so healthy upgraded installs stop showing the stale archived-column warning.</span>
                     </div>
                     <div class="page-stack-card">
-                        <strong>v5.0.0</strong>
-                        <span>Goal profiles, Decision Cortex v2, structured outcome learning, and skill evolution now close the loop between choice, result, and reuse.</span>
+                        <strong>v5.0.1</strong>
+                        <span>Legacy managed Claude Code hooks are purged safely on upgrade, so real installs stop carrying warning drift from older releases.</span>
                     </div>
                     <div class="page-stack-card">
                         <strong>v4.1.0</strong>
@@ -132,6 +132,36 @@
                 <div id="changelog-page-meta" class="changelog-page-meta">Loading release pages…</div>
                 <div id="changelog-pager" class="changelog-pager" aria-label="Changelog pagination"></div>
             </div>
+        </div>
+    </div>
+</section>
+
+<!-- v5.0.2 Deep-doctor schema-drift hotfix -->
+<section id="v502" class="section-compact" style="background:linear-gradient(135deg,#111827 0%,#4338ca 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.0.2 <span style="opacity:.5;font-weight:400;">&mdash; April 10, 2026</span></div>
+        <h2 class="section-title">The 5.0 Runtime Now Doctors Itself Honestly</h2>
+        <p class="section-subtitle">
+            v5.0.2 is a focused hotfix release for the post-upgrade deep-doctor path. Healthy installs using the current <code>learnings</code> schema could still show a misleading skipped check because the doctor was reading the old <code>archived</code> column. This patch restores schema-aware auditing and revalidates the corrected path on a real upgraded runtime.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h3>Current And Legacy Schemas Both Pass</h3>
+                    <p>The deep doctor now reads both the modern <code>status</code>-based <code>learnings</code> schema and the older <code>archived</code> flag instead of assuming one historical shape forever.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Real Runtime Revalidated</h3>
+                    <p>The patched path was re-tested on a live upgraded install with <code>nexo update</code>, <code>nexo doctor --tier deep</code>, and <code>nexo doctor --tier all</code>.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Startup Smoke Still Clean</h3>
+                    <p>A fresh Claude Code startup smoke returned <code>OK STARTUP</code> after the sync, so the hotfix ships with runtime evidence instead of only a unit-test story.</p>
+                </div>
+            </div>
+        </div>
+        <div style="margin-top:24px;font-size:14px;opacity:.6;">
+            Schema-aware doctoring restored &bull; upgraded runtime revalidated &bull; Claude Code startup smoke clean
         </div>
     </div>
 </section>
