@@ -245,6 +245,59 @@ def test_task_acknowledge_guard_resolves_guard_debt(monkeypatch):
     assert "Canonical file rule reviewed" in debt["resolution"]
 
 
+def test_protocol_debt_list_filters_by_type_and_severity():
+    from db import create_protocol_debt
+    from plugins.protocol import handle_protocol_debt_list
+
+    sid = _register_session("nexo-1005-2006")
+    create_protocol_debt(sid, "missing_followup_payload", severity="warn", evidence="duplicate followup id")
+    create_protocol_debt(sid, "unacknowledged_guard_blocking", severity="error", evidence="guard debt")
+
+    payload = json.loads(
+        handle_protocol_debt_list(
+            status="open",
+            session_id=sid,
+            debt_type="missing_followup_payload",
+            severity="warn",
+        )
+    )
+
+    assert payload["ok"] is True
+    assert payload["count"] == 1
+    assert payload["summary"] == {"missing_followup_payload": 1}
+    assert payload["items"][0]["debt_type"] == "missing_followup_payload"
+
+
+def test_protocol_debt_resolve_accepts_debt_ids():
+    from db import create_protocol_debt, get_db
+    from plugins.protocol import handle_protocol_debt_resolve
+
+    sid = _register_session("nexo-1005-2007")
+    debt = create_protocol_debt(
+        sid,
+        "codex_conditioned_read_without_protocol",
+        severity="warn",
+        evidence="historical transcript audit debt",
+    )
+
+    payload = json.loads(
+        handle_protocol_debt_resolve(
+            debt_ids=str(debt["id"]),
+            resolution="Audited historical debt; current discipline already enforced.",
+        )
+    )
+
+    assert payload["ok"] is True
+    assert payload["resolved"] == 1
+    assert payload["matched_ids"] == [debt["id"]]
+    row = get_db().execute(
+        "SELECT status, resolution FROM protocol_debt WHERE id = ?",
+        (debt["id"],),
+    ).fetchone()
+    assert row["status"] == "resolved"
+    assert "historical debt" in row["resolution"]
+
+
 def test_task_close_creates_change_log_and_stays_clean():
     from db import get_db
     from plugins.protocol import handle_task_open, handle_task_close

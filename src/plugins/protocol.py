@@ -93,6 +93,17 @@ def _parse_bool(value) -> bool:
     return bool(value)
 
 
+def _parse_int_list(value) -> list[int]:
+    items = _parse_list(value)
+    parsed: list[int] = []
+    for item in items:
+        try:
+            parsed.append(int(item))
+        except (TypeError, ValueError):
+            continue
+    return parsed
+
+
 def _detect_high_stakes(*parts: str) -> bool:
     combined = " ".join((part or "").strip().lower() for part in parts if part)
     return any(keyword in combined for keyword in HIGH_STAKES_KEYWORDS)
@@ -1169,9 +1180,105 @@ def handle_task_acknowledge_guard(
     )
 
 
+def handle_protocol_debt_list(
+    status: str = "open",
+    task_id: str = "",
+    session_id: str = "",
+    debt_type: str = "",
+    severity: str = "",
+    limit: str = "50",
+) -> str:
+    rows = list_protocol_debts(
+        status=status.strip() if isinstance(status, str) else "open",
+        task_id=(task_id or "").strip(),
+        session_id=(session_id or "").strip(),
+        debt_type=(debt_type or "").strip(),
+        severity=(severity or "").strip(),
+        limit=max(1, min(500, int(limit or 50))),
+    )
+    summary: dict[str, int] = {}
+    for row in rows:
+        debt_key = str(row.get("debt_type") or "unknown")
+        summary[debt_key] = summary.get(debt_key, 0) + 1
+    return json.dumps(
+        {
+            "ok": True,
+            "count": len(rows),
+            "summary": summary,
+            "items": rows,
+        },
+        ensure_ascii=False,
+        indent=2,
+    )
+
+
+def handle_protocol_debt_resolve(
+    debt_ids: str = "",
+    task_id: str = "",
+    session_id: str = "",
+    debt_types: str = "",
+    resolution: str = "",
+) -> str:
+    parsed_ids = _parse_int_list(debt_ids)
+    parsed_types = _parse_list(debt_types)
+    if not parsed_ids and not (task_id or "").strip() and not (session_id or "").strip() and not parsed_types:
+        return json.dumps(
+            {
+                "ok": False,
+                "error": "Provide `debt_ids`, `task_id`, `session_id`, or `debt_types` to select protocol debt.",
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+
+    matched: list[dict] = []
+    if parsed_ids:
+        conn = get_db()
+        placeholders = ",".join("?" for _ in parsed_ids)
+        rows = conn.execute(
+            f"""SELECT * FROM protocol_debt
+                WHERE status = 'open' AND id IN ({placeholders})
+                ORDER BY created_at DESC""",
+            tuple(parsed_ids),
+        ).fetchall()
+        matched = [dict(row) for row in rows]
+    else:
+        matched = list_protocol_debts(
+            status="open",
+            task_id=(task_id or "").strip(),
+            session_id=(session_id or "").strip(),
+            limit=500,
+        )
+        if parsed_types:
+            allowed = set(parsed_types)
+            matched = [row for row in matched if str(row.get("debt_type") or "") in allowed]
+
+    normalized_resolution = (resolution or "Resolved during protocol debt maintenance audit.").strip()
+    resolved = resolve_protocol_debts(
+        task_id=(task_id or "").strip(),
+        session_id=(session_id or "").strip(),
+        debt_ids=parsed_ids or None,
+        debt_types=parsed_types or None,
+        resolution=normalized_resolution,
+    )
+    return json.dumps(
+        {
+            "ok": True,
+            "resolved": resolved,
+            "matched_ids": [int(row["id"]) for row in matched],
+            "matched_debt_types": sorted({str(row.get("debt_type") or "") for row in matched if row.get("debt_type")}),
+            "resolution": normalized_resolution,
+        },
+        ensure_ascii=False,
+        indent=2,
+    )
+
+
 TOOLS = [
     (handle_confidence_check, "nexo_confidence_check", "Decide whether a non-trivial answer should be answered, verified, asked, or deferred before replying."),
     (handle_task_open, "nexo_task_open", "Open a non-trivial task with heartbeat, guard, rules, and Cortex captured as one protocol contract."),
     (handle_task_acknowledge_guard, "nexo_task_acknowledge_guard", "Acknowledge blocking guard rules on an open protocol task before proceeding."),
     (handle_task_close, "nexo_task_close", "Close a protocol task, auto-record evidence/change-log/followup artifacts, and open protocol debt when discipline is missing."),
+    (handle_protocol_debt_list, "nexo_protocol_debt_list", "List protocol debt records with optional status, session, task, type, or severity filters."),
+    (handle_protocol_debt_resolve, "nexo_protocol_debt_resolve", "Resolve protocol debt records by id or filters once the debt has been audited and cleared."),
 ]

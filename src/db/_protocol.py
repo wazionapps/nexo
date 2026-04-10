@@ -393,6 +393,7 @@ def resolve_protocol_debts(
     *,
     session_id: str = "",
     task_id: str = "",
+    debt_ids: list[int] | None = None,
     debt_types: list[str] | None = None,
     resolution: str = "",
 ) -> int:
@@ -405,6 +406,12 @@ def resolve_protocol_debts(
     if task_id:
         clauses.append("task_id = ?")
         params.append(task_id.strip())
+    if debt_ids:
+        normalized_ids = [int(item) for item in debt_ids if str(item).strip()]
+        if normalized_ids:
+            placeholders = ",".join("?" * len(normalized_ids))
+            clauses.append(f"id IN ({placeholders})")
+            params.extend(normalized_ids)
     if debt_types:
         placeholders = ",".join("?" * len(debt_types))
         clauses.append(f"debt_type IN ({placeholders})")
@@ -422,7 +429,15 @@ def resolve_protocol_debts(
     return cursor.rowcount
 
 
-def list_protocol_debts(*, status: str = "open", task_id: str = "", limit: int = 50) -> list[dict]:
+def list_protocol_debts(
+    *,
+    status: str = "open",
+    task_id: str = "",
+    session_id: str = "",
+    debt_type: str = "",
+    severity: str = "",
+    limit: int = 50,
+) -> list[dict]:
     conn = get_db()
     clauses = []
     params: list[object] = []
@@ -432,6 +447,15 @@ def list_protocol_debts(*, status: str = "open", task_id: str = "", limit: int =
     if task_id:
         clauses.append("task_id = ?")
         params.append(task_id.strip())
+    if session_id:
+        clauses.append("session_id = ?")
+        params.append(session_id.strip())
+    if debt_type:
+        clauses.append("debt_type = ?")
+        params.append(debt_type.strip())
+    if severity in {"info", "warn", "error"}:
+        clauses.append("severity = ?")
+        params.append(severity)
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     rows = conn.execute(
         f"SELECT * FROM protocol_debt {where} ORDER BY created_at DESC LIMIT ?",
