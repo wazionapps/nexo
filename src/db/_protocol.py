@@ -246,6 +246,82 @@ def override_cortex_evaluation(evaluation_id: int, *, selected_choice: str, sele
     return get_cortex_evaluation(evaluation_id)
 
 
+def cortex_evaluation_summary(days: int = 30) -> dict:
+    conn = get_db()
+    window = f"-{max(1, int(days))} days"
+    rows = conn.execute(
+        """SELECT e.id, e.goal, e.area, e.goal_profile_id, e.linked_outcome_id,
+                  e.recommended_choice, e.selected_choice, e.selection_source, e.created_at,
+                  o.status AS outcome_status
+           FROM cortex_evaluations e
+           LEFT JOIN outcomes o ON o.id = e.linked_outcome_id
+           WHERE e.created_at >= datetime('now', ?)
+           ORDER BY e.created_at DESC, e.id DESC""",
+        (window,),
+    ).fetchall()
+    items = [dict(row) for row in rows]
+    total = len(items)
+    overrides = [
+        row for row in items
+        if (row.get("selection_source") == "override")
+        or ((row.get("selected_choice") or "").strip() and (row.get("selected_choice") or "").strip() != (row.get("recommended_choice") or "").strip())
+    ]
+    accepted = total - len(overrides)
+    linked = [row for row in items if row.get("linked_outcome_id")]
+    linked_met = [row for row in linked if row.get("outcome_status") == "met"]
+    linked_missed = [row for row in linked if row.get("outcome_status") == "missed"]
+    linked_pending = [row for row in linked if row.get("outcome_status") == "pending"]
+    linked_resolved = [row for row in linked if row.get("outcome_status") in {"met", "missed"}]
+
+    recommended_linked = [row for row in linked_resolved if row not in overrides]
+    override_linked = [row for row in linked_resolved if row in overrides]
+
+    def _pct(numerator: int, denominator: int) -> float:
+        if denominator <= 0:
+            return 0.0
+        return round((numerator / denominator) * 100, 1)
+
+    profile_counts: dict[str, int] = {}
+    for row in items:
+        key = (row.get("goal_profile_id") or "unprofiled").strip() or "unprofiled"
+        profile_counts[key] = profile_counts.get(key, 0) + 1
+
+    top_profiles = [
+        {"goal_profile_id": profile_id, "count": count}
+        for profile_id, count in sorted(profile_counts.items(), key=lambda item: (-item[1], item[0]))[:5]
+    ]
+
+    gaps: list[str] = []
+    if total < 3:
+        gaps.append("Muy pocas evaluaciones del cortex para inferir mejora estable.")
+    if len(linked) < 2:
+        gaps.append("Muy pocas decisiones enlazadas a outcomes para medir calidad real de recomendación.")
+
+    return {
+        "days": max(1, int(days)),
+        "total_evaluations": total,
+        "accepted_recommendations": accepted,
+        "overrides": len(overrides),
+        "recommendation_accept_rate": _pct(accepted, total),
+        "override_rate": _pct(len(overrides), total),
+        "linked_outcomes_total": len(linked),
+        "linked_outcomes_met": len(linked_met),
+        "linked_outcomes_missed": len(linked_missed),
+        "linked_outcomes_pending": len(linked_pending),
+        "linked_outcome_success_rate": _pct(len(linked_met), len(linked_resolved)),
+        "recommended_success_rate": _pct(
+            sum(1 for row in recommended_linked if row.get("outcome_status") == "met"),
+            len(recommended_linked),
+        ),
+        "override_success_rate": _pct(
+            sum(1 for row in override_linked if row.get("outcome_status") == "met"),
+            len(override_linked),
+        ),
+        "top_goal_profiles": top_profiles,
+        "gaps": gaps,
+    }
+
+
 def close_protocol_task(
     task_id: str,
     *,

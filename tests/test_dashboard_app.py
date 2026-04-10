@@ -287,6 +287,8 @@ def test_dashboard_cortex_api_parses_goal_profile_trace(isolated_db):
     assert "preserve_trust" in latest["goal_profile_labels"]
     assert isinstance(latest["goal_profile_weights"], dict)
     assert latest["goal_profile_weights"]["risk"] > 0
+    assert "summary" in payload
+    assert "recommendation_accept_rate" in payload["summary"]
 
 
 def test_dashboard_reminder_update_requires_read_token(isolated_db):

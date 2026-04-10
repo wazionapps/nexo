@@ -35,15 +35,15 @@
     <p class="text-2xl font-display font-bold text-slate-100" id="stat-decisions">--</p>
   </div>
   <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-5 card">
-    <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1">Avg Confidence</p>
+    <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1">Accept Rate</p>
     <p class="text-2xl font-display font-bold text-nexo-400" id="stat-confidence">--</p>
   </div>
   <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-5 card">
-    <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1">Cortex Logs</p>
+    <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1">Linked Outcomes</p>
     <p class="text-2xl font-display font-bold text-slate-100" id="stat-logs">--</p>
   </div>
   <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-5 card">
-    <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1">Overrides</p>
+    <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1">Override Rate</p>
     <p class="text-2xl font-display font-bold text-amber-400" id="stat-success">--</p>
   </div>
 </div>
@@ -293,6 +293,7 @@
     allLogs = data.cortex_logs || [];
     allDecisions = data.decisions || [];
     allEvaluations = data.evaluations || [];
+    const summary = data.summary || {};
 
     // Populate domain filter
     const domains = [...new Set([
@@ -306,17 +307,9 @@
 
     // Stats
     document.getElementById('stat-decisions').textContent = formatNumber(allEvaluations.length);
-    document.getElementById('stat-logs').textContent = formatNumber(allLogs.length);
-
-    const confidences = allDecisions.filter(d => d.confidence != null).map(d => {
-      const v = typeof d.confidence === 'number' ? (d.confidence > 1 ? d.confidence : d.confidence * 100) : parseFloat(d.confidence);
-      return v;
-    });
-    const avgConf = confidences.length ? (confidences.reduce((a, b) => a + b, 0) / confidences.length) : 0;
-    document.getElementById('stat-confidence').textContent = avgConf.toFixed(0) + '%';
-
-    const overrides = allEvaluations.filter(e => e.selection_source === 'override').length;
-    document.getElementById('stat-success').textContent = formatNumber(overrides);
+    document.getElementById('stat-confidence').textContent = `${Number(summary.recommendation_accept_rate || 0).toFixed(0)}%`;
+    document.getElementById('stat-logs').textContent = formatNumber(summary.linked_outcomes_total || 0);
+    document.getElementById('stat-success').textContent = `${Number(summary.override_rate || 0).toFixed(0)}%`;
 
     renderConfidenceChart(allDecisions);
     applyFilters();

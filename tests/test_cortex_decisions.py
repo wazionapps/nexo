@@ -195,3 +195,86 @@ def test_cortex_decide_without_explicit_profile_resolves_context_profile():
     assert payload["ok"] is True
     assert payload["goal_profile"]["profile_id"] == "ops_efficiency"
     assert payload["goal_profile"]["resolved_by"] == "task_type"
+
+
+def test_cortex_quality_summarises_acceptance_override_and_linked_outcomes():
+    from db import create_outcome, evaluate_outcome
+    from plugins.cortex import handle_cortex_decide, handle_cortex_override, handle_cortex_quality
+
+    met_outcome = create_outcome(
+        "manual_review",
+        "Confirmar estrategia recomendada",
+        "El outcome recomendado se cumple",
+        metric_source="manual",
+        target_value=1,
+        target_operator="gte",
+        deadline="2099-01-01T00:00:00",
+    )
+    missed_outcome = create_outcome(
+        "manual_review",
+        "Confirmar estrategia override",
+        "El outcome override se cumple",
+        metric_source="manual",
+        target_value=1,
+        target_operator="gte",
+        deadline="2000-01-01T00:00:00",
+    )
+
+    recommended = json.loads(
+        handle_cortex_decide(
+            goal="Cerrar un release de forma segura",
+            task_type="execute",
+            impact_level="critical",
+            area="release",
+            linked_outcome_id=met_outcome["id"],
+            alternatives=json.dumps([
+                {"name": "staged_validation", "description": "Validate in staging with smoke tests and rollback ready."},
+                {"name": "direct_push", "description": "Deploy directly to production and skip manual review."},
+            ]),
+            goal_profile_id="release_safety",
+        )
+    )
+
+    overridden = json.loads(
+        handle_cortex_decide(
+            goal="Cerrar la ventana de growth de hoy",
+            task_type="execute",
+            impact_level="critical",
+            area="business",
+            linked_outcome_id=missed_outcome["id"],
+            alternatives=json.dumps([
+                {"name": "staged_validation", "description": "Validate in staging with smoke tests and rollback ready."},
+                {"name": "direct_growth_push", "description": "Deploy release directly to production, ship fast and skip manual review."},
+            ]),
+            goal_profile_id="business_growth",
+        )
+    )
+    assert recommended["ok"] is True
+    assert overridden["ok"] is True
+
+    override_result = json.loads(
+        handle_cortex_override(
+            evaluation_id=overridden["evaluation_id"],
+            chosen="staged_validation",
+            reason="Se prefirió la opción segura por contexto reputacional.",
+        )
+    )
+    assert override_result["ok"] is True
+
+    evaluate_outcome(met_outcome["id"], actual_value=1.0)
+    evaluate_outcome(missed_outcome["id"], actual_value=0.0)
+
+    summary = json.loads(handle_cortex_quality(days=30))
+    assert summary["ok"] is True
+    payload = summary["summary"]
+    assert payload["total_evaluations"] == 2
+    assert payload["accepted_recommendations"] == 1
+    assert payload["overrides"] == 1
+    assert payload["recommendation_accept_rate"] == 50.0
+    assert payload["override_rate"] == 50.0
+    assert payload["linked_outcomes_total"] == 2
+    assert payload["linked_outcomes_met"] == 1
+    assert payload["linked_outcomes_missed"] == 1
+    assert payload["recommended_success_rate"] == 100.0
+    assert payload["override_success_rate"] == 0.0
+    assert payload["top_goal_profiles"][0]["goal_profile_id"] in {"business_growth", "release_safety"}

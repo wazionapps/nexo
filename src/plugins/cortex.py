@@ -829,10 +829,19 @@ def handle_cortex_override(evaluation_id: int, chosen: str, reason: str) -> str:
     return json.dumps({"ok": True, "evaluation": updated}, ensure_ascii=False, indent=2)
 
 
+def handle_cortex_quality(days: int = 30) -> str:
+    """Summarise recommendation quality, overrides, and linked outcome results."""
+    from db import cortex_evaluation_summary
+
+    summary = cortex_evaluation_summary(days=days)
+    return json.dumps({"ok": True, "summary": summary}, ensure_ascii=False, indent=2)
+
+
 TOOLS = [
     (handle_cortex_check, "nexo_cortex_check", "Cognitive pre-action check. Validates reasoning and determines if you can act, should propose, or need to ask first. Call before significant actions."),
     (handle_cortex_decide, "nexo_cortex_decide", "Evaluate 2+ alternatives for a high-impact task and persist the recommendation on top of the existing Cortex."),
     (handle_cortex_review, "nexo_cortex_review", "Review persisted Cortex alternative evaluations by ID, task, or session."),
     (handle_cortex_override, "nexo_cortex_override", "Override a stored Cortex recommendation while preserving the recommendation trail."),
+    (handle_cortex_quality, "nexo_cortex_quality", "Summarise recommendation accept rate, override rate, and linked outcome success for Cortex evaluations."),
     (handle_cortex_stats, "nexo_cortex_stats", "View Cortex activation statistics — modes, task types, inhibition rate."),
 ]

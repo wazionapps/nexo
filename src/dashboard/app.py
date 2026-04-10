@@ -1566,6 +1566,7 @@ async def api_guard(limit: int = Query(100, ge=1, le=500)):
 async def api_cortex(limit: int = Query(50, ge=1, le=200)):
     db = _db()
     conn = db.get_db()
+    summary = db.cortex_evaluation_summary(days=30) if hasattr(db, "cortex_evaluation_summary") else {}
     logs = []
     decisions = []
     if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='cortex_log'").fetchone():
@@ -1612,7 +1613,7 @@ async def api_cortex(limit: int = Query(50, ge=1, le=200)):
                 outcome_id = item.get("linked_outcome_id")
                 if outcome_id:
                     item["linked_outcome"] = outcome_rows.get(int(outcome_id))
-    return {"cortex_logs": logs, "decisions": decisions, "evaluations": evaluations}
+    return {"cortex_logs": logs, "decisions": decisions, "evaluations": evaluations, "summary": summary}
 
 
 # ---------------------------------------------------------------------------
