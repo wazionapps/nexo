@@ -49,7 +49,7 @@
         "headline": "How to Give Your AI Agent Persistent Memory",
         "description": "Learn how to give your AI agent persistent memory. Compare context windows, RAG, and dedicated memory systems. See how NEXO Brain uses the Atkinson-Shiffrin model to solve AI amnesia.",
         "datePublished": "2026-04-04",
-        "dateModified": "2026-04-04",
+        "dateModified": "2026-04-10",
         "author": {
             "@type": "Person",
             "name": "Francisco Cerd\u00e0 Puigserver"
@@ -189,12 +189,12 @@
             <li><strong>Long-Term Memory (LTM)</strong> &mdash; consolidated knowledge. Memories promoted to LTM have a 60-day half-life and are the agent's durable knowledge base.</li>
         </ul>
         <p>Retrieval uses <strong>semantic search with cosine similarity</strong>, boosted by recency, access frequency, and a spreading activation network that strengthens connections between memories that are retrieved together. The result: the most relevant and most alive memories surface first.</p>
-        <p>On the <a href="/features/benchmark/">LoCoMo benchmark</a>, which tests long-conversation memory across multi-session dialogues, NEXO Brain scores <strong>72.1%</strong> &mdash; outperforming systems like Mem0 (49.5%) and Zep (35.3%) that rely on simpler storage approaches.</p>
+        <p>On the <a href="/features/benchmark/">LoCoMo benchmark</a>, which tests long-conversation memory across multi-session dialogues, the checked-in NEXO Brain memory run currently scores <strong>F1 0.588</strong>. The benchmark page now also makes the scope explicit: LoCoMo proves the memory slice, while the broader runtime story is shown separately through the operator runtime pack and compare scorecard.</p>
 
         <h2>Getting started</h2>
         <p>NEXO Brain installs in one command. It runs as an MCP server that any compatible AI client (Claude, GPT, Cursor, Windsurf) can connect to:</p>
         <pre><code>npx nexo-brain</code></pre>
-        <p>That is it. No API keys, no cloud dependencies, no configuration files. NEXO creates a local SQLite database, initializes the three memory stores, and exposes 21 cognitive tools that your agent can call to remember, recall, and manage knowledge.</p>
+        <p>That is it. No API keys, no cloud dependencies, no configuration files. NEXO creates a local SQLite database, initializes the three memory stores, and exposes <strong>150+ MCP tools</strong> plus the surrounding local runtime surfaces for memory, continuity, diagnostics, and workflow discipline.</p>
 
         <h2>What happens after install</h2>
         <p>Once connected, your agent gains capabilities it never had:</p>

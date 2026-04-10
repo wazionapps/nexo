@@ -49,7 +49,7 @@
         "headline": "The Atkinson-Shiffrin Model: Why We Built AI Memory Like Human Memory",
         "description": "How the 1968 Atkinson-Shiffrin memory model maps to AI agent architecture. Three memory stores, forgetting curves, and rehearsal applied to build agents that learn like humans.",
         "datePublished": "2026-04-04",
-        "dateModified": "2026-04-04",
+        "dateModified": "2026-04-10",
         "author": {
             "@type": "Person",
             "name": "Francisco Cerd\u00e0 Puigserver"
@@ -213,7 +213,7 @@
         <p>We have been running this architecture in production for months. Here is what we have observed:</p>
         <ul>
             <li><strong>Memory stays lean.</strong> After 100+ sessions, the active memory set is typically a few hundred items, not thousands. Decay handles the cleanup automatically.</li>
-            <li><strong>Retrieval is fast and relevant.</strong> The combination of semantic search, recency weighting, and spreading activation consistently surfaces the right memories. On the LoCoMo benchmark, this architecture scores 72.1%.</li>
+            <li><strong>Retrieval is fast and relevant.</strong> The combination of semantic search, recency weighting, and spreading activation consistently surfaces the right memories. On the public LoCoMo memory benchmark, the checked-in NEXO run currently scores F1 0.588.</li>
             <li><strong>The "oh wait" moment.</strong> The most satisfying behavior: an agent surfaces a memory from weeks ago that is suddenly relevant. "You mentioned this was a recurring issue on March 12th." That is long-term memory working as designed.</li>
             <li><strong>Corrections stick.</strong> When you correct the agent, that correction becomes a high-priority memory with a natural decay path. It influences behavior strongly at first and fades only if never reinforced.</li>
         </ul>

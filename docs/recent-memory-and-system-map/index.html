@@ -36,7 +36,7 @@
         "headline": "NEXO Recent Memory, Transcript Fallback, and Live System Map",
         "description": "How NEXO keeps the last 24 hours fresh, falls back to full transcripts when needed, and exposes a live map of its own runtime.",
         "datePublished": "2026-04-08",
-        "dateModified": "2026-04-08",
+        "dateModified": "2026-04-10",
         "author": {
             "@type": "Person",
             "name": "Francisco Cerda Puigserver"
@@ -155,13 +155,13 @@
                 </div>
                 <div class="code-body">
                     <span style="color:#94A3B8"># recent-memory bundle first</span><br>
-                    <span style="color:#22C55E">$</span> nexo call nexo_pre_action_context --input '{"query":"wifi digi","hours":24,"limit":6}'<br><br>
+                    <span style="color:#22C55E">$</span> nexo scripts call nexo_pre_action_context --input '{"query":"wifi digi","hours":24,"limit":6}'<br><br>
                     <span style="color:#94A3B8"># raw fallback if that is not enough</span><br>
-                    <span style="color:#22C55E">$</span> nexo call nexo_transcript_search --input '{"query":"wifi digi","hours":24,"limit":5}'<br>
-                    <span style="color:#22C55E">$</span> nexo call nexo_transcript_read --input '{"session_ref":"claude_code:session-wifi.jsonl","max_messages":80}'<br><br>
+                    <span style="color:#22C55E">$</span> nexo scripts call nexo_transcript_search --input '{"query":"wifi digi","hours":24,"limit":5}'<br>
+                    <span style="color:#22C55E">$</span> nexo scripts call nexo_transcript_read --input '{"session_ref":"claude_code:session-wifi.jsonl","max_messages":80}'<br><br>
                     <span style="color:#94A3B8"># ask NEXO what it has right now</span><br>
-                    <span style="color:#22C55E">$</span> nexo call nexo_system_catalog --input '{"section":"core_tools","query":"transcript"}'<br>
-                    <span style="color:#22C55E">$</span> nexo call nexo_tool_explain --input '{"name":"nexo_pre_action_context"}'
+                    <span style="color:#22C55E">$</span> nexo scripts call nexo_system_catalog --input '{"section":"core_tools","query":"transcript"}'<br>
+                    <span style="color:#22C55E">$</span> nexo scripts call nexo_tool_explain --input '{"name":"nexo_pre_action_context"}'
                 </div>
             </div>
 
