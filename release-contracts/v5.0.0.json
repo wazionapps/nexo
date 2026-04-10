@@ -97,7 +97,7 @@
     {
       "id": "release_package",
       "title": "Release Package",
-      "status": "pending",
+      "status": "complete",
       "evidence_required": [
         "Version and changelog aligned",
         "Release notes exist",
