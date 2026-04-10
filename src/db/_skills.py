@@ -11,6 +11,7 @@ Executable skills are indexed in SQLite but sourced from filesystem definitions.
 import datetime
 import json
 import os
+import re
 import shutil
 from pathlib import Path
 
@@ -62,6 +63,13 @@ TRUST_INITIAL = 50
 TRUST_ARCHIVE_THRESHOLD = 20
 PROMOTION_USES_REQUIRED = 2
 DEFAULT_STABLE_AFTER_USES = 10
+OUTCOME_SKILL_PROMOTION_MIN_RESOLVED = 4
+OUTCOME_SKILL_STABLE_MIN_RESOLVED = 6
+OUTCOME_SKILL_RETIRE_MIN_RESOLVED = 4
+OUTCOME_SKILL_PROMOTION_SUCCESS_RATE = 0.75
+OUTCOME_SKILL_STABLE_SUCCESS_RATE = 0.85
+OUTCOME_SKILL_RETIRE_MAX_SUCCESS_RATE = 0.25
+OUTCOME_SKILL_DEPRIORITIZE_MAX_SUCCESS_RATE = 0.5
 
 SKILL_DEFINITION_FILENAME = "skill.json"
 SOURCE_PRIORITY = {"community": 1, "core": 2, "personal": 3}
@@ -165,6 +173,68 @@ def _safe_slug(value: str) -> str:
             chars.append("-")
     slug = "".join(chars).strip("-")
     return slug or "skill"
+
+
+def _normalize_match_token(value: str | None) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", str(value or "").strip().lower()).strip()
+
+
+def _outcome_skill_id_from_candidate(candidate: dict) -> str:
+    raw_parts = [
+        candidate.get("area", ""),
+        candidate.get("task_type", ""),
+        candidate.get("goal_profile_id", ""),
+        candidate.get("selected_choice", ""),
+    ]
+    chunks = []
+    for part in raw_parts:
+        cleaned = re.sub(r"[^A-Z0-9]+", "-", str(part or "").upper()).strip("-")
+        if cleaned:
+            chunks.append(cleaned[:12])
+    suffix = "-".join(chunks[:4]) or "GENERAL"
+    return f"SK-OUTCOME-{suffix}"
+
+
+def _skill_outcome_pattern_match(skill: dict, candidate: dict) -> list[str]:
+    matched_via: list[str] = []
+    direct_skill_id = _outcome_skill_id_from_candidate(candidate)
+    if skill.get("id") == direct_skill_id:
+        matched_via.append("pattern_id")
+
+    selected_choice = _normalize_match_token(candidate.get("selected_choice", ""))
+    if selected_choice:
+        triggers = {
+            _normalize_match_token(item)
+            for item in _json_list(skill.get("trigger_patterns", "[]"))
+            if _normalize_match_token(item)
+        }
+        if selected_choice in triggers:
+            matched_via.append("trigger_pattern")
+
+    return matched_via
+
+
+def _recommend_skill_outcome_action(skill: dict, *, resolved: int, success_rate: float) -> tuple[str, str]:
+    level = str(skill.get("level") or "").strip().lower()
+    stable_after = int(skill.get("stable_after_uses", DEFAULT_STABLE_AFTER_USES) or DEFAULT_STABLE_AFTER_USES)
+    stable_threshold = max(OUTCOME_SKILL_STABLE_MIN_RESOLVED, min(stable_after, 8))
+
+    if resolved >= OUTCOME_SKILL_RETIRE_MIN_RESOLVED and success_rate <= OUTCOME_SKILL_RETIRE_MAX_SUCCESS_RATE:
+        return "retire", "Sustained poor outcome evidence suggests the skill should be archived."
+    if level == "draft" and resolved >= OUTCOME_SKILL_PROMOTION_MIN_RESOLVED and success_rate >= OUTCOME_SKILL_PROMOTION_SUCCESS_RATE:
+        return "promote_published", "Repeated successful outcomes justify promoting the draft skill to published."
+    if level == "published" and resolved >= stable_threshold and success_rate >= OUTCOME_SKILL_STABLE_SUCCESS_RATE:
+        return "promote_stable", "Strong sustained success outcomes justify promoting the skill to stable."
+    if level in {"draft", "published", "stable"} and resolved >= OUTCOME_SKILL_RETIRE_MIN_RESOLVED and success_rate < OUTCOME_SKILL_DEPRIORITIZE_MAX_SUCCESS_RATE:
+        return "deprioritize", "Mixed or weak recent outcomes suggest lowering this skill in ranking until evidence improves."
+    return "observe", "Not enough sustained evidence yet to change the lifecycle."
+
+
+def _skill_outcome_ranking_weight(*, resolved: int, success_rate: float) -> float:
+    if resolved <= 0:
+        return 0.0
+    magnitude = min(resolved, 8)
+    return round((success_rate - 0.5) * magnitude, 3)
 
 
 def _preserve_level(existing_level: str, requested_level: str) -> str:
@@ -648,8 +718,14 @@ def record_usage(skill_id: str, session_id: str = "", success: bool = True,
     conn.commit()
 
     promotion = None
+    outcome_review = get_skill_outcome_evidence(skill_id)
+    allow_publish_promotion = not outcome_review.get("has_evidence") or outcome_review.get("recommended_action") in {
+        "promote_published",
+        "promote_stable",
+    }
+    allow_stable_promotion = not outcome_review.get("has_evidence") or outcome_review.get("recommended_action") == "promote_stable"
     refreshed = dict(conn.execute("SELECT * FROM skills WHERE id = ?", (skill_id,)).fetchone())
-    if skill["level"] == "draft" and success:
+    if skill["level"] == "draft" and success and allow_publish_promotion:
         distinct_contexts = conn.execute(
             """SELECT COUNT(DISTINCT context) FROM skill_usage
                WHERE skill_id = ? AND success = 1 AND context != ''""",
@@ -664,7 +740,7 @@ def record_usage(skill_id: str, session_id: str = "", success: bool = True,
             promotion = "draft → published"
 
     refreshed = dict(conn.execute("SELECT * FROM skills WHERE id = ?", (skill_id,)).fetchone())
-    if refreshed["level"] == "published" and success:
+    if refreshed["level"] == "published" and success and allow_stable_promotion:
         stable_after = int(refreshed.get("stable_after_uses", DEFAULT_STABLE_AFTER_USES) or DEFAULT_STABLE_AFTER_USES)
         if refreshed["success_count"] >= stable_after and refreshed["fail_count"] == 0:
             conn.execute(
@@ -673,6 +749,15 @@ def record_usage(skill_id: str, session_id: str = "", success: bool = True,
             )
             conn.commit()
             promotion = "published → stable"
+
+    refreshed = dict(conn.execute("SELECT * FROM skills WHERE id = ?", (skill_id,)).fetchone())
+    if outcome_review.get("recommended_action") == "retire" and refreshed["level"] in {"draft", "published", "stable"}:
+        conn.execute(
+            "UPDATE skills SET level = 'archived', updated_at = datetime('now') WHERE id = ?",
+            (skill_id,),
+        )
+        conn.commit()
+        promotion = f"{refreshed['level']} → archived (poor outcome evidence)"
 
     refreshed = dict(conn.execute("SELECT * FROM skills WHERE id = ?", (skill_id,)).fetchone())
     if new_trust < TRUST_ARCHIVE_THRESHOLD and refreshed["level"] in {"draft", "published", "stable"}:
@@ -749,10 +834,16 @@ def match_skills(task: str, level: str = "", top_n: int = 3) -> list[dict]:
             seen.add(skill["id"])
             results.append(skill)
 
+    for skill in results:
+        review = get_skill_outcome_evidence(skill["id"])
+        skill["_outcome_review"] = review
+        skill["_outcome_rank"] = float(review.get("ranking_weight") or 0.0)
+
     results.sort(
         key=lambda skill: (
             0 if skill.get("source_kind") == "personal" else 1 if skill.get("source_kind") == "core" else 2,
             0 if skill.get("level") == "stable" else 1 if skill.get("level") == "published" else 2,
+            -float(skill.get("_outcome_rank", 0.0)),
             -int(skill.get("trust_score", 0)),
         )
     )
@@ -825,6 +916,14 @@ def get_skill_stats() -> dict:
     recent_uses = conn.execute(
         "SELECT COUNT(*) FROM skill_usage WHERE created_at >= datetime('now', '-7 days')"
     ).fetchone()[0]
+    outcome_reviews = list_skill_outcome_reviews(limit=max(total, 1), actionable_only=False)
+    outcome_backed = [item for item in outcome_reviews if item.get("has_evidence")]
+    avg_outcome_success = 0.0
+    if outcome_backed:
+        avg_outcome_success = round(
+            sum(float(item.get("success_rate") or 0.0) for item in outcome_backed) / len(outcome_backed) * 100,
+            1,
+        )
 
     return {
         "total": total,
@@ -833,6 +932,20 @@ def get_skill_stats() -> dict:
         "total_uses": total_uses,
         "success_rate": success_rate,
         "uses_last_7d": recent_uses,
+        "skill_reuse_rate": round(total_uses / max(total, 1), 1),
+        "outcome_backed_skills": len(outcome_backed),
+        "outcome_backed_success_rate": avg_outcome_success,
+        "promoted_from_evidence_count": sum(
+            1
+            for item in outcome_backed
+            if item["recommended_action"] in {"promote_published", "promote_stable"}
+            and item.get("level") in {"published", "stable"}
+        ),
+        "retired_for_poor_outcomes_count": sum(
+            1
+            for item in outcome_backed
+            if item["recommended_action"] == "retire" and item.get("level") == "archived"
+        ),
     }
 
 
@@ -850,6 +963,128 @@ def get_featured_skills(limit: int = 5) -> list[dict]:
         (limit,),
     ).fetchall()
     return [dict(row) for row in rows]
+
+
+def get_skill_outcome_evidence(skill_id: str, *, pattern_limit: int = 200) -> dict:
+    skill = get_skill(skill_id)
+    if not skill:
+        return {"error": f"Skill {skill_id} not found"}
+
+    from db._outcomes import list_outcome_pattern_candidates
+
+    candidates = list_outcome_pattern_candidates(limit=max(20, int(pattern_limit)))
+    matches = []
+    for candidate in candidates:
+        matched_via = _skill_outcome_pattern_match(skill, candidate)
+        if not matched_via:
+            continue
+        matches.append(
+            {
+                "pattern_key": candidate["pattern_key"],
+                "candidate_type": candidate["candidate_type"],
+                "selected_choice": candidate["selected_choice"],
+                "context_label": candidate["context_label"],
+                "resolved_outcomes": int(candidate["resolved_outcomes"]),
+                "met": int(candidate["met"]),
+                "missed": int(candidate["missed"]),
+                "success_rate": float(candidate["success_rate"]),
+                "matched_via": matched_via,
+                "evidence": candidate.get("evidence", [])[:3],
+            }
+        )
+
+    if not matches:
+        return {
+            "skill_id": skill_id,
+            "has_evidence": False,
+            "level": skill.get("level", ""),
+            "resolved_outcomes": 0,
+            "met": 0,
+            "missed": 0,
+            "success_rate": None,
+            "matched_patterns": [],
+            "recommended_action": "observe",
+            "recommended_reason": "No comparable outcome patterns are linked to this skill yet.",
+            "supports_promotion": False,
+            "supports_retirement": False,
+            "ranking_weight": 0.0,
+        }
+
+    resolved = sum(item["resolved_outcomes"] for item in matches)
+    met = sum(item["met"] for item in matches)
+    missed = sum(item["missed"] for item in matches)
+    success_rate = round(met / resolved, 3) if resolved else 0.0
+    recommended_action, recommended_reason = _recommend_skill_outcome_action(
+        skill,
+        resolved=resolved,
+        success_rate=success_rate,
+    )
+    ranking_weight = _skill_outcome_ranking_weight(resolved=resolved, success_rate=success_rate)
+    if recommended_action == "retire":
+        ranking_weight = min(ranking_weight, -3.0)
+    elif recommended_action == "promote_stable":
+        ranking_weight = max(ranking_weight, 3.0)
+    elif recommended_action == "promote_published":
+        ranking_weight = max(ranking_weight, 2.0)
+
+    matches.sort(
+        key=lambda item: (
+            0 if "pattern_id" in item["matched_via"] else 1,
+            -item["resolved_outcomes"],
+            item["selected_choice"],
+        )
+    )
+    return {
+        "skill_id": skill_id,
+        "has_evidence": True,
+        "level": skill.get("level", ""),
+        "resolved_outcomes": resolved,
+        "met": met,
+        "missed": missed,
+        "success_rate": success_rate,
+        "matched_patterns": matches,
+        "recommended_action": recommended_action,
+        "recommended_reason": recommended_reason,
+        "supports_promotion": recommended_action in {"promote_published", "promote_stable"},
+        "supports_retirement": recommended_action == "retire",
+        "ranking_weight": ranking_weight,
+    }
+
+
+def list_skill_outcome_reviews(*, limit: int = 20, actionable_only: bool = False) -> list[dict]:
+    conn = get_db()
+    rows = conn.execute(
+        """SELECT id FROM skills
+           WHERE level IN ('draft', 'published', 'stable', 'archived')
+           ORDER BY CASE level WHEN 'stable' THEN 0 WHEN 'published' THEN 1 WHEN 'draft' THEN 2 ELSE 3 END,
+                    trust_score DESC,
+                    COALESCE(last_used_at, created_at) DESC""",
+    ).fetchall()
+
+    reviews = []
+    for row in rows:
+        review = get_skill_outcome_evidence(row["id"])
+        if review.get("error") or not review.get("has_evidence"):
+            continue
+        if actionable_only and review["recommended_action"] == "observe":
+            continue
+        reviews.append(review)
+
+    priority = {
+        "retire": 0,
+        "promote_stable": 1,
+        "promote_published": 2,
+        "deprioritize": 3,
+        "observe": 4,
+    }
+    reviews.sort(
+        key=lambda item: (
+            priority.get(item["recommended_action"], 9),
+            -int(item["resolved_outcomes"]),
+            item["skill_id"],
+        )
+    )
+    return reviews[: max(1, int(limit))]
 
 
 def get_skill_execution_spec(skill_id: str) -> dict:

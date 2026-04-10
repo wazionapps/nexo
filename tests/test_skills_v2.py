@@ -73,6 +73,7 @@ def _seed_outcome_pattern(
     *,
     selected_choice: str,
     count: int,
+    success: bool = True,
     area: str = "ops",
     task_type: str = "execute",
     goal_profile_id: str = "ops_efficiency",
@@ -85,7 +86,7 @@ def _seed_outcome_pattern(
             metric_source="manual",
             target_value=1,
             target_operator="gte",
-            deadline="2099-01-01T00:00:00",
+            deadline="2099-01-01T00:00:00" if success else "2000-01-01T00:00:00",
         )
         db.create_cortex_evaluation(
             goal="Seed skill candidate from outcomes",
@@ -104,7 +105,7 @@ def _seed_outcome_pattern(
             selection_reason="seed",
             selection_source="recommended",
         )
-        db.evaluate_outcome(outcome["id"], actual_value=1.0)
+        db.evaluate_outcome(outcome["id"], actual_value=1.0 if success else 0.0)
 
 
 @pytest.fixture
@@ -357,6 +358,80 @@ class TestSkillsRuntime:
         assert seeded_again["created"] is False
         assert seeded_again["skill"]["id"] == seeded["skill"]["id"]
 
+    def test_skill_outcome_review_can_promote_and_retire_from_evidence(self, skills_env):
+        db, skills_runtime, _, _ = _reload_skill_stack()
+        db.init_db()
+
+        _seed_outcome_pattern(db, selected_choice="staged_validation", count=6)
+        seeded = skills_runtime.materialize_outcome_pattern_skill(
+            next(
+                item["pattern_key"]
+                for item in skills_runtime.list_evolution_candidates()["outcome_patterns"]
+                if item["selected_choice"] == "staged_validation"
+            )
+        )
+        skill_id = seeded["skill"]["id"]
+
+        review = skills_runtime.review_skill_outcomes(skill_id)
+        promoted = skills_runtime.review_skill_outcomes(skill_id, auto_apply=True)
+        promoted_skill = db.get_skill(skill_id)
+
+        db.create_skill(
+            skill_id="SK-RISKY-HOTFIX",
+            name="Risky Hotfix",
+            description="A bad emergency pattern that should be retired when outcomes stay poor.",
+            level="published",
+            content="# Risky Hotfix\n",
+            trigger_patterns=["risky_hotfix"],
+        )
+        _seed_outcome_pattern(db, selected_choice="risky_hotfix", count=4, success=False)
+        retire_review = skills_runtime.review_skill_outcomes("SK-RISKY-HOTFIX")
+        retired = skills_runtime.review_skill_outcomes("SK-RISKY-HOTFIX", auto_apply=True)
+        retired_skill = db.get_skill("SK-RISKY-HOTFIX")
+
+        assert review["review"]["recommended_action"] == "promote_published"
+        assert promoted["auto_applied"] is True
+        assert promoted["applied_action"] == "promote_published"
+        assert promoted_skill["level"] == "published"
+        assert retire_review["review"]["recommended_action"] == "retire"
+        assert retired["auto_applied"] is True
+        assert retired["applied_action"] == "retire"
+        assert retired_skill["level"] == "archived"
+
+    def test_match_skills_prefers_positive_outcome_evidence(self, skills_env):
+        db, _, _, _ = _reload_skill_stack()
+        db.init_db()
+
+        db.create_skill(
+            skill_id="SK-SAFE-ROLLOUT",
+            name="Safe Rollout",
+            description="Conservative rollout pattern.",
+            level="published",
+            content="# Safe Rollout\n",
+            trigger_patterns=["safe_rollout"],
+            tags=["release", "ops"],
+            trust_score=55,
+        )
+        db.create_skill(
+            skill_id="SK-RISKY-HOTFIX",
+            name="Risky Hotfix",
+            description="Aggressive rollout pattern.",
+            level="published",
+            content="# Risky Hotfix\n",
+            trigger_patterns=["risky_hotfix"],
+            tags=["release", "ops"],
+            trust_score=90,
+        )
+        _seed_outcome_pattern(db, selected_choice="safe_rollout", count=6)
+        _seed_outcome_pattern(db, selected_choice="risky_hotfix", count=4, success=False)
+
+        matches = db.match_skills("release ops", top_n=2)
+
+        assert [item["id"] for item in matches] == ["SK-SAFE-ROLLOUT", "SK-RISKY-HOTFIX"]
+        assert matches[0]["_outcome_review"]["has_evidence"] is True
+        assert matches[0]["_outcome_rank"] > 0
+        assert matches[1]["_outcome_review"]["recommended_action"] == "retire"
+
 
 class TestSkillsCli:
     def test_cli_sync_list_get_and_featured(self, skills_env):
@@ -497,3 +572,26 @@ class TestSkillsCli:
         assert retired.returncode == 0
         retired_payload = json.loads(retired.stdout)
         assert retired_payload["level"] == "archived"
+
+    def test_cli_skill_outcome_review(self, skills_env):
+        db, skills_runtime, _, _ = _reload_skill_stack()
+        db.init_db()
+
+        _seed_outcome_pattern(db, selected_choice="staged_validation", count=4)
+        pattern_key = next(
+            item["pattern_key"]
+            for item in skills_runtime.list_evolution_candidates()["outcome_patterns"]
+            if item["selected_choice"] == "staged_validation"
+        )
+        seeded = skills_runtime.materialize_outcome_pattern_skill(pattern_key)
+
+        review = _run_cli(skills_env, "skills", "outcome-review", seeded["skill"]["id"], "--json")
+        assert review.returncode == 0
+        review_payload = json.loads(review.stdout)
+        assert review_payload["review"]["recommended_action"] == "promote_published"
+
+        auto = _run_cli(skills_env, "skills", "outcome-review", seeded["skill"]["id"], "--auto-apply", "--json")
+        assert auto.returncode == 0
+        auto_payload = json.loads(auto.stdout)
+        assert auto_payload["auto_applied"] is True
+        assert auto_payload["level"] == "published"

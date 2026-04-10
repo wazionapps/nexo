@@ -23,9 +23,11 @@ from db import (
     create_skill,
     get_featured_skills,
     get_skill,
+    get_skill_outcome_evidence,
     get_skill_execution_spec,
     init_db,
     list_outcome_pattern_candidates,
+    list_skill_outcome_reviews,
     materialize_personal_skill_definition,
     record_skill_usage,
     render_command_template,
@@ -275,6 +277,21 @@ def promote_skill(skill_id: str, target_level: str = "published", reason: str = 
         return {"ok": False, "error": f"Unsupported target_level: {target_level}"}
     if clean_target == "archived":
         return {"ok": False, "error": "Use retire_skill to archive skills explicitly"}
+    outcome_review = get_skill_outcome_evidence(skill_id)
+    if outcome_review.get("has_evidence"):
+        recommended = outcome_review.get("recommended_action")
+        if clean_target == "published" and recommended not in {"promote_published", "promote_stable"}:
+            return {
+                "ok": False,
+                "error": "Outcome evidence does not yet support promotion to published",
+                "outcome_review": outcome_review,
+            }
+        if clean_target == "stable" and recommended != "promote_stable":
+            return {
+                "ok": False,
+                "error": "Outcome evidence does not yet support promotion to stable",
+                "outcome_review": outcome_review,
+            }
     updated = update_skill(skill_id, level=clean_target)
     if "error" in updated:
         return {"ok": False, "error": updated["error"]}
@@ -284,6 +301,7 @@ def promote_skill(skill_id: str, target_level: str = "published", reason: str = 
         "previous_level": skill.get("level", ""),
         "level": updated.get("level", clean_target),
         "reason": str(reason or "").strip(),
+        "outcome_review": outcome_review,
     }
 
 
@@ -308,7 +326,51 @@ def retire_skill(skill_id: str, replacement_id: str = "", reason: str = "") -> d
         "level": updated.get("level", "archived"),
         "replacement_id": clean_replacement,
         "reason": str(reason or "").strip(),
+        "outcome_review": get_skill_outcome_evidence(skill_id),
     }
+
+
+def review_skill_outcomes(skill_id: str, auto_apply: bool = False) -> dict:
+    _ensure_ready()
+    sync_skill_directories()
+    skill = get_skill(skill_id)
+    if not skill:
+        return {"ok": False, "error": f"Skill {skill_id} not found"}
+
+    review = get_skill_outcome_evidence(skill_id)
+    if "error" in review:
+        return {"ok": False, "error": review["error"]}
+
+    result = {
+        "ok": True,
+        "skill_id": skill_id,
+        "level": skill.get("level", ""),
+        "review": review,
+        "auto_applied": False,
+        "applied_action": "",
+    }
+    if not auto_apply:
+        return result
+
+    action = review.get("recommended_action")
+    target_level = ""
+    if action == "promote_published":
+        target_level = "published"
+    elif action == "promote_stable":
+        target_level = "stable"
+    elif action == "retire":
+        target_level = "archived"
+    if not target_level:
+        return result
+
+    updated = update_skill(skill_id, level=target_level)
+    if "error" in updated:
+        return {"ok": False, "error": updated["error"], "review": review}
+    result["auto_applied"] = True
+    result["applied_action"] = action
+    result["level"] = updated.get("level", target_level)
+    result["skill"] = updated
+    return result
 
 
 def compose_skills(
@@ -507,6 +569,7 @@ def list_evolution_candidates() -> dict:
         "scriptable": collect_scriptable_skill_candidates(),
         "improvements": collect_skill_improvement_candidates(),
         "outcome_patterns": outcome_patterns,
+        "outcome_lifecycle": list_skill_outcome_reviews(limit=20, actionable_only=True),
     }
 
 

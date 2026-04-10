@@ -1212,6 +1212,17 @@ def _skills_evolution(args):
     return 0
 
 
+def _skills_outcome_review(args):
+    from skills_runtime import review_skill_outcomes
+
+    result = review_skill_outcomes(args.id, auto_apply=args.auto_apply)
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    else:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    return 0 if result.get("ok") else 1
+
+
 def _skills_promote(args):
     from skills_runtime import promote_skill
 
@@ -1436,6 +1447,11 @@ def main():
     skills_evolution_p = skills_sub.add_parser("evolution", help="Evolution candidates")
     skills_evolution_p.add_argument("--json", action="store_true", help="JSON output")
 
+    skills_outcome_review_p = skills_sub.add_parser("outcome-review", help="Review skill lifecycle against sustained outcomes")
+    skills_outcome_review_p.add_argument("id", help="Skill ID")
+    skills_outcome_review_p.add_argument("--auto-apply", action="store_true", help="Apply the recommended promotion/retirement when it is strong enough")
+    skills_outcome_review_p.add_argument("--json", action="store_true", help="JSON output")
+
     skills_promote_p = skills_sub.add_parser("promote", help="Promote a skill lifecycle level")
     skills_promote_p.add_argument("id", help="Skill ID")
     skills_promote_p.add_argument("--target-level", default="published", choices=["draft", "published", "stable"])
@@ -1537,6 +1553,8 @@ def main():
             return _skills_featured(args)
         elif args.skills_command == "evolution":
             return _skills_evolution(args)
+        elif args.skills_command == "outcome-review":
+            return _skills_outcome_review(args)
         elif args.skills_command == "promote":
             return _skills_promote(args)
         elif args.skills_command == "retire":
