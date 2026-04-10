@@ -27,6 +27,37 @@ SRC_DIR = CODE_ROOT
 PACKAGE_JSON = REPO_DIR / "package.json"
 
 
+def _venv_python_path(runtime_root: Path = NEXO_HOME) -> Path:
+    if sys.platform == "win32":
+        return runtime_root / ".venv" / "Scripts" / "python.exe"
+    return runtime_root / ".venv" / "bin" / "python3"
+
+
+def _venv_pip_path(runtime_root: Path = NEXO_HOME) -> Path:
+    if sys.platform == "win32":
+        return runtime_root / ".venv" / "Scripts" / "pip.exe"
+    return runtime_root / ".venv" / "bin" / "pip"
+
+
+def _ensure_managed_venv(runtime_root: Path = NEXO_HOME) -> str | None:
+    venv_python = _venv_python_path(runtime_root)
+    if venv_python.exists():
+        return None
+    try:
+        runtime_root.mkdir(parents=True, exist_ok=True)
+        result = subprocess.run(
+            [sys.executable, "-m", "venv", str(runtime_root / ".venv")],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+    except Exception as e:
+        return f"venv creation error: {e}"
+    if result.returncode != 0 or not venv_python.exists():
+        return f"venv creation failed: {result.stderr or result.stdout}"
+    return None
+
+
 def _find_npm_pkg_src() -> Path | None:
     """Locate the nexo-brain npm package's src/ directory for requirements.txt."""
     try:
@@ -205,9 +236,14 @@ def _reinstall_pip_deps() -> str | None:
             req_file = npm_src / "requirements.txt"
     if not req_file.exists():
         return None  # No requirements file, skip
-    venv_pip = NEXO_HOME / ".venv" / "bin" / "pip"
-    if not venv_pip.exists():
-        venv_pip = NEXO_HOME / ".venv" / "bin" / "pip3"
+    venv_error = _ensure_managed_venv(NEXO_HOME)
+    if venv_error is not None:
+        return venv_error
+    venv_pip = _venv_pip_path(NEXO_HOME)
+    if not venv_pip.exists() and sys.platform != "win32":
+        alt_pip = NEXO_HOME / ".venv" / "bin" / "pip3"
+        if alt_pip.exists():
+            venv_pip = alt_pip
     if not venv_pip.exists():
         # No venv, try system pip with --break-system-packages
         try:

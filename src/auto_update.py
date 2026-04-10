@@ -11,6 +11,7 @@ import json
 import hashlib
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -148,16 +149,41 @@ def _runtime_cli_wrapper_text() -> str:
         "#!/usr/bin/env bash\n"
         "set -euo pipefail\n\n"
         f'NEXO_HOME="{NEXO_HOME}"\n'
-        'PYTHON="$NEXO_HOME/.venv/bin/python3"\n'
-        'if [ ! -x "$PYTHON" ]; then\n'
-        '  if command -v python3 >/dev/null 2>&1; then\n'
-        '    PYTHON="python3"\n'
-        "  else\n"
-        '    PYTHON="python"\n'
-        "  fi\n"
-        "fi\n"
         'export NEXO_HOME\n'
-        'export NEXO_CODE="$NEXO_HOME"\n'
+        'export NEXO_CODE="${NEXO_CODE:-$NEXO_HOME}"\n'
+        'resolve_python() {\n'
+        '  local candidates=()\n'
+        '  local candidate=""\n'
+        '  if [ -n "${NEXO_RUNTIME_PYTHON:-}" ]; then candidates+=("$NEXO_RUNTIME_PYTHON"); fi\n'
+        '  if [ -n "${NEXO_PYTHON:-}" ]; then candidates+=("$NEXO_PYTHON"); fi\n'
+        '  candidates+=("$NEXO_HOME/.venv/bin/python3" "$NEXO_HOME/.venv/bin/python")\n'
+        '  case "$(uname -s)" in\n'
+        '    Darwin) candidates+=("/opt/homebrew/bin/python3" "/usr/local/bin/python3") ;;\n'
+        '    *) candidates+=("/usr/local/bin/python3" "/usr/bin/python3") ;;\n'
+        '  esac\n'
+        '  if command -v python3 >/dev/null 2>&1; then candidates+=("$(command -v python3)"); fi\n'
+        '  if command -v python >/dev/null 2>&1; then candidates+=("$(command -v python)"); fi\n'
+        '  for candidate in "${candidates[@]}"; do\n'
+        '    [ -n "$candidate" ] || continue\n'
+        '    [ -x "$candidate" ] || continue\n'
+        '    if NEXO_HOME="$NEXO_HOME" NEXO_CODE="$NEXO_CODE" "$candidate" -c "import fastmcp" >/dev/null 2>&1; then\n'
+        '      printf \'%s\\n\' "$candidate"\n'
+        '      return 0\n'
+        '    fi\n'
+        '  done\n'
+        '  for candidate in "${candidates[@]}"; do\n'
+        '    [ -n "$candidate" ] || continue\n'
+        '    [ -x "$candidate" ] || continue\n'
+        '    printf \'%s\\n\' "$candidate"\n'
+        '    return 0\n'
+        '  done\n'
+        '  return 1\n'
+        '}\n'
+        'PYTHON="$(resolve_python || true)"\n'
+        'if [ -z "$PYTHON" ]; then\n'
+        '  echo "NEXO runtime Python not found. Run nexo-brain or nexo update to repair the installation." >&2\n'
+        '  exit 1\n'
+        'fi\n'
         'exec "$PYTHON" "$NEXO_HOME/cli.py" "$@"\n'
     )
 
@@ -209,14 +235,50 @@ def _requirements_hash() -> str:
     return ""
 
 
+def _venv_python_path(runtime_root: Path = NEXO_HOME) -> Path:
+    if sys.platform == "win32":
+        return runtime_root / ".venv" / "Scripts" / "python.exe"
+    return runtime_root / ".venv" / "bin" / "python3"
+
+
+def _venv_pip_path(runtime_root: Path = NEXO_HOME) -> Path:
+    if sys.platform == "win32":
+        return runtime_root / ".venv" / "Scripts" / "pip.exe"
+    return runtime_root / ".venv" / "bin" / "pip"
+
+
+def _ensure_runtime_venv(runtime_root: Path = NEXO_HOME) -> Path | None:
+    venv_python = _venv_python_path(runtime_root)
+    if venv_python.exists():
+        return venv_python
+    try:
+        runtime_root.mkdir(parents=True, exist_ok=True)
+        result = subprocess.run(
+            [sys.executable, "-m", "venv", str(runtime_root / ".venv")],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        if result.returncode == 0 and venv_python.exists():
+            _log(f"Created managed venv at {runtime_root / '.venv'}")
+            return venv_python
+        _log(f"venv creation failed (exit {result.returncode}): {result.stderr or result.stdout}")
+    except Exception as e:
+        _log(f"venv creation failed: {e}")
+    return None
+
+
 def _reinstall_pip_deps() -> bool:
     """Reinstall Python deps from requirements.txt. Returns True on success."""
     req_file = SRC_DIR / "requirements.txt"
     if not req_file.exists():
         return True
-    venv_pip = NEXO_HOME / ".venv" / "bin" / "pip"
-    if not venv_pip.exists():
-        venv_pip = NEXO_HOME / ".venv" / "bin" / "pip3"
+    _ensure_runtime_venv(NEXO_HOME)
+    venv_pip = _venv_pip_path(NEXO_HOME)
+    if not venv_pip.exists() and sys.platform != "win32":
+        alt_pip = NEXO_HOME / ".venv" / "bin" / "pip3"
+        if alt_pip.exists():
+            venv_pip = alt_pip
     try:
         if venv_pip.exists():
             result = subprocess.run(
@@ -1399,9 +1461,12 @@ def _reinstall_runtime_pip_deps(runtime_root: Path = NEXO_HOME) -> bool:
     req_file = runtime_root / "requirements.txt"
     if not req_file.exists():
         return True
-    venv_pip = runtime_root / ".venv" / "bin" / "pip"
-    if not venv_pip.exists():
-        venv_pip = runtime_root / ".venv" / "bin" / "pip3"
+    _ensure_runtime_venv(runtime_root)
+    venv_pip = _venv_pip_path(runtime_root)
+    if not venv_pip.exists() and sys.platform != "win32":
+        alt_pip = runtime_root / ".venv" / "bin" / "pip3"
+        if alt_pip.exists():
+            venv_pip = alt_pip
     try:
         if venv_pip.exists():
             result = subprocess.run(

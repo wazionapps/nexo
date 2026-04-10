@@ -14,17 +14,44 @@ const path = require("path");
 
 const NEXO_HOME = process.env.NEXO_HOME || path.join(os.homedir(), ".nexo");
 
+function pythonSupportsModule(candidate, moduleName) {
+  if (!candidate) return false;
+  if (candidate.includes("/") && !fs.existsSync(candidate)) return false;
+  try {
+    const result = spawnSync(candidate, ["-c", `import ${moduleName}`], {
+      stdio: "ignore",
+      env: {
+        ...process.env,
+        NEXO_HOME,
+        NEXO_CODE: path.join(__dirname, "..", "src"),
+      },
+    });
+    return result.status === 0;
+  } catch {
+    return false;
+  }
+}
+
 function findPython() {
   const candidates = [
+    process.env.NEXO_RUNTIME_PYTHON,
+    process.env.NEXO_PYTHON,
     path.join(NEXO_HOME, ".venv", "bin", "python3"),
     path.join(NEXO_HOME, ".venv", "bin", "python"),
+    process.platform === "darwin" ? "/opt/homebrew/bin/python3" : "",
+    "/usr/local/bin/python3",
+    "/usr/bin/python3",
     "python3",
     "python",
   ];
+  let fallback = "";
   for (const c of candidates) {
-    if (c.includes("/") ? fs.existsSync(c) : true) return c;
+    if (!c) continue;
+    if (!(c.includes("/") ? fs.existsSync(c) : true)) continue;
+    if (!fallback) fallback = c;
+    if (pythonSupportsModule(c, "fastmcp")) return c;
   }
-  return "python3";
+  return fallback || "python3";
 }
 
 function findCliPy() {
