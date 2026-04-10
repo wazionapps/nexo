@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import json
 import sys
 from pathlib import Path
 
@@ -49,6 +50,47 @@ def outcome_env(tmp_path, monkeypatch):
     home = tmp_path / "nexo"
     (home / "data").mkdir(parents=True, exist_ok=True)
     return _reload_outcome_stack(monkeypatch, home)
+
+
+def _seed_pattern(
+    db,
+    *,
+    selected_choice: str,
+    status: str,
+    count: int,
+    area: str = "release",
+    task_type: str = "execute",
+    goal_profile_id: str = "release_safety",
+):
+    for idx in range(count):
+        deadline = "2099-01-01T00:00:00" if status == "met" else "2000-01-01T00:00:00"
+        outcome = db.create_outcome(
+            action_type="manual_review",
+            description=f"Seed {status} for {selected_choice} #{idx}",
+            expected_result=f"{selected_choice} should succeed",
+            metric_source="manual",
+            target_value=1,
+            target_operator="gte",
+            deadline=deadline,
+        )
+        db.create_cortex_evaluation(
+            goal="Seed structured outcome pattern",
+            task_type=task_type,
+            area=area,
+            impact_level="high",
+            alternatives=[{"name": selected_choice, "description": selected_choice}],
+            scores=[{"name": selected_choice, "total_score": 1.0}],
+            recommended_choice=selected_choice,
+            recommended_reasoning="seed",
+            linked_outcome_id=outcome["id"],
+            goal_profile_id=goal_profile_id,
+            goal_profile_labels=[],
+            goal_profile_weights={},
+            selected_choice=selected_choice,
+            selection_reason="seed",
+            selection_source="recommended",
+        )
+        db.evaluate_outcome(outcome["id"], actual_value=1.0 if status == "met" else 0.0)
 
 
 def test_followup_completion_marks_linked_outcome_met(outcome_env):
@@ -168,3 +210,76 @@ def test_sqlite_outcome_below_target_after_deadline_becomes_missed_and_creates_l
     assert checked["actual_value"] == 3.0
     assert checked["learning_id"] is not None
     assert learning_row["category"] == "outcomes"
+
+
+def test_outcome_pattern_candidates_surface_positive_and_negative_groups(outcome_env):
+    db, _, _ = outcome_env
+    db.init_db()
+
+    import plugins.outcomes as outcomes_plugin
+
+    importlib.reload(outcomes_plugin)
+
+    _seed_pattern(db, selected_choice="staged_validation", status="met", count=3)
+    _seed_pattern(db, selected_choice="direct_push", status="missed", count=3)
+
+    payload = json.loads(outcomes_plugin.handle_outcome_pattern_candidates(min_resolved=3, limit=10))
+
+    assert payload["ok"] is True
+    candidates = payload["candidates"]
+    positive = next(item for item in candidates if item["selected_choice"] == "staged_validation")
+    negative = next(item for item in candidates if item["selected_choice"] == "direct_push")
+
+    assert positive["candidate_type"] == "reinforce_strategy"
+    assert positive["resolved_outcomes"] == 3
+    assert positive["success_rate"] == 1.0
+    assert negative["candidate_type"] == "avoid_strategy"
+    assert negative["resolved_outcomes"] == 3
+    assert negative["success_rate"] == 0.0
+    assert len(positive["evidence"]) >= 1
+
+
+def test_outcome_pattern_capture_creates_learning_once(outcome_env):
+    db, _, _ = outcome_env
+    db.init_db()
+
+    import plugins.outcomes as outcomes_plugin
+
+    importlib.reload(outcomes_plugin)
+
+    _seed_pattern(db, selected_choice="staged_validation", status="met", count=3)
+    payload = json.loads(outcomes_plugin.handle_outcome_pattern_candidates(min_resolved=3, limit=10))
+    candidate = next(item for item in payload["candidates"] if item["selected_choice"] == "staged_validation")
+
+    first = json.loads(outcomes_plugin.handle_outcome_pattern_capture(candidate["pattern_key"]))
+    second = json.loads(outcomes_plugin.handle_outcome_pattern_capture(candidate["pattern_key"]))
+    row = db.get_db().execute(
+        "SELECT COUNT(*) AS total FROM learnings WHERE applies_to = ?",
+        (f"outcome-pattern:{candidate['pattern_key']}",),
+    ).fetchone()
+
+    assert first["ok"] is True
+    assert first["created"] is True
+    assert first["learning"]["category"] == "outcomes"
+    assert "Prefer staged_validation" in first["learning"]["title"]
+    assert second["ok"] is True
+    assert second["created"] is False
+    assert second["learning"]["id"] == first["learning"]["id"]
+    assert row["total"] == 1
+
+
+def test_outcome_pattern_candidates_skip_contradictory_groups(outcome_env):
+    db, _, _ = outcome_env
+    db.init_db()
+
+    import plugins.outcomes as outcomes_plugin
+
+    importlib.reload(outcomes_plugin)
+
+    _seed_pattern(db, selected_choice="mixed_strategy", status="met", count=2)
+    _seed_pattern(db, selected_choice="mixed_strategy", status="missed", count=2)
+
+    payload = json.loads(outcomes_plugin.handle_outcome_pattern_candidates(min_resolved=4, limit=10))
+
+    assert payload["ok"] is True
+    assert not any(item["selected_choice"] == "mixed_strategy" for item in payload["candidates"])

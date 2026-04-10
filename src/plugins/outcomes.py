@@ -10,6 +10,8 @@ from db import (
     list_outcomes,
     cancel_outcome,
     evaluate_outcome,
+    list_outcome_pattern_candidates,
+    capture_outcome_pattern,
 )
 
 
@@ -104,9 +106,25 @@ def handle_outcome_cancel(id: int, reason: str = "") -> str:
     return f"Outcome #{result['id']} cancelled."
 
 
+def handle_outcome_pattern_candidates(min_resolved: int = 3, limit: int = 10) -> str:
+    """List repeated resolved outcome patterns that are strong enough to become reusable knowledge."""
+    candidates = list_outcome_pattern_candidates(min_resolved=min_resolved, limit=limit)
+    return json.dumps({"ok": True, "candidates": candidates}, ensure_ascii=False, indent=2)
+
+
+def handle_outcome_pattern_capture(pattern_key: str, target: str = "learning", category: str = "outcomes") -> str:
+    """Materialize one repeated outcome pattern into a reusable artifact (currently a learning)."""
+    result = capture_outcome_pattern(pattern_key=pattern_key, target=target, category=category)
+    if "error" in result:
+        return json.dumps({"ok": False, "error": result["error"]}, ensure_ascii=False, indent=2)
+    return json.dumps(result, ensure_ascii=False, indent=2)
+
+
 TOOLS = [
     (handle_outcome_register, "nexo_outcome_register", "Register an expected action outcome with metric source, deadline, and optional link to decision/followup/task."),
     (handle_outcome_check, "nexo_outcome_check", "Check a tracked outcome now using linked state or supplied evidence; marks pending/met/missed and may create a learning on miss."),
     (handle_outcome_list, "nexo_outcome_list", "List tracked outcomes filtered by status and/or action type."),
     (handle_outcome_cancel, "nexo_outcome_cancel", "Cancel an outcome so it stops blocking pending/missed reviews."),
+    (handle_outcome_pattern_candidates, "nexo_outcome_pattern_candidates", "List repeated resolved outcome patterns from cortex-linked decisions that are consistent enough to become reusable knowledge."),
+    (handle_outcome_pattern_capture, "nexo_outcome_pattern_capture", "Capture one repeated outcome pattern as a reusable artifact (currently a learning) once the evidence is consistent."),
 ]

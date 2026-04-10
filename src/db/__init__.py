@@ -220,6 +220,7 @@ from db._outcomes import (
     create_outcome, get_outcome, list_outcomes,
     cancel_outcome, evaluate_outcome, pending_outcomes_due,
     find_pending_outcomes_by_action, set_linked_outcomes_met,
+    list_outcome_pattern_candidates, capture_outcome_pattern,
 )
 
 # Goal Engine v1

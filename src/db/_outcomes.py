@@ -15,6 +15,10 @@ VALID_METRIC_SOURCES = {
     "nexo_sqlite",
 }
 VALID_TARGET_OPERATORS = {"gte", "lte", "eq"}
+OUTCOME_PATTERN_MIN_RESOLVED = 3
+OUTCOME_PATTERN_MAX_EVIDENCE = 5
+OUTCOME_PATTERN_MIN_SUCCESS_RATE = 0.75
+OUTCOME_PATTERN_MAX_FAILURE_RATE = 0.25
 
 
 def _utcnow_iso() -> str:
@@ -69,6 +73,30 @@ def _format_scalar(value: Any) -> str:
     if isinstance(value, float):
         return f"{value:.4f}".rstrip("0").rstrip(".")
     return str(value)
+
+
+def _pattern_key(*, area: str, task_type: str, goal_profile_id: str, selected_choice: str) -> str:
+    return json.dumps(
+        {
+            "area": (area or "").strip(),
+            "task_type": (task_type or "").strip(),
+            "goal_profile_id": (goal_profile_id or "").strip(),
+            "selected_choice": (selected_choice or "").strip(),
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+
+
+def _context_label(*, area: str, task_type: str, goal_profile_id: str) -> str:
+    bits = []
+    if (area or "").strip():
+        bits.append(f"area={area.strip()}")
+    if (task_type or "").strip():
+        bits.append(f"task_type={task_type.strip()}")
+    if (goal_profile_id or "").strip():
+        bits.append(f"profile={goal_profile_id.strip()}")
+    return ", ".join(bits) if bits else "contexto general"
 
 
 def _compare(actual_value: float, target_value: float, operator: str) -> bool:
@@ -490,3 +518,208 @@ def set_linked_outcomes_met(
             )
         )
     return updated
+
+
+def list_outcome_pattern_candidates(
+    *,
+    min_resolved: int = OUTCOME_PATTERN_MIN_RESOLVED,
+    min_success_rate: float = OUTCOME_PATTERN_MIN_SUCCESS_RATE,
+    max_failure_rate: float = OUTCOME_PATTERN_MAX_FAILURE_RATE,
+    limit: int = 20,
+) -> list[dict]:
+    conn = get_db()
+    if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='cortex_evaluations'").fetchone():
+        return []
+
+    rows = conn.execute(
+        """SELECT
+               e.area,
+               e.task_type,
+               e.goal_profile_id,
+               e.selected_choice,
+               SUM(CASE WHEN o.status = 'met' THEN 1 ELSE 0 END) AS met,
+               SUM(CASE WHEN o.status = 'missed' THEN 1 ELSE 0 END) AS missed,
+               COUNT(*) AS resolved_outcomes,
+               MAX(e.created_at) AS last_seen_at
+           FROM cortex_evaluations e
+           JOIN outcomes o ON o.id = e.linked_outcome_id
+           WHERE (e.selected_choice IS NOT NULL AND trim(e.selected_choice) != '')
+             AND o.status IN ('met', 'missed')
+           GROUP BY e.area, e.task_type, e.goal_profile_id, e.selected_choice
+           HAVING COUNT(*) >= ?
+           ORDER BY resolved_outcomes DESC, last_seen_at DESC
+           LIMIT ?""",
+        (max(1, int(min_resolved)), max(1, int(limit * 3))),
+    ).fetchall()
+
+    candidates: list[dict] = []
+    for row in rows:
+        resolved = int(row["resolved_outcomes"] or 0)
+        met = int(row["met"] or 0)
+        missed = int(row["missed"] or 0)
+        if resolved <= 0:
+            continue
+        success_rate = round(met / resolved, 3)
+        candidate_type = ""
+        if success_rate >= float(min_success_rate):
+            candidate_type = "reinforce_strategy"
+        elif success_rate <= float(max_failure_rate):
+            candidate_type = "avoid_strategy"
+        if not candidate_type:
+            continue
+
+        evidence_rows = conn.execute(
+            """SELECT e.id AS evaluation_id, o.id AS outcome_id, o.status, o.description, e.created_at
+               FROM cortex_evaluations e
+               JOIN outcomes o ON o.id = e.linked_outcome_id
+               WHERE e.area = ?
+                 AND e.task_type = ?
+                 AND e.goal_profile_id = ?
+                 AND e.selected_choice = ?
+                 AND o.status IN ('met', 'missed')
+               ORDER BY e.created_at DESC, e.id DESC
+               LIMIT ?""",
+            (
+                row["area"] or "",
+                row["task_type"] or "",
+                row["goal_profile_id"] or "",
+                row["selected_choice"] or "",
+                OUTCOME_PATTERN_MAX_EVIDENCE,
+            ),
+        ).fetchall()
+        evidence = [dict(item) for item in evidence_rows]
+        context = _context_label(
+            area=row["area"] or "",
+            task_type=row["task_type"] or "",
+            goal_profile_id=row["goal_profile_id"] or "",
+        )
+        selected_choice = (row["selected_choice"] or "").strip()
+        if candidate_type == "reinforce_strategy":
+            rationale = (
+                f"La estrategia '{selected_choice}' acumula {met}/{resolved} outcomes met en {context}."
+            )
+        else:
+            rationale = (
+                f"La estrategia '{selected_choice}' acumula {missed}/{resolved} outcomes missed en {context}."
+            )
+
+        pattern_key = _pattern_key(
+            area=row["area"] or "",
+            task_type=row["task_type"] or "",
+            goal_profile_id=row["goal_profile_id"] or "",
+            selected_choice=selected_choice,
+        )
+        candidates.append(
+            {
+                "pattern_key": pattern_key,
+                "candidate_type": candidate_type,
+                "area": row["area"] or "",
+                "task_type": row["task_type"] or "",
+                "goal_profile_id": row["goal_profile_id"] or "",
+                "selected_choice": selected_choice,
+                "resolved_outcomes": resolved,
+                "met": met,
+                "missed": missed,
+                "success_rate": success_rate,
+                "last_seen_at": row["last_seen_at"],
+                "context_label": context,
+                "rationale": rationale,
+                "evidence": evidence,
+                "suggested_skill_candidate": (
+                    candidate_type == "reinforce_strategy" and resolved >= max(4, int(min_resolved))
+                ),
+            }
+        )
+
+    candidates.sort(
+        key=lambda item: (
+            0 if item["candidate_type"] == "avoid_strategy" else 1,
+            -item["resolved_outcomes"],
+            item["selected_choice"],
+        )
+    )
+    return candidates[: max(1, int(limit))]
+
+
+def capture_outcome_pattern(
+    pattern_key: str,
+    *,
+    target: str = "learning",
+    category: str = "outcomes",
+) -> dict:
+    clean_target = (target or "learning").strip().lower()
+    if clean_target != "learning":
+        return {"error": f"Unsupported target: {target}"}
+
+    clean_key = (pattern_key or "").strip()
+    if not clean_key:
+        return {"error": "pattern_key is required"}
+
+    candidates = list_outcome_pattern_candidates(limit=200)
+    candidate = next((item for item in candidates if item["pattern_key"] == clean_key), None)
+    if not candidate:
+        return {"error": "Pattern candidate not found or no longer qualifies"}
+
+    selected_choice = candidate["selected_choice"]
+    context = candidate["context_label"]
+    applies_to = f"outcome-pattern:{clean_key}"
+    if candidate["candidate_type"] == "reinforce_strategy":
+        title = f"Prefer {selected_choice} in {context}"
+        prevention = (
+            f"When a comparable context appears, default to '{selected_choice}' unless fresh evidence or constraints override it."
+        )
+    else:
+        title = f"Avoid {selected_choice} in {context}"
+        prevention = (
+            f"When a comparable context appears, do not default to '{selected_choice}' until the evidence base changes."
+        )
+
+    conn = get_db()
+    existing = conn.execute(
+        """SELECT * FROM learnings
+           WHERE status = 'active' AND applies_to = ?
+           ORDER BY updated_at DESC, id DESC
+           LIMIT 1""",
+        (applies_to,),
+    ).fetchone()
+    if existing:
+        return {
+            "ok": True,
+            "created": False,
+            "target": clean_target,
+            "candidate": candidate,
+            "learning": dict(existing),
+        }
+
+    evidence_refs = ", ".join(
+        f"eval#{item['evaluation_id']}/outcome#{item['outcome_id']}:{item['status']}"
+        for item in candidate["evidence"][:OUTCOME_PATTERN_MAX_EVIDENCE]
+    )
+    content = (
+        f"{candidate['rationale']} "
+        f"Success rate: {candidate['success_rate']:.3f}. "
+        f"Resolved outcomes: {candidate['resolved_outcomes']} "
+        f"(met={candidate['met']}, missed={candidate['missed']}). "
+        f"Evidence: {evidence_refs or 'none'}."
+    )
+    reasoning = (
+        "Structured outcome pattern captured from repeated resolved cortex-linked outcomes. "
+        f"Pattern key: {clean_key}."
+    )
+    from db._learnings import create_learning
+
+    learning = create_learning(
+        category=(category or "outcomes").strip(),
+        title=title,
+        content=content,
+        reasoning=reasoning,
+        prevention=prevention,
+        applies_to=applies_to,
+    )
+    return {
+        "ok": True,
+        "created": True,
+        "target": clean_target,
+        "candidate": candidate,
+        "learning": learning,
+    }
