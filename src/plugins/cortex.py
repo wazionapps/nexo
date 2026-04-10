@@ -408,6 +408,46 @@ def _historical_outcome_signal(
     }
 
 
+def _pattern_learning_signal(
+    choice_name: str,
+    *,
+    area: str = "",
+    task_type: str = "",
+    goal_profile_id: str = "",
+) -> dict:
+    clean_choice = (choice_name or "").strip()
+    if not clean_choice:
+        return {
+            "active": False,
+            "pattern_key": "",
+            "learning_id": 0,
+            "mode": "",
+            "title": "",
+            "success_adjustment": 0.0,
+            "risk_adjustment": 0.0,
+        }
+
+    try:
+        from db._outcomes import get_outcome_pattern_learning_signal
+    except Exception:
+        return {
+            "active": False,
+            "pattern_key": "",
+            "learning_id": 0,
+            "mode": "",
+            "title": "",
+            "success_adjustment": 0.0,
+            "risk_adjustment": 0.0,
+        }
+
+    return get_outcome_pattern_learning_signal(
+        area=area,
+        task_type=task_type,
+        goal_profile_id=goal_profile_id,
+        selected_choice=clean_choice,
+    )
+
+
 def _somatic_penalty(*parts: str) -> float:
     conn = _get_db()
     if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='somatic_events'").fetchone():
@@ -556,6 +596,20 @@ def _score_alternative(
             f"histórico insuficiente aún ({historical['resolved_outcomes']}/{historical['threshold']} outcomes)"
         )
 
+    pattern_learning = _pattern_learning_signal(
+        alternative.get("name", ""),
+        area=area,
+        task_type=task_type,
+        goal_profile_id=(goal_profile.get("profile_id") or ""),
+    )
+    if pattern_learning["active"]:
+        success += pattern_learning["success_adjustment"]
+        risk += pattern_learning["risk_adjustment"]
+        if pattern_learning["mode"] == "prefer":
+            reasons.append("regla estructurada capturada favorece esta estrategia")
+        elif pattern_learning["mode"] == "avoid":
+            reasons.append("regla estructurada capturada penaliza esta estrategia")
+
     constraint_penalty, constraint_reasons = _constraint_penalty(lowered, constraints)
     if constraint_penalty:
         risk += constraint_penalty
@@ -583,6 +637,7 @@ def _score_alternative(
             "outcomes": history["matched_outcomes"],
         },
         "historical_signal": historical,
+        "pattern_learning_signal": pattern_learning,
     }
 
 

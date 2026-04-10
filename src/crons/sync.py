@@ -42,6 +42,9 @@ LABEL_PREFIX = "com.nexo."
 LOG_DIR = NEXO_HOME / "logs"
 OPTIONALS_FILE = NEXO_HOME / "config" / "optionals.json"
 SCHEDULE_FILE = NEXO_HOME / "config" / "schedule.json"
+CORE_CRON_MANAGED_ENV = "NEXO_MANAGED_CORE_CRON"
+PERSONAL_CRON_MANAGED_ENV = "NEXO_MANAGED_PERSONAL_CRON"
+PERSONAL_CRON_ID_ENV = "NEXO_PERSONAL_CRON_ID"
 RETIRED_CORE_FILES = (
     Path("scripts") / "nexo-day-orchestrator.sh",
 )
@@ -316,6 +319,29 @@ def unload_plist(plist_path: Path, dry_run: bool):
     log(f"  Removed: {plist_path.name}")
 
 
+def _plist_is_personal(existing: dict) -> bool:
+    """Return True when a LaunchAgent is explicitly managed as a personal cron."""
+    env = existing.get("EnvironmentVariables", {}) or {}
+    return env.get(PERSONAL_CRON_MANAGED_ENV) == "1" or bool(env.get(PERSONAL_CRON_ID_ENV))
+
+
+def _plist_is_core(existing: dict) -> bool:
+    """Return True when a LaunchAgent should be treated as a core cron."""
+    env = existing.get("EnvironmentVariables", {}) or {}
+    if _plist_is_personal(existing):
+        return False
+
+    if env.get(CORE_CRON_MANAGED_ENV) == "1":
+        return True
+
+    args = existing.get("ProgramArguments", [])
+    arg_blob = " ".join(str(a) for a in args)
+    return (
+        "nexo-cron-wrapper.sh" in arg_blob
+        and (str(SOURCE_ROOT) in arg_blob or str(NEXO_HOME) in arg_blob)
+    )
+
+
 def sync(dry_run: bool = False):
     system = platform.system()
     if system == "Linux":
@@ -355,20 +381,10 @@ def sync(dry_run: bool = False):
     #    (personal crons like shopify-backup, email-monitor are left alone)
     for cron_id, plist_path in installed.items():
         if cron_id not in manifest_ids:
-            # Check if this was previously a core cron by reading the plist
-            # If it points to NEXO_CODE scripts → it's core, safe to remove
             try:
                 with open(plist_path, "rb") as f:
                     existing = plistlib.load(f)
-                env = existing.get("EnvironmentVariables", {}) or {}
-                args = existing.get("ProgramArguments", [])
-                is_core = env.get("NEXO_MANAGED_CORE_CRON") == "1"
-                if not is_core:
-                    arg_blob = " ".join(str(a) for a in args)
-                    is_core = (
-                        "nexo-cron-wrapper.sh" in arg_blob
-                        and (str(SOURCE_ROOT) in arg_blob or str(NEXO_HOME) in arg_blob)
-                    )
+                is_core = _plist_is_core(existing)
             except Exception:
                 is_core = False
 

@@ -346,6 +346,106 @@ def test_cortex_history_can_flip_recommendation_with_resolved_outcomes():
     assert staged["total_score"] > direct["total_score"]
 
 
+def test_cortex_uses_captured_outcome_pattern_learning_in_following_decision():
+    from db import (
+        create_outcome,
+        evaluate_outcome,
+        list_outcome_pattern_candidates,
+        capture_outcome_pattern,
+    )
+    from plugins.cortex import handle_cortex_decide
+
+    alternatives = json.dumps([
+        {
+            "name": "staged_validation",
+            "description": "Validate in staging with smoke tests, rollback ready, monitor and reconcile before moving.",
+        },
+        {
+            "name": "direct_growth_push",
+            "description": "Deploy release directly to production, ship fast, automate launch, integrate immediately and skip manual review.",
+        },
+    ])
+
+    for choice in ("staged_validation", "direct_growth_push"):
+        for idx in range(3):
+            met_outcome = create_outcome(
+                "manual_review",
+                f"Structured pattern seed for {choice} #{idx}",
+                f"The strategy {choice} succeeds",
+                metric_source="manual",
+                target_value=1,
+                target_operator="gte",
+                deadline="2099-01-01T00:00:00",
+            )
+            seeded = json.loads(
+                handle_cortex_decide(
+                    goal="Maximize growth from this launch window",
+                    task_type="execute",
+                    impact_level="critical",
+                    area="business",
+                    linked_outcome_id=met_outcome["id"],
+                    alternatives=alternatives,
+                    goal_profile_id="business_growth",
+                )
+            )
+            if seeded["recommendation"] != choice:
+                # Keep the seed aligned with the intended selected_choice.
+                from plugins.cortex import handle_cortex_override
+                override = json.loads(
+                    handle_cortex_override(
+                        evaluation_id=seeded["evaluation_id"],
+                        chosen=choice,
+                        reason=f"Seed the structured pattern for {choice}.",
+                    )
+                )
+                assert override["ok"] is True
+            evaluate_outcome(met_outcome["id"], actual_value=1.0)
+
+    before = json.loads(
+        handle_cortex_decide(
+            goal="Maximize growth from this launch window",
+            task_type="execute",
+            impact_level="critical",
+            area="business",
+            alternatives=alternatives,
+            goal_profile_id="business_growth",
+        )
+    )
+    staged_before = next(item for item in before["scores"] if item["name"] == "staged_validation")
+    direct_before = next(item for item in before["scores"] if item["name"] == "direct_growth_push")
+    assert staged_before["pattern_learning_signal"]["active"] is False
+    assert direct_before["pattern_learning_signal"]["active"] is False
+
+    candidate = next(
+        item
+        for item in list_outcome_pattern_candidates(min_resolved=3, limit=10)
+        if item["selected_choice"] == "staged_validation"
+        and item["area"] == "business"
+        and item["goal_profile_id"] == "business_growth"
+    )
+    captured = capture_outcome_pattern(candidate["pattern_key"])
+    assert captured["ok"] is True
+
+    after = json.loads(
+        handle_cortex_decide(
+            goal="Maximize growth from this launch window",
+            task_type="execute",
+            impact_level="critical",
+            area="business",
+            alternatives=alternatives,
+            goal_profile_id="business_growth",
+        )
+    )
+    staged_after = next(item for item in after["scores"] if item["name"] == "staged_validation")
+    direct_after = next(item for item in after["scores"] if item["name"] == "direct_growth_push")
+
+    assert staged_after["pattern_learning_signal"]["active"] is True
+    assert staged_after["pattern_learning_signal"]["mode"] == "prefer"
+    assert staged_after["pattern_learning_signal"]["learning_id"] == captured["learning"]["id"]
+    assert staged_after["total_score"] > staged_before["total_score"]
+    assert direct_after["pattern_learning_signal"]["active"] is False
+
+
 def test_cortex_quality_summarises_acceptance_override_and_linked_outcomes():
     from db import create_outcome, evaluate_outcome
     from plugins.cortex import handle_cortex_decide, handle_cortex_override, handle_cortex_quality

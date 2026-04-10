@@ -17,6 +17,10 @@ VALID_METRIC_SOURCES = {
 VALID_TARGET_OPERATORS = {"gte", "lte", "eq"}
 OUTCOME_PATTERN_MIN_RESOLVED = 3
 OUTCOME_PATTERN_MAX_EVIDENCE = 5
+OUTCOME_PATTERN_LEARNING_SUCCESS_BOOST = 0.9
+OUTCOME_PATTERN_LEARNING_RISK_REDUCTION = 0.6
+OUTCOME_PATTERN_LEARNING_SUCCESS_PENALTY = -1.1
+OUTCOME_PATTERN_LEARNING_RISK_PENALTY = 0.8
 OUTCOME_PATTERN_MIN_SUCCESS_RATE = 0.75
 OUTCOME_PATTERN_MAX_FAILURE_RATE = 0.25
 
@@ -722,4 +726,75 @@ def capture_outcome_pattern(
         "target": clean_target,
         "candidate": candidate,
         "learning": learning,
+    }
+
+
+def get_outcome_pattern_learning_signal(
+    *,
+    area: str = "",
+    task_type: str = "",
+    goal_profile_id: str = "",
+    selected_choice: str = "",
+) -> dict:
+    clean_choice = (selected_choice or "").strip()
+    if not clean_choice:
+        return {
+            "active": False,
+            "pattern_key": "",
+            "learning_id": 0,
+            "mode": "",
+            "title": "",
+            "success_adjustment": 0.0,
+            "risk_adjustment": 0.0,
+        }
+
+    pattern_key = _pattern_key(
+        area=area or "",
+        task_type=task_type or "",
+        goal_profile_id=goal_profile_id or "",
+        selected_choice=clean_choice,
+    )
+    applies_to = f"outcome-pattern:{pattern_key}"
+    conn = get_db()
+    row = conn.execute(
+        """SELECT id, title
+           FROM learnings
+           WHERE status = 'active' AND applies_to = ?
+           ORDER BY updated_at DESC, id DESC
+           LIMIT 1""",
+        (applies_to,),
+    ).fetchone()
+    if not row:
+        return {
+            "active": False,
+            "pattern_key": pattern_key,
+            "learning_id": 0,
+            "mode": "",
+            "title": "",
+            "success_adjustment": 0.0,
+            "risk_adjustment": 0.0,
+        }
+
+    title = str(row["title"] or "").strip()
+    if title.startswith("Prefer "):
+        mode = "prefer"
+        success_adjustment = OUTCOME_PATTERN_LEARNING_SUCCESS_BOOST
+        risk_adjustment = -OUTCOME_PATTERN_LEARNING_RISK_REDUCTION
+    elif title.startswith("Avoid "):
+        mode = "avoid"
+        success_adjustment = OUTCOME_PATTERN_LEARNING_SUCCESS_PENALTY
+        risk_adjustment = OUTCOME_PATTERN_LEARNING_RISK_PENALTY
+    else:
+        mode = "observe"
+        success_adjustment = 0.0
+        risk_adjustment = 0.0
+
+    return {
+        "active": mode in {"prefer", "avoid"},
+        "pattern_key": pattern_key,
+        "learning_id": int(row["id"] or 0),
+        "mode": mode,
+        "title": title,
+        "success_adjustment": round(success_adjustment, 2),
+        "risk_adjustment": round(risk_adjustment, 2),
     }
