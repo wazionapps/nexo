@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import os
 import re
 import secrets
 import time
@@ -17,12 +18,14 @@ from db import (
     capture_context_event,
     format_pre_action_context_bundle,
     get_db,
+    get_followups,
     get_protocol_task,
     list_workflow_goals,
     list_workflow_runs,
     list_protocol_debts,
     log_change,
     resolve_protocol_debts,
+    search_learnings,
 )
 from plugins.cortex import evaluate_cortex_state
 from plugins.guard import handle_guard_check
@@ -252,6 +255,89 @@ def _preview_prospective_triggers(goal: str, context_hint: str, files_list: list
         }
         for match in matches
     ]
+
+
+ATLAS_PATH = os.path.join(
+    os.environ.get("NEXO_HOME", os.path.join(os.path.expanduser("~"), ".nexo")),
+    "brain",
+    "project-atlas.json",
+)
+
+
+def _build_area_context(area: str) -> dict:
+    """Build a pre-reading context block for a known area.
+
+    Returns project-atlas entry, recent area learnings, and active area followups
+    so the agent never starts 'cold' on a known project.
+    """
+    clean_area = (area or "").strip().lower()
+    if not clean_area:
+        return {"has_context": False}
+
+    # 1. Project-atlas lookup
+    atlas_entry = None
+    try:
+        with open(ATLAS_PATH, "r", encoding="utf-8") as f:
+            atlas = json.load(f)
+        for key, entry in atlas.items():
+            if key == "_meta":
+                continue
+            aliases = [a.lower() for a in entry.get("aliases", [])]
+            if clean_area == key.lower() or clean_area in aliases:
+                atlas_entry = {
+                    "project_key": key,
+                    "description": entry.get("description", ""),
+                    "locations": entry.get("locations", {}),
+                    "servers": {k: {sk: sv for sk, sv in v.items() if sk != "credential_key"} for k, v in entry.get("servers", {}).items()} if isinstance(entry.get("servers"), dict) else {},
+                }
+                break
+    except Exception:
+        pass
+
+    # 2. Recent area learnings (top 5)
+    area_learnings = []
+    try:
+        results = search_learnings(clean_area, category=clean_area)
+        if not results:
+            results = search_learnings(clean_area)
+        for learning in results[:5]:
+            area_learnings.append({
+                "id": learning.get("id"),
+                "title": (learning.get("title") or "")[:120],
+                "priority": learning.get("priority", "medium"),
+            })
+    except Exception:
+        pass
+
+    # 3. Active followups for the area (keyword match on description)
+    area_followups = []
+    try:
+        all_active = get_followups("active")
+        for followup in all_active:
+            desc = (followup.get("description") or "").lower()
+            fid = (followup.get("id") or "").lower()
+            if clean_area in desc or clean_area in fid:
+                area_followups.append({
+                    "id": followup.get("id"),
+                    "description": (followup.get("description") or "")[:120],
+                    "date": followup.get("date"),
+                    "priority": followup.get("priority", "medium"),
+                })
+                if len(area_followups) >= 5:
+                    break
+    except Exception:
+        pass
+
+    has_context = bool(atlas_entry or area_learnings or area_followups)
+    return {
+        "has_context": has_context,
+        "area": clean_area,
+        "atlas_entry": atlas_entry,
+        "learnings_count": len(area_learnings),
+        "learnings": area_learnings,
+        "followups_count": len(area_followups),
+        "followups": area_followups,
+    }
 
 
 def _create_preventive_followup(goal: str, *, attention: dict, warnings: list[dict]) -> dict | None:
@@ -493,6 +579,7 @@ def handle_task_open(
         hours=24,
         limit=4,
     )
+    area_context = _build_area_context(area.strip()) if area.strip() else {"has_context": False}
     heartbeat_result = handle_heartbeat(sid, clean_goal[:120], context_hint=context_hint[:500])
     attention = _attention_snapshot(sid.strip())
     anticipatory_warnings = _preview_prospective_triggers(clean_goal, context_hint.strip(), files_list)
@@ -641,6 +728,7 @@ def handle_task_open(
             "has_matches": bool(recent_bundle.get("has_matches")),
             "excerpt": format_pre_action_context_bundle(recent_bundle, compact=True) if recent_bundle.get("has_matches") else "",
         },
+        "area_context": area_context if area_context.get("has_context") else None,
         "contract": {
             "must_verify": must_verify,
             "must_change_log": must_change_log,
@@ -704,6 +792,7 @@ def handle_task_close(
     created_followup_id = ""
     debts_created: list[dict] = []
 
+    # ── Evidence enforcement: reject 'done' without proof in strict mode ──
     if task.get("must_verify") and clean_outcome == "done":
         if clean_evidence:
             resolve_protocol_debts(
@@ -712,12 +801,45 @@ def handle_task_close(
                 resolution="Verification evidence supplied during task_close",
             )
         else:
+            protocol_strictness = get_protocol_strictness()
+            if protocol_strictness == "strict":
+                return json.dumps(
+                    {
+                        "ok": False,
+                        "error": "Cannot close task as 'done' without evidence.",
+                        "hint": "Provide the `evidence` parameter with verifiable proof: test output, curl response, screenshot path, or real command output.",
+                        "task_id": task_id,
+                        "protocol_strictness": protocol_strictness,
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                )
             _record_debt(
                 task["session_id"],
                 task_id,
                 "claimed_done_without_evidence",
                 severity="error",
                 evidence=f"Task closed as done without evidence. Goal: {task.get('goal','')}",
+                debts=debts_created,
+            )
+
+    # ── Release checklist: require channel alignment evidence for release tasks ──
+    RELEASE_KEYWORDS = {"release", "deploy", "version", "launch", "ship"}
+    task_goal_lower = (task.get("goal") or "").lower()
+    is_release = any(kw in task_goal_lower for kw in RELEASE_KEYWORDS)
+    if is_release and clean_outcome == "done" and clean_evidence:
+        missing_channels: list[str] = []
+        evidence_lower = clean_evidence.lower()
+        for channel in ["test", "staging", "production", "changelog", "version"]:
+            if channel not in evidence_lower:
+                missing_channels.append(channel)
+        if missing_channels:
+            _record_debt(
+                task["session_id"],
+                task_id,
+                "release_channel_alignment_incomplete",
+                severity="warn",
+                evidence=f"Release task evidence missing channel references: {', '.join(missing_channels)}. Evidence provided: {clean_evidence[:200]}",
                 debts=debts_created,
             )
 
