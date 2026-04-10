@@ -191,6 +191,12 @@
           </div>
         </div>
         ${item.recommended_reasoning ? `<p class="text-xs text-slate-400 mb-2">${escapeHtml(item.recommended_reasoning)}</p>` : ''}
+        ${item.linked_outcome_id ? `
+          <div class="mt-2 text-[10px] text-slate-500">
+            outcome #${escapeHtml(String(item.linked_outcome_id))}
+            ${item.linked_outcome?.status ? `· <span class="text-slate-300">${escapeHtml(String(item.linked_outcome.status))}</span>` : ''}
+          </div>
+        ` : ''}
         ${selectedChanged && item.selection_reason ? `
           <div class="mt-2 bg-amber-500/10 rounded px-2 py-1.5">
             <p class="text-[10px] text-amber-400 font-semibold uppercase tracking-wider mb-0.5">Override</p>

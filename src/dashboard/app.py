@@ -1576,6 +1576,26 @@ async def api_cortex(limit: int = Query(50, ge=1, le=200)):
                 (limit,),
             ).fetchall()
         ]
+        linked_outcome_ids = sorted(
+            {
+                int(item.get("linked_outcome_id"))
+                for item in evaluations
+                if item.get("linked_outcome_id")
+            }
+        )
+        if linked_outcome_ids and conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='outcomes'").fetchone():
+            placeholders = ",".join("?" for _ in linked_outcome_ids)
+            outcome_rows = {
+                int(row["id"]): dict(row)
+                for row in conn.execute(
+                    f"SELECT id, status, deadline FROM outcomes WHERE id IN ({placeholders})",
+                    linked_outcome_ids,
+                ).fetchall()
+            }
+            for item in evaluations:
+                outcome_id = item.get("linked_outcome_id")
+                if outcome_id:
+                    item["linked_outcome"] = outcome_rows.get(int(outcome_id))
     return {"cortex_logs": logs, "decisions": decisions, "evaluations": evaluations}
 
 

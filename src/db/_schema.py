@@ -838,6 +838,7 @@ def _m34_cortex_evaluations(conn):
             scores TEXT NOT NULL DEFAULT '[]',
             recommended_choice TEXT DEFAULT '',
             recommended_reasoning TEXT DEFAULT '',
+            linked_outcome_id INTEGER DEFAULT NULL,
             selected_choice TEXT DEFAULT '',
             selection_reason TEXT DEFAULT '',
             selection_source TEXT NOT NULL DEFAULT 'recommended',
@@ -848,6 +849,12 @@ def _m34_cortex_evaluations(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_cortex_evaluations_task ON cortex_evaluations(task_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_cortex_evaluations_session ON cortex_evaluations(session_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_cortex_evaluations_created ON cortex_evaluations(created_at)")
+
+
+def _m35_cortex_evaluation_outcome_link(conn):
+    """Link Cortex evaluations to tracked outcomes when the task has a measurable result."""
+    _migrate_add_column(conn, "cortex_evaluations", "linked_outcome_id", "INTEGER DEFAULT NULL")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_cortex_evaluations_outcome ON cortex_evaluations(linked_outcome_id)")
 
 
 MIGRATIONS = [
@@ -885,6 +892,7 @@ MIGRATIONS = [
     (32, "outcomes", _m32_outcomes),
     (33, "followup_impact_scoring", _m33_followup_impact_scoring),
     (34, "cortex_evaluations", _m34_cortex_evaluations),
+    (35, "cortex_evaluation_outcome_link", _m35_cortex_evaluation_outcome_link),
 ]
 
 

@@ -130,6 +130,36 @@ def test_task_open_requires_decision_support_for_high_stakes_action():
     assert "alternatives" in payload["next_action"].lower()
 
 
+@pytest.mark.parametrize(
+    ("goal", "context_hint"),
+    [
+        ("Approve customer-facing pricing change", "Public launch affects revenue"),
+        ("Execute refund policy change", "Could affect brand reputation"),
+        ("Ship roadmap choice for public product launch", "Customer-visible tradeoff with cost"),
+    ],
+)
+def test_task_open_detects_high_stakes_from_cost_reputation_and_product_context(goal, context_hint):
+    from plugins.protocol import handle_task_open
+
+    sid = _register_session(f"nexo-{abs(hash(goal)) % 10000}-{(abs(hash(context_hint)) % 10000) or 1}")
+    payload = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal=goal,
+            task_type="execute",
+            area="product",
+            context_hint=context_hint,
+            plan='["prepare", "execute", "verify"]',
+            evidence_refs='["decision memo", "staging evidence"]',
+            verification_step="run post-change verification",
+        )
+    )
+
+    assert payload["ok"] is True
+    assert payload["response_contract"]["high_stakes"] is True
+    assert payload["decision_support"]["required"] is True
+
+
 def test_task_open_with_blocking_guard_creates_guard_debt(monkeypatch):
     from db import get_db
     from plugins.protocol import handle_task_open

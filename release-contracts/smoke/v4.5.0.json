@@ -1,9 +1,28 @@
 {
   "release_line": "v4.5",
   "version": "4.1.0",
-  "generated_at": "2026-04-10T11:37:34.531679+00:00",
+  "generated_at": "2026-04-10T11:54:22.594343+00:00",
   "ok": true,
   "groups": [
+    {
+      "id": "manual_canonical",
+      "description": "canonical manual for personal artifacts stays explicit, generic, and tied to live runtime behavior",
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_personal_artifacts_manual.py"
+      ],
+      "targets": [
+        "tests/test_personal_artifacts_manual.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 2.84,
+      "stdout": "...                                                                      [100%]Running teardown with pytest sessionfinish...\n\n3 passed in 0.16s\n",
+      "stderr": ""
+    },
     {
       "id": "protocol_flow",
       "description": "startup, protocol contract, and high-stakes close path stay coherent",
@@ -21,8 +40,8 @@
       ],
       "returncode": 0,
       "ok": true,
-      "duration_seconds": 3.65,
-      "stdout": "......................                                                   [100%]Running teardown with pytest sessionfinish...\n\n22 passed in 1.34s\n",
+      "duration_seconds": 3.47,
+      "stdout": ".........................                                                [100%]Running teardown with pytest sessionfinish...\n\n25 passed in 1.32s\n",
       "stderr": ""
     },
     {
@@ -40,8 +59,8 @@
       ],
       "returncode": 0,
       "ok": true,
-      "duration_seconds": 2.41,
-      "stdout": "....                                                                     [100%]Running teardown with pytest sessionfinish...\n\n4 passed in 0.51s\n",
+      "duration_seconds": 2.24,
+      "stdout": "....                                                                     [100%]Running teardown with pytest sessionfinish...\n\n4 passed in 0.47s\n",
       "stderr": ""
     },
     {
@@ -59,8 +78,8 @@
       ],
       "returncode": 0,
       "ok": true,
-      "duration_seconds": 2.38,
-      "stdout": "...                                                                      [100%]Running teardown with pytest sessionfinish...\n\n3 passed in 0.21s\n",
+      "duration_seconds": 2.25,
+      "stdout": "....                                                                     [100%]Running teardown with pytest sessionfinish...\n\n4 passed in 0.25s\n",
       "stderr": ""
     },
     {
@@ -78,8 +97,8 @@
       ],
       "returncode": 0,
       "ok": true,
-      "duration_seconds": 2.59,
-      "stdout": "..                                                                       [100%]Running teardown with pytest sessionfinish...\n\n2 passed in 0.13s\n",
+      "duration_seconds": 1.67,
+      "stdout": "...                                                                      [100%]Running teardown with pytest sessionfinish...\n\n3 passed in 0.14s\n",
       "stderr": ""
     },
     {
@@ -97,8 +116,8 @@
       ],
       "returncode": 0,
       "ok": true,
-      "duration_seconds": 3.46,
-      "stdout": "...........................................                              [100%]Running teardown with pytest sessionfinish...\n\n43 passed in 1.30s\n",
+      "duration_seconds": 3.28,
+      "stdout": "...........................................                              [100%]Running teardown with pytest sessionfinish...\n\n43 passed in 1.35s\n",
       "stderr": ""
     },
     {
@@ -116,8 +135,8 @@
       ],
       "returncode": 0,
       "ok": true,
-      "duration_seconds": 2.37,
-      "stdout": "..                                                                       [100%]Running teardown with pytest sessionfinish...\n\n2 passed in 0.12s\n",
+      "duration_seconds": 1.7,
+      "stdout": "..                                                                       [100%]Running teardown with pytest sessionfinish...\n\n2 passed in 0.11s\n",
       "stderr": ""
     },
     {
@@ -135,7 +154,7 @@
       ],
       "returncode": 0,
       "ok": true,
-      "duration_seconds": 2.35,
+      "duration_seconds": 2.22,
       "stdout": "...........                                                              [100%]Running teardown with pytest sessionfinish...\n\n11 passed in 0.49s\n",
       "stderr": ""
     },
@@ -156,8 +175,8 @@
       ],
       "returncode": 0,
       "ok": true,
-      "duration_seconds": 2.51,
-      "stdout": "...                                                                      [100%]Running teardown with pytest sessionfinish...\n\n3 passed in 0.18s\n",
+      "duration_seconds": 2.23,
+      "stdout": "...                                                                      [100%]Running teardown with pytest sessionfinish...\n\n3 passed in 0.17s\n",
       "stderr": ""
     },
     {
@@ -175,8 +194,8 @@
       ],
       "returncode": 0,
       "ok": true,
-      "duration_seconds": 2.36,
-      "stdout": ".....                                                                    [100%]Running teardown with pytest sessionfinish...\n\n5 passed in 0.26s\n",
+      "duration_seconds": 2.38,
+      "stdout": "......                                                                   [100%]Running teardown with pytest sessionfinish...\n\n6 passed in 0.31s\n",
       "stderr": ""
     },
     {
@@ -196,7 +215,7 @@
       ],
       "returncode": 0,
       "ok": true,
-      "duration_seconds": 2.82,
+      "duration_seconds": 2.88,
       "stdout": "......................                                                   [100%]Running teardown with pytest sessionfinish...\n\n22 passed in 0.95s\n",
       "stderr": ""
     },
@@ -215,8 +234,8 @@
       ],
       "returncode": 0,
       "ok": true,
-      "duration_seconds": 13.92,
-      "stdout": "..........................                                               [100%]Running teardown with pytest sessionfinish...\n\n26 passed in 12.27s\n",
+      "duration_seconds": 13.83,
+      "stdout": "..........................                                               [100%]Running teardown with pytest sessionfinish...\n\n26 passed in 12.21s\n",
       "stderr": ""
     }
   ]

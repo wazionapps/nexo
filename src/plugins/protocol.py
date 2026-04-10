@@ -50,8 +50,19 @@ HIGH_STAKES_KEYWORDS = {
     "production",
     "deploy",
     "release",
+    "launch",
     "delete",
     "migration",
+    "pricing",
+    "refund",
+    "customer",
+    "public",
+    "brand",
+    "reputation",
+    "reputational",
+    "roadmap",
+    "revenue",
+    "cost",
 }
 
 

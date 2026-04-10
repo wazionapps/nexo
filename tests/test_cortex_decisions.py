@@ -84,3 +84,39 @@ def test_cortex_override_preserves_override_reason():
     assert row["selected_choice"] == "direct_release"
     assert "emergency window" in row["selection_reason"]
     assert row["selection_source"] == "override"
+
+
+def test_cortex_decide_links_pending_outcome_for_same_task():
+    from db import create_outcome, get_db
+    from plugins.cortex import handle_cortex_decide
+
+    task_id = "PT-OUTCOME-LINK"
+    outcome = create_outcome(
+        "release_gate",
+        "Cerrar release con verificación",
+        "La salida queda validada",
+        metric_source="protocol_task_status",
+        action_id=task_id,
+    )
+
+    payload = json.loads(
+        handle_cortex_decide(
+            goal="Deploy the production release package",
+            task_type="execute",
+            impact_level="critical",
+            area="release",
+            task_id=task_id,
+            alternatives=json.dumps([
+                {"name": "canary_release", "description": "Deploy staged canary release with smoke tests and rollback ready"},
+                {"name": "direct_release", "description": "Deploy directly to production without staged verification"},
+            ]),
+        )
+    )
+
+    assert payload["ok"] is True
+    assert payload["linked_outcome_id"] == outcome["id"]
+    row = get_db().execute(
+        "SELECT linked_outcome_id FROM cortex_evaluations WHERE id = ?",
+        (payload["evaluation_id"],),
+    ).fetchone()
+    assert row["linked_outcome_id"] == outcome["id"]

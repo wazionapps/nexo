@@ -17,6 +17,13 @@ DEFAULT_OUTPUT = ROOT / "release-contracts" / "smoke" / "v4.5.0.json"
 
 SMOKE_GROUPS = [
     {
+        "id": "manual_canonical",
+        "description": "canonical manual for personal artifacts stays explicit, generic, and tied to live runtime behavior",
+        "targets": [
+            "tests/test_personal_artifacts_manual.py",
+        ],
+    },
+    {
         "id": "protocol_flow",
         "description": "startup, protocol contract, and high-stakes close path stay coherent",
         "targets": [

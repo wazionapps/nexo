@@ -337,6 +337,39 @@ def _somatic_penalty(*parts: str) -> float:
     return round(min(5.0, penalty), 2)
 
 
+def _resolve_linked_outcome_id(*, linked_outcome_id: int | str | None = None, task_id: str = "") -> int | None:
+    try:
+        explicit = int(linked_outcome_id or 0)
+    except (TypeError, ValueError):
+        explicit = 0
+    if explicit > 0:
+        return explicit
+
+    clean_task_id = (task_id or "").strip()
+    if not clean_task_id:
+        return None
+
+    conn = _get_db()
+    if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='outcomes'").fetchone():
+        return None
+
+    row = conn.execute(
+        """SELECT id FROM outcomes
+           WHERE action_id = ? AND status = 'pending'
+           ORDER BY
+             CASE metric_source
+               WHEN 'protocol_task_status' THEN 0
+               WHEN 'decision_outcome' THEN 1
+               ELSE 2
+             END,
+             deadline ASC,
+             created_at DESC
+           LIMIT 1""",
+        (clean_task_id,),
+    ).fetchone()
+    return int(row["id"]) if row else None
+
+
 def _score_alternative(
     alternative: dict,
     *,
@@ -593,6 +626,7 @@ def handle_cortex_decide(
     evidence_refs: str = "[]",
     session_id: str = "",
     task_id: str = "",
+    linked_outcome_id: int = 0,
 ) -> str:
     """Evaluate concrete alternatives for a high-impact task using the existing Cortex."""
     clean_goal = (goal or "").strip()
@@ -630,6 +664,10 @@ def handle_cortex_decide(
     scored.sort(key=lambda item: item["total_score"], reverse=True)
     recommended = scored[0]
     reasoning = _format_decision_summary(recommended, scored)
+    resolved_outcome_id = _resolve_linked_outcome_id(
+        linked_outcome_id=linked_outcome_id,
+        task_id=task_id,
+    )
 
     try:
         from db import create_cortex_evaluation
@@ -646,6 +684,7 @@ def handle_cortex_decide(
             scores=scored,
             recommended_choice=recommended["name"],
             recommended_reasoning=reasoning,
+            linked_outcome_id=resolved_outcome_id,
             selected_choice=recommended["name"],
             selection_reason=reasoning,
             selection_source="recommended",
@@ -671,6 +710,7 @@ def handle_cortex_decide(
             "reasoning": reasoning,
             "selected_choice": record.get("selected_choice"),
             "selection_source": record.get("selection_source"),
+            "linked_outcome_id": record.get("linked_outcome_id"),
             "alternatives": parsed_alternatives,
             "scores": scored,
             "next_action": "Apply the recommended choice or call nexo_cortex_override if you intentionally choose another option.",

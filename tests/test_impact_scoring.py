@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import importlib
+import importlib.util
+import json
 import sys
 from pathlib import Path
 
 import pytest
 
 REPO_SRC = Path(__file__).resolve().parents[1] / "src"
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 if str(REPO_SRC) not in sys.path:
     sys.path.insert(0, str(REPO_SRC))
@@ -41,6 +44,14 @@ def impact_env(tmp_path, monkeypatch):
     home = tmp_path / "nexo"
     (home / "data").mkdir(parents=True, exist_ok=True)
     return _reload_impact_stack(monkeypatch, home)
+
+
+def _load_script(module_name: str, path: Path):
+    spec = importlib.util.spec_from_file_location(module_name, path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
 
 
 def test_score_followup_prefers_high_priority_due_work(impact_env):
@@ -123,3 +134,38 @@ def test_score_active_followups_persists_factors_json(impact_env):
     assert float(row["impact_score"]) > 0
     assert "business_impact" in row["impact_factors"]
     assert row["last_scored_at"] is not None
+
+
+def test_impact_scorer_writes_reasoned_summary(tmp_path, monkeypatch):
+    home = tmp_path / "nexo"
+    (home / "data").mkdir(parents=True, exist_ok=True)
+    db, _ = _reload_impact_stack(monkeypatch, home)
+    db.init_db()
+
+    db.create_followup(
+        id="NF-SUMMARY",
+        description="Cerrar trabajo crítico de revenue.",
+        date="2000-01-01",
+        verification="pytest green",
+        reasoning="Bloquea ingresos",
+        priority="critical",
+    )
+    db.create_followup(
+        id="NF-LATER",
+        description="Revisar idea secundaria.",
+        date="2099-12-31",
+        priority="low",
+    )
+
+    monkeypatch.setenv("NEXO_HOME", str(home))
+    monkeypatch.setenv("NEXO_CODE", str(REPO_SRC))
+    monkeypatch.setenv("NEXO_TEST_DB", str(home / "data" / "nexo.db"))
+    script = _load_script("impact_scorer_test", REPO_ROOT / "src" / "scripts" / "nexo-impact-scorer.py")
+
+    assert script.main() == 0
+
+    summary = json.loads((home / "coordination" / "impact-scorer-summary.json").read_text(encoding="utf-8"))
+    assert summary["scored_count"] >= 2
+    assert summary["top_followups"][0]["id"] == "NF-SUMMARY"
+    assert "reasoning" in summary["top_followups"][0]["impact_factors"]
+    assert summary["top_changes"][0]["id"] == "NF-SUMMARY"

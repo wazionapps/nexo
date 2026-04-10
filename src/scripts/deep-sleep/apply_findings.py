@@ -75,6 +75,68 @@ def generate_run_id(target_date: str) -> str:
     return f"{target_date}-{ts}"
 
 
+def _decode_json_object(value) -> dict:
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return {}
+        try:
+            parsed = json.loads(stripped)
+        except json.JSONDecodeError:
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+    return {}
+
+
+def _top_followups_by_impact(limit: int = 5) -> list[dict]:
+    if not NEXO_DB.exists():
+        return []
+    try:
+        conn = sqlite3.connect(str(NEXO_DB))
+        conn.row_factory = sqlite3.Row
+        columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(followups)").fetchall()}
+        if "impact_score" not in columns:
+            conn.close()
+            return []
+        impact_factors_sql = ", impact_factors" if "impact_factors" in columns else ""
+        rows = [
+            dict(row)
+            for row in conn.execute(
+                f"""SELECT id, description, date, priority, impact_score{impact_factors_sql}
+                    FROM followups
+                    WHERE status IN ('PENDING', 'ACTIVE', 'WAITING', 'BLOCKED')
+                    ORDER BY
+                      CASE WHEN COALESCE(impact_score, 0) > 0 THEN 0 ELSE 1 END ASC,
+                      COALESCE(impact_score, 0) DESC,
+                      CASE WHEN date IS NULL OR date = '' THEN 1 ELSE 0 END ASC,
+                      date ASC
+                    LIMIT ?""",
+                (max(1, int(limit)),),
+            ).fetchall()
+        ]
+        conn.close()
+    except Exception:
+        return []
+
+    for row in rows:
+        factors = _decode_json_object(row.get("impact_factors"))
+        row["impact_factors"] = factors
+        row["impact_reasoning"] = str(factors.get("reasoning") or "").strip()
+    return rows
+
+
+def _read_impact_summary() -> dict:
+    path = NEXO_HOME / "coordination" / "impact-scorer-summary.json"
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
 def load_recent_dedupe_keys(target_date: str, days: int = 7) -> set[str]:
     """Load dedupe_keys from applied files in the last N days."""
     keys = set()
@@ -1753,6 +1815,35 @@ def write_morning_briefing(target_date: str, synthesis: dict) -> Path:
             if item.get("context"):
                 lines.append(f"\n> {item['context']}")
             lines.append("")
+
+    top_impact = _top_followups_by_impact(limit=5)
+    if top_impact:
+        lines.append("## Top by Impact")
+        lines.append("")
+        for item in top_impact:
+            impact = float(item.get("impact_score") or 0.0)
+            due = item.get("date") or "—"
+            reason = item.get("impact_reasoning") or "impact score persisted without explicit reasoning"
+            lines.append(
+                f"- **{item.get('id', '?')}** [{impact:.1f}] {item.get('description', '')} "
+                f"(due {due}, priority {item.get('priority') or 'medium'})"
+            )
+            lines.append(f"  Why: {reason}")
+        lines.append("")
+
+    impact_summary = _read_impact_summary()
+    top_changes = [item for item in (impact_summary.get("top_changes") or []) if abs(float(item.get("delta") or 0.0)) >= 1.0]
+    if top_changes:
+        lines.append("## Impact Queue Changes")
+        lines.append("")
+        for item in top_changes[:5]:
+            delta = float(item.get("delta") or 0.0)
+            direction = "+" if delta >= 0 else ""
+            lines.append(
+                f"- **{item.get('id', '?')}** {direction}{delta:.1f} -> {float(item.get('impact_score') or 0.0):.1f} "
+                f"({item.get('impact_reasoning') or 'score recalculated'})"
+            )
+        lines.append("")
 
     # Emotional day
     emotional = synthesis.get("emotional_day", {})
