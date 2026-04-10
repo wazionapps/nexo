@@ -814,6 +814,14 @@ def _m32_outcomes(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_outcomes_action ON outcomes(action_type, action_id)")
 
 
+def _m33_followup_impact_scoring(conn):
+    """Followup impact scoring v1 — persistent prioritization over real queues."""
+    _migrate_add_column(conn, "followups", "impact_score", "REAL DEFAULT 0")
+    _migrate_add_column(conn, "followups", "impact_factors", "TEXT DEFAULT '{}'")
+    _migrate_add_column(conn, "followups", "last_scored_at", "TEXT DEFAULT NULL")
+    _migrate_add_index(conn, "idx_followups_impact_score", "followups", "impact_score")
+
+
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
     (2, "followups_reasoning", _m2_followups_reasoning),
@@ -847,6 +855,7 @@ MIGRATIONS = [
     (30, "hot_context_memory", _m30_hot_context_memory),
     (31, "drive_signals", _m31_drive_signals),
     (32, "outcomes", _m32_outcomes),
+    (33, "followup_impact_scoring", _m33_followup_impact_scoring),
 ]
 
 

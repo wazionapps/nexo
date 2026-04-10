@@ -105,6 +105,18 @@ def safe_query(sql: str, params=()) -> list:
         return []
 
 
+def _table_columns(table_name: str) -> set[str]:
+    if not NEXO_DB.exists():
+        return set()
+    try:
+        conn = sqlite3.connect(str(NEXO_DB))
+        rows = conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+        conn.close()
+        return {str(row[1]) for row in rows}
+    except Exception:
+        return set()
+
+
 def collect_data() -> dict:
     """Collect all raw data for synthesis."""
     data = {"date": TODAY_STR}
@@ -145,9 +157,21 @@ def collect_data() -> dict:
     )
 
     # Pending followups (schema: description, date, status uppercase)
+    followup_columns = _table_columns("followups")
+    if "impact_score" in followup_columns:
+        followup_select = "SELECT id, description, date, priority, impact_score FROM followups "
+        followup_order = (
+            "ORDER BY "
+            "CASE WHEN COALESCE(impact_score, 0) > 0 THEN 0 ELSE 1 END ASC, "
+            "COALESCE(impact_score, 0) DESC, "
+            "CASE WHEN date IS NULL OR date = '' THEN 1 ELSE 0 END ASC, "
+            "date ASC"
+        )
+    else:
+        followup_select = "SELECT id, description, date FROM followups "
+        followup_order = "ORDER BY date"
     data["pending_followups"] = safe_query(
-        "SELECT id, description, date FROM followups "
-        "WHERE status='PENDING' ORDER BY date"
+        f"{followup_select} WHERE status='PENDING' {followup_order}"
     )
 
     # Guard stats

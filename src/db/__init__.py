@@ -89,6 +89,7 @@ from db._reminders import (
     create_followup, update_followup, complete_followup, delete_followup,
     restore_followup, add_followup_note, get_followups, get_followup, get_followup_history,
     find_similar_followups,
+    compute_followup_impact, score_followup, score_active_followups,
     add_item_history, get_item_history, validate_item_read_token,
 )
 

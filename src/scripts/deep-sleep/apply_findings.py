@@ -246,10 +246,11 @@ def _fetch_open_followups() -> list[dict]:
     cols = _table_columns(NEXO_DB, "followups")
     reasoning_sql = ", reasoning" if "reasoning" in cols else ""
     verification_sql = ", verification" if "verification" in cols else ""
+    impact_sql = ", impact_score" if "impact_score" in cols else ""
     try:
         rows = conn.execute(
             "SELECT id, description, date, status"
-            f"{verification_sql}{reasoning_sql} "
+            f"{verification_sql}{reasoning_sql}{impact_sql} "
             "FROM followups WHERE status NOT LIKE 'COMPLETED%' "
             "AND status NOT IN ('DELETED','archived','blocked','waiting','CANCELLED')"
         ).fetchall()
@@ -937,7 +938,7 @@ def _project_weighting_window(target_date: str, *, window_days: int) -> list[dic
 
     followup_rows = _safe_query(
         NEXO_DB,
-        "SELECT description, date, status, priority, created_at, updated_at, reasoning FROM followups "
+        "SELECT description, date, status, priority, created_at, updated_at, reasoning, impact_score FROM followups "
         "WHERE status NOT IN ('COMPLETED', 'CANCELLED') ORDER BY date ASC, created_at ASC LIMIT 160",
     )
     for row in followup_rows:
@@ -956,7 +957,8 @@ def _project_weighting_window(target_date: str, *, window_days: int) -> list[dic
         due_dt = _parse_any_datetime(row.get("date"))
         if due_dt and due_dt <= target_day:
             overdue_bonus = 1.5
-        score = 1.5 + _priority_weight(row.get("priority")) + overdue_bonus
+        impact_bonus = min(4.0, max(0.0, float(row.get("impact_score", 0) or 0)) / 25.0)
+        score = 1.5 + _priority_weight(row.get("priority")) + overdue_bonus + impact_bonus
         for project in matched:
             bump(project, score, "followups", "open followup pressure")
 

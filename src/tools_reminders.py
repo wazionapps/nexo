@@ -67,9 +67,6 @@ def _format_followups(filter_type: str) -> str:
         return ""
 
     lines = ["FOLLOWUPS NEXO:"]
-    # Sort by priority: critical first, then high, medium, low
-    pri_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
-    rows = sorted(rows, key=lambda r: pri_order.get(r.get("priority") or "medium", 2))
     for r in rows:
         nfid = r.get("id", "?")
         fecha = r.get("date") or ""
@@ -82,8 +79,10 @@ def _format_followups(filter_type: str) -> str:
         pri = r.get("priority") or "medium"
         pri_icon = {"critical": "🔴", "high": "🟠", "medium": "", "low": "⚪"}.get(pri, "")
         pri_tag = f" {pri_icon}" if pri_icon else ""
+        impact = float(r.get("impact_score") or 0)
+        impact_tag = f" [impact {impact:.1f}]" if impact > 0 else ""
         status = r.get("status") or ""
         status_tag = f" [{status}]" if status and status != "PENDING" else ""
-        lines.append(f"  {nfid} {fecha_display}{due_marker}{pri_tag}{rec_tag}{status_tag} — {desc[:120]}")
+        lines.append(f"  {nfid} {fecha_display}{due_marker}{pri_tag}{impact_tag}{rec_tag}{status_tag} — {desc[:120]}")
 
     return "\n".join(lines)

@@ -53,7 +53,7 @@
     {
       "id": "priority_loop",
       "title": "Priority Loop",
-      "status": "pending",
+      "status": "complete",
       "evidence_required": [
         "Impact Scoring orders a real queue",
         "Fallback when score is absent"
