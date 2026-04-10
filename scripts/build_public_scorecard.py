@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 COMPARE_DIR = ROOT / "compare"
 LOCOMO_SUMMARY = ROOT / "benchmarks" / "locomo" / "results" / "locomo_nexo_summary.json"
 ABLATION_SUMMARY = ROOT / "benchmarks" / "runtime_ablations" / "results" / "ablation_summary.json"
+RUNTIME_PACK_SUMMARY = ROOT / "benchmarks" / "runtime_pack" / "results" / "latest_summary.json"
 DEFAULT_NEXO_HOME_CANDIDATES = (
     Path.home() / ".nexo",
     Path.home() / "claude",
@@ -89,6 +90,16 @@ def load_ablation_summary(path: Path = ABLATION_SUMMARY) -> dict:
     payload = json.loads(path.read_text())
     if not isinstance(payload, dict):
         return {"available": False, "reason": "ablation summary is not a JSON object"}
+    payload.setdefault("available", True)
+    return payload
+
+
+def load_runtime_pack_summary(path: Path = RUNTIME_PACK_SUMMARY) -> dict:
+    if not path.is_file():
+        return {"available": False, "reason": f"missing {path}"}
+    payload = json.loads(path.read_text())
+    if not isinstance(payload, dict):
+        return {"available": False, "reason": "runtime pack summary is not a JSON object"}
     payload.setdefault("available", True)
     return payload
 
@@ -335,6 +346,7 @@ def build_scorecard() -> dict:
     artifacts = {
         "locomo_summary": "benchmarks/locomo/results/locomo_nexo_summary.json",
         "ablation_summary": "benchmarks/runtime_ablations/results/ablation_summary.json",
+        "runtime_pack_summary": "benchmarks/runtime_pack/results/latest_summary.json",
         "compare_readme": "compare/README.md",
         "compare_scorecard": "compare/scorecard.json",
         "benchmark_page": "features/benchmark/index.html",
@@ -349,6 +361,7 @@ def build_scorecard() -> dict:
         "benchmarks": {
             "locomo_rag": load_locomo_summary(),
             "ablation_suite": load_ablation_summary(),
+            "runtime_pack": load_runtime_pack_summary(),
         },
         "artifacts": artifacts,
         "claim_map": [
@@ -369,6 +382,12 @@ def build_scorecard() -> dict:
                 "claim": "Client parity across Claude Code and Codex is audited by code and docs, not left as a vague promise.",
                 "evidence": [artifacts["parity_audit"], artifacts["parity_checklist"]],
                 "scope_note": "Parity claims refer to the audited runtime surfaces listed in the checklist and script output.",
+            },
+            {
+                "id": "operator_runtime_pack",
+                "claim": "NEXO publishes a reproducible operator benchmark pack against realistic local baselines, not just a memory-only paper benchmark.",
+                "evidence": [artifacts["runtime_pack_summary"], "benchmarks/runtime_pack/README.md"],
+                "scope_note": "The runtime pack is a small manual-rubric benchmark for operator workflows; it complements LoCoMo instead of replacing it.",
             },
             {
                 "id": "local_runtime_telemetry",
@@ -475,6 +494,24 @@ def render_markdown(scorecard: dict) -> str:
             lines.append(f"- {label}: " + " | ".join(summary_bits or ["no summary"]))
     else:
         lines.append(f"- Ablation suite unavailable: {ablations.get('reason', 'unknown')}")
+
+    runtime_pack = (scorecard.get("benchmarks") or {}).get("runtime_pack") or {}
+    lines.extend(["", "## Operator runtime pack"])
+    if runtime_pack.get("available"):
+        latest = runtime_pack.get("latest_run") or {}
+        lines.append(
+            f"- {latest.get('title', latest.get('run_id', 'Runtime pack latest run'))} ({latest.get('date', 'undated')})"
+        )
+        lines.append(
+            f"- Scope: {runtime_pack.get('scope_note', 'runtime-focused operator benchmark')}"
+        )
+        for baseline in latest.get("baselines") or []:
+            lines.append(
+                f"- {baseline.get('label', baseline.get('id', 'unknown'))}: score {baseline.get('score_pct')}% | "
+                f"pass {baseline.get('pass_count')} | partial {baseline.get('partial_count')} | fail {baseline.get('fail_count')}"
+            )
+    else:
+        lines.append(f"- Runtime pack unavailable: {runtime_pack.get('reason', 'unknown')}")
 
     lines.extend(["", "## Longitudinal local runtime metrics"])
     for window in scorecard.get("longitudinal") or []:

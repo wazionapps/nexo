@@ -2,7 +2,7 @@
 
 NEXO is the local cognitive runtime that makes the model around your model smarter.
 
-Generated: 2026-04-10T10:57:28.286049+00:00
+Generated: 2026-04-10T13:18:57.924730+00:00
 
 ## What this scorecard is
 
@@ -20,6 +20,9 @@ Generated: 2026-04-10T10:57:28.286049+00:00
 - Client parity across Claude Code and Codex is audited by code and docs, not left as a vague promise.
   - Evidence: `scripts/verify_client_parity.py`, `docs/client-parity-checklist.md`
   - Scope: Parity claims refer to the audited runtime surfaces listed in the checklist and script output.
+- NEXO publishes a reproducible operator benchmark pack against realistic local baselines, not just a memory-only paper benchmark.
+  - Evidence: `benchmarks/runtime_pack/results/latest_summary.json`, `benchmarks/runtime_pack/README.md`
+  - Scope: The runtime pack is a small manual-rubric benchmark for operator workflows; it complements LoCoMo instead of replacing it.
 - NEXO publishes longitudinal local runtime telemetry separately from benchmark scores.
   - Evidence: `compare/scorecard.json`, `compare/README.md`
   - Scope: Runtime windows are local operational telemetry; they are not folded into LoCoMo F1.
@@ -45,10 +48,17 @@ Generated: 2026-04-10T10:57:28.286049+00:00
 - NEXO memory-only mode (LoCoMo RAG): F1 0.5875
 - NEXO cognitive-cycle mode: F1 0.2931
 
+## Operator runtime pack
+- Memory Recall vs Static CLAUDE.md (2026-04-08)
+- Scope: Small reproducible operator benchmark focused on runtime-backed recall and continuity, not a universal agent benchmark.
+- NEXO full stack: score 100.0% | pass 5 | partial 0 | fail 0
+- Static CLAUDE.md: score 40.0% | pass 0 | partial 4 | fail 1
+- No memory: score 0.0% | pass 0 | partial 0 | fail 5
+
 ## Longitudinal local runtime metrics
-- 30d: success 13.0% | avg close 8.2 min | recovery 65.4% | open protocol debt 15 | unnecessary tool 3.4% | cost/solved 23.534217 USD
-- 60d: success 13.0% | avg close 8.2 min | recovery 65.4% | open protocol debt 15 | unnecessary tool 3.4% | cost/solved 23.534217 USD
-- 90d: success 13.0% | avg close 8.2 min | recovery 65.4% | open protocol debt 15 | unnecessary tool 3.4% | cost/solved 23.534217 USD
+- 30d: success 16.7% | avg close 8.4 min | recovery 67.3% | open protocol debt 17 | unnecessary tool 3.4% | cost/solved 17.264899 USD
+- 60d: success 16.7% | avg close 8.4 min | recovery 67.3% | open protocol debt 17 | unnecessary tool 3.4% | cost/solved 17.264899 USD
+- 90d: success 16.7% | avg close 8.4 min | recovery 67.3% | open protocol debt 17 | unnecessary tool 3.4% | cost/solved 17.264899 USD
 
 ## System On Top Of Model
 ![NEXO system on top of model](../assets/nexo-brain-architecture.png)
@@ -66,6 +76,7 @@ Generated: 2026-04-10T10:57:28.286049+00:00
 ## Artifact map
 - `locomo_summary`: `benchmarks/locomo/results/locomo_nexo_summary.json`
 - `ablation_summary`: `benchmarks/runtime_ablations/results/ablation_summary.json`
+- `runtime_pack_summary`: `benchmarks/runtime_pack/results/latest_summary.json`
 - `compare_readme`: `compare/README.md`
 - `compare_scorecard`: `compare/scorecard.json`
 - `benchmark_page`: `features/benchmark/index.html`

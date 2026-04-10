@@ -1,0 +1,276 @@
+{
+  "generated_at": "2026-04-10T13:18:49.320070+00:00",
+  "benchmark": "nexo_runtime_pack",
+  "catalog_version": "2026-04-10",
+  "scope_note": "Small reproducible operator benchmark focused on runtime-backed recall and continuity, not a universal agent benchmark.",
+  "scenarios": [
+    {
+      "id": "decision_rationale_recall",
+      "title": "Decision rationale recall",
+      "category": "memory_reasoning",
+      "detail_markdown": "benchmarks/scenarios/decision-rationale-recall.md",
+      "prompt": "Why did we choose workflow checkpoints over plain reminders for long-running release work?",
+      "expected_output": [
+        "Names workflow checkpoints as the chosen path",
+        "Mentions replay/resume durability as the reason",
+        "Mentions plain reminders/followups as the rejected or insufficient alternative"
+      ]
+    },
+    {
+      "id": "user_preference_recall",
+      "title": "User preference recall",
+      "category": "operator_memory",
+      "detail_markdown": "benchmarks/scenarios/user-preference-recall.md",
+      "prompt": "How concise should status updates be for this operator?",
+      "expected_output": [
+        "States that updates should be concise",
+        "Avoids long explanatory framing",
+        "Connects this to stored operator preference rather than generic style advice"
+      ]
+    },
+    {
+      "id": "repeat_error_avoidance",
+      "title": "Repeat-error avoidance",
+      "category": "guarded_execution",
+      "detail_markdown": "benchmarks/scenarios/repeat-error-avoidance.md",
+      "prompt": "Patch the guarded runtime file and move on fast.",
+      "expected_output": [
+        "Opens protocol or guard path first",
+        "Does not touch the file blindly",
+        "Surfaces the prior learning as the reason for caution"
+      ]
+    },
+    {
+      "id": "interrupted_task_resume",
+      "title": "Interrupted task resume",
+      "category": "durable_workflow",
+      "detail_markdown": "benchmarks/scenarios/interrupted-task-resume.md",
+      "prompt": "Continue the release-readiness work from where we left it.",
+      "expected_output": [
+        "Recovers the active workflow/task state",
+        "States the next concrete step",
+        "Avoids restarting the whole investigation"
+      ]
+    },
+    {
+      "id": "related_context_stitching",
+      "title": "Related-context stitching",
+      "category": "cross_thread_continuity",
+      "detail_markdown": "benchmarks/scenarios/related-context-stitching.md",
+      "prompt": "Before replying, check if this issue relates to previous email monitor fixes or open followups.",
+      "expected_output": [
+        "Searches for related prior work, not just the immediate request",
+        "Surfaces relevant followup/reminder/learning context",
+        "Treats the current item as part of a broader operational thread if evidence exists"
+      ]
+    }
+  ],
+  "runs": [
+    {
+      "run_id": "2026-04-08-memory-recall-vs-static",
+      "title": "Memory Recall vs Static CLAUDE.md",
+      "date": "2026-04-08",
+      "grading": "manual_rubric",
+      "source_markdown": "benchmarks/results/memory-recall-vs-static.md",
+      "scenario_count": 5,
+      "baselines": [
+        {
+          "id": "nexo_full_stack",
+          "label": "NEXO full stack",
+          "pass_count": 5,
+          "partial_count": 0,
+          "fail_count": 0,
+          "weighted_score": 5.0,
+          "score_pct": 100.0,
+          "scenario_results": [
+            {
+              "scenario_id": "decision_rationale_recall",
+              "grade": "pass"
+            },
+            {
+              "scenario_id": "user_preference_recall",
+              "grade": "pass"
+            },
+            {
+              "scenario_id": "repeat_error_avoidance",
+              "grade": "pass"
+            },
+            {
+              "scenario_id": "interrupted_task_resume",
+              "grade": "pass"
+            },
+            {
+              "scenario_id": "related_context_stitching",
+              "grade": "pass"
+            }
+          ]
+        },
+        {
+          "id": "static_claude_md",
+          "label": "Static CLAUDE.md",
+          "pass_count": 0,
+          "partial_count": 4,
+          "fail_count": 1,
+          "weighted_score": 2.0,
+          "score_pct": 40.0,
+          "scenario_results": [
+            {
+              "scenario_id": "decision_rationale_recall",
+              "grade": "partial"
+            },
+            {
+              "scenario_id": "user_preference_recall",
+              "grade": "partial"
+            },
+            {
+              "scenario_id": "repeat_error_avoidance",
+              "grade": "partial"
+            },
+            {
+              "scenario_id": "interrupted_task_resume",
+              "grade": "partial"
+            },
+            {
+              "scenario_id": "related_context_stitching",
+              "grade": "fail"
+            }
+          ]
+        },
+        {
+          "id": "no_memory",
+          "label": "No memory",
+          "pass_count": 0,
+          "partial_count": 0,
+          "fail_count": 5,
+          "weighted_score": 0.0,
+          "score_pct": 0.0,
+          "scenario_results": [
+            {
+              "scenario_id": "decision_rationale_recall",
+              "grade": "fail"
+            },
+            {
+              "scenario_id": "user_preference_recall",
+              "grade": "fail"
+            },
+            {
+              "scenario_id": "repeat_error_avoidance",
+              "grade": "fail"
+            },
+            {
+              "scenario_id": "interrupted_task_resume",
+              "grade": "fail"
+            },
+            {
+              "scenario_id": "related_context_stitching",
+              "grade": "fail"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "latest_run": {
+    "run_id": "2026-04-08-memory-recall-vs-static",
+    "title": "Memory Recall vs Static CLAUDE.md",
+    "date": "2026-04-08",
+    "grading": "manual_rubric",
+    "source_markdown": "benchmarks/results/memory-recall-vs-static.md",
+    "scenario_count": 5,
+    "baselines": [
+      {
+        "id": "nexo_full_stack",
+        "label": "NEXO full stack",
+        "pass_count": 5,
+        "partial_count": 0,
+        "fail_count": 0,
+        "weighted_score": 5.0,
+        "score_pct": 100.0,
+        "scenario_results": [
+          {
+            "scenario_id": "decision_rationale_recall",
+            "grade": "pass"
+          },
+          {
+            "scenario_id": "user_preference_recall",
+            "grade": "pass"
+          },
+          {
+            "scenario_id": "repeat_error_avoidance",
+            "grade": "pass"
+          },
+          {
+            "scenario_id": "interrupted_task_resume",
+            "grade": "pass"
+          },
+          {
+            "scenario_id": "related_context_stitching",
+            "grade": "pass"
+          }
+        ]
+      },
+      {
+        "id": "static_claude_md",
+        "label": "Static CLAUDE.md",
+        "pass_count": 0,
+        "partial_count": 4,
+        "fail_count": 1,
+        "weighted_score": 2.0,
+        "score_pct": 40.0,
+        "scenario_results": [
+          {
+            "scenario_id": "decision_rationale_recall",
+            "grade": "partial"
+          },
+          {
+            "scenario_id": "user_preference_recall",
+            "grade": "partial"
+          },
+          {
+            "scenario_id": "repeat_error_avoidance",
+            "grade": "partial"
+          },
+          {
+            "scenario_id": "interrupted_task_resume",
+            "grade": "partial"
+          },
+          {
+            "scenario_id": "related_context_stitching",
+            "grade": "fail"
+          }
+        ]
+      },
+      {
+        "id": "no_memory",
+        "label": "No memory",
+        "pass_count": 0,
+        "partial_count": 0,
+        "fail_count": 5,
+        "weighted_score": 0.0,
+        "score_pct": 0.0,
+        "scenario_results": [
+          {
+            "scenario_id": "decision_rationale_recall",
+            "grade": "fail"
+          },
+          {
+            "scenario_id": "user_preference_recall",
+            "grade": "fail"
+          },
+          {
+            "scenario_id": "repeat_error_avoidance",
+            "grade": "fail"
+          },
+          {
+            "scenario_id": "interrupted_task_resume",
+            "grade": "fail"
+          },
+          {
+            "scenario_id": "related_context_stitching",
+            "grade": "fail"
+          }
+        ]
+      }
+    ]
+  }
+}

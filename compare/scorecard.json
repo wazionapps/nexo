@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-10T10:57:28.286049+00:00",
+  "generated_at": "2026-04-10T13:18:57.924730+00:00",
   "product_story": "NEXO is the local cognitive runtime that makes the model around your model smarter.",
   "benchmarks": {
     "locomo_rag": {
@@ -55,11 +55,289 @@
           "source": "benchmarks/locomo/results/locomo_nexo_cognitive_metrics.json"
         }
       ]
+    },
+    "runtime_pack": {
+      "generated_at": "2026-04-10T13:18:49.320070+00:00",
+      "benchmark": "nexo_runtime_pack",
+      "catalog_version": "2026-04-10",
+      "scope_note": "Small reproducible operator benchmark focused on runtime-backed recall and continuity, not a universal agent benchmark.",
+      "scenarios": [
+        {
+          "id": "decision_rationale_recall",
+          "title": "Decision rationale recall",
+          "category": "memory_reasoning",
+          "detail_markdown": "benchmarks/scenarios/decision-rationale-recall.md",
+          "prompt": "Why did we choose workflow checkpoints over plain reminders for long-running release work?",
+          "expected_output": [
+            "Names workflow checkpoints as the chosen path",
+            "Mentions replay/resume durability as the reason",
+            "Mentions plain reminders/followups as the rejected or insufficient alternative"
+          ]
+        },
+        {
+          "id": "user_preference_recall",
+          "title": "User preference recall",
+          "category": "operator_memory",
+          "detail_markdown": "benchmarks/scenarios/user-preference-recall.md",
+          "prompt": "How concise should status updates be for this operator?",
+          "expected_output": [
+            "States that updates should be concise",
+            "Avoids long explanatory framing",
+            "Connects this to stored operator preference rather than generic style advice"
+          ]
+        },
+        {
+          "id": "repeat_error_avoidance",
+          "title": "Repeat-error avoidance",
+          "category": "guarded_execution",
+          "detail_markdown": "benchmarks/scenarios/repeat-error-avoidance.md",
+          "prompt": "Patch the guarded runtime file and move on fast.",
+          "expected_output": [
+            "Opens protocol or guard path first",
+            "Does not touch the file blindly",
+            "Surfaces the prior learning as the reason for caution"
+          ]
+        },
+        {
+          "id": "interrupted_task_resume",
+          "title": "Interrupted task resume",
+          "category": "durable_workflow",
+          "detail_markdown": "benchmarks/scenarios/interrupted-task-resume.md",
+          "prompt": "Continue the release-readiness work from where we left it.",
+          "expected_output": [
+            "Recovers the active workflow/task state",
+            "States the next concrete step",
+            "Avoids restarting the whole investigation"
+          ]
+        },
+        {
+          "id": "related_context_stitching",
+          "title": "Related-context stitching",
+          "category": "cross_thread_continuity",
+          "detail_markdown": "benchmarks/scenarios/related-context-stitching.md",
+          "prompt": "Before replying, check if this issue relates to previous email monitor fixes or open followups.",
+          "expected_output": [
+            "Searches for related prior work, not just the immediate request",
+            "Surfaces relevant followup/reminder/learning context",
+            "Treats the current item as part of a broader operational thread if evidence exists"
+          ]
+        }
+      ],
+      "runs": [
+        {
+          "run_id": "2026-04-08-memory-recall-vs-static",
+          "title": "Memory Recall vs Static CLAUDE.md",
+          "date": "2026-04-08",
+          "grading": "manual_rubric",
+          "source_markdown": "benchmarks/results/memory-recall-vs-static.md",
+          "scenario_count": 5,
+          "baselines": [
+            {
+              "id": "nexo_full_stack",
+              "label": "NEXO full stack",
+              "pass_count": 5,
+              "partial_count": 0,
+              "fail_count": 0,
+              "weighted_score": 5.0,
+              "score_pct": 100.0,
+              "scenario_results": [
+                {
+                  "scenario_id": "decision_rationale_recall",
+                  "grade": "pass"
+                },
+                {
+                  "scenario_id": "user_preference_recall",
+                  "grade": "pass"
+                },
+                {
+                  "scenario_id": "repeat_error_avoidance",
+                  "grade": "pass"
+                },
+                {
+                  "scenario_id": "interrupted_task_resume",
+                  "grade": "pass"
+                },
+                {
+                  "scenario_id": "related_context_stitching",
+                  "grade": "pass"
+                }
+              ]
+            },
+            {
+              "id": "static_claude_md",
+              "label": "Static CLAUDE.md",
+              "pass_count": 0,
+              "partial_count": 4,
+              "fail_count": 1,
+              "weighted_score": 2.0,
+              "score_pct": 40.0,
+              "scenario_results": [
+                {
+                  "scenario_id": "decision_rationale_recall",
+                  "grade": "partial"
+                },
+                {
+                  "scenario_id": "user_preference_recall",
+                  "grade": "partial"
+                },
+                {
+                  "scenario_id": "repeat_error_avoidance",
+                  "grade": "partial"
+                },
+                {
+                  "scenario_id": "interrupted_task_resume",
+                  "grade": "partial"
+                },
+                {
+                  "scenario_id": "related_context_stitching",
+                  "grade": "fail"
+                }
+              ]
+            },
+            {
+              "id": "no_memory",
+              "label": "No memory",
+              "pass_count": 0,
+              "partial_count": 0,
+              "fail_count": 5,
+              "weighted_score": 0.0,
+              "score_pct": 0.0,
+              "scenario_results": [
+                {
+                  "scenario_id": "decision_rationale_recall",
+                  "grade": "fail"
+                },
+                {
+                  "scenario_id": "user_preference_recall",
+                  "grade": "fail"
+                },
+                {
+                  "scenario_id": "repeat_error_avoidance",
+                  "grade": "fail"
+                },
+                {
+                  "scenario_id": "interrupted_task_resume",
+                  "grade": "fail"
+                },
+                {
+                  "scenario_id": "related_context_stitching",
+                  "grade": "fail"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "latest_run": {
+        "run_id": "2026-04-08-memory-recall-vs-static",
+        "title": "Memory Recall vs Static CLAUDE.md",
+        "date": "2026-04-08",
+        "grading": "manual_rubric",
+        "source_markdown": "benchmarks/results/memory-recall-vs-static.md",
+        "scenario_count": 5,
+        "baselines": [
+          {
+            "id": "nexo_full_stack",
+            "label": "NEXO full stack",
+            "pass_count": 5,
+            "partial_count": 0,
+            "fail_count": 0,
+            "weighted_score": 5.0,
+            "score_pct": 100.0,
+            "scenario_results": [
+              {
+                "scenario_id": "decision_rationale_recall",
+                "grade": "pass"
+              },
+              {
+                "scenario_id": "user_preference_recall",
+                "grade": "pass"
+              },
+              {
+                "scenario_id": "repeat_error_avoidance",
+                "grade": "pass"
+              },
+              {
+                "scenario_id": "interrupted_task_resume",
+                "grade": "pass"
+              },
+              {
+                "scenario_id": "related_context_stitching",
+                "grade": "pass"
+              }
+            ]
+          },
+          {
+            "id": "static_claude_md",
+            "label": "Static CLAUDE.md",
+            "pass_count": 0,
+            "partial_count": 4,
+            "fail_count": 1,
+            "weighted_score": 2.0,
+            "score_pct": 40.0,
+            "scenario_results": [
+              {
+                "scenario_id": "decision_rationale_recall",
+                "grade": "partial"
+              },
+              {
+                "scenario_id": "user_preference_recall",
+                "grade": "partial"
+              },
+              {
+                "scenario_id": "repeat_error_avoidance",
+                "grade": "partial"
+              },
+              {
+                "scenario_id": "interrupted_task_resume",
+                "grade": "partial"
+              },
+              {
+                "scenario_id": "related_context_stitching",
+                "grade": "fail"
+              }
+            ]
+          },
+          {
+            "id": "no_memory",
+            "label": "No memory",
+            "pass_count": 0,
+            "partial_count": 0,
+            "fail_count": 5,
+            "weighted_score": 0.0,
+            "score_pct": 0.0,
+            "scenario_results": [
+              {
+                "scenario_id": "decision_rationale_recall",
+                "grade": "fail"
+              },
+              {
+                "scenario_id": "user_preference_recall",
+                "grade": "fail"
+              },
+              {
+                "scenario_id": "repeat_error_avoidance",
+                "grade": "fail"
+              },
+              {
+                "scenario_id": "interrupted_task_resume",
+                "grade": "fail"
+              },
+              {
+                "scenario_id": "related_context_stitching",
+                "grade": "fail"
+              }
+            ]
+          }
+        ]
+      },
+      "available": true
     }
   },
   "artifacts": {
     "locomo_summary": "benchmarks/locomo/results/locomo_nexo_summary.json",
     "ablation_summary": "benchmarks/runtime_ablations/results/ablation_summary.json",
+    "runtime_pack_summary": "benchmarks/runtime_pack/results/latest_summary.json",
     "compare_readme": "compare/README.md",
     "compare_scorecard": "compare/scorecard.json",
     "benchmark_page": "features/benchmark/index.html",
@@ -97,6 +375,15 @@
       "scope_note": "Parity claims refer to the audited runtime surfaces listed in the checklist and script output."
     },
     {
+      "id": "operator_runtime_pack",
+      "claim": "NEXO publishes a reproducible operator benchmark pack against realistic local baselines, not just a memory-only paper benchmark.",
+      "evidence": [
+        "benchmarks/runtime_pack/results/latest_summary.json",
+        "benchmarks/runtime_pack/README.md"
+      ],
+      "scope_note": "The runtime pack is a small manual-rubric benchmark for operator workflows; it complements LoCoMo instead of replacing it."
+    },
+    {
       "id": "local_runtime_telemetry",
       "claim": "NEXO publishes longitudinal local runtime telemetry separately from benchmark scores.",
       "evidence": [
@@ -119,19 +406,19 @@
     {
       "days": 30,
       "available": true,
-      "closed_tasks": 192,
-      "task_success_rate_pct": 13.0,
-      "avg_time_to_close_minutes": 8.2,
-      "recovery_after_failure_pct": 65.4,
-      "open_protocol_debt": 15,
+      "closed_tasks": 209,
+      "task_success_rate_pct": 16.7,
+      "avg_time_to_close_minutes": 8.4,
+      "recovery_after_failure_pct": 67.3,
+      "open_protocol_debt": 17,
       "unnecessary_tool_call_rate_pct": 3.4,
       "unnecessary_tool_call_detail": {
-        "candidate_calls": 58871,
-        "probable_duplicate_calls": 1985
+        "candidate_calls": 59115,
+        "probable_duplicate_calls": 1994
       },
-      "automation_runs": 447,
+      "automation_runs": 456,
       "cost_telemetry_coverage_pct": 100.0,
-      "cost_per_solved_task": 23.534217,
+      "cost_per_solved_task": 17.264899,
       "notes": [
         "unnecessary_tool_call_rate_pct is a conservative heuristic: duplicate successful non-housekeeping tool calls with identical input inside 5-minute bursts"
       ]
@@ -139,19 +426,19 @@
     {
       "days": 60,
       "available": true,
-      "closed_tasks": 192,
-      "task_success_rate_pct": 13.0,
-      "avg_time_to_close_minutes": 8.2,
-      "recovery_after_failure_pct": 65.4,
-      "open_protocol_debt": 15,
+      "closed_tasks": 209,
+      "task_success_rate_pct": 16.7,
+      "avg_time_to_close_minutes": 8.4,
+      "recovery_after_failure_pct": 67.3,
+      "open_protocol_debt": 17,
       "unnecessary_tool_call_rate_pct": 3.4,
       "unnecessary_tool_call_detail": {
-        "candidate_calls": 58871,
-        "probable_duplicate_calls": 1985
+        "candidate_calls": 59115,
+        "probable_duplicate_calls": 1994
       },
-      "automation_runs": 447,
+      "automation_runs": 456,
       "cost_telemetry_coverage_pct": 100.0,
-      "cost_per_solved_task": 23.534217,
+      "cost_per_solved_task": 17.264899,
       "notes": [
         "unnecessary_tool_call_rate_pct is a conservative heuristic: duplicate successful non-housekeeping tool calls with identical input inside 5-minute bursts"
       ]
@@ -159,19 +446,19 @@
     {
       "days": 90,
       "available": true,
-      "closed_tasks": 192,
-      "task_success_rate_pct": 13.0,
-      "avg_time_to_close_minutes": 8.2,
-      "recovery_after_failure_pct": 65.4,
-      "open_protocol_debt": 15,
+      "closed_tasks": 209,
+      "task_success_rate_pct": 16.7,
+      "avg_time_to_close_minutes": 8.4,
+      "recovery_after_failure_pct": 67.3,
+      "open_protocol_debt": 17,
       "unnecessary_tool_call_rate_pct": 3.4,
       "unnecessary_tool_call_detail": {
-        "candidate_calls": 58871,
-        "probable_duplicate_calls": 1985
+        "candidate_calls": 59115,
+        "probable_duplicate_calls": 1994
       },
-      "automation_runs": 447,
+      "automation_runs": 456,
       "cost_telemetry_coverage_pct": 100.0,
-      "cost_per_solved_task": 23.534217,
+      "cost_per_solved_task": 17.264899,
       "notes": [
         "unnecessary_tool_call_rate_pct is a conservative heuristic: duplicate successful non-housekeeping tool calls with identical input inside 5-minute bursts"
       ]

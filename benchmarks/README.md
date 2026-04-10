@@ -34,6 +34,7 @@ Primary outcomes:
 
 - `scenarios/` contains the scenario definitions and expected outputs
 - `results/` contains checked-in benchmark runs
+- `runtime_pack/` contains the structured operator benchmark catalog, run files, and generated summary artifacts
 - `locomo/` contains the larger checked-in LoCoMo benchmark harness
 
 ## First checked-in run
@@ -43,3 +44,10 @@ The first micro-benchmark is here:
 - [results/memory-recall-vs-static.md](./results/memory-recall-vs-static.md)
 
 This initial run is deliberately modest: five workflow scenarios, manual grading rubric, and a baseline comparison that answers a product question users actually ask.
+
+The structured runtime-pack artifacts generated from that run live here:
+
+- `runtime_pack/scenario_catalog.json`
+- `runtime_pack/results/2026-04-08-memory-recall-vs-static.json`
+- `runtime_pack/results/latest_summary.json`
+- `runtime_pack/README.md`

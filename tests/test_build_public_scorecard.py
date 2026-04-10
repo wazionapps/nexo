@@ -144,6 +144,7 @@ def test_render_markdown_includes_core_sections():
             "artifacts": {
                 "compare_scorecard": "compare/scorecard.json",
                 "locomo_summary": "benchmarks/locomo/results/locomo_nexo_summary.json",
+                "runtime_pack_summary": "benchmarks/runtime_pack/results/latest_summary.json",
             },
             "claim_map": [
                 {
@@ -163,6 +164,18 @@ def test_render_markdown_includes_core_sections():
                         {"label": "Full NEXO", "task_success_rate_pct": 100.0, "conditioned_file_protection_pct": 100.0, "resume_recovery_pct": 100.0},
                     ],
                 },
+                "runtime_pack": {
+                    "available": True,
+                    "scope_note": "Small operator runtime benchmark.",
+                    "latest_run": {
+                        "title": "Memory Recall vs Static CLAUDE.md",
+                        "date": "2026-04-08",
+                        "baselines": [
+                            {"label": "NEXO full stack", "score_pct": 100.0, "pass_count": 5, "partial_count": 0, "fail_count": 0},
+                            {"label": "Static CLAUDE.md", "score_pct": 40.0, "pass_count": 0, "partial_count": 4, "fail_count": 1},
+                        ],
+                    },
+                },
             },
             "longitudinal": [{"days": 30, "available": True, "task_success_rate_pct": 75.0, "avg_time_to_close_minutes": 10.0, "recovery_after_failure_pct": 50.0, "open_protocol_debt": 1, "unnecessary_tool_call_rate_pct": 12.5, "cost_per_solved_task": 0.42}],
         }
@@ -175,6 +188,8 @@ def test_render_markdown_includes_core_sections():
     assert "LoCoMo overall F1: 0.58" in markdown
     assert "Ablation / baseline suite" in markdown
     assert "Raw model baseline: success 20.0%" in markdown
+    assert "## Operator runtime pack" in markdown
+    assert "NEXO full stack: score 100.0%" in markdown
     assert "30d: success 75.0%" in markdown
     assert "unnecessary tool 12.5%" in markdown
     assert "cost/solved 0.42 USD" in markdown

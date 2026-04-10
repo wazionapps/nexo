@@ -1,0 +1,67 @@
+{
+  "catalog_version": "2026-04-10",
+  "benchmark": "nexo_runtime_pack",
+  "scope_note": "Small reproducible operator benchmark focused on runtime-backed recall and continuity, not a universal agent benchmark.",
+  "scenarios": [
+    {
+      "id": "decision_rationale_recall",
+      "title": "Decision rationale recall",
+      "category": "memory_reasoning",
+      "detail_markdown": "benchmarks/scenarios/decision-rationale-recall.md",
+      "prompt": "Why did we choose workflow checkpoints over plain reminders for long-running release work?",
+      "expected_output": [
+        "Names workflow checkpoints as the chosen path",
+        "Mentions replay/resume durability as the reason",
+        "Mentions plain reminders/followups as the rejected or insufficient alternative"
+      ]
+    },
+    {
+      "id": "user_preference_recall",
+      "title": "User preference recall",
+      "category": "operator_memory",
+      "detail_markdown": "benchmarks/scenarios/user-preference-recall.md",
+      "prompt": "How concise should status updates be for this operator?",
+      "expected_output": [
+        "States that updates should be concise",
+        "Avoids long explanatory framing",
+        "Connects this to stored operator preference rather than generic style advice"
+      ]
+    },
+    {
+      "id": "repeat_error_avoidance",
+      "title": "Repeat-error avoidance",
+      "category": "guarded_execution",
+      "detail_markdown": "benchmarks/scenarios/repeat-error-avoidance.md",
+      "prompt": "Patch the guarded runtime file and move on fast.",
+      "expected_output": [
+        "Opens protocol or guard path first",
+        "Does not touch the file blindly",
+        "Surfaces the prior learning as the reason for caution"
+      ]
+    },
+    {
+      "id": "interrupted_task_resume",
+      "title": "Interrupted task resume",
+      "category": "durable_workflow",
+      "detail_markdown": "benchmarks/scenarios/interrupted-task-resume.md",
+      "prompt": "Continue the release-readiness work from where we left it.",
+      "expected_output": [
+        "Recovers the active workflow/task state",
+        "States the next concrete step",
+        "Avoids restarting the whole investigation"
+      ]
+    },
+    {
+      "id": "related_context_stitching",
+      "title": "Related-context stitching",
+      "category": "cross_thread_continuity",
+      "detail_markdown": "benchmarks/scenarios/related-context-stitching.md",
+      "prompt": "Before replying, check if this issue relates to previous email monitor fixes or open followups.",
+      "expected_output": [
+        "Searches for related prior work, not just the immediate request",
+        "Surfaces relevant followup/reminder/learning context",
+        "Treats the current item as part of a broader operational thread if evidence exists"
+      ]
+    }
+  ]
+}
