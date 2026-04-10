@@ -68,6 +68,45 @@ def _write_skill_definition(base_dir: Path, slug: str, metadata: dict, guide: st
     return skill_dir
 
 
+def _seed_outcome_pattern(
+    db,
+    *,
+    selected_choice: str,
+    count: int,
+    area: str = "ops",
+    task_type: str = "execute",
+    goal_profile_id: str = "ops_efficiency",
+):
+    for idx in range(count):
+        outcome = db.create_outcome(
+            action_type="manual_review",
+            description=f"seed {selected_choice} #{idx}",
+            expected_result=f"{selected_choice} should succeed",
+            metric_source="manual",
+            target_value=1,
+            target_operator="gte",
+            deadline="2099-01-01T00:00:00",
+        )
+        db.create_cortex_evaluation(
+            goal="Seed skill candidate from outcomes",
+            task_type=task_type,
+            area=area,
+            impact_level="high",
+            alternatives=[{"name": selected_choice, "description": selected_choice}],
+            scores=[{"name": selected_choice, "total_score": 1.0}],
+            recommended_choice=selected_choice,
+            recommended_reasoning="seed",
+            linked_outcome_id=outcome["id"],
+            goal_profile_id=goal_profile_id,
+            goal_profile_labels=[],
+            goal_profile_weights={},
+            selected_choice=selected_choice,
+            selection_reason="seed",
+            selection_source="recommended",
+        )
+        db.evaluate_outcome(outcome["id"], actual_value=1.0)
+
+
 @pytest.fixture
 def skills_env(tmp_path, monkeypatch):
     home = tmp_path / "nexo"
@@ -292,6 +331,31 @@ class TestSkillsRuntime:
         assert retired["ok"] is True
         archived = db.get_skill("SK-SECOND")
         assert archived["level"] == "archived"
+
+    def test_outcome_pattern_can_seed_skill_candidate(self, skills_env):
+        db, skills_runtime, _, _ = _reload_skill_stack()
+        db.init_db()
+
+        _seed_outcome_pattern(db, selected_choice="staged_validation", count=4)
+
+        candidates = skills_runtime.list_evolution_candidates()
+        pattern = next(item for item in candidates["outcome_patterns"] if item["selected_choice"] == "staged_validation")
+
+        seeded = skills_runtime.materialize_outcome_pattern_skill(pattern["pattern_key"])
+        seeded_again = skills_runtime.materialize_outcome_pattern_skill(pattern["pattern_key"])
+        skill = db.get_skill(seeded["skill"]["id"])
+        linked = json.loads(skill["linked_learnings"])
+
+        assert pattern["suggested_skill_candidate"] is True
+        assert seeded["ok"] is True
+        assert seeded["created"] is True
+        assert skill["level"] == "draft"
+        assert skill["source_kind"] == "personal"
+        assert skill["mode"] == "guide"
+        assert linked
+        assert seeded_again["ok"] is True
+        assert seeded_again["created"] is False
+        assert seeded_again["skill"]["id"] == seeded["skill"]["id"]
 
 
 class TestSkillsCli:

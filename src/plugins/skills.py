@@ -22,6 +22,7 @@ from skills_runtime import (
     compose_skills,
     get_featured_skill_summaries,
     list_evolution_candidates,
+    materialize_outcome_pattern_skill,
     promote_skill,
     retire_skill,
     sync_skills,
@@ -204,6 +205,10 @@ def handle_skill_evolution_candidates() -> str:
     return json.dumps(list_evolution_candidates(), ensure_ascii=False)
 
 
+def handle_skill_seed_from_outcome_pattern(pattern_key: str) -> str:
+    return json.dumps(materialize_outcome_pattern_skill(pattern_key), ensure_ascii=False)
+
+
 def handle_skill_promote(id: str, target_level: str = "published", reason: str = "") -> str:
     return json.dumps(promote_skill(id, target_level=target_level, reason=reason), ensure_ascii=False)
 
@@ -282,6 +287,8 @@ TOOLS = [
      "Return featured published/stable skills for startup discovery."),
     (handle_skill_evolution_candidates, "nexo_skill_evolution_candidates",
      "Return candidates for skill improvement or text-to-script evolution."),
+    (handle_skill_seed_from_outcome_pattern, "nexo_skill_seed_from_outcome_pattern",
+     "Materialize a draft skill candidate from a repeated successful outcome pattern with linked evidence."),
     (handle_skill_promote, "nexo_skill_promote",
      "Promote a skill to a stronger published/stable lifecycle stage."),
     (handle_skill_retire, "nexo_skill_retire",

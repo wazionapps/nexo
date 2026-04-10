@@ -1106,6 +1106,7 @@ def materialize_personal_skill_definition(skill_data: dict) -> dict:
         "tags": _json_list(skill_data.get("tags", [])),
         "trigger_patterns": _json_list(skill_data.get("trigger_patterns", [])),
         "source_sessions": _json_list(skill_data.get("source_sessions", [])),
+        "linked_learnings": _json_list(skill_data.get("linked_learnings", [])),
         "steps": _json_list(skill_data.get("steps", [])),
         "gotchas": _json_list(skill_data.get("gotchas", [])),
         "params_schema": _json_dict(skill_data.get("params_schema", {})),
