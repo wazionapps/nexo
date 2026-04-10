@@ -3,32 +3,32 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Benchmark Results — NEXO Brain</title>
-    <meta name="description" content="NEXO Brain benchmark results on LoCoMo (ACL 2024). F1 0.588 on CPU only, +55% vs GPT-4 (128K). 1,986 questions, 10 conversations, peer-reviewed dataset.">
+    <title>Benchmarks and Public Proof — NEXO Brain</title>
+    <meta name="description" content="NEXO Brain public proof surface: LoCoMo memory benchmark plus the operator runtime pack. F1 0.588 on LoCoMo, +55% vs GPT-4, and a 13-scenario runtime matrix against realistic local baselines.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/features/benchmark/">
 
     <!-- Open Graph -->
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/features/benchmark/">
-    <meta property="og:title" content="Benchmark Results — NEXO Brain">
-    <meta property="og:description" content="F1 0.588 on CPU only, +55% vs GPT-4 (128K). Benchmarked on LoCoMo (ACL 2024) with 1,986 questions.">
+    <meta property="og:title" content="Benchmarks and Public Proof — NEXO Brain">
+    <meta property="og:description" content="LoCoMo memory benchmark plus the operator runtime pack: inspect NEXO's public proof surface, not just one memory number.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-features-benchmark.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Benchmark Results — NEXO Brain">
-    <meta name="twitter:description" content="F1 0.588 on CPU only, +55% vs GPT-4 (128K). Benchmarked on LoCoMo (ACL 2024) with 1,986 questions.">
+    <meta name="twitter:title" content="Benchmarks and Public Proof — NEXO Brain">
+    <meta name="twitter:description" content="LoCoMo memory benchmark plus the operator runtime pack: inspect NEXO's public proof surface, not just one memory number.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-features-benchmark.png">
 
     <script type="application/ld+json">
     {
         "@context": "https://schema.org",
         "@type": "WebPage",
-        "name": "Benchmark Results — NEXO Brain",
-        "description": "NEXO Brain benchmark results on LoCoMo. F1 0.588 on CPU only, +55% vs GPT-4 (128K), evaluated on 1,986 questions across 10 conversations.",
+        "name": "Benchmarks and Public Proof — NEXO Brain",
+        "description": "NEXO Brain public proof surface with the LoCoMo memory benchmark and the operator runtime pack.",
         "url": "https://nexo-brain.com/features/benchmark/",
         "isPartOf": {
             "@type": "WebSite",
@@ -84,21 +84,23 @@
         <div class="page-hero-grid">
             <div class="page-hero-copy">
                 <div class="section-label">Benchmarks</div>
-                <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Benchmarked on LoCoMo <span style="font-size:16px;font-weight:400;color:var(--text-muted)">(ACL 2024)</span></h1>
+                <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Benchmarks and public proof</h1>
                 <p class="section-subtitle">
-                    1,986 questions &middot; 10 conversations &middot; Peer-reviewed dataset. This page covers the memory benchmark slice; the broader public proof lives in the compare scorecard and claim map.
+                    This page now shows both public proof layers. LoCoMo covers the memory slice. The operator runtime pack covers continuity, contradiction handling, cross-client state, guarded execution, and the first outcome/prioritization advantages against realistic local baselines.
                 </p>
                 <div class="page-chip-row">
                     <span class="page-chip">F1 0.588</span>
+                    <span class="page-chip">Runtime pack 92.3%</span>
                     <span class="page-chip">CPU only</span>
+                    <span class="page-chip">13 operator scenarios</span>
                     <span class="page-chip">+55% vs GPT-4 (128K)</span>
                 </div>
             </div>
             <div class="page-visual">
                 <div class="page-stack">
-                    <div class="page-stack-card"><strong>Benchmark target</strong><span>Long conversational memory under realistic retrieval pressure.</span></div>
-                    <div class="page-stack-card"><strong>Why it matters</strong><span>Public proof that NEXO is not just architecture talk or a marketing memory claim.</span></div>
-                    <div class="page-stack-card"><strong>What to read next</strong><span>Compare pages, feature map, and runtime scorecards for the live story.</span></div>
+                    <div class="page-stack-card"><strong>Memory slice</strong><span>LoCoMo: long conversational memory under realistic retrieval pressure.</span></div>
+                    <div class="page-stack-card"><strong>Runtime slice</strong><span>Operator runtime pack: continuity, contradiction handling, cross-client state, outcome loop, prioritization.</span></div>
+                    <div class="page-stack-card"><strong>Why it matters</strong><span>Public proof that NEXO is not just architecture talk or a single benchmark cherry-pick.</span></div>
                 </div>
             </div>
         </div>
@@ -168,12 +170,57 @@
     </div>
 </section>
 
+<section>
+    <div class="container">
+        <div class="section-label">Operator runtime pack</div>
+        <h2 class="section-title">The broader proof is now a runtime matrix, not just one memory score</h2>
+        <p class="section-subtitle" style="max-width:900px;">
+            The checked-in operator runtime pack expands public proof into the workflows that matter once memory is embedded into a working system:
+            contradiction handling, temporal reasoning, structured recall, multi-session continuity, cross-client continuity, guarded execution,
+            and the first honest outcome-loop / prioritization checks.
+        </p>
+        <div class="compare-split" style="margin-top:28px;">
+            <div class="compare-panel">
+                <h3>Latest runtime matrix</h3>
+                <ul class="arch-list">
+                    <li>13 scored operator scenarios.</li>
+                    <li>NEXO full stack: <strong>92.3%</strong>.</li>
+                    <li>Static <code>CLAUDE.md</code>: <strong>42.3%</strong>.</li>
+                    <li>No memory baseline: <strong>0%</strong>.</li>
+                </ul>
+            </div>
+            <div class="compare-panel">
+                <h3>What it measures</h3>
+                <ul class="arch-list">
+                    <li>Contradiction latest-wins and temporal reasoning.</li>
+                    <li>Structured recall, interrupted-task resume, and related-context stitching.</li>
+                    <li>Cross-client continuity across Claude Code and Codex.</li>
+                    <li>Outcome-loop and prioritization quality, graded conservatively.</li>
+                </ul>
+            </div>
+            <div class="compare-panel">
+                <h3>Why this is honest</h3>
+                <ul class="arch-list">
+                    <li>LoCoMo stays the memory benchmark; it is not stretched into a runtime score.</li>
+                    <li>The runtime pack uses manual-rubric grading with checked-in scenario files and scored run JSON.</li>
+                    <li>Outcome-loop and prioritization are not inflated: they are still partial until live field evidence deepens.</li>
+                </ul>
+            </div>
+        </div>
+        <div class="hero-actions" style="justify-content:flex-start;margin-top:28px;">
+            <a href="/compare/" class="btn btn-primary">Open compare hub</a>
+            <a href="https://github.com/wazionapps/nexo/blob/main/benchmarks/runtime_pack/README.md" class="btn btn-secondary">Runtime pack README</a>
+            <a href="https://github.com/wazionapps/nexo/blob/main/benchmarks/runtime_pack/results/latest_summary.json" class="btn btn-secondary">Latest summary JSON</a>
+        </div>
+    </div>
+</section>
+
 <!-- CTA -->
 <section class="cta-section">
     <div class="container">
         <h2 class="section-title">Give your agent a mind</h2>
         <p class="section-subtitle" style="margin: 16px auto 48px;">
-            Open source, AGPL-3.0 licensed, and built for builders who want their AI to actually remember.
+            Open source, AGPL-3.0 licensed, and built for builders who want public proof for both memory and runtime behavior.
         </p>
         <div class="hero-actions">
             <a href="https://github.com/wazionapps/nexo" class="btn btn-primary">
@@ -189,6 +236,9 @@
             </a>
             <a href="https://github.com/wazionapps/nexo/blob/main/compare/README.md" class="btn btn-secondary">
                 Scorecard README
+            </a>
+            <a href="/compare/" class="btn btn-secondary">
+                Compare hub
             </a>
         </div>
     </div>
