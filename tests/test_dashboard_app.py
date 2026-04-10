@@ -260,6 +260,37 @@ def test_dashboard_recent_context_api_surfaces_hot_context(isolated_db):
     assert any(event["event_type"] == "context_capture" for event in payload["events"])
 
 
+def test_dashboard_cortex_api_parses_goal_profile_trace(isolated_db):
+    client = TestClient(app)
+
+    from plugins.cortex import handle_cortex_decide
+
+    handle_cortex_decide(
+        goal="Ship the public release package",
+        task_type="execute",
+        impact_level="critical",
+        area="release",
+        alternatives=json.dumps([
+            {"name": "staged_validation", "description": "Validate in staging with smoke tests and rollback ready."},
+            {"name": "direct_growth_push", "description": "Deploy release directly to production and skip manual review."},
+        ]),
+        goal_profile_id="release_safety",
+    )
+
+    res = client.get("/api/cortex")
+    assert res.status_code == 200
+    payload = res.json()
+    assert payload["evaluations"]
+    latest = payload["evaluations"][0]
+    assert latest["goal_profile_id"] == "release_safety"
+    assert isinstance(latest["goal_profile_labels"], list)
+    assert "preserve_trust" in latest["goal_profile_labels"]
+    assert isinstance(latest["goal_profile_weights"], dict)
+    assert latest["goal_profile_weights"]["risk"] > 0
+    assert "summary" in payload
+    assert "recommendation_accept_rate" in payload["summary"]
+
+
 def test_dashboard_reminder_update_requires_read_token(isolated_db):
     client = TestClient(app)
 

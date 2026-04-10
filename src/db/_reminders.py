@@ -907,6 +907,17 @@ def get_followups(filter_type: str = "all") -> list[dict]:
     """Get followups by filter: active, due, completed, deleted, history."""
     conn = get_db()
     today = datetime.date.today().isoformat()
+    columns = {str(row["name"]) for row in conn.execute("PRAGMA table_info(followups)").fetchall()}
+    if "impact_score" in columns:
+        active_order = (
+            "ORDER BY "
+            "CASE WHEN COALESCE(impact_score, 0) > 0 THEN 0 ELSE 1 END ASC, "
+            "COALESCE(impact_score, 0) DESC, "
+            "CASE WHEN date IS NULL OR date = '' THEN 1 ELSE 0 END ASC, "
+            "date ASC, updated_at DESC"
+        )
+    else:
+        active_order = "ORDER BY date ASC NULLS LAST"
     if filter_type == "completed":
         rows = conn.execute(
             "SELECT * FROM followups WHERE status LIKE 'COMPLETED%' ORDER BY updated_at DESC"
@@ -923,13 +934,13 @@ def get_followups(filter_type: str = "all") -> list[dict]:
         rows = conn.execute(
             f"SELECT * FROM followups WHERE {_active_status_where()} "
             "AND date IS NOT NULL AND date <= ? "
-            "ORDER BY date ASC",
+            f"{active_order}",
             (today,),
         ).fetchall()
     else:
         rows = conn.execute(
             f"SELECT * FROM followups WHERE {_active_status_where()} "
-            "ORDER BY date ASC NULLS LAST"
+            f"{active_order}"
         ).fetchall()
     return [dict(r) for r in rows]
 
@@ -950,3 +961,138 @@ def get_followup(id: str, include_history: bool = False) -> dict | None:
 
 def get_followup_history(id: str, limit: int = 20) -> list[dict]:
     return get_item_history("followup", id, limit=limit)
+
+
+def _parse_date(date_str: str | None) -> datetime.date | None:
+    text = str(date_str or "").strip()
+    if not text:
+        return None
+    try:
+        return datetime.date.fromisoformat(text[:10])
+    except (ValueError, TypeError):
+        return None
+
+
+def compute_followup_impact(followup: dict) -> dict:
+    """Compute a deterministic impact score for one followup.
+
+    v1 is intentionally simple and transparent:
+    - business impact comes from declared priority
+    - temporal urgency comes from due date proximity
+    - success probability rewards concrete, specified followups
+    - cost of inaction grows with priority and overdue state
+    """
+    priority = str(followup.get("priority") or "medium").strip().lower()
+    priority_map = {"critical": 10.0, "high": 8.0, "medium": 5.0, "low": 2.0}
+    business_impact = priority_map.get(priority, 5.0)
+
+    due_date = _parse_date(followup.get("date"))
+    today = datetime.date.today()
+    if due_date is None:
+        temporal_urgency = 3.0
+        due_label = "undated"
+        overdue = False
+    else:
+        days = (due_date - today).days
+        overdue = days <= 0
+        if days <= 0:
+            temporal_urgency = 10.0
+            due_label = "due_or_overdue"
+        elif days <= 2:
+            temporal_urgency = 8.0
+            due_label = "1_2_days"
+        elif days <= 7:
+            temporal_urgency = 5.0
+            due_label = "3_7_days"
+        else:
+            temporal_urgency = 2.0
+            due_label = "later"
+
+    status = str(followup.get("status") or "PENDING").strip().upper()
+    verification = str(followup.get("verification") or "").strip()
+    reasoning = str(followup.get("reasoning") or "").strip()
+    recurrence = str(followup.get("recurrence") or "").strip()
+
+    success_probability = 0.6
+    if verification:
+        success_probability += 0.15
+    if reasoning:
+        success_probability += 0.1
+    if due_date is not None:
+        success_probability += 0.05
+    if recurrence:
+        success_probability += 0.05
+    if status in {"BLOCKED", "WAITING"}:
+        success_probability -= 0.35
+    success_probability = max(0.2, min(0.95, round(success_probability, 2)))
+
+    cost_of_inaction = business_impact
+    if overdue:
+        cost_of_inaction += 1.0
+    if recurrence:
+        cost_of_inaction += 0.5
+    cost_of_inaction = min(10.0, round(cost_of_inaction, 2))
+
+    impact_score = round(
+        (business_impact * temporal_urgency * success_probability * cost_of_inaction) / 10.0,
+        2,
+    )
+    reasoning_bits = [
+        f"priority={priority}",
+        f"due={due_label}",
+        f"verification={'yes' if verification else 'no'}",
+        f"reasoning={'yes' if reasoning else 'no'}",
+    ]
+    if recurrence:
+        reasoning_bits.append("recurring=yes")
+    if status in {"BLOCKED", "WAITING"}:
+        reasoning_bits.append(f"status={status.lower()}")
+    factors = {
+        "business_impact": business_impact,
+        "temporal_urgency": temporal_urgency,
+        "success_probability": success_probability,
+        "cost_of_inaction": cost_of_inaction,
+        "reasoning": "; ".join(reasoning_bits),
+    }
+    return {
+        "impact_score": impact_score,
+        "factors": factors,
+        "reasoning": factors["reasoning"],
+    }
+
+
+def score_followup(id: str) -> dict:
+    """Compute and persist impact scoring for a single followup."""
+    conn = get_db()
+    row = conn.execute("SELECT * FROM followups WHERE id = ?", (id,)).fetchone()
+    if not row:
+        return {"error": f"Followup {id} not found"}
+    computed = compute_followup_impact(dict(row))
+    factors_json = json.dumps(computed["factors"], ensure_ascii=False, sort_keys=True)
+    conn.execute(
+        "UPDATE followups SET impact_score = ?, impact_factors = ?, last_scored_at = datetime('now'), updated_at = updated_at WHERE id = ?",
+        (computed["impact_score"], factors_json, id),
+    )
+    conn.commit()
+    refreshed = conn.execute("SELECT * FROM followups WHERE id = ?", (id,)).fetchone()
+    result = dict(refreshed)
+    result["impact_factors"] = computed["factors"]
+    result["impact_reasoning"] = computed["reasoning"]
+    return result
+
+
+def score_active_followups(limit: int = 200) -> list[dict]:
+    """Score all active followups and return them ordered by the persisted result."""
+    conn = get_db()
+    rows = conn.execute(
+        f"""SELECT * FROM followups
+            WHERE {_active_status_where()}
+            ORDER BY
+              CASE WHEN date IS NULL OR date = '' THEN 1 ELSE 0 END ASC,
+              date ASC,
+              created_at ASC
+            LIMIT ?""",
+        (max(1, int(limit)),),
+    ).fetchall()
+    scored = [score_followup(str(row["id"])) for row in rows]
+    return sorted(scored, key=lambda row: (-(float(row.get("impact_score") or 0)), row.get("date") or "9999-12-31"))

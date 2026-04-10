@@ -105,6 +105,36 @@ def safe_query(sql: str, params=()) -> list:
         return []
 
 
+def _table_columns(table_name: str) -> set[str]:
+    if not NEXO_DB.exists():
+        return set()
+    try:
+        conn = sqlite3.connect(str(NEXO_DB))
+        rows = conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+        conn.close()
+        return {str(row[1]) for row in rows}
+    except Exception:
+        return set()
+
+
+def _parse_json_field(value):
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return {}
+        try:
+            parsed = json.loads(stripped)
+        except json.JSONDecodeError:
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+    return value if isinstance(value, dict) else {}
+
+
+def _impact_reasoning(row: dict) -> str:
+    factors = _parse_json_field(row.get("impact_factors"))
+    return str(factors.get("reasoning") or "").strip()
+
+
 def collect_data() -> dict:
     """Collect all raw data for synthesis."""
     data = {"date": TODAY_STR}
@@ -145,10 +175,37 @@ def collect_data() -> dict:
     )
 
     # Pending followups (schema: description, date, status uppercase)
+    followup_columns = _table_columns("followups")
+    if "impact_score" in followup_columns:
+        impact_factors_sql = ", impact_factors" if "impact_factors" in followup_columns else ""
+        followup_select = (
+            "SELECT id, description, date, priority, impact_score"
+            f"{impact_factors_sql} FROM followups "
+        )
+        followup_order = (
+            "ORDER BY "
+            "CASE WHEN COALESCE(impact_score, 0) > 0 THEN 0 ELSE 1 END ASC, "
+            "COALESCE(impact_score, 0) DESC, "
+            "CASE WHEN date IS NULL OR date = '' THEN 1 ELSE 0 END ASC, "
+            "date ASC"
+        )
+    else:
+        followup_select = "SELECT id, description, date FROM followups "
+        followup_order = "ORDER BY date"
     data["pending_followups"] = safe_query(
-        "SELECT id, description, date FROM followups "
-        "WHERE status='PENDING' ORDER BY date"
+        f"{followup_select} WHERE status='PENDING' {followup_order}"
     )
+    for row in data["pending_followups"]:
+        if "impact_factors" in row:
+            row["impact_factors"] = _parse_json_field(row.get("impact_factors"))
+            row["impact_reasoning"] = _impact_reasoning(row)
+
+    impact_summary_file = COORD_DIR / "impact-scorer-summary.json"
+    if impact_summary_file.exists():
+        try:
+            data["impact_queue_summary"] = json.loads(impact_summary_file.read_text(encoding="utf-8"))
+        except Exception as exc:
+            data["impact_queue_summary_error"] = str(exc)
 
     # Guard stats
     data["guard_stats"] = safe_query(
@@ -273,7 +330,28 @@ def fallback_synthesis(data: dict):
     if data.get("pending_followups"):
         lines.append("## Pending Followups")
         for f in data["pending_followups"][:10]:
-            lines.append(f"- #{f.get('id', '?')} {f.get('description', '')} (due {f.get('date', '?')})")
+            impact = float(f.get("impact_score") or 0.0)
+            impact_tag = f" [impact {impact:.1f}]" if impact > 0 else ""
+            because = _impact_reasoning(f)
+            because_tag = f" — {because}" if because else ""
+            lines.append(
+                f"- #{f.get('id', '?')} {f.get('description', '')} "
+                f"(due {f.get('date', '?')}){impact_tag}{because_tag}"
+            )
+        lines.append("")
+
+    impact_summary = data.get("impact_queue_summary") or {}
+    if impact_summary.get("top_changes"):
+        lines.append("## Queue Changes By Impact")
+        for item in impact_summary.get("top_changes", [])[:5]:
+            delta = float(item.get("delta") or 0.0)
+            if abs(delta) < 1.0:
+                continue
+            direction = "+" if delta >= 0 else ""
+            lines.append(
+                f"- #{item.get('id', '?')} {direction}{delta:.1f} -> {float(item.get('impact_score') or 0.0):.1f}"
+                f" ({item.get('impact_reasoning') or 'score recalculated'})"
+            )
         lines.append("")
 
     OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)

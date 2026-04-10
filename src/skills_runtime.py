@@ -10,19 +10,24 @@ This module is the single execution gate for skills. It decides:
 
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
 
 from db import (
     approve_skill,
+    capture_outcome_pattern,
     collect_skill_improvement_candidates,
     collect_scriptable_skill_candidates,
     create_skill,
     get_featured_skills,
     get_skill,
+    get_skill_outcome_evidence,
     get_skill_execution_spec,
     init_db,
+    list_outcome_pattern_candidates,
+    list_skill_outcome_reviews,
     materialize_personal_skill_definition,
     record_skill_usage,
     render_command_template,
@@ -157,6 +162,13 @@ def get_featured_skill_summaries(limit: int = 5) -> list[dict]:
                 "source_kind": skill.get("source_kind", "personal"),
                 "trust_score": skill.get("trust_score", 0),
                 "trigger_patterns": triggers[:3],
+                "outcome_review": {
+                    "has_evidence": bool((skill.get("_outcome_review") or {}).get("has_evidence")),
+                    "recommended_action": (skill.get("_outcome_review") or {}).get("recommended_action", "observe"),
+                    "success_rate": (skill.get("_outcome_review") or {}).get("success_rate"),
+                    "resolved_outcomes": (skill.get("_outcome_review") or {}).get("resolved_outcomes", 0),
+                    "ranking_weight": float(skill.get("_outcome_rank", 0.0)),
+                },
             }
         )
     return featured
@@ -168,6 +180,90 @@ def _skill_json_list(skill: dict, key: str) -> list:
     except json.JSONDecodeError:
         value = []
     return value if isinstance(value, list) else []
+
+
+def _outcome_skill_id(candidate: dict) -> str:
+    raw_parts = [
+        candidate.get("area", ""),
+        candidate.get("task_type", ""),
+        candidate.get("goal_profile_id", ""),
+        candidate.get("selected_choice", ""),
+    ]
+    chunks = []
+    for part in raw_parts:
+        cleaned = re.sub(r"[^A-Z0-9]+", "-", str(part or "").upper()).strip("-")
+        if cleaned:
+            chunks.append(cleaned[:12])
+    suffix = "-".join(chunks[:4]) or "GENERAL"
+    return f"SK-OUTCOME-{suffix}"
+
+
+def _outcome_pattern_to_skill_payload(candidate: dict, learning_id: int) -> dict:
+    selected_choice = candidate.get("selected_choice", "")
+    context_label = candidate.get("context_label", "contexto general")
+    evidence = candidate.get("evidence") or []
+    evidence_summary = ", ".join(
+        f"eval#{item.get('evaluation_id')}/outcome#{item.get('outcome_id')}:{item.get('status')}"
+        for item in evidence[:5]
+    )
+    description = (
+        f"Draft skill candidate derived from {candidate.get('resolved_outcomes', 0)} resolved outcomes "
+        f"for '{selected_choice}' in {context_label}."
+    )
+    steps = [
+        f"Confirm that the current case matches {context_label}.",
+        f"Use '{selected_choice}' as the default starting strategy.",
+        "Check fresh constraints or evidence that could invalidate the historical pattern.",
+        "Link and evaluate the resulting outcome so the evidence base keeps improving.",
+    ]
+    gotchas = [
+        "Do not apply this skill if current evidence contradicts the pattern.",
+        "Keep outcomes linked; a pattern without fresh feedback should not gain trust forever.",
+    ]
+    content = "\n".join(
+        [
+            f"# Outcome pattern skill candidate — {selected_choice}",
+            "",
+            description,
+            "",
+            "## Evidence",
+            f"- Success rate: {candidate.get('success_rate', 0.0):.3f}",
+            f"- Resolved outcomes: {candidate.get('resolved_outcomes', 0)}",
+            f"- Context: {context_label}",
+            f"- Evidence refs: {evidence_summary or 'none'}",
+            "",
+            "## Steps",
+            *(f"{index}. {step}" for index, step in enumerate(steps, 1)),
+            "",
+            "## Gotchas",
+            *(f"- {gotcha}" for gotcha in gotchas),
+            "",
+        ]
+    )
+    tags = [
+        "outcomes-derived",
+        str(candidate.get("area") or "").strip(),
+        str(candidate.get("task_type") or "").strip(),
+        str(candidate.get("goal_profile_id") or "").strip(),
+    ]
+    trigger_patterns = [
+        str(candidate.get("selected_choice") or "").strip(),
+        str(candidate.get("area") or "").strip(),
+        str(candidate.get("task_type") or "").strip(),
+    ]
+    return {
+        "id": _outcome_skill_id(candidate),
+        "name": f"Outcome Pattern: {selected_choice}",
+        "description": description,
+        "level": "draft",
+        "mode": "guide",
+        "tags": [item for item in tags if item],
+        "trigger_patterns": [item for item in trigger_patterns if item],
+        "linked_learnings": [int(learning_id)],
+        "steps": steps,
+        "gotchas": gotchas,
+        "content": content,
+    }
 
 
 def test_skill(skill_id: str, params=None, mode: str = "auto", context: str = "") -> dict:
@@ -188,6 +284,21 @@ def promote_skill(skill_id: str, target_level: str = "published", reason: str = 
         return {"ok": False, "error": f"Unsupported target_level: {target_level}"}
     if clean_target == "archived":
         return {"ok": False, "error": "Use retire_skill to archive skills explicitly"}
+    outcome_review = get_skill_outcome_evidence(skill_id)
+    if outcome_review.get("has_evidence"):
+        recommended = outcome_review.get("recommended_action")
+        if clean_target == "published" and recommended not in {"promote_published", "promote_stable"}:
+            return {
+                "ok": False,
+                "error": "Outcome evidence does not yet support promotion to published",
+                "outcome_review": outcome_review,
+            }
+        if clean_target == "stable" and recommended != "promote_stable":
+            return {
+                "ok": False,
+                "error": "Outcome evidence does not yet support promotion to stable",
+                "outcome_review": outcome_review,
+            }
     updated = update_skill(skill_id, level=clean_target)
     if "error" in updated:
         return {"ok": False, "error": updated["error"]}
@@ -197,6 +308,7 @@ def promote_skill(skill_id: str, target_level: str = "published", reason: str = 
         "previous_level": skill.get("level", ""),
         "level": updated.get("level", clean_target),
         "reason": str(reason or "").strip(),
+        "outcome_review": outcome_review,
     }
 
 
@@ -221,7 +333,51 @@ def retire_skill(skill_id: str, replacement_id: str = "", reason: str = "") -> d
         "level": updated.get("level", "archived"),
         "replacement_id": clean_replacement,
         "reason": str(reason or "").strip(),
+        "outcome_review": get_skill_outcome_evidence(skill_id),
     }
+
+
+def review_skill_outcomes(skill_id: str, auto_apply: bool = False) -> dict:
+    _ensure_ready()
+    sync_skill_directories()
+    skill = get_skill(skill_id)
+    if not skill:
+        return {"ok": False, "error": f"Skill {skill_id} not found"}
+
+    review = get_skill_outcome_evidence(skill_id)
+    if "error" in review:
+        return {"ok": False, "error": review["error"]}
+
+    result = {
+        "ok": True,
+        "skill_id": skill_id,
+        "level": skill.get("level", ""),
+        "review": review,
+        "auto_applied": False,
+        "applied_action": "",
+    }
+    if not auto_apply:
+        return result
+
+    action = review.get("recommended_action")
+    target_level = ""
+    if action == "promote_published":
+        target_level = "published"
+    elif action == "promote_stable":
+        target_level = "stable"
+    elif action == "retire":
+        target_level = "archived"
+    if not target_level:
+        return result
+
+    updated = update_skill(skill_id, level=target_level)
+    if "error" in updated:
+        return {"ok": False, "error": updated["error"], "review": review}
+    result["auto_applied"] = True
+    result["applied_action"] = action
+    result["level"] = updated.get("level", target_level)
+    result["skill"] = updated
+    return result
 
 
 def compose_skills(
@@ -411,9 +567,56 @@ def approve_skill_execution(skill_id: str, execution_level: str = "", approved_b
 def list_evolution_candidates() -> dict:
     _ensure_ready()
     sync_skill_directories()
+    outcome_patterns = [
+        candidate
+        for candidate in list_outcome_pattern_candidates(limit=20)
+        if candidate.get("candidate_type") == "reinforce_strategy" and candidate.get("suggested_skill_candidate")
+    ]
     return {
         "scriptable": collect_scriptable_skill_candidates(),
         "improvements": collect_skill_improvement_candidates(),
+        "outcome_patterns": outcome_patterns,
+        "outcome_lifecycle": list_skill_outcome_reviews(limit=20, actionable_only=True),
+    }
+
+
+def materialize_outcome_pattern_skill(pattern_key: str) -> dict:
+    _ensure_ready()
+    sync_skill_directories()
+    candidates = list_outcome_pattern_candidates(limit=200)
+    candidate = next((item for item in candidates if item.get("pattern_key") == pattern_key), None)
+    if not candidate:
+        return {"ok": False, "error": "Outcome pattern candidate not found"}
+    if candidate.get("candidate_type") != "reinforce_strategy":
+        return {"ok": False, "error": "Only reinforce_strategy patterns can seed a skill"}
+    if not candidate.get("suggested_skill_candidate"):
+        return {"ok": False, "error": "Pattern is not strong enough yet to seed a skill draft"}
+
+    learning_result = capture_outcome_pattern(pattern_key, target="learning", category="outcomes")
+    if "error" in learning_result:
+        return {"ok": False, "error": learning_result["error"]}
+    learning = learning_result.get("learning") or {}
+    skill_id = _outcome_skill_id(candidate)
+    existing = get_skill(skill_id)
+    if existing:
+        return {
+            "ok": True,
+            "created": False,
+            "skill": existing,
+            "candidate": candidate,
+            "learning": learning,
+        }
+
+    payload = _outcome_pattern_to_skill_payload(candidate, int(learning.get("id", 0) or 0))
+    created = materialize_personal_skill_definition(payload)
+    if "error" in created:
+        return {"ok": False, "error": created["error"]}
+    return {
+        "ok": True,
+        "created": True,
+        "skill": created,
+        "candidate": candidate,
+        "learning": learning,
     }
 
 

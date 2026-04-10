@@ -1,0 +1,122 @@
+{
+  "release_line": "v4.5",
+  "target_version": "4.5.0",
+  "scope_owner": "NEXO",
+  "distribution": {
+    "git_updates_on": "merge_to_main",
+    "packaged_release_on": "tag_publish"
+  },
+  "required_repo_files": [
+    "docs/personal-artifacts-manual.md",
+    "docs/specs/2026-04-10-v4-5-release-contract.md",
+    "scripts/verify_release_readiness.py",
+    "compare/README.md",
+    "compare/scorecard.json"
+  ],
+  "required_website_files": [
+    "index.html",
+    "compare/index.html",
+    "blog/index.html",
+    "changelog/index.html",
+    "docs/index.html"
+  ],
+  "gates": [
+    {
+      "id": "manual_canonical",
+      "title": "Manual Canonical",
+      "status": "complete",
+      "evidence_required": [
+        "Canonical personal artifacts guide exists",
+        "README/docs link to the guide"
+      ]
+    },
+    {
+      "id": "scope_freeze",
+      "title": "Scope Freeze",
+      "status": "complete",
+      "evidence_required": [
+        "v4.5 scope is explicit",
+        "v5.0 no-scope is explicit",
+        "Release contract is tracked in repo"
+      ]
+    },
+    {
+      "id": "outcome_loop",
+      "title": "Outcome Loop",
+      "status": "complete",
+      "evidence_required": [
+        "Outcome Tracker exists",
+        "At least two real integration points",
+        "Met/missed evidence path"
+      ]
+    },
+    {
+      "id": "priority_loop",
+      "title": "Priority Loop",
+      "status": "complete",
+      "evidence_required": [
+        "Impact Scoring orders a real queue",
+        "Fallback when score is absent"
+      ]
+    },
+    {
+      "id": "decision_loop",
+      "title": "Decision Loop",
+      "status": "complete",
+      "evidence_required": [
+        "Cortex evaluates alternatives",
+        "Recommendation and override are logged"
+      ]
+    },
+    {
+      "id": "public_proof",
+      "title": "Public Proof",
+      "status": "complete",
+      "evidence_required": [
+        "Compare scorecard is refreshed",
+        "Public claims map to artifacts"
+      ]
+    },
+    {
+      "id": "reliability",
+      "title": "Reliability",
+      "status": "complete",
+      "evidence_required": [
+        "Golden paths pass",
+        "No critical runtime drift"
+      ]
+    },
+    {
+      "id": "cli_mcp_runtime",
+      "title": "CLI Core Runtime",
+      "status": "complete",
+      "evidence_required": [
+        "Personal scripts can call core tools via the canonical CLI path",
+        "Cron/subprocess path is tested, not only interactive runtime",
+        "No ModuleNotFoundError or equivalent runtime drift remains"
+      ]
+    },
+    {
+      "id": "drive_signal_semantics",
+      "title": "Drive Signal Semantics",
+      "status": "complete",
+      "evidence_required": [
+        "Drive signal detection no longer depends on hardcoded regex as the primary path",
+        "Semantic classification is the authoritative detection path",
+        "Regex fallback is explicit, narrow, and tested as secondary safety behavior",
+        "Cross-language or phrasing-variant coverage exists for anomaly/pattern/gap/opportunity detection"
+      ]
+    },
+    {
+      "id": "release_package",
+      "title": "Release Package",
+      "status": "pending",
+      "evidence_required": [
+        "Changelog",
+        "Release notes",
+        "Website/blog/changelog updated",
+        "Post-release smoke checks"
+      ]
+    }
+  ]
+}

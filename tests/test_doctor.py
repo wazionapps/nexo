@@ -1590,6 +1590,48 @@ class TestRuntimeChecks:
         assert check.status == "healthy"
         assert any("overall live protocol compliance" in item for item in check.evidence)
 
+    def test_protocol_compliance_counts_propose_as_non_blocking_and_skips_warmup_decision_eval(self, nexo_home):
+        db_path = nexo_home / "data" / "nexo.db"
+        _create_protocol_tables(db_path)
+        conn = sqlite3.connect(str(db_path))
+        conn.execute("ALTER TABLE protocol_tasks ADD COLUMN response_high_stakes INTEGER DEFAULT 0")
+        conn.execute(
+            """CREATE TABLE cortex_evaluations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_id TEXT DEFAULT '',
+                created_at TEXT DEFAULT (datetime('now'))
+            )"""
+        )
+        conn.execute(
+            """INSERT INTO protocol_tasks (
+                task_id, status, must_verify, close_evidence, must_change_log,
+                change_log_id, correction_happened, learning_id, task_type,
+                cortex_mode, response_high_stakes, opened_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))""",
+            ("PT-10", "done", 1, "pytest passed", 1, 42, 0, None, "edit", "propose", 0),
+        )
+        conn.execute(
+            """INSERT INTO protocol_tasks (
+                task_id, status, must_verify, close_evidence, must_change_log,
+                change_log_id, correction_happened, learning_id, task_type,
+                cortex_mode, response_high_stakes, opened_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))""",
+            ("PT-11", "done", 1, "smoke passed", 1, 43, 0, None, "execute", "propose", 1),
+        )
+        conn.execute(
+            "INSERT INTO cortex_evaluations (task_id, created_at) VALUES (?, datetime('now'))",
+            ("PT-11",),
+        )
+        conn.commit()
+        conn.close()
+
+        from doctor.providers.runtime import check_protocol_compliance
+
+        check = check_protocol_compliance()
+        assert check.status == "healthy"
+        assert any("action tasks Cortex-cleared: 2/2" in item for item in check.evidence)
+        assert any("decision-eval rollout warming up" in item for item in check.evidence)
+
     def test_protocol_compliance_goes_critical_on_open_error_debt(self, nexo_home):
         db_path = nexo_home / "data" / "nexo.db"
         _create_protocol_tables(db_path)

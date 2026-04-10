@@ -471,6 +471,94 @@ def _scripts_doctor(args):
     return 0
 
 
+def _runtime_python_candidates() -> list[str]:
+    candidates: list[str] = []
+    seen: set[str] = set()
+
+    def _add(value: str | None) -> None:
+        if not value:
+            return
+        text = str(value).strip()
+        if not text or text in seen:
+            return
+        seen.add(text)
+        candidates.append(text)
+
+    _add(os.environ.get("NEXO_RUNTIME_PYTHON"))
+    _add(os.environ.get("NEXO_PYTHON"))
+    _add(sys.executable)
+
+    for root in {NEXO_HOME, NEXO_CODE, NEXO_CODE.parent}:
+        _add(str(root / ".venv" / "bin" / "python3"))
+        _add(str(root / ".venv" / "bin" / "python"))
+
+    if sys.platform == "darwin":
+        _add("/opt/homebrew/bin/python3")
+        _add("/usr/local/bin/python3")
+    else:
+        _add("/usr/local/bin/python3")
+        _add("/usr/bin/python3")
+
+    _add(shutil.which("python3"))
+    _add(shutil.which("python"))
+    return candidates
+
+
+def _python_supports_module(python_bin: str, module_name: str) -> bool:
+    path = Path(python_bin)
+    if "/" in python_bin and not path.exists():
+        return False
+    try:
+        result = subprocess.run(
+            [python_bin, "-c", f"import {module_name}"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            env={**os.environ, "NEXO_HOME": str(NEXO_HOME), "NEXO_CODE": str(NEXO_CODE)},
+        )
+        return result.returncode == 0
+    except Exception:
+        return False
+
+
+def _recover_scripts_call_runtime(tool_name: str, exc: ModuleNotFoundError) -> int | None:
+    missing = getattr(exc, "name", "") or ""
+    if missing != "fastmcp":
+        return None
+    if os.environ.get("NEXO_CLI_REEXECED") == "1":
+        return None
+
+    current = str(Path(sys.executable).resolve())
+    for candidate in _runtime_python_candidates():
+        try:
+            resolved = str(Path(candidate).resolve()) if "/" in candidate else candidate
+        except Exception:
+            resolved = candidate
+        if resolved == current:
+            continue
+        if not _python_supports_module(candidate, "fastmcp"):
+            continue
+        env = {
+            **os.environ,
+            "NEXO_HOME": str(NEXO_HOME),
+            "NEXO_CODE": str(NEXO_CODE),
+            "NEXO_CLI_REEXECED": "1",
+        }
+        result = subprocess.run(
+            [candidate, str(Path(__file__).resolve()), *sys.argv[1:]],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            env=env,
+        )
+        if result.stdout:
+            print(result.stdout, end="")
+        if result.stderr:
+            print(result.stderr, file=sys.stderr, end="")
+        return result.returncode
+    return None
+
+
 def _scripts_call(args):
     """Call a NEXO MCP tool via in-process fastmcp client."""
     tool_name = args.tool
@@ -562,6 +650,10 @@ def _scripts_call(args):
         print(str(e), file=sys.stderr)
         return 1
     except Exception as e:
+        if isinstance(e, ModuleNotFoundError):
+            recovered = _recover_scripts_call_runtime(tool_name, e)
+            if recovered is not None:
+                return recovered
         print(f"Error calling tool {tool_name}: {e}", file=sys.stderr)
         return 1
 
@@ -1120,6 +1212,17 @@ def _skills_evolution(args):
     return 0
 
 
+def _skills_outcome_review(args):
+    from skills_runtime import review_skill_outcomes
+
+    result = review_skill_outcomes(args.id, auto_apply=args.auto_apply)
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    else:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    return 0 if result.get("ok") else 1
+
+
 def _skills_promote(args):
     from skills_runtime import promote_skill
 
@@ -1344,6 +1447,11 @@ def main():
     skills_evolution_p = skills_sub.add_parser("evolution", help="Evolution candidates")
     skills_evolution_p.add_argument("--json", action="store_true", help="JSON output")
 
+    skills_outcome_review_p = skills_sub.add_parser("outcome-review", help="Review skill lifecycle against sustained outcomes")
+    skills_outcome_review_p.add_argument("id", help="Skill ID")
+    skills_outcome_review_p.add_argument("--auto-apply", action="store_true", help="Apply the recommended promotion/retirement when it is strong enough")
+    skills_outcome_review_p.add_argument("--json", action="store_true", help="JSON output")
+
     skills_promote_p = skills_sub.add_parser("promote", help="Promote a skill lifecycle level")
     skills_promote_p.add_argument("id", help="Skill ID")
     skills_promote_p.add_argument("--target-level", default="published", choices=["draft", "published", "stable"])
@@ -1445,6 +1553,8 @@ def main():
             return _skills_featured(args)
         elif args.skills_command == "evolution":
             return _skills_evolution(args)
+        elif args.skills_command == "outcome-review":
+            return _skills_outcome_review(args)
         elif args.skills_command == "promote":
             return _skills_promote(args)
         elif args.skills_command == "retire":

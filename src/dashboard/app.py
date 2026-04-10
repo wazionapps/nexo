@@ -1566,9 +1566,54 @@ async def api_guard(limit: int = Query(100, ge=1, le=500)):
 async def api_cortex(limit: int = Query(50, ge=1, le=200)):
     db = _db()
     conn = db.get_db()
-    logs = [dict(r) for r in conn.execute("SELECT * FROM cortex_log ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()]
-    decisions = [dict(r) for r in conn.execute("SELECT * FROM decisions ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()]
-    return {"cortex_logs": logs, "decisions": decisions}
+    summary = db.cortex_evaluation_summary(days=30) if hasattr(db, "cortex_evaluation_summary") else {}
+    logs = []
+    decisions = []
+    if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='cortex_log'").fetchone():
+        logs = [dict(r) for r in conn.execute("SELECT * FROM cortex_log ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()]
+    if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='decisions'").fetchone():
+        decisions = [dict(r) for r in conn.execute("SELECT * FROM decisions ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()]
+    evaluations = []
+    if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='cortex_evaluations'").fetchone():
+        evaluations = [
+            dict(r) for r in conn.execute(
+                "SELECT * FROM cortex_evaluations ORDER BY created_at DESC, id DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        ]
+        for item in evaluations:
+            for key, default in (("goal_profile_labels", []), ("goal_profile_weights", {})):
+                raw = item.get(key)
+                if raw in (None, ""):
+                    item[key] = default
+                    continue
+                if isinstance(raw, (list, dict)):
+                    continue
+                try:
+                    item[key] = json.loads(raw)
+                except Exception:
+                    item[key] = default
+        linked_outcome_ids = sorted(
+            {
+                int(item.get("linked_outcome_id"))
+                for item in evaluations
+                if item.get("linked_outcome_id")
+            }
+        )
+        if linked_outcome_ids and conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='outcomes'").fetchone():
+            placeholders = ",".join("?" for _ in linked_outcome_ids)
+            outcome_rows = {
+                int(row["id"]): dict(row)
+                for row in conn.execute(
+                    f"SELECT id, status, deadline FROM outcomes WHERE id IN ({placeholders})",
+                    linked_outcome_ids,
+                ).fetchall()
+            }
+            for item in evaluations:
+                outcome_id = item.get("linked_outcome_id")
+                if outcome_id:
+                    item["linked_outcome"] = outcome_rows.get(int(outcome_id))
+    return {"cortex_logs": logs, "decisions": decisions, "evaluations": evaluations, "summary": summary}
 
 
 # ---------------------------------------------------------------------------

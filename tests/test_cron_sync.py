@@ -381,3 +381,100 @@ def test_sync_linux_weekday_7_is_sunday_alias():
     # The days list in sync_linux has 8 entries to support weekday=7
     days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
     assert days[7] == "Sun", "weekday=7 should map to Sun (Sunday alias)"
+
+
+def test_sync_does_not_remove_wrapper_based_personal_launchagent(tmp_path, monkeypatch):
+    from crons import sync as cron_sync
+
+    launch_agents_dir = tmp_path / "LaunchAgents"
+    nexo_home = tmp_path / "nexo-home"
+    source_root = tmp_path / "repo-src"
+    launch_agents_dir.mkdir(parents=True)
+    (nexo_home / "logs").mkdir(parents=True)
+
+    plist_path = launch_agents_dir / "com.nexo.email-monitor.plist"
+    with plist_path.open("wb") as fh:
+        plistlib.dump(
+            {
+                "Label": "com.nexo.email-monitor",
+                "ProgramArguments": [
+                    "/bin/bash",
+                    str(nexo_home / "scripts" / "nexo-cron-wrapper.sh"),
+                    "email-monitor",
+                    "/opt/homebrew/bin/python3",
+                    str(nexo_home / "scripts" / "nexo-email-monitor.py"),
+                ],
+                "EnvironmentVariables": {
+                    "NEXO_HOME": str(nexo_home),
+                    "PATH": "/opt/homebrew/bin:/usr/bin:/bin",
+                    "NEXO_MANAGED_PERSONAL_CRON": "1",
+                    "NEXO_PERSONAL_CRON_ID": "email-monitor",
+                },
+            },
+            fh,
+        )
+
+    removed: list[str] = []
+    monkeypatch.setattr(cron_sync.platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(cron_sync, "LAUNCH_AGENTS_DIR", launch_agents_dir)
+    monkeypatch.setattr(cron_sync, "NEXO_HOME", nexo_home)
+    monkeypatch.setattr(cron_sync, "SOURCE_ROOT", source_root)
+    monkeypatch.setattr(cron_sync, "LOG_DIR", nexo_home / "logs")
+    monkeypatch.setattr(cron_sync, "MANIFEST", tmp_path / "manifest.json")
+    monkeypatch.setattr(cron_sync, "load_manifest", lambda: [])
+    monkeypatch.setattr(cron_sync, "_cleanup_retired_core_files", lambda: None)
+    monkeypatch.setattr(cron_sync, "_refresh_runtime_manifest", lambda: None)
+    monkeypatch.setattr(cron_sync, "_sync_watchdog_hash_registry", lambda: None)
+    monkeypatch.setattr(cron_sync, "unload_plist", lambda path, dry_run: removed.append(path.name))
+
+    cron_sync.sync()
+
+    assert removed == []
+    assert plist_path.exists()
+
+
+def test_sync_removes_legacy_core_wrapper_launchagent_not_in_manifest(tmp_path, monkeypatch):
+    from crons import sync as cron_sync
+
+    launch_agents_dir = tmp_path / "LaunchAgents"
+    nexo_home = tmp_path / "nexo-home"
+    source_root = tmp_path / "repo-src"
+    launch_agents_dir.mkdir(parents=True)
+    (nexo_home / "logs").mkdir(parents=True)
+
+    plist_path = launch_agents_dir / "com.nexo.watchdog.plist"
+    with plist_path.open("wb") as fh:
+        plistlib.dump(
+            {
+                "Label": "com.nexo.watchdog",
+                "ProgramArguments": [
+                    "/bin/bash",
+                    str(nexo_home / "scripts" / "nexo-cron-wrapper.sh"),
+                    "watchdog",
+                    "/bin/bash",
+                    str(source_root / "scripts" / "nexo-watchdog.sh"),
+                ],
+                "EnvironmentVariables": {
+                    "NEXO_HOME": str(nexo_home),
+                    "PATH": "/opt/homebrew/bin:/usr/bin:/bin",
+                },
+            },
+            fh,
+        )
+
+    removed: list[str] = []
+    monkeypatch.setattr(cron_sync.platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(cron_sync, "LAUNCH_AGENTS_DIR", launch_agents_dir)
+    monkeypatch.setattr(cron_sync, "NEXO_HOME", nexo_home)
+    monkeypatch.setattr(cron_sync, "SOURCE_ROOT", source_root)
+    monkeypatch.setattr(cron_sync, "LOG_DIR", nexo_home / "logs")
+    monkeypatch.setattr(cron_sync, "MANIFEST", tmp_path / "manifest.json")
+    monkeypatch.setattr(cron_sync, "load_manifest", lambda: [])
+    monkeypatch.setattr(cron_sync, "_cleanup_retired_core_files", lambda: None)
+    monkeypatch.setattr(cron_sync, "_refresh_runtime_manifest", lambda: None)
+    monkeypatch.setattr(cron_sync, "_sync_watchdog_hash_registry", lambda: None)
+    monkeypatch.setattr(cron_sync, "unload_plist", lambda path, dry_run: removed.append(path.name))
+
+    cron_sync.sync()
+
+    assert removed == ["com.nexo.watchdog.plist"]

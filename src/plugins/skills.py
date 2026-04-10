@@ -22,7 +22,9 @@ from skills_runtime import (
     compose_skills,
     get_featured_skill_summaries,
     list_evolution_candidates,
+    materialize_outcome_pattern_skill,
     promote_skill,
+    review_skill_outcomes,
     retire_skill,
     sync_skills,
     test_skill,
@@ -167,7 +169,11 @@ def handle_skill_stats() -> str:
         f"  By level: {', '.join(f'{k}={v}' for k, v in sorted(stats['by_level'].items()))}\n"
         f"  Avg trust: {stats['avg_trust']}\n"
         f"  Total uses: {stats['total_uses']} (success rate: {stats['success_rate']}%)\n"
-        f"  Uses last 7d: {stats['uses_last_7d']}"
+        f"  Uses last 7d: {stats['uses_last_7d']}\n"
+        f"  Reuse rate: {stats['skill_reuse_rate']}\n"
+        f"  Outcome-backed skills: {stats['outcome_backed_skills']} (avg success: {stats['outcome_backed_success_rate']}%)\n"
+        f"  Promoted from evidence: {stats['promoted_from_evidence_count']}\n"
+        f"  Retired for poor outcomes: {stats['retired_for_poor_outcomes_count']}"
     )
 
 
@@ -202,6 +208,14 @@ def handle_skill_featured(limit: int = 5) -> str:
 
 def handle_skill_evolution_candidates() -> str:
     return json.dumps(list_evolution_candidates(), ensure_ascii=False)
+
+
+def handle_skill_seed_from_outcome_pattern(pattern_key: str) -> str:
+    return json.dumps(materialize_outcome_pattern_skill(pattern_key), ensure_ascii=False)
+
+
+def handle_skill_outcome_review(id: str, auto_apply: bool = False) -> str:
+    return json.dumps(review_skill_outcomes(id, auto_apply=auto_apply), ensure_ascii=False)
 
 
 def handle_skill_promote(id: str, target_level: str = "published", reason: str = "") -> str:
@@ -282,6 +296,10 @@ TOOLS = [
      "Return featured published/stable skills for startup discovery."),
     (handle_skill_evolution_candidates, "nexo_skill_evolution_candidates",
      "Return candidates for skill improvement or text-to-script evolution."),
+    (handle_skill_seed_from_outcome_pattern, "nexo_skill_seed_from_outcome_pattern",
+     "Materialize a draft skill candidate from a repeated successful outcome pattern with linked evidence."),
+    (handle_skill_outcome_review, "nexo_skill_outcome_review",
+     "Review whether a skill should be promoted, deprioritized, or retired based on sustained outcome evidence."),
     (handle_skill_promote, "nexo_skill_promote",
      "Promote a skill to a stronger published/stable lifecycle stage."),
     (handle_skill_retire, "nexo_skill_retire",

@@ -10,6 +10,7 @@ from db._core import get_db
 VALID_TASK_TYPES = {"answer", "analyze", "edit", "execute", "delegate"}
 VALID_OUTCOMES = {"open", "done", "partial", "blocked", "failed", "cancelled"}
 VALID_DEBT_STATUS = {"open", "forgiven", "resolved"}
+VALID_IMPACT_LEVELS = {"medium", "high", "critical"}
 
 
 def _task_id() -> str:
@@ -26,6 +27,10 @@ def _as_json(value) -> str:
 
 def _as_bool(value) -> int:
     return 1 if bool(value) else 0
+
+
+def _row_to_dict(row):
+    return dict(row) if row else None
 
 
 def create_protocol_task(
@@ -114,7 +119,207 @@ def create_protocol_task(
 def get_protocol_task(task_id: str) -> dict | None:
     conn = get_db()
     row = conn.execute("SELECT * FROM protocol_tasks WHERE task_id = ?", (task_id,)).fetchone()
-    return dict(row) if row else None
+    return _row_to_dict(row)
+
+
+def create_cortex_evaluation(
+    *,
+    session_id: str = "",
+    task_id: str = "",
+    goal: str,
+    task_type: str = "",
+    area: str = "",
+    impact_level: str = "high",
+    context_hint: str = "",
+    alternatives,
+    scores,
+    recommended_choice: str,
+    recommended_reasoning: str,
+    linked_outcome_id: int | None = None,
+    goal_profile_id: str = "",
+    goal_profile_labels=None,
+    goal_profile_weights=None,
+    selected_choice: str = "",
+    selection_reason: str = "",
+    selection_source: str = "recommended",
+) -> dict:
+    conn = get_db()
+    clean_level = impact_level if impact_level in VALID_IMPACT_LEVELS else "high"
+    cursor = conn.execute(
+        """INSERT INTO cortex_evaluations (
+               session_id, task_id, goal, task_type, area, impact_level, context_hint,
+               alternatives, scores, recommended_choice, recommended_reasoning, linked_outcome_id,
+               goal_profile_id, goal_profile_labels, goal_profile_weights,
+               selected_choice, selection_reason, selection_source
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            session_id.strip(),
+            task_id.strip(),
+            goal.strip(),
+            task_type.strip(),
+            area.strip(),
+            clean_level,
+            context_hint.strip(),
+            _as_json(alternatives),
+            _as_json(scores),
+            recommended_choice.strip(),
+            recommended_reasoning.strip(),
+            int(linked_outcome_id) if linked_outcome_id else None,
+            goal_profile_id.strip(),
+            _as_json(goal_profile_labels or []),
+            _as_json(goal_profile_weights or {}),
+            (selected_choice or recommended_choice).strip(),
+            (selection_reason or recommended_reasoning).strip(),
+            (selection_source or "recommended").strip(),
+        ),
+    )
+    conn.commit()
+    return get_cortex_evaluation(cursor.lastrowid) or {}
+
+
+def get_cortex_evaluation(evaluation_id: int) -> dict | None:
+    conn = get_db()
+    row = conn.execute(
+        "SELECT * FROM cortex_evaluations WHERE id = ?",
+        (int(evaluation_id),),
+    ).fetchone()
+    return _row_to_dict(row)
+
+
+def list_cortex_evaluations(*, session_id: str = "", task_id: str = "", limit: int = 20) -> list[dict]:
+    conn = get_db()
+    clauses = []
+    params: list[object] = []
+    if session_id:
+        clauses.append("session_id = ?")
+        params.append(session_id.strip())
+    if task_id:
+        clauses.append("task_id = ?")
+        params.append(task_id.strip())
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    rows = conn.execute(
+        f"SELECT * FROM cortex_evaluations {where} ORDER BY created_at DESC, id DESC LIMIT ?",
+        params + [max(1, int(limit))],
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def latest_cortex_evaluation_for_task(task_id: str) -> dict | None:
+    conn = get_db()
+    row = conn.execute(
+        """SELECT * FROM cortex_evaluations
+           WHERE task_id = ?
+           ORDER BY created_at DESC, id DESC
+           LIMIT 1""",
+        (task_id.strip(),),
+    ).fetchone()
+    return _row_to_dict(row)
+
+
+def task_has_cortex_evaluation(task_id: str) -> bool:
+    if not task_id.strip():
+        return False
+    conn = get_db()
+    row = conn.execute(
+        "SELECT 1 FROM cortex_evaluations WHERE task_id = ? LIMIT 1",
+        (task_id.strip(),),
+    ).fetchone()
+    return bool(row)
+
+
+def override_cortex_evaluation(evaluation_id: int, *, selected_choice: str, selection_reason: str) -> dict | None:
+    conn = get_db()
+    conn.execute(
+        """UPDATE cortex_evaluations
+           SET selected_choice = ?,
+               selection_reason = ?,
+               selection_source = 'override',
+               updated_at = datetime('now')
+           WHERE id = ?""",
+        (
+            selected_choice.strip(),
+            selection_reason.strip(),
+            int(evaluation_id),
+        ),
+    )
+    conn.commit()
+    return get_cortex_evaluation(evaluation_id)
+
+
+def cortex_evaluation_summary(days: int = 30) -> dict:
+    conn = get_db()
+    window = f"-{max(1, int(days))} days"
+    rows = conn.execute(
+        """SELECT e.id, e.goal, e.area, e.goal_profile_id, e.linked_outcome_id,
+                  e.recommended_choice, e.selected_choice, e.selection_source, e.created_at,
+                  o.status AS outcome_status
+           FROM cortex_evaluations e
+           LEFT JOIN outcomes o ON o.id = e.linked_outcome_id
+           WHERE e.created_at >= datetime('now', ?)
+           ORDER BY e.created_at DESC, e.id DESC""",
+        (window,),
+    ).fetchall()
+    items = [dict(row) for row in rows]
+    total = len(items)
+    overrides = [
+        row for row in items
+        if (row.get("selection_source") == "override")
+        or ((row.get("selected_choice") or "").strip() and (row.get("selected_choice") or "").strip() != (row.get("recommended_choice") or "").strip())
+    ]
+    accepted = total - len(overrides)
+    linked = [row for row in items if row.get("linked_outcome_id")]
+    linked_met = [row for row in linked if row.get("outcome_status") == "met"]
+    linked_missed = [row for row in linked if row.get("outcome_status") == "missed"]
+    linked_pending = [row for row in linked if row.get("outcome_status") == "pending"]
+    linked_resolved = [row for row in linked if row.get("outcome_status") in {"met", "missed"}]
+
+    recommended_linked = [row for row in linked_resolved if row not in overrides]
+    override_linked = [row for row in linked_resolved if row in overrides]
+
+    def _pct(numerator: int, denominator: int) -> float:
+        if denominator <= 0:
+            return 0.0
+        return round((numerator / denominator) * 100, 1)
+
+    profile_counts: dict[str, int] = {}
+    for row in items:
+        key = (row.get("goal_profile_id") or "unprofiled").strip() or "unprofiled"
+        profile_counts[key] = profile_counts.get(key, 0) + 1
+
+    top_profiles = [
+        {"goal_profile_id": profile_id, "count": count}
+        for profile_id, count in sorted(profile_counts.items(), key=lambda item: (-item[1], item[0]))[:5]
+    ]
+
+    gaps: list[str] = []
+    if total < 3:
+        gaps.append("Muy pocas evaluaciones del cortex para inferir mejora estable.")
+    if len(linked) < 2:
+        gaps.append("Muy pocas decisiones enlazadas a outcomes para medir calidad real de recomendación.")
+
+    return {
+        "days": max(1, int(days)),
+        "total_evaluations": total,
+        "accepted_recommendations": accepted,
+        "overrides": len(overrides),
+        "recommendation_accept_rate": _pct(accepted, total),
+        "override_rate": _pct(len(overrides), total),
+        "linked_outcomes_total": len(linked),
+        "linked_outcomes_met": len(linked_met),
+        "linked_outcomes_missed": len(linked_missed),
+        "linked_outcomes_pending": len(linked_pending),
+        "linked_outcome_success_rate": _pct(len(linked_met), len(linked_resolved)),
+        "recommended_success_rate": _pct(
+            sum(1 for row in recommended_linked if row.get("outcome_status") == "met"),
+            len(recommended_linked),
+        ),
+        "override_success_rate": _pct(
+            sum(1 for row in override_linked if row.get("outcome_status") == "met"),
+            len(override_linked),
+        ),
+        "top_goal_profiles": top_profiles,
+        "gaps": gaps,
+    }
 
 
 def close_protocol_task(
@@ -188,6 +393,7 @@ def resolve_protocol_debts(
     *,
     session_id: str = "",
     task_id: str = "",
+    debt_ids: list[int] | None = None,
     debt_types: list[str] | None = None,
     resolution: str = "",
 ) -> int:
@@ -200,6 +406,12 @@ def resolve_protocol_debts(
     if task_id:
         clauses.append("task_id = ?")
         params.append(task_id.strip())
+    if debt_ids:
+        normalized_ids = [int(item) for item in debt_ids if str(item).strip()]
+        if normalized_ids:
+            placeholders = ",".join("?" * len(normalized_ids))
+            clauses.append(f"id IN ({placeholders})")
+            params.extend(normalized_ids)
     if debt_types:
         placeholders = ",".join("?" * len(debt_types))
         clauses.append(f"debt_type IN ({placeholders})")
@@ -217,7 +429,15 @@ def resolve_protocol_debts(
     return cursor.rowcount
 
 
-def list_protocol_debts(*, status: str = "open", task_id: str = "", limit: int = 50) -> list[dict]:
+def list_protocol_debts(
+    *,
+    status: str = "open",
+    task_id: str = "",
+    session_id: str = "",
+    debt_type: str = "",
+    severity: str = "",
+    limit: int = 50,
+) -> list[dict]:
     conn = get_db()
     clauses = []
     params: list[object] = []
@@ -227,6 +447,15 @@ def list_protocol_debts(*, status: str = "open", task_id: str = "", limit: int =
     if task_id:
         clauses.append("task_id = ?")
         params.append(task_id.strip())
+    if session_id:
+        clauses.append("session_id = ?")
+        params.append(session_id.strip())
+    if debt_type:
+        clauses.append("debt_type = ?")
+        params.append(debt_type.strip())
+    if severity in {"info", "warn", "error"}:
+        clauses.append("severity = ?")
+        params.append(severity)
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     rows = conn.execute(
         f"SELECT * FROM protocol_debt {where} ORDER BY created_at DESC LIMIT ?",
@@ -262,6 +491,9 @@ def protocol_compliance_summary(days: int = 7) -> dict:
     learning_ok = [row for row in learning_required if row["learning_id"]]
     action_tasks = [row for row in tasks if row["task_type"] in ("edit", "execute", "delegate")]
     cortex_ok = [row for row in action_tasks if row["cortex_mode"] == "act"]
+    has_response_high_stakes = bool(tasks) and "response_high_stakes" in tasks[0].keys()
+    high_stakes_action_tasks = [row for row in action_tasks if row["response_high_stakes"]] if has_response_high_stakes else []
+    decision_ok = [row for row in high_stakes_action_tasks if task_has_cortex_evaluation(row["task_id"])]
 
     score_parts = []
     if verify_required:
@@ -272,6 +504,8 @@ def protocol_compliance_summary(days: int = 7) -> dict:
         score_parts.append((len(learning_ok) / len(learning_required)) * 100)
     if action_tasks:
         score_parts.append((len(cortex_ok) / len(action_tasks)) * 100)
+    if high_stakes_action_tasks:
+        score_parts.append((len(decision_ok) / len(high_stakes_action_tasks)) * 100)
 
     base_score = (sum(score_parts) / len(score_parts)) if score_parts else (100.0 if tasks else 0.0)
     warn_debt = sum(row["total"] for row in open_debts if row["severity"] == "warn")
@@ -295,6 +529,9 @@ def protocol_compliance_summary(days: int = 7) -> dict:
         "action_tasks": len(action_tasks),
         "cortex_ok": len(cortex_ok),
         "cortex_pct": round((len(cortex_ok) / len(action_tasks)) * 100, 1) if action_tasks else None,
+        "high_stakes_action_tasks": len(high_stakes_action_tasks),
+        "decision_support_ok": len(decision_ok),
+        "decision_support_pct": round((len(decision_ok) / len(high_stakes_action_tasks)) * 100, 1) if high_stakes_action_tasks else None,
         "open_debt_total": warn_debt + error_debt,
         "open_warn_debt": warn_debt,
         "open_error_debt": error_debt,

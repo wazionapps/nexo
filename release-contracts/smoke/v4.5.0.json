@@ -1,0 +1,242 @@
+{
+  "release_line": "v4.5",
+  "version": "4.1.0",
+  "generated_at": "2026-04-10T11:54:22.594343+00:00",
+  "ok": true,
+  "groups": [
+    {
+      "id": "manual_canonical",
+      "description": "canonical manual for personal artifacts stays explicit, generic, and tied to live runtime behavior",
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_personal_artifacts_manual.py"
+      ],
+      "targets": [
+        "tests/test_personal_artifacts_manual.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 2.84,
+      "stdout": "...                                                                      [100%]Running teardown with pytest sessionfinish...\n\n3 passed in 0.16s\n",
+      "stderr": ""
+    },
+    {
+      "id": "protocol_flow",
+      "description": "startup, protocol contract, and high-stakes close path stay coherent",
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_startup_preflight.py",
+        "tests/test_protocol.py"
+      ],
+      "targets": [
+        "tests/test_startup_preflight.py",
+        "tests/test_protocol.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 3.47,
+      "stdout": ".........................                                                [100%]Running teardown with pytest sessionfinish...\n\n25 passed in 1.32s\n",
+      "stderr": ""
+    },
+    {
+      "id": "outcome_loop",
+      "description": "decision/followup/protocol outcomes close with met or missed evidence",
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_outcomes.py"
+      ],
+      "targets": [
+        "tests/test_outcomes.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 2.24,
+      "stdout": "....                                                                     [100%]Running teardown with pytest sessionfinish...\n\n4 passed in 0.47s\n",
+      "stderr": ""
+    },
+    {
+      "id": "priority_loop",
+      "description": "impact scoring persists and reorders real followup queues",
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_impact_scoring.py"
+      ],
+      "targets": [
+        "tests/test_impact_scoring.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 2.25,
+      "stdout": "....                                                                     [100%]Running teardown with pytest sessionfinish...\n\n4 passed in 0.25s\n",
+      "stderr": ""
+    },
+    {
+      "id": "decision_loop",
+      "description": "cortex evaluates, persists, and allows override on high-stakes actions",
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_cortex_decisions.py"
+      ],
+      "targets": [
+        "tests/test_cortex_decisions.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 1.67,
+      "stdout": "...                                                                      [100%]Running teardown with pytest sessionfinish...\n\n3 passed in 0.14s\n",
+      "stderr": ""
+    },
+    {
+      "id": "drive_semantics",
+      "description": "drive detects anomaly/pattern/gap/opportunity semantically across phrasing variants",
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_drive.py"
+      ],
+      "targets": [
+        "tests/test_drive.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 3.28,
+      "stdout": "...........................................                              [100%]Running teardown with pytest sessionfinish...\n\n43 passed in 1.35s\n",
+      "stderr": ""
+    },
+    {
+      "id": "public_proof",
+      "description": "scorecard/compare generation remains readable and inspectable",
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_build_public_scorecard.py"
+      ],
+      "targets": [
+        "tests/test_build_public_scorecard.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 1.7,
+      "stdout": "..                                                                       [100%]Running teardown with pytest sessionfinish...\n\n2 passed in 0.11s\n",
+      "stderr": ""
+    },
+    {
+      "id": "dashboard_state",
+      "description": "dashboard exposes sane protocol and operations state",
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_dashboard_app.py"
+      ],
+      "targets": [
+        "tests/test_dashboard_app.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 2.22,
+      "stdout": "...........                                                              [100%]Running teardown with pytest sessionfinish...\n\n11 passed in 0.49s\n",
+      "stderr": ""
+    },
+    {
+      "id": "followup_history",
+      "description": "followups and reminders keep history-aware create/read/delete/restore flows coherent",
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_reminders_history.py",
+        "tests/test_followup_hygiene.py"
+      ],
+      "targets": [
+        "tests/test_reminders_history.py",
+        "tests/test_followup_hygiene.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 2.23,
+      "stdout": "...                                                                      [100%]Running teardown with pytest sessionfinish...\n\n3 passed in 0.17s\n",
+      "stderr": ""
+    },
+    {
+      "id": "deep_sleep",
+      "description": "deep sleep apply still produces the expected summaries and rollups",
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_deep_sleep_apply.py"
+      ],
+      "targets": [
+        "tests/test_deep_sleep_apply.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 2.38,
+      "stdout": "......                                                                   [100%]Running teardown with pytest sessionfinish...\n\n6 passed in 0.31s\n",
+      "stderr": ""
+    },
+    {
+      "id": "cron_integrity",
+      "description": "cron sync and recovery keep managed schedules healthy without drift",
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_cron_sync.py",
+        "tests/test_cron_recovery.py"
+      ],
+      "targets": [
+        "tests/test_cron_sync.py",
+        "tests/test_cron_recovery.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 2.88,
+      "stdout": "......................                                                   [100%]Running teardown with pytest sessionfinish...\n\n22 passed in 0.95s\n",
+      "stderr": ""
+    },
+    {
+      "id": "runtime_cli",
+      "description": "runtime CLI paths and scripts call flow still behave under isolated environments",
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "-m",
+        "pytest",
+        "-q",
+        "tests/test_cli_scripts.py"
+      ],
+      "targets": [
+        "tests/test_cli_scripts.py"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "duration_seconds": 13.83,
+      "stdout": "..........................                                               [100%]Running teardown with pytest sessionfinish...\n\n26 passed in 12.21s\n",
+      "stderr": ""
+    }
+  ]
+}

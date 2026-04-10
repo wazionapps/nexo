@@ -144,6 +144,30 @@
       "run_on_wake": true
     },
     {
+      "id": "impact-scorer",
+      "script": "scripts/nexo-impact-scorer.py",
+      "schedule": {"hour": 5, "minute": 45},
+      "description": "Daily impact scoring for active followups so real queues can prioritize by expected impact",
+      "core": true,
+      "recovery_policy": "catchup",
+      "idempotent": true,
+      "max_catchup_age": 172800,
+      "run_on_boot": true,
+      "run_on_wake": true
+    },
+    {
+      "id": "outcome-checker",
+      "script": "scripts/nexo-outcome-checker.py",
+      "schedule": {"hour": 8, "minute": 0},
+      "description": "Daily outcome verification — marks tracked outcomes as met or missed",
+      "core": true,
+      "recovery_policy": "catchup",
+      "idempotent": true,
+      "max_catchup_age": 172800,
+      "run_on_boot": true,
+      "run_on_wake": true
+    },
+    {
       "id": "auto-close-sessions",
       "script": "auto_close_sessions.py",
       "interval_seconds": 300,

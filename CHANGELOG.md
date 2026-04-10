@@ -1,5 +1,24 @@
 # Changelog
 
+## [5.0.0] - 2026-04-10
+
+### Goal-Driven Decisions + Outcome Learning
+- Added Goal Engine v1 with explicit, auditable `goal_profiles`, runtime tools to inspect and manage them, and decision traces that show which objective weights were active for a recommendation.
+- Extended the existing Cortex into a real Decision Cortex v2 path: high-impact work can now rank alternatives with goal weights, outcome history, override history, structured penalties, and persisted evaluation summaries instead of treating "context" as the only intelligence layer.
+- Added the first structured-learning bridge from repeated outcomes into future decisions. Strong repeated patterns can now be captured as durable outcome-pattern learnings, and later decisions can read that structured signal back as an explicit score adjustment.
+- Outcome-backed skill evolution is now real: strong patterns can seed reusable skills, outcome evidence can influence promotion and retirement, and product-facing reuse surfaces such as featured skills now change because of that evidence instead of only trust counters.
+
+### Proof + Runtime Integrity
+- Rebuilt the runtime benchmark pack around a broader matrix with checked-in results, generated summaries, and compare artifacts that make the operator/runtime advantage inspectable instead of anecdotal.
+- Replaced Drive's primary hardcoded-regex detection path with semantic classification as the authoritative signal path, leaving regex only as a narrow fallback.
+- Hardened the CLI-to-core runtime path so personal scripts and cron/subprocess flows can call core tools without depending on the interactive Claude Code environment to have already loaded the right Python runtime.
+- Added an official path to inspect and resolve historical `protocol_debt`, and updated runtime doctor scoring so it distinguishes open live debt from already-audited historical drift and from decision-eval rollout warmup.
+- Audited the live update path on a real installation, fixed a real `cron-sync` bug that could remove official personal LaunchAgents, and revalidated the runtime with `nexo update` plus `nexo doctor --tier all`.
+
+### Validation
+- Added or refreshed smoke/contract artifacts for both v4.5 and v5.0 release lines, including `scripts/run_v5_0_smoke.py` and `release-contracts/v5.0.0.json`.
+- Confirmed the release-critical regression suites across protocol, doctor, cron sync, outcomes, cortex decisions, skills, and public scorecard generation.
+
 ## [4.1.0] - 2026-04-09
 
 ### Drive/Curiosity — Autonomous Investigation Signals

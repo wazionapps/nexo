@@ -424,3 +424,63 @@ def test_add_learning_flags_contradictions_for_review(monkeypatch, tmp_path):
     assert learning_count == 1
     assert followup_count == 1
     assert "Reconcile contradictory learning" in followup_desc
+
+
+def test_write_morning_briefing_includes_top_impact_and_queue_changes(monkeypatch, tmp_path):
+    apply_mod = _load_apply_module(monkeypatch, tmp_path)
+    nexo_home = Path(os.environ["NEXO_HOME"])
+    (nexo_home / "operations").mkdir(parents=True, exist_ok=True)
+    (nexo_home / "coordination").mkdir(parents=True, exist_ok=True)
+
+    import db
+
+    db.init_db()
+    db.create_followup(
+        id="NF-IMPACT-TOP",
+        description="Cerrar bloqueo principal de release.",
+        date="2000-01-01",
+        verification="smoke green",
+        reasoning="Bloquea salida",
+        priority="critical",
+    )
+    db.create_followup(
+        id="NF-IMPACT-LOW",
+        description="Revisar una nota secundaria.",
+        date="2099-12-31",
+        priority="low",
+    )
+    db.score_active_followups()
+
+    (nexo_home / "coordination" / "impact-scorer-summary.json").write_text(
+        json.dumps(
+            {
+                "top_changes": [
+                    {
+                        "id": "NF-IMPACT-TOP",
+                        "delta": 12.5,
+                        "impact_score": 64.0,
+                        "impact_reasoning": "priority=critical; due=due_or_overdue; verification=yes; reasoning=yes",
+                    }
+                ]
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    briefing = apply_mod.write_morning_briefing(
+        "2026-04-10",
+        {
+            "summary": "Resumen corto",
+            "morning_agenda": [],
+            "emotional_day": {},
+            "productivity_day": {},
+            "trust_calibration": {},
+        },
+    ).read_text(encoding="utf-8")
+
+    assert "## Top by Impact" in briefing
+    assert "NF-IMPACT-TOP" in briefing
+    assert "Why:" in briefing
+    assert "## Impact Queue Changes" in briefing
+    assert "+12.5 -> 64.0" in briefing

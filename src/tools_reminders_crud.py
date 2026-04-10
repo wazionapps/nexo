@@ -7,6 +7,7 @@ from db import (
     restore_followup, add_followup_note, get_followup,
     validate_item_read_token,
     find_decisions_by_context_ref, update_decision_outcome,
+    set_linked_outcomes_met,
 )
 
 
@@ -306,6 +307,20 @@ def handle_followup_complete(id: str, result: str = '') -> str:
             update_decision_outcome(dec['id'], outcome_text)
         dec_ids = ', '.join(f"#{d['id']}" for d in linked_decisions)
         msg += f" Decision(s) {dec_ids} updated with automatic outcome."
+
+    try:
+        linked_outcomes = set_linked_outcomes_met(
+            "followup",
+            id,
+            metric_source="followup_status",
+            actual_value=1.0,
+            actual_value_text=result if result else f"Followup {id} completed",
+            note="Linked followup completed.",
+        )
+    except Exception:
+        linked_outcomes = []
+    if linked_outcomes:
+        msg += f" Linked outcomes met: {len(linked_outcomes)}."
 
     return msg
 

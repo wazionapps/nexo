@@ -52,6 +52,8 @@ _personal_scripts = _load_submodule("db._personal_scripts")
 _skills = _load_submodule("db._skills")
 _hot_context = _load_submodule("db._hot_context")
 _drive = _load_submodule("db._drive")
+_outcomes = _load_submodule("db._outcomes")
+_goal_profiles = _load_submodule("db._goal_profiles")
 
 # Core: connection, constants, init, utils
 from db._core import (
@@ -88,6 +90,7 @@ from db._reminders import (
     create_followup, update_followup, complete_followup, delete_followup,
     restore_followup, add_followup_note, get_followups, get_followup, get_followup_history,
     find_similar_followups,
+    compute_followup_impact, score_followup, score_active_followups,
     add_item_history, get_item_history, validate_item_read_token,
 )
 
@@ -147,6 +150,10 @@ from db._protocol import (
     create_protocol_task, get_protocol_task, close_protocol_task,
     create_protocol_debt, resolve_protocol_debts, list_protocol_debts,
     protocol_compliance_summary,
+    create_cortex_evaluation, get_cortex_evaluation, list_cortex_evaluations,
+    cortex_evaluation_summary,
+    latest_cortex_evaluation_for_task, task_has_cortex_evaluation,
+    override_cortex_evaluation,
 )
 
 # Durable workflow runtime
@@ -185,6 +192,7 @@ from db._skills import (
     validate_skill_params, render_command_template, sync_skill_directories,
     import_skill_from_directory, approve_skill, collect_scriptable_skill_candidates,
     collect_skill_improvement_candidates, materialize_personal_skill_definition,
+    get_skill_outcome_evidence, list_skill_outcome_reviews,
     get_skill_health_report,
 )
 
@@ -204,6 +212,23 @@ from db._hot_context import (
     get_hot_context, search_hot_context, search_recent_events,
     build_pre_action_context, format_pre_action_context_bundle,
     resolve_hot_context,
+)
+
+# Outcomes
+from db._outcomes import (
+    VALID_METRIC_SOURCES as OUTCOME_METRIC_SOURCES,
+    VALID_TARGET_OPERATORS as OUTCOME_TARGET_OPERATORS,
+    create_outcome, get_outcome, list_outcomes,
+    cancel_outcome, evaluate_outcome, pending_outcomes_due,
+    find_pending_outcomes_by_action, set_linked_outcomes_met,
+    list_outcome_pattern_candidates, capture_outcome_pattern,
+)
+
+# Goal Engine v1
+from db._goal_profiles import (
+    DEFAULT_GOAL_PROFILES,
+    ensure_default_goal_profiles, get_goal_profile, list_goal_profiles,
+    upsert_goal_profile, resolve_goal_profile,
 )
 
 

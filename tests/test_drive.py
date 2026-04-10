@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import json
 
+import tools_drive
+
 from db import (
     create_drive_signal, reinforce_drive_signal, get_drive_signals,
     get_drive_signal, update_drive_signal_status, decay_drive_signals,
@@ -175,6 +177,73 @@ class TestStats:
 # ── Detection heuristic tests ────────────────────────────────────────
 
 class TestDetection:
+    def test_llm_classification_is_primary_when_available(self, monkeypatch):
+        monkeypatch.setattr(
+            tools_drive,
+            "_llm_classify_signal",
+            lambda text: {
+                "available": True,
+                "label": "opportunity",
+                "confidence": 0.91,
+                "reason": "model sees an automation opportunity",
+                "source": "llm",
+            },
+        )
+        monkeypatch.setattr(
+            tools_drive,
+            "_semantic_signal_scores",
+            lambda text: {"anomaly": 0.99, "pattern": 0.0, "gap": 0.0, "opportunity": 0.0},
+        )
+
+        result = detect_drive_signal(
+            "This flow should probably be automated before the backlog grows again",
+            source="heartbeat", source_id="test-sid-llm",
+        )
+
+        assert result is not None
+        signal = get_drive_signal(result["id"])
+        assert signal is not None
+        assert signal["signal_type"] == "opportunity"
+
+    def test_llm_none_blocks_fallback_when_confident(self, monkeypatch):
+        monkeypatch.setattr(
+            tools_drive,
+            "_llm_classify_signal",
+            lambda text: {
+                "available": True,
+                "label": None,
+                "confidence": 0.93,
+                "reason": "normal progress update",
+                "source": "llm",
+            },
+        )
+        monkeypatch.setattr(
+            tools_drive,
+            "_semantic_signal_scores",
+            lambda text: {"pattern": 0.98, "anomaly": 0.0, "gap": 0.0, "opportunity": 0.0},
+        )
+
+        result = detect_drive_signal(
+            "Otra vez revisé el dashboard y todo sigue bien",
+            source="heartbeat", source_id="test-sid-llm-none",
+        )
+
+        assert result is None
+
+    def test_fallback_still_works_when_llm_is_unavailable(self, monkeypatch):
+        monkeypatch.setattr(
+            tools_drive,
+            "_llm_classify_signal",
+            lambda text: {"available": False, "label": None, "reason": "backend_down"},
+        )
+
+        result = detect_drive_signal(
+            "Revenue dropped 18% after yesterday deploy and that looks unexpected",
+            source="heartbeat", source_id="test-sid-fallback",
+        )
+
+        assert result is not None
+
     def test_anomaly_detected(self):
         result = detect_drive_signal(
             "El CPC subió 40% en los últimos 3 días sin cambio de campaña",
@@ -190,10 +259,24 @@ class TestDetection:
         )
         assert result is not None
 
+    def test_pattern_detected_in_portuguese(self):
+        result = detect_drive_signal(
+            "O mesmo problema volta a acontecer sempre que sincronizamos o catalogo",
+            source="heartbeat", source_id="test-sid",
+        )
+        assert result is not None
+
     def test_gap_detected(self):
         result = detect_drive_signal(
             "No sé cómo funciona el pricing de ICNEA para las agencias",
             source="task_close", source_id="task-123",
+        )
+        assert result is not None
+
+    def test_gap_detected_in_german(self):
+        result = detect_drive_signal(
+            "Ich weiss nicht wie dieser Checkout Flow dokumentiert ist y no puedo seguir",
+            source="task_close", source_id="task-123-de",
         )
         assert result is not None
 
@@ -204,10 +287,31 @@ class TestDetection:
         )
         assert result is not None
 
+    def test_opportunity_detected_in_english(self):
+        result = detect_drive_signal(
+            "We could automate invoice reconciliation because peers handle this much faster",
+            source="task_close", source_id="task-456-en",
+        )
+        assert result is not None
+
+    def test_anomaly_detected_in_english(self):
+        result = detect_drive_signal(
+            "Revenue dropped 18% after yesterday deploy and that looks unexpected",
+            source="heartbeat", source_id="test-sid-en",
+        )
+        assert result is not None
+
     def test_normal_text_ignored(self):
         result = detect_drive_signal(
             "Procesando los emails de hoy, todo normal",
             source="heartbeat", source_id="test-sid",
+        )
+        assert result is None
+
+    def test_recurrence_without_problem_is_ignored(self):
+        result = detect_drive_signal(
+            "Otra vez revisé el dashboard y todo sigue bien",
+            source="heartbeat", source_id="test-sid-neutral",
         )
         assert result is None
 

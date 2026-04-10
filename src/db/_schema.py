@@ -783,6 +783,109 @@ def _m31_drive_signals(conn):
     )
 
 
+def _m32_outcomes(conn):
+    """Outcome tracker v1 — close action -> expected result -> actual result loops."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS outcomes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            action_type TEXT NOT NULL,
+            action_id TEXT DEFAULT '',
+            session_id TEXT DEFAULT '',
+            description TEXT NOT NULL,
+            expected_result TEXT NOT NULL,
+            metric_source TEXT NOT NULL DEFAULT 'manual',
+            metric_query TEXT DEFAULT '',
+            baseline_value REAL,
+            target_value REAL,
+            target_operator TEXT NOT NULL DEFAULT 'gte',
+            actual_value REAL,
+            actual_value_text TEXT DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'pending',
+            deadline TEXT NOT NULL,
+            checked_at TEXT DEFAULT NULL,
+            notes TEXT DEFAULT '',
+            learning_id INTEGER,
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now'))
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_outcomes_status ON outcomes(status)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_outcomes_deadline ON outcomes(deadline)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_outcomes_action ON outcomes(action_type, action_id)")
+
+
+def _m33_followup_impact_scoring(conn):
+    """Followup impact scoring v1 — persistent prioritization over real queues."""
+    _migrate_add_column(conn, "followups", "impact_score", "REAL DEFAULT 0")
+    _migrate_add_column(conn, "followups", "impact_factors", "TEXT DEFAULT '{}'")
+    _migrate_add_column(conn, "followups", "last_scored_at", "TEXT DEFAULT NULL")
+    _migrate_add_index(conn, "idx_followups_impact_score", "followups", "impact_score")
+
+
+def _m34_cortex_evaluations(conn):
+    """Persist high-impact alternative evaluations on top of the existing Cortex."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS cortex_evaluations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT DEFAULT '',
+            task_id TEXT DEFAULT '',
+            goal TEXT NOT NULL,
+            task_type TEXT DEFAULT '',
+            area TEXT DEFAULT '',
+            impact_level TEXT NOT NULL DEFAULT 'high',
+            context_hint TEXT DEFAULT '',
+            alternatives TEXT NOT NULL DEFAULT '[]',
+            scores TEXT NOT NULL DEFAULT '[]',
+            recommended_choice TEXT DEFAULT '',
+            recommended_reasoning TEXT DEFAULT '',
+            linked_outcome_id INTEGER DEFAULT NULL,
+            selected_choice TEXT DEFAULT '',
+            selection_reason TEXT DEFAULT '',
+            selection_source TEXT NOT NULL DEFAULT 'recommended',
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now'))
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_cortex_evaluations_task ON cortex_evaluations(task_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_cortex_evaluations_session ON cortex_evaluations(session_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_cortex_evaluations_created ON cortex_evaluations(created_at)")
+
+
+def _m35_cortex_evaluation_outcome_link(conn):
+    """Link Cortex evaluations to tracked outcomes when the task has a measurable result."""
+    _migrate_add_column(conn, "cortex_evaluations", "linked_outcome_id", "INTEGER DEFAULT NULL")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_cortex_evaluations_outcome ON cortex_evaluations(linked_outcome_id)")
+
+
+def _m36_goal_profiles(conn):
+    """Goal Engine v1 — explicit optimization profiles resolved by context."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS goal_profiles (
+            profile_id TEXT PRIMARY KEY,
+            profile_name TEXT NOT NULL,
+            description TEXT DEFAULT '',
+            scope_type TEXT NOT NULL DEFAULT 'default',
+            scope_value TEXT DEFAULT '',
+            goal_labels TEXT DEFAULT '[]',
+            weights TEXT NOT NULL DEFAULT '{}',
+            status TEXT NOT NULL DEFAULT 'active',
+            source TEXT DEFAULT '',
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now'))
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_goal_profiles_scope ON goal_profiles(scope_type, scope_value)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_goal_profiles_status ON goal_profiles(status)")
+
+
+def _m37_cortex_goal_profile_trace(conn):
+    """Persist which goal profile influenced each important Cortex decision."""
+    _migrate_add_column(conn, "cortex_evaluations", "goal_profile_id", "TEXT DEFAULT ''")
+    _migrate_add_column(conn, "cortex_evaluations", "goal_profile_labels", "TEXT DEFAULT '[]'")
+    _migrate_add_column(conn, "cortex_evaluations", "goal_profile_weights", "TEXT DEFAULT '{}'")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_cortex_evaluations_goal_profile ON cortex_evaluations(goal_profile_id)")
+
+
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
     (2, "followups_reasoning", _m2_followups_reasoning),
@@ -815,6 +918,12 @@ MIGRATIONS = [
     (29, "item_history_and_soft_delete", _m29_item_history_and_soft_delete),
     (30, "hot_context_memory", _m30_hot_context_memory),
     (31, "drive_signals", _m31_drive_signals),
+    (32, "outcomes", _m32_outcomes),
+    (33, "followup_impact_scoring", _m33_followup_impact_scoring),
+    (34, "cortex_evaluations", _m34_cortex_evaluations),
+    (35, "cortex_evaluation_outcome_link", _m35_cortex_evaluation_outcome_link),
+    (36, "goal_profiles", _m36_goal_profiles),
+    (37, "cortex_goal_profile_trace", _m37_cortex_goal_profile_trace),
 ]
 
 

@@ -40,6 +40,33 @@ def _run_cli(nexo_home, *args, timeout=10):
     return result
 
 
+def test_scripts_call_recovers_with_compatible_python(monkeypatch, capsys):
+    import cli
+
+    exc = ModuleNotFoundError("No module named 'fastmcp'")
+    exc.name = "fastmcp"
+    calls = []
+
+    monkeypatch.delenv("NEXO_CLI_REEXECED", raising=False)
+    monkeypatch.setattr(cli, "_runtime_python_candidates", lambda: ["/bad/python", "/good/python"])
+    monkeypatch.setattr(cli, "_python_supports_module", lambda python_bin, module_name: python_bin == "/good/python")
+    monkeypatch.setattr(cli.sys, "argv", ["cli.py", "scripts", "call", "nexo_pre_action_context", "--input", "{}"])
+
+    def fake_run(cmd, capture_output=True, text=True, timeout=60, env=None):
+        calls.append((cmd, env))
+        return subprocess.CompletedProcess(cmd, 0, "RECOVERED\n", "")
+
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+
+    result = cli._recover_scripts_call_runtime("nexo_pre_action_context", exc)
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "RECOVERED" in captured.out
+    assert calls[0][0][0] == "/good/python"
+    assert calls[0][1]["NEXO_CLI_REEXECED"] == "1"
+
+
 class TestScriptsList:
     def test_empty_list(self, nexo_home):
         result = _run_cli(nexo_home, "scripts", "list")

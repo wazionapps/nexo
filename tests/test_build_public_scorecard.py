@@ -139,7 +139,20 @@ def test_render_markdown_includes_core_sections():
     module = _load_module()
     markdown = module.render_markdown(
         {
+            "generated_at": "2026-04-10T12:00:00+00:00",
             "product_story": "NEXO makes the model around your model smarter.",
+            "artifacts": {
+                "compare_scorecard": "compare/scorecard.json",
+                "locomo_summary": "benchmarks/locomo/results/locomo_nexo_summary.json",
+                "runtime_pack_summary": "benchmarks/runtime_pack/results/latest_summary.json",
+            },
+            "claim_map": [
+                {
+                    "claim": "NEXO publishes a measured long-conversation memory result.",
+                    "evidence": ["compare/scorecard.json"],
+                    "scope_note": "Memory benchmark only.",
+                }
+            ],
             "benchmarks": {
                 "locomo_rag": {"available": True, "overall_f1": 0.58, "overall_recall": 0.74, "open_domain_f1": 0.63, "multi_hop_f1": 0.33, "temporal_f1": 0.32},
                 "ablation_suite": {
@@ -151,17 +164,35 @@ def test_render_markdown_includes_core_sections():
                         {"label": "Full NEXO", "task_success_rate_pct": 100.0, "conditioned_file_protection_pct": 100.0, "resume_recovery_pct": 100.0},
                     ],
                 },
+                "runtime_pack": {
+                    "available": True,
+                    "scope_note": "Small operator runtime benchmark.",
+                    "latest_run": {
+                        "title": "Memory Recall vs Static CLAUDE.md",
+                        "date": "2026-04-08",
+                        "baselines": [
+                            {"label": "NEXO full stack", "score_pct": 100.0, "pass_count": 5, "partial_count": 0, "fail_count": 0},
+                            {"label": "Static CLAUDE.md", "score_pct": 40.0, "pass_count": 0, "partial_count": 4, "fail_count": 1},
+                        ],
+                    },
+                },
             },
             "longitudinal": [{"days": 30, "available": True, "task_success_rate_pct": 75.0, "avg_time_to_close_minutes": 10.0, "recovery_after_failure_pct": 50.0, "open_protocol_debt": 1, "unnecessary_tool_call_rate_pct": 12.5, "cost_per_solved_task": 0.42}],
         }
     )
 
     assert "# NEXO Compare Scorecard" in markdown
+    assert "## Claims you can inspect today" in markdown
+    assert "Memory benchmark only." in markdown
+    assert "## What this scorecard does not claim" in markdown
     assert "LoCoMo overall F1: 0.58" in markdown
     assert "Ablation / baseline suite" in markdown
     assert "Raw model baseline: success 20.0%" in markdown
+    assert "## Operator runtime pack" in markdown
+    assert "NEXO full stack: score 100.0%" in markdown
     assert "30d: success 75.0%" in markdown
     assert "unnecessary tool 12.5%" in markdown
     assert "cost/solved 0.42 USD" in markdown
     assert "nexo-brain-architecture.png" in markdown
     assert "nexo_remember" in markdown
+    assert "## Artifact map" in markdown

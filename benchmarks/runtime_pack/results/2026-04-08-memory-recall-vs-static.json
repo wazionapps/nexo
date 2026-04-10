@@ -1,0 +1,53 @@
+{
+  "run_id": "2026-04-08-memory-recall-vs-static",
+  "title": "Memory Recall vs Static CLAUDE.md",
+  "date": "2026-04-08",
+  "grading": "manual_rubric",
+  "notes": [
+    "First checked-in micro-benchmark answering whether a large static CLAUDE.md can substitute for a shared brain.",
+    "Uses only the original five recall/continuity scenarios; newer runtime-pack scenarios were added later."
+  ],
+  "scenarios": [
+    "decision_rationale_recall",
+    "user_preference_recall",
+    "repeat_error_avoidance",
+    "interrupted_task_resume",
+    "related_context_stitching"
+  ],
+  "baselines": [
+    {
+      "id": "nexo_full_stack",
+      "label": "NEXO full stack",
+      "scenario_results": {
+        "decision_rationale_recall": "pass",
+        "user_preference_recall": "pass",
+        "repeat_error_avoidance": "pass",
+        "interrupted_task_resume": "pass",
+        "related_context_stitching": "pass"
+      }
+    },
+    {
+      "id": "static_claude_md",
+      "label": "Static CLAUDE.md",
+      "scenario_results": {
+        "decision_rationale_recall": "partial",
+        "user_preference_recall": "partial",
+        "repeat_error_avoidance": "partial",
+        "interrupted_task_resume": "partial",
+        "related_context_stitching": "fail"
+      }
+    },
+    {
+      "id": "no_memory",
+      "label": "No memory",
+      "scenario_results": {
+        "decision_rationale_recall": "fail",
+        "user_preference_recall": "fail",
+        "repeat_error_avoidance": "fail",
+        "interrupted_task_resume": "fail",
+        "related_context_stitching": "fail"
+      }
+    }
+  ],
+  "source_markdown": "benchmarks/results/memory-recall-vs-static.md"
+}

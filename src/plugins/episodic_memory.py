@@ -7,7 +7,7 @@ from db import (
     log_decision, update_decision_outcome, search_decisions,
     write_session_diary, read_session_diary,
     log_change, search_changes, update_change_commit,
-    recall, get_db,
+    recall, get_db, set_linked_outcomes_met,
 )
 
 
@@ -84,7 +84,20 @@ def handle_decision_outcome(id: int, outcome: str) -> str:
         (id,)
     )
     conn.commit()
-    return f"Decision #{id} outcome recorded: {outcome[:100]}"
+    linked_outcomes = []
+    try:
+        linked_outcomes = set_linked_outcomes_met(
+            "decision",
+            str(id),
+            metric_source="decision_outcome",
+            actual_value=1.0,
+            actual_value_text=outcome,
+            note="Linked decision outcome recorded.",
+        )
+    except Exception:
+        linked_outcomes = []
+    suffix = f" Linked outcomes met: {len(linked_outcomes)}." if linked_outcomes else ""
+    return f"Decision #{id} outcome recorded: {outcome[:100]}{suffix}"
 
 
 def handle_decision_search(query: str = '', domain: str = '', days: int = 30) -> str:
