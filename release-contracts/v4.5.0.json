@@ -80,7 +80,7 @@
     {
       "id": "reliability",
       "title": "Reliability",
-      "status": "pending",
+      "status": "complete",
       "evidence_required": [
         "Golden paths pass",
         "No critical runtime drift"
