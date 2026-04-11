@@ -584,6 +584,49 @@ def prune_adaptive_log(max_age_days: int = 90):
         return 0
 
 
+def _open_rollback_followup(*, reason: str, pre_rate: float, post_rate: float) -> None:
+    """Surface a learned-weights rollback as a NEXO followup.
+
+    Idempotent across daily cron runs: uses INSERT OR REPLACE on the fixed id
+    NF-ADAPTIVE-WEIGHTS-ROLLBACK so a second cron run that hits the same
+    rollback condition refreshes the row in place rather than duplicating it.
+    Until this followup existed, rollback events only landed in the
+    cognitive-decay log, so the user might never notice that learned weights
+    had been reverted.
+    """
+    description = (
+        "NEXO adaptive learned weights rolled back to static defaults.\n"
+        f"Reason: {reason}\n"
+        f"Pre-activation correction rate: {pre_rate:.2f}/day\n"
+        f"Post-activation correction rate: {post_rate:.2f}/day\n\n"
+        "Investigate adaptive_log entries since the activation date and decide "
+        "whether the regression was caused by the new weights or by an "
+        "unrelated incident before the next learn_weights() cycle re-trains."
+    )
+    verification = (
+        "SELECT timestamp, mode, score, feedback_event FROM adaptive_log "
+        "WHERE timestamp >= datetime('now', '-7 days') ORDER BY timestamp DESC LIMIT 30"
+    )
+    now_epoch = datetime.now().timestamp()
+    conn = get_db()
+    conn.execute(
+        "INSERT OR REPLACE INTO followups (id, description, date, status, "
+        "verification, created_at, updated_at, priority) "
+        "VALUES (?, ?, NULL, 'PENDING', ?, ?, ?, 'high')",
+        (
+            "NF-ADAPTIVE-WEIGHTS-ROLLBACK",
+            description,
+            verification,
+            now_epoch,
+            now_epoch,
+        ),
+    )
+    try:
+        conn.commit()
+    except Exception:
+        pass
+
+
 def check_weight_rollback() -> dict:
     """Check if learned weights should be rolled back.
     Compares correction rate in last 7 days vs 7 days before activation.
@@ -634,9 +677,20 @@ def check_weight_rollback() -> dict:
             state.pop("learned_weights_samples", None)
             state["learned_weights_rollback"] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
             _save_state(state)
+            reason = (
+                f"Recent correction rate {post_rate:.2f}/day vs pre-activation "
+                f"{pre_rate:.2f}/day (>=2x)"
+            )
+            # Surface the rollback as a visible followup so the user notices.
+            # Best-effort: a failure in the followup helper must not block the
+            # rollback itself, which is the load-bearing safety mechanism.
+            try:
+                _open_rollback_followup(reason=reason, pre_rate=pre_rate, post_rate=post_rate)
+            except Exception:
+                pass
             return {"status": "rolled_back", "pre_rate": round(pre_rate, 2),
                     "post_rate": round(post_rate, 2),
-                    "reason": f"Recent correction rate {post_rate:.2f}/day vs pre-activation {pre_rate:.2f}/day (>=2x)"}
+                    "reason": reason}
 
         return {"status": "ok", "pre_rate": round(pre_rate, 2), "post_rate": round(post_rate, 2),
                 "days_since_activation": days_since}
