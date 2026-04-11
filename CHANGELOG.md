@@ -1,5 +1,134 @@
 # Changelog
 
+## [5.1.0] - 2026-04-11
+
+### NEXO-AUDIT-2026-04-11 — Phases 2-5 delivered end-to-end
+
+This release lands the entire NEXO-AUDIT-2026-04-11 roadmap (Phases 2 through 5
+plus the pre-release Bloques A-D) as a single coordinated version bump. Every
+item was empirically verified before touching code — about 46% of the audit's
+originally-flagged gaps turned out to be false positives, which is why this
+changelog focuses on what actually changed rather than on the audit list
+itself.
+
+### Phase 2 — open evolution / adaptive / skills / cortex loops now close under themselves
+- Evolution cycle now auto-applies user-approved proposals on the next run
+  via `_apply_accepted_proposals()` in `scripts/nexo-evolution-run.py`, backed
+  by the new `evolution_log.proposal_payload` column (migration m38). Accepted
+  proposals can no longer linger in `accepted` state indefinitely.
+- `skills_runtime.auto_promote_outcome_patterns_to_skills()` now materializes
+  recurring outcome patterns into draft skills without manual curation, and
+  `detect_skill_coactivation_candidates()` exposes a Voyager-style detector
+  that groups `skill_usage` by session and surfaces co-occurring pairs as
+  composite-skill candidates via `nexo_skill_compose_candidates`.
+- New `retroactive_learnings.apply_learning_retroactively()` walks recent
+  decisions, scores them against a newly-added learning, and opens
+  deterministic `NF-RETRO-L<id>-D<id>` followups when the learning would have
+  changed the decision. Exposed via `nexo_learning_apply_retroactively`.
+- Adaptive learned-weight rollback now surfaces as a visible followup on the
+  next heartbeat so the operator sees the runtime has backed off instead of
+  the signal staying inside `adaptive_log`.
+- New Cortex quality cron (`scripts/nexo-cortex-cycle.py`, every 6h via
+  `src/crons/manifest.json`) watches accept_rate / linked_success /
+  override_gap thresholds and opens `NF-CORTEX-QUALITY-DROP` idempotently
+  when Cortex quality degrades between cycles.
+- `nexo_heartbeat` surfaces open `protocol_debt` rows for the active task so
+  the agent cannot drift past a dropped discipline rule silently.
+- Deep-sleep `code_change` actions now stage their findings into
+  `evolution_log` with proposal payloads so the evolution cycle can apply
+  them, closing the end-to-end loop from observation → synthesis → apply.
+
+### Phase 3 — cognitive subsystems close their own loops with user-visible evidence
+- `cognitive._search.search()` now accepts `dream_weight: float` and reranks
+  dream-insight memories through that weight when set. A new
+  `_somatic_boost_results()` step (max +0.10) folds somatic markers into the
+  same reranking path, so emotional salience and dream salience are both
+  first-class signals instead of dead columns.
+- State watchers now open and auto-resolve deterministic `NF-WATCHER-{id}`
+  followups through `_open_watcher_followup` /
+  `_resolve_watcher_followup`, so a watcher firing is always externally
+  observable rather than buried in runtime logs.
+- Cognitive-decay now surfaces correction fatigue as a visible followup when
+  the fatigue signal crosses its threshold, instead of only adjusting
+  memory weights invisibly.
+- Hook lifecycle observability: new `src/hook_observability.py` +
+  `src/scripts/nexo-hook-record.py` shim record hook runs into a `hook_runs`
+  table (migration m39) with 3 indexes. `nexo_hook_runs` tool exposes recent
+  runs + a health summary so hook failures surface instead of silently
+  dropping work.
+- `auto_update` is now guarded by POSIX `fcntl.flock` with stale-steal at 10
+  minutes, fixing a race where two concurrent `nexo update` invocations could
+  stomp each other mid-sync.
+
+### Phase 4 — automated lint / security / coverage / release gates on every PR
+- New `.github/workflows/lint.yml` enforces ruff `E9 / F63 / F7 / F82 / F821`
+  on every PR and push to main. Baseline pass fixed 5 latent F821 bugs in
+  `cognitive/_memory.py`, `cognitive/_ingest.py`, `tools_menu.py`.
+- New `.github/workflows/security.yml` runs `bandit -r src/` at
+  `high severity + high confidence`. Baseline pass fixed 10 weak-hash flags
+  (`usedforsecurity=False`) across `plugins/protocol.py`, `plugins/simple_api.py`,
+  `scripts/check-context.py`, `scripts/deep-sleep/apply_findings.py`,
+  `scripts/deep-sleep/synthesize.py`, and `scripts/nexo-daily-self-audit.py`.
+- Coverage baseline tests (`test_decay_baseline.py`, `test_trust_baseline.py`,
+  `test_plugin_loader_baseline.py`, `test_fase4_lint_baseline.py`,
+  `test_security_baseline.py`, `test_release_readiness_baseline.py`) pin the
+  contract surface area of the cognitive / plugin loading / security / release
+  stack so a refactor cannot silently delete it.
+- `.github/workflows/release-readiness.yml` now runs
+  `verify_release_readiness.py --ci` on **every PR** instead of only on tag
+  push, which means a PR that breaks the release contract fails loudly
+  instead of waiting until release time to surface.
+- `requirements-dev.txt` pins `ruff>=0.6.0`, `pytest-cov>=4.0`, and
+  `bandit[toml]>=1.7`. `pyproject.toml` carries the ruff / bandit / pytest
+  configuration so local dev matches CI exactly.
+
+### Phase 5 — shippable differentiators vs existing memory frameworks
+- Bitemporal Knowledge Graph export: `knowledge_graph.export_to_jsonld()` and
+  `knowledge_graph.export_to_graphml()` emit the full graph in JSON-LD (with
+  `nexo:*` vocabulary) or GraphML (for igraph / Gephi / NetworkX / Cytoscape).
+  Both accept an `as_of` ISO timestamp that replays the historical snapshot
+  through `kg_edges.valid_from / valid_until`. Exposed via `nexo_kg_export`.
+- OpenTelemetry integration: new `src/observability.py` soft-imports
+  `opentelemetry` and only activates when `OTEL_EXPORTER_OTLP_ENDPOINT` or
+  `OTEL_SERVICE_NAME` is set. `tool_span()` is a no-op context manager when
+  OTEL is disabled and a real span when enabled, so NEXO can be traced with
+  `ai.tool.*` semantic conventions without a hard dependency.
+- `benchmarks/results/comparison-vs-competition-2026-04.md` documents an
+  honest feature matrix vs Letta, Mem0, Zep, Graphiti, Cognee, and DSPy so
+  the differentiators (bitemporal KG, metacognitive guard, trust scoring,
+  Atkinson-Shiffrin decay, native MCP surface) are defensible with receipts.
+- Voyager-style skill co-activation detector (see Phase 2) ships as the first
+  evidence of automated skill composition from live usage.
+
+### Audit followups (NEXO-AUDIT-2026-04-11) — closed under evidence
+- `nexo_heartbeat` now auto-fires `compute_mode` every heartbeat so
+  `adaptive_log` actually gets populated from live signals instead of staying
+  empty.
+- Server FastMCP instructions now tell the agent to register outcomes
+  proactively, closing the gap where tools existed but the agent didn't know
+  it was supposed to call them.
+- Every other Phase 2-5 followup was either marked `resolved` with evidence
+  or left as an explicit tracked followup with a clear next action.
+
+### Release safety — v5.0.x → v5.1.0 update path
+- `auto_update._reload_launch_agents_after_bump()` now `launchctl unload`s
+  and re-`load`s every `com.nexo.*.plist` after a version bump on macOS, so
+  long-lived crons pick up the new codebase automatically instead of running
+  the pre-bump version until the next reboot.
+- Migrations m38 (`evolution_log.proposal_payload`) and m39 (`hook_runs` +
+  3 indexes) are idempotent `ALTER TABLE` / `CREATE TABLE IF NOT EXISTS`
+  statements safe to re-run across every v5.0.x baseline.
+- `tests/test_update_path_and_reload.py` pins the hot-reload + migration
+  contract. `tests/test_auto_update_lock.py` pins the concurrent-run
+  protection so a regression here fails CI instead of corrupting a real
+  install.
+
+### Validation
+- `python3 -m pytest tests/ -q` — all tests passing.
+- `python3 scripts/verify_release_readiness.py --ci --contract release-contracts/v5.1.0.json --require-contract-complete` passes locally and in CI.
+- ruff + bandit + release-readiness workflows all green on main.
+- Live runtime `nexo doctor --tier all` returns `HEALTHY` after sync.
+
 ## [5.0.4] - 2026-04-11
 
 ### Runtime Bridge + Doctor Signal Cleanup
