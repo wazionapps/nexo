@@ -734,6 +734,123 @@ def auto_promote_outcome_patterns_to_skills(
     }
 
 
+def detect_skill_coactivation_candidates(
+    *,
+    min_co_occurrence: int = 3,
+    min_success_rate: float = 0.6,
+    limit: int = 20,
+) -> list[dict]:
+    """Detect pairs of skills that fire together and could be composed.
+
+    Closes Fase 5 item 5 of NEXO-AUDIT-2026-04-11. NEXO already has
+    compose_skills (manual composer), auto_promote_outcome_patterns_to_skills
+    (Fase 2 item 2), and auto_promote_skill_evolution (guide → executable
+    draft). What it lacked is the Voyager-style observation pass: when
+    the same two skills are used inside the same session multiple times,
+    a composite skill probably wants to exist.
+
+    This function reads skill_usage rows, groups by session_id to get
+    the set of skills per session, builds a co-occurrence count over
+    all unordered pairs, and returns candidates whose count is at or
+    above min_co_occurrence and whose joint success rate is at or
+    above min_success_rate.
+
+    Args:
+        min_co_occurrence: minimum number of sessions both skills must
+            have co-occurred in. Default 3 — same threshold the
+            outcome_pattern detector uses.
+        min_success_rate: minimum joint success rate (success rows /
+            total rows for the pair). Default 0.6.
+        limit: max candidates to return. Default 20.
+
+    Returns a list (newest co-occurrence first):
+        [
+          {
+            "skill_a": str, "skill_b": str,
+            "co_occurrence": int,
+            "joint_success_rate": float,
+            "sessions": [session_id, ...],
+            "suggested_skill_id": str,   # canonical id for the composite
+          },
+          ...
+        ]
+
+    Pure DB read, never raises. Empty list when skill_usage table is
+    missing or no candidates qualify.
+    """
+    _ensure_ready()
+    try:
+        from db import get_db
+        conn = get_db()
+        # Sanity check the table exists.
+        conn.execute("SELECT 1 FROM skill_usage LIMIT 1").fetchone()
+    except Exception:
+        return []
+
+    try:
+        rows = conn.execute(
+            "SELECT skill_id, session_id, success FROM skill_usage "
+            "WHERE session_id IS NOT NULL AND session_id != '' "
+            "ORDER BY created_at DESC LIMIT 5000"
+        ).fetchall()
+    except Exception:
+        return []
+
+    by_session: dict[str, list[tuple[str, int]]] = {}
+    for row in rows:
+        sid = (row["session_id"] or "").strip() if hasattr(row, "keys") else (row[1] or "").strip()
+        if not sid:
+            continue
+        skill_id = row["skill_id"] if hasattr(row, "keys") else row[0]
+        success = row["success"] if hasattr(row, "keys") else row[2]
+        by_session.setdefault(sid, []).append((skill_id, int(success or 0)))
+
+    pair_stats: dict[tuple[str, str], dict] = {}
+    for sid, usages in by_session.items():
+        # Distinct skills with their best (any) success in this session.
+        seen_in_session: dict[str, int] = {}
+        for skill_id, success in usages:
+            seen_in_session[skill_id] = max(seen_in_session.get(skill_id, 0), success)
+        skills_in_session = sorted(seen_in_session.keys())
+        if len(skills_in_session) < 2:
+            continue
+        for i in range(len(skills_in_session)):
+            for j in range(i + 1, len(skills_in_session)):
+                pair = (skills_in_session[i], skills_in_session[j])
+                stats = pair_stats.setdefault(
+                    pair,
+                    {"co_occurrence": 0, "joint_success": 0, "sessions": []},
+                )
+                stats["co_occurrence"] += 1
+                # Joint success: both skills succeeded in this session.
+                if seen_in_session[pair[0]] and seen_in_session[pair[1]]:
+                    stats["joint_success"] += 1
+                stats["sessions"].append(sid)
+
+    candidates: list[dict] = []
+    for (skill_a, skill_b), stats in pair_stats.items():
+        co = stats["co_occurrence"]
+        if co < int(min_co_occurrence):
+            continue
+        rate = stats["joint_success"] / co if co > 0 else 0.0
+        if rate < float(min_success_rate):
+            continue
+        # Deterministic suggested id derived from the pair so re-running
+        # the detector points at the same composite skill.
+        suggested_id = "SK-COMPOSE-" + "+".join(sorted([skill_a, skill_b]))
+        candidates.append({
+            "skill_a": skill_a,
+            "skill_b": skill_b,
+            "co_occurrence": co,
+            "joint_success_rate": round(rate, 3),
+            "sessions": stats["sessions"][:5],
+            "suggested_skill_id": suggested_id,
+        })
+
+    candidates.sort(key=lambda c: (-c["co_occurrence"], -c["joint_success_rate"]))
+    return candidates[: max(1, int(limit))]
+
+
 def auto_promote_skill_evolution(approved_by: str = "system:auto") -> dict:
     """Convert mature guide skills into executable drafts without manual approval."""
     _ensure_ready()
