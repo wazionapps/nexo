@@ -1,5 +1,95 @@
 # Changelog
 
+## [5.2.0] - 2026-04-12
+
+### Response contract i18n & scoring — cortex-quality snapshot reader
+
+A focused minor release that closes two real gaps in the Cortex layer
+identified during the audit of the response-contract behaviour: the
+`HIGH_STAKES_KEYWORDS` detector was English-only and had no way to
+reward tasks with meaningful prior context, and the `nexo-cortex-cycle`
+cron was writing a quality snapshot that no reader ever consumed.
+
+#### Protocol — response contract Fase 1
+
+- **Bilingual high-stakes detection.** `HIGH_STAKES_KEYWORDS_ES` adds ~45
+  Spanish keywords (`crítico`, `producción`, `facturación`, `clientes`,
+  `despliegue`, `credencial`, `privacidad`, `reembolso`, accented and
+  unaccented variants). A task written in Spanish now trips the same
+  high-stakes gate as its English twin — previously a goal like
+  *"migrar la base de datos de producción"* silently skipped the
+  high-stakes penalty because none of its words matched the English set.
+- **Negation-aware detection.** `NEGATION_PATTERNS` suppresses the
+  high-stakes flag when the text explicitly disclaims touching the
+  sensitive area (`sin afectar producción`, `no tocar prod`,
+  `without touching production`, `don't modify`, etc.). Before this
+  release these boundary statements caused false positives because the
+  raw keyword was physically present in the string. `_detect_high_stakes`
+  now runs negation suppression before keyword matching.
+- **Positive signals on the confidence score.** `evaluate_response_confidence`
+  accepts two new optional kwargs:
+  - `pre_action_context_hits: int` — adds `+min(10, hits*2)` when the
+    pre-action context lookup returned relevant prior context
+  - `area_has_atlas_entry: bool` — adds `+5` when the task's area is a
+    known entry in `project-atlas.json`
+  Both are capped so they can never override a real risk signal. Before
+  this release the score was purely a penalty accumulator; there was no
+  mechanism to reward a task that *did* load the right context, which
+  meant the final score drifted downward even when the agent was well
+  prepared.
+- **Numeric safeguard over the boolean decision tree.** After the
+  existing `high_stakes/unknowns/evidence/verification` rules pick a
+  mode, `evaluate_response_confidence` now applies a monotonic
+  safeguard: `answer` with `final_score < 50` is downgraded to `verify`,
+  and `verify` with `high_stakes=true` and `final_score < 30` is
+  downgraded to `defer`. The safeguard can only make response
+  discipline *stricter*, never looser. This catches edge cases where
+  accumulated soft penalties didn't trip any single boolean rule but
+  the confidence was objectively low.
+
+#### Cortex — quality snapshot reader
+
+- **`handle_cortex_quality` now reads the cron snapshot.** The
+  `nexo-cortex-cycle` cron (every 6h, `src/scripts/nexo-cortex-cycle.py`)
+  has been writing `$NEXO_HOME/operations/cortex-quality-latest.json`
+  since v5.1.0, with an explicit promise in its own docstring that
+  *"dashboards / morning briefings can read fresh metrics without
+  re-running the SQL"*. That reader never existed —
+  `handle_cortex_quality` recomputed the summary from the DB on every
+  call. This release closes the loop: the handler now serves the cached
+  snapshot when `days in {1, 7}`, the file is fresh (< 6h 30m old), and
+  `schema == 1`. Any failure (missing file, corrupt JSON, stale
+  timestamp, unknown window, schema mismatch) falls back silently to
+  the live `cortex_evaluation_summary` computation. The cache is a
+  performance optimisation, never a correctness dependency.
+- **Observable source.** The handler's JSON response now includes
+  `"source": "cache" | "live"` so callers (dashboards, morning
+  briefings, agents) can tell which path was taken without extra
+  tooling.
+
+#### Tests
+
+- `tests/test_protocol.py` — 9 new tests covering:
+  - Spanish keyword detection (accented and unaccented)
+  - Negation suppression (bilingual)
+  - Positive signal boosts (capped)
+  - Numeric safeguard transitions
+  - Score bounds
+- `tests/test_cortex_quality_cache.py` — 7 new tests covering:
+  - Fresh cache hit serves 7d / 1d windows without touching the DB
+  - Stale cache (>6h 30m) falls back to live
+  - Corrupt schema falls back to live
+  - Invalid JSON falls back to live
+  - Missing file falls back to live
+  - Non-cached windows (e.g. 30d) always use live
+
+All pre-existing cortex + protocol tests continue to pass — the new
+positive-signal kwargs are defaulted so no existing caller is broken,
+and the numeric safeguard is monotonic over the existing boolean tree.
+
+No breaking changes, no bootstrap / startup / Deep Sleep / client
+parity surfaces touched.
+
 ## [5.1.1] - 2026-04-12
 
 ### Release trace hygiene — runtime + self-audit + diary

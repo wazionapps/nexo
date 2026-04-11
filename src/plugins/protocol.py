@@ -64,6 +64,74 @@ HIGH_STAKES_KEYWORDS = {
     "revenue",
     "cost",
 }
+# v5.2.0: Spanish high-stakes keywords. Parity with the English set so a
+# goal written in Spanish ("migrar producción a nuevo servidor") trips
+# the same high-stakes gate as its English twin. Accented and unaccented
+# variants are both listed because user prompts mix both freely.
+HIGH_STAKES_KEYWORDS_ES = {
+    "crítico",
+    "critico",
+    "crítica",
+    "critica",
+    "producción",
+    "produccion",
+    "cliente",
+    "clientes",
+    "despliegue",
+    "desplegar",
+    "pago",
+    "pagos",
+    "facturación",
+    "facturacion",
+    "factura",
+    "credencial",
+    "credenciales",
+    "contraseña",
+    "seguridad",
+    "legal",
+    "médico",
+    "medico",
+    "financiero",
+    "financiera",
+    "privacidad",
+    "marca",
+    "reputación",
+    "reputacion",
+    "ingresos",
+    "borrar",
+    "eliminar",
+    "migración",
+    "migracion",
+    "migrar",
+    "lanzamiento",
+    "lanzar",
+    "precio",
+    "precios",
+    "reembolso",
+    "público",
+    "publico",
+    "riesgo",
+    "riesgos",
+    "coste",
+    "costes",
+    "ventas",
+    "pedido",
+    "pedidos",
+}
+# v5.2.0: Negation patterns that should SUPPRESS the high-stakes flag.
+# Without this, a user message like "sin afectar producción" or
+# "no tocar prod" triggers a false positive just because the keyword
+# is physically present. Bilingual and conservative on purpose.
+NEGATION_PATTERNS = (
+    re.compile(r"\bno\s+tocar\s+prod(?:ucci[oó]n|uccion)?\b", re.IGNORECASE),
+    re.compile(r"\bsin\s+(?:tocar|afectar|romper|modificar)\b", re.IGNORECASE),
+    re.compile(r"\bnunca\s+(?:borrar|eliminar|tocar)\b", re.IGNORECASE),
+    re.compile(r"\bno\s+(?:borrar|eliminar|tocar|modificar)\b", re.IGNORECASE),
+    re.compile(r"\bevitar\s+(?:borrar|eliminar|tocar|romper)\b", re.IGNORECASE),
+    re.compile(r"\bavoid\s+(?:deleting|touching|breaking|modifying)\b", re.IGNORECASE),
+    re.compile(r"\bdon'?t\s+(?:touch|break|modify|delete)\b", re.IGNORECASE),
+    re.compile(r"\bwithout\s+(?:touching|breaking|affecting)\b", re.IGNORECASE),
+)
 
 
 def _parse_list(value) -> list[str]:
@@ -104,9 +172,32 @@ def _parse_int_list(value) -> list[int]:
     return parsed
 
 
+def _has_negation_context(text: str) -> bool:
+    """Return True when the text explicitly disclaims touching the sensitive area.
+
+    Used to suppress high-stakes false positives where the user is stating
+    the *boundary* of safe work ("without touching production") rather than
+    the *target* of a risky action ("migrate production").
+    """
+    if not text:
+        return False
+    return any(pattern.search(text) for pattern in NEGATION_PATTERNS)
+
+
 def _detect_high_stakes(*parts: str) -> bool:
     combined = " ".join((part or "").strip().lower() for part in parts if part)
-    return any(keyword in combined for keyword in HIGH_STAKES_KEYWORDS)
+    if not combined:
+        return False
+    # Negation override: "sin afectar producción" / "don't touch prod" / etc.
+    # Explicit disclaimers suppress the flag even if a high-stakes keyword
+    # is physically present, otherwise boundary statements get miscategorised
+    # as action targets.
+    if _has_negation_context(combined):
+        return False
+    return any(
+        keyword in combined
+        for keyword in HIGH_STAKES_KEYWORDS | HIGH_STAKES_KEYWORDS_ES
+    )
 
 
 def _decision_support_required(*, task_type: str, high_stakes: bool) -> bool:
@@ -124,6 +215,8 @@ def evaluate_response_confidence(
     unknowns=None,
     verification_step: str = "",
     stakes: str = "",
+    pre_action_context_hits: int = 0,
+    area_has_atlas_entry: bool = False,
 ) -> dict:
     evidence_refs = _parse_list(evidence_refs)
     unknowns = _parse_list(unknowns)
@@ -152,6 +245,22 @@ def evaluate_response_confidence(
         score -= 20
         reasons.append("high-stakes context detected")
 
+    # v5.2.0: Positive signals. Before this release the score was purely
+    # a penalty accumulator — there was no way to reward tasks that had
+    # meaningful prior context loaded or that sat inside a known area.
+    # Cap at +10 and +5 so these can never override a real risk signal.
+    if pre_action_context_hits > 0:
+        boost = min(10, pre_action_context_hits * 2)
+        score += boost
+        reasons.append(
+            f"+{boost} from {pre_action_context_hits} pre-action context hit(s)"
+        )
+    if area_has_atlas_entry:
+        score += 5
+        reasons.append("+5 from known project-atlas area")
+
+    final_score = max(0, min(100, score))
+
     mode = "answer"
     if task_type in RESPONSE_TASKS:
         if high_stakes and (unknowns or not evidence_refs):
@@ -160,6 +269,23 @@ def evaluate_response_confidence(
             mode = "ask"
         elif high_stakes or not evidence_refs or not verification_step.strip():
             mode = "verify"
+
+        # v5.2.0: Numeric safeguard. The boolean decision tree above
+        # covers every obvious case, but tasks can accumulate soft
+        # penalties without tripping any single rule. When the final
+        # score is critically low, downgrade the mode by one step.
+        # This catches edge cases and is monotonic — it can only make
+        # the response discipline stricter, never looser.
+        if mode == "answer" and final_score < 50:
+            mode = "verify"
+            reasons.append(
+                f"numeric safeguard: score {final_score} < 50 forces verify"
+            )
+        elif mode == "verify" and final_score < 30 and high_stakes:
+            mode = "defer"
+            reasons.append(
+                f"numeric safeguard: high-stakes with score {final_score} forces defer"
+            )
 
     next_action = {
         "answer": "You may answer directly, but stay within the evidence you actually have.",
@@ -170,7 +296,7 @@ def evaluate_response_confidence(
 
     return {
         "mode": mode,
-        "confidence": max(0, min(100, score)),
+        "confidence": final_score,
         "high_stakes": high_stakes,
         "reasons": reasons,
         "next_action": next_action,

@@ -87,6 +87,14 @@ Versions `3.1.7` through `3.2.0` close the recent-memory gap:
 - when even that misses, NEXO now exposes raw transcript fallback tools for Claude Code and Codex session stores
 - NEXO can now inspect itself through a live system catalog derived from canonical sources instead of relying only on stale docs or operator memory
 
+Version `5.2.0` closes two focused gaps in the Cortex layer that were left open by the v5.1 audit — the high-stakes response-contract detector was English-only, and the `nexo-cortex-cycle` cron was writing a quality snapshot that no reader ever consumed:
+
+- `HIGH_STAKES_KEYWORDS_ES` adds ~45 Spanish keywords to the high-stakes detector with accented and unaccented variants, so a goal written in Spanish (`migrar la base de datos de producción`) trips the same gate as its English twin.
+- `NEGATION_PATTERNS` suppresses false positives when the user explicitly disclaims touching the sensitive area (`sin afectar producción`, `no tocar prod`, `without touching production`, `don't modify`). The raw keyword being present is no longer enough to flag the task.
+- `evaluate_response_confidence` accepts two new optional kwargs, `pre_action_context_hits` (+up to 10) and `area_has_atlas_entry` (+5), so the score can finally reward tasks that loaded real context instead of only punishing unprepared ones. Both signals are capped and cannot override a real risk penalty.
+- A monotonic numeric safeguard layers on top of the boolean decision tree: `answer` downgrades to `verify` when `final_score < 50`, and `verify` downgrades to `defer` when `high_stakes` and `final_score < 30`. The safeguard can only make response discipline stricter, never looser.
+- `handle_cortex_quality` in `src/plugins/cortex.py` now reads `$NEXO_HOME/operations/cortex-quality-latest.json` when the requested window (7 or 1 days) is fresh (<6h 30m) and the schema matches — silent fallback to the live SQL computation on any failure. The handler's JSON response now includes `"source": "cache" | "live"` for observability.
+
 Version `5.1.0` lands the full NEXO-AUDIT-2026-04-11 roadmap as a single minor bump — every open evolution / adaptive / cognitive / skills loop now closes under itself, the knowledge graph exports cleanly, OpenTelemetry spans can be turned on without a hard dependency, and every PR has to clear lint, security, coverage, and release-readiness gates before it can merge:
 
 - Evolution cycle now auto-applies user-approved proposals on the next run (backed by the new idempotent migration `m38`), adaptive learned-weight rollbacks surface as visible followups, outcome patterns auto-promote to draft skills, and a Voyager-style detector exposes co-occurring skill pairs as composite-skill candidates via `nexo_skill_compose_candidates`.
