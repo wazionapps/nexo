@@ -603,6 +603,35 @@ def _handle_heartbeat_inner(sid: str, task: str, context_hint: str = '') -> str:
         except Exception:
             pass  # Best-effort reminder only
 
+    # Adaptive mode auto-fire from heartbeat. Closes the audit-followup
+    # adaptive_log circuit: previously the table only filled when an agent
+    # explicitly called nexo_adaptive_mode with signals, which almost never
+    # happened in normal flow. Result: the learn_weights() pipeline (Fase 2
+    # item 4) had zero training data and the shadow→active graduation
+    # never fired. Now every heartbeat derives the 6 signals from the
+    # context_hint and task fields and runs compute_mode, which writes one
+    # adaptive_log row per heartbeat. Wrapped in best-effort try/except so
+    # a failure here cannot block the heartbeat itself.
+    try:
+        if context_hint and len(context_hint.strip()) >= 5:
+            from plugins.adaptive_mode import compute_mode
+            from cognitive._trust import detect_sentiment
+            sentiment = detect_sentiment(context_hint)
+            vibe_label = sentiment.get("sentiment", "neutral")
+            vibe_intensity = float(sentiment.get("intensity", 0.5) or 0.5)
+            # Heuristic signal derivation — same fields the manual tool
+            # would feed compute_mode with, just synthesized from context.
+            compute_mode(
+                vibe=vibe_label,
+                vibe_intensity=vibe_intensity,
+                recent_corrections=0,  # heartbeat does not see explicit corrections
+                user_msg_length=len(context_hint),
+                context_hint=context_hint[:300],
+                tool_had_error=False,  # heartbeat is post-tool, not pre-tool
+            )
+    except Exception:
+        pass  # Best-effort, never block heartbeat
+
     # Protocol debt surfacing: if this session has open debts, warn so the
     # agent can resolve them with nexo_protocol_debt_resolve before claiming
     # any task complete. Mirrors task_open / task_close behavior so that
