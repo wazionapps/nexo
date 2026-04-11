@@ -1,62 +1,53 @@
-"""Opportunistic maintenance — run overdue tasks on MCP startup."""
+"""Placeholder module for historical `maintenance` runner.
 
-import time
-from datetime import datetime, timezone
-from db import get_db
+HISTORICAL CONTEXT (NEXO-AUDIT-2026-04-11 finding, Learning #194)
+==================================================================
 
+This module previously exposed `check_and_run_overdue()` and a private
+`_run_task()` dispatcher that walked the `maintenance_schedule` table and
+executed cognitive decay, synthesis, self audit, weight learning, somatic
+decay, somatic projection, drive decay and graph maintenance as needed.
 
-def check_and_run_overdue():
-    conn = get_db()
-    rows = conn.execute("SELECT task_name, interval_hours, last_run_at FROM maintenance_schedule").fetchall()
-    ran = []
-    for row in rows:
-        task = row["task_name"]
-        interval = row["interval_hours"]
-        last_run = row["last_run_at"]
-        if last_run:
-            try:
-                last_dt = datetime.strptime(last_run, "%Y-%m-%dT%H:%M:%S")
-                hours_since = (datetime.now(timezone.utc).replace(tzinfo=None) - last_dt).total_seconds() / 3600
-                if hours_since < interval:
-                    continue
-            except (ValueError, TypeError):
-                pass
-        start = time.time()
-        try:
-            _run_task(task)
-            duration_ms = int((time.time() - start) * 1000)
-            conn.execute(
-                "UPDATE maintenance_schedule SET last_run_at = ?, last_duration_ms = ?, "
-                "run_count = run_count + 1 WHERE task_name = ?",
-                (datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%dT%H:%M:%S"), duration_ms, task))
-            conn.commit()
-            ran.append({"task": task, "duration_ms": duration_ms})
-        except Exception as e:
-            ran.append({"task": task, "error": str(e)})
-    return ran
+None of that code was ever called from anywhere. A repository-wide grep
+for `check_and_run_overdue`, `from maintenance`, `import maintenance` and
+`maintenance.check` produced zero hits during the 2026-04-11 audit. Each
+of those tasks actually runs from its own LaunchAgent via its own script
+in `src/scripts/` (e.g. `nexo-cognitive-decay.py`, `nexo-daily-self-audit
+.py`, `nexo-evolution-run.py`), not through this dispatcher. The
+`maintenance_schedule` table in SQLite is still populated by migrations
+(see `db/_schema.py::_m9_maintenance_schedule` and the drive_decay
+registration) but is effectively dead data: nothing reads it.
 
+Why the dispatcher was removed
+------------------------------
+The dead dispatcher was actively misleading: developers reading the code
+could reasonably conclude that adding a row to `maintenance_schedule`
+would cause the named task to run. It would not. That false contract
+was the root of a near-miss during the Item 9 fix of the 2026-04-11
+audit, where the first plan was to register a new `read_token_cleanup`
+task via this mechanism before discovering that the mechanism is never
+invoked. See `src/db/_reminders.py::_purge_expired_read_tokens_if_due`
+for the opportunistic-cleanup pattern that replaced that initial plan.
 
-def _run_task(task_name: str):
-    import cognitive
-    if task_name == "cognitive_decay":
-        cognitive.apply_decay()
-        cognitive.promote_stm_to_ltm()
-        cognitive.gc_stm()
-    elif task_name == "somatic_decay":
-        cognitive.somatic_nightly_decay()
-    elif task_name == "somatic_projection":
-        cognitive.somatic_project_events()
-    elif task_name == "weight_learning":
-        try:
-            import sys, os
-            sys.path.insert(0, os.path.join(os.path.dirname(__file__), "plugins"))
-            from adaptive_mode import learn_weights, prune_adaptive_log
-            learn_weights()
-            prune_adaptive_log()
-        except Exception:
-            pass
-    elif task_name == "drive_decay":
-        from db import decay_drive_signals
-        decay_drive_signals()
-    elif task_name == "graph_maintenance":
-        pass  # Future: orphan cleanup, consolidation
+What to do if you need scheduled maintenance
+--------------------------------------------
+Do NOT reintroduce a dispatcher in this module. Pick one of:
+
+  * Add your work to an existing LaunchAgent script under
+    `src/scripts/` that already runs on the cadence you need.
+  * Register a new personal script via `nexo_personal_script_create` and
+    let the schedule/LaunchAgent system handle it.
+  * Run the cleanup opportunistically inside the hot path, throttled
+    by wall-clock (see `_purge_expired_read_tokens_if_due`).
+
+What happens to the `maintenance_schedule` table
+-------------------------------------------------
+The table is intentionally left in place. Removing it would require a
+destructive migration for every installed user with no benefit — the
+rows do no harm, cost a few KB each, and their removal is deferred to a
+future cleanup pass when migration numbering is renegotiated.
+"""
+
+from __future__ import annotations
+
+__all__: list[str] = []
