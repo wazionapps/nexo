@@ -75,7 +75,8 @@ def evolution_env(tmp_path, monkeypatch):
         "id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT DEFAULT (datetime('now')), "
         "cycle_number INTEGER NOT NULL, dimension TEXT NOT NULL, proposal TEXT NOT NULL, "
         "classification TEXT NOT NULL DEFAULT 'auto', status TEXT DEFAULT 'pending', "
-        "files_changed TEXT, snapshot_ref TEXT, test_result TEXT, impact INTEGER DEFAULT 0, reasoning TEXT NOT NULL)"
+        "files_changed TEXT, snapshot_ref TEXT, test_result TEXT, impact INTEGER DEFAULT 0, "
+        "reasoning TEXT NOT NULL, proposal_payload TEXT DEFAULT NULL)"
     )
     conn.execute(
         "CREATE TABLE evolution_metrics ("
@@ -646,3 +647,310 @@ class TestPublicContributionExecution:
         assert marks == ["peer_reviewed:1"]
         assert saved
         assert saved[-1]["history"][0]["mode"] == "public_core_review"
+
+
+class TestApplyAcceptedProposals:
+    """Fase 2 item 1: user-approved proposals must actually be applied.
+
+    Before m38 + _apply_accepted_proposals, calling nexo_evolution_approve
+    just flipped status to 'accepted' and the row was never consumed.
+    These tests pin the closed loop: the runner reads accepted rows that
+    have a proposal_payload and runs them through execute_auto_proposal.
+    """
+
+    def _seed_accepted(
+        self,
+        env: Path,
+        *,
+        action: str,
+        changes: list[dict],
+        cycle_number: int = 1,
+        dimension: str = "reliability",
+        reasoning: str = "user approved",
+        payload_override: object = None,
+    ) -> int:
+        conn = sqlite3.connect(str(env / "data" / "nexo.db"))
+        try:
+            payload = (
+                payload_override
+                if payload_override is not None
+                else json.dumps({
+                    "classification": "propose",
+                    "dimension": dimension,
+                    "action": action,
+                    "reasoning": reasoning,
+                    "scope": "local",
+                    "changes": changes,
+                })
+            )
+            cur = conn.execute(
+                "INSERT INTO evolution_log (cycle_number, dimension, proposal, classification, "
+                "reasoning, status, proposal_payload) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (cycle_number, dimension, action, "propose", reasoning, "accepted", payload),
+            )
+            conn.commit()
+            return int(cur.lastrowid)
+        finally:
+            conn.close()
+
+    def test_apply_accepted_runs_user_approved_proposal_and_marks_applied(
+        self, evolution_env, monkeypatch
+    ):
+        target = evolution_env / "scripts" / "approved_patch.py"
+        target.write_text("print('before')\n")
+
+        _, runner = _load_runner_module(monkeypatch, evolution_env)
+        runner.dry_run_restore_test = lambda: True
+
+        log_id = self._seed_accepted(
+            evolution_env,
+            action="Apply user-approved patch",
+            changes=[
+                {
+                    "file": str(target),
+                    "operation": "replace",
+                    "search": "print('before')\n",
+                    "content": "print('after')\n",
+                }
+            ],
+        )
+
+        conn = sqlite3.connect(str(evolution_env / "data" / "nexo.db"))
+        conn.row_factory = sqlite3.Row
+        try:
+            stats = runner._apply_accepted_proposals(
+                conn, cycle_num=2, max_to_apply=3, evolution_mode="managed"
+            )
+            row = conn.execute(
+                "SELECT status, files_changed, test_result FROM evolution_log WHERE id = ?",
+                (log_id,),
+            ).fetchone()
+        finally:
+            conn.close()
+
+        assert stats["attempted"] == 1
+        assert stats["applied"] == 1
+        assert stats["rolled_back"] == 0
+        assert stats["blocked"] == 0
+        assert stats["skipped"] == 0
+        assert stats["failed"] == 0
+        assert row["status"] == "applied"
+        assert str(target) in (row["files_changed"] or "")
+        assert target.read_text() == "print('after')\n"
+
+    def test_apply_accepted_skips_rows_without_payload(self, evolution_env, monkeypatch):
+        _, runner = _load_runner_module(monkeypatch, evolution_env)
+
+        # Pre-m38 row: payload is NULL. Must NOT be touched.
+        conn = sqlite3.connect(str(evolution_env / "data" / "nexo.db"))
+        cur = conn.execute(
+            "INSERT INTO evolution_log (cycle_number, dimension, proposal, classification, "
+            "reasoning, status, proposal_payload) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (1, "reliability", "Pre-m38 legacy row", "propose", "legacy", "accepted", None),
+        )
+        legacy_id = cur.lastrowid
+        conn.commit()
+        conn.close()
+
+        conn = sqlite3.connect(str(evolution_env / "data" / "nexo.db"))
+        conn.row_factory = sqlite3.Row
+        try:
+            stats = runner._apply_accepted_proposals(
+                conn, cycle_num=2, max_to_apply=3, evolution_mode="managed"
+            )
+            row = conn.execute(
+                "SELECT status FROM evolution_log WHERE id = ?", (legacy_id,)
+            ).fetchone()
+        finally:
+            conn.close()
+
+        assert stats["attempted"] == 0
+        assert stats["applied"] == 0
+        assert row["status"] == "accepted"  # legacy row untouched
+
+    def test_apply_accepted_marks_skipped_when_payload_invalid_json(
+        self, evolution_env, monkeypatch
+    ):
+        _, runner = _load_runner_module(monkeypatch, evolution_env)
+
+        log_id = self._seed_accepted(
+            evolution_env,
+            action="Bad payload row",
+            changes=[],
+            payload_override="not-json{{",
+        )
+
+        conn = sqlite3.connect(str(evolution_env / "data" / "nexo.db"))
+        conn.row_factory = sqlite3.Row
+        try:
+            stats = runner._apply_accepted_proposals(
+                conn, cycle_num=2, max_to_apply=3, evolution_mode="managed"
+            )
+            row = conn.execute(
+                "SELECT status, test_result FROM evolution_log WHERE id = ?", (log_id,)
+            ).fetchone()
+        finally:
+            conn.close()
+
+        assert stats["skipped"] == 1
+        assert stats["applied"] == 0
+        assert row["status"] == "skipped"
+        assert "Invalid proposal_payload JSON" in (row["test_result"] or "")
+
+    def test_apply_accepted_marks_skipped_when_changes_array_missing(
+        self, evolution_env, monkeypatch
+    ):
+        _, runner = _load_runner_module(monkeypatch, evolution_env)
+
+        log_id = self._seed_accepted(
+            evolution_env,
+            action="No changes row",
+            changes=[],  # empty list, payload object will end up with []
+        )
+
+        conn = sqlite3.connect(str(evolution_env / "data" / "nexo.db"))
+        conn.row_factory = sqlite3.Row
+        try:
+            stats = runner._apply_accepted_proposals(
+                conn, cycle_num=2, max_to_apply=3, evolution_mode="managed"
+            )
+            row = conn.execute(
+                "SELECT status, test_result FROM evolution_log WHERE id = ?", (log_id,)
+            ).fetchone()
+        finally:
+            conn.close()
+
+        assert stats["skipped"] == 1
+        assert row["status"] == "skipped"
+        assert "missing or empty changes" in (row["test_result"] or "")
+
+    def test_apply_accepted_rolls_back_failed_proposal_and_creates_followup(
+        self, evolution_env, monkeypatch
+    ):
+        target = evolution_env / "scripts" / "rollback_target.py"
+        target.write_text("print('original')\n")
+
+        _, runner = _load_runner_module(monkeypatch, evolution_env)
+        runner.dry_run_restore_test = lambda: True
+
+        log_id = self._seed_accepted(
+            evolution_env,
+            action="Patch that will fail validation",
+            changes=[
+                {
+                    "file": str(target),
+                    "operation": "replace",
+                    "search": "missing-marker-not-in-file",
+                    "content": "print('would-not-apply')\n",
+                }
+            ],
+        )
+
+        conn = sqlite3.connect(str(evolution_env / "data" / "nexo.db"))
+        conn.row_factory = sqlite3.Row
+        try:
+            stats = runner._apply_accepted_proposals(
+                conn, cycle_num=2, max_to_apply=3, evolution_mode="managed"
+            )
+            row = conn.execute(
+                "SELECT status, test_result FROM evolution_log WHERE id = ?",
+                (log_id,),
+            ).fetchone()
+            followup = conn.execute(
+                "SELECT id, description FROM followups ORDER BY created_at DESC LIMIT 1"
+            ).fetchone()
+        finally:
+            conn.close()
+
+        # apply_change returns BLOCKED for missing search text — execute_auto_proposal
+        # raises and rolls back, so the row ends up rolled_back (no actual writes).
+        assert stats["attempted"] == 1
+        assert stats["applied"] == 0
+        assert row["status"] in ("rolled_back", "blocked")
+        assert followup is not None
+        assert followup["id"].startswith("NF-EVO-L")
+        assert target.read_text() == "print('original')\n"
+
+    def test_apply_accepted_respects_max_to_apply_cap(
+        self, evolution_env, monkeypatch
+    ):
+        targets = []
+        for i in range(5):
+            t = evolution_env / "scripts" / f"capped_{i}.py"
+            t.write_text(f"print('original_{i}')\n")
+            targets.append(t)
+
+        _, runner = _load_runner_module(monkeypatch, evolution_env)
+        runner.dry_run_restore_test = lambda: True
+
+        for i, t in enumerate(targets):
+            self._seed_accepted(
+                evolution_env,
+                action=f"Patch {i}",
+                changes=[
+                    {
+                        "file": str(t),
+                        "operation": "replace",
+                        "search": f"print('original_{i}')\n",
+                        "content": f"print('patched_{i}')\n",
+                    }
+                ],
+            )
+
+        conn = sqlite3.connect(str(evolution_env / "data" / "nexo.db"))
+        conn.row_factory = sqlite3.Row
+        try:
+            stats = runner._apply_accepted_proposals(
+                conn, cycle_num=2, max_to_apply=2, evolution_mode="managed"
+            )
+            applied_rows = conn.execute(
+                "SELECT id FROM evolution_log WHERE status = 'applied' ORDER BY id ASC"
+            ).fetchall()
+            still_accepted = conn.execute(
+                "SELECT COUNT(*) FROM evolution_log WHERE status = 'accepted'"
+            ).fetchone()[0]
+        finally:
+            conn.close()
+
+        assert stats["attempted"] == 2
+        assert stats["applied"] == 2
+        assert len(applied_rows) == 2
+        assert still_accepted == 3  # 5 seeded - 2 applied = 3 left for future cycles
+
+    def test_m38_migration_is_idempotent_and_adds_proposal_payload(self):
+        """The m38 migration must be safe to re-run on a real schema."""
+        from db._schema import _m38_evolution_log_proposal_payload
+
+        # Build a minimal evolution_log table without proposal_payload, like
+        # any pre-m38 install would have.
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        conn.execute(
+            "CREATE TABLE evolution_log ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, cycle_number INTEGER NOT NULL, "
+            "dimension TEXT NOT NULL, proposal TEXT NOT NULL, "
+            "classification TEXT NOT NULL DEFAULT 'auto', status TEXT DEFAULT 'pending', "
+            "files_changed TEXT, snapshot_ref TEXT, test_result TEXT, "
+            "impact INTEGER DEFAULT 0, reasoning TEXT NOT NULL)"
+        )
+        conn.execute(
+            "INSERT INTO evolution_log (cycle_number, dimension, proposal, reasoning) "
+            "VALUES (?, ?, ?, ?)",
+            (1, "safety", "pre-m38 row", "legacy"),
+        )
+        conn.commit()
+
+        # Run twice — must not raise.
+        _m38_evolution_log_proposal_payload(conn)
+        _m38_evolution_log_proposal_payload(conn)
+
+        cols = {row["name"] for row in conn.execute("PRAGMA table_info(evolution_log)")}
+        assert "proposal_payload" in cols
+
+        # Pre-existing row preserved with NULL payload.
+        row = conn.execute(
+            "SELECT proposal, proposal_payload FROM evolution_log WHERE id = 1"
+        ).fetchone()
+        assert row["proposal"] == "pre-m38 row"
+        assert row["proposal_payload"] is None
+        conn.close()

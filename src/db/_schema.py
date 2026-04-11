@@ -886,6 +886,24 @@ def _m37_cortex_goal_profile_trace(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_cortex_evaluations_goal_profile ON cortex_evaluations(goal_profile_id)")
 
 
+def _m38_evolution_log_proposal_payload(conn):
+    """Persist the full proposal dict (with `changes` array) so user-approved
+    proposals can be applied by a later cycle.
+
+    Before m38, evolution_log only stored the proposal `action` string. When a
+    user marked a proposal as `accepted` via nexo_evolution_approve, the next
+    cycle had no way to re-execute it because the `changes` operations were
+    discarded after the original cycle. Adding `proposal_payload` (TEXT/JSON)
+    closes that loop and lets _apply_accepted_proposals() in the runner pick
+    up accepted rows and run them through execute_auto_proposal().
+
+    Idempotent and append-only: ALTER TABLE ADD COLUMN is non-destructive in
+    SQLite. Pre-m38 rows keep proposal_payload NULL and are skipped by the
+    apply step (which requires a non-null payload).
+    """
+    _migrate_add_column(conn, "evolution_log", "proposal_payload", "TEXT DEFAULT NULL")
+
+
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
     (2, "followups_reasoning", _m2_followups_reasoning),
@@ -924,6 +942,7 @@ MIGRATIONS = [
     (35, "cortex_evaluation_outcome_link", _m35_cortex_evaluation_outcome_link),
     (36, "goal_profiles", _m36_goal_profiles),
     (37, "cortex_goal_profile_trace", _m37_cortex_goal_profile_trace),
+    (38, "evolution_log_proposal_payload", _m38_evolution_log_proposal_payload),
 ]
 
 
