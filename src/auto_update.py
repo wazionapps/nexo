@@ -355,6 +355,91 @@ def _sync_crons():
         _log(f"Cron sync warning: {e}")
 
 
+def _reload_launch_agents_after_bump() -> dict:
+    """Unload+load NEXO LaunchAgents so they pick up the new code on next fire.
+
+    Closes Bloque D of NEXO-AUDIT-2026-04-11 (learning #186 from Fase 1).
+    Until this helper, `nexo update` would `git pull` the new code into
+    NEXO_CODE but the 40+ LaunchAgents already running held the old
+    Python modules in memory until macOS happened to restart them. With
+    a single function call we explicitly tell launchd to reload the
+    plist files so the next fire reads the fresh code.
+
+    Best-effort throughout — a failure here must NEVER block the update
+    that just succeeded. Returns a dict with what was attempted so the
+    caller can log a single summary line.
+
+    Returns:
+        {
+          "scanned": N,        # plists found in ~/Library/LaunchAgents
+          "reloaded": N,       # plists where unload+load both succeeded
+          "skipped_missing": N, # plist file vanished mid-scan
+          "errors": [{plist, stderr}],
+        }
+
+    Linux equivalent: systemctl --user daemon-reload + restart of timer
+    units. Implemented as a no-op stub on Linux for now (the macOS
+    LaunchAgent path is the production target — Linux users running
+    `nexo update` get the cron sync but not the per-timer restart yet).
+    Captured as a TODO for the next round.
+    """
+    result: dict = {
+        "scanned": 0,
+        "reloaded": 0,
+        "skipped_missing": 0,
+        "errors": [],
+        "platform": sys.platform,
+    }
+
+    if sys.platform != "darwin":
+        # macOS-only for now. systemd path tracked separately.
+        return result
+
+    launch_agents_dir = Path.home() / "Library" / "LaunchAgents"
+    if not launch_agents_dir.is_dir():
+        return result
+
+    try:
+        plists = sorted(launch_agents_dir.glob("com.nexo.*.plist"))
+    except Exception as e:
+        result["errors"].append({"plist": "*", "stderr": f"glob failed: {e}"})
+        return result
+
+    result["scanned"] = len(plists)
+    for plist in plists:
+        try:
+            if not plist.is_file():
+                result["skipped_missing"] += 1
+                continue
+            # launchctl bootout / bootstrap is the modern API but requires
+            # the GUI session id ($UID/Background or gui/$UID). The legacy
+            # unload + load -w pair still works on every macOS NEXO supports
+            # and does not need a session id, so we use it here.
+            unload_proc = subprocess.run(
+                ["launchctl", "unload", str(plist)],
+                capture_output=True, text=True, timeout=10,
+            )
+            # unload returns non-zero if the agent was not loaded — that
+            # is fine, we still try to load fresh.
+            load_proc = subprocess.run(
+                ["launchctl", "load", "-w", str(plist)],
+                capture_output=True, text=True, timeout=10,
+            )
+            if load_proc.returncode == 0:
+                result["reloaded"] += 1
+            else:
+                result["errors"].append({
+                    "plist": plist.name,
+                    "stderr": (load_proc.stderr or load_proc.stdout or "load failed")[:300],
+                })
+        except subprocess.TimeoutExpired:
+            result["errors"].append({"plist": plist.name, "stderr": "launchctl timeout"})
+        except Exception as e:
+            result["errors"].append({"plist": plist.name, "stderr": str(e)[:300]})
+
+    return result
+
+
 AUTO_UPDATE_BACKUP_KEEP = 10
 """Maximum number of auto-update backups to keep per prefix.
 
@@ -584,6 +669,28 @@ def _check_git_updates() -> str | None:
 
     # Sync cron definitions with manifest
     _sync_crons()
+
+    # Bloque D / learning #186: when the package version actually
+    # changed, reload the LaunchAgents so the 40+ background crons
+    # pick up the new code on their next fire instead of holding the
+    # old Python modules in memory until macOS happens to restart them.
+    # Best-effort — never blocks the update flow.
+    if old_version != new_version:
+        try:
+            reload_summary = _reload_launch_agents_after_bump()
+            if reload_summary.get("reloaded"):
+                _log(
+                    f"Reloaded {reload_summary['reloaded']}/{reload_summary['scanned']} "
+                    f"NEXO LaunchAgents after version bump"
+                    + (f" ({len(reload_summary['errors'])} errors)" if reload_summary["errors"] else "")
+                )
+            elif reload_summary.get("scanned"):
+                _log(
+                    f"LaunchAgent reload after bump: scanned {reload_summary['scanned']}, "
+                    f"reloaded 0, errors {len(reload_summary['errors'])}"
+                )
+        except Exception as e:
+            _log(f"LaunchAgent reload after bump failed: {e}")
 
     msg = f"Auto-updated: {old_version} -> {new_version}" if old_version != new_version else f"Auto-updated (v{new_version}, new commits)"
     _log(msg)
