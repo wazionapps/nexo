@@ -1,0 +1,144 @@
+{
+  "release_line": "v5.1",
+  "target_version": "5.1.0",
+  "scope_owner": "NEXO",
+  "distribution": {
+    "git_updates_on": "merge_to_main",
+    "packaged_release_on": "tag_publish"
+  },
+  "required_repo_files": [
+    "scripts/verify_release_readiness.py",
+    "scripts/run_v5_0_smoke.py",
+    "release-contracts/v5.1.0.json",
+    ".github/workflows/lint.yml",
+    ".github/workflows/security.yml",
+    ".github/workflows/release-readiness.yml",
+    "pyproject.toml",
+    "requirements-dev.txt",
+    "src/auto_update.py",
+    "src/hook_observability.py",
+    "src/observability.py",
+    "src/retroactive_learnings.py",
+    "src/skills_runtime.py",
+    "src/state_watchers_runtime.py",
+    "src/knowledge_graph.py",
+    "src/tools_sessions.py",
+    "src/cognitive/_search.py",
+    "src/cognitive/_memory.py",
+    "src/cognitive/_ingest.py",
+    "src/plugins/skills.py",
+    "src/plugins/knowledge_graph_tools.py",
+    "src/plugins/protocol.py",
+    "src/scripts/nexo-cortex-cycle.py",
+    "src/scripts/nexo-evolution-run.py",
+    "src/scripts/nexo-hook-record.py",
+    "src/server.py",
+    "tests/test_auto_update_lock.py",
+    "tests/test_update_path_and_reload.py",
+    "tests/test_evolution.py",
+    "tests/test_cortex_cycle.py",
+    "tests/test_skills_v2.py",
+    "tests/test_adaptive_weights_rollback.py",
+    "tests/test_deep_sleep_apply.py",
+    "tests/test_retroactive_learnings.py",
+    "tests/test_hook_observability.py",
+    "tests/test_state_watchers.py",
+    "tests/test_correction_fatigue_followup.py",
+    "tests/test_cognitive.py",
+    "tests/test_kg_export.py",
+    "tests/test_skill_coactivation.py",
+    "tests/test_observability.py",
+    "tests/test_security_baseline.py",
+    "tests/test_release_readiness_baseline.py",
+    "tests/test_decay_baseline.py",
+    "tests/test_trust_baseline.py",
+    "tests/test_plugin_loader_baseline.py",
+    "tests/test_fase4_lint_baseline.py",
+    "tests/test_heartbeat_adaptive_log_wire.py",
+    "tests/test_protocol.py",
+    "benchmarks/results/comparison-vs-competition-2026-04.md",
+    "README.md"
+  ],
+  "required_website_files": [
+    "index.html",
+    "watch/index.html",
+    "features/index.html",
+    "changelog/index.html",
+    "compare/index.html",
+    "docs/index.html",
+    "assets/nexo-brain-infographic-v5.png",
+    "assets/video/nexo-brain-v5-overview.mp4"
+  ],
+  "gates": [
+    {
+      "id": "phase2_loop_closed",
+      "title": "Phase 2 — every open evolution/adaptive/skills/cortex loop closes under itself",
+      "status": "complete",
+      "evidence_required": [
+        "evolution_log accepted proposals are auto-applied on next cycle (PR #101)",
+        "outcome patterns auto-promote to draft skills and Voyager co-activation detector exposed (#103 + #121)",
+        "retroactive learnings create deterministic NF-RETRO followups on application (#106)",
+        "adaptive weight rollback surfaces as visible followup (#104)",
+        "Cortex quality cron runs every 6h and opens NF-CORTEX-QUALITY-DROP on degradation (#102)",
+        "protocol_debt is surfaced by heartbeat for active tasks (#100)",
+        "deep-sleep code_change action stages findings into evolution_log (#105)"
+      ]
+    },
+    {
+      "id": "phase3_cognitive_robustness",
+      "title": "Phase 3 — cognitive subsystems close their own loops with user-visible evidence",
+      "status": "complete",
+      "evidence_required": [
+        "search() accepts dream_weight and somatic boost is wired into reranking (#109 + #110)",
+        "state watchers auto-create and auto-resolve deterministic NF-WATCHER followups (#107)",
+        "correction fatigue surfaces as visible followup via cognitive-decay (#108)",
+        "hook lifecycle observability exposes hook_runs table + nexo_hook_runs tool (#111)",
+        "auto_update guarded by POSIX flock with stale-steal (#112)"
+      ]
+    },
+    {
+      "id": "phase4_qa_pipeline",
+      "title": "Phase 4 — automated lint/security/coverage/release gates run on every PR",
+      "status": "complete",
+      "evidence_required": [
+        "ruff lint workflow enforces E9/F63/F7/F82/F821 on PR and push (#113)",
+        "bandit high-severity workflow runs on PR and push; 10 weak-hash sites fixed (#115)",
+        "coverage baseline tests pin decay/trust/plugin_loader contracts (#114)",
+        "verify_release_readiness.py --ci gates every PR, not just tags (#116)",
+        "requirements-dev.txt pins ruff, pytest-cov, bandit toml extras (#117)"
+      ]
+    },
+    {
+      "id": "phase5_market_differentiation",
+      "title": "Phase 5 — shippable differentiators vs existing memory frameworks",
+      "status": "complete",
+      "evidence_required": [
+        "Bitemporal KG export to JSON-LD and GraphML with as_of support (#120)",
+        "OpenTelemetry tool_span soft-import activates only when OTEL env vars set (#123)",
+        "benchmarks/results/comparison-vs-competition-2026-04.md documents honest feature matrix vs Letta/Mem0/Zep/Graphiti/Cognee/DSPy (#122)",
+        "Voyager-style skill co-activation detector exposes composite skill candidates (#121)"
+      ]
+    },
+    {
+      "id": "audit_followups_resolved",
+      "title": "NEXO-AUDIT-2026-04-11 followups closed under evidence",
+      "status": "complete",
+      "evidence_required": [
+        "heartbeat auto-fires compute_mode so adaptive_log stays populated (#118)",
+        "server instructions tell agents to register outcomes proactively (#119)",
+        "every Phase 2-5 audit followup marked resolved with evidence or left as explicit open followup"
+      ]
+    },
+    {
+      "id": "update_path_safety",
+      "title": "Update path v5.0.x → v5.1.0 leaves runtime in a consistent state",
+      "status": "complete",
+      "evidence_required": [
+        "auto_update reloads LaunchAgents after version bump on macOS (#124)",
+        "migrations m38 (evolution_log.proposal_payload) and m39 (hook_runs) are idempotent across every v5.0.x baseline",
+        "test_update_path_and_reload.py pins the hot-reload + migration contract",
+        "auto_update concurrent run protection pinned by test_auto_update_lock.py"
+      ]
+    }
+  ]
+}

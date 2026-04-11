@@ -87,6 +87,18 @@ Versions `3.1.7` through `3.2.0` close the recent-memory gap:
 - when even that misses, NEXO now exposes raw transcript fallback tools for Claude Code and Codex session stores
 - NEXO can now inspect itself through a live system catalog derived from canonical sources instead of relying only on stale docs or operator memory
 
+Version `5.1.0` lands the full NEXO-AUDIT-2026-04-11 roadmap as a single minor bump — every open evolution / adaptive / cognitive / skills loop now closes under itself, the knowledge graph exports cleanly, OpenTelemetry spans can be turned on without a hard dependency, and every PR has to clear lint, security, coverage, and release-readiness gates before it can merge:
+
+- Evolution cycle now auto-applies user-approved proposals on the next run (backed by the new idempotent migration `m38`), adaptive learned-weight rollbacks surface as visible followups, outcome patterns auto-promote to draft skills, and a Voyager-style detector exposes co-occurring skill pairs as composite-skill candidates via `nexo_skill_compose_candidates`.
+- `cognitive._search.search()` now accepts `dream_weight` and reranks dream-insights through it, somatic markers fold into the same reranking path (max +0.10 boost), state watchers open and auto-resolve deterministic `NF-WATCHER-{id}` followups, and correction fatigue opens a visible followup instead of only decaying memory.
+- A new Cortex quality cron (every 6h) watches accept rate / linked-success / override gap and opens `NF-CORTEX-QUALITY-DROP` idempotently when the decision engine starts drifting between cycles.
+- Adding a new learning now walks recent decisions through `retroactive_learnings.apply_learning_retroactively()` and opens deterministic `NF-RETRO-L<id>-D<id>` followups for every decision the learning would have changed (exposed via `nexo_learning_apply_retroactively`).
+- Hook lifecycle observability: new `hook_runs` table (migration `m39`) + `nexo_hook_runs` tool expose recent hook runs, failure streaks, and a health summary. Hook drops are no longer invisible.
+- Knowledge graph bitemporal export: `nexo_kg_export` emits JSON-LD (with an `nexo:*` vocabulary) or GraphML, and accepts an `as_of` ISO timestamp that replays the historical snapshot through `kg_edges.valid_from / valid_until` for igraph, Gephi, NetworkX, and Cytoscape.
+- OpenTelemetry integration: new `src/observability.py` soft-imports `opentelemetry` and only activates when `OTEL_EXPORTER_OTLP_ENDPOINT` or `OTEL_SERVICE_NAME` is set. `tool_span()` becomes a real span when enabled and stays a no-op context manager when disabled.
+- CI gates on every PR: new workflows enforce ruff (`E9 / F63 / F7 / F82 / F821`), bandit at high severity / high confidence, coverage baselines, and `verify_release_readiness.py --ci`. A PR that breaks the release contract fails loudly instead of waiting until tag push.
+- Safer update path: `auto_update` is guarded by a POSIX `flock` with stale-steal at 10 minutes, and on macOS it now `launchctl unload`s and reloads every `com.nexo.*.plist` after a version bump so long-lived crons pick up the new codebase immediately.
+
 Version `5.0.4` tightens the local runtime bridge and trims false-positive doctor noise:
 
 - vendorable `nexo_helper.py` now resolves `NEXO_HOME` and the `nexo` CLI path robustly, so personal scripts and subprocess flows stop depending on a lucky PATH
