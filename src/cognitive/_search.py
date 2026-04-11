@@ -726,6 +726,7 @@ def search(
     spreading_depth: int | None = None,
     decompose: bool = True,
     exclude_dreams: bool = True,
+    dream_weight: float = 0.0,
 ) -> list[dict]:
     """Full vector search across STM and/or LTM with rehearsal and dormant reactivation.
 
@@ -735,10 +736,29 @@ def search(
         exclude_dreams: If True (default), exclude dream_insight memories from results.
                         Dream insights are 21% of LTM and dilute search precision.
                         Set to False only when explicitly looking for cross-domain patterns.
+        dream_weight: Float in [0.0, 1.0]. Closes Fase 3 item 1 of NEXO-AUDIT-2026-04-11.
+                      When > 0, dream_insight memories are INCLUDED in retrieval even
+                      if exclude_dreams=True, but their cosine score is multiplied by
+                      this weight before the min_score gate. The default 0.0 keeps
+                      the historical behavior (dreams excluded). Set to 0.5 for
+                      "include dreams at half importance" or 1.0 for "treat dreams
+                      like any other memory". When dream_weight > 0, the result rows
+                      that came from dream_insight carry a `dream_weighted=True` flag
+                      so dashboards and downstream rerankers can identify them.
         hybrid: If True, boost results with BM25 keyword matches (default True)
         hybrid_alpha: Weight for vector vs BM25. Higher = more vector. (default 0.6)
         decompose: If True, decompose complex queries into sub-queries for better multi-hop (default True)
     """
+    # Normalize dream_weight to [0.0, 1.0]; >0 effectively overrides exclude_dreams.
+    try:
+        dream_weight = float(dream_weight or 0.0)
+    except (TypeError, ValueError):
+        dream_weight = 0.0
+    if dream_weight < 0.0:
+        dream_weight = 0.0
+    elif dream_weight > 1.0:
+        dream_weight = 1.0
+    _include_dreams_with_weight = dream_weight > 0.0
     # Multi-query decomposition: for complex questions, search sub-parts and merge
     if decompose and query_text:
         _connectors = [" after ", " before ", " because ", " and then ", " when ", " while "]
@@ -856,7 +876,8 @@ def search(
         if source_type_filter:
             where += " AND source_type = ?"
             params.append(source_type_filter)
-        if exclude_dreams and not source_type_filter:
+        # Fase 3 item 1: dream_weight > 0 lets dreams in even when exclude_dreams=True.
+        if exclude_dreams and not source_type_filter and not _include_dreams_with_weight:
             where += " AND source_type != 'dream_insight'"
         rows = db.execute(f"SELECT * FROM ltm_memories {where}", params).fetchall()
 
@@ -869,8 +890,14 @@ def search(
             lifecycle = row["lifecycle_state"] or "active"
             if lifecycle == "pinned":
                 score = min(1.0, score + 0.2)
+            # Fase 3 item 1: dream_insight rows get their score scaled by dream_weight.
+            # The weight applies BEFORE the min_score gate, so a low weight naturally
+            # suppresses dreams without requiring a separate filter step.
+            is_dream = row["source_type"] == "dream_insight"
+            if is_dream and _include_dreams_with_weight:
+                score = score * dream_weight
             if score >= min_score:
-                results.append({
+                entry = {
                     "store": "ltm",
                     "id": row["id"],
                     "content": row["content"],
@@ -884,7 +911,11 @@ def search(
                     "score": score,
                     "tags": row["tags"],
                     "lifecycle_state": lifecycle,
-                })
+                }
+                if is_dream and _include_dreams_with_weight:
+                    entry["dream_weighted"] = True
+                    entry["dream_weight_applied"] = dream_weight
+                results.append(entry)
 
     # Check dormant LTM for reactivation
     if stores in ("both", "ltm") and not exclude_dormant:
