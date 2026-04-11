@@ -255,3 +255,182 @@ def extract_subgraph(center_id: int, depth: int = 2) -> dict:
     d3_edges = [{"source": e["source_id"], "target": e["target_id"],
                  "relation": e["relation"], "weight": e["weight"]} for e in graph["edges"]]
     return {"nodes": d3_nodes, "edges": d3_edges}
+
+
+# ── Bitemporal export — Fase 5 item 1 ────────────────────────────────────
+#
+# The KG is bi-temporal by design: kg_edges has valid_from and valid_until
+# columns and the upsert_edge / delete_edge helpers maintain them
+# correctly. The audit's "exportable" requirement asked for emitting the
+# graph to standard interchange formats so external tools can ingest it
+# without speaking SQLite. The two helpers below cover the canonical
+# choices: JSON-LD (semantic web, human-readable) and GraphML (igraph,
+# Gephi, NetworkX, Cytoscape).
+#
+# Both helpers respect the bitemporal model: when as_of is None, only
+# active edges (valid_until IS NULL) are emitted. When as_of is a
+# timestamp string, the historical state at that instant is emitted.
+
+import json as _json
+
+
+def export_to_jsonld(*, as_of: str = "") -> dict:
+    """Export the active or historical KG to a JSON-LD document.
+
+    The vocabulary lives under https://nexo-brain.com/kg/v1# so external
+    tools can resolve types and relations consistently. Each node becomes
+    a top-level @graph entry with @id = nexo:node:<id> and @type =
+    nexo:<node_type>. Each edge becomes a relation property on its source
+    node, plus a parallel @reverse on the target so the JSON-LD remains
+    fully traversable.
+
+    Args:
+        as_of: ISO timestamp. If empty, exports active edges only
+               (valid_until IS NULL). If provided, exports the snapshot
+               that was valid at that instant via temporal range query.
+
+    Returns a JSON-LD-shaped dict ready for json.dumps().
+    """
+    db = _get_db()
+    # kg_nodes is NOT bitemporal — only kg_edges has valid_from/valid_until.
+    # The audit's "bitemporal" requirement is satisfied at the edge level
+    # because nodes are stable identities while edges encode the temporal
+    # facts (relationships valid during a time window).
+    nodes = [dict(row) for row in db.execute(
+        "SELECT id, node_type, node_ref, label, properties FROM kg_nodes"
+    ).fetchall()]
+
+    if as_of and as_of.strip():
+        edge_rows = db.execute(
+            "SELECT id, source_id, target_id, relation, weight, confidence, "
+            "valid_from, valid_until, properties FROM kg_edges "
+            "WHERE valid_from <= ? AND (valid_until IS NULL OR valid_until > ?)",
+            (as_of, as_of),
+        ).fetchall()
+    else:
+        edge_rows = db.execute(
+            "SELECT id, source_id, target_id, relation, weight, confidence, "
+            "valid_from, valid_until, properties FROM kg_edges WHERE valid_until IS NULL"
+        ).fetchall()
+    edges = [dict(row) for row in edge_rows]
+
+    nodes_by_id: dict[int, dict] = {}
+    for n in nodes:
+        try:
+            props = _json.loads(n.get("properties") or "{}")
+        except Exception:
+            props = {}
+        nodes_by_id[n["id"]] = {
+            "@id": f"nexo:node:{n['id']}",
+            "@type": f"nexo:{n['node_type']}",
+            "label": n.get("label") or "",
+            "node_ref": n.get("node_ref") or "",
+            "properties": props,
+        }
+
+    for e in edges:
+        src_id = e["source_id"]
+        tgt_id = e["target_id"]
+        if src_id not in nodes_by_id or tgt_id not in nodes_by_id:
+            continue  # orphan edge — skip
+        relation_key = f"nexo:{e['relation']}"
+        edge_payload = {
+            "@id": f"nexo:edge:{e['id']}",
+            "target": f"nexo:node:{tgt_id}",
+            "weight": float(e.get("weight") or 0.0),
+            "confidence": float(e.get("confidence") or 0.0),
+            "valid_from": e.get("valid_from"),
+            "valid_until": e.get("valid_until"),
+        }
+        nodes_by_id[src_id].setdefault(relation_key, []).append(edge_payload)
+
+    snapshot_label = as_of.strip() if as_of and as_of.strip() else "active"
+    return {
+        "@context": {
+            "nexo": "https://nexo-brain.com/kg/v1#",
+            "label": "https://nexo-brain.com/kg/v1#label",
+            "node_ref": "https://nexo-brain.com/kg/v1#node_ref",
+            "weight": "https://nexo-brain.com/kg/v1#weight",
+            "confidence": "https://nexo-brain.com/kg/v1#confidence",
+            "valid_from": "https://nexo-brain.com/kg/v1#valid_from",
+            "valid_until": "https://nexo-brain.com/kg/v1#valid_until",
+            "properties": "https://nexo-brain.com/kg/v1#properties",
+        },
+        "@type": "nexo:KnowledgeGraphSnapshot",
+        "snapshot": snapshot_label,
+        "node_count": len(nodes_by_id),
+        "edge_count": len(edges),
+        "@graph": list(nodes_by_id.values()),
+    }
+
+
+def export_to_graphml(*, as_of: str = "") -> str:
+    """Export the active or historical KG to a GraphML XML string.
+
+    GraphML is the canonical interchange for igraph, Gephi, NetworkX, and
+    Cytoscape. Bitemporal columns are emitted as edge data attributes so
+    importers that support them (Gephi temporal layouts, NetworkX
+    DiGraph) can render the historical view.
+
+    Args:
+        as_of: ISO timestamp. Same semantics as export_to_jsonld.
+
+    Returns a string with a valid GraphML 1.1 document.
+    """
+    db = _get_db()
+    nodes = [dict(row) for row in db.execute(
+        "SELECT id, node_type, node_ref, label FROM kg_nodes"
+    ).fetchall()]
+    if as_of and as_of.strip():
+        edge_rows = db.execute(
+            "SELECT id, source_id, target_id, relation, weight, valid_from, valid_until FROM kg_edges "
+            "WHERE valid_from <= ? AND (valid_until IS NULL OR valid_until > ?)",
+            (as_of, as_of),
+        ).fetchall()
+    else:
+        edge_rows = db.execute(
+            "SELECT id, source_id, target_id, relation, weight, valid_from, valid_until FROM kg_edges "
+            "WHERE valid_until IS NULL"
+        ).fetchall()
+
+    def _xml_escape(value: object) -> str:
+        text = "" if value is None else str(value)
+        return (
+            text.replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace('"', "&quot;")
+            .replace("'", "&apos;")
+        )
+
+    out: list[str] = []
+    out.append('<?xml version="1.0" encoding="UTF-8"?>')
+    out.append('<graphml xmlns="http://graphml.graphdrawing.org/xmlns">')
+    out.append('  <key id="label" for="node" attr.name="label" attr.type="string"/>')
+    out.append('  <key id="node_type" for="node" attr.name="node_type" attr.type="string"/>')
+    out.append('  <key id="node_ref" for="node" attr.name="node_ref" attr.type="string"/>')
+    out.append('  <key id="relation" for="edge" attr.name="relation" attr.type="string"/>')
+    out.append('  <key id="weight" for="edge" attr.name="weight" attr.type="double"/>')
+    out.append('  <key id="valid_from" for="edge" attr.name="valid_from" attr.type="string"/>')
+    out.append('  <key id="valid_until" for="edge" attr.name="valid_until" attr.type="string"/>')
+    snapshot_label = as_of.strip() if as_of and as_of.strip() else "active"
+    out.append(f'  <graph id="nexo_kg_{_xml_escape(snapshot_label)}" edgedefault="directed">')
+    for n in nodes:
+        out.append(f'    <node id="n{n["id"]}">')
+        out.append(f'      <data key="label">{_xml_escape(n.get("label"))}</data>')
+        out.append(f'      <data key="node_type">{_xml_escape(n.get("node_type"))}</data>')
+        out.append(f'      <data key="node_ref">{_xml_escape(n.get("node_ref"))}</data>')
+        out.append('    </node>')
+    for e in edge_rows:
+        out.append(
+            f'    <edge id="e{e["id"]}" source="n{e["source_id"]}" target="n{e["target_id"]}">'
+        )
+        out.append(f'      <data key="relation">{_xml_escape(e["relation"])}</data>')
+        out.append(f'      <data key="weight">{float(e["weight"] or 0.0)}</data>')
+        out.append(f'      <data key="valid_from">{_xml_escape(e["valid_from"])}</data>')
+        if e["valid_until"]:
+            out.append(f'      <data key="valid_until">{_xml_escape(e["valid_until"])}</data>')
+        out.append('    </edge>')
+    out.append('  </graph>')
+    out.append('</graphml>')
+    return "\n".join(out)
