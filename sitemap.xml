@@ -61,6 +61,12 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://nexo-brain.com/watch/</loc>
+    <lastmod>2026-04-11</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://nexo-brain.com/demos/install-in-60-seconds/</loc>
     <lastmod>2026-04-07</lastmod>
     <changefreq>monthly</changefreq>
