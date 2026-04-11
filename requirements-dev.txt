@@ -2,6 +2,17 @@
 -r src/requirements.txt
 pytest>=7.0
 
+# Fase 4 item 1: lint baseline. ruff config lives in pyproject.toml.
+# Conservative selection (E9, F63, F7, F82, F821) catches latent bugs
+# without flooding CI on the existing 64 KLOC tree.
+ruff>=0.6.0
+
 # Fase 4 item 2: coverage baseline. pytest-cov makes the per-module
 # coverage numbers visible in CI and locally with a single flag.
 pytest-cov>=4.0
+
+# Fase 4 item 3: security baseline. bandit config lives in pyproject.toml.
+# CI runs bandit -r src/ --severity-level high --confidence-level high
+# which has zero findings (the original sweep's 10 weak-hash findings
+# were all fixed by adding usedforsecurity=False to the hashlib calls).
+bandit[toml]>=1.7
