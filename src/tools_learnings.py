@@ -398,6 +398,30 @@ def handle_learning_add(category: str, title: str, content: str, reasoning: str 
             f"Retry nexo_learning_add or investigate DB integrity."
         )
 
+    # Fase 2 item 3: when a learning lands with an enforceable prevention
+    # rule, scan recent decisions for ones that would have been decided
+    # differently and surface them as deterministic followups. Best-effort:
+    # a failure here must NEVER block the learning insert that the user
+    # already verified above.
+    retro_meta_msg = ""
+    if prevention:
+        try:
+            from retroactive_learnings import apply_learning_retroactively
+            retro_result = apply_learning_retroactively(
+                int(result["id"]),
+                lookback_days=14,
+                max_matches=5,
+                min_score=0.4,
+            )
+            if retro_result.get("followups_created"):
+                retro_meta_msg = (
+                    f"\n📜 Retroactive scan: {retro_result['followups_created']} "
+                    f"past decision(s) flagged for review (scanned "
+                    f"{retro_result.get('scanned', 0)})"
+                )
+        except Exception:
+            pass  # Best-effort surfacing only
+
     meta = []
     if prevention:
         meta.append("with prevention")
@@ -406,7 +430,7 @@ def handle_learning_add(category: str, title: str, content: str, reasoning: str 
     if supersedes_id:
         meta.append(f"supersedes={int(supersedes_id)}")
     meta_str = f" ({', '.join(meta)})" if meta else ""
-    return f"Learning #{result['id']} added in {category}: {title}{meta_str} ✓verified{repetition_msg}"
+    return f"Learning #{result['id']} added in {category}: {title}{meta_str} ✓verified{repetition_msg}{retro_meta_msg}"
 
 
 def handle_learning_search(query: str, category: str = '') -> str:

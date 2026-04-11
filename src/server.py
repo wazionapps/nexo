@@ -877,6 +877,44 @@ def nexo_learning_search(query: str, category: str = "") -> str:
 
 
 @mcp.tool
+def nexo_learning_apply_retroactively(
+    learning_id: int,
+    lookback_days: int = 14,
+    max_matches: int = 5,
+    min_score: float = 0.4,
+    dry_run: bool = False,
+) -> str:
+    """Scan recent decisions and surface those that conflict with a learning's prevention rule.
+
+    Closes Fase 2 item 3 of NEXO-AUDIT-2026-04-11. Use this when you add a new
+    rule and want to retroactively check whether past decisions still hold.
+    Creates deterministic NF-RETRO-L<learning>-D<decision> followups so the
+    helper is idempotent across reruns. nexo_learning_add invokes this
+    automatically when the new learning has a `prevention` field — call this
+    tool manually only when you want to re-scan with a longer window or a
+    different threshold.
+
+    Args:
+        learning_id: ID of the learning to apply.
+        lookback_days: How many days back to scan decisions (default 14).
+        max_matches: Cap on followups created per call (default 5).
+        min_score: Match threshold in [0.0, 1.0] (default 0.4).
+        dry_run: If True, scores matches but does not create followups.
+    """
+    import json as _json
+    from retroactive_learnings import apply_learning_retroactively
+
+    result = apply_learning_retroactively(
+        int(learning_id),
+        lookback_days=int(lookback_days),
+        max_matches=int(max_matches),
+        min_score=float(min_score),
+        dry_run=bool(dry_run),
+    )
+    return _json.dumps(result, ensure_ascii=False, indent=2)
+
+
+@mcp.tool
 def nexo_learning_update(
     id: int,
     title: str = "",
