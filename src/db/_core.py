@@ -53,7 +53,7 @@ def get_db() -> sqlite3.Connection:
         raw.execute("PRAGMA journal_mode=WAL")
         raw.execute("PRAGMA busy_timeout=30000")
         raw.execute("PRAGMA foreign_keys=ON")
-        raw.execute("PRAGMA wal_autocheckpoint=100")
+        raw.execute("PRAGMA wal_autocheckpoint=1000")
         raw.row_factory = sqlite3.Row
         _shared_conn = _SerializedConnection(raw)
     return _shared_conn
