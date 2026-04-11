@@ -1,0 +1,64 @@
+{
+  "id": "SK-RUN-RELEASE-FINAL-AUDIT",
+  "name": "Run Release Final Audit",
+  "description": "Runs the final pre-release audit for NEXO: smoke when available, release-readiness checks, contract completeness, and consistency guardrails before a release/publication package.",
+  "level": "published",
+  "mode": "hybrid",
+  "source_kind": "core",
+  "execution_level": "read-only",
+  "approval_required": false,
+  "tags": ["release", "audit", "readiness", "consistency", "reversibility"],
+  "trigger_patterns": [
+    "final release audit",
+    "release readiness audit",
+    "pre-release audit",
+    "auditoria final release",
+    "auditoria final publicacion",
+    "seguridad reversibilidad consistencia"
+  ],
+  "params_schema": {
+    "contract": {
+      "type": "string",
+      "required": false,
+      "default": "auto"
+    },
+    "require_contract_complete": {
+      "type": "boolean",
+      "required": false,
+      "default": true
+    },
+    "include_smoke": {
+      "type": "boolean",
+      "required": false,
+      "default": true
+    },
+    "ci": {
+      "type": "boolean",
+      "required": false,
+      "default": false
+    },
+    "website_root": {
+      "type": "string",
+      "required": false,
+      "default": ""
+    },
+    "nexo_home": {
+      "type": "string",
+      "required": false,
+      "default": ""
+    }
+  },
+  "command_template": {
+    "argv": [
+      "{{file_path}}",
+      "{{contract}}",
+      "{{require_contract_complete}}",
+      "{{include_smoke}}",
+      "{{ci}}",
+      "{{website_root}}",
+      "{{nexo_home}}"
+    ]
+  },
+  "executable_entry": "script.py",
+  "stable_after_uses": 5
+}
