@@ -4,6 +4,33 @@
 # Caches output for 1 hour to avoid regenerating on rapid successive sessions.
 set -uo pipefail
 
+# Fase 3 item 7: hook lifecycle observability — record duration + exit code
+# in hook_runs on EXIT. Best-effort: a failure here must not break the hook.
+NEXO_HOOK_START_MS=$(python3 -c "import time; print(int(time.time()*1000))" 2>/dev/null || echo 0)
+NEXO_HOOK_NAME="session-start"
+_nexo_record_hook_run() {
+    local exit_code=$?
+    local duration_ms=0
+    if [ "$NEXO_HOOK_START_MS" != "0" ]; then
+        local now_ms
+        now_ms=$(python3 -c "import time; print(int(time.time()*1000))" 2>/dev/null || echo 0)
+        if [ "$now_ms" != "0" ]; then
+            duration_ms=$((now_ms - NEXO_HOOK_START_MS))
+        fi
+    fi
+    local recorder
+    recorder="${NEXO_CODE:-/Users/franciscoc/Documents/_PhpstormProjects/nexo/src}/scripts/nexo-hook-record.py"
+    if [ -f "$recorder" ]; then
+        python3 "$recorder" record \
+            --hook "$NEXO_HOOK_NAME" \
+            --duration-ms "$duration_ms" \
+            --exit "$exit_code" \
+            --session "${CLAUDE_SID:-}" \
+            >/dev/null 2>&1 || true
+    fi
+}
+trap _nexo_record_hook_run EXIT
+
 NEXO_HOME="${NEXO_HOME:-$HOME/.nexo}"
 BRIEFING_FILE="$NEXO_HOME/coordination/session-briefing.txt"
 MAX_AGE_SECONDS=3600  # 1 hour cache
