@@ -1,8 +1,8 @@
 # NEXO Brain
 
-> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v5.1.0).
+> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v5.2.0).
 
-NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. Version 5.1.0 closes every open evolution, adaptive, cognitive, and skills loop under itself, ships bitemporal knowledge graph export to JSON-LD and GraphML with `as_of` historical replay, adds an OpenTelemetry tool-span path behind a soft-import, and puts lint, security, coverage, and release-readiness gates on every PR, on top of the 5.0 goal, decision, outcome, reusable-skill, and public-proof loop across supported clients, configurable terminal and automation backends, recovery-aware background jobs, startup preflight, runtime self-healing, multimodal memory refs, pre-compaction auto-flush, a public claim wiki, readable memory export, richer user-state adaptation, long-horizon overnight analysis, and 150+ MCP tools.
+NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. Version 5.2.0 ships bilingual response discipline with Spanish and English high-stakes keyword parity and bilingual negation suppression, a numeric confidence safeguard layered on top of the existing response-contract decision tree with positive context signals (pre-action context hits and known project-atlas areas), and a cortex-quality cache reader that finally consumes the write-only snapshot that the `nexo-cortex-cycle` cron has been writing every 6h since v5.1.0. Builds on v5.1.0's closed evolution, adaptive, cognitive, and skills loops, bitemporal knowledge graph export to JSON-LD and GraphML with `as_of` historical replay, OpenTelemetry tool-span path behind a soft-import, and lint, security, coverage, and release-readiness gates on every PR, plus v5.0's goal, decision, outcome, reusable-skill, and public-proof loop across supported clients, configurable terminal and automation backends, recovery-aware background jobs, startup preflight, runtime self-healing, multimodal memory refs, pre-compaction auto-flush, a public claim wiki, readable memory export, richer user-state adaptation, long-horizon overnight analysis, and 150+ MCP tools.
 
 ## Core Product Model
 
@@ -14,10 +14,14 @@ NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cogniti
 
 ## Current Release Focus
 
-- Goal profiles and Decision Cortex v2 shape higher-stakes recommendations instead of leaving strategy selection to raw prompting.
+- Bilingual response discipline: Spanish + English high-stakes detection with bilingual negation suppression, so boundary statements like "sin afectar producción" / "without touching production" no longer trigger false positives.
+- Positive signals on the confidence score so tasks that loaded real context and operate in a known project area are rewarded, not punished alongside unprepared ones.
+- Numeric safeguard layered over the boolean response-contract decision tree, monotonic over the existing rules (can only make discipline stricter, never looser).
+- Cortex-quality cache reader: `nexo_cortex_quality` now serves the snapshot that the `nexo-cortex-cycle` cron writes every 6 hours, with silent fallback to live SQL computation on any failure. Observable path via `"source": "cache" | "live"` in the response.
+- Goal profiles and Decision Cortex v2 keep shaping higher-stakes recommendations instead of leaving strategy selection to raw prompting.
 - Outcomes, impact scoring, and structured pattern capture connect action, result, and future prioritization more tightly.
 - Repeated winning patterns can seed or promote reusable skills, while poor evidence can demote or retire them.
-- Public proof now combines the LoCoMo memory result with a broader operator runtime pack so the website reflects more than one memory benchmark.
+- Public proof combines the LoCoMo memory result with a broader operator runtime pack so the website reflects more than one memory benchmark.
 
 ## Key Features
 
