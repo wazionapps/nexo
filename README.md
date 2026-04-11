@@ -87,6 +87,12 @@ Versions `3.1.7` through `3.2.0` close the recent-memory gap:
 - when even that misses, NEXO now exposes raw transcript fallback tools for Claude Code and Codex session stores
 - NEXO can now inspect itself through a live system catalog derived from canonical sources instead of relying only on stale docs or operator memory
 
+Version `5.0.4` tightens the local runtime bridge and trims false-positive doctor noise:
+
+- vendorable `nexo_helper.py` now resolves `NEXO_HOME` and the `nexo` CLI path robustly, so personal scripts and subprocess flows stop depending on a lucky PATH
+- doctor no longer degrades because of advisory-only self-audit warnings or a single missing usage-telemetry row
+- managed Claude Code and Codex bootstraps now force an immediate first answer after simple email/diary/reminder/followup reads instead of feeling hung while chaining extra lookups
+
 Version `5.0.3` closes the next post-5.0 runtime gap:
 
 - `nexo chat` now boots Claude Code and Codex with an explicit NEXO startup prompt instead of opening cold or leaking the target path as a fake prompt
