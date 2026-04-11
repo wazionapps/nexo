@@ -15,9 +15,12 @@ v0.1: Single MCP tool + middleware validation.
 """
 
 import json
+import os
 import re
 import secrets
 import time
+from datetime import datetime
+from pathlib import Path
 
 
 def _get_db():
@@ -1003,12 +1006,88 @@ def handle_cortex_override(evaluation_id: int, chosen: str, reason: str) -> str:
     return json.dumps({"ok": True, "evaluation": updated}, ensure_ascii=False, indent=2)
 
 
+# v5.2.0: Cortex quality cache reader. The `nexo-cortex-cycle` cron
+# (src/scripts/nexo-cortex-cycle.py) writes a fresh quality snapshot to
+# $NEXO_HOME/operations/cortex-quality-latest.json every 6h. Until this
+# release the reader was missing — the snapshot was write-only and every
+# call to `nexo_cortex_quality` re-ran the SQL summary. Now the handler
+# reads the cache first for the 7d / 1d windows and falls back silently
+# to the live computation on any failure.
+_CORTEX_QUALITY_CACHE_PATH = (
+    Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+    / "operations"
+    / "cortex-quality-latest.json"
+)
+# 6h cron + 30 min slack so a slightly-late run still serves cache.
+_CORTEX_QUALITY_CACHE_MAX_AGE_SECONDS = 23400
+_CORTEX_QUALITY_CACHE_WINDOWS = {1: "window_1d", 7: "window_7d"}
+_CORTEX_QUALITY_CACHE_SCHEMA = 1
+
+
+def _load_cortex_quality_cache(days: int) -> dict | None:
+    """Return cached summary dict for the requested window, or None if unusable.
+
+    Silent on any failure so the live path always wins on a corrupt cache.
+    Respects the snapshot schema written by `_persist_quality_snapshot`
+    in src/scripts/nexo-cortex-cycle.py — do NOT change the layout here
+    without updating the writer in the same release.
+    """
+    window_key = _CORTEX_QUALITY_CACHE_WINDOWS.get(days)
+    if window_key is None:
+        return None
+    try:
+        if not _CORTEX_QUALITY_CACHE_PATH.is_file():
+            return None
+        payload = json.loads(
+            _CORTEX_QUALITY_CACHE_PATH.read_text(encoding="utf-8")
+        )
+    except Exception:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    if payload.get("schema") != _CORTEX_QUALITY_CACHE_SCHEMA:
+        return None
+    captured_at = payload.get("captured_at") or ""
+    if not isinstance(captured_at, str):
+        return None
+    try:
+        captured = datetime.fromisoformat(captured_at)
+    except Exception:
+        return None
+    age = time.time() - captured.timestamp()
+    if age < 0 or age > _CORTEX_QUALITY_CACHE_MAX_AGE_SECONDS:
+        return None
+    window = payload.get(window_key)
+    if not isinstance(window, dict):
+        return None
+    return window
+
+
 def handle_cortex_quality(days: int = 30) -> str:
-    """Summarise recommendation quality, overrides, and linked outcome results."""
+    """Summarise recommendation quality, overrides, and linked outcome results.
+
+    v5.2.0: Serves the snapshot written by `nexo-cortex-cycle` when the
+    requested window is 7 or 1 days and the snapshot is fresh
+    (< 6h30m old, schema == 1). Falls back silently to a live SQL
+    summary on any failure, so the caller always gets a valid response.
+    The returned JSON includes `"source": "cache" | "live"` so the
+    path taken is observable from the outside.
+    """
     from db import cortex_evaluation_summary
 
+    cached = _load_cortex_quality_cache(days)
+    if cached is not None:
+        return json.dumps(
+            {"ok": True, "summary": cached, "source": "cache"},
+            ensure_ascii=False,
+            indent=2,
+        )
     summary = cortex_evaluation_summary(days=days)
-    return json.dumps({"ok": True, "summary": summary}, ensure_ascii=False, indent=2)
+    return json.dumps(
+        {"ok": True, "summary": summary, "source": "live"},
+        ensure_ascii=False,
+        indent=2,
+    )
 
 
 TOOLS = [
