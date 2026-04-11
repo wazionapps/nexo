@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.0.4 with local runtime bridge hardening, quieter doctor signals, and tighter first-response pacing on top of the goal-driven 5.0 runtime line.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.1.0 closes every open evolution, adaptive, cognitive, and skills loop under itself, ships bitemporal JSON-LD and GraphML knowledge graph export, adds an OpenTelemetry tool-span path, and puts lint, security, coverage, and release-readiness gates on every PR.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.0.4 with local runtime bridge hardening, quieter doctor signals, and tighter first-response pacing on top of the goal-driven 5.0 runtime line.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.1.0 closes every open evolution, adaptive, cognitive, and skills loop under itself, ships bitemporal JSON-LD and GraphML knowledge graph export, adds an OpenTelemetry tool-span path, and puts lint, security, coverage, and release-readiness gates on every PR.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.0.4 with local runtime bridge hardening, quieter doctor signals, and tighter first-response pacing on top of the goal-driven 5.0 runtime line.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.1.0 closes every open evolution, adaptive, cognitive, and skills loop under itself, ships bitemporal JSON-LD and GraphML knowledge graph export, adds an OpenTelemetry tool-span path, and puts lint, security, coverage, and release-readiness gates on every PR.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v5.0.4 with local runtime bridge hardening, quieter doctor signals, and tighter first-response pacing on top of the goal-driven 5.0 runtime line.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v5.1.0 closes every open evolution, adaptive, cognitive, and skills loop under itself, ships bitemporal JSON-LD and GraphML knowledge graph export, adds an OpenTelemetry tool-span path, and puts lint, security, coverage, and release-readiness gates on every PR.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,18 +87,22 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v5.0.4 live</span>
-                    <span class="page-chip">Runtime bridge + doctor cleanup</span>
-                    <span class="page-chip">Sharper first-response pacing</span>
+                    <span class="page-chip">v5.1.0 live</span>
+                    <span class="page-chip">Closed loops across evolution, adaptive, cognitive, skills</span>
+                    <span class="page-chip">Bitemporal KG export &middot; OTEL spans &middot; CI gates</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v504" class="btn btn-primary">Start with v5.0.4</a>
+                    <a href="#v510" class="btn btn-primary">Start with v5.1.0</a>
                     <a href="#v400" class="btn btn-secondary">See v4.0.0</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
             </div>
             <div class="page-visual">
                 <div class="page-stack">
+                    <div class="page-stack-card">
+                        <strong>v5.1.0</strong>
+                        <span>Every open evolution, adaptive, cognitive, and skills loop closes under itself. Bitemporal KG export, OpenTelemetry spans, and lint/security/release gates on every PR.</span>
+                    </div>
                     <div class="page-stack-card">
                         <strong>v5.0.4</strong>
                         <span>Personal-script runtime bridges are more robust, doctor false positives are quieter, and simple artifact reads answer sooner instead of looking hung.</span>
@@ -132,6 +136,64 @@
                 <div id="changelog-page-meta" class="changelog-page-meta">Loading release pages…</div>
                 <div id="changelog-pager" class="changelog-pager" aria-label="Changelog pagination"></div>
             </div>
+        </div>
+    </div>
+</section>
+
+<!-- v5.1.0 NEXO-AUDIT Phases 2-5 -->
+<section id="v510" class="section-compact" style="background:linear-gradient(135deg,#111827 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.1.0 <span style="opacity:.5;font-weight:400;">&mdash; April 11, 2026</span></div>
+        <h2 class="section-title">Every Open Loop Closes Under Itself</h2>
+        <p class="section-subtitle">
+            v5.1.0 lands the full NEXO-AUDIT-2026-04-11 roadmap as a single coordinated minor bump. Evolution, adaptive, cognitive, and skills subsystems now close their own loops instead of leaving half-delivered signals inside the database. The knowledge graph exports cleanly, OpenTelemetry spans hook in when you want them, and every PR now has to clear lint, security, coverage, and release-readiness gates before it can merge.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h3>Evolution + Adaptive + Skills Loops Close</h3>
+                    <p>Approved evolution proposals now auto-apply on the next cycle, adaptive rollbacks open visible followups instead of hiding inside <code>adaptive_log</code>, outcome patterns auto-promote to draft skills, and a Voyager-style detector surfaces co-occurring skill pairs as composite-skill candidates.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Cognitive Subsystems Get Loud</h3>
+                    <p>Search reranking now honours <code>dream_weight</code> and somatic markers as first-class signals. State watchers open deterministic <code>NF-WATCHER-{id}</code> followups and auto-resolve them, and correction fatigue surfaces as a visible followup instead of silently decaying memory.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Cortex Keeps Watching Itself</h3>
+                    <p>A new Cortex quality cron runs every 6 hours, watches accept rate, linked-success rate, and override gap, and opens <code>NF-CORTEX-QUALITY-DROP</code> idempotently when the decision engine starts drifting between cycles.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Retroactive Learnings</h3>
+                    <p>Adding a new learning now walks recent decisions, scores them against the rule, and opens deterministic <code>NF-RETRO-L&lt;id&gt;-D&lt;id&gt;</code> followups for every decision the learning would have changed &mdash; exposed via <code>nexo_learning_apply_retroactively</code>.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Bitemporal Knowledge Graph Export</h3>
+                    <p>The KG already tracked <code>valid_from</code> / <code>valid_until</code> on every edge. v5.1.0 adds <code>nexo_kg_export</code> with JSON-LD (using an <code>nexo:*</code> vocabulary) and GraphML output, and the <code>as_of</code> parameter replays historical snapshots for igraph, Gephi, NetworkX, and Cytoscape.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>OpenTelemetry, Opt-In</h3>
+                    <p>A new soft-import observability layer activates only when <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> or <code>OTEL_SERVICE_NAME</code> is set. When enabled, every tool call becomes a real span with <code>ai.tool.*</code> semantic attributes. When disabled, the wrapper stays a no-op so runtime cost is zero.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Hook Lifecycle Observability</h3>
+                    <p>A new <code>hook_runs</code> table and <code>nexo_hook_runs</code> tool surface recent hook runs, failure streaks, and latency. Hook drops are no longer invisible.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>CI Gates On Every PR</h3>
+                    <p>New GitHub Actions workflows enforce ruff (E9/F63/F7/F82/F821), bandit at high severity/high confidence, coverage baselines for decay/trust/plugin loader, and <code>verify_release_readiness.py --ci</code>. A PR that breaks the release contract now fails loudly instead of waiting until tag push.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Safer v5.0.x &rarr; v5.1.0 Update Path</h3>
+                    <p>On a version bump, macOS installs now <code>launchctl unload</code> and reload every <code>com.nexo.*.plist</code> so long-lived crons pick up the new codebase immediately. <code>auto_update</code> is guarded by a POSIX <code>flock</code> with stale-steal at 10 minutes so two concurrent <code>nexo update</code> runs cannot stomp each other.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Honest Feature Matrix vs Peers</h3>
+                    <p>The new <code>benchmarks/results/comparison-vs-competition-2026-04.md</code> lays out where NEXO wins, where it is on par, and where peers lead &mdash; across Letta, Mem0, Zep, Graphiti, Cognee, and DSPy. No cherry-picking.</p>
+                </div>
+            </div>
+        </div>
+        <div style="margin-top:24px;font-size:14px;opacity:.6;">
+            Closed loops across evolution / adaptive / cognitive / skills &bull; bitemporal KG export &bull; OpenTelemetry spans &bull; lint/security/coverage/release gates on every PR &bull; safer update path
         </div>
     </div>
 </section>

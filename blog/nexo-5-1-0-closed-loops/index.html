@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXO 5.1.0: Every Open Loop Closes Under Itself</title>
+    <meta name="description" content="NEXO 5.1.0 lands the full NEXO-AUDIT-2026-04-11 roadmap: evolution, adaptive, cognitive, and skills loops close under themselves, the bitemporal knowledge graph exports cleanly, OpenTelemetry spans hook in on demand, and every PR has to clear lint, security, coverage, and release-readiness gates before it can merge.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-5-1-0-closed-loops/">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/blog/nexo-5-1-0-closed-loops/">
+    <meta property="og:title" content="NEXO 5.1.0: Every Open Loop Closes Under Itself">
+    <meta property="og:description" content="NEXO 5.1.0 closes every open evolution, adaptive, cognitive, and skills loop under itself, ships bitemporal JSON-LD and GraphML knowledge graph export, adds an OpenTelemetry tool-span path, and puts lint, security, coverage, and release-readiness gates on every PR.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+    <meta property="article:published_time" content="2026-04-11">
+    <meta property="article:author" content="Francisco Cerda Puigserver">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO 5.1.0: Every Open Loop Closes Under Itself">
+    <meta name="twitter:description" content="Closed loops across evolution, adaptive, cognitive, and skills subsystems. Bitemporal KG export. OpenTelemetry spans. Lint, security, coverage, and release-readiness gates on every PR.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "NEXO 5.1.0: Every Open Loop Closes Under Itself",
+        "description": "NEXO 5.1.0 lands the full NEXO-AUDIT-2026-04-11 roadmap: evolution, adaptive, cognitive, and skills loops close under themselves, the bitemporal knowledge graph exports cleanly, OpenTelemetry spans hook in on demand, and every PR has to clear lint, security, coverage, and release-readiness gates before it can merge.",
+        "datePublished": "2026-04-11",
+        "dateModified": "2026-04-11",
+        "author": {
+            "@type": "Person",
+            "name": "Francisco Cerda Puigserver"
+        },
+        "publisher": {
+            "@type": "Organization",
+            "name": "WAzion",
+            "url": "https://www.wazion.com"
+        },
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https://nexo-brain.com/blog/nexo-5-1-0-closed-loops/"
+        },
+        "url": "https://nexo-brain.com/blog/nexo-5-1-0-closed-loops/",
+        "image": "https://nexo-brain.com/assets/nexo-brain-infographic-v5.png",
+        "keywords": ["NEXO 5.1.0", "closed loops", "bitemporal knowledge graph", "OpenTelemetry", "release readiness", "skill composition"]
+    }
+    </script>
+
+    <style>
+        .article-header { padding-top: 128px; padding-bottom: 40px; text-align: center; }
+        .article-meta { font-size: 14px; color: var(--text-muted); margin-bottom: 16px; }
+        .article-body {
+            max-width: 720px; margin: 0 auto; padding: 0 24px 80px;
+            font-size: 17px; line-height: 1.8; color: var(--text);
+        }
+        .article-body h2 { font-size: 28px; font-weight: 700; margin: 48px 0 16px; letter-spacing: -0.01em; }
+        .article-body p { margin-bottom: 20px; color: var(--text-muted); }
+        .article-body strong { color: var(--text); }
+        .article-body a { color: var(--purple-light); }
+        .article-body a:hover { color: var(--pink); }
+        .article-body ul { margin: 0 0 20px 24px; color: var(--text-muted); }
+        .article-body li { margin-bottom: 8px; }
+        .article-body code {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 14px; color: var(--pink);
+            background: rgba(236, 72, 153, 0.1);
+            padding: 2px 8px; border-radius: 4px;
+        }
+        .article-back {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 14px; font-weight: 600; color: var(--text-muted);
+            margin-bottom: 24px;
+        }
+        .article-back:hover { color: var(--purple-light); }
+        .article-visual { margin: 32px 0 40px; text-align: center; }
+        .article-visual img {
+            max-width: 100%;
+            border-radius: 16px;
+            border: 1px solid var(--dark-border);
+            box-shadow: 0 8px 32px rgba(124,58,237,0.15);
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-64.png" alt="NEXO Brain" class="logo-image">
+            <span class="logo-text">NEXO Brain</span>
+        </a>
+        <button class="mobile-menu-toggle" aria-label="Toggle navigation" onclick="toggleMobileMenu()">
+            <span></span><span></span><span></span>
+        </button>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/features/">Features</a>
+            <a href="/evolution/">Evolution</a>
+            <a href="/compare/">Compare</a>
+            <a href="/blog/">Blog</a>
+            <a href="/changelog/">Changelog</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta">GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<section class="article-header">
+    <div class="container">
+        <a href="/blog/" class="article-back">← Back to blog</a>
+        <div class="article-meta">April 11, 2026 · Minor release · NEXO-AUDIT-2026-04-11</div>
+        <h1 class="section-title" style="font-size:clamp(28px,4.5vw,48px);max-width:920px;margin:0 auto 16px;">NEXO 5.1.0: Every Open Loop Closes Under Itself</h1>
+        <p class="section-subtitle" style="max-width:760px;margin:0 auto;">5.0.0 tied goals, decisions, outcomes, and reusable skills into one coherent runtime. 5.1.0 is the release where every remaining loop inside that runtime starts closing under itself instead of leaving half-delivered signals in the database.</p>
+    </div>
+</section>
+
+<section>
+    <div class="article-body">
+        <div class="article-visual">
+            <img src="/assets/nexo-brain-infographic-v5.png" alt="NEXO Brain 5.1.0 release">
+        </div>
+
+        <p><strong>5.1.0 is the output of a single audit: <code>NEXO-AUDIT-2026-04-11</code>.</strong> It walked every subsystem introduced between 4.x and 5.0 looking for loops that had been opened but not closed — adaptive signals that got computed but never surfaced, evolution proposals that got accepted but never applied, skills that got promoted but never composed, hook runs that could drop silently, and so on. About 46% of the originally-flagged items turned out to be false positives under empirical verification. What remained is what actually shipped in this release.</p>
+
+        <h2>Evolution, adaptive, skills, and cortex now close their own loops</h2>
+        <ul>
+            <li><strong>Accepted evolution proposals auto-apply on the next cycle.</strong> <code>nexo-evolution-run.py</code> now reads <code>evolution_log</code> rows marked <code>accepted</code> and runs them through the auto-proposal executor with snapshot and rollback, backed by the new idempotent migration <code>m38</code>. No more forever-pending approvals.</li>
+            <li><strong>Outcome patterns auto-promote to draft skills.</strong> <code>skills_runtime.auto_promote_outcome_patterns_to_skills()</code> materializes recurring successful patterns into draft skills without manual curation, and a Voyager-style detector groups <code>skill_usage</code> by session to surface co-occurring skill pairs as composite-skill candidates.</li>
+            <li><strong>Retroactive learnings.</strong> Adding a new learning now walks recent decisions, scores them against the rule, and opens deterministic <code>NF-RETRO-L&lt;id&gt;-D&lt;id&gt;</code> followups for every decision the learning would have changed. Exposed via <code>nexo_learning_apply_retroactively</code>.</li>
+            <li><strong>Adaptive rollbacks are visible.</strong> When adaptive learned-weights roll back, the runtime now surfaces that as a visible followup on the next heartbeat instead of hiding the signal inside <code>adaptive_log</code>.</li>
+            <li><strong>Cortex keeps watching itself.</strong> A new quality cron runs every 6 hours, watches accept rate, linked-success rate, and override gap, and opens <code>NF-CORTEX-QUALITY-DROP</code> idempotently when the decision engine starts drifting between cycles.</li>
+        </ul>
+
+        <h2>Cognitive subsystems get externally observable</h2>
+        <ul>
+            <li><strong>Dream + somatic reranking.</strong> <code>cognitive._search.search()</code> now accepts a <code>dream_weight</code> parameter and reranks dream-insight memories through it, while a new somatic boost step (max +0.10) folds emotional salience into the same reranking path. Both signals are first-class instead of dead columns.</li>
+            <li><strong>State watchers auto-open and auto-resolve followups.</strong> When a watcher fires, it opens a deterministic <code>NF-WATCHER-{id}</code> followup; when it clears, the followup resolves. Watcher activity is always externally observable instead of being buried in runtime logs.</li>
+            <li><strong>Correction fatigue surfaces as a followup.</strong> Cognitive-decay now opens a visible followup when the fatigue signal crosses its threshold, so the operator sees the runtime is getting tired of correcting the same thing instead of only adjusting memory weights invisibly.</li>
+            <li><strong>Hook lifecycle observability.</strong> A new <code>hook_runs</code> table (migration <code>m39</code>) + <code>nexo_hook_runs</code> MCP tool expose recent hook runs, failure streaks, and a health summary. Hook drops are no longer invisible.</li>
+        </ul>
+
+        <h2>Bitemporal Knowledge Graph exports</h2>
+        <p>NEXO's knowledge graph has been bitemporal since 4.x — every edge carries <code>valid_from</code> / <code>valid_until</code>, and the upsert/delete helpers maintain them. What it was missing was a way to <em>emit</em> the graph in a format external tools could ingest. 5.1.0 fixes that with <code>nexo_kg_export</code>:</p>
+        <ul>
+            <li><strong>JSON-LD</strong> output uses an <code>nexo:*</code> vocabulary so the graph is semantic-web friendly and human-readable.</li>
+            <li><strong>GraphML</strong> output plugs into igraph, Gephi, NetworkX, and Cytoscape for serious graph analysis.</li>
+            <li><strong><code>as_of</code> parameter</strong> replays the historical snapshot that was valid at any instant — this is what makes the export actually bitemporal rather than just "current state dumped to a file".</li>
+        </ul>
+
+        <h2>OpenTelemetry, opt-in</h2>
+        <p>A new <code>src/observability.py</code> module soft-imports <code>opentelemetry</code> and only activates when <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> or <code>OTEL_SERVICE_NAME</code> is set. <code>tool_span()</code> is a no-op context manager when OTEL is disabled and a real span with <code>ai.tool.*</code> semantic attributes when enabled. The result: NEXO can be wired into any OTEL backend (Honeycomb, Jaeger, Tempo, Grafana Cloud, Dash0, Signoz, etc) without taking a hard dependency on OTEL for users who don't want it.</p>
+
+        <h2>CI gates on every PR</h2>
+        <p>The operational gap 5.0.x left open was not in the runtime — it was in the release pipeline. A PR could break the release contract and nobody would notice until tag push. 5.1.0 closes that:</p>
+        <ul>
+            <li><strong>ruff lint workflow</strong> enforces <code>E9 / F63 / F7 / F82 / F821</code> on every PR and push. Baseline pass fixed 5 latent <code>F821</code> bugs.</li>
+            <li><strong>bandit security workflow</strong> runs at high severity / high confidence. Baseline pass fixed 10 weak-hash flags (<code>usedforsecurity=False</code>) across protocol, deep-sleep, and daily-self-audit scripts.</li>
+            <li><strong>Coverage baseline tests</strong> pin the contract surface area of decay, trust, plugin loader, cognitive, and release so a refactor cannot silently delete them.</li>
+            <li><strong><code>verify_release_readiness.py --ci</code></strong> now runs on every PR, not just tags. A PR that breaks the release contract fails loudly immediately.</li>
+        </ul>
+
+        <h2>Safer update path</h2>
+        <p>Two long-standing footguns are gone in 5.1.0:</p>
+        <ul>
+            <li><strong>Concurrent <code>nexo update</code> protection.</strong> <code>auto_update</code> is now guarded by a POSIX <code>flock</code> with stale-steal at 10 minutes, so two overlapping update runs cannot stomp each other mid-sync.</li>
+            <li><strong>LaunchAgent hot-reload.</strong> On macOS, a version bump now <code>launchctl unload</code>s and reloads every <code>com.nexo.*.plist</code>, so long-lived crons pick up the new codebase immediately instead of running the pre-bump version until the next reboot.</li>
+        </ul>
+
+        <h2>Honest feature matrix vs peers</h2>
+        <p>The new <code>benchmarks/results/comparison-vs-competition-2026-04.md</code> lays out where NEXO wins, where it is on par, and where peers lead — across Letta, Mem0, Zep, Graphiti, Cognee, and DSPy. No cherry-picking. The defensible differentiators end up being the bitemporal knowledge graph, the metacognitive guard, trust scoring, Atkinson-Shiffrin decay, and the native MCP surface.</p>
+
+        <h2>What did not change</h2>
+        <p>5.1.0 does not replace the 5.0.0 story. Goal profiles, Decision Cortex v2, outcome-backed skill evolution, and the broader runtime pack are still the backbone. This release makes that backbone observable and maintainable under itself instead of relying on the operator to remember to look at every subsystem.</p>
+
+        <p>If you want the exact release record, open the <a href="/changelog/#v510">5.1.0 changelog section</a>. If you want to dig into the new graph exports and observability paths, start from <a href="/features/">Features</a> or the <a href="/docs/">docs map</a>. If you are on an older install, <code>nexo update</code> will handle the migration and cron reload automatically.</p>
+    </div>
+</section>
+
+<footer>
+    <div class="container">
+        <div class="footer-content">
+            <div class="footer-left">
+                Created by <strong>Francisco Cerd&agrave; Puigserver</strong> &amp; <strong>NEXO</strong> (Claude Opus) &bull; Built by <a href="https://www.wazion.com">WAzion</a> &bull; AGPL-3.0 License &bull; &copy; 2026
+            </div>
+            <div class="footer-links">
+                <a href="https://github.com/wazionapps/nexo">GitHub</a>
+                <a href="https://x.com/NEXOBRAIN">X / Twitter</a>
+                <a href="https://github.com/sponsors/wazionapps">Sponsor</a>
+                <a href="/docs/">Docs</a>
+                <a href="/compare/">Compare</a>
+                <a href="/blog/">Blog</a>
+                <a href="https://www.npmjs.com/package/nexo-brain">npm</a>
+                <a href="https://github.com/wazionapps/nexo/releases">Releases</a>
+            </div>
+            <div style="text-align:center;margin-top:12px;color:#6b7280;font-size:12px;">Last updated: April 2026</div>
+        </div>
+    </div>
+</footer>
+
+</body>
+</html>
