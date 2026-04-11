@@ -14,6 +14,35 @@ from db._hot_context import capture_context_event
 ACTIVE_EXCLUDED_STATUSES = {"DELETED", "archived", "blocked", "waiting"}
 READ_TOKEN_TTL_SECONDS = 30 * 60
 
+# Opportunistic cleanup of expired item_read_tokens: runs at most once every
+# _READ_TOKEN_PURGE_INTERVAL seconds from inside _issue_item_read_token. This
+# avoids unbounded growth of expired tokens without adding a new cron or
+# relying on maintenance_schedule (which is currently not wired up — its
+# runner check_and_run_overdue is defined but never invoked from anywhere).
+_READ_TOKEN_PURGE_INTERVAL = 3600  # 1 hour
+_last_read_token_purge: float = 0.0
+
+
+def _purge_expired_read_tokens_if_due(conn: sqlite3.Connection, now: float) -> None:
+    """Delete expired item_read_tokens in-band with a 1h throttle.
+
+    Called from _issue_item_read_token so cleanup rides on normal activity and
+    does not require a separate scheduler. Failures are swallowed because
+    token issuance must never be blocked by cleanup problems.
+    """
+    global _last_read_token_purge
+    if now - _last_read_token_purge < _READ_TOKEN_PURGE_INTERVAL:
+        return
+    _last_read_token_purge = now
+    try:
+        conn.execute(
+            "DELETE FROM item_read_tokens WHERE expires_at < ?",
+            (now,),
+        )
+    except Exception:
+        # Cleanup must never block token issuance. Swallow and move on.
+        pass
+
 
 def _table_exists(conn: sqlite3.Connection, table_name: str) -> bool:
     row = conn.execute(
@@ -133,6 +162,13 @@ def get_item_history(item_type: str, item_id: str, limit: int = 20) -> list[dict
 def _issue_item_read_token(item_type: str, item_id: str, ttl_seconds: int = READ_TOKEN_TTL_SECONDS) -> str:
     conn = get_db()
     now = now_epoch()
+    # Opportunistic cleanup of expired tokens so the table does not grow
+    # unbounded. Throttled to once per hour. Wrapped defensively: any
+    # failure inside the cleanup helper must never block token issuance.
+    try:
+        _purge_expired_read_tokens_if_due(conn, now)
+    except Exception:
+        pass
     token = "IRT-" + secrets.token_hex(12)
     history_seq = _latest_history_seq(conn, item_type, item_id)
     conn.execute(
