@@ -11,12 +11,12 @@
 **NEXO Brain transforms any MCP-compatible AI agent from a stateless assistant into a cognitive partner that remembers, learns, forgets, adapts, and builds a relationship with you over time.**
 
 <p align="center">
-  <a href="https://www.youtube.com/watch?v=IBs7zh7ZMG0">
+  <a href="https://nexo-brain.com/watch/">
     <img src="assets/nexo-brain-infographic-v5.png" alt="NEXO Brain Architecture" width="700">
   </a>
 </p>
 
-[Watch the overview on YouTube](https://www.youtube.com/watch?v=IBs7zh7ZMG0) · [Watch the full deep-dive](https://www.youtube.com/watch?v=bKAfowyyy5M)
+[Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
 Start here:
 - [5-minute quickstart](docs/quickstart-5-minutes.md)
@@ -86,6 +86,13 @@ Versions `3.1.7` through `3.2.0` close the recent-memory gap:
 - the runtime can build a reusable pre-action bundle instead of reconstructing the last few hours from diaries and durable recall only
 - when even that misses, NEXO now exposes raw transcript fallback tools for Claude Code and Codex session stores
 - NEXO can now inspect itself through a live system catalog derived from canonical sources instead of relying only on stale docs or operator memory
+
+Version `5.0.3` closes the next post-5.0 runtime gap:
+
+- `nexo chat` now boots Claude Code and Codex with an explicit NEXO startup prompt instead of opening cold or leaking the target path as a fake prompt
+- terminal launches now use the requested working directory as real `cwd`, so the selected project path stops behaving like chat text
+- the vendorable `nexo_helper.py` bridge now bounds helper calls with a timeout instead of letting personal-script subprocess flows wait forever
+- the doctor hardening from `5.0.2` remains validated on a real upgraded runtime after sync
 
 Version `5.0.2` closes the small post-5.0.1 doctor drift:
 

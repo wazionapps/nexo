@@ -1,0 +1,82 @@
+{
+  "release_line": "v5.0",
+  "target_version": "5.0.3",
+  "scope_owner": "NEXO",
+  "distribution": {
+    "git_updates_on": "merge_to_main",
+    "packaged_release_on": "tag_publish"
+  },
+  "required_repo_files": [
+    "scripts/verify_release_readiness.py",
+    "scripts/run_v5_0_smoke.py",
+    "release-contracts/v5.0.3.json",
+    "src/agent_runner.py",
+    "src/cli.py",
+    "src/doctor/providers/runtime.py",
+    "src/tools_sessions.py",
+    "templates/CLAUDE.md.template",
+    "templates/CODEX.AGENTS.md.template",
+    "templates/nexo_helper.py",
+    "tests/test_agent_runner.py",
+    "tests/test_cli_scripts.py",
+    "tests/test_doctor.py",
+    "tests/test_drive.py",
+    "tests/test_hot_context.py",
+    "README.md"
+  ],
+  "required_website_files": [
+    "index.html",
+    "watch/index.html",
+    "features/index.html",
+    "changelog/index.html",
+    "compare/index.html",
+    "docs/index.html",
+    "assets/nexo-brain-infographic-v5.png",
+    "assets/video/nexo-brain-v5-overview.mp4"
+  ],
+  "gates": [
+    {
+      "id": "interactive_bootstrap",
+      "title": "Managed terminal clients start as NEXO immediately",
+      "status": "complete",
+      "evidence_required": [
+        "Claude Code launch no longer treats the target path as a prompt",
+        "Claude Code and Codex both receive an explicit startup prompt",
+        "Interactive launches use the requested working directory as real cwd"
+      ]
+    },
+    {
+      "id": "doctor_hotfix_persists",
+      "title": "Doctor/runtime hardening remains healthy after sync",
+      "status": "complete",
+      "evidence_required": [
+        "nexo doctor prints immediate progress feedback",
+        "nexo doctor --tier all stays healthy on a real upgraded runtime",
+        "protocol and automation false positives remain closed"
+      ]
+    },
+    {
+      "id": "runtime_revalidation",
+      "title": "Live runtime revalidated after sync",
+      "status": "complete",
+      "evidence_required": [
+        "nexo update passes on a real install",
+        "nexo clients sync stays healthy for Claude Code, Codex, and Claude Desktop",
+        "Codex and Claude launch smokes show startup prompt + cwd",
+        "real nexo_email_read returns promptly after sync",
+        "single-artifact asks produce a visible answer before deeper investigation"
+      ]
+    },
+    {
+      "id": "release_package",
+      "title": "Release package aligned",
+      "status": "complete",
+      "evidence_required": [
+        "Version and changelog aligned",
+        "Release artifacts synced",
+        "Smoke + readiness checks pass",
+        "README and website point at the current public video + infographic"
+      ]
+    }
+  ]
+}

@@ -1081,6 +1081,8 @@ def _doctor(args):
         return 1
 
     init_db()
+    tier_label = getattr(args, "tier", "boot") or "boot"
+    print(f"[NEXO] Inspecting {tier_label} diagnostics... please wait.", file=sys.stderr, flush=True)
     report = run_doctor(tier=args.tier, fix=args.fix)
     output = format_report(report, fmt="json" if args.json else "text")
     print(output)

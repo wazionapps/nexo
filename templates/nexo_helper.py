@@ -17,6 +17,7 @@ from pathlib import Path
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 DEFAULT_ALLOWED_TOOLS = "Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__*"
+DEFAULT_NEXO_TIMEOUT_SECONDS = max(15, int(os.environ.get("NEXO_HELPER_TIMEOUT", "90")))
 
 
 def _load_schedule() -> dict:
@@ -57,6 +58,7 @@ def run_nexo(args: list[str]) -> str:
         ["nexo", *args],
         capture_output=True,
         text=True,
+        timeout=DEFAULT_NEXO_TIMEOUT_SECONDS,
     )
     if result.returncode != 0:
         raise RuntimeError(result.stderr.strip() or result.stdout.strip() or f"nexo exited {result.returncode}")

@@ -45,6 +45,7 @@ def test_build_interactive_client_command_uses_codex_when_selected(tmp_path, mon
     monkeypatch.setattr(agent_runner, "_resolve_codex_cli", lambda: "/tmp/fake-codex")
     monkeypatch.setattr(agent_runner, "_load_client_bootstrap_prompt", lambda client: "You are NEXO.")
     monkeypatch.setattr(agent_runner, "_codex_managed_initial_messages_enabled", lambda: False)
+    monkeypatch.setattr(agent_runner, "_interactive_startup_prompt", lambda client: "Start NEXO now.")
 
     client, cmd = agent_runner.build_interactive_client_command(
         target=tmp_path,
@@ -72,13 +73,14 @@ def test_build_interactive_client_command_uses_codex_when_selected(tmp_path, mon
     assert cmd[5:7] == ["-c", 'initial_messages=[{role="system",content="You are NEXO."}]']
     assert cmd[7:9] == ["-m", "gpt-5.4"]
     assert cmd[9:11] == ["-c", 'model_reasoning_effort="xhigh"']
-    assert cmd[-2:] == ["-C", str(tmp_path)]
+    assert cmd[-3:] == ["-C", str(tmp_path), "Start NEXO now."]
 
 
 def test_build_interactive_client_command_preserves_claude_flags(tmp_path, monkeypatch):
     import agent_runner
 
     monkeypatch.setattr(agent_runner, "_resolve_claude_cli", lambda: "/tmp/fake-claude")
+    monkeypatch.setattr(agent_runner, "_interactive_startup_prompt", lambda client: "Start NEXO now.")
 
     client, cmd = agent_runner.build_interactive_client_command(
         target=tmp_path,
@@ -95,7 +97,13 @@ def test_build_interactive_client_command_preserves_claude_flags(tmp_path, monke
     )
 
     assert client == "claude_code"
-    assert cmd == ["/tmp/fake-claude", "--model", "claude-opus-4-6[1m]", "--dangerously-skip-permissions", str(tmp_path)]
+    assert cmd == [
+        "/tmp/fake-claude",
+        "--model",
+        "claude-opus-4-6[1m]",
+        "--dangerously-skip-permissions",
+        "Start NEXO now.",
+    ]
 
 
 def test_run_automation_prompt_uses_claude_backend_command(monkeypatch, tmp_path):
@@ -415,6 +423,7 @@ def test_codex_runner_skips_inline_bootstrap_when_global_bootstrap_is_managed(mo
     monkeypatch.setattr(agent_runner, "_resolve_codex_cli", lambda: "/tmp/fake-codex")
     monkeypatch.setattr(agent_runner, "_load_client_bootstrap_prompt", lambda client: "You are NEXO.")
     monkeypatch.setattr(agent_runner, "_codex_managed_initial_messages_enabled", lambda: True)
+    monkeypatch.setattr(agent_runner, "_interactive_startup_prompt", lambda client: "Start NEXO now.")
 
     client, cmd = agent_runner.build_interactive_client_command(
         target=tmp_path,
@@ -442,6 +451,32 @@ def test_codex_runner_skips_inline_bootstrap_when_global_bootstrap_is_managed(mo
     config_values = [cmd[idx + 1] for idx, part in enumerate(cmd) if part == "-c"]
     assert not any("initial_messages=" in value for value in config_values)
     assert 'model_reasoning_effort="xhigh"' in config_values
+    assert cmd[-3:] == ["-C", str(tmp_path), "Start NEXO now."]
+
+
+def test_launch_interactive_client_uses_target_as_cwd(monkeypatch, tmp_path):
+    import agent_runner
+
+    captured = {}
+
+    monkeypatch.setattr(
+        agent_runner,
+        "build_interactive_client_command",
+        lambda **kwargs: ("claude_code", ["/tmp/fake-claude", "--dangerously-skip-permissions", "Start NEXO now."]),
+    )
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        captured["cwd"] = kwargs.get("cwd")
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(agent_runner.subprocess, "run", fake_run)
+
+    result = agent_runner.launch_interactive_client(target=tmp_path)
+
+    assert result.returncode == 0
+    assert captured["cmd"][-1] == "Start NEXO now."
+    assert captured["cwd"] == str(tmp_path.resolve())
 
 
 def test_build_followup_terminal_shell_command_uses_codex_interactive_flags(monkeypatch, tmp_path):

@@ -73,6 +73,7 @@ def _create_protocol_tables(db_path: Path):
     conn.execute(
         """CREATE TABLE IF NOT EXISTS protocol_tasks (
             task_id TEXT PRIMARY KEY,
+            session_id TEXT DEFAULT '',
             status TEXT DEFAULT 'open',
             must_verify INTEGER DEFAULT 0,
             close_evidence TEXT DEFAULT '',
@@ -88,6 +89,8 @@ def _create_protocol_tables(db_path: Path):
     conn.execute(
         """CREATE TABLE IF NOT EXISTS protocol_debt (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT DEFAULT '',
+            task_id TEXT DEFAULT '',
             debt_type TEXT NOT NULL,
             severity TEXT NOT NULL DEFAULT 'warn',
             status TEXT NOT NULL DEFAULT 'open',
@@ -172,6 +175,30 @@ class TestRuntimeChecks:
         from doctor.providers.runtime import check_immune_status
         check = check_immune_status()
         assert check.status == "healthy"
+
+    def test_stale_immune_reuses_last_status_when_cron_is_alive(self, nexo_home):
+        status = {
+            "counts": {"OK": 3, "WARN": 0, "FAIL": 0},
+            "checks": {"db": [1], "services": [1, 2]},
+        }
+        status_path = nexo_home / "coordination" / "immune-status.json"
+        status_path.write_text(json.dumps(status))
+        old_time = time.time() - 7200
+        os.utime(str(status_path), (old_time, old_time))
+
+        conn = sqlite3.connect(str(nexo_home / "data" / "nexo.db"))
+        conn.execute(
+            "INSERT INTO cron_runs (cron_id, started_at) VALUES (?, datetime('now'))",
+            ("immune",),
+        )
+        conn.commit()
+        conn.close()
+
+        from doctor.providers.runtime import check_immune_status
+
+        check = check_immune_status()
+        assert check.status == "healthy"
+        assert "reusing last reported status" in " ".join(check.evidence)
 
     def test_stale_watchdog(self, nexo_home):
         status_file = nexo_home / "operations" / "watchdog-status.json"
@@ -1658,6 +1685,39 @@ class TestRuntimeChecks:
         assert check.status == "critical"
         assert any("claimed_done_without_evidence" in item for item in check.evidence)
 
+    def test_protocol_compliance_ignores_live_guard_debt_on_active_task(self, nexo_home):
+        db_path = nexo_home / "data" / "nexo.db"
+        _create_protocol_tables(db_path)
+        conn = sqlite3.connect(str(db_path))
+        conn.execute("ALTER TABLE protocol_tasks ADD COLUMN response_high_stakes INTEGER DEFAULT 0")
+        conn.execute(
+            """INSERT INTO sessions (sid, task, started_epoch, last_update_epoch, local_time)
+               VALUES (?, ?, ?, ?, ?)""",
+            ("nexo-live", "active task", time.time() - 120, time.time(), "10:00"),
+        )
+        conn.execute(
+            """INSERT INTO protocol_tasks (
+                task_id, session_id, status, must_verify, close_evidence, must_change_log,
+                change_log_id, correction_happened, learning_id, task_type,
+                cortex_mode, response_high_stakes, opened_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))""",
+            ("PT-LIVE", "nexo-live", "open", 1, "", 0, None, 0, None, "execute", "propose", 0),
+        )
+        conn.execute(
+            """INSERT INTO protocol_debt (
+                session_id, task_id, debt_type, severity, status, created_at
+            ) VALUES (?, ?, ?, ?, ?, datetime('now'))""",
+            ("nexo-live", "PT-LIVE", "unacknowledged_guard_blocking", "error", "open"),
+        )
+        conn.commit()
+        conn.close()
+
+        from doctor.providers.runtime import check_protocol_compliance
+
+        check = check_protocol_compliance()
+        assert check.status == "healthy"
+        assert any("live in-progress guard acknowledgements pending: 1" in item for item in check.evidence)
+
     def test_automation_telemetry_goes_critical_when_cost_coverage_is_missing(self, nexo_home):
         db_path = nexo_home / "data" / "nexo.db"
         conn = sqlite3.connect(str(db_path))
@@ -1699,6 +1759,48 @@ class TestRuntimeChecks:
         check = check_automation_telemetry()
         assert check.status == "critical"
         assert any("cost_coverage=66.7%" in item for item in check.evidence)
+
+    def test_automation_telemetry_ignores_failed_runs_without_usage(self, nexo_home):
+        db_path = nexo_home / "data" / "nexo.db"
+        conn = sqlite3.connect(str(db_path))
+        conn.execute(
+            """CREATE TABLE automation_runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                backend TEXT DEFAULT '',
+                model TEXT DEFAULT '',
+                reasoning_effort TEXT DEFAULT '',
+                input_tokens INTEGER DEFAULT 0,
+                cached_input_tokens INTEGER DEFAULT 0,
+                output_tokens INTEGER DEFAULT 0,
+                total_cost_usd REAL,
+                telemetry_source TEXT DEFAULT '',
+                cost_source TEXT DEFAULT '',
+                status TEXT DEFAULT 'ok',
+                metadata TEXT DEFAULT '{}',
+                created_at TEXT DEFAULT (datetime('now'))
+            )"""
+        )
+        conn.execute(
+            """INSERT INTO automation_runs (
+                backend, input_tokens, output_tokens, total_cost_usd, cost_source, status, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))""",
+            ("claude_code", 120, 20, 0.12, "backend", "ok"),
+        )
+        conn.execute(
+            """INSERT INTO automation_runs (
+                backend, input_tokens, output_tokens, total_cost_usd, cost_source, status, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))""",
+            ("codex", 0, 0, 0.0, "pricing_snapshot", "failed"),
+        )
+        conn.commit()
+        conn.close()
+
+        from doctor.providers.runtime import check_automation_telemetry
+
+        check = check_automation_telemetry()
+        assert check.status == "healthy"
+        assert any("successful_runs=1" in item for item in check.evidence)
+        assert any("failed_runs=1" in item for item in check.evidence)
 
 
 class TestDeepChecks:

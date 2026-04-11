@@ -41,6 +41,7 @@ PROTECTED_MACOS_ROOTS = (
 IMMUNE_FRESHNESS = 3600  # 1 hour (runs every 30 min)
 WATCHDOG_FRESHNESS = 3600  # 1 hour (runs every 30 min)
 DEFAULT_CRON_THRESHOLD = 7200  # Fallback when manifest data is unavailable
+LIVE_PROTOCOL_SESSION_FRESHNESS = 1800  # 30 minutes
 AUXILIARY_CORE_LAUNCHAGENT_IDS = {"dashboard", "prevent-sleep", "tcc-approve"}
 SPECIAL_LAUNCHAGENT_IDS = {"prevent-sleep", "tcc-approve"}
 SPECIAL_ENV_NORMALIZE_IDS = SPECIAL_LAUNCHAGENT_IDS
@@ -691,6 +692,37 @@ def _load_json(path: Path) -> dict:
     return json.loads(path.read_text())
 
 
+def _latest_cron_run_age_seconds(cron_id: str) -> float | None:
+    db_path = NEXO_HOME / "data" / "nexo.db"
+    if not db_path.is_file():
+        return None
+    try:
+        conn = sqlite3.connect(str(db_path), timeout=2)
+        try:
+            conn.row_factory = sqlite3.Row
+            table = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='cron_runs'"
+            ).fetchone()
+            if not table:
+                return None
+            row = conn.execute(
+                "SELECT MAX(started_at) AS last_run FROM cron_runs WHERE cron_id = ?",
+                (cron_id,),
+            ).fetchone()
+        finally:
+            conn.close()
+    except Exception:
+        return None
+
+    last_run = row["last_run"] if row else None
+    parsed = _parse_timestamp(last_run) if last_run else None
+    if parsed is None:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=dt.timezone.utc)
+    return max(0.0, time.time() - parsed.timestamp())
+
+
 def _latest_periodic_summary(kind: str) -> dict | None:
     pattern = f"*-{kind}-summary.json"
     candidates: list[tuple[str, Path]] = []
@@ -1097,22 +1129,9 @@ def check_immune_status() -> DoctorCheck:
         )
 
     age_min = age / 60
-    if age > IMMUNE_FRESHNESS:
-        return DoctorCheck(
-            id="runtime.immune_freshness",
-            tier="runtime",
-            status="degraded",
-            severity="warn",
-            summary=f"Immune status stale ({age_min:.0f} min old, threshold {IMMUNE_FRESHNESS // 60} min)",
-            evidence=[f"{status_file} last modified {age_min:.0f} minutes ago"],
-            repair_plan=[
-                "Check LaunchAgent/systemd timer for immune cron",
-                "nexo scripts call nexo_schedule_status --input '{}'",
-            ],
-            escalation_prompt="Investigate why immune system stopped refreshing.",
-        )
 
-    # Read status for additional context
+    # Read status for additional context even when the file is stale so the
+    # doctor can distinguish a dead immune cron from an intentional skip window.
     try:
         data = _load_json(status_file)
         counts = data.get("counts") or {}
@@ -1132,6 +1151,39 @@ def check_immune_status() -> DoctorCheck:
             status = "healthy"
             severity = "info"
             overall = "ok"
+        evidence: list[str] = []
+        if age > IMMUNE_FRESHNESS:
+            cron_age = _latest_cron_run_age_seconds("immune")
+            if cron_age is not None and cron_age <= IMMUNE_FRESHNESS:
+                evidence.append(
+                    f"immune cron ran {cron_age / 60:.0f} minutes ago; reusing last reported status while the cron remains alive"
+                )
+                summary = (
+                    f"Immune cron is alive; last status reused ({age_min:.0f} min old file)"
+                    if status == "healthy"
+                    else f"Immune cron is alive; last {overall} status reused ({age_min:.0f} min old file)"
+                )
+                return DoctorCheck(
+                    id="runtime.immune_freshness",
+                    tier="runtime",
+                    status=status,
+                    severity=severity,
+                    summary=summary,
+                    evidence=evidence,
+                )
+            return DoctorCheck(
+                id="runtime.immune_freshness",
+                tier="runtime",
+                status="degraded",
+                severity="warn",
+                summary=f"Immune status stale ({age_min:.0f} min old, threshold {IMMUNE_FRESHNESS // 60} min)",
+                evidence=[f"{status_file} last modified {age_min:.0f} minutes ago"],
+                repair_plan=[
+                    "Check LaunchAgent/systemd timer for immune cron",
+                    "nexo scripts call nexo_schedule_status --input '{}'",
+                ],
+                escalation_prompt="Investigate why immune system stopped refreshing.",
+            )
         return DoctorCheck(
             id="runtime.immune_freshness",
             tier="runtime",
@@ -2310,7 +2362,7 @@ def check_protocol_compliance() -> DoctorCheck:
                 tables = {
                     row["name"]
                     for row in conn.execute(
-                        "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('protocol_tasks', 'protocol_debt')"
+                        "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('protocol_tasks', 'protocol_debt', 'sessions')"
                     ).fetchall()
                 }
                 tasks = None
@@ -2323,14 +2375,78 @@ def check_protocol_compliance() -> DoctorCheck:
                            ORDER BY opened_at DESC""",
                         (window,),
                     ).fetchall()
-                    debt_rows = conn.execute(
-                        """SELECT severity, debt_type, COUNT(*) AS total
-                           FROM protocol_debt
-                           WHERE status = 'open' AND created_at >= datetime('now', ?)
-                           GROUP BY severity, debt_type
-                           ORDER BY total DESC, debt_type ASC""",
-                        (window,),
-                    ).fetchall()
+                    protocol_debt_cols = {
+                        row["name"] for row in conn.execute("PRAGMA table_info(protocol_debt)").fetchall()
+                    }
+                    protocol_task_cols = {
+                        row["name"] for row in conn.execute("PRAGMA table_info(protocol_tasks)").fetchall()
+                    }
+                    session_cols = set()
+                    if "sessions" in tables:
+                        session_cols = {
+                            row["name"] for row in conn.execute("PRAGMA table_info(sessions)").fetchall()
+                        }
+                    active_session_ids: set[str] = set()
+                    if {"sid", "last_update_epoch"}.issubset(session_cols):
+                        active_cutoff = time.time() - LIVE_PROTOCOL_SESSION_FRESHNESS
+                        active_session_ids = {
+                            str(row["sid"] or "")
+                            for row in conn.execute(
+                                "SELECT sid FROM sessions WHERE last_update_epoch >= ?",
+                                (active_cutoff,),
+                            ).fetchall()
+                        }
+                    live_guard_debt = 0
+                    if {"task_id", "session_id"}.issubset(protocol_debt_cols):
+                        task_status_expr = "'' AS task_status"
+                        if "status" in protocol_task_cols:
+                            task_status_expr = "pt.status AS task_status"
+                        open_debts = conn.execute(
+                            f"""SELECT
+                                    pd.severity,
+                                    pd.debt_type,
+                                    pd.session_id,
+                                    pd.task_id,
+                                    pd.created_at,
+                                    {task_status_expr}
+                                FROM protocol_debt pd
+                                LEFT JOIN protocol_tasks pt ON pt.task_id = pd.task_id
+                                WHERE pd.status = 'open' AND pd.created_at >= datetime('now', ?)
+                                ORDER BY pd.created_at DESC""",
+                            (window,),
+                        ).fetchall()
+                        debt_counter: dict[tuple[str, str], int] = {}
+                        for row in open_debts:
+                            severity = str(row["severity"] or "warn")
+                            debt_type = str(row["debt_type"] or "unknown")
+                            session_id = str(row["session_id"] or "")
+                            task_status = str(row["task_status"] or "")
+                            if (
+                                debt_type == "unacknowledged_guard_blocking"
+                                and task_status == "open"
+                                and session_id in active_session_ids
+                            ):
+                                live_guard_debt += 1
+                                continue
+                            debt_counter[(severity, debt_type)] = debt_counter.get((severity, debt_type), 0) + 1
+                        debt_rows = [
+                            {"severity": severity, "debt_type": debt_type, "total": total}
+                            for (severity, debt_type), total in sorted(
+                                debt_counter.items(),
+                                key=lambda item: (-item[1], item[0][1], item[0][0]),
+                            )
+                        ]
+                    else:
+                        debt_rows = [
+                            dict(row) for row in conn.execute(
+                                """SELECT severity, debt_type, COUNT(*) AS total
+                                   FROM protocol_debt
+                                   WHERE status = 'open' AND created_at >= datetime('now', ?)
+                                   GROUP BY severity, debt_type
+                                   ORDER BY total DESC, debt_type ASC""",
+                                (window,),
+                            ).fetchall()
+                        ]
                     has_cortex_evaluations = bool(
                         conn.execute(
                             "SELECT 1 FROM sqlite_master WHERE type='table' AND name='cortex_evaluations'"
@@ -2417,6 +2533,8 @@ def check_protocol_compliance() -> DoctorCheck:
                             evidence.append("high-stakes decision-eval rollout not yet seeded in the live window")
                     for row in debt_rows[:5]:
                         evidence.append(f"open {row['severity']} debt — {row['debt_type']}: {row['total']}")
+                    if live_guard_debt:
+                        evidence.append(f"live in-progress guard acknowledgements pending: {live_guard_debt}")
 
                     repair_plan: list[str] = []
                     if verify_required and len(verify_ok) != len(verify_required):
@@ -2725,20 +2843,51 @@ def check_automation_telemetry(days: int = 7) -> DoctorCheck:
                     repair_plan=["Run NEXO migrations before trusting automation cost/parity metrics"],
                     escalation_prompt="Shared automation runs are happening without the telemetry table that release metrics depend on.",
                 )
-
-            row = conn.execute(
-                """
-                SELECT
-                    COUNT(*) AS runs,
-                    SUM(CASE WHEN (input_tokens + cached_input_tokens + output_tokens) > 0 THEN 1 ELSE 0 END) AS usage_runs,
-                    SUM(CASE WHEN total_cost_usd IS NOT NULL THEN 1 ELSE 0 END) AS cost_runs,
-                    SUM(CASE WHEN cost_source = 'pricing_unavailable' THEN 1 ELSE 0 END) AS pricing_gaps,
-                    GROUP_CONCAT(DISTINCT backend) AS backends
-                FROM automation_runs
-                WHERE created_at >= datetime('now', ?)
-                """,
-                (f"-{days} days",),
-            ).fetchone()
+            columns = {
+                row["name"] for row in conn.execute("PRAGMA table_info(automation_runs)").fetchall()
+            }
+            schema_has_status = {
+                "status",
+                "input_tokens",
+                "cached_input_tokens",
+                "output_tokens",
+                "total_cost_usd",
+                "cost_source",
+                "backend",
+                "created_at",
+            }.issubset(columns)
+            if schema_has_status:
+                row = conn.execute(
+                    """
+                    SELECT
+                        COUNT(*) AS runs,
+                        SUM(CASE WHEN status = 'ok' THEN 1 ELSE 0 END) AS successful_runs,
+                        SUM(CASE WHEN status != 'ok' THEN 1 ELSE 0 END) AS failed_runs,
+                        SUM(CASE WHEN status = 'ok' AND (input_tokens + cached_input_tokens + output_tokens) > 0 THEN 1 ELSE 0 END) AS usage_runs,
+                        SUM(CASE WHEN status = 'ok' AND total_cost_usd IS NOT NULL THEN 1 ELSE 0 END) AS cost_runs,
+                        SUM(CASE WHEN status = 'ok' AND cost_source = 'pricing_unavailable' THEN 1 ELSE 0 END) AS pricing_gaps,
+                        GROUP_CONCAT(DISTINCT backend) AS backends
+                    FROM automation_runs
+                    WHERE created_at >= datetime('now', ?)
+                    """,
+                    (f"-{days} days",),
+                ).fetchone()
+            else:
+                row = conn.execute(
+                    """
+                    SELECT
+                        COUNT(*) AS runs,
+                        COUNT(*) AS successful_runs,
+                        0 AS failed_runs,
+                        SUM(CASE WHEN (input_tokens + cached_input_tokens + output_tokens) > 0 THEN 1 ELSE 0 END) AS usage_runs,
+                        SUM(CASE WHEN total_cost_usd IS NOT NULL THEN 1 ELSE 0 END) AS cost_runs,
+                        SUM(CASE WHEN cost_source = 'pricing_unavailable' THEN 1 ELSE 0 END) AS pricing_gaps,
+                        GROUP_CONCAT(DISTINCT backend) AS backends
+                    FROM automation_runs
+                    WHERE created_at >= datetime('now', ?)
+                    """,
+                    (f"-{days} days",),
+                ).fetchone()
         finally:
             conn.close()
     except Exception as exc:
@@ -2766,14 +2915,20 @@ def check_automation_telemetry(days: int = 7) -> DoctorCheck:
             escalation_prompt="",
         )
 
+    successful_runs = int((row["successful_runs"] if row else 0) or 0)
+    failed_runs = int((row["failed_runs"] if row else 0) or 0)
     usage_runs = int((row["usage_runs"] if row else 0) or 0)
     cost_runs = int((row["cost_runs"] if row else 0) or 0)
     pricing_gaps = int((row["pricing_gaps"] if row else 0) or 0)
-    usage_coverage = round((usage_runs / total_runs) * 100, 1)
-    cost_coverage = round((cost_runs / total_runs) * 100, 1)
+    usage_denominator = successful_runs or total_runs
+    cost_denominator = successful_runs or total_runs
+    usage_coverage = round((usage_runs / usage_denominator) * 100, 1) if usage_denominator else 100.0
+    cost_coverage = round((cost_runs / cost_denominator) * 100, 1) if cost_denominator else 100.0
     evidence = [
         f"window={days}d",
         f"runs={total_runs}",
+        f"successful_runs={successful_runs}",
+        f"failed_runs={failed_runs}",
         f"usage_coverage={usage_coverage}%",
         f"cost_coverage={cost_coverage}%",
         f"pricing_gaps={pricing_gaps}",
