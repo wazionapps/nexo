@@ -1659,6 +1659,29 @@ class TestRuntimeChecks:
         assert any("action tasks Cortex-cleared: 2/2" in item for item in check.evidence)
         assert any("decision-eval rollout warming up" in item for item in check.evidence)
 
+    def test_protocol_compliance_does_not_penalize_unseeded_decision_eval_rollout(self, nexo_home):
+        db_path = nexo_home / "data" / "nexo.db"
+        _create_protocol_tables(db_path)
+        conn = sqlite3.connect(str(db_path))
+        conn.execute("ALTER TABLE protocol_tasks ADD COLUMN response_high_stakes INTEGER DEFAULT 0")
+        for idx in range(1, 4):
+            conn.execute(
+                """INSERT INTO protocol_tasks (
+                    task_id, status, must_verify, close_evidence, must_change_log,
+                    change_log_id, correction_happened, learning_id, task_type,
+                    cortex_mode, response_high_stakes, opened_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))""",
+                (f"PT-seed-{idx}", "done", 1, "pytest passed", 1, 40 + idx, 0, None, "execute", "act", 1),
+            )
+        conn.commit()
+        conn.close()
+
+        from doctor.providers.runtime import check_protocol_compliance
+
+        check = check_protocol_compliance()
+        assert check.status == "healthy"
+        assert any("high-stakes decision-eval rollout not yet seeded in the live window" in item for item in check.evidence)
+
     def test_protocol_compliance_goes_critical_on_open_error_debt(self, nexo_home):
         db_path = nexo_home / "data" / "nexo.db"
         _create_protocol_tables(db_path)
@@ -1802,6 +1825,45 @@ class TestRuntimeChecks:
         assert any("successful_runs=1" in item for item in check.evidence)
         assert any("failed_runs=1" in item for item in check.evidence)
 
+    def test_automation_telemetry_tolerates_single_missing_usage_run(self, nexo_home):
+        db_path = nexo_home / "data" / "nexo.db"
+        conn = sqlite3.connect(str(db_path))
+        conn.execute(
+            """CREATE TABLE automation_runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                backend TEXT DEFAULT '',
+                model TEXT DEFAULT '',
+                reasoning_effort TEXT DEFAULT '',
+                input_tokens INTEGER DEFAULT 0,
+                cached_input_tokens INTEGER DEFAULT 0,
+                output_tokens INTEGER DEFAULT 0,
+                total_cost_usd REAL,
+                telemetry_source TEXT DEFAULT '',
+                cost_source TEXT DEFAULT '',
+                status TEXT DEFAULT 'ok',
+                metadata TEXT DEFAULT '{}',
+                created_at TEXT DEFAULT (datetime('now'))
+            )"""
+        )
+        conn.executemany(
+            """INSERT INTO automation_runs (
+                backend, input_tokens, output_tokens, total_cost_usd, cost_source, status, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))""",
+            [
+                ("codex", 120, 20, 0.12, "pricing_snapshot", "ok"),
+                ("codex", 90, 18, 0.10, "pricing_snapshot", "ok"),
+                ("codex", 0, 0, 0.0, "pricing_snapshot", "ok"),
+            ],
+        )
+        conn.commit()
+        conn.close()
+
+        from doctor.providers.runtime import check_automation_telemetry
+
+        check = check_automation_telemetry()
+        assert check.status == "healthy"
+        assert any("missing_usage_runs=1" in item for item in check.evidence)
+
 
 class TestDeepChecks:
     def test_schema_version(self, nexo_home):
@@ -1823,6 +1885,16 @@ class TestDeepChecks:
         from doctor.providers.deep import check_self_audit_summary
         check = check_self_audit_summary()
         assert check.status == "critical"
+
+    def test_self_audit_warns_are_advisory(self, nexo_home):
+        (nexo_home / "logs" / "self-audit-summary.json").write_text(json.dumps({
+            "findings": [{"severity": "WARN", "msg": "manual review still pending"}],
+            "counts": {"error": 0, "warn": 1, "info": 0},
+        }))
+        from doctor.providers.deep import check_self_audit_summary
+        check = check_self_audit_summary()
+        assert check.status == "healthy"
+        assert "1 warn" in check.summary
 
     def test_failed_preflight_is_critical(self, nexo_home):
         (nexo_home / "logs" / "runtime-preflight-summary.json").write_text(json.dumps({

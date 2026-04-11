@@ -1,5 +1,17 @@
 # Changelog
 
+## [5.0.4] - 2026-04-11
+
+### Runtime Bridge + Doctor Signal Cleanup
+- Hardened the vendorable `templates/nexo_helper.py` bridge so personal scripts and subprocess flows resolve `NEXO_HOME` and the `nexo` CLI robustly instead of depending on PATH luck or a single home layout.
+- Added structured JSON automation helpers to the vendorable bridge, giving personal-script callers a canonical path for automation jobs that must parse machine-readable output cleanly.
+- Refined doctor scoring so advisory-only self-audit warnings remain healthy and a single missing usage-telemetry row does not degrade the full runtime. That keeps the live signal honest without punishing one-off backend telemetry gaps.
+- Tightened the managed Claude Code and Codex bootstraps for single-artifact reads (`email`, `diary`, `reminders`, `followups`): after the first relevant read, NEXO should answer immediately instead of silently chaining more lookups and looking hung.
+
+### Validation
+- Added regression coverage for the single-missing-usage telemetry path on the runtime doctor suite.
+- Re-ran `python3 -m pytest tests/test_doctor.py -q` (`80 passed`) and revalidated a live runtime with `nexo doctor --tier all` returning `HEALTHY`.
+
 ## [5.0.3] - 2026-04-11
 
 ### Terminal Bootstrap + Runtime Hardening

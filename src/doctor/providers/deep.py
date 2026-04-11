@@ -65,9 +65,6 @@ def check_self_audit_summary() -> DoctorCheck:
         if error_count > 0:
             status = "critical"
             severity = "error"
-        elif warn_count > 0:
-            status = "degraded"
-            severity = "warn"
         else:
             status = "healthy"
             severity = "info"

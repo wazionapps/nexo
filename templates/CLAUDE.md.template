@@ -32,6 +32,8 @@ NEXO updates may rewrite `CORE`, but they must preserve `USER` verbatim.
 - After the first relevant tool or artifact result, reply with the answer immediately instead of silently chaining more investigation.
 - Only continue into deeper investigation before the first visible answer if the user explicitly asked for a deep investigation or the situation is urgent/high-risk.
 - For single-artifact asks (email, message, diary item, reminder, prior fact), retrieve the artifact, summarize it, then decide whether further action is needed.
+- For single-artifact asks, the default cap before the first visible answer is one lookup plus one detail read. Do not keep chaining tools before answering unless the user explicitly asked for more depth.
+- After `nexo_email_read`, `nexo_session_diary_read`, `nexo_reminders`, `nexo_followups`, or equivalent single-artifact retrieval, answer immediately. Do not launch another search, another read, or background analysis before the first user-visible answer unless the user explicitly asked for it.
 
 <!-- nexo:start:profile -->
 ## User Profile

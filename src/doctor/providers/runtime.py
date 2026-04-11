@@ -2491,7 +2491,7 @@ def check_protocol_compliance() -> DoctorCheck:
                             if str(row["opened_at"] or "") >= first_cortex_eval_at
                         ]
                     decision_ok = [row for row in decision_eligible if row["task_id"] in covered_tasks]
-                    decision_metric_ready = len(decision_eligible) >= 3
+                    decision_metric_ready = bool(first_cortex_eval_at) and len(decision_eligible) >= 3
 
                     score_parts = []
                     if verify_required:
@@ -2922,6 +2922,7 @@ def check_automation_telemetry(days: int = 7) -> DoctorCheck:
     pricing_gaps = int((row["pricing_gaps"] if row else 0) or 0)
     usage_denominator = successful_runs or total_runs
     cost_denominator = successful_runs or total_runs
+    missing_usage_runs = max(0, usage_denominator - usage_runs) if usage_denominator else 0
     usage_coverage = round((usage_runs / usage_denominator) * 100, 1) if usage_denominator else 100.0
     cost_coverage = round((cost_runs / cost_denominator) * 100, 1) if cost_denominator else 100.0
     evidence = [
@@ -2933,6 +2934,8 @@ def check_automation_telemetry(days: int = 7) -> DoctorCheck:
         f"cost_coverage={cost_coverage}%",
         f"pricing_gaps={pricing_gaps}",
     ]
+    if missing_usage_runs:
+        evidence.append(f"missing_usage_runs={missing_usage_runs}")
     backends = str((row["backends"] if row else "") or "").strip()
     if backends:
         evidence.append(f"backends={backends}")
@@ -2940,7 +2943,7 @@ def check_automation_telemetry(days: int = 7) -> DoctorCheck:
     status = "healthy"
     severity = "info"
     repair_plan: list[str] = []
-    if usage_coverage < 100.0:
+    if usage_coverage < 100.0 and missing_usage_runs > 1:
         status = "degraded"
         severity = "warn"
         repair_plan.append("Restore backend usage parsing so automation runs always emit token telemetry")
