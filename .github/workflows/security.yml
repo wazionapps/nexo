@@ -1,0 +1,34 @@
+name: Security
+
+# Closes Fase 4 item 3 of NEXO-AUDIT-2026-04-11. Until this workflow existed,
+# nothing in CI scanned the codebase for security smells. The bandit baseline
+# is HIGH severity / HIGH confidence (= zero false positives, zero noise).
+# The original sweep surfaced 10 weak-hash findings (MD5/SHA1 used for
+# fingerprinting); each was fixed by adding usedforsecurity=False to the
+# hashlib call.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  bandit:
+    name: bandit (high severity, high confidence)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install bandit
+        run: pip install 'bandit[toml]>=1.7'
+
+      - name: Show bandit version
+        run: bandit --version
+
+      - name: Scan src/
+        run: bandit -r src/ --severity-level high --confidence-level high -c pyproject.toml

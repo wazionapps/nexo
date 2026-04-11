@@ -87,7 +87,7 @@ class ContextChecker:
             with open(action_file) as fh:
                 actions = json.load(fh)
 
-        key = hashlib.md5(f"{action_type}:{identifier}".encode()).hexdigest()
+        key = hashlib.md5(f"{action_type}:{identifier}".encode(), usedforsecurity=False).hexdigest()
         if key in actions:
             action_time = datetime.fromisoformat(actions[key]["timestamp"])
             age_days = (datetime.now() - action_time).days
@@ -103,7 +103,7 @@ class ContextChecker:
             with open(action_file) as fh:
                 actions = json.load(fh)
 
-        key = hashlib.md5(f"{action_type}:{identifier}".encode()).hexdigest()
+        key = hashlib.md5(f"{action_type}:{identifier}".encode(), usedforsecurity=False).hexdigest()
         actions[key] = {
             "type": action_type,
             "identifier": identifier,

@@ -216,7 +216,8 @@ def _ensure_followup(description: str, *, verification: str = "", reasoning: str
     ).fetchone()
     if row:
         return {"id": row["id"], "created": False}
-    followup_id = f"NF-PROTOCOL-{hashlib.sha1(description.encode('utf-8')).hexdigest()[:10].upper()}"
+    # Content fingerprint for deterministic followup id — not security-sensitive.
+    followup_id = f"NF-PROTOCOL-{hashlib.sha1(description.encode('utf-8'), usedforsecurity=False).hexdigest()[:10].upper()}"
     result = create_followup(
         followup_id,
         description,
