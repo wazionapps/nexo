@@ -927,6 +927,101 @@ def _sync_client_bootstraps(preferences: dict | None = None) -> list[str]:
 
 # ── Main entry point ─────────────────────────────────────────────────
 
+_AUTO_UPDATE_LOCK_FILE = NEXO_HOME / "operations" / ".auto_update.lock"
+_AUTO_UPDATE_LOCK_STALE_SECONDS = 600  # 10 minutes
+
+
+def _acquire_auto_update_lock() -> tuple[bool, object | None, str]:
+    """Acquire an exclusive non-blocking lock on the auto_update lockfile.
+
+    Closes NF-AUDIT-2026-04-11-UPDATE-LOCK. Two NEXO terminals starting at
+    the same moment after a version bump used to race on
+    auto_update_check(): they would both run run_migrations(),
+    _check_git_updates(), and the file/hooks sync, occasionally tripping
+    UNIQUE constraints on schema_migrations or producing torn writes on
+    shared files.
+
+    The lock uses fcntl.flock(LOCK_EX | LOCK_NB) so the second caller
+    returns instantly with a clean "skipped_reason=locked_by_other_process"
+    rather than blocking the server startup. The lock file persists across
+    crashes — we treat any lock older than 10 minutes as stale and steal
+    it, so a hard kill mid-update never wedges future runs forever.
+
+    Returns:
+        (acquired, fh, reason)
+        - acquired: True if we now hold the lock, False otherwise.
+        - fh: the open file handle (caller MUST close it after release).
+        - reason: human-readable explanation when not acquired.
+    """
+    try:
+        _AUTO_UPDATE_LOCK_FILE.parent.mkdir(parents=True, exist_ok=True)
+    except Exception as e:
+        return False, None, f"cannot create lock directory: {e}"
+
+    # Steal stale locks: if the lockfile exists and was last modified more
+    # than 10 minutes ago, assume the previous holder crashed and reset it.
+    try:
+        if _AUTO_UPDATE_LOCK_FILE.exists():
+            age = time.time() - _AUTO_UPDATE_LOCK_FILE.stat().st_mtime
+            if age > _AUTO_UPDATE_LOCK_STALE_SECONDS:
+                try:
+                    _AUTO_UPDATE_LOCK_FILE.unlink()
+                except Exception:
+                    pass  # Will fall through to the open below
+    except Exception:
+        pass
+
+    try:
+        fh = open(_AUTO_UPDATE_LOCK_FILE, "a+")
+    except Exception as e:
+        return False, None, f"cannot open lock file: {e}"
+
+    try:
+        import fcntl
+        fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except ImportError:
+        # Non-POSIX platform. Best-effort: write a PID stamp and proceed.
+        try:
+            fh.seek(0)
+            fh.truncate()
+            fh.write(f"{os.getpid()}:{time.time()}\n")
+            fh.flush()
+        except Exception:
+            pass
+        return True, fh, ""
+    except (OSError, BlockingIOError):
+        try:
+            fh.close()
+        except Exception:
+            pass
+        return False, None, "locked_by_other_process"
+
+    # We have the lock. Stamp PID + timestamp so observers can see who.
+    try:
+        fh.seek(0)
+        fh.truncate()
+        fh.write(f"{os.getpid()}:{time.time()}\n")
+        fh.flush()
+    except Exception:
+        pass
+    return True, fh, ""
+
+
+def _release_auto_update_lock(fh: object | None) -> None:
+    """Release the lock acquired by _acquire_auto_update_lock and close the fd."""
+    if fh is None:
+        return
+    try:
+        import fcntl
+        fcntl.flock(fh.fileno(), fcntl.LOCK_UN)  # type: ignore[attr-defined]
+    except Exception:
+        pass
+    try:
+        fh.close()  # type: ignore[attr-defined]
+    except Exception:
+        pass
+
+
 def auto_update_check() -> dict:
     """Run the full auto-update check at server startup.
 
@@ -941,6 +1036,12 @@ def auto_update_check() -> dict:
         - git fetch/pull (if git repo)
         - npm version check (if non-git install)
 
+    Concurrency:
+        Wrapped in a non-blocking exclusive flock so a second concurrent
+        terminal returns instantly with skipped_reason='locked_by_other_process'
+        instead of racing on run_migrations / git pull / file sync. Stale
+        locks (>10 minutes) are auto-stolen.
+
     Returns a dict with:
         - checked: bool — whether a network check was actually performed
         - git_update: str|None — git update status message
@@ -949,9 +1050,30 @@ def auto_update_check() -> dict:
         - client_bootstrap_updates: list[str] — Codex/Claude bootstrap sync statuses
         - migrations: list — file-based migration results
         - db_migrations: int — number of DB schema migrations applied
-        - skipped_reason: str|None — why the network check was skipped (cooldown, etc.)
+        - skipped_reason: str|None — why the network check was skipped (cooldown, locked, etc.)
         - error: str|None — error message if something failed (informational only)
     """
+    acquired, lock_fh, lock_reason = _acquire_auto_update_lock()
+    if not acquired:
+        return {
+            "checked": False,
+            "git_update": None,
+            "npm_notice": None,
+            "claude_md_update": None,
+            "client_bootstrap_updates": [],
+            "migrations": [],
+            "db_migrations": 0,
+            "skipped_reason": lock_reason or "locked_by_other_process",
+            "error": None,
+        }
+    try:
+        return _auto_update_check_locked()
+    finally:
+        _release_auto_update_lock(lock_fh)
+
+
+def _auto_update_check_locked() -> dict:
+    """Inner body of auto_update_check, executed while holding the lockfile."""
     result = {
         "checked": False,
         "git_update": None,
