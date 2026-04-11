@@ -904,6 +904,38 @@ def _m38_evolution_log_proposal_payload(conn):
     _migrate_add_column(conn, "evolution_log", "proposal_payload", "TEXT DEFAULT NULL")
 
 
+def _m39_hook_runs(conn):
+    """Persist hook lifecycle observability — closes Fase 3 item 7.
+
+    Before m39, NEXO had 12 hook scripts (session-start.sh, post-compact.sh,
+    pre-compact.sh, inbox-hook.sh, etc.) but no central record of when they
+    ran, how long they took, or whether they succeeded. The audit lifecycle
+    was a black box. This table is the storage layer that
+    src/hook_observability.py records into and that the new
+    nexo_hook_runs MCP tool reads from.
+
+    Idempotent: CREATE TABLE IF NOT EXISTS plus indexes by hook_name and
+    started_at so the daily query patterns are cheap.
+    """
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS hook_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            hook_name TEXT NOT NULL,
+            started_at REAL NOT NULL,
+            duration_ms INTEGER NOT NULL DEFAULT 0,
+            exit_code INTEGER NOT NULL DEFAULT 0,
+            status TEXT NOT NULL DEFAULT 'ok',
+            session_id TEXT DEFAULT '',
+            summary TEXT DEFAULT '',
+            metadata TEXT DEFAULT '{}',
+            created_at REAL NOT NULL
+        )"""
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_hook_runs_hook_name ON hook_runs(hook_name)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_hook_runs_started_at ON hook_runs(started_at)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_hook_runs_status ON hook_runs(status)")
+
+
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
     (2, "followups_reasoning", _m2_followups_reasoning),
@@ -943,6 +975,7 @@ MIGRATIONS = [
     (36, "goal_profiles", _m36_goal_profiles),
     (37, "cortex_goal_profile_trace", _m37_cortex_goal_profile_trace),
     (38, "evolution_log_proposal_payload", _m38_evolution_log_proposal_payload),
+    (39, "hook_runs", _m39_hook_runs),
 ]
 
 

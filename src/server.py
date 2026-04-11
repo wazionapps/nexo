@@ -915,6 +915,47 @@ def nexo_learning_apply_retroactively(
 
 
 @mcp.tool
+def nexo_hook_runs(
+    hours: int = 24,
+    hook_name: str = "",
+    status: str = "",
+    limit: int = 50,
+    summary_only: bool = False,
+) -> str:
+    """List recent hook lifecycle runs and per-hook health summary.
+
+    Closes Fase 3 item 7 of NEXO-AUDIT-2026-04-11. Each NEXO hook
+    (session-start, post-compact, pre-compact, inbox-hook, etc.) writes
+    a row to hook_runs when it finishes via scripts/nexo-hook-record.py.
+    This tool reads them back so the agent can answer "is the hook
+    pipeline healthy?" without needing the dashboard or grepping log files.
+
+    Args:
+        hours: How far back to look (default 24).
+        hook_name: Optional substring filter (LIKE %name%).
+        status: Optional exact status filter (ok|error|skipped|timeout|blocked).
+        limit: Max raw rows to return when summary_only=False (default 50).
+        summary_only: If True, return only the per-hook health summary
+                       (success rate, p50/p95 duration, unhealthy hooks)
+                       and skip the raw row list.
+    """
+    import json as _json
+    from hook_observability import list_recent_hook_runs, hook_health_summary
+
+    summary = hook_health_summary(hours=int(hours))
+    if summary_only:
+        return _json.dumps(summary, ensure_ascii=False, indent=2)
+
+    runs = list_recent_hook_runs(
+        hours=int(hours),
+        hook_name=hook_name,
+        status=status,
+        limit=int(limit),
+    )
+    return _json.dumps({"summary": summary, "runs": runs}, ensure_ascii=False, indent=2)
+
+
+@mcp.tool
 def nexo_learning_update(
     id: int,
     title: str = "",
