@@ -330,16 +330,17 @@ def _regex_fallback_classify(text: str) -> str | None:
     return None
 
 
-def _classify_signal(text: str) -> str | None:
+def _classify_signal(text: str, *, allow_llm: bool = True) -> str | None:
     """Classify text into a signal type, or None if nothing interesting."""
-    llm_result = _llm_classify_signal(text)
-    if llm_result.get("available"):
-        confidence = float(llm_result.get("confidence", 0.0) or 0.0)
-        label = llm_result.get("label")
-        if label is None and confidence >= _LLM_CONFIDENCE_THRESHOLD:
-            return None
-        if isinstance(label, str) and confidence >= _LLM_CONFIDENCE_THRESHOLD:
-            return label
+    if allow_llm:
+        llm_result = _llm_classify_signal(text)
+        if llm_result.get("available"):
+            confidence = float(llm_result.get("confidence", 0.0) or 0.0)
+            label = llm_result.get("label")
+            if label is None and confidence >= _LLM_CONFIDENCE_THRESHOLD:
+                return None
+            if isinstance(label, str) and confidence >= _LLM_CONFIDENCE_THRESHOLD:
+                return label
 
     scores = _semantic_signal_scores(text)
     if scores:
@@ -378,6 +379,8 @@ def detect_drive_signal(
     source: str,
     source_id: str = "",
     area: str = "",
+    *,
+    allow_llm: bool = False,
 ) -> dict | None:
     """Analyze text for interesting signals. Creates or reinforces.
 
@@ -387,7 +390,7 @@ def detect_drive_signal(
     if not context_hint or len(context_hint.strip()) < 15:
         return None
 
-    signal_type = _classify_signal(context_hint)
+    signal_type = _classify_signal(context_hint, allow_llm=allow_llm)
     if not signal_type:
         return None
 

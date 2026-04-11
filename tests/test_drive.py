@@ -177,7 +177,35 @@ class TestStats:
 # ── Detection heuristic tests ────────────────────────────────────────
 
 class TestDetection:
-    def test_llm_classification_is_primary_when_available(self, monkeypatch):
+    def test_interactive_detection_defaults_to_local_classification(self, monkeypatch):
+        monkeypatch.setattr(
+            tools_drive,
+            "_llm_classify_signal",
+            lambda text: {
+                "available": True,
+                "label": "opportunity",
+                "confidence": 0.91,
+                "reason": "model sees an automation opportunity",
+                "source": "llm",
+            },
+        )
+        monkeypatch.setattr(
+            tools_drive,
+            "_semantic_signal_scores",
+            lambda text: {"anomaly": 0.99, "pattern": 0.0, "gap": 0.0, "opportunity": 0.0},
+        )
+
+        result = detect_drive_signal(
+            "Revenue dropped 18% after yesterday deploy and that looks unexpected",
+            source="heartbeat", source_id="test-sid-local-default",
+        )
+
+        assert result is not None
+        signal = get_drive_signal(result["id"])
+        assert signal is not None
+        assert signal["signal_type"] == "anomaly"
+
+    def test_llm_classification_is_primary_when_explicitly_enabled(self, monkeypatch):
         monkeypatch.setattr(
             tools_drive,
             "_llm_classify_signal",
@@ -197,7 +225,7 @@ class TestDetection:
 
         result = detect_drive_signal(
             "This flow should probably be automated before the backlog grows again",
-            source="heartbeat", source_id="test-sid-llm",
+            source="heartbeat", source_id="test-sid-llm", allow_llm=True,
         )
 
         assert result is not None
@@ -225,7 +253,7 @@ class TestDetection:
 
         result = detect_drive_signal(
             "Otra vez revisé el dashboard y todo sigue bien",
-            source="heartbeat", source_id="test-sid-llm-none",
+            source="heartbeat", source_id="test-sid-llm-none", allow_llm=True,
         )
 
         assert result is None

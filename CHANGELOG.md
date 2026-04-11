@@ -1,5 +1,23 @@
 # Changelog
 
+## [5.0.3] - 2026-04-11
+
+### Terminal Bootstrap + Runtime Hardening
+- Fixed `nexo chat` so Claude Code no longer receives the selected path as a fake prompt. The terminal client now launches in the requested working directory and starts from an explicit NEXO bootstrap prompt instead of the stray `.` / cold-open path.
+- Codex interactive launch now gets the same explicit startup prompt, so both managed terminal clients begin by acting as NEXO immediately instead of waiting for the operator to force bootstrap manually.
+- Added explicit response-pacing rules to the managed Claude Code and Codex bootstraps. After the first relevant tool/artifact result, NEXO now answers visibly before chaining deeper investigation, which removes the "looks hung" behavior on single-email / single-fact asks.
+- Hardened Drive signal detection in `heartbeat`: the hot path now passes `allow_llm` explicitly, defaults to `NEXO_DRIVE_LLM_IN_HEARTBEAT=0`, and keeps LLM classification out of interactive startup/heartbeat unless it is deliberately re-enabled.
+- Added a bounded timeout to the vendorable `templates/nexo_helper.py` CLI bridge so personal scripts using `nexo scripts call` cannot wait forever on a stuck subprocess path.
+- Revalidated the doctor hotfix path on the live runtime after sync: the progress banner appears immediately, `nexo doctor --tier all` stays healthy, and the protocol/automation false positives remain closed.
+
+### Public Surface Refresh
+- Replaced the old external video dependency on the public site with a self-hosted overview video page (`/watch/`) and updated home/features embeds plus README/watch links to point at the current v5 asset set.
+- Refreshed the public infographic and social-preview assets so README, docs/blog surfaces, and the main site all show the current v5 graphic instead of drifting across older versions.
+
+### Validation
+- Added regression tests covering the new interactive startup prompt flow for Claude Code and Codex, explicit `cwd` handoff for terminal launches, and the new heartbeat drive flag default/override path.
+- Re-ran the focused runtime regression suites (`drive`, `hot_context`, `agent_runner`, `client_sync`, `cli_scripts`, `doctor`) and revalidated the live runtime with `nexo update`, `nexo doctor --tier all`, Codex/Claude launch smokes, client bootstrap sync, diary retrieval, and real email/tool flows.
+
 ## [5.0.2] - 2026-04-10
 
 ### Doctor Schema Drift Hotfix

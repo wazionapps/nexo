@@ -31,6 +31,14 @@ SESSION_PORTABILITY_DIR = NEXO_HOME / "operations" / "session-portability"
 _keepalive_threads: dict[str, threading.Event] = {}  # sid → stop_event
 
 
+def _env_flag(name: str, default: bool = False) -> bool:
+    """Parse a boolean environment flag with sane falsey values."""
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() not in {"", "0", "false", "no", "off"}
+
+
 def _keepalive_loop(sid: str, stop_event: threading.Event) -> None:
     """Periodically touch the session's last_update_epoch until stopped."""
     while not stop_event.wait(KEEPALIVE_INTERVAL):
@@ -522,7 +530,13 @@ def handle_heartbeat(sid: str, task: str, context_hint: str = '') -> str:
     try:
         if context_hint and len(context_hint.strip()) >= 15:
             from tools_drive import detect_drive_signal as _detect_drive
-            _drive_result = _detect_drive(context_hint, source="heartbeat", source_id=sid)
+            _drive_allow_llm = _env_flag("NEXO_DRIVE_LLM_IN_HEARTBEAT", default=False)
+            _drive_result = _detect_drive(
+                context_hint,
+                source="heartbeat",
+                source_id=sid,
+                allow_llm=_drive_allow_llm,
+            )
             if _drive_result:
                 # Check for READY signals relevant to current area
                 from db import get_drive_signals as _get_drive

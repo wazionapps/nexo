@@ -22,6 +22,7 @@ from client_preferences import (
     CLIENT_CODEX,
     TERMINAL_CLIENT_KEYS,
     load_client_preferences,
+    normalize_client_key,
     resolve_automation_backend,
     resolve_automation_task_profile,
     resolve_client_runtime_profile,
@@ -37,6 +38,11 @@ MODEL_PRICING_USD_PER_1M = {
     "gpt-5.4": {"input": 1.25, "cached_input": 0.125, "output": 10.0},
     "gpt-5.4-mini": {"input": 0.25, "cached_input": 0.025, "output": 2.0},
 }
+INTERACTIVE_STARTUP_PROMPT = (
+    "Start as NEXO for this session now. Use the managed bootstrap already installed "
+    "for this client, run nexo_startup and nexo_heartbeat for this first turn, then "
+    "reply with one concise startup status in the user's language."
+)
 
 
 class AgentRunnerError(RuntimeError):
@@ -312,6 +318,26 @@ def _codex_interactive_launch_flags() -> list[str]:
     return ["--sandbox", "danger-full-access", "--ask-for-approval", "never"]
 
 
+def _interactive_startup_prompt(client: str) -> str:
+    client_key = normalize_client_key(client)
+    if client_key in {CLIENT_CLAUDE_CODE, CLIENT_CODEX}:
+        return INTERACTIVE_STARTUP_PROMPT
+    return ""
+
+
+def _interactive_target_cwd(target: str | os.PathLike[str]) -> str:
+    candidate = Path(target).expanduser()
+    if candidate.exists() and candidate.is_file():
+        candidate = candidate.parent
+    try:
+        resolved = candidate.resolve()
+    except Exception:
+        resolved = candidate
+    if resolved.exists():
+        return str(resolved)
+    return str(Path.cwd())
+
+
 def build_interactive_client_command(
     *,
     target: str | os.PathLike[str],
@@ -322,6 +348,7 @@ def build_interactive_client_command(
     selected = resolve_terminal_client(client, preferences=prefs)
     target_path = str(Path(target).expanduser())
     profile = resolve_client_runtime_profile(selected, preferences=prefs)
+    startup_prompt = _interactive_startup_prompt(selected)
 
     if selected == CLIENT_CLAUDE_CODE:
         claude_bin = _resolve_claude_cli()
@@ -334,7 +361,9 @@ def build_interactive_client_command(
             cmd.extend(["--model", profile["model"]])
         if profile["reasoning_effort"]:
             cmd.extend(["--effort", profile["reasoning_effort"]])
-        cmd.extend(["--dangerously-skip-permissions", target_path])
+        cmd.append("--dangerously-skip-permissions")
+        if startup_prompt:
+            cmd.append(startup_prompt)
         return selected, cmd
 
     if selected == CLIENT_CODEX:
@@ -352,6 +381,8 @@ def build_interactive_client_command(
         if profile["reasoning_effort"]:
             cmd.extend(["-c", f'model_reasoning_effort="{profile["reasoning_effort"]}"'])
         cmd.extend(["-C", target_path])
+        if startup_prompt:
+            cmd.append(startup_prompt)
         return selected, cmd
 
     raise TerminalClientUnavailableError(f"Unsupported terminal client: {selected}")
@@ -368,7 +399,7 @@ def launch_interactive_client(
     launch_env = os.environ.copy()
     if env:
         launch_env.update(env)
-    return subprocess.run(cmd, env=launch_env)
+    return subprocess.run(cmd, env=launch_env, cwd=_interactive_target_cwd(target))
 
 
 def build_followup_terminal_shell_command(

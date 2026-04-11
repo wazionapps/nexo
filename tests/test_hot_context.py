@@ -130,6 +130,56 @@ def test_heartbeat_warns_when_user_correction_has_no_recent_learning(isolated_db
     assert "nexo_learning_add" in output
 
 
+def test_heartbeat_drive_detection_disables_llm_by_default(isolated_db, monkeypatch):
+    import tools_drive
+    import tools_sessions
+
+    importlib.reload(tools_sessions)
+
+    captured: dict[str, object] = {}
+
+    def _fake_detect(context_hint, source, source_id="", area="", *, allow_llm=False):
+        captured["allow_llm"] = allow_llm
+        return None
+
+    monkeypatch.delenv("NEXO_DRIVE_LLM_IN_HEARTBEAT", raising=False)
+    monkeypatch.setattr(tools_drive, "detect_drive_signal", _fake_detect)
+
+    sid = _register_session("nexo-3003-4003")
+    tools_sessions.handle_heartbeat(
+        sid,
+        "Comprobar drive",
+        "Esto parece un texto suficientemente largo para que el heartbeat pruebe drive.",
+    )
+
+    assert captured["allow_llm"] is False
+
+
+def test_heartbeat_drive_detection_can_enable_llm_via_env(isolated_db, monkeypatch):
+    import tools_drive
+    import tools_sessions
+
+    importlib.reload(tools_sessions)
+
+    captured: dict[str, object] = {}
+
+    def _fake_detect(context_hint, source, source_id="", area="", *, allow_llm=False):
+        captured["allow_llm"] = allow_llm
+        return None
+
+    monkeypatch.setenv("NEXO_DRIVE_LLM_IN_HEARTBEAT", "1")
+    monkeypatch.setattr(tools_drive, "detect_drive_signal", _fake_detect)
+
+    sid = _register_session("nexo-3004-4004")
+    tools_sessions.handle_heartbeat(
+        sid,
+        "Comprobar drive",
+        "Esto parece un texto suficientemente largo para que el heartbeat pruebe drive.",
+    )
+
+    assert captured["allow_llm"] is True
+
+
 def test_heartbeat_skips_learning_reminder_when_recent_learning_exists(isolated_db):
     import db
     import tools_sessions

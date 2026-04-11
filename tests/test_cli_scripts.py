@@ -67,6 +67,12 @@ def test_scripts_call_recovers_with_compatible_python(monkeypatch, capsys):
     assert calls[0][1]["NEXO_CLI_REEXECED"] == "1"
 
 
+def test_doctor_prints_progress_message(nexo_home):
+    result = _run_cli(nexo_home, "doctor", "--tier", "boot")
+    assert "[NEXO] Inspecting boot diagnostics... please wait." in result.stderr
+    assert "NEXO Doctor" in result.stdout
+
+
 class TestScriptsList:
     def test_empty_list(self, nexo_home):
         result = _run_cli(nexo_home, "scripts", "list")
@@ -475,12 +481,14 @@ class TestClientsCommand:
 
 class TestChatCommand:
     def test_chat_launches_claude_with_current_path(self, nexo_home, tmp_path):
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
         fake_claude = tmp_path / "claude"
         out_file = tmp_path / "claude-invocation.json"
         fake_claude.write_text(
             "#!/usr/bin/env python3\n"
             "import json, os, sys\n"
-            f"open({json.dumps(str(out_file))}, 'w').write(json.dumps(sys.argv[1:]))\n"
+            f"open({json.dumps(str(out_file))}, 'w').write(json.dumps({{'argv': sys.argv[1:], 'cwd': os.getcwd()}}))\n"
         )
         fake_claude.chmod(0o755)
 
@@ -492,19 +500,25 @@ class TestChatCommand:
             "CLAUDE_BIN": str(fake_claude),
         }
         result = subprocess.run(
-            [sys.executable, CLI_PY, "chat", "."],
+            [sys.executable, CLI_PY, "chat", str(workspace)],
             capture_output=True, text=True, timeout=30, env=env,
         )
         assert result.returncode == 0
-        assert json.loads(out_file.read_text()) == ["--model", "claude-opus-4-6[1m]", "--dangerously-skip-permissions", "."]
+        payload = json.loads(out_file.read_text())
+        assert payload["argv"][:3] == ["--model", "claude-opus-4-6[1m]", "--dangerously-skip-permissions"]
+        assert "nexo_startup" in payload["argv"][-1]
+        assert "nexo_heartbeat" in payload["argv"][-1]
+        assert payload["cwd"] == str(workspace.resolve())
 
     def test_chat_uses_configured_codex_client(self, nexo_home, tmp_path):
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
         fake_codex = tmp_path / "codex"
         out_file = tmp_path / "codex-invocation.json"
         fake_codex.write_text(
             "#!/usr/bin/env python3\n"
-            "import json, sys\n"
-            f"open({json.dumps(str(out_file))}, 'w').write(json.dumps(sys.argv[1:]))\n"
+            "import json, os, sys\n"
+            f"open({json.dumps(str(out_file))}, 'w').write(json.dumps({{'argv': sys.argv[1:], 'cwd': os.getcwd()}}))\n"
         )
         fake_codex.chmod(0o755)
         (nexo_home / "config").mkdir(exist_ok=True)
@@ -540,16 +554,20 @@ class TestChatCommand:
             "PATH": f"{tmp_path}:{os.environ.get('PATH', '')}",
         }
         result = subprocess.run(
-            [sys.executable, CLI_PY, "chat", "."],
+            [sys.executable, CLI_PY, "chat", str(workspace)],
             capture_output=True, text=True, timeout=30, env=env,
         )
         assert result.returncode == 0
-        argv = json.loads(out_file.read_text())
+        payload = json.loads(out_file.read_text())
+        argv = payload["argv"]
         assert argv[:5] == ["--sandbox", "danger-full-access", "--ask-for-approval", "never", "-c"]
         assert argv[5].startswith('initial_messages=[{role="system",content=')
         assert ["-m", "gpt-5.4"] == argv[6:8]
         assert ["-c", 'model_reasoning_effort="xhigh"'] == argv[8:10]
-        assert argv[-2:] == ["-C", "."]
+        assert argv[-3:-1] == ["-C", str(workspace)]
+        assert "nexo_startup" in argv[-1]
+        assert "nexo_heartbeat" in argv[-1]
+        assert payload["cwd"] == str(workspace.resolve())
 
     def test_chat_prompts_when_multiple_clients_are_available_and_reorders_to_last_used(self, nexo_home, tmp_path):
         fake_claude = tmp_path / "claude"
