@@ -74,6 +74,35 @@ def main() -> int:
             f"deadline={result.get('deadline')})"
         )
 
+    # Phase 2 item 2: after closing outcomes, attempt to promote any
+    # outcome pattern that just crossed the suggested-skill threshold to a
+    # real draft skill. The helper is idempotent and capped at
+    # max_promotions per run, so this is safe to call on every cycle.
+    promotion_summary: dict = {"promoted": [], "skipped": [], "errors": [], "scanned": 0}
+    try:
+        from skills_runtime import auto_promote_outcome_patterns_to_skills
+        promotion_summary = auto_promote_outcome_patterns_to_skills(
+            min_success_rate=0.8,
+            max_promotions=3,
+        )
+        if promotion_summary.get("promoted"):
+            log(
+                f"Auto-promoted {len(promotion_summary['promoted'])} outcome pattern(s) "
+                f"to skill draft(s) (scanned={promotion_summary.get('scanned', 0)})"
+            )
+            for entry in promotion_summary["promoted"]:
+                log(
+                    f"  -> {entry.get('pattern_key')} -> skill {entry.get('skill_id')} "
+                    f"(success_rate={entry.get('success_rate')}, created={entry.get('created')})"
+                )
+        elif promotion_summary.get("scanned"):
+            log(
+                f"Outcome pattern auto-promote: scanned {promotion_summary['scanned']}, "
+                f"none qualified (skipped={len(promotion_summary['skipped'])})"
+            )
+    except Exception as e:
+        log(f"WARN: outcome pattern auto-promote raised: {e}")
+
     summary = {
         "checked_at": datetime.now().isoformat(timespec="seconds"),
         "checked": checked,
@@ -82,6 +111,7 @@ def main() -> int:
         "pending": pending,
         "errors": errors,
         "ids": checked_ids,
+        "auto_promoted_patterns": promotion_summary,
     }
     SUMMARY_FILE.parent.mkdir(parents=True, exist_ok=True)
     SUMMARY_FILE.write_text(json.dumps(summary, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

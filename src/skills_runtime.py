@@ -620,6 +620,120 @@ def materialize_outcome_pattern_skill(pattern_key: str) -> dict:
     }
 
 
+def auto_promote_outcome_patterns_to_skills(
+    *,
+    min_success_rate: float = 0.8,
+    max_promotions: int = 3,
+) -> dict:
+    """Promote mature outcome patterns to draft skills without manual approval.
+
+    Closes Fase 2 item 2 of NEXO-AUDIT-2026-04-11. Until this function ran
+    automatically, every outcome pattern that crossed the suggested-skill
+    threshold sat in the candidates table waiting for an explicit
+    nexo_skill_seed_from_outcome_pattern call. The materialization helper
+    already existed (see materialize_outcome_pattern_skill above), but no
+    process invoked it on a schedule.
+
+    This wrapper:
+      - Lists current outcome pattern candidates (top 20).
+      - Filters to reinforce_strategy candidates that the analyzer already
+        flagged as suggested_skill_candidate=True (resolved >= 4) AND whose
+        success_rate is at or above min_success_rate (default 0.8).
+      - Calls materialize_outcome_pattern_skill() per qualifying candidate,
+        capped at max_promotions per invocation so a sudden flood does not
+        materialize dozens of skills in one cycle.
+      - materialize_outcome_pattern_skill() is itself idempotent: if the
+        target skill id already exists it returns created=False without
+        re-creating, so this function is safe to run repeatedly.
+
+    Returns a stats dict:
+        {
+          "promoted": [list of {pattern_key, skill_id, created}],
+          "skipped": [list of {pattern_key, reason}],
+          "errors":  [list of {pattern_key, error}],
+          "scanned": int,  # number of candidates inspected
+        }
+
+    Best-effort: never raises. A single failing pattern logs an error entry
+    but lets the loop continue, so one bad row never blocks the queue.
+    """
+    _ensure_ready()
+    sync_skill_directories()
+
+    promoted: list[dict] = []
+    skipped: list[dict] = []
+    errors: list[dict] = []
+
+    try:
+        candidates = list_outcome_pattern_candidates(limit=20)
+    except Exception as e:
+        return {
+            "promoted": [],
+            "skipped": [],
+            "errors": [{"pattern_key": "*", "error": f"list_outcome_pattern_candidates raised: {e}"}],
+            "scanned": 0,
+        }
+
+    scanned = 0
+    promote_budget = max(0, int(max_promotions))
+    for candidate in candidates:
+        scanned += 1
+        pattern_key = (candidate.get("pattern_key") or "").strip()
+        if not pattern_key:
+            skipped.append({"pattern_key": "", "reason": "missing pattern_key"})
+            continue
+        if candidate.get("candidate_type") != "reinforce_strategy":
+            skipped.append({"pattern_key": pattern_key, "reason": "not reinforce_strategy"})
+            continue
+        if not candidate.get("suggested_skill_candidate"):
+            skipped.append({"pattern_key": pattern_key, "reason": "below suggested_skill_candidate threshold"})
+            continue
+        success_rate = float(candidate.get("success_rate") or 0.0)
+        if success_rate < float(min_success_rate):
+            skipped.append({
+                "pattern_key": pattern_key,
+                "reason": f"success_rate {success_rate:.3f} < {min_success_rate:.3f}",
+            })
+            continue
+        if promote_budget <= 0:
+            skipped.append({"pattern_key": pattern_key, "reason": "promotion budget exhausted"})
+            continue
+
+        try:
+            result = materialize_outcome_pattern_skill(pattern_key)
+        except Exception as e:
+            errors.append({"pattern_key": pattern_key, "error": str(e)})
+            continue
+
+        if not result.get("ok"):
+            errors.append({
+                "pattern_key": pattern_key,
+                "error": result.get("error", "materialize_outcome_pattern_skill failed"),
+            })
+            continue
+
+        skill = result.get("skill") or {}
+        promoted.append({
+            "pattern_key": pattern_key,
+            "skill_id": skill.get("id") or skill.get("skill_id"),
+            "created": bool(result.get("created")),
+            "success_rate": success_rate,
+            "resolved_outcomes": int(candidate.get("resolved_outcomes") or 0),
+        })
+        # Only newly-created skills consume the budget. Idempotent re-use of
+        # an existing skill costs nothing because it didn't materialize a new
+        # one — letting other candidates through.
+        if result.get("created"):
+            promote_budget -= 1
+
+    return {
+        "promoted": promoted,
+        "skipped": skipped,
+        "errors": errors,
+        "scanned": scanned,
+    }
+
+
 def auto_promote_skill_evolution(approved_by: str = "system:auto") -> dict:
     """Convert mature guide skills into executable drafts without manual approval."""
     _ensure_ready()

@@ -628,3 +628,119 @@ class TestSkillsCli:
         auto_payload = json.loads(auto.stdout)
         assert auto_payload["auto_applied"] is True
         assert auto_payload["level"] == "published"
+
+
+class TestAutoPromoteOutcomePatternsToSkills:
+    """Fase 2 item 2: outcome patterns must be auto-promoted to skill drafts.
+
+    Before this helper existed, every outcome pattern that crossed the
+    suggested-skill threshold sat in the candidates table waiting for an
+    explicit nexo_skill_seed_from_outcome_pattern call. The materializer
+    already existed but no scheduled process invoked it. These tests pin
+    that the new wrapper:
+      - Promotes qualifying patterns automatically.
+      - Skips low-success-rate or non-reinforce candidates.
+      - Respects the per-cycle promotion budget.
+      - Is idempotent across consecutive runs.
+    """
+
+    def test_promotes_qualifying_pattern_to_skill_draft(self, skills_env):
+        db, skills_runtime, _, _ = _reload_skill_stack()
+        db.init_db()
+
+        _seed_outcome_pattern(db, selected_choice="staged_validation", count=4)
+
+        result = skills_runtime.auto_promote_outcome_patterns_to_skills(
+            min_success_rate=0.8, max_promotions=3
+        )
+
+        assert result["scanned"] >= 1
+        assert len(result["promoted"]) == 1
+        promoted = result["promoted"][0]
+        assert promoted["created"] is True
+        assert promoted["skill_id"]
+        assert promoted["success_rate"] == 1.0  # all seeded outcomes succeeded
+        assert promoted["resolved_outcomes"] >= 4
+        assert result["errors"] == []
+
+        skill = db.get_skill(promoted["skill_id"])
+        assert skill is not None
+        assert skill["level"] == "draft"
+        assert skill["mode"] == "guide"
+        assert skill["source_kind"] == "personal"
+
+    def test_idempotent_across_runs_does_not_recreate_existing_skill(self, skills_env):
+        db, skills_runtime, _, _ = _reload_skill_stack()
+        db.init_db()
+
+        _seed_outcome_pattern(db, selected_choice="staged_validation", count=4)
+
+        first = skills_runtime.auto_promote_outcome_patterns_to_skills(
+            min_success_rate=0.8, max_promotions=3
+        )
+        second = skills_runtime.auto_promote_outcome_patterns_to_skills(
+            min_success_rate=0.8, max_promotions=3
+        )
+
+        assert len(first["promoted"]) == 1
+        assert first["promoted"][0]["created"] is True
+
+        # Second run should report the same skill but as not-created (the
+        # underlying materializer already returned existing).
+        assert len(second["promoted"]) == 1
+        assert second["promoted"][0]["created"] is False
+        assert second["promoted"][0]["skill_id"] == first["promoted"][0]["skill_id"]
+
+    def test_skips_pattern_below_min_success_rate(self, skills_env):
+        db, skills_runtime, _, _ = _reload_skill_stack()
+        db.init_db()
+
+        # Mostly-failing pattern: 1 success out of 5 → success rate 0.2
+        _seed_outcome_pattern(db, selected_choice="failing_pattern", count=4, success=False)
+        _seed_outcome_pattern(db, selected_choice="failing_pattern", count=1, success=True)
+
+        result = skills_runtime.auto_promote_outcome_patterns_to_skills(
+            min_success_rate=0.8, max_promotions=3
+        )
+
+        # The candidate becomes an avoid_strategy (or below threshold), so
+        # auto_promote must skip it — never materialize a skill from a bad
+        # pattern.
+        assert result["promoted"] == []
+        assert any(
+            "failing_pattern" in (s.get("pattern_key") or "")
+            or "not reinforce_strategy" in s.get("reason", "")
+            or "success_rate" in s.get("reason", "")
+            for s in result["skipped"]
+        )
+
+    def test_respects_max_promotions_budget(self, skills_env):
+        db, skills_runtime, _, _ = _reload_skill_stack()
+        db.init_db()
+
+        _seed_outcome_pattern(db, selected_choice="strategy_a", count=4, area="ops")
+        _seed_outcome_pattern(db, selected_choice="strategy_b", count=4, area="qa")
+        _seed_outcome_pattern(db, selected_choice="strategy_c", count=4, area="release")
+
+        result = skills_runtime.auto_promote_outcome_patterns_to_skills(
+            min_success_rate=0.8, max_promotions=2
+        )
+
+        promoted_count = sum(1 for entry in result["promoted"] if entry["created"])
+        assert promoted_count == 2
+        # The third qualifying candidate must show up in skipped with the
+        # budget-exhausted reason — not as an error.
+        assert any("promotion budget exhausted" in s.get("reason", "") for s in result["skipped"])
+
+    def test_returns_clean_result_when_no_candidates(self, skills_env):
+        db, skills_runtime, _, _ = _reload_skill_stack()
+        db.init_db()
+
+        result = skills_runtime.auto_promote_outcome_patterns_to_skills(
+            min_success_rate=0.8, max_promotions=3
+        )
+
+        assert result["promoted"] == []
+        assert result["skipped"] == []
+        assert result["errors"] == []
+        assert result["scanned"] == 0
