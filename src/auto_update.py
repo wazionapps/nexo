@@ -355,6 +355,52 @@ def _sync_crons():
         _log(f"Cron sync warning: {e}")
 
 
+AUTO_UPDATE_BACKUP_KEEP = 10
+"""Maximum number of auto-update backups to keep per prefix.
+
+Both `pre-autoupdate-*/` (DB snapshots) and `runtime-tree-*/` (code mirrors)
+were accumulating indefinitely, growing to tens of GB on long-running
+installs. Rotating to the N most recent keeps a meaningful rollback window
+without unbounded disk use."""
+
+
+def _rotate_auto_update_backups(prefix: str, keep: int = AUTO_UPDATE_BACKUP_KEEP) -> int:
+    """Delete old auto-update backup directories matching a prefix, keeping `keep` most recent.
+
+    Silent on failures — cleanup must never interrupt the auto-update flow.
+    Returns number of entries removed (0 on failure or nothing to prune).
+    """
+    if keep <= 0:
+        return 0
+    base = NEXO_HOME / "backups"
+    if not base.is_dir():
+        return 0
+    try:
+        candidates = [p for p in base.iterdir() if p.is_dir() and p.name.startswith(prefix)]
+    except Exception as e:
+        _log(f"Backup rotation scan warning ({prefix}): {e}")
+        return 0
+    if len(candidates) <= keep:
+        return 0
+    # Newest first by modification time, then delete everything beyond `keep`
+    try:
+        candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    except Exception as e:
+        _log(f"Backup rotation sort warning ({prefix}): {e}")
+        return 0
+    removed = 0
+    import shutil as _shutil
+    for old in candidates[keep:]:
+        try:
+            _shutil.rmtree(str(old))
+            removed += 1
+        except Exception as e:
+            _log(f"Backup rotation remove warning ({old.name}): {e}")
+    if removed:
+        _log(f"Rotated {removed} old {prefix}* backup(s), kept {keep} most recent")
+    return removed
+
+
 def _backup_dbs() -> str | None:
     """Snapshot all .db files before migration. Returns backup dir or None."""
     import sqlite3
@@ -388,6 +434,14 @@ def _backup_dbs() -> str | None:
                         conn.close()
                     except Exception:
                         pass
+    # Opportunistic rotation: keep only the N most recent pre-autoupdate dirs.
+    # Failures here must never bubble up — the caller depends on the backup
+    # path string for rollback and should not see spurious exceptions from
+    # housekeeping of older entries.
+    try:
+        _rotate_auto_update_backups("pre-autoupdate-")
+    except Exception as e:
+        _log(f"Backup rotation warning (pre-autoupdate): {e}")
     return str(backup_dir)
 
 
@@ -1315,6 +1369,13 @@ def _backup_runtime_tree(dest: Path = NEXO_HOME) -> str:
     if (dest / "bin").is_dir():
         import shutil
         shutil.copytree(str(dest / "bin"), str(backup_dir / "bin"), dirs_exist_ok=True)
+    # Opportunistic rotation: runtime-tree snapshots were accumulating forever
+    # because nothing ever pruned them. Keep only the N most recent; failures
+    # must never block the runtime-tree caller's rollback flow.
+    try:
+        _rotate_auto_update_backups("runtime-tree-")
+    except Exception as e:
+        _log(f"Backup rotation warning (runtime-tree): {e}")
     return str(backup_dir)
 
 

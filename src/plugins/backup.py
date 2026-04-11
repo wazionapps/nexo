@@ -100,13 +100,24 @@ def handle_backup_restore(filename: str) -> str:
 
 
 def _cleanup_old():
-    """Remove backups older than RETENTION_DAYS."""
+    """Remove backups older than RETENTION_DAYS.
+
+    Covers both the hourly `nexo-YYYY-MM-DD-HHMM.db` snapshots and the
+    `nexo-pre-restore-*.db` safety snapshots created by handle_backup_restore.
+    Failures are swallowed — housekeeping must never interrupt the caller.
+    """
     if not os.path.isdir(BACKUP_DIR):
         return
     cutoff = time.time() - (RETENTION_DAYS * 86400)
+    # glob `nexo-*.db` matches both the hourly pattern and pre-restore
+    # snapshots, so a single loop prunes both with a single pass.
     for f in glob.glob(os.path.join(BACKUP_DIR, "nexo-*.db")):
-        if os.path.getmtime(f) < cutoff:
-            os.remove(f)
+        try:
+            if os.path.getmtime(f) < cutoff:
+                os.remove(f)
+        except OSError:
+            # Permission / concurrent removal — skip silently.
+            pass
 
 
 TOOLS = [
