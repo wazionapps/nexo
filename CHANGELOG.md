@@ -1,5 +1,34 @@
 # Changelog
 
+## [5.1.1] - 2026-04-12
+
+### Release trace hygiene — runtime + self-audit + diary
+
+A focused patch that closes the gap where audit-phase workflow traces and
+self-audit placeholder goals silently accumulated in the runtime. No breaking
+changes, no bootstrap / startup / Deep Sleep / client-parity surfaces touched.
+
+- **New runtime doctor check `runtime.release_trace_hygiene`** flags stale
+  `audit-phase` `workflow_runs` (>6h open) and stale active `WG-AUDIT-*` /
+  `NEXO-AUDIT-*` `workflow_goals` with no open runs, so drifted release traces
+  surface as a visible `degraded` check instead of quietly accumulating.
+- **Daily self-audit auto-retires stale `WG-AUDIT-*` placeholder goals** via
+  `_retire_stale_audit_goals_inline()`. Goals owned by `system:self-audit`
+  with the placeholder `next_action`, no open runs, and no activity for
+  >36h are marked `abandoned` with an explicit `blocker_reason`. The
+  self-audit recreates them only if the underlying pattern reappears.
+- **`episodic_memory.handle_session_diary_write` splits commit_ref warnings**
+  into recent (last 7 days) vs historical buckets, so diary warnings
+  distinguish live drift from dormant debt instead of lumping them together.
+
+Tests:
+- `tests/test_doctor.py::test_release_trace_hygiene_flags_stale_audit_artifacts`
+- `tests/test_self_audit.py::test_retire_stale_audit_goals_inline_abandons_old_placeholders`
+- `tests/test_episodic_memory.py::test_session_diary_write_distinguishes_recent_and_historical_commit_ref_gaps`
+
+All three pass locally and in CI (Lint / Security / Release readiness /
+Verify integrations / Verify client parity all green on PR #127).
+
 ## [5.1.0] - 2026-04-11
 
 ### NEXO-AUDIT-2026-04-11 — Phases 2-5 delivered end-to-end
