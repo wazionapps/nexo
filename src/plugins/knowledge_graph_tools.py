@@ -97,9 +97,41 @@ def handle_kg_stats() -> str:
     return "\n".join(lines)
 
 
+def handle_kg_export(format: str = "jsonld", as_of: str = "") -> str:
+    """Export the bitemporal knowledge graph to a standard interchange format.
+
+    Closes Fase 5 item 1 of NEXO-AUDIT-2026-04-11. The KG was already
+    bitemporal (kg_edges has valid_from and valid_until and the
+    upsert/delete helpers maintain them), but had no way to emit the
+    graph in a format external tools can ingest. This tool wraps the
+    two canonical exporters in cognitive.knowledge_graph.
+
+    Args:
+        format: 'jsonld' (default, semantic web / human-readable) or
+                'graphml' (igraph, Gephi, NetworkX, Cytoscape).
+        as_of: Optional ISO timestamp. If empty, exports the active
+                snapshot. If provided, exports the historical snapshot
+                that was valid at that instant.
+    """
+    import json as _json
+    import knowledge_graph as kg
+
+    fmt = (format or "jsonld").strip().lower()
+    if fmt == "jsonld":
+        payload = kg.export_to_jsonld(as_of=as_of)
+        return _json.dumps(payload, ensure_ascii=False, indent=2)
+    if fmt == "graphml":
+        return kg.export_to_graphml(as_of=as_of)
+    return _json.dumps(
+        {"ok": False, "error": f"unsupported format: {format!r} (use jsonld or graphml)"},
+        ensure_ascii=False,
+    )
+
+
 TOOLS = [
     (handle_kg_query, "nexo_kg_query", "Query knowledge graph — traverse from a node"),
     (handle_kg_path, "nexo_kg_path", "Find shortest path between two nodes"),
     (handle_kg_neighbors, "nexo_kg_neighbors", "Get direct neighbors of a node"),
     (handle_kg_stats, "nexo_kg_stats", "Knowledge graph statistics"),
+    (handle_kg_export, "nexo_kg_export", "Export the bitemporal KG to JSON-LD or GraphML (active snapshot or historical via as_of)"),
 ]
