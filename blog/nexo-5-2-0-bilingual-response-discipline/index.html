@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXO 5.2.0: Bilingual Response Discipline &amp; Closed Cortex-Quality Loop</title>
+    <meta name="description" content="NEXO 5.2.0 ships bilingual response discipline with Spanish and English high-stakes detection, bilingual negation suppression, positive signals on the confidence score, a numeric safeguard layered over the decision tree, and a cortex-quality cache reader that finally consumes the v5.1.0 cron's write-only snapshot.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-5-2-0-bilingual-response-discipline/">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/blog/nexo-5-2-0-bilingual-response-discipline/">
+    <meta property="og:title" content="NEXO 5.2.0: Bilingual Response Discipline &amp; Closed Cortex-Quality Loop">
+    <meta property="og:description" content="v5.2.0 closes two real gaps in the Cortex layer: the high-stakes detector was English-only with no way to reward well-prepared tasks, and the cortex-cycle cron was writing a quality snapshot that no reader ever consumed. Both loops close in this release.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+    <meta property="article:published_time" content="2026-04-12">
+    <meta property="article:author" content="Francisco Cerda Puigserver">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO 5.2.0: Bilingual Response Discipline &amp; Closed Cortex-Quality Loop">
+    <meta name="twitter:description" content="Spanish + English high-stakes detection with negation suppression, numeric confidence safeguard with positive context signals, and a cortex-quality cache reader closing the v5.1.0 cron loop.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "NEXO 5.2.0: Bilingual Response Discipline & Closed Cortex-Quality Loop",
+        "description": "NEXO 5.2.0 ships bilingual response discipline with Spanish and English high-stakes detection, bilingual negation suppression, positive signals on the confidence score, a numeric safeguard layered over the decision tree, and a cortex-quality cache reader that finally consumes the v5.1.0 cron's write-only snapshot.",
+        "datePublished": "2026-04-12",
+        "dateModified": "2026-04-12",
+        "author": {
+            "@type": "Person",
+            "name": "Francisco Cerda Puigserver"
+        },
+        "publisher": {
+            "@type": "Organization",
+            "name": "WAzion",
+            "url": "https://www.wazion.com"
+        },
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https://nexo-brain.com/blog/nexo-5-2-0-bilingual-response-discipline/"
+        },
+        "url": "https://nexo-brain.com/blog/nexo-5-2-0-bilingual-response-discipline/",
+        "image": "https://nexo-brain.com/assets/nexo-brain-infographic-v5.png",
+        "keywords": ["NEXO 5.2.0", "response discipline", "high-stakes detection", "bilingual", "cortex quality cache", "confidence scoring"]
+    }
+    </script>
+
+    <style>
+        .article-header { padding-top: 128px; padding-bottom: 40px; text-align: center; }
+        .article-meta { font-size: 14px; color: var(--text-muted); margin-bottom: 16px; }
+        .article-body {
+            max-width: 720px; margin: 0 auto; padding: 0 24px 80px;
+            font-size: 17px; line-height: 1.8; color: var(--text);
+        }
+        .article-body h2 { font-size: 28px; font-weight: 700; margin: 48px 0 16px; letter-spacing: -0.01em; }
+        .article-body p { margin-bottom: 20px; color: var(--text-muted); }
+        .article-body strong { color: var(--text); }
+        .article-body a { color: var(--purple-light); }
+        .article-body a:hover { color: var(--pink); }
+        .article-body ul { margin: 0 0 20px 24px; color: var(--text-muted); }
+        .article-body li { margin-bottom: 8px; }
+        .article-body code {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 14px; color: var(--pink);
+            background: rgba(236, 72, 153, 0.1);
+            padding: 2px 8px; border-radius: 4px;
+        }
+        .article-back {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 14px; font-weight: 600; color: var(--text-muted);
+            margin-bottom: 24px;
+        }
+        .article-back:hover { color: var(--purple-light); }
+        .article-visual { margin: 32px 0 40px; text-align: center; }
+        .article-visual img {
+            max-width: 100%;
+            border-radius: 16px;
+            border: 1px solid var(--dark-border);
+            box-shadow: 0 8px 32px rgba(124,58,237,0.15);
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-64.png" alt="NEXO Brain" class="logo-image">
+            <span class="logo-text">NEXO Brain</span>
+        </a>
+        <button class="mobile-menu-toggle" aria-label="Toggle navigation" onclick="toggleMobileMenu()">
+            <span></span><span></span><span></span>
+        </button>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/features/">Features</a>
+            <a href="/evolution/">Evolution</a>
+            <a href="/compare/">Compare</a>
+            <a href="/blog/">Blog</a>
+            <a href="/changelog/">Changelog</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta">GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<section class="article-header">
+    <div class="container">
+        <a href="/blog/" class="article-back">← Back to blog</a>
+        <div class="article-meta">April 12, 2026 · Minor release · Cortex layer</div>
+        <h1 class="section-title" style="font-size:clamp(28px,4.5vw,48px);max-width:920px;margin:0 auto 16px;">NEXO 5.2.0: Bilingual Response Discipline &amp; Closed Cortex-Quality Loop</h1>
+        <p class="section-subtitle" style="max-width:760px;margin:0 auto;">5.1.0 closed the big subsystem loops. 5.1.1 was a trace-hygiene patch. 5.2.0 closes two smaller but real gaps in the Cortex layer that the v5.1 audit left open on purpose &mdash; the high-stakes detector was English-only, and the <code>nexo-cortex-cycle</code> cron was writing a quality snapshot nobody ever consumed.</p>
+    </div>
+</section>
+
+<section>
+    <div class="article-body">
+        <div class="article-visual">
+            <img src="/assets/nexo-brain-infographic-v5.png" alt="NEXO Brain 5.2.0 release">
+        </div>
+
+        <p><strong>5.2.0 is a focused minor release.</strong> No breaking changes. No bootstrap, startup, Deep Sleep, or client-parity surfaces touched. Two concrete gaps in the Cortex layer close under themselves, both identified during the audit of the response-contract behaviour that landed in 5.1.</p>
+
+        <h2>The response-contract recap</h2>
+        <p>When a NEXO agent calls <code>nexo_task_open</code>, the runtime does not just accept the task. A pure function called <code>evaluate_response_confidence</code> inspects the goal, task type, area, evidence references, verification step, and stakes, and returns a <strong>response contract</strong> that tells the agent how to answer: <code>answer</code> (you can respond directly), <code>verify</code> (respond but confirm with evidence first), <code>ask</code> (you are missing information, request it), or <code>defer</code> (do not answer yet, this is high-stakes and under-evidenced).</p>
+        <p>This is deterministic reasoning on top of the LLM &mdash; no hidden model call, no temperature, just a 50-line function with an explicit score and an explicit decision tree. The advantage is auditability: every response-contract decision comes with a <code>reasons</code> array that explains exactly why it landed where it did. The disadvantage, pre-5.2.0, was that the function had two real limits: it was monolingual, and it could only push the score <em>down</em>.</p>
+
+        <h2>Bilingual high-stakes detection</h2>
+        <p>The <code>HIGH_STAKES_KEYWORDS</code> set that triggers the high-stakes penalty on the score was English-only. Roughly 25 words &mdash; <code>production</code>, <code>deploy</code>, <code>migration</code>, <code>customer</code>, <code>credential</code>, <code>delete</code>, and so on. A goal written in Spanish like <em>"migrar la base de datos de producción al nuevo servidor"</em> silently skipped every single one. It had the same risk profile as its English twin and the runtime treated it like an innocuous task.</p>
+        <p>5.2.0 adds <code>HIGH_STAKES_KEYWORDS_ES</code>: about 45 Spanish keywords including both accented and unaccented variants for the ones that carry diacritics (<code>crítico</code>/<code>critico</code>, <code>producción</code>/<code>produccion</code>, <code>facturación</code>/<code>facturacion</code>, <code>migración</code>/<code>migracion</code>, <code>reputación</code>/<code>reputacion</code>, <code>público</code>/<code>publico</code>, <code>médico</code>/<code>medico</code>). User prompts in the wild mix both forms, so accepting only one is effectively accepting neither. <code>_detect_high_stakes</code> now matches against the union of both sets.</p>
+
+        <h2>Negation-aware detection</h2>
+        <p>There is a subtler bug that keyword-matching always has: boundary statements. A user who writes <em>"refactor del parser interno sin tocar producción"</em> is explicitly disclaiming the sensitive area &mdash; the word <code>producción</code> appears in the string, but the user is stating where they will <em>not</em> go, not where they will act. Pre-5.2.0, this tripped the high-stakes flag anyway because the raw keyword was physically present. False positive.</p>
+        <p>5.2.0 adds <code>NEGATION_PATTERNS</code>: a small, conservative list of regex patterns that match these boundary statements bilingually. Examples: <code>no tocar prod</code>, <code>sin afectar</code>, <code>nunca borrar</code>, <code>evitar eliminar</code>, <code>without touching</code>, <code>don't modify</code>, <code>avoid deleting</code>. When any of these match, <code>_detect_high_stakes</code> short-circuits and returns <code>False</code> even if a high-stakes keyword is physically present. The effect is that the user can now describe the safe zone of their task without accidentally flagging the whole thing as a production operation.</p>
+
+        <h2>Positive signals on the confidence score</h2>
+        <p>Before 5.2.0, the confidence score inside <code>evaluate_response_confidence</code> was a pure penalty accumulator. Base 85, minus the penalties for unknowns, missing evidence, missing verification path, and high-stakes context. There was no mechanism to <em>reward</em> a task that had actually loaded the right context or that operated inside a known project area. The score drifted downward even when the agent was well-prepared.</p>
+        <p>5.2.0 adds two optional kwargs:</p>
+        <ul>
+            <li><strong><code>pre_action_context_hits: int</code></strong> &mdash; adds <code>+min(10, hits*2)</code> when the pre-action context lookup returned relevant learnings, decisions, or past events for this task. The cap keeps the boost bounded.</li>
+            <li><strong><code>area_has_atlas_entry: bool</code></strong> &mdash; adds <code>+5</code> when the task's area is a known entry in <code>project-atlas.json</code>. Known projects start from more trusted footing than unknown ones.</li>
+        </ul>
+        <p>Both signals are capped &mdash; they can never override a real risk penalty. A high-stakes task with missing evidence stays high-stakes and under-evidenced no matter how much context the agent loaded. But a routine task that ran the right searches finally gets credit for it in the score.</p>
+
+        <h2>Numeric safeguard over the decision tree</h2>
+        <p>The boolean decision tree inside <code>evaluate_response_confidence</code> covers every obvious case. But tasks can accumulate soft penalties without tripping any single boolean rule. Imagine a task with no unknowns, no high-stakes context, no verification step, and no evidence refs: the tree maps it to <code>verify</code>, and the score ends up at 50 exactly.</p>
+        <p>5.2.0 adds a monotonic numeric safeguard on top of the tree. After the boolean rules pick a mode, two extra checks run:</p>
+        <ul>
+            <li>If <code>mode == "answer"</code> and <code>final_score &lt; 50</code>, downgrade to <code>verify</code>.</li>
+            <li>If <code>mode == "verify"</code> and <code>high_stakes</code> and <code>final_score &lt; 30</code>, downgrade to <code>defer</code>.</li>
+        </ul>
+        <p>The safeguard is <strong>monotonic</strong> &mdash; it can only make the response discipline stricter, never looser. This means it can never break an existing pass-case; it can only catch edge cases where soft penalties stacked below the threshold of any single rule but still meant the runtime had no business answering directly. The <code>reasons</code> array gets a dedicated <code>numeric safeguard: ...</code> entry so the downgrade is explicit.</p>
+
+        <h2>Cortex-quality cache reader</h2>
+        <p>The second real gap was outside the response-contract layer, over in the Cortex quality cron. Since 5.1.0, <code>src/scripts/nexo-cortex-cycle.py</code> has been running every 6 hours and writing a full quality snapshot to <code>$NEXO_HOME/operations/cortex-quality-latest.json</code>. The cron's own docstring makes an explicit promise:</p>
+        <p><em>"Persists the snapshot to ~/claude/operations/cortex-quality-latest.json so dashboards / morning briefings can read fresh metrics without re-running the SQL."</em></p>
+        <p>That reader never existed. <code>handle_cortex_quality</code> in <code>src/plugins/cortex.py</code> was still re-computing the summary from SQL on every call. The cache file sat there for weeks being overwritten every 6h with fresh data, and nobody ever read it. Not a bug. Just a half-delivered promise.</p>
+        <p>5.2.0 closes it. The handler now attempts the cache first when <code>days</code> is 7 or 1 (the two windows the cron actually writes), falls back silently to the live SQL path on any failure, and returns an observable <code>"source": "cache" | "live"</code> field in its JSON response. Failure conditions that trigger fallback:</p>
+        <ul>
+            <li>Cache file does not exist</li>
+            <li><code>captured_at</code> is older than 6h 30m (6h cron + 30m slack for a slightly-late run)</li>
+            <li><code>schema</code> field does not match the current version</li>
+            <li>JSON is corrupt or malformed</li>
+            <li>Requested window is not cached (e.g. <code>days=30</code> always hits live)</li>
+        </ul>
+        <p>The cache is a performance optimisation, never a correctness dependency. Any corruption routes transparently to live computation.</p>
+
+        <h2>Tests</h2>
+        <p>9 new tests lock in Spanish keyword detection, accented variants, bilingual negation suppression, positive signal boosting (including the caps), numeric safeguard transitions, and score bounds. 7 new tests cover the cache reader: fresh cache hits for both windows, stale cache, unknown schema, invalid JSON, missing file, and explicitly non-cached windows. Every pre-existing protocol and cortex test continues to pass &mdash; the new positive-signal kwargs default to safe values and the numeric safeguard is monotonic.</p>
+        <p>Lint, security, coverage, release-readiness, and client-parity gates all green on the release PR.</p>
+
+        <h2>What did not change</h2>
+        <p>5.2.0 does not replace the 5.1.0 closed-loops story, and it does not replace the 5.0.0 goal/decision/outcome backbone. Every subsystem from prior releases keeps behaving the same way for tasks written in English. The difference is that tasks written in Spanish now trip the same gates, boundary statements are no longer mistaken for action targets, well-prepared tasks get credit for the context they loaded, and the cortex-quality cron's promise to serve fresh metrics without re-running SQL is finally kept.</p>
+
+        <p>If you want the exact release record, open the <a href="/changelog/#v520">5.2.0 changelog section</a>. If you are on an older install, <code>nexo update</code> will pick up the new module on the next run automatically. No migration. No schema change. No bootstrap surface touched.</p>
+    </div>
+</section>
+
+<footer>
+    <div class="container">
+        <div class="footer-content">
+            <div class="footer-left">
+                Created by <strong>Francisco Cerd&agrave; Puigserver</strong> &amp; <strong>NEXO</strong> (Claude Opus) &bull; Built by <a href="https://www.wazion.com">WAzion</a> &bull; AGPL-3.0 License &bull; &copy; 2026
+            </div>
+            <div class="footer-links">
+                <a href="https://github.com/wazionapps/nexo">GitHub</a>
+                <a href="https://x.com/NEXOBRAIN">X / Twitter</a>
+                <a href="https://github.com/sponsors/wazionapps">Sponsor</a>
+                <a href="/docs/">Docs</a>
+                <a href="/compare/">Compare</a>
+                <a href="/blog/">Blog</a>
+                <a href="https://www.npmjs.com/package/nexo-brain">npm</a>
+                <a href="https://github.com/wazionapps/nexo/releases">Releases</a>
+            </div>
+            <div style="text-align:center;margin-top:12px;color:#6b7280;font-size:12px;">Last updated: April 2026</div>
+        </div>
+    </div>
+</footer>
+
+</body>
+</html>

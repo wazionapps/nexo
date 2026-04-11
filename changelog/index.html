@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.1.0 closes every open evolution, adaptive, cognitive, and skills loop under itself, ships bitemporal JSON-LD and GraphML knowledge graph export, adds an OpenTelemetry tool-span path, and puts lint, security, coverage, and release-readiness gates on every PR.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.2.0 ships bilingual response discipline (Spanish and English high-stakes detection with negation suppression), a numeric confidence safeguard with positive context signals, and a cortex-quality cache reader that closes the v5.1.0 cron's write-only snapshot loop.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.1.0 closes every open evolution, adaptive, cognitive, and skills loop under itself, ships bitemporal JSON-LD and GraphML knowledge graph export, adds an OpenTelemetry tool-span path, and puts lint, security, coverage, and release-readiness gates on every PR.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.2.0 ships bilingual response discipline (Spanish and English high-stakes detection with negation suppression), a numeric confidence safeguard with positive context signals, and a cortex-quality cache reader that closes the v5.1.0 cron's write-only snapshot loop.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.1.0 closes every open evolution, adaptive, cognitive, and skills loop under itself, ships bitemporal JSON-LD and GraphML knowledge graph export, adds an OpenTelemetry tool-span path, and puts lint, security, coverage, and release-readiness gates on every PR.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.2.0 ships bilingual response discipline (Spanish and English high-stakes detection with negation suppression), a numeric confidence safeguard with positive context signals, and a cortex-quality cache reader that closes the v5.1.0 cron's write-only snapshot loop.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v5.1.0 closes every open evolution, adaptive, cognitive, and skills loop under itself, ships bitemporal JSON-LD and GraphML knowledge graph export, adds an OpenTelemetry tool-span path, and puts lint, security, coverage, and release-readiness gates on every PR.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v5.2.0 ships bilingual response discipline (Spanish and English high-stakes detection with negation suppression), a numeric confidence safeguard with positive context signals, and a cortex-quality cache reader that closes the v5.1.0 cron's write-only snapshot loop.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,18 +87,22 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v5.1.1 live</span>
-                    <span class="page-chip">Release trace hygiene &middot; stale WG-AUDIT-* auto-retire</span>
-                    <span class="page-chip">Diary warning split: recent vs historical</span>
+                    <span class="page-chip">v5.2.0 live</span>
+                    <span class="page-chip">Bilingual response discipline &middot; ES/EN high-stakes detection</span>
+                    <span class="page-chip">Cortex-quality cache reader closes the v5.1.0 cron loop</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v511" class="btn btn-primary">Start with v5.1.1</a>
+                    <a href="#v520" class="btn btn-primary">Start with v5.2.0</a>
                     <a href="#v400" class="btn btn-secondary">See v4.0.0</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
             </div>
             <div class="page-visual">
                 <div class="page-stack">
+                    <div class="page-stack-card">
+                        <strong>v5.2.0</strong>
+                        <span>Bilingual response discipline (Spanish + English high-stakes detection with negation suppression), numeric confidence safeguard with positive context signals, and a cortex-quality cache reader that closes the v5.1.0 cron's write-only snapshot loop.</span>
+                    </div>
                     <div class="page-stack-card">
                         <strong>v5.1.1</strong>
                         <span>Release trace hygiene patch. New doctor check surfaces stale audit-phase workflows; self-audit auto-retires stale WG-AUDIT-* placeholder goals; diary warnings split recent vs historical commit_ref gaps.</span>
@@ -141,6 +145,48 @@
                 <div id="changelog-pager" class="changelog-pager" aria-label="Changelog pagination"></div>
             </div>
         </div>
+    </div>
+</section>
+
+<!-- v5.2.0 Response contract i18n + cortex-quality cache reader -->
+<section id="v520" class="section-compact" style="background:linear-gradient(135deg,#0b1120 0%,#7c3aed 55%,#ec4899 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.2.0 <span style="opacity:.5;font-weight:400;">&mdash; April 12, 2026</span></div>
+        <h2 class="section-title">Bilingual Response Discipline &amp; Closed Cortex-Quality Loop</h2>
+        <p class="section-subtitle">
+            A focused minor release that closes two real gaps in the Cortex layer: the high-stakes detector was English-only with no way to reward well-prepared tasks, and the <code>nexo-cortex-cycle</code> cron was writing a quality snapshot that no reader ever consumed. Both loops close in this release. No breaking changes; no bootstrap, startup, Deep Sleep, or client-parity surfaces were touched.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h3>Spanish keyword parity</h3>
+                    <p><code>HIGH_STAKES_KEYWORDS_ES</code> adds ~45 Spanish keywords (<code>crítico</code>, <code>producción</code>, <code>facturación</code>, <code>clientes</code>, <code>despliegue</code>, <code>credencial</code>, <code>privacidad</code>, <code>reembolso</code>, and both accented and unaccented variants). A goal written in Spanish now trips the same high-stakes gate as its English twin &mdash; something like <em>"migrar la base de datos de producción"</em> used to silently skip the penalty.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Negation-aware detection</h3>
+                    <p><code>NEGATION_PATTERNS</code> suppresses the high-stakes flag when the text explicitly disclaims touching the sensitive area (<em>"sin afectar producción"</em>, <em>"no tocar prod"</em>, <em>"without touching production"</em>, <em>"don't modify"</em>). Before this release these boundary statements caused false positives because the raw keyword was physically present.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Positive signals on the confidence score</h3>
+                    <p><code>evaluate_response_confidence</code> now accepts <code>pre_action_context_hits</code> (+up to 10) and <code>area_has_atlas_entry</code> (+5). The score was a pure penalty accumulator before this release &mdash; there was no way to reward a task that <em>did</em> load the right context. Both signals are capped so they can never override a real risk penalty.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Numeric safeguard over the decision tree</h3>
+                    <p>After the boolean <code>high_stakes/unknowns/evidence/verification</code> rules pick a mode, a monotonic safeguard downgrades <code>answer</code> to <code>verify</code> when <code>final_score &lt; 50</code> and <code>verify</code> to <code>defer</code> when <code>high_stakes</code> and <code>final_score &lt; 30</code>. The safeguard can only make response discipline <em>stricter</em>, never looser &mdash; catching edge cases where soft penalties stacked below the threshold of any single rule.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Cortex-quality cache reader</h3>
+                    <p>The <code>nexo-cortex-cycle</code> cron has been writing <code>$NEXO_HOME/operations/cortex-quality-latest.json</code> every 6h since v5.1.0, with an explicit promise in its own docstring that <em>"dashboards / morning briefings can read fresh metrics without re-running the SQL"</em>. That reader never existed. In v5.2.0, <code>nexo_cortex_quality</code> finally serves the cached snapshot for the 7d / 1d windows when the file is fresh (&lt; 6h 30m), the schema matches, and the window is cached &mdash; otherwise it falls back silently to the live <code>cortex_evaluation_summary</code> computation.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Observable cache path</h3>
+                    <p>The handler's response now includes <code>"source": "cache" | "live"</code> so callers (dashboards, morning briefings, agents) can see which path was taken without extra instrumentation. The cache is a performance optimisation, never a correctness dependency &mdash; any failure (missing file, corrupt JSON, stale timestamp, unknown schema, non-cached window) routes to live.</p>
+                </div>
+            </div>
+        </div>
+        <p class="section-subtitle" style="margin-top:24px;">
+            9 new tests in <code>tests/test_protocol.py</code> lock in Spanish detection, bilingual negation suppression, positive signal boosting, numeric safeguard transitions, and score bounds. 7 new tests in <code>tests/test_cortex_quality_cache.py</code> cover fresh cache hits, stale cache, corrupt schema, invalid JSON, missing file, and non-cached windows. Lint, security, coverage, release-readiness, and client-parity gates all green.
+        </p>
     </div>
 </section>
 
