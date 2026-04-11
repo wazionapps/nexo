@@ -584,6 +584,35 @@ def handle_heartbeat(sid: str, task: str, context_hint: str = '') -> str:
         except Exception:
             pass  # Best-effort reminder only
 
+    # Protocol debt surfacing: if this session has open debts, warn so the
+    # agent can resolve them with nexo_protocol_debt_resolve before claiming
+    # any task complete. Mirrors task_open / task_close behavior so that
+    # protocol debt is visible at every protocol touchpoint, not only at
+    # task boundaries.
+    try:
+        from db import list_protocol_debts
+        session_debts = list_protocol_debts(status="open", session_id=sid, limit=5)
+        if session_debts:
+            error_count = sum(1 for d in session_debts if d.get("severity") == "error")
+            icon = "⛔" if error_count else "⚠"
+            parts.append("")
+            parts.append(
+                f"{icon} PROTOCOL DEBT: {len(session_debts)} open debt(s) in this session"
+                + (f" ({error_count} error)" if error_count else "")
+                + "."
+            )
+            for debt in session_debts[:3]:
+                evidence = (debt.get("evidence") or "").strip().replace("\n", " ")
+                parts.append(
+                    f"  [{debt.get('id')}] {debt.get('debt_type', '?')}"
+                    f" ({debt.get('severity', '?')}): {evidence[:100]}"
+                )
+            parts.append(
+                "  Resolve with nexo_protocol_debt_resolve before claiming task complete."
+            )
+    except Exception:
+        pass  # Best-effort surfacing, never block heartbeat
+
     return "\n".join(parts)
 
 

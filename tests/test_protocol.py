@@ -617,3 +617,68 @@ def test_task_open_previews_anticipatory_warnings_without_firing_trigger():
     assert payload["preventive_followup"]["id"].startswith("NF-PROTOCOL-")
     assert get_followup(payload["preventive_followup"]["id"]) is not None
     assert any(trigger["id"] == trigger_id for trigger in triggers)
+
+
+def test_heartbeat_surfaces_open_protocol_debt():
+    """heartbeat must warn when the current session has open protocol debt.
+
+    Mirrors task_open / task_close behavior so the agent sees protocol debt
+    at every protocol touchpoint, not only at task boundaries. Without this
+    surfacing, an agent could log many heartbeats without ever noticing
+    debts opened by self-audit, task_close, or guard checks.
+    """
+    from db import create_protocol_debt
+    from tools_sessions import handle_heartbeat
+
+    sid = _register_session("nexo-1011-2011")
+    create_protocol_debt(
+        sid,
+        "claimed_done_without_evidence",
+        severity="error",
+        evidence="Closed task without close_evidence payload",
+    )
+    create_protocol_debt(
+        sid,
+        "missing_followup_payload",
+        severity="warn",
+        evidence="duplicate followup id",
+    )
+
+    output = handle_heartbeat(sid=sid, task="continue work", context_hint="checking session state")
+
+    assert "PROTOCOL DEBT" in output
+    assert "2 open debt(s)" in output
+    assert "1 error" in output
+    assert "claimed_done_without_evidence" in output
+    assert "missing_followup_payload" in output
+    assert "nexo_protocol_debt_resolve" in output
+
+
+def test_heartbeat_silent_when_no_protocol_debt():
+    """heartbeat must NOT spam the protocol debt warning when the session is clean."""
+    from tools_sessions import handle_heartbeat
+
+    sid = _register_session("nexo-1012-2012")
+    output = handle_heartbeat(sid=sid, task="clean work", context_hint="all good")
+
+    assert "PROTOCOL DEBT" not in output
+
+
+def test_heartbeat_only_surfaces_current_session_debt():
+    """heartbeat must scope debt surfacing to the current session, not bleed across sessions."""
+    from db import create_protocol_debt
+    from tools_sessions import handle_heartbeat
+
+    other_sid = _register_session("nexo-1013-2013")
+    create_protocol_debt(
+        other_sid,
+        "claimed_done_without_evidence",
+        severity="error",
+        evidence="other session debt",
+    )
+
+    current_sid = _register_session("nexo-1014-2014")
+    output = handle_heartbeat(sid=current_sid, task="my work", context_hint="my context")
+
+    assert "PROTOCOL DEBT" not in output
+    assert "other session debt" not in output
