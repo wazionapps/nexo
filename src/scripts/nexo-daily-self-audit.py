@@ -230,7 +230,8 @@ def _ensure_followup(conn: sqlite3.Connection, *, prefix: str, description: str,
                      verification: str, reasoning: str, priority: str = "high") -> str:
     if not _table_exists(conn, "followups"):
         return ""
-    followup_id = f"NF-{prefix}-{hashlib.sha1(description.encode('utf-8')).hexdigest()[:8].upper()}"
+    # Content fingerprint, not security-sensitive.
+    followup_id = f"NF-{prefix}-{hashlib.sha1(description.encode('utf-8'), usedforsecurity=False).hexdigest()[:8].upper()}"
     existing = conn.execute(
         """SELECT id FROM followups
            WHERE status NOT LIKE 'COMPLETED%'
@@ -517,7 +518,8 @@ def _upsert_workflow_goal_inline(conn: sqlite3.Connection, *, area: str, sample_
         )
         return {"ok": True, "action": "updated", "goal_id": str(existing["goal_id"])}
 
-    goal_id = f"WG-AUDIT-{hashlib.sha1(f'{area}:{signature or sample_goal}'.encode('utf-8')).hexdigest()[:8].upper()}"
+    # Content fingerprint, not security-sensitive.
+    goal_id = f"WG-AUDIT-{hashlib.sha1(f'{area}:{signature or sample_goal}'.encode('utf-8'), usedforsecurity=False).hexdigest()[:8].upper()}"
     values: dict[str, object] = {"goal_id": goal_id}
     if "session_id" in columns:
         values["session_id"] = ""

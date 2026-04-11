@@ -51,3 +51,22 @@ testpaths = ["tests"]
 filterwarnings = [
     "ignore::DeprecationWarning",
 ]
+
+# Fase 4 item 3: bandit security baseline. The CI workflow runs bandit
+# with --severity-level high --confidence-level high which has zero
+# findings as of this commit (the original sweep surfaced 10 weak-hash
+# findings, all fixed by adding usedforsecurity=False). Lower-severity
+# findings are informational and tracked in the project board, not
+# enforced.
+[tool.bandit]
+exclude_dirs = [
+    ".venv",
+    "venv",
+    "build",
+    "dist",
+    "tests",
+    "release-contracts",
+    "benchmarks",
+]
+# B101 = assert statements (harmless, all in tests/ which is excluded).
+skips = ["B101"]

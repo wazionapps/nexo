@@ -138,8 +138,10 @@ def _pattern_followup_from_fix(pattern: dict) -> dict | None:
         "impact": "high" if severity == "high" else "medium",
         "reversibility": "reversible",
         "evidence": pattern.get("evidence", []) or [],
+        # Content fingerprint, not security-sensitive.
         "dedupe_key": "engineering-fix:" + hashlib.md5(
-            _normalize_action_text(followup_description).encode("utf-8")
+            _normalize_action_text(followup_description).encode("utf-8"),
+            usedforsecurity=False,
         ).hexdigest()[:16],
         "content": {
             "title": title or f"Engineering fix for: {pattern_text[:90]}",

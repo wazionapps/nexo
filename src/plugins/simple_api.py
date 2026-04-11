@@ -25,7 +25,10 @@ def handle_remember(
         return json.dumps({"ok": False, "error": "content is required"}, ensure_ascii=False, indent=2)
 
     clean_title = (title or "").strip()[:120]
-    source_id = hashlib.sha1(f"{clean_title}|{clean_content}".encode("utf-8")).hexdigest()[:12]
+    # Content fingerprint for deterministic dedup id — not security-sensitive.
+    source_id = hashlib.sha1(
+        f"{clean_title}|{clean_content}".encode("utf-8"), usedforsecurity=False
+    ).hexdigest()[:12]
     memory_id = cognitive.ingest_to_ltm(
         clean_content,
         source_type=(source_type or "note").strip()[:40],

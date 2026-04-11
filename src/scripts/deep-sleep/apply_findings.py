@@ -594,8 +594,8 @@ def create_followup(description: str, date: str = "", reasoning_note: str = "", 
                     status=desired_status,
                 )
 
-        # Generate a deterministic ID
-        fid = "NF-DS-" + hashlib.md5(description.encode()).hexdigest()[:8].upper()
+        # Generate a deterministic ID — content fingerprint, not security-sensitive.
+        fid = "NF-DS-" + hashlib.md5(description.encode(), usedforsecurity=False).hexdigest()[:8].upper()
         existing = nexo_db.get_followup(fid)
         if existing:
             return _touch_existing_followup(
@@ -761,8 +761,9 @@ def create_skill(skill_data: dict) -> dict:
 
         skill_id = skill_data.get("id", "")
         if not skill_id:
+            # Content fingerprint, not security-sensitive.
             skill_id = "SK-DS-" + hashlib.md5(
-                skill_data.get("name", "").encode()
+                skill_data.get("name", "").encode(), usedforsecurity=False
             ).hexdigest()[:8].upper()
 
         execution_level = skill_data.get("execution_level", "")
@@ -1955,7 +1956,8 @@ def apply_action(action: dict, run_id: str) -> dict:
     content = action.get("content", {})
     dedupe_key = action.get("dedupe_key", "")
 
-    applied_id = f"{run_id}-{hashlib.md5(dedupe_key.encode()).hexdigest()[:8]}"
+    # Content fingerprint, not security-sensitive.
+    applied_id = f"{run_id}-{hashlib.md5(dedupe_key.encode(), usedforsecurity=False).hexdigest()[:8]}"
 
     log_entry = {
         "applied_action_id": applied_id,
