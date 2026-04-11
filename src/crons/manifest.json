@@ -17,6 +17,18 @@
       "run_on_wake": true
     },
     {
+      "id": "cortex-cycle",
+      "script": "scripts/nexo-cortex-cycle.py",
+      "interval_seconds": 21600,
+      "description": "Continuous Cortex quality validation — every 6h. Persists snapshot and opens NF-CORTEX-QUALITY-DROP followup on degradation",
+      "core": true,
+      "recovery_policy": "catchup",
+      "idempotent": true,
+      "max_catchup_age": 86400,
+      "run_on_boot": false,
+      "run_on_wake": false
+    },
+    {
       "id": "sleep",
       "script": "scripts/nexo-sleep.py",
       "schedule": {"hour": 4, "minute": 0},
