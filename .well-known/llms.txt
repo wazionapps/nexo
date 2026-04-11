@@ -1,8 +1,8 @@
 # NEXO Brain
 
-> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v5.0.2).
+> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v5.1.0).
 
-NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. Version 5.0.2 fixes the post-upgrade deep-doctor schema drift for the 5.0 runtime line while keeping the broader goal, decision, outcome, reusable-skill, and public-proof loop across supported clients, configurable terminal and automation backends, recovery-aware background jobs, startup preflight, runtime self-healing, multimodal memory refs, pre-compaction auto-flush, a public claim wiki, readable memory export, richer user-state adaptation, long-horizon overnight analysis, and 150+ MCP tools.
+NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. Version 5.1.0 closes every open evolution, adaptive, cognitive, and skills loop under itself, ships bitemporal knowledge graph export to JSON-LD and GraphML with `as_of` historical replay, adds an OpenTelemetry tool-span path behind a soft-import, and puts lint, security, coverage, and release-readiness gates on every PR, on top of the 5.0 goal, decision, outcome, reusable-skill, and public-proof loop across supported clients, configurable terminal and automation backends, recovery-aware background jobs, startup preflight, runtime self-healing, multimodal memory refs, pre-compaction auto-flush, a public claim wiki, readable memory export, richer user-state adaptation, long-horizon overnight analysis, and 150+ MCP tools.
 
 ## Core Product Model
 
