@@ -87,18 +87,22 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v5.1.0 live</span>
-                    <span class="page-chip">Closed loops across evolution, adaptive, cognitive, skills</span>
-                    <span class="page-chip">Bitemporal KG export &middot; OTEL spans &middot; CI gates</span>
+                    <span class="page-chip">v5.1.1 live</span>
+                    <span class="page-chip">Release trace hygiene &middot; stale WG-AUDIT-* auto-retire</span>
+                    <span class="page-chip">Diary warning split: recent vs historical</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v510" class="btn btn-primary">Start with v5.1.0</a>
+                    <a href="#v511" class="btn btn-primary">Start with v5.1.1</a>
                     <a href="#v400" class="btn btn-secondary">See v4.0.0</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
             </div>
             <div class="page-visual">
                 <div class="page-stack">
+                    <div class="page-stack-card">
+                        <strong>v5.1.1</strong>
+                        <span>Release trace hygiene patch. New doctor check surfaces stale audit-phase workflows; self-audit auto-retires stale WG-AUDIT-* placeholder goals; diary warnings split recent vs historical commit_ref gaps.</span>
+                    </div>
                     <div class="page-stack-card">
                         <strong>v5.1.0</strong>
                         <span>Every open evolution, adaptive, cognitive, and skills loop closes under itself. Bitemporal KG export, OpenTelemetry spans, and lint/security/release gates on every PR.</span>
@@ -137,6 +141,36 @@
                 <div id="changelog-pager" class="changelog-pager" aria-label="Changelog pagination"></div>
             </div>
         </div>
+    </div>
+</section>
+
+<!-- v5.1.1 Release trace hygiene patch -->
+<section id="v511" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.1.1 <span style="opacity:.5;font-weight:400;">&mdash; April 12, 2026</span></div>
+        <h2 class="section-title">Release Trace Hygiene</h2>
+        <p class="section-subtitle">
+            A focused patch that closes the gap where audit-phase workflow traces and self-audit placeholder goals silently accumulated in the runtime. No breaking changes; no bootstrap, startup, Deep Sleep, or client-parity surfaces were touched.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h3>Doctor check: release_trace_hygiene</h3>
+                    <p>New runtime check flags stale <code>audit-phase</code> <code>workflow_runs</code> (over 6h open) and stale active <code>WG-AUDIT-*</code> / <code>NEXO-AUDIT-*</code> goals with no open runs, so drifted release traces become a visible degraded check instead of quietly piling up.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Self-audit auto-retire</h3>
+                    <p>The daily self-audit now abandons <code>WG-AUDIT-*</code> placeholder goals after 36h via <code>_retire_stale_audit_goals_inline()</code>, marking them with an explicit <code>blocker_reason</code>. They are recreated only if the underlying pattern reappears.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Diary warning split</h3>
+                    <p><code>episodic_memory.handle_session_diary_write</code> now separates commit_ref gap warnings into recent (last 7 days) and historical buckets, so live drift stands out from dormant debt instead of being lumped together.</p>
+                </div>
+            </div>
+        </div>
+        <p class="section-subtitle" style="margin-top:24px;">
+            All three changes ship with dedicated tests and cleared Lint, Security, Release readiness, and Verify integrations / client-parity gates on PR #127.
+        </p>
     </div>
 </section>
 
