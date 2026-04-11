@@ -19,6 +19,71 @@ import cognitive
 STATE_FILE = NEXO_HOME / "operations" / ".catchup-state.json"
 
 
+CORRECTION_FATIGUE_FOLLOWUP_ID = "NF-CORRECTION-FATIGUE"
+
+
+def _open_correction_fatigue_followup(fatigued: list) -> str:
+    """Surface fatigued memories as a single high-priority followup.
+
+    Closes Fase 3 item 4 of NEXO-AUDIT-2026-04-11. check_correction_fatigue
+    already auto-decays the strength of memories corrected 3+ times in a
+    week and tags them under_review, but the under_review tag is never
+    read elsewhere — the user could lose hours debugging a wrong memory
+    before noticing it had been silently decayed. This helper writes a
+    single deterministic followup so the operator sees the list at the
+    next morning briefing.
+
+    Idempotent across daily runs via the fixed id NF-CORRECTION-FATIGUE
+    (INSERT OR REPLACE). Best-effort: never raises.
+    """
+    import sqlite3 as _sqlite3
+    if not fatigued:
+        return "no_signal"
+
+    db_path = (
+        os.environ.get("NEXO_TEST_DB")
+        or os.environ.get("NEXO_DB")
+        or str(NEXO_HOME / "data" / "nexo.db")
+    )
+    if not Path(db_path).exists():
+        return "skipped_no_db"
+
+    lines = [
+        f"NEXO detected {len(fatigued)} memory/memories corrected 3+ times in the last 7 days.",
+        "These have been auto-decayed to strength <= 0.2 and tagged under_review.",
+        "Verify each one and either delete it, refine its content, or accept the decay.",
+        "",
+    ]
+    for f in fatigued[:10]:
+        lines.append(
+            f"- LTM #{f.get('memory_id')} ({f.get('corrections_7d')}x corrections, "
+            f"strength={f.get('strength')}): {(f.get('content') or '')[:160]}"
+        )
+    if len(fatigued) > 10:
+        lines.append(f"... and {len(fatigued) - 10} more")
+    description = "\n".join(lines)
+    verification = (
+        "sqlite3 ~/claude/data/cognitive.db \"SELECT id, content, strength, tags "
+        "FROM ltm_memories WHERE tags LIKE '%under_review%' ORDER BY strength ASC LIMIT 50\""
+    )
+    now_epoch = datetime.now().timestamp()
+
+    conn = _sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            "INSERT OR REPLACE INTO followups (id, description, date, status, "
+            "verification, created_at, updated_at, priority) "
+            "VALUES (?, ?, NULL, 'PENDING', ?, ?, ?, 'high')",
+            (CORRECTION_FATIGUE_FOLLOWUP_ID, description, verification, now_epoch, now_epoch),
+        )
+        conn.commit()
+    except Exception as e:
+        return f"failed: {e}"
+    finally:
+        conn.close()
+    return "opened_or_refreshed"
+
+
 def update_catchup_state():
     """Register successful run so catch-up script knows we ran."""
     try:
@@ -88,12 +153,22 @@ def main():
         print(f"[{ts}] Consolidation error: {e}")
 
     # 5. Correction fatigue — mark memories corrected 3+ times as unreliable
+    # Closes Fase 3 item 4 of NEXO-AUDIT-2026-04-11. check_correction_fatigue
+    # already auto-decays strength to 0.2 and tags the memory as
+    # 'under_review', but the under_review tag is never read elsewhere in the
+    # codebase. The user could lose hours debugging a wrong memory before
+    # noticing it had been silently decayed. Surface as a daily followup so
+    # the operator sees fatigued memories at the next morning briefing.
     try:
         fatigued = cognitive.check_correction_fatigue()
         if fatigued:
             print(f"[{ts}] CORRECTION FATIGUE: {len(fatigued)} memories corrected 3+ times in 7d:")
             for f in fatigued:
                 print(f"[{ts}]   LTM #{f['memory_id']} ({f['corrections_7d']}x): {f['content'][:80]}...")
+            try:
+                _open_correction_fatigue_followup(fatigued)
+            except Exception as fe:
+                print(f"[{ts}] Correction fatigue followup error: {fe}")
         else:
             print(f"[{ts}] No correction fatigue detected.")
     except Exception as e:
