@@ -484,3 +484,188 @@ def test_write_morning_briefing_includes_top_impact_and_queue_changes(monkeypatc
     assert "Why:" in briefing
     assert "## Impact Queue Changes" in briefing
     assert "+12.5 -> 64.0" in briefing
+
+
+# ── Fase 2 item 5: code_change action stages into evolution_log ──────────
+
+
+def _seed_evolution_log_table(db_path: Path) -> None:
+    """Create a minimal post-m38 evolution_log schema for the apply tests."""
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS evolution_log ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "created_at TEXT DEFAULT (datetime('now')), "
+        "cycle_number INTEGER NOT NULL, "
+        "dimension TEXT NOT NULL, "
+        "proposal TEXT NOT NULL, "
+        "classification TEXT NOT NULL DEFAULT 'auto', "
+        "status TEXT DEFAULT 'pending', "
+        "files_changed TEXT, snapshot_ref TEXT, test_result TEXT, "
+        "impact INTEGER DEFAULT 0, reasoning TEXT NOT NULL, "
+        "proposal_payload TEXT DEFAULT NULL)"
+    )
+    conn.commit()
+    conn.close()
+
+
+def test_apply_code_change_action_stages_into_evolution_log(monkeypatch, tmp_path):
+    apply_mod = _load_apply_module(monkeypatch, tmp_path)
+    db_path = Path(os.environ["NEXO_DB"])
+    _seed_evolution_log_table(db_path)
+
+    content = {
+        "dimension": "reliability",
+        "action": "Add retry to flaky API call",
+        "reasoning": "deep sleep saw 5 retried failures in 2 days",
+        "scope": "local",
+        "changes": [
+            {
+                "file": "/tmp/repo/src/api.py",
+                "operation": "replace",
+                "search": "return call()",
+                "content": "return call_with_retry(call, max_retries=3)",
+            }
+        ],
+    }
+    result = apply_mod.apply_code_change_action(content, dedupe_key="ds-2026-04-11-api-retry")
+
+    assert result["success"] is True
+    assert result.get("skipped_duplicate") is False
+    assert result["evolution_log_id"]
+
+    conn = sqlite3.connect(str(db_path))
+    row = conn.execute(
+        "SELECT dimension, proposal, classification, status, proposal_payload "
+        "FROM evolution_log WHERE id = ?",
+        (result["evolution_log_id"],),
+    ).fetchone()
+    conn.close()
+
+    assert row is not None
+    assert row[0] == "reliability"
+    assert row[1] == "Add retry to flaky API call"
+    assert row[2] == "propose"
+    assert row[3] == "accepted"
+    payload = json.loads(row[4])
+    assert payload["changes"][0]["file"] == "/tmp/repo/src/api.py"
+    assert payload["extras"]["source"] == "deep_sleep"
+    assert payload["extras"]["dedupe_key"] == "ds-2026-04-11-api-retry"
+
+
+def test_apply_code_change_action_is_idempotent_by_dedupe_key(monkeypatch, tmp_path):
+    apply_mod = _load_apply_module(monkeypatch, tmp_path)
+    db_path = Path(os.environ["NEXO_DB"])
+    _seed_evolution_log_table(db_path)
+
+    content = {
+        "dimension": "safety",
+        "action": "Quote shell args",
+        "reasoning": "shell injection hardening",
+        "changes": [
+            {
+                "file": "/tmp/repo/src/run.sh",
+                "operation": "replace",
+                "search": "rm -rf $TARGET",
+                "content": 'rm -rf "$TARGET"',
+            }
+        ],
+    }
+    first = apply_mod.apply_code_change_action(content, dedupe_key="ds-quote-shell")
+    second = apply_mod.apply_code_change_action(content, dedupe_key="ds-quote-shell")
+
+    assert first["success"] is True
+    assert first["skipped_duplicate"] is False
+    assert second["success"] is True
+    assert second["skipped_duplicate"] is True
+    assert second["evolution_log_id"] == first["evolution_log_id"]
+
+    conn = sqlite3.connect(str(db_path))
+    count = conn.execute("SELECT COUNT(*) FROM evolution_log").fetchone()[0]
+    conn.close()
+    assert count == 1
+
+
+def test_apply_code_change_action_validates_required_fields(monkeypatch, tmp_path):
+    apply_mod = _load_apply_module(monkeypatch, tmp_path)
+    _seed_evolution_log_table(Path(os.environ["NEXO_DB"]))
+
+    bad1 = apply_mod.apply_code_change_action(
+        {"action": "do x", "changes": [{"file": "x", "operation": "replace"}]}, "k1"
+    )
+    assert bad1["success"] is False
+    assert "dimension" in bad1["reason"]
+
+    bad2 = apply_mod.apply_code_change_action(
+        {"dimension": "reliability", "action": "do x"}, "k2"
+    )
+    assert bad2["success"] is False
+    assert "changes" in bad2["reason"]
+
+    bad3 = apply_mod.apply_code_change_action(
+        {"dimension": "reliability", "action": "do x", "changes": []}, "k3"
+    )
+    assert bad3["success"] is False
+
+    bad4 = apply_mod.apply_code_change_action(
+        {"dimension": "reliability", "action": "do x", "changes": [{"file": "x"}]}, "k4"
+    )
+    assert bad4["success"] is False
+    assert "operation" in bad4["reason"]
+
+
+def test_apply_action_dispatches_code_change(monkeypatch, tmp_path):
+    apply_mod = _load_apply_module(monkeypatch, tmp_path)
+    _seed_evolution_log_table(Path(os.environ["NEXO_DB"]))
+
+    action = {
+        "action_type": "code_change",
+        "action_class": "auto_apply",
+        "dedupe_key": "ds-dispatch-test",
+        "content": {
+            "dimension": "reliability",
+            "action": "Wire dispatch",
+            "reasoning": "regression test",
+            "changes": [
+                {
+                    "file": "/tmp/repo/foo.py",
+                    "operation": "replace",
+                    "search": "old",
+                    "content": "new",
+                }
+            ],
+        },
+    }
+    log_entry = apply_mod.apply_action(action, run_id="ds-test")
+
+    assert log_entry["status"] == "applied"
+    assert log_entry["action_type"] == "code_change"
+    assert log_entry["details"]["success"] is True
+    assert log_entry["details"]["evolution_log_id"]
+
+
+def test_apply_action_skips_code_change_when_action_class_not_auto_apply(monkeypatch, tmp_path):
+    apply_mod = _load_apply_module(monkeypatch, tmp_path)
+    _seed_evolution_log_table(Path(os.environ["NEXO_DB"]))
+
+    action = {
+        "action_type": "code_change",
+        "action_class": "draft_for_morning",
+        "dedupe_key": "ds-deferred",
+        "content": {
+            "dimension": "reliability",
+            "action": "Wire dispatch",
+            "changes": [
+                {"file": "x", "operation": "replace", "search": "a", "content": "b"}
+            ],
+        },
+    }
+    log_entry = apply_mod.apply_action(action, run_id="ds-test")
+
+    assert log_entry["status"] == "deferred_to_morning"
+    db_path = Path(os.environ["NEXO_DB"])
+    conn = sqlite3.connect(str(db_path))
+    count = conn.execute("SELECT COUNT(*) FROM evolution_log").fetchone()[0]
+    conn.close()
+    assert count == 0

@@ -2005,11 +2005,136 @@ def apply_action(action: dict, run_id: str) -> dict:
         # These are included in the briefing file, not applied separately
         log_entry["status"] = "included_in_briefing"
 
+    elif action_type == "code_change":
+        # Closes Fase 2 item 5: deep sleep can now hand a concrete code
+        # change to the evolution apply pipeline. We do NOT touch any source
+        # file directly here — that would bypass the sandbox/snapshot/rollback
+        # safety net that lives in nexo-evolution-run.py:execute_auto_proposal.
+        # Instead we persist the proposal to evolution_log with status=accepted
+        # and a proposal_payload, so the next evolution cycle picks it up via
+        # _apply_accepted_proposals (added in Fase 2 item 1, m38).
+        result = apply_code_change_action(content, dedupe_key)
+        log_entry["status"] = "applied" if result.get("success") else "error"
+        log_entry["details"] = result
+
     else:
         log_entry["status"] = "unknown_type"
         log_entry["details"] = {"error": f"Unknown action_type: {action_type}"}
 
     return log_entry
+
+
+def apply_code_change_action(content: dict, dedupe_key: str) -> dict:
+    """Stage a code_change finding into evolution_log for the next cycle.
+
+    Required content keys:
+        dimension:  evolution dimension (reliability/safety/etc)
+        action:     short human-readable description of what to do
+        reasoning:  why deep sleep proposed this change
+        changes:    list of {file, operation, search?, content} entries
+                    matching nexo-evolution-run.py:apply_change semantics
+
+    Optional:
+        scope: 'local' | 'public' (default 'local')
+        classification: 'propose' | 'auto' (default 'propose')
+
+    Idempotent: if a row with the same dedupe_key already exists in
+    evolution_log (matched against proposal_payload extras.dedupe_key), the
+    function returns success without inserting a duplicate.
+
+    Returns: {success: bool, evolution_log_id: int|None, reason: str|None,
+              skipped_duplicate: bool}
+    """
+    if not isinstance(content, dict):
+        return {"success": False, "reason": "content must be a dict"}
+
+    dimension = (content.get("dimension") or "").strip()
+    action_text = (content.get("action") or content.get("title") or "").strip()
+    reasoning = (content.get("reasoning") or content.get("why") or "").strip()
+    changes = content.get("changes") or []
+    scope = (content.get("scope") or "local").strip() or "local"
+    classification = (content.get("classification") or "propose").strip() or "propose"
+
+    if not dimension:
+        return {"success": False, "reason": "missing dimension"}
+    if not action_text:
+        return {"success": False, "reason": "missing action"}
+    if not isinstance(changes, list) or not changes:
+        return {"success": False, "reason": "missing or empty changes array"}
+    for idx, change in enumerate(changes):
+        if not isinstance(change, dict):
+            return {"success": False, "reason": f"changes[{idx}] is not a dict"}
+        if not change.get("file"):
+            return {"success": False, "reason": f"changes[{idx}] missing file"}
+        if not change.get("operation"):
+            return {"success": False, "reason": f"changes[{idx}] missing operation"}
+
+    payload = {
+        "classification": classification,
+        "dimension": dimension,
+        "action": action_text,
+        "reasoning": reasoning,
+        "scope": scope,
+        "changes": changes,
+        "extras": {
+            "source": "deep_sleep",
+            "dedupe_key": dedupe_key,
+        },
+    }
+    payload_json = json.dumps(payload, ensure_ascii=False)
+
+    try:
+        conn = sqlite3.connect(str(NEXO_DB), timeout=10)
+    except Exception as e:
+        return {"success": False, "reason": f"cannot open nexo.db: {e}"}
+
+    try:
+        # Idempotency: skip if any prior row already staged this dedupe_key.
+        existing = conn.execute(
+            "SELECT id FROM evolution_log "
+            "WHERE proposal_payload IS NOT NULL "
+            "  AND proposal_payload LIKE ? "
+            "ORDER BY id DESC LIMIT 1",
+            (f'%"dedupe_key": "{dedupe_key}"%',),
+        ).fetchone()
+        if existing:
+            return {
+                "success": True,
+                "skipped_duplicate": True,
+                "evolution_log_id": int(existing[0]),
+                "reason": "already staged in evolution_log",
+            }
+
+        cur = conn.execute(
+            "INSERT INTO evolution_log "
+            "(cycle_number, dimension, proposal, classification, reasoning, status, proposal_payload) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+                0,  # cycle_number 0 = staged from outside the regular cycle
+                dimension,
+                action_text,
+                classification,
+                reasoning or "deep sleep proposed code change",
+                "accepted",
+                payload_json,
+            ),
+        )
+        try:
+            conn.commit()
+        except Exception:
+            pass
+        return {
+            "success": True,
+            "skipped_duplicate": False,
+            "evolution_log_id": int(cur.lastrowid),
+        }
+    except Exception as e:
+        return {"success": False, "reason": f"insert failed: {e}"}
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 
 def main():
