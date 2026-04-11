@@ -320,19 +320,153 @@ def _persist_result(result: dict) -> None:
         conn.close()
 
 
+def _open_watcher_followup(result: dict) -> dict:
+    """Open or refresh a NF-WATCHER-{id} followup when a watcher fires.
+
+    Closes Fase 3 item 5 of NEXO-AUDIT-2026-04-11. Until this helper, state
+    watchers only updated their own row in `state_watchers` and wrote a
+    summary file. A watcher could go critical and stay critical for days
+    without ever surfacing to the user.
+
+    Idempotent: uses INSERT OR REPLACE on a deterministic id derived from
+    the watcher_id, so consecutive runs that hit the same problem refresh
+    the followup in place rather than duplicating it. The followup is
+    automatically resolved next time the watcher reports healthy (the cron
+    that wires `run_state_watchers` will hit the resolve path).
+
+    Returns: {action: 'opened'|'refreshed'|'skipped'|'failed', followup_id, reason}
+    """
+    health = (result.get("health") or "").strip().lower()
+    watcher_id = (result.get("watcher_id") or "").strip()
+    if not watcher_id:
+        return {"action": "skipped", "reason": "missing watcher_id"}
+    if health not in {"degraded", "critical"}:
+        return {"action": "skipped", "reason": f"health={health}"}
+
+    followup_id = f"NF-WATCHER-{watcher_id}"
+    severity_map = {"degraded": "warn", "critical": "error"}
+    severity = severity_map.get(health, "warn")
+    priority_map = {"degraded": "high", "critical": "critical"}
+    priority = priority_map.get(health, "high")
+    title = (result.get("title") or watcher_id).strip()
+    summary = (result.get("summary") or "").strip() or "(no summary)"
+    target = (result.get("target") or "").strip()
+    watcher_type = (result.get("watcher_type") or "").strip()
+
+    description_lines = [
+        f"State watcher {watcher_id} reports {health.upper()} ({severity}).",
+        f"Title: {title}",
+        f"Type: {watcher_type}" + (f" / Target: {target}" if target else ""),
+        "",
+        f"Summary: {summary}",
+    ]
+    evidence = result.get("evidence") or []
+    if isinstance(evidence, list) and evidence:
+        description_lines.append("")
+        description_lines.append("Evidence:")
+        for ev in evidence[:5]:
+            description_lines.append(f"  - {str(ev)[:200]}")
+    description_lines.append("")
+    description_lines.append(
+        "Investigate the watcher target and either fix the underlying drift "
+        "or update the watcher's threshold. The followup will auto-resolve "
+        "next time the watcher reports healthy."
+    )
+    description = "\n".join(description_lines)
+    verification = (
+        f"sqlite3 ~/claude/data/nexo.db \"SELECT last_health, last_result "
+        f"FROM state_watchers WHERE watcher_id = '{watcher_id}'\""
+    )
+
+    db_path = _db_path()
+    if not db_path.is_file():
+        return {"action": "failed", "followup_id": followup_id, "reason": "db not found"}
+
+    now_epoch = datetime.now().timestamp()
+    conn = sqlite3.connect(str(db_path))
+    try:
+        existing = conn.execute(
+            "SELECT id, status FROM followups WHERE id = ?", (followup_id,)
+        ).fetchone()
+        was_pending = bool(existing) and (existing[1] == "PENDING")
+        try:
+            conn.execute(
+                "INSERT OR REPLACE INTO followups (id, description, date, status, "
+                "verification, created_at, updated_at, priority) "
+                "VALUES (?, ?, NULL, 'PENDING', ?, ?, ?, ?)",
+                (followup_id, description, verification, now_epoch, now_epoch, priority),
+            )
+            conn.commit()
+        except sqlite3.OperationalError:
+            return {"action": "failed", "followup_id": followup_id, "reason": "followups table missing"}
+    finally:
+        conn.close()
+
+    return {
+        "action": "refreshed" if was_pending else "opened",
+        "followup_id": followup_id,
+        "severity": severity,
+    }
+
+
+def _resolve_watcher_followup(watcher_id: str) -> dict:
+    """Auto-resolve a NF-WATCHER-{id} followup when the watcher recovers.
+
+    Idempotent: a no-op when the followup does not exist or is already
+    resolved. Called from run_state_watchers when a watcher reports healthy
+    after previously being degraded/critical.
+    """
+    if not watcher_id:
+        return {"action": "skipped", "reason": "missing watcher_id"}
+    db_path = _db_path()
+    if not db_path.is_file():
+        return {"action": "skipped", "reason": "db not found"}
+    followup_id = f"NF-WATCHER-{watcher_id}"
+    conn = sqlite3.connect(str(db_path))
+    try:
+        existing = conn.execute(
+            "SELECT id, status FROM followups WHERE id = ?", (followup_id,)
+        ).fetchone()
+        if not existing:
+            return {"action": "skipped", "reason": "no followup"}
+        if existing[1] != "PENDING":
+            return {"action": "skipped", "reason": f"already {existing[1]}"}
+        conn.execute(
+            "UPDATE followups SET status = 'COMPLETED', updated_at = ? "
+            "WHERE id = ? AND status = 'PENDING'",
+            (datetime.now().timestamp(), followup_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return {"action": "resolved", "followup_id": followup_id}
+
+
 def run_state_watchers(*, persist: bool = True, status: str = "active") -> dict:
     watchers = _list_watchers(status=status)
     results = [evaluate_state_watcher(watcher) for watcher in watchers]
     counts = {"healthy": 0, "degraded": 0, "critical": 0, "unknown": 0}
+    followup_actions: list[dict] = []
     for result in results:
         counts[result["health"]] = counts.get(result["health"], 0) + 1
         if persist:
             _persist_result(result)
+            # Surface degraded/critical as a followup, auto-resolve when healthy.
+            try:
+                if result["health"] in {"degraded", "critical"}:
+                    action = _open_watcher_followup(result)
+                else:
+                    action = _resolve_watcher_followup(result.get("watcher_id", ""))
+                if action.get("action") not in {"skipped", None}:
+                    followup_actions.append(action)
+            except Exception:
+                pass  # Best-effort surfacing
     summary = {
         "generated_at": _now_iso(),
         "watcher_count": len(results),
         "counts": counts,
         "watchers": results,
+        "followup_actions": followup_actions,
     }
     if persist:
         summary_file = _summary_file()
