@@ -78,6 +78,10 @@ CLAUDE_CLI = _resolve_claude_cli()
 
 findings = []
 
+AUDIT_GOAL_NEXT_ACTION = "Convert the recurring theme into an explicit workflow or close it as intentional noise."
+AUDIT_GOAL_OWNER = "system:self-audit"
+AUDIT_GOAL_STALE_HOURS = 36
+
 
 def log(msg):
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -492,7 +496,7 @@ def _upsert_workflow_goal_inline(conn: sqlite3.Connection, *, area: str, sample_
         f"Recurring {area} theme detected by daily self-audit. "
         f"The theme '{sample_goal}' appeared {count} times without a durable goal, learning, or resolved workflow."
     )
-    next_action = "Convert the recurring theme into an explicit workflow or close it as intentional noise."
+    next_action = AUDIT_GOAL_NEXT_ACTION
     success_signal = "The theme stops resurfacing in unresolved protocol tasks."
     now_iso = datetime.now().isoformat(timespec="seconds")
     if existing:
@@ -504,7 +508,7 @@ def _upsert_workflow_goal_inline(conn: sqlite3.Connection, *, area: str, sample_
         if "priority" in columns:
             updates["priority"] = "high"
         if "owner" in columns:
-            updates["owner"] = "system:self-audit"
+            updates["owner"] = AUDIT_GOAL_OWNER
         if "next_action" in columns:
             updates["next_action"] = next_action
         if "success_signal" in columns:
@@ -534,7 +538,7 @@ def _upsert_workflow_goal_inline(conn: sqlite3.Connection, *, area: str, sample_
     if "priority" in columns:
         values["priority"] = "high"
     if "owner" in columns:
-        values["owner"] = "system:self-audit"
+        values["owner"] = AUDIT_GOAL_OWNER
     if "next_action" in columns:
         values["next_action"] = next_action
     if "success_signal" in columns:
@@ -551,6 +555,75 @@ def _upsert_workflow_goal_inline(conn: sqlite3.Connection, *, area: str, sample_
         list(values.values()),
     )
     return {"ok": True, "action": "created", "goal_id": goal_id}
+
+
+def _retire_stale_audit_goals_inline(
+    conn: sqlite3.Connection, *, max_age_hours: int = AUDIT_GOAL_STALE_HOURS
+) -> dict:
+    if not _table_exists(conn, "workflow_goals"):
+        return {"ok": False, "reason": "workflow_goals_missing"}
+
+    has_runs = _table_exists(conn, "workflow_runs")
+    if has_runs:
+        rows = conn.execute(
+            """SELECT g.goal_id, g.title, g.status, g.owner, g.next_action, g.opened_at, g.updated_at,
+                      COALESCE((SELECT COUNT(*) FROM workflow_runs r WHERE r.goal_id = g.goal_id), 0) AS run_count,
+                      COALESCE((SELECT COUNT(*) FROM workflow_runs r WHERE r.goal_id = g.goal_id
+                                AND r.status NOT IN ('completed', 'failed', 'cancelled')), 0) AS open_run_count
+               FROM workflow_goals g
+               WHERE g.status = 'active'
+                 AND g.goal_id LIKE 'WG-AUDIT-%'
+               ORDER BY g.updated_at DESC, g.opened_at DESC"""
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            """SELECT g.goal_id, g.title, g.status, g.owner, g.next_action, g.opened_at, g.updated_at,
+                      0 AS run_count,
+                      0 AS open_run_count
+               FROM workflow_goals g
+               WHERE g.status = 'active'
+                 AND g.goal_id LIKE 'WG-AUDIT-%'
+               ORDER BY g.updated_at DESC, g.opened_at DESC"""
+        ).fetchall()
+
+    if not rows:
+        return {"ok": True, "retired": 0}
+
+    now = datetime.now()
+    now_iso = now.isoformat(timespec="seconds")
+    retired = 0
+    for row in rows:
+        if str(row["next_action"] or "").strip() != AUDIT_GOAL_NEXT_ACTION:
+            continue
+        owner = str(row["owner"] or "").strip()
+        if owner and owner != AUDIT_GOAL_OWNER:
+            continue
+        if int(row["open_run_count"] or 0) > 0:
+            continue
+        updated_at = _parse_mixed_datetime(row["updated_at"]) or _parse_mixed_datetime(row["opened_at"])
+        if not updated_at:
+            continue
+        age_hours = (now - updated_at).total_seconds() / 3600
+        if age_hours < max_age_hours:
+            continue
+        conn.execute(
+            """UPDATE workflow_goals
+               SET status = 'abandoned',
+                   next_action = ?,
+                   blocker_reason = ?,
+                   updated_at = ?,
+                   closed_at = ?
+               WHERE goal_id = ?""",
+            (
+                "Ninguna. Placeholder stale retirado automáticamente; el self-audit lo recreará si el patrón reaparece.",
+                f"Self-audit placeholder stale >{max_age_hours}h sin workflow runs abiertos.",
+                now_iso,
+                now_iso,
+                row["goal_id"],
+            ),
+        )
+        retired += 1
+    return {"ok": True, "retired": retired}
 
 
 def _queue_public_core_handoff(
@@ -1173,6 +1246,11 @@ def check_unformalized_mentions():
     if not _table_exists(conn, "protocol_tasks"):
         conn.close()
         return
+
+    retired_result = _retire_stale_audit_goals_inline(conn)
+    retired_count = int(retired_result.get("retired") or 0)
+    if retired_count:
+        finding("INFO", "formalization", f"retired {retired_count} stale self-audit workflow goals")
 
     rows = conn.execute(
         """SELECT goal, area, learning_id, followup_id

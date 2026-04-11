@@ -2710,6 +2710,137 @@ def check_release_artifact_sync() -> DoctorCheck:
     )
 
 
+def check_release_trace_hygiene() -> DoctorCheck:
+    db_path = NEXO_HOME / "data" / "nexo.db"
+    if not db_path.is_file():
+        return DoctorCheck(
+            id="runtime.release_trace_hygiene",
+            tier="runtime",
+            status="healthy",
+            severity="info",
+            summary="Release trace hygiene unavailable (no DB)",
+            evidence=[],
+            repair_plan=[],
+            escalation_prompt="",
+        )
+
+    try:
+        conn = sqlite3.connect(str(db_path), timeout=2)
+        conn.row_factory = sqlite3.Row
+        try:
+            tables = {
+                row[0]
+                for row in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('workflow_goals', 'workflow_runs')"
+                ).fetchall()
+            }
+            if "workflow_goals" not in tables or "workflow_runs" not in tables:
+                return DoctorCheck(
+                    id="runtime.release_trace_hygiene",
+                    tier="runtime",
+                    status="healthy",
+                    severity="info",
+                    summary="Release trace hygiene unavailable (workflow tables absent)",
+                    evidence=[],
+                    repair_plan=[],
+                    escalation_prompt="",
+                )
+
+            stale_run_samples: list[str] = []
+            stale_goal_samples: list[str] = []
+            now = dt.datetime.now(dt.timezone.utc)
+            stale_after_hours = 6
+
+            run_rows = conn.execute(
+                """SELECT run_id, goal, updated_at
+                   FROM workflow_runs
+                   WHERE workflow_kind = 'audit-phase'
+                     AND status NOT IN ('completed', 'failed', 'cancelled')
+                   ORDER BY updated_at DESC"""
+            ).fetchall()
+            for row in run_rows:
+                updated_at = _parse_timestamp(row["updated_at"] or "")
+                if updated_at is None:
+                    stale_run_samples.append(f"{row['run_id']}: unreadable updated_at")
+                    continue
+                if updated_at.tzinfo is None:
+                    updated_at = updated_at.replace(tzinfo=dt.timezone.utc)
+                age_hours = (now - updated_at).total_seconds() / 3600
+                if age_hours >= stale_after_hours:
+                    stale_run_samples.append(
+                        f"{row['run_id']}: {age_hours:.1f}h stale ({str(row['goal'] or '')[:72]})"
+                    )
+
+            goal_rows = conn.execute(
+                """SELECT g.goal_id, g.title, g.updated_at,
+                          COALESCE((SELECT COUNT(*) FROM workflow_runs r WHERE r.goal_id = g.goal_id), 0) AS run_count,
+                          COALESCE((SELECT COUNT(*) FROM workflow_runs r WHERE r.goal_id = g.goal_id
+                                    AND r.status NOT IN ('completed', 'failed', 'cancelled')), 0) AS open_run_count
+                   FROM workflow_goals g
+                   WHERE g.status = 'active'
+                     AND (g.goal_id LIKE 'WG-AUDIT-%' OR g.title LIKE 'NEXO-AUDIT-%')
+                   ORDER BY g.updated_at DESC"""
+            ).fetchall()
+            for row in goal_rows:
+                if int(row["open_run_count"] or 0) > 0:
+                    continue
+                updated_at = _parse_timestamp(row["updated_at"] or "")
+                if updated_at is None:
+                    stale_goal_samples.append(f"{row['goal_id']}: unreadable updated_at")
+                    continue
+                if updated_at.tzinfo is None:
+                    updated_at = updated_at.replace(tzinfo=dt.timezone.utc)
+                age_hours = (now - updated_at).total_seconds() / 3600
+                if age_hours >= stale_after_hours:
+                    stale_goal_samples.append(
+                        f"{row['goal_id']}: {age_hours:.1f}h stale ({str(row['title'] or '')[:72]})"
+                    )
+        finally:
+            conn.close()
+    except Exception as exc:
+        return DoctorCheck(
+            id="runtime.release_trace_hygiene",
+            tier="runtime",
+            status="degraded",
+            severity="warn",
+            summary="Release trace hygiene check failed",
+            evidence=[str(exc)],
+            repair_plan=["Inspect workflow_goals/workflow_runs state manually"],
+            escalation_prompt="Release traces could not be audited, so stale audit artifacts may be hiding in the runtime.",
+        )
+
+    evidence = [
+        f"stale audit workflows: {len(stale_run_samples)}",
+        f"stale audit goals: {len(stale_goal_samples)}",
+    ]
+    evidence.extend(stale_run_samples[:3])
+    evidence.extend(stale_goal_samples[:3])
+    if stale_run_samples or stale_goal_samples:
+        return DoctorCheck(
+            id="runtime.release_trace_hygiene",
+            tier="runtime",
+            status="degraded",
+            severity="warn",
+            summary="Release trace hygiene needs cleanup",
+            evidence=evidence,
+            repair_plan=[
+                "Close or complete stale audit-phase workflows and active audit goals",
+                "Keep workflow/goal state aligned with the real shipped state after releases",
+            ],
+            escalation_prompt="Audit/release traces drifted away from reality, which makes shipping state look ambiguous.",
+        )
+    return DoctorCheck(
+        id="runtime.release_trace_hygiene",
+        tier="runtime",
+        status="healthy",
+        severity="info",
+        summary="Release trace hygiene OK",
+        evidence=evidence,
+        repair_plan=[],
+        escalation_prompt="",
+    )
+
+
 def check_state_watchers() -> DoctorCheck:
     db_path = NEXO_HOME / "data" / "nexo.db"
     summary_path = NEXO_HOME / "operations" / "state-watchers-status.json"
@@ -2988,6 +3119,7 @@ def run_runtime_checks(fix: bool = False) -> list[DoctorCheck]:
         safe_check(check_automation_telemetry),
         safe_check(check_state_watchers),
         safe_check(check_release_artifact_sync),
+        safe_check(check_release_trace_hygiene),
         safe_check(check_launchagent_inventory),
         safe_check(check_launchagent_integrity, fix=fix),
         safe_check(check_personal_script_registry, fix=fix),
