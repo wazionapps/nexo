@@ -20,6 +20,7 @@ from skills_runtime import (
     apply_skill,
     approve_skill_execution,
     compose_skills,
+    detect_skill_coactivation_candidates,
     get_featured_skill_summaries,
     list_evolution_candidates,
     materialize_outcome_pattern_skill,
@@ -210,6 +211,35 @@ def handle_skill_evolution_candidates() -> str:
     return json.dumps(list_evolution_candidates(), ensure_ascii=False)
 
 
+def handle_skill_compose_candidates(
+    min_co_occurrence: int = 3,
+    min_success_rate: float = 0.6,
+    limit: int = 20,
+) -> str:
+    """List Voyager-style composition candidates from skill_usage co-activation.
+
+    Closes Fase 5 item 5. Detects pairs of skills that fire together
+    in the same session repeatedly and could become a single composite.
+    Returns the candidates sorted by co-occurrence count, with a
+    suggested deterministic skill_id (SK-COMPOSE-<a>+<b>) that
+    nexo_skill_compose can take as input.
+
+    Args:
+        min_co_occurrence: minimum sessions where both skills fired (default 3).
+        min_success_rate: minimum joint success rate (default 0.6).
+        limit: max candidates to return (default 20).
+    """
+    return json.dumps(
+        detect_skill_coactivation_candidates(
+            min_co_occurrence=int(min_co_occurrence),
+            min_success_rate=float(min_success_rate),
+            limit=int(limit),
+        ),
+        ensure_ascii=False,
+        indent=2,
+    )
+
+
 def handle_skill_seed_from_outcome_pattern(pattern_key: str) -> str:
     return json.dumps(materialize_outcome_pattern_skill(pattern_key), ensure_ascii=False)
 
@@ -306,4 +336,6 @@ TOOLS = [
      "Retire a skill cleanly so it leaves the active lifecycle."),
     (handle_skill_compose, "nexo_skill_compose",
      "Compose multiple existing skills into one higher-level reusable skill."),
+    (handle_skill_compose_candidates, "nexo_skill_compose_candidates",
+     "Voyager-style detection: list skill pairs that fired together in 3+ sessions with 60%+ joint success and could become a single composite (closes Fase 5 item 5)."),
 ]
