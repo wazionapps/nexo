@@ -686,6 +686,66 @@ def test_check_unformalized_mentions_creates_workflow_goal_inline(self_audit_env
     assert "Recurring nexo theme detected by daily self-audit" in goal[2]
 
 
+def test_retire_stale_audit_goals_inline_abandons_old_placeholders(self_audit_env):
+    module = _load_self_audit_module()
+    conn = sqlite3.connect(str(self_audit_env / "data" / "nexo.db"))
+    conn.row_factory = sqlite3.Row
+    conn.execute(
+        """CREATE TABLE workflow_goals (
+            goal_id TEXT PRIMARY KEY,
+            session_id TEXT,
+            title TEXT,
+            objective TEXT,
+            parent_goal_id TEXT,
+            status TEXT,
+            priority TEXT,
+            owner TEXT,
+            next_action TEXT,
+            success_signal TEXT,
+            shared_state TEXT,
+            blocker_reason TEXT,
+            opened_at TEXT,
+            updated_at TEXT,
+            closed_at TEXT
+        )"""
+    )
+    conn.execute(
+        """CREATE TABLE workflow_runs (
+            run_id TEXT PRIMARY KEY,
+            goal_id TEXT,
+            workflow_kind TEXT,
+            status TEXT,
+            updated_at TEXT
+        )"""
+    )
+    conn.execute(
+        """INSERT INTO workflow_goals (
+            goal_id, session_id, title, objective, parent_goal_id, status, priority, owner,
+            next_action, success_signal, shared_state, blocker_reason, opened_at, updated_at, closed_at
+        ) VALUES (?, '', ?, '', '', 'active', 'high', ?, ?, '', '{}', '', datetime('now', '-3 days'), datetime('now', '-3 days'), NULL)""",
+        (
+            "WG-AUDIT-DEADBEEF",
+            "Placeholder stale",
+            module.AUDIT_GOAL_OWNER,
+            module.AUDIT_GOAL_NEXT_ACTION,
+        ),
+    )
+    conn.commit()
+
+    result = module._retire_stale_audit_goals_inline(conn, max_age_hours=24)
+    goal = conn.execute(
+        "SELECT status, next_action, blocker_reason, closed_at FROM workflow_goals WHERE goal_id = 'WG-AUDIT-DEADBEEF'"
+    ).fetchone()
+    conn.close()
+
+    assert result["ok"] is True
+    assert result["retired"] == 1
+    assert goal[0] == "abandoned"
+    assert "retirado automáticamente" in goal[1]
+    assert "stale >24h" in goal[2]
+    assert goal[3] is not None
+
+
 def test_check_automation_opportunities_creates_opportunity_followup(self_audit_env):
     module = _load_self_audit_module()
     module.findings.clear()

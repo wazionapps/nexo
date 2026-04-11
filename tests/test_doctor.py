@@ -918,6 +918,68 @@ class TestRuntimeChecks:
         assert check.status == "healthy"
         assert any("release artifacts in sync" in item for item in check.evidence)
 
+    def test_release_trace_hygiene_flags_stale_audit_artifacts(self, nexo_home, monkeypatch):
+        from doctor.providers import runtime
+
+        db_path = nexo_home / "data" / "nexo.db"
+        conn = sqlite3.connect(str(db_path))
+        conn.execute(
+            """CREATE TABLE workflow_goals (
+                goal_id TEXT PRIMARY KEY,
+                session_id TEXT,
+                title TEXT,
+                objective TEXT,
+                parent_goal_id TEXT,
+                status TEXT,
+                priority TEXT,
+                owner TEXT,
+                next_action TEXT,
+                success_signal TEXT,
+                shared_state TEXT,
+                blocker_reason TEXT,
+                opened_at TEXT,
+                updated_at TEXT,
+                closed_at TEXT
+            )"""
+        )
+        conn.execute(
+            """CREATE TABLE workflow_runs (
+                run_id TEXT PRIMARY KEY,
+                session_id TEXT,
+                goal_id TEXT,
+                goal TEXT,
+                workflow_kind TEXT,
+                status TEXT,
+                updated_at TEXT
+            )"""
+        )
+        conn.execute(
+            """INSERT INTO workflow_goals (
+                goal_id, session_id, title, objective, parent_goal_id, status, priority, owner,
+                next_action, success_signal, shared_state, blocker_reason, opened_at, updated_at, closed_at
+            ) VALUES (
+                'WG-AUDIT-12345678', '', 'NEXO-AUDIT stale goal', '', '', 'active', 'high', 'system:self-audit',
+                'Convert the recurring theme into an explicit workflow or close it as intentional noise.',
+                '', '{}', '', datetime('now', '-2 days'), datetime('now', '-2 days'), NULL
+            )"""
+        )
+        conn.execute(
+            """INSERT INTO workflow_runs (
+                run_id, session_id, goal_id, goal, workflow_kind, status, updated_at
+            ) VALUES (
+                'WF-STALE-1', '', '', 'Ejecutar Fase 4...', 'audit-phase', 'open', datetime('now', '-8 hours')
+            )"""
+        )
+        conn.commit()
+        conn.close()
+
+        monkeypatch.setattr(runtime, "NEXO_HOME", nexo_home)
+        check = runtime.check_release_trace_hygiene()
+
+        assert check.status == "degraded"
+        assert any("WF-STALE-1" in item for item in check.evidence)
+        assert any("WG-AUDIT-12345678" in item for item in check.evidence)
+
     def test_transcript_source_parity_warns_when_codex_selected_without_sessions(self, nexo_home, monkeypatch):
         from doctor.providers import runtime
 

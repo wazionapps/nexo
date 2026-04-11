@@ -229,8 +229,20 @@ def handle_session_diary_write(decisions: str, summary: str,
     orphan_changes = conn.execute(
         "SELECT COUNT(*) FROM change_log WHERE (commit_ref IS NULL OR commit_ref = '')"
     ).fetchone()[0]
+    recent_orphan_changes = conn.execute(
+        """SELECT COUNT(*) FROM change_log
+           WHERE (commit_ref IS NULL OR commit_ref = '')
+             AND created_at >= datetime('now', '-7 days')"""
+    ).fetchone()[0]
     if orphan_changes > 0:
-        warnings.append(f"{orphan_changes} changes sin commit_ref")
+        if recent_orphan_changes > 0 and recent_orphan_changes != orphan_changes:
+            warnings.append(
+                f"{recent_orphan_changes} changes recientes sin commit_ref ({orphan_changes} históricas total)"
+            )
+        elif recent_orphan_changes > 0:
+            warnings.append(f"{recent_orphan_changes} changes recientes sin commit_ref")
+        else:
+            warnings.append(f"{orphan_changes} changes históricas sin commit_ref")
     orphan_decisions = conn.execute(
         "SELECT COUNT(*) FROM decisions WHERE (outcome IS NULL OR outcome = '') AND created_at < datetime('now', '-7 days')"
     ).fetchone()[0]
