@@ -1231,6 +1231,136 @@ def _create_failure_followup(conn: sqlite3.Connection, cycle_num: int, log_id: i
         log(f"  WARN: Failed to create failure followup: {e}")
 
 
+# ── Apply user-approved proposals from prior cycles ─────────────────────
+def _apply_accepted_proposals(
+    conn: sqlite3.Connection,
+    cycle_num: int,
+    max_to_apply: int,
+    evolution_mode: str,
+) -> dict:
+    """Apply evolution_log rows that the user marked as `accepted`.
+
+    Reads up to `max_to_apply` rows where `status = 'accepted'` and
+    `proposal_payload IS NOT NULL`, deserializes the original proposal dict,
+    and runs each one through `execute_auto_proposal()` (same path as live
+    AUTO proposals: snapshot, apply, validate, rollback on failure).
+
+    Updates each row's status to one of: 'applied', 'rolled_back', 'blocked',
+    'skipped'. Failed rows get an `NF-EVO-L<id>` followup so they remain
+    visible after the cycle. The cycle continues even if individual rows
+    fail — one bad proposal does not block the queue.
+
+    Pre-m38 rows have NULL proposal_payload and are intentionally skipped:
+    we cannot reconstruct their `changes` array.
+
+    Returns: dict with attempted/applied/rolled_back/blocked/skipped/failed counts.
+    """
+    rows = conn.execute(
+        "SELECT id, dimension, proposal, reasoning, proposal_payload "
+        "FROM evolution_log WHERE status = 'accepted' AND proposal_payload IS NOT NULL "
+        "ORDER BY id ASC LIMIT ?",
+        (max(1, int(max_to_apply)),),
+    ).fetchall()
+
+    stats = {
+        "attempted": 0,
+        "applied": 0,
+        "rolled_back": 0,
+        "blocked": 0,
+        "skipped": 0,
+        "failed": 0,
+    }
+
+    for row in rows:
+        log_id = row["id"]
+        raw_payload = row["proposal_payload"]
+        try:
+            payload = json.loads(raw_payload)
+        except Exception as e:
+            log(f"  ACCEPTED #{log_id} skipped: invalid payload ({e})")
+            conn.execute(
+                "UPDATE evolution_log SET status = ?, test_result = ? WHERE id = ?",
+                ("skipped", f"Invalid proposal_payload JSON: {e}", log_id),
+            )
+            stats["skipped"] += 1
+            continue
+
+        if not isinstance(payload, dict) or not payload.get("changes"):
+            log(f"  ACCEPTED #{log_id} skipped: payload missing changes array")
+            conn.execute(
+                "UPDATE evolution_log SET status = ?, test_result = ? WHERE id = ?",
+                ("skipped", "Payload missing or empty changes array", log_id),
+            )
+            stats["skipped"] += 1
+            continue
+
+        action = (payload.get("action") or row["proposal"] or "")[:80]
+        log(f"  ACCEPTED #{log_id} applying: {action}")
+        stats["attempted"] += 1
+
+        try:
+            result = execute_auto_proposal(payload, cycle_num, conn, mode=evolution_mode)
+        except Exception as e:
+            log(f"    FAILED execute_auto_proposal: {e}")
+            conn.execute(
+                "UPDATE evolution_log SET status = ?, test_result = ? WHERE id = ?",
+                ("blocked", f"execute_auto_proposal raised: {e}", log_id),
+            )
+            stats["failed"] += 1
+            try:
+                _create_failure_followup(
+                    conn, cycle_num, log_id, payload, {"status": "failed", "reason": str(e)}
+                )
+            except Exception:
+                pass
+            continue
+
+        status = str(result.get("status") or "failed")
+        update_sets = ["status = ?"]
+        update_vals: list[object] = [status]
+        if "test_result" in result:
+            update_sets.append("test_result = ?")
+            update_vals.append(str(result.get("test_result", ""))[:2000])
+        if result.get("snapshot_ref"):
+            update_sets.append("snapshot_ref = ?")
+            update_vals.append(result["snapshot_ref"])
+        if result.get("files_changed"):
+            update_sets.append("files_changed = ?")
+            update_vals.append(json.dumps(result["files_changed"]))
+        update_vals.append(log_id)
+        conn.execute(
+            f"UPDATE evolution_log SET {', '.join(update_sets)} WHERE id = ?",
+            update_vals,
+        )
+
+        if status == "applied":
+            stats["applied"] += 1
+            log(f"    APPLIED")
+        elif status == "rolled_back":
+            stats["rolled_back"] += 1
+            log(f"    ROLLED BACK: {str(result.get('test_result', ''))[:100]}")
+            try:
+                _create_failure_followup(conn, cycle_num, log_id, payload, result)
+            except Exception:
+                pass
+        elif status == "blocked":
+            stats["blocked"] += 1
+            log(f"    BLOCKED: {str(result.get('reason') or result.get('test_result', ''))[:100]}")
+            try:
+                _create_failure_followup(conn, cycle_num, log_id, payload, result)
+            except Exception:
+                pass
+        elif status == "skipped":
+            stats["skipped"] += 1
+            log(f"    SKIPPED: {result.get('reason', '')}")
+        else:
+            stats["failed"] += 1
+            log(f"    UNKNOWN STATUS: {status}")
+
+    conn.commit()
+    return stats
+
+
 # ── Main run ─────────────────────────────────────────────────────────────
 def run():
     log("=" * 60)
@@ -1272,6 +1402,40 @@ def run():
         set_consecutive_failures(failures + 1)
         sys.exit(1)
     log("Restore test PASSED")
+
+    # Apply user-approved proposals from prior cycles BEFORE generating new ones.
+    # nexo_evolution_approve marks proposals as 'accepted' but until m38 there
+    # was no consumer for that status. This step closes the loop so the user's
+    # explicit approvals actually run on the next cycle, with the same sandbox
+    # / snapshot / rollback safety as live AUTO proposals.
+    log("Checking for user-approved proposals to apply...")
+    cycle_num_for_apply = objective.get("total_evolutions", 0) + 1
+    evolution_mode_for_apply = _normalize_mode(objective.get("evolution_mode", "auto"))
+    max_to_apply = max_auto_changes(objective.get("total_evolutions", 0))
+    apply_conn = sqlite3.connect(str(NEXO_DB), timeout=10)
+    apply_conn.row_factory = sqlite3.Row
+    apply_conn.execute("PRAGMA busy_timeout=5000")
+    try:
+        apply_stats = _apply_accepted_proposals(
+            apply_conn,
+            cycle_num_for_apply,
+            max_to_apply,
+            evolution_mode_for_apply,
+        )
+        if apply_stats["attempted"]:
+            log(
+                f"  Applied {apply_stats['applied']}/{apply_stats['attempted']} accepted proposals "
+                f"({apply_stats['rolled_back']} rolled back, "
+                f"{apply_stats['blocked']} blocked, "
+                f"{apply_stats['skipped']} skipped, "
+                f"{apply_stats['failed']} failed)"
+            )
+        else:
+            log("  No user-approved proposals pending")
+    except Exception as e:
+        log(f"  WARN: apply_accepted_proposals raised: {e}")
+    finally:
+        apply_conn.close()
 
     # Gather data
     log("Gathering week data from nexo.db...")
@@ -1348,8 +1512,9 @@ def run():
             log(f"  QUEUED [{scope}]: {action[:80]}")
             conn.execute(
                 "INSERT INTO evolution_log (cycle_number, dimension, proposal, classification, "
-                "reasoning, status) VALUES (?, ?, ?, ?, ?, ?)",
-                (cycle_num, dimension, action, classification, reasoning, "pending_review")
+                "reasoning, status, proposal_payload) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (cycle_num, dimension, action, classification, reasoning, "pending_review",
+                 json.dumps(p, ensure_ascii=False))
             )
             followup_items.append({
                 "dimension": dimension,
@@ -1369,12 +1534,13 @@ def run():
 
             cur = conn.execute(
                 "INSERT INTO evolution_log (cycle_number, dimension, proposal, classification, "
-                "reasoning, status, files_changed, snapshot_ref, test_result) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "reasoning, status, files_changed, snapshot_ref, test_result, proposal_payload) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (cycle_num, dimension, action, "auto", reasoning, status,
                  json.dumps(result.get("files_changed", [])),
                  result.get("snapshot_ref", ""),
-                 result.get("test_result", ""))
+                 result.get("test_result", ""),
+                 json.dumps(p, ensure_ascii=False))
             )
             log_id = cur.lastrowid
 
@@ -1401,8 +1567,9 @@ def run():
 
             conn.execute(
                 "INSERT INTO evolution_log (cycle_number, dimension, proposal, classification, "
-                "reasoning, status) VALUES (?, ?, ?, ?, ?, ?)",
-                (cycle_num, dimension, action, classification, reasoning, "proposed")
+                "reasoning, status, proposal_payload) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (cycle_num, dimension, action, classification, reasoning, "proposed",
+                 json.dumps(p, ensure_ascii=False))
             )
             if evolution_mode in {"review", "managed"}:
                 followup_items.append({
