@@ -2,6 +2,7 @@
 
 import math
 import numpy as np
+import pytest
 
 
 def test_cosine_similarity_identical():
@@ -361,3 +362,220 @@ def test_cognitive_retrieve_forwards_public_search_knobs(monkeypatch):
     assert "decompose=OFF" in output
     assert "dreams=ON" in output
     assert "dormant=ON" in output
+
+
+# ── Fase 3 item 1: dream_weight parameter for retrieval ──────────────────
+
+
+def _build_dream_search_db(monkeypatch, dream_score: float = 0.85, learning_score: float = 0.75):
+    """Wire a fake DB into _search so we can test the dream_weight branch.
+
+    Returns the captured `where` clause executed against ltm_memories so the
+    test can assert whether the dream filter was applied.
+    """
+    import importlib
+    _search = importlib.import_module("cognitive._search")
+
+    captured: dict = {"ltm_where_clauses": []}
+
+    class _Cursor:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def fetchall(self):
+            return self._rows
+
+    learning_row = {
+        "id": 1,
+        "embedding": np.array([learning_score], dtype=np.float32),
+        "content": "How to deploy NEXO updates",
+        "source_type": "learning",
+        "source_id": "L1",
+        "source_title": "Deploy guide",
+        "domain": "nexo",
+        "created_at": "2026-04-05T01:00:00",
+        "strength": 0.8,
+        "access_count": 3,
+        "tags": "",
+        "lifecycle_state": "active",
+        "is_dormant": 0,
+    }
+    dream_row = {
+        "id": 2,
+        "embedding": np.array([dream_score], dtype=np.float32),
+        "content": "Cross-pattern: deploys correlate with cron drift",
+        "source_type": "dream_insight",
+        "source_id": "D1",
+        "source_title": "Dream #1",
+        "domain": "nexo",
+        "created_at": "2026-04-05T01:00:00",
+        "strength": 0.6,
+        "access_count": 0,
+        "tags": "",
+        "lifecycle_state": "active",
+        "is_dormant": 0,
+    }
+
+    class _DB:
+        def execute(self, sql, params=()):
+            if "FROM stm_memories" in sql and "SELECT *" in sql:
+                return _Cursor([])
+            if "FROM ltm_memories" in sql and "SELECT *" in sql:
+                captured["ltm_where_clauses"].append(sql)
+                # Honor the dream-exclusion filter so the fake DB matches reality.
+                rows = [learning_row]
+                if "source_type != 'dream_insight'" not in sql:
+                    rows.append(dream_row)
+                return _Cursor(rows)
+            return _Cursor([])
+
+        def commit(self):
+            return None
+
+    monkeypatch.setattr(_search, "_get_db", lambda: _DB())
+    monkeypatch.setattr(_search, "_blob_to_array", lambda value: value)
+    monkeypatch.setattr(_search, "embed", lambda query: np.array([1.0], dtype=np.float32))
+    monkeypatch.setattr(_search, "hyde_expand_query", lambda query: np.array([1.0], dtype=np.float32))
+    monkeypatch.setattr(_search, "cosine_similarity", lambda query, vec: float(vec[0]))
+    monkeypatch.setattr(_search, "_auto_use_hyde", lambda query, source_type_filter="": False)
+    monkeypatch.setattr(_search, "_auto_spreading_depth", lambda query, source_type_filter="": 0)
+    monkeypatch.setattr(_search, "_apply_temporal_boost", lambda results, query: results)
+    monkeypatch.setattr(_search, "_kg_boost_results", lambda results: results)
+    monkeypatch.setattr(_search, "_auto_restore_snoozed", lambda db: None)
+    monkeypatch.setattr(_search, "_rehearse_results", lambda results, skip_ids=None: None)
+    monkeypatch.setattr(_search, "record_co_activation", lambda items: None)
+    monkeypatch.setattr(_search, "_get_co_activated_neighbors", lambda ids, depth=1: {})
+
+    return _search, captured
+
+
+def test_dream_weight_default_zero_excludes_dreams_via_sql_filter(monkeypatch):
+    _search, captured = _build_dream_search_db(monkeypatch)
+
+    results = _search.search(
+        "deploy issues",
+        top_k=10,
+        min_score=0.1,
+        hybrid=False,
+        rehearse=False,
+        decompose=False,
+    )
+
+    # Default behavior: dream_weight=0 -> SQL filter excludes dreams.
+    assert any("source_type != 'dream_insight'" in q for q in captured["ltm_where_clauses"])
+    sources = [r["source_type"] for r in results]
+    assert "dream_insight" not in sources
+    assert "learning" in sources
+
+
+def test_dream_weight_one_includes_dreams_with_full_score(monkeypatch):
+    _search, captured = _build_dream_search_db(monkeypatch)
+
+    results = _search.search(
+        "deploy issues",
+        top_k=10,
+        min_score=0.1,
+        hybrid=False,
+        rehearse=False,
+        decompose=False,
+        dream_weight=1.0,
+    )
+
+    # When dream_weight=1.0 the SQL filter must NOT include the dream exclusion.
+    assert all("source_type != 'dream_insight'" not in q for q in captured["ltm_where_clauses"])
+    by_type = {r["source_type"]: r for r in results}
+    assert "dream_insight" in by_type
+    assert "learning" in by_type
+    # Score is unchanged at full weight (epsilon-safe comparison for float32).
+    assert by_type["dream_insight"]["score"] == pytest.approx(0.85, abs=1e-4)
+    assert by_type["dream_insight"].get("dream_weighted") is True
+    assert by_type["dream_insight"].get("dream_weight_applied") == 1.0
+
+
+def test_dream_weight_half_scales_dream_score(monkeypatch):
+    _search, captured = _build_dream_search_db(monkeypatch, dream_score=0.85, learning_score=0.75)
+
+    results = _search.search(
+        "deploy issues",
+        top_k=10,
+        min_score=0.1,
+        hybrid=False,
+        rehearse=False,
+        decompose=False,
+        dream_weight=0.5,
+    )
+
+    by_type = {r["source_type"]: r for r in results}
+    assert "dream_insight" in by_type
+    # 0.85 raw * 0.5 weight = 0.425
+    assert by_type["dream_insight"]["score"] == pytest.approx(0.425, abs=1e-6)
+    assert by_type["dream_insight"]["dream_weighted"] is True
+    # The plain learning score is unchanged.
+    assert by_type["learning"]["score"] == pytest.approx(0.75, abs=1e-6)
+    assert by_type["learning"].get("dream_weighted") is None or by_type["learning"].get("dream_weighted") is False
+
+
+def test_dream_weight_below_min_score_drops_dream_from_results(monkeypatch):
+    # Dream cosine 0.6, weight 0.2 -> weighted score 0.12 < min_score 0.5
+    _search, _ = _build_dream_search_db(monkeypatch, dream_score=0.6, learning_score=0.75)
+
+    results = _search.search(
+        "deploy issues",
+        top_k=10,
+        min_score=0.5,
+        hybrid=False,
+        rehearse=False,
+        decompose=False,
+        dream_weight=0.2,
+    )
+
+    sources = [r["source_type"] for r in results]
+    assert "dream_insight" not in sources
+    assert "learning" in sources
+
+
+def test_dream_weight_clamps_to_valid_range(monkeypatch):
+    _search, _ = _build_dream_search_db(monkeypatch, dream_score=0.8, learning_score=0.75)
+
+    # Negative dream_weight clamps to 0 -> dreams excluded.
+    results = _search.search(
+        "deploy issues",
+        top_k=10,
+        min_score=0.1,
+        hybrid=False,
+        rehearse=False,
+        decompose=False,
+        dream_weight=-0.5,
+    )
+    assert all(r["source_type"] != "dream_insight" for r in results)
+
+    # >1 dream_weight clamps to 1 -> dreams included with full score.
+    _search2, _ = _build_dream_search_db(monkeypatch, dream_score=0.8, learning_score=0.75)
+    results = _search2.search(
+        "deploy issues",
+        top_k=10,
+        min_score=0.1,
+        hybrid=False,
+        rehearse=False,
+        decompose=False,
+        dream_weight=5.0,
+    )
+    by_type = {r["source_type"]: r for r in results}
+    assert "dream_insight" in by_type
+    assert by_type["dream_insight"]["dream_weight_applied"] == 1.0
+
+
+def test_dream_weight_rejects_garbage_input(monkeypatch):
+    _search, _ = _build_dream_search_db(monkeypatch)
+
+    results = _search.search(
+        "deploy issues",
+        top_k=10,
+        min_score=0.1,
+        hybrid=False,
+        rehearse=False,
+        decompose=False,
+        dream_weight="not-a-float",  # type: ignore[arg-type]
+    )
+    # Garbage falls back to 0 -> dreams excluded.
+    assert all(r["source_type"] != "dream_insight" for r in results)
