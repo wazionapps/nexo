@@ -1,0 +1,36 @@
+name: Lint
+
+# Closes Fase 4 item 1 of NEXO-AUDIT-2026-04-11. Until this workflow existed,
+# nothing in CI prevented latent F821 (undefined name) bugs from reaching main.
+# The audit surfaced five concrete cases (cognitive/_ingest.py,
+# cognitive/_memory.py x3, tools_menu.py) that this workflow now blocks
+# from re-entering.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  ruff:
+    name: ruff (E9, F63, F7, F82, F821)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: Show ruff config
+        run: ruff --version && ruff check --show-settings src/ | head -30 || true
+
+      - name: Lint src/
+        run: ruff check src/
+
+      - name: Lint scripts/
+        run: ruff check src/scripts/

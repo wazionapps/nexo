@@ -353,8 +353,10 @@ def prediction_error_gate(
 
     if best_score > threshold:
         # Check for siblings before rejecting -- if discriminating entities differ,
-        # this is NOT a duplicate, it's a sibling (same fix for different platforms)
+        # this is NOT a duplicate, it's a sibling (same fix for different platforms).
+        # Lazy import to avoid the cognitive._memory <-> cognitive._ingest cycle.
         if best_match:
+            from cognitive._memory import _memories_are_siblings
             is_sibling, discriminators = _memories_are_siblings(content, best_match["content"])
             if is_sibling:
                 _gate_stats["accepted_novel"] += 1

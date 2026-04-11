@@ -1,3 +1,8 @@
 # NEXO Brain — development / test dependencies
 -r src/requirements.txt
 pytest>=7.0
+
+# Fase 4 item 1: lint baseline. ruff config lives in pyproject.toml.
+# Conservative selection (E9, F63, F7, F82, F821) catches latent bugs
+# without flooding CI on the existing 64 KLOC tree.
+ruff>=0.6.0

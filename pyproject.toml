@@ -1,0 +1,53 @@
+# NEXO Brain — project metadata + dev tooling configuration.
+#
+# Closes Fase 4 item 1 of NEXO-AUDIT-2026-04-11. Until this file existed,
+# the repo had zero shared lint config and zero CI lint job. The conservative
+# rule set below catches the same five F821 latent bugs that the audit
+# surfaced (cognitive/_ingest.py, cognitive/_memory.py x3, tools_menu.py)
+# and prevents the same class of regression from re-entering main without
+# touching the rest of the existing 64 KLOC src tree.
+#
+# Why such a small ruff selection: the audit's Fase 4 line item is "type
+# checking and linting in CI". The minimum useful bar is "fail CI on
+# objectively broken code" (undefined names, unused imports that hide
+# undefined names, syntax errors). A wider rule set on a 64 KLOC unmaintained
+# tree would generate thousands of warnings that no one would triage and
+# would not catch real bugs faster. Owners can broaden the rule set in
+# follow-ups once the green baseline is established.
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+extend-exclude = [
+    ".venv",
+    "venv",
+    "build",
+    "dist",
+    "src/scripts/deep-sleep/__pycache__",
+    "**/__pycache__",
+    "release-contracts",
+    "benchmarks",
+]
+
+[tool.ruff.lint]
+# Conservative subset that the entire 64 KLOC src/ tree currently passes:
+#   E9   — runtime / syntax errors
+#   F63  — invalid comparison constructs (e.g. == None)
+#   F7   — control flow logic errors
+#   F82  — undefined name in __all__
+#   F401 — unused imports (catches dead code that hides typos)
+#   F821 — undefined name (the gate that surfaced the 5 latent bugs)
+select = ["E9", "F63", "F7", "F82", "F821"]
+# F401 is intentionally NOT in the baseline yet — there are dozens of
+# unused imports across legacy modules that need a triage pass before
+# the rule can be enforced without flooding CI.
+
+[tool.ruff.lint.per-file-ignores]
+# Test files often import fixtures that look unused to ruff.
+"tests/**/*.py" = ["F401"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]

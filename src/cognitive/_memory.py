@@ -1,4 +1,5 @@
 """NEXO Cognitive — Memory operations: format, stats, consolidation, somatic."""
+import base64
 import json, math, re
 import numpy as np
 from datetime import datetime, timedelta, timezone
@@ -9,7 +10,10 @@ def _utcnow_naive() -> datetime:
     the legacy ``datetime.utcnow()`` string format on disk.
     """
     return datetime.now(timezone.utc).replace(tzinfo=None)
-from cognitive._core import _get_db, embed, cosine_similarity, _blob_to_array, _array_to_blob, EMBEDDING_DIM, DISCRIMINATING_ENTITIES
+from cognitive._core import (
+    _get_db, embed, cosine_similarity, _blob_to_array, _array_to_blob,
+    EMBEDDING_DIM, DISCRIMINATING_ENTITIES, redact_secrets,
+)
 from cognitive._ingest import _sanitize_memory_content
 
 
