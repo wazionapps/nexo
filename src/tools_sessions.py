@@ -409,7 +409,26 @@ def handle_heartbeat(sid: str, task: str, context_hint: str = '') -> str:
         sid: Session ID
         task: Current task description
         context_hint: Optional — stored for diary draft context and used for recent 24h continuity lookup.
+
+    OpenTelemetry: emits an ai.tool.nexo_heartbeat span when OTEL is
+    enabled (Fase 5 item 2). The span carries sid, task, and the
+    context_hint length so dashboards can correlate heartbeat cadence
+    with workload. No-op when telemetry is off.
     """
+    from observability import tool_span
+    with tool_span(
+        "nexo_heartbeat",
+        attributes={
+            "nexo.session.id": sid,
+            "nexo.heartbeat.task": (task or "")[:200],
+            "nexo.heartbeat.context_hint_length": len(context_hint or ""),
+        },
+    ):
+        return _handle_heartbeat_inner(sid, task, context_hint)
+
+
+def _handle_heartbeat_inner(sid: str, task: str, context_hint: str = '') -> str:
+    """Inner body of handle_heartbeat — wrapped by tool_span above."""
     from db import get_db
     update_session(sid, task)
     parts = [f"OK: {sid} — {task}"]
