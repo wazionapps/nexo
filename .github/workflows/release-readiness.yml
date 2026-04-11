@@ -1,0 +1,40 @@
+name: Release readiness
+
+# Closes Fase 4 items 4 + 5 of NEXO-AUDIT-2026-04-11. Until this workflow
+# existed, scripts/verify_release_readiness.py only ran in publish.yml on
+# tag push — meaning a PR could break the release contract and nobody
+# would notice until release time. Running it on every PR + push to main
+# is the "automated gate with verifiable evidence" the audit asked for.
+#
+# The benchmarks/ harness (item 4) already exists with scenarios, results,
+# README, and runtime_pack/runtime_ablations. This workflow does NOT run
+# the actual benchmark scoring (that requires API credits and a real LLM
+# session). It DOES enforce the harness directory layout via the test
+# suite below so a refactor cannot accidentally delete the benchmark
+# infrastructure.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  release-readiness:
+    name: verify_release_readiness.py --ci
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Run verify_release_readiness.py
+        run: python3 scripts/verify_release_readiness.py --ci
+
+      - name: Pin benchmark + contract structure tests
+        run: PYTHONPATH=src pytest tests/test_release_readiness_baseline.py -v
