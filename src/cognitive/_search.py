@@ -278,6 +278,82 @@ def _result_confidence(score: float) -> str:
 # (structural) worlds.
 # ============================================================================
 
+def _somatic_boost_results(results: list[dict], max_boost: float = 0.10) -> list[dict]:
+    """Boost search results that touch high-risk somatic targets.
+
+    Closes Fase 3 item 2 of NEXO-AUDIT-2026-04-11. The somatic_markers table
+    is populated by guard hits, error_repetition events, and learning_add
+    side effects (see _memory.py:somatic_*). Until this function existed,
+    that risk signal was never used to influence retrieval — a memory
+    touching a known-painful area got no extra surfacing.
+
+    Now any retrieved memory whose `domain` matches an area-type marker
+    with risk_score > 0.1 receives a positive boost proportional to the
+    risk_score. The intent is positive (not penalizing): a high-risk area
+    is exactly the context where the agent benefits from extra reminders.
+
+    Boost formula: min(max_boost, 0.10 * risk_score)
+    - risk_score 0.2 -> +0.020
+    - risk_score 0.5 -> +0.050
+    - risk_score 1.0 -> +0.100 (capped)
+
+    Result rows that received a boost carry `somatic_boost` (the actual
+    boost) and `somatic_risk` (the source risk_score) so dashboards and
+    downstream rerankers can identify them.
+
+    The boost gate matches `_kg_boost_results`: only results already at
+    score >= 0.45 receive the boost, so noise from very weak matches is
+    not amplified.
+    """
+    if not results:
+        return results
+
+    try:
+        db = _get_db()
+    except Exception:
+        return results
+
+    # Collect distinct domains across the result set so we can do a single
+    # batched query against somatic_markers instead of one per result.
+    domains = {(r.get("domain") or "").strip() for r in results if (r.get("domain") or "").strip()}
+    if not domains:
+        return results
+
+    try:
+        placeholders = ",".join(["?"] * len(domains))
+        rows = db.execute(
+            f"SELECT target, risk_score FROM somatic_markers "
+            f"WHERE target_type = 'area' AND risk_score > 0.1 "
+            f"AND target IN ({placeholders})",
+            list(domains),
+        ).fetchall()
+    except Exception:
+        return results
+
+    if not rows:
+        return results
+
+    risk_by_domain = {row["target"]: float(row["risk_score"] or 0.0) for row in rows}
+
+    for r in results:
+        domain = (r.get("domain") or "").strip()
+        if not domain:
+            continue
+        risk = risk_by_domain.get(domain, 0.0)
+        if risk <= 0.1:
+            continue
+        if r.get("score", 0) < 0.45:  # Same relevance gate as KG and temporal
+            continue
+        boost = min(max_boost, 0.10 * risk)
+        if boost <= 0:
+            continue
+        r["score"] = min(0.95, r["score"] + boost)
+        r["somatic_boost"] = round(boost, 4)
+        r["somatic_risk"] = round(risk, 4)
+
+    return results
+
+
 def _kg_boost_results(results: list[dict], max_boost: float = 0.08) -> list[dict]:
     """Boost search results based on Knowledge Graph connectivity.
 
@@ -966,6 +1042,11 @@ def search(
 
     # Knowledge Graph structural boost: connected memories rank higher
     results = _kg_boost_results(results)
+
+    # Fase 3 item 2: somatic risk boost — memories whose domain matches a
+    # high-risk area marker get a small positive lift so the agent surfaces
+    # warnings about painful areas more aggressively.
+    results = _somatic_boost_results(results)
 
     # Sort by score descending, take top-20 for reranking
     results.sort(key=lambda x: x.get("score", 0), reverse=True)

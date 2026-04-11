@@ -579,3 +579,136 @@ def test_dream_weight_rejects_garbage_input(monkeypatch):
     )
     # Garbage falls back to 0 -> dreams excluded.
     assert all(r["source_type"] != "dream_insight" for r in results)
+
+
+# ── Fase 3 item 2: somatic markers in retrieval reranking ────────────────
+
+
+def test_somatic_boost_results_no_op_when_no_markers(monkeypatch):
+    import importlib
+    _search = importlib.import_module("cognitive._search")
+
+    class _SCursor:
+        def fetchall(self):
+            return []
+
+    class _SDB:
+        def execute(self, sql, params=()):
+            return _SCursor()
+
+    monkeypatch.setattr(_search, "_get_db", lambda: _SDB())
+    results = [
+        {"store": "ltm", "id": 1, "domain": "ecommerce", "score": 0.7, "source_type": "learning", "source_id": "L1"},
+    ]
+    boosted = _search._somatic_boost_results(results)
+    assert "somatic_boost" not in boosted[0]
+    assert boosted[0]["score"] == 0.7
+
+
+def test_somatic_boost_results_lifts_high_risk_domain(monkeypatch):
+    import importlib
+    _search = importlib.import_module("cognitive._search")
+
+    class _SCursor:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def fetchall(self):
+            return self._rows
+
+    class _SDB:
+        def execute(self, sql, params=()):
+            if "FROM somatic_markers" in sql:
+                return _SCursor([
+                    {"target": "ecommerce", "risk_score": 0.6},
+                    {"target": "wazion", "risk_score": 0.05},
+                ])
+            return _SCursor([])
+
+    monkeypatch.setattr(_search, "_get_db", lambda: _SDB())
+
+    results = [
+        {"store": "ltm", "id": 1, "domain": "ecommerce", "score": 0.70, "source_type": "learning", "source_id": "L1"},
+        {"store": "ltm", "id": 2, "domain": "wazion", "score": 0.65, "source_type": "learning", "source_id": "L2"},
+        {"store": "ltm", "id": 3, "domain": "nexo", "score": 0.80, "source_type": "learning", "source_id": "L3"},
+    ]
+    boosted = _search._somatic_boost_results(results)
+
+    by_id = {r["id"]: r for r in boosted}
+    assert by_id[1]["score"] == pytest.approx(0.76, abs=1e-4)
+    assert by_id[1]["somatic_boost"] == pytest.approx(0.06, abs=1e-4)
+    assert by_id[1]["somatic_risk"] == pytest.approx(0.6, abs=1e-4)
+    assert by_id[2]["score"] == 0.65
+    assert "somatic_boost" not in by_id[2]
+    assert by_id[3]["score"] == 0.80
+    assert "somatic_boost" not in by_id[3]
+
+
+def test_somatic_boost_results_skips_low_relevance_results(monkeypatch):
+    """The 0.45 relevance gate must prevent boosting noisy weak matches."""
+    import importlib
+    _search = importlib.import_module("cognitive._search")
+
+    class _SCursor:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def fetchall(self):
+            return self._rows
+
+    class _SDB:
+        def execute(self, sql, params=()):
+            if "FROM somatic_markers" in sql:
+                return _SCursor([{"target": "ecommerce", "risk_score": 0.9}])
+            return _SCursor([])
+
+    monkeypatch.setattr(_search, "_get_db", lambda: _SDB())
+
+    results = [
+        {"store": "ltm", "id": 1, "domain": "ecommerce", "score": 0.40, "source_type": "learning", "source_id": "L1"},
+    ]
+    boosted = _search._somatic_boost_results(results)
+    assert boosted[0]["score"] == 0.40
+    assert "somatic_boost" not in boosted[0]
+
+
+def test_somatic_boost_results_caps_at_max_boost(monkeypatch):
+    import importlib
+    _search = importlib.import_module("cognitive._search")
+
+    class _SCursor:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def fetchall(self):
+            return self._rows
+
+    class _SDB:
+        def execute(self, sql, params=()):
+            if "FROM somatic_markers" in sql:
+                return _SCursor([{"target": "ecommerce", "risk_score": 1.5}])
+            return _SCursor([])
+
+    monkeypatch.setattr(_search, "_get_db", lambda: _SDB())
+
+    results = [
+        {"store": "ltm", "id": 1, "domain": "ecommerce", "score": 0.70, "source_type": "learning", "source_id": "L1"},
+    ]
+    boosted = _search._somatic_boost_results(results)
+    assert boosted[0]["somatic_boost"] == pytest.approx(0.10, abs=1e-4)
+    assert boosted[0]["score"] == pytest.approx(0.80, abs=1e-4)
+
+
+def test_somatic_boost_results_handles_db_error_gracefully(monkeypatch):
+    import importlib
+    _search = importlib.import_module("cognitive._search")
+
+    def _raises():
+        raise RuntimeError("db unavailable")
+
+    monkeypatch.setattr(_search, "_get_db", _raises)
+    results = [
+        {"store": "ltm", "id": 1, "domain": "ecommerce", "score": 0.7},
+    ]
+    boosted = _search._somatic_boost_results(results)
+    assert boosted == results
