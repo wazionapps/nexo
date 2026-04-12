@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>NEXO Brain — Libre Shared Brain for Claude Code, Codex, and MCP Agents</title>
-    <meta name="description" content="Libre/open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients. Version 5.3.3 closes the last packaged-runtime doctor mismatch by recognizing the built-in backup LaunchAgent as core, on top of the 5.3.2 runtime-boundary hardening for normal npm users.">
+    <meta name="description" content="Libre/open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients. Version 5.3.6 hardens the Claude Code MCP bootstrap path, keeps schedule status honest for still-running jobs, and tightens runtime hygiene for real packaged users.">
     <meta name="keywords" content="AI memory, cognitive architecture, MCP, Claude Code, Codex, Claude Desktop, agent memory, vector search, AI agents, shared brain, open source">
     <meta name="author" content="WAzion">
     <meta name="robots" content="index, follow">
@@ -14,7 +14,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com">
     <meta property="og:title" content="NEXO Brain — Libre Shared Brain for Claude Code, Codex, and MCP Agents">
-    <meta property="og:description" content="Libre/open-source cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Version 5.3.3 closes the last packaged-runtime doctor mismatch by recognizing the built-in backup LaunchAgent as core, on top of the 5.3.2 runtime-boundary hardening for normal npm users.">
+    <meta property="og:description" content="Libre/open-source cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Version 5.3.6 hardens the Claude Code MCP bootstrap path, keeps schedule status honest for still-running jobs, and tightens runtime hygiene for real packaged users.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-home.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -22,7 +22,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="NEXO Brain — Libre Shared Brain for Claude Code, Codex, and MCP Agents">
-    <meta name="twitter:description" content="Libre/open-source cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Version 5.3.3 closes the last packaged-runtime doctor mismatch by recognizing the built-in backup LaunchAgent as core, on top of the 5.3.2 runtime-boundary hardening for normal npm users.">
+    <meta name="twitter:description" content="Libre/open-source cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Version 5.3.6 hardens the Claude Code MCP bootstrap path, keeps schedule status honest for still-running jobs, and tightens runtime hygiene for real packaged users.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-home.png">
 
     <!-- Google Analytics (GA4) -->
@@ -46,12 +46,12 @@
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
         "name": "NEXO Brain",
-        "description": "Libre/open-source local cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Version 5.3.3 closes the last packaged-runtime doctor mismatch by recognizing the built-in backup LaunchAgent as core, on top of the 5.3.2 runtime-boundary hardening for normal npm users.",
+        "description": "Libre/open-source local cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Version 5.3.6 hardens the Claude Code MCP bootstrap path, keeps schedule status honest for still-running jobs, and tightens runtime hygiene for real packaged users.",
         "applicationCategory": "DeveloperApplication",
         "operatingSystem": "macOS, Linux, Windows",
         "url": "https://nexo-brain.com",
         "downloadUrl": "https://www.npmjs.com/package/nexo-brain",
-        "softwareVersion": "5.3.3",
+        "softwareVersion": "5.3.6",
         "license": "https://www.gnu.org/licenses/agpl-3.0",
         "author": {
             "@type": "Organization",
@@ -88,7 +88,7 @@
         "@type": "WebSite",
         "name": "NEXO Brain",
         "url": "https://nexo-brain.com",
-        "description": "Libre/open-source local cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Version 5.3.3 closes the last packaged-runtime doctor mismatch by recognizing the built-in backup LaunchAgent as core, on top of the 5.3.2 runtime-boundary hardening for normal npm users.",
+        "description": "Libre/open-source local cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Version 5.3.6 hardens the Claude Code MCP bootstrap path, keeps schedule status honest for still-running jobs, and tightens runtime hygiene for real packaged users.",
         "publisher": {
             "@type": "Organization",
             "name": "WAzion",
@@ -697,7 +697,7 @@
     <div class="container">
         <div class="hero-badge fade-up">
             <span class="dot"></span>
-            <span id="version-badge">v5.3.3</span> &mdash; Doctor inventory now recognizes the built-in backup LaunchAgent as core, completing the packaged runtime cleanup started in <code>v5.3.2</code>
+            <span id="version-badge">v5.3.6</span> &mdash; Claude Code now reads the managed NEXO MCP from the right user config, while runtime hygiene stays tighter across schedules, script boundaries, and release checks
         </div>
         <div class="fade-up" style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;">
             <img src="https://img.shields.io/npm/v/nexo-brain?color=7C3AED&label=npm" alt="npm version">
@@ -1156,9 +1156,9 @@
 
         <div class="release-evolution-grid">
             <div class="release-evolution-card">
-                <div class="release-evolution-version">v5.3.3</div>
-                <h3>Packaged runtime and doctor now agree on what is core</h3>
-                <p>The last packaged-runtime doctor mismatch is gone: the built-in hourly backup helper is now inventoried as a core LaunchAgent, so a clean npm install no longer looks “mysteriously dirty” to <code>nexo doctor</code>. The 5.3.2 runtime-boundary separation remains the foundation underneath it.</p>
+                <div class="release-evolution-version">v5.3.6</div>
+                <h3>Claude bootstrap and runtime hygiene now hold together better</h3>
+                <p>The managed NEXO MCP server now lands where current Claude Code actually reads user-scoped MCP config, schedule status distinguishes real running jobs from broken ones, and retroactive learnings stop opening noisy keyword-only followups outside their declared scope.</p>
             </div>
             <div class="release-evolution-card">
                 <div class="release-evolution-version">v5.1.0</div>

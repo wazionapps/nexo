@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.3 aligns runtime doctor with the packaged installer by recognizing the built-in backup LaunchAgent as core.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.6 hardens the Claude Code MCP bootstrap path and tightens runtime hygiene for packaged daily work.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.3 aligns runtime doctor with the packaged installer by recognizing the built-in backup LaunchAgent as core.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.6 hardens the Claude Code MCP bootstrap path and tightens runtime hygiene for packaged daily work.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.3 aligns runtime doctor with the packaged installer by recognizing the built-in backup LaunchAgent as core.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.6 hardens the Claude Code MCP bootstrap path and tightens runtime hygiene for packaged daily work.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.3 aligns runtime doctor with the packaged installer by recognizing the built-in backup LaunchAgent as core.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.6 hardens the Claude Code MCP bootstrap path and tightens runtime hygiene for packaged daily work.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,12 +87,12 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v5.3.3 live</span>
-                    <span class="page-chip">Doctor inventory alignment</span>
-                    <span class="page-chip">Clean npm installs no longer show a false unknown backup LaunchAgent</span>
+                    <span class="page-chip">v5.3.6 live</span>
+                    <span class="page-chip">Claude MCP bootstrap hardening</span>
+                    <span class="page-chip">Daily-work runtime hygiene for packaged users</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v533" class="btn btn-primary">Start with v5.3.3</a>
+                    <a href="#v536" class="btn btn-primary">Start with v5.3.6</a>
                     <a href="#v400" class="btn btn-secondary">See v4.0.0</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -100,8 +100,8 @@
             <div class="page-visual">
                 <div class="page-stack">
                     <div class="page-stack-card">
-                        <strong>v5.3.3</strong>
-                        <span>Doctor inventory alignment: the built-in backup LaunchAgent is now recognized as core, so clean packaged installs stop looking like they have an unexplained legacy plist.</span>
+                        <strong>v5.3.6</strong>
+                        <span>Claude Code now reads the managed NEXO MCP server from the right user config, schedule status separates running jobs from broken ones, and runtime hygiene keeps tightening around real packaged use.</span>
                     </div>
                     <div class="page-stack-card">
                         <strong>v5.3.0</strong>
@@ -155,6 +155,33 @@
             <div>
                 <div id="changelog-page-meta" class="changelog-page-meta">Loading release pages…</div>
                 <div id="changelog-pager" class="changelog-pager" aria-label="Changelog pagination"></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v5.3.6 Claude bootstrap hardening -->
+<section id="v536" class="section-compact" style="background:linear-gradient(135deg,#081225 0%,#2563eb 42%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.3.6 <span style="opacity:.5;font-weight:400;">&mdash; April 12, 2026</span></div>
+        <h2 class="section-title">Claude MCP Bootstrap Hardening &amp; Runtime Hygiene for Daily Work</h2>
+        <p class="section-subtitle">
+            A practical patch release aimed at the real packaged path users actually live in. Claude Code now sees the managed NEXO MCP server from the user config it really reads, schedule status stops mislabeling open runs as broken, and runtime/release hygiene tightens around the edges that cause noisy drift.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h3>Claude Code picks up the managed MCP server reliably</h3>
+                    <p>Managed client sync now writes the NEXO MCP server to <code>~/.claude.json</code> as well as Claude's managed settings file. That keeps <code>nexo chat</code>, <code>claude mcp</code>, and interactive sessions aligned on current Claude Code builds instead of leaving the runtime healthy but invisible.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Open runs look like open runs, not broken jobs</h3>
+                    <p><code>nexo schedule status</code> now treats in-flight jobs honestly, showing age and active/open-run state instead of collapsing every missing exit code into a failure. That makes long-running or keep-alive automation easier to trust at a glance.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Less noise around the runtime boundary</h3>
+                    <p>Core-vs-personal script classification now reads more of the actual packaged/runtime surface, retroactive learnings stop opening keyword-only false positives outside their declared <code>applies_to</code> scope, and the final release-audit skill resolves repo roots more robustly across real operator layouts.</p>
+                </div>
             </div>
         </div>
     </div>

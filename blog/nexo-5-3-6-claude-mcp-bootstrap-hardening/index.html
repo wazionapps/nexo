@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXO 5.3.6: Claude MCP Bootstrap Hardening for Real Daily Work</title>
+    <meta name="description" content="NEXO 5.3.6 hardens the Claude Code bootstrap path by syncing the managed NEXO MCP server into the user config Claude actually reads, while tightening schedule status and runtime hygiene for packaged users.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-5-3-6-claude-mcp-bootstrap-hardening/">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/blog/nexo-5-3-6-claude-mcp-bootstrap-hardening/">
+    <meta property="og:title" content="NEXO 5.3.6: Claude MCP Bootstrap Hardening for Real Daily Work">
+    <meta property="og:description" content="A practical patch release that fixes the real-world Claude Code MCP bootstrap path and tightens runtime hygiene around it.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+    <meta property="article:published_time" content="2026-04-12">
+    <meta property="article:author" content="Francisco Cerda Puigserver">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO 5.3.6: Claude MCP Bootstrap Hardening for Real Daily Work">
+    <meta name="twitter:description" content="Claude Code now reads the managed NEXO MCP server from the user config it actually uses, and runtime hygiene gets tighter around it.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "NEXO 5.3.6: Claude MCP Bootstrap Hardening for Real Daily Work",
+        "description": "NEXO 5.3.6 hardens the Claude Code bootstrap path by syncing the managed NEXO MCP server into the user config Claude actually reads, while tightening schedule status and runtime hygiene for packaged users.",
+        "datePublished": "2026-04-12",
+        "dateModified": "2026-04-12",
+        "author": {
+            "@type": "Person",
+            "name": "Francisco Cerda Puigserver"
+        },
+        "publisher": {
+            "@type": "Organization",
+            "name": "WAzion",
+            "url": "https://www.wazion.com"
+        },
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https://nexo-brain.com/blog/nexo-5-3-6-claude-mcp-bootstrap-hardening/"
+        },
+        "url": "https://nexo-brain.com/blog/nexo-5-3-6-claude-mcp-bootstrap-hardening/",
+        "image": "https://nexo-brain.com/assets/nexo-brain-infographic-v5.png",
+        "keywords": ["NEXO 5.3.6", "Claude Code", "MCP", "~/.claude.json", "nexo chat", "runtime hygiene"]
+    }
+    </script>
+
+    <style>
+        .article-header { padding-top: 128px; padding-bottom: 40px; text-align: center; }
+        .article-meta { font-size: 14px; color: var(--text-muted); margin-bottom: 16px; }
+        .article-body {
+            max-width: 720px; margin: 0 auto; padding: 0 24px 80px;
+            font-size: 17px; line-height: 1.8; color: var(--text);
+        }
+        .article-body h2 { font-size: 28px; font-weight: 700; margin: 48px 0 16px; letter-spacing: -0.01em; }
+        .article-body p { margin-bottom: 20px; color: var(--text-muted); }
+        .article-body strong { color: var(--text); }
+        .article-body a { color: var(--purple-light); }
+        .article-body a:hover { color: var(--pink); }
+        .article-body code {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 14px; color: var(--pink);
+            background: rgba(236, 72, 153, 0.1);
+            padding: 2px 8px; border-radius: 4px;
+        }
+        .article-back {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 14px; font-weight: 600; color: var(--text-muted);
+            margin-bottom: 24px;
+        }
+        .article-back:hover { color: var(--purple-light); }
+        .article-visual { margin: 32px 0 40px; text-align: center; }
+        .article-visual img {
+            max-width: 100%;
+            border-radius: 16px;
+            border: 1px solid var(--dark-border);
+            box-shadow: 0 8px 32px rgba(37,99,235,0.18);
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-64.png" alt="NEXO Brain" class="logo-image">
+            <span class="logo-text">NEXO Brain</span>
+        </a>
+        <button class="mobile-menu-toggle" aria-label="Toggle navigation" onclick="toggleMobileMenu()">
+            <span></span><span></span><span></span>
+        </button>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/features/">Features</a>
+            <a href="/evolution/">Evolution</a>
+            <a href="/compare/">Compare</a>
+            <a href="/blog/">Blog</a>
+            <a href="/changelog/">Changelog</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta">GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<section class="article-header">
+    <div class="container">
+        <a href="/blog/" class="article-back">← Back to blog</a>
+        <div class="article-meta">April 12, 2026 · Patch release · Claude Code / packaged runtime</div>
+        <h1 class="section-title" style="font-size:clamp(28px,4.5vw,48px);max-width:920px;margin:0 auto 16px;">NEXO 5.3.6: Claude MCP Bootstrap Hardening for Real Daily Work</h1>
+        <p class="section-subtitle" style="max-width:760px;margin:0 auto;">This is a practical daily-work patch. The runtime was healthy, but Claude Code could still miss the managed NEXO MCP server if the config landed in the wrong user file. 5.3.6 closes that gap and tightens a few other runtime edges around it.</p>
+    </div>
+</section>
+
+<section>
+    <div class="article-body">
+        <div class="article-visual">
+            <img src="/assets/nexo-brain-infographic-v5.png" alt="NEXO Brain 5.3.6 release">
+        </div>
+
+        <p><strong>5.3.6 is about making the normal working path stay normal.</strong> If a user installs or updates NEXO, opens Claude Code, runs <code>nexo chat</code>, and expects the managed shared-brain server to be there, the product should not depend on a stale config assumption to make that happen.</p>
+
+        <h2>The real mismatch</h2>
+        <p>NEXO already knew how to sync managed Claude Code settings. The problem was that current Claude Code builds read user-scoped MCP servers from <code>~/.claude.json</code>, while NEXO still wrote the managed MCP server only to <code>~/.claude/settings.json</code>. That left a bad daily-work outcome: the runtime itself could be fine, yet <code>claude mcp</code> and interactive sessions still missed the NEXO server.</p>
+
+        <h2>What 5.3.6 changes</h2>
+        <p>Managed client sync now writes the NEXO MCP server to <code>~/.claude.json</code> as well, while still keeping Claude's managed settings file in sync for hooks and bootstrap. That means the runtime, the CLI, and Claude Code itself all point at the same managed server instead of drifting across two config surfaces.</p>
+
+        <h2>Why this matters</h2>
+        <p>Bootstrap bugs are trust bugs. If a user runs <code>nexo update</code>, restarts, and the shared brain disappears because the MCP server landed in the wrong config file, the product feels fragile even when the underlying runtime is solid. A patch release that restores the intended daily path is worth shipping quickly and clearly.</p>
+
+        <h2>Other runtime hygiene in the same release</h2>
+        <p>The patch also tightens a few nearby edges that affect operator trust: <code>nexo schedule status</code> now distinguishes still-running jobs from broken runs instead of flattening missing exit codes into failure; runtime script classification reads more of the actual packaged/core surface before calling something personal; retroactive learnings stop opening keyword-only false positives when a learning's declared <code>applies_to</code> scope does not match; and the final release-audit skill resolves repo roots more robustly across real operator layouts.</p>
+
+        <h2>Upgrade</h2>
+        <p>Open the <a href="/changelog/#v536">5.3.6 changelog section</a> for the exact release note. For installed users, the intended path stays straightforward:</p>
+        <p><code>npm install -g nexo-brain@5.3.6</code><br><code>nexo update</code><br><code>nexo doctor</code></p>
+        <p>Your data still lives in <code>~/.nexo</code>. The runtime stays replaceable. What changes is that the managed Claude path now lands where Claude really looks for it.</p>
+    </div>
+</section>
+
+<footer>
+    <div class="container">
+        <div class="footer-content">
+            <div class="footer-left">
+                Created by <strong>Francisco Cerd&agrave; Puigserver</strong> &amp; <strong>NEXO</strong> (Claude Opus) &bull; Built by <a href="https://www.wazion.com">WAzion</a> &bull; AGPL-3.0 License &bull; &copy; 2026
+            </div>
+            <div class="footer-links">
+                <a href="https://github.com/wazionapps/nexo">GitHub</a>
+                <a href="https://x.com/NEXOBRAIN">X / Twitter</a>
+                <a href="https://github.com/sponsors/wazionapps">Sponsor</a>
+                <a href="/docs/">Docs</a>
+                <a href="/compare/">Compare</a>
+                <a href="/blog/">Blog</a>
+                <a href="https://www.npmjs.com/package/nexo-brain">npm</a>
+                <a href="https://github.com/wazionapps/nexo/releases">Releases</a>
+            </div>
+            <div style="text-align:center;margin-top:12px;color:#6b7280;font-size:12px;">Last updated: April 2026</div>
+        </div>
+    </div>
+</footer>
+
+</body>
+</html>
