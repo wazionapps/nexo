@@ -99,6 +99,34 @@ def test_refresh_installed_manifest_writes_runtime_core_artifacts(tmp_path, monk
     assert (runtime_home / "crons" / "manifest.json").is_file()
 
 
+def test_refresh_installed_manifest_packaged_mode_uses_npm_src_for_core_artifacts(tmp_path, monkeypatch):
+    from plugins import update
+
+    runtime_home = tmp_path / "runtime"
+    npm_src = tmp_path / "npm-src"
+    (runtime_home / "scripts").mkdir(parents=True)
+    (npm_src / "crons").mkdir(parents=True)
+    (npm_src / "scripts").mkdir()
+    (npm_src / "hooks").mkdir()
+
+    (runtime_home / "scripts" / "daily-report.py").write_text("print('personal')\n")
+    (npm_src / "crons" / "manifest.json").write_text('{"crons":[]}\n')
+    (npm_src / "scripts" / "nexo-catchup.py").write_text("print('core')\n")
+    (npm_src / "hooks" / "capture-tool-logs.sh").write_text("#!/bin/bash\necho ok\n")
+
+    monkeypatch.setattr(update, "NEXO_HOME", runtime_home)
+    monkeypatch.setattr(update, "SRC_DIR", runtime_home)
+    monkeypatch.setattr(update, "_PACKAGED_INSTALL", True)
+    monkeypatch.setattr(update, "_find_npm_pkg_src", lambda: npm_src)
+
+    update._refresh_installed_manifest()
+
+    manifest = json.loads((runtime_home / "config" / "runtime-core-artifacts.json").read_text())
+    assert manifest["script_names"] == ["nexo-catchup.py"]
+    assert manifest["hook_names"] == ["capture-tool-logs.sh"]
+    assert "daily-report.py" not in manifest["script_names"]
+
+
 def test_cleanup_retired_runtime_files_removes_legacy_heartbeat_files(tmp_path, monkeypatch):
     from plugins import update
 

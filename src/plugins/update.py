@@ -75,6 +75,14 @@ def _find_npm_pkg_src() -> Path | None:
         pass
     return None
 
+
+def _core_artifact_source_dir() -> Path | None:
+    """Return the canonical source directory for packaged core artifacts."""
+    if _PACKAGED_INSTALL:
+        return _find_npm_pkg_src()
+    return SRC_DIR
+
+
 def _is_git_repo() -> bool:
     """Check if REPO_DIR is a valid git repository."""
     return (REPO_DIR / ".git").exists() or (REPO_DIR / ".git").is_file()
@@ -83,7 +91,11 @@ def _is_git_repo() -> bool:
 def _refresh_installed_manifest():
     """Refresh packaged crons and persist the runtime core-artifacts manifest."""
     try:
-        src_crons = SRC_DIR / "crons"
+        artifact_src = _core_artifact_source_dir()
+        if artifact_src is None:
+            return
+
+        src_crons = artifact_src / "crons"
         dst_crons = NEXO_HOME / "crons"
         if src_crons.exists():
             dst_crons.mkdir(parents=True, exist_ok=True)
@@ -98,13 +110,13 @@ def _refresh_installed_manifest():
         payload = {
             "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "script_names": sorted(
-                f.name for f in (SRC_DIR / "scripts").iterdir()
+                f.name for f in (artifact_src / "scripts").iterdir()
                 if f.is_file()
-            ) if (SRC_DIR / "scripts").is_dir() else [],
+            ) if (artifact_src / "scripts").is_dir() else [],
             "hook_names": sorted(
-                f.name for f in (SRC_DIR / "hooks").iterdir()
+                f.name for f in (artifact_src / "hooks").iterdir()
                 if f.is_file()
-            ) if (SRC_DIR / "hooks").is_dir() else [],
+            ) if (artifact_src / "hooks").is_dir() else [],
         }
         (config_dir / "runtime-core-artifacts.json").write_text(
             json.dumps(payload, indent=2, ensure_ascii=False) + "\n"

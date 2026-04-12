@@ -161,10 +161,36 @@ def _add_filenames_from_dir(names: set[str], directory: Path, *, skip_if_scripts
             names.add(item.name)
 
 
+def _find_packaged_core_source_dir() -> Path | None:
+    repo_root = NEXO_CODE.parent
+    if (repo_root / ".git").exists() or (repo_root / ".git").is_file():
+        return None
+
+    with contextlib.suppress(Exception):
+        result = subprocess.run(
+            ["npm", "root", "-g"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode == 0:
+            candidate = Path(result.stdout.strip()) / "nexo-brain" / "src"
+            if candidate.is_dir():
+                return candidate
+    return None
+
+
 def load_core_script_names() -> set[str]:
     """Load every core-managed runtime artifact name that must never be treated as personal."""
     names: set[str] = set()
-    for manifest_path in [NEXO_CODE / "crons" / "manifest.json", NEXO_HOME / "crons" / "manifest.json"]:
+    packaged_src = _find_packaged_core_source_dir()
+
+    manifest_candidates = []
+    if packaged_src is not None:
+        manifest_candidates.append(packaged_src / "crons" / "manifest.json")
+    manifest_candidates.extend([NEXO_CODE / "crons" / "manifest.json", NEXO_HOME / "crons" / "manifest.json"])
+
+    for manifest_path in manifest_candidates:
         if manifest_path.exists():
             try:
                 data = json.loads(manifest_path.read_text())
@@ -176,17 +202,21 @@ def load_core_script_names() -> set[str]:
             except Exception:
                 continue
 
-    for artifact_path in (
-        NEXO_HOME / "config" / "runtime-core-artifacts.json",
-        NEXO_CODE / "config" / "runtime-core-artifacts.json",
-        NEXO_CODE.parent / "config" / "runtime-core-artifacts.json",
-    ):
-        if artifact_path.exists():
-            _add_runtime_artifact_names(names, artifact_path)
+    if packaged_src is not None:
+        _add_filenames_from_dir(names, packaged_src / "hooks")
+        _add_filenames_from_dir(names, packaged_src / "scripts")
+    else:
+        for artifact_path in (
+            NEXO_HOME / "config" / "runtime-core-artifacts.json",
+            NEXO_CODE / "config" / "runtime-core-artifacts.json",
+            NEXO_CODE.parent / "config" / "runtime-core-artifacts.json",
+        ):
+            if artifact_path.exists():
+                _add_runtime_artifact_names(names, artifact_path)
 
-    _add_filenames_from_dir(names, NEXO_HOME / "hooks")
-    _add_filenames_from_dir(names, NEXO_CODE / "hooks")
-    _add_filenames_from_dir(names, NEXO_CODE / "scripts", skip_if_scripts_dir=True)
+        _add_filenames_from_dir(names, NEXO_HOME / "hooks")
+        _add_filenames_from_dir(names, NEXO_CODE / "hooks")
+        _add_filenames_from_dir(names, NEXO_CODE / "scripts", skip_if_scripts_dir=True)
 
     for legacy_name, canonical_name in _LEGACY_CORE_SCRIPT_ALIASES.items():
         if canonical_name in names:

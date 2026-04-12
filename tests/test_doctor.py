@@ -667,6 +667,7 @@ class TestRuntimeChecks:
 
     def test_launchagent_inventory_accepts_auxiliary_and_personal_labels(self, nexo_home, monkeypatch):
         import db
+        import script_registry
         from doctor.providers import runtime
 
         launch_agents = nexo_home / "launchagents"
@@ -679,6 +680,7 @@ class TestRuntimeChecks:
         monkeypatch.setattr(runtime.platform, "system", lambda: "Darwin")
         monkeypatch.setattr(runtime, "_launchagent_schedule_expectations", lambda: {})
         monkeypatch.setattr(db, "init_db", lambda: None)
+        monkeypatch.setattr(script_registry, "sync_personal_scripts", lambda prune_missing=True: {"ok": True})
         monkeypatch.setattr(
             db,
             "list_personal_script_schedules",
@@ -696,8 +698,44 @@ class TestRuntimeChecks:
         check = runtime.check_launchagent_inventory()
         assert check.status == "healthy"
 
+    def test_launchagent_inventory_syncs_personal_scripts_before_known_ids(self, nexo_home, monkeypatch):
+        import db
+        import script_registry
+        from doctor.providers import runtime
+
+        launch_agents = nexo_home / "launchagents"
+        launch_agents.mkdir()
+        (launch_agents / "com.nexo.email-monitor.plist").write_text("<plist/>")
+
+        synced = {"done": False}
+
+        def fake_sync(prune_missing=True):
+            synced["done"] = True
+            return {"ok": True}
+
+        monkeypatch.setattr(runtime, "LAUNCH_AGENTS_DIR", launch_agents)
+        monkeypatch.setattr(runtime.platform, "system", lambda: "Darwin")
+        monkeypatch.setattr(runtime, "_launchagent_schedule_expectations", lambda: {})
+        monkeypatch.setattr(db, "init_db", lambda: None)
+        monkeypatch.setattr(script_registry, "sync_personal_scripts", fake_sync)
+        monkeypatch.setattr(
+            db,
+            "list_personal_script_schedules",
+            lambda: [{"cron_id": "email-monitor"}] if synced["done"] else [],
+        )
+        monkeypatch.setattr(
+            runtime.subprocess,
+            "run",
+            lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout="", stderr=""),
+        )
+
+        check = runtime.check_launchagent_inventory()
+        assert synced["done"] is True
+        assert check.status == "healthy"
+
     def test_launchagent_inventory_warns_on_unknown_label(self, nexo_home, monkeypatch):
         import db
+        import script_registry
         from doctor.providers import runtime
 
         launch_agents = nexo_home / "launchagents"
@@ -708,6 +746,7 @@ class TestRuntimeChecks:
         monkeypatch.setattr(runtime.platform, "system", lambda: "Darwin")
         monkeypatch.setattr(runtime, "_launchagent_schedule_expectations", lambda: {})
         monkeypatch.setattr(db, "init_db", lambda: None)
+        monkeypatch.setattr(script_registry, "sync_personal_scripts", lambda prune_missing=True: {"ok": True})
         monkeypatch.setattr(db, "list_personal_script_schedules", lambda: [])
         monkeypatch.setattr(
             runtime.subprocess,

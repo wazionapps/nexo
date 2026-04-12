@@ -1,0 +1,73 @@
+{
+  "release_line": "v5.3",
+  "target_version": "5.3.9",
+  "scope_owner": "NEXO",
+  "distribution": {
+    "git_updates_on": "merge_to_main",
+    "packaged_release_on": "tag_publish"
+  },
+  "required_repo_files": [
+    "package.json",
+    "CHANGELOG.md",
+    "README.md",
+    "llms.txt",
+    "bin/nexo-brain.js",
+    "scripts/sync_release_artifacts.py",
+    "scripts/verify_release_readiness.py",
+    "release-contracts/v5.3.9.json",
+    ".claude-plugin/plugin.json",
+    "clawhub-skill/SKILL.md",
+    "openclaw-plugin/package.json",
+    "openclaw-plugin/src/mcp-bridge.ts",
+    "src/doctor/providers/runtime.py",
+    "src/plugins/update.py",
+    "src/script_registry.py",
+    "src/user_data_portability.py",
+    "tests/test_cli_scripts.py",
+    "tests/test_doctor.py",
+    "tests/test_packaged_update_runtime.py",
+    "tests/test_script_registry.py"
+  ],
+  "required_website_files": [
+    "index.html",
+    "features/index.html",
+    "blog/index.html",
+    "blog/nexo-5-3-9-packaged-core-manifest-heal/index.html",
+    "changelog/index.html",
+    "llms.txt",
+    ".well-known/llms.txt",
+    "sitemap.xml"
+  ],
+  "gates": [
+    {
+      "id": "packaged_core_manifest_heal",
+      "title": "Packaged runtimes stop poisoning the core-artifact manifest with personal scripts during update",
+      "status": "complete",
+      "evidence_required": [
+        "Packaged updates rebuild runtime-core-artifacts.json from the canonical npm package src tree instead of scanning ~/.nexo/scripts",
+        "Script classification prefers the canonical npm package source when available so a bad 5.3.8 manifest no longer hides personal scripts",
+        "Runtime doctor syncs personal scripts before LaunchAgent inventory so personal automations recover ownership cleanly after update"
+      ]
+    },
+    {
+      "id": "portable_user_data_still_works_for_packaged_users",
+      "title": "Portable export/import continues to work after the manifest heal",
+      "status": "complete",
+      "evidence_required": [
+        "nexo export still writes the portable bundle successfully on real packaged installs",
+        "Personal scripts remain included instead of disappearing into the core bucket",
+        "Regression tests cover the packaged manifest heal and script-registry recovery path"
+      ]
+    },
+    {
+      "id": "public_surface_alignment",
+      "title": "Package, docs, plugin artifacts, and website tell the same v5.3.9 story",
+      "status": "complete",
+      "evidence_required": [
+        "Root package and integration artifacts all point to 5.3.9",
+        "README, changelog, llms, and release contract mention the packaged core-artifact manifest heal clearly",
+        "Website home, blog, changelog, llms, and sitemap are updated to 5.3.9"
+      ]
+    }
+  ]
+}
