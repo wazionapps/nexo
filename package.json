@@ -67,6 +67,7 @@
     "bin/nexo-brain.js",
     "bin/nexo.js",
     "bin/postinstall.js",
+    "scripts/sync_release_artifacts.py",
     "src/",
     "community/",
     "!src/**/__pycache__",

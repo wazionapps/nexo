@@ -16,6 +16,7 @@ from client_preferences import (
     normalize_client_key,
     normalize_client_preferences,
 )
+from runtime_home import resolve_nexo_home
 
 def _resolve_templates_dir(module_file: str | os.PathLike[str]) -> Path:
     module_dir = Path(module_file).resolve().parent
@@ -60,7 +61,7 @@ def _user_home() -> Path:
 
 
 def _default_nexo_home() -> Path:
-    return Path(os.environ.get("NEXO_HOME", str(_user_home() / ".nexo"))).expanduser()
+    return resolve_nexo_home(os.environ.get("NEXO_HOME", str(_user_home() / ".nexo")))
 
 
 def _resolve_operator_name(nexo_home: Path, explicit: str = "") -> str:
@@ -115,6 +116,18 @@ def _build_user_block(user_payload: str, template_text: str) -> str:
     return f"{USER_START}\n{user_payload.rstrip()}\n{USER_END}"
 
 
+def _extract_user_payload(text: str) -> str:
+    block = _extract_block(text, USER_START, USER_END)
+    if not block:
+        return ""
+    payload = block
+    if payload.startswith(USER_START):
+        payload = payload[len(USER_START):]
+    if payload.endswith(USER_END):
+        payload = payload[: -len(USER_END)]
+    return payload.strip("\n")
+
+
 def _legacy_user_payload(existing_text: str) -> str:
     cleaned = re.sub(r"<!--\s*nexo-[^-]+-[^-]+-version:\s*[\d.]+\s*-->\s*", "", existing_text)
     if "<!-- nexo:start:" in cleaned:
@@ -144,6 +157,33 @@ def _legacy_user_payload(existing_text: str) -> str:
         residue = "\n".join(filtered_lines).strip()
         return residue
     return cleaned.strip()
+
+
+def _home_alias(path: Path, user_home: Path) -> str:
+    try:
+        relative = path.expanduser().relative_to(user_home.expanduser())
+    except Exception:
+        return str(path.expanduser())
+    return "~/" + relative.as_posix()
+
+
+def _migrate_legacy_nexo_home_references(user_payload: str, *, nexo_home: Path, user_home: Path) -> str:
+    if not user_payload.strip():
+        return user_payload
+    legacy_home = user_home.expanduser() / "claude"
+    target_home = nexo_home.expanduser()
+    if legacy_home == target_home:
+        return user_payload
+
+    replacements = [
+        (str(legacy_home), str(target_home)),
+        (_home_alias(legacy_home, user_home), _home_alias(target_home, user_home)),
+    ]
+    updated = user_payload
+    for old, new in replacements:
+        if old and new and old != new:
+            updated = updated.replace(old, new)
+    return updated
 
 
 def _target_path(client: str, *, user_home: Path | None = None) -> Path:
@@ -243,12 +283,23 @@ def sync_client_bootstrap(
 
     existing = target_path.read_text()
     if CORE_START in existing and CORE_END in existing and USER_START in existing and USER_END in existing:
-        user_block = _extract_block(existing, USER_START, USER_END) or _extract_block(rendered, USER_START, USER_END)
+        user_payload = _extract_user_payload(existing) or _extract_user_payload(rendered)
+        user_payload = _migrate_legacy_nexo_home_references(
+            user_payload,
+            nexo_home=nexo_home_path,
+            user_home=home_path,
+        )
+        user_block = _build_user_block(user_payload, rendered)
         updated = _replace_block(existing, CORE_START, CORE_END, rendered_core)
         updated = _replace_block(updated, USER_START, USER_END, user_block)
         action = "updated" if updated != existing else "unchanged"
     else:
         legacy_user = _legacy_user_payload(existing)
+        legacy_user = _migrate_legacy_nexo_home_references(
+            legacy_user,
+            nexo_home=nexo_home_path,
+            user_home=home_path,
+        )
         updated = _replace_block(rendered, USER_START, USER_END, _build_user_block(legacy_user, rendered))
         action = "migrated"
 

@@ -918,6 +918,24 @@ class TestRuntimeChecks:
         assert check.status == "healthy"
         assert any("release artifacts in sync" in item for item in check.evidence)
 
+    def test_release_artifact_sync_skips_packaged_runtime_without_source_repo(self, nexo_home, monkeypatch, tmp_path):
+        from doctor.providers import runtime
+
+        runtime_home = tmp_path / "runtime"
+        runtime_home.mkdir()
+        (runtime_home / "version.json").write_text(json.dumps({"version": "5.3.0"}))
+
+        monkeypatch.setattr(runtime, "NEXO_HOME", runtime_home)
+        monkeypatch.setattr(runtime, "NEXO_CODE", runtime_home)
+        monkeypatch.setattr(runtime, "PACKAGE_JSON", runtime_home / "package.json")
+        monkeypatch.setattr(runtime, "CHANGELOG_FILE", runtime_home / "CHANGELOG.md")
+
+        check = runtime.check_release_artifact_sync()
+
+        assert check.status == "healthy"
+        assert "packaged runtime" in check.summary.lower()
+        assert any("audit skipped" in item for item in check.evidence)
+
     def test_release_trace_hygiene_flags_stale_audit_artifacts(self, nexo_home, monkeypatch):
         from doctor.providers import runtime
 

@@ -84,6 +84,28 @@ def _release_root() -> Path:
     return Path(NEXO_CODE)
 
 
+def _has_release_publish_context(release_root: Path) -> bool:
+    git_dir = release_root / ".git"
+    if git_dir.exists() or git_dir.is_file():
+        return True
+    if _recorded_source_root() is not None:
+        return True
+    try:
+        release_root_resolved = release_root.resolve()
+        nexo_home_resolved = NEXO_HOME.resolve()
+    except Exception:
+        release_root_resolved = release_root
+        nexo_home_resolved = NEXO_HOME
+    if release_root_resolved == nexo_home_resolved:
+        return False
+    has_release_files = (
+        (release_root / "package.json").is_file()
+        and (release_root / "CHANGELOG.md").is_file()
+        and (release_root / "scripts" / "sync_release_artifacts.py").is_file()
+    )
+    return has_release_files
+
+
 def _package_json_path() -> Path:
     if PACKAGE_JSON.is_file():
         return PACKAGE_JSON
@@ -2660,13 +2682,27 @@ def check_release_artifact_sync() -> DoctorCheck:
     if changelog_version:
         evidence.append(f"top changelog version: {changelog_version}")
 
+    release_root = _release_root()
+    if not _has_release_publish_context(release_root):
+        if version:
+            evidence.append(f"package version: {version}")
+        evidence.append(f"release root: {release_root}")
+        evidence.append("packaged runtime without source repo; release artifact audit skipped")
+        return DoctorCheck(
+            id="runtime.release_artifacts",
+            tier="runtime",
+            status="healthy",
+            severity="info",
+            summary="Release artifact audit skipped for packaged runtime",
+            evidence=evidence,
+        )
+
     if version and changelog_version and version != changelog_version:
         status = "critical"
         severity = "error"
         evidence.append("package/changelog release version mismatch")
         repair_plan.append("Bump or align CHANGELOG.md before publishing")
 
-    release_root = _release_root()
     sync_script = release_root / "scripts" / "sync_release_artifacts.py"
     if not sync_script.is_file():
         status = "critical"

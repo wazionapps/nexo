@@ -12,7 +12,44 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 
-const NEXO_HOME = process.env.NEXO_HOME || path.join(os.homedir(), ".nexo");
+function resolveNexoHome(rawValue) {
+  const homeDir = os.homedir();
+  const managedHome = path.join(homeDir, ".nexo");
+  const legacyHome = path.join(homeDir, "claude");
+  const candidate = rawValue || managedHome;
+
+  if (candidate === managedHome) return managedHome;
+  if (candidate === legacyHome) return fs.existsSync(managedHome) ? managedHome : candidate;
+
+  try {
+    if (fs.existsSync(managedHome) && fs.realpathSync.native(candidate) === fs.realpathSync.native(managedHome)) {
+      return managedHome;
+    }
+  } catch {}
+
+  return candidate;
+}
+
+const NEXO_HOME = resolveNexoHome(process.env.NEXO_HOME);
+const NEXO_CODE = resolveCodeDir();
+
+function resolveCodeDir() {
+  const envCode = process.env.NEXO_CODE;
+  if (envCode && fs.existsSync(path.join(envCode, "cli.py"))) {
+    return envCode;
+  }
+  const repoCandidate = path.join(__dirname, "..", "src", "cli.py");
+  if (fs.existsSync(repoCandidate)) {
+    return path.join(__dirname, "..", "src");
+  }
+  if (fs.existsSync(path.join(NEXO_HOME, "cli.py"))) {
+    return NEXO_HOME;
+  }
+  if (fs.existsSync(path.join(NEXO_HOME, "claude", "cli.py"))) {
+    return path.join(NEXO_HOME, "claude");
+  }
+  return NEXO_HOME;
+}
 
 function pythonSupportsModule(candidate, moduleName) {
   if (!candidate) return false;
@@ -23,7 +60,7 @@ function pythonSupportsModule(candidate, moduleName) {
       env: {
         ...process.env,
         NEXO_HOME,
-        NEXO_CODE: path.join(__dirname, "..", "src"),
+        NEXO_CODE,
       },
     });
     return result.status === 0;
@@ -36,6 +73,8 @@ function findPython() {
   const candidates = [
     process.env.NEXO_RUNTIME_PYTHON,
     process.env.NEXO_PYTHON,
+    path.join(NEXO_CODE, ".venv", "bin", "python3"),
+    path.join(NEXO_CODE, ".venv", "bin", "python"),
     path.join(NEXO_HOME, ".venv", "bin", "python3"),
     path.join(NEXO_HOME, ".venv", "bin", "python"),
     process.platform === "darwin" ? "/opt/homebrew/bin/python3" : "",
@@ -55,10 +94,7 @@ function findPython() {
 }
 
 function findCliPy() {
-  const repoCandidate = path.join(__dirname, "..", "src", "cli.py");
-  const installedCandidate = path.join(NEXO_HOME, "cli.py");
-  if (fs.existsSync(repoCandidate)) return repoCandidate;
-  return installedCandidate;
+  return path.join(NEXO_CODE, "cli.py");
 }
 
 const python = findPython();
@@ -75,7 +111,7 @@ const result = spawnSync(python, [cliPy, ...process.argv.slice(2)], {
   env: {
     ...process.env,
     NEXO_HOME,
-    NEXO_CODE: path.join(__dirname, "..", "src"),
+    NEXO_CODE,
   },
 });
 

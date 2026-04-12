@@ -12,7 +12,7 @@ recommendation pattern could persist indefinitely between user reports.
 What this script does (idempotent and best-effort):
 
 1. Loads cortex_evaluation_summary for the last 7 days and last 1 day.
-2. Persists the snapshot to ~/claude/operations/cortex-quality-latest.json
+2. Persists the snapshot to ~/.nexo/operations/cortex-quality-latest.json
    so dashboards / morning briefings can read fresh metrics without
    re-running the SQL.
 3. Detects degradation signals on the 7-day window. The criteria are
@@ -25,7 +25,7 @@ What this script does (idempotent and best-effort):
    metrics when degradation is detected. Idempotent: if a non-PENDING /
    resolved followup of the same id already exists, it is updated in
    place rather than duplicated.
-5. Logs every run to ~/claude/logs/cortex-cycle.log.
+5. Logs every run to ~/.nexo/logs/cortex-cycle.log.
 
 Catchup-friendly: a stale plist firing twice in quick succession is fine.
 The quality file is rewritten in place, the followup is upserted, no

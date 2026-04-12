@@ -3,7 +3,7 @@
 
 Closes Fase 3 item 7 of NEXO-AUDIT-2026-04-11. Bash hooks can call:
 
-    python3 ~/Documents/_PhpstormProjects/nexo/src/scripts/nexo-hook-record.py \
+    NEXO_HOME=~/.nexo python3 ~/.nexo/scripts/nexo-hook-record.py \
         --hook session-start --duration-ms 142 --exit $? --session $SID
 
 This script is intentionally minimal so it adds <50ms of latency to the

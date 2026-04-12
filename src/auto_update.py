@@ -17,7 +17,9 @@ import sys
 import time
 from pathlib import Path
 
-NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+from runtime_home import export_resolved_nexo_home, managed_nexo_home
+
+NEXO_HOME = export_resolved_nexo_home()
 DATA_DIR = NEXO_HOME / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -148,15 +150,42 @@ def _runtime_cli_wrapper_text() -> str:
     return (
         "#!/usr/bin/env bash\n"
         "set -euo pipefail\n\n"
-        f'NEXO_HOME="{NEXO_HOME}"\n'
+        f'DEFAULT_NEXO_HOME="{managed_nexo_home()}"\n'
+        'RUNTIME_HOME="${NEXO_HOME:-$DEFAULT_NEXO_HOME}"\n'
+        'if [ "$RUNTIME_HOME" = "${HOME}/claude" ] && [ -e "$DEFAULT_NEXO_HOME" ]; then\n'
+        '  RUNTIME_HOME="$DEFAULT_NEXO_HOME"\n'
+        'fi\n'
+        'if [ -e "$RUNTIME_HOME" ] && [ -e "$DEFAULT_NEXO_HOME" ]; then\n'
+        '  RESOLVED_RUNTIME="$(cd "$RUNTIME_HOME" 2>/dev/null && pwd -P || true)"\n'
+        '  RESOLVED_DEFAULT="$(cd "$DEFAULT_NEXO_HOME" 2>/dev/null && pwd -P || true)"\n'
+        '  if [ -n "$RESOLVED_RUNTIME" ] && [ "$RESOLVED_RUNTIME" = "$RESOLVED_DEFAULT" ]; then\n'
+        '    RUNTIME_HOME="$DEFAULT_NEXO_HOME"\n'
+        '  fi\n'
+        'fi\n'
+        'NEXO_HOME="$RUNTIME_HOME"\n'
         'export NEXO_HOME\n'
-        'export NEXO_CODE="${NEXO_CODE:-$NEXO_HOME}"\n'
+        'resolve_code_dir() {\n'
+        '  if [ -n "${NEXO_CODE:-}" ] && [ -f "${NEXO_CODE%/}/cli.py" ]; then\n'
+        '    printf \'%s\\n\' "${NEXO_CODE%/}"\n'
+        '    return 0\n'
+        '  fi\n'
+        '  if [ -f "$NEXO_HOME/cli.py" ]; then\n'
+        '    printf \'%s\\n\' "$NEXO_HOME"\n'
+        '    return 0\n'
+        '  fi\n'
+        '  printf \'%s\\n\' "$NEXO_HOME"\n'
+        '}\n'
+        'NEXO_CODE="$(resolve_code_dir)"\n'
+        'export NEXO_CODE\n'
         'resolve_python() {\n'
         '  local candidates=()\n'
         '  local candidate=""\n'
         '  if [ -n "${NEXO_RUNTIME_PYTHON:-}" ]; then candidates+=("$NEXO_RUNTIME_PYTHON"); fi\n'
         '  if [ -n "${NEXO_PYTHON:-}" ]; then candidates+=("$NEXO_PYTHON"); fi\n'
-        '  candidates+=("$NEXO_HOME/.venv/bin/python3" "$NEXO_HOME/.venv/bin/python")\n'
+        '  candidates+=("$NEXO_CODE/.venv/bin/python3" "$NEXO_CODE/.venv/bin/python")\n'
+        '  if [ "$NEXO_CODE" != "$NEXO_HOME" ]; then\n'
+        '    candidates+=("$NEXO_HOME/.venv/bin/python3" "$NEXO_HOME/.venv/bin/python")\n'
+        '  fi\n'
         '  case "$(uname -s)" in\n'
         '    Darwin) candidates+=("/opt/homebrew/bin/python3" "/usr/local/bin/python3") ;;\n'
         '    *) candidates+=("/usr/local/bin/python3" "/usr/bin/python3") ;;\n'
@@ -184,7 +213,17 @@ def _runtime_cli_wrapper_text() -> str:
         '  echo "NEXO runtime Python not found. Run nexo-brain or nexo update to repair the installation." >&2\n'
         '  exit 1\n'
         'fi\n'
-        'exec "$PYTHON" "$NEXO_HOME/cli.py" "$@"\n'
+        'CLI_PY="$NEXO_CODE/cli.py"\n'
+        'if [ ! -f "$CLI_PY" ] && [ -f "$NEXO_HOME/cli.py" ]; then\n'
+        '  NEXO_CODE="$NEXO_HOME"\n'
+        '  export NEXO_CODE\n'
+        '  CLI_PY="$NEXO_HOME/cli.py"\n'
+        'fi\n'
+        'if [ ! -f "$CLI_PY" ]; then\n'
+        '  echo "NEXO CLI not found under $NEXO_HOME. Run nexo-brain or nexo update to repair the installation." >&2\n'
+        '  exit 1\n'
+        'fi\n'
+        'exec "$PYTHON" "$CLI_PY" "$@"\n'
     )
 
 
@@ -1451,9 +1490,11 @@ def _resolve_sync_source() -> tuple[Path | None, Path | None]:
     if (
         not same_as_runtime
         and (NEXO_CODE / "db").is_dir()
-        and (NEXO_CODE.parent / "package.json").is_file()
     ):
-        return NEXO_CODE, NEXO_CODE.parent
+        if (NEXO_CODE.parent / "package.json").is_file():
+            return NEXO_CODE, NEXO_CODE.parent
+        if (NEXO_CODE / "package.json").is_file():
+            return NEXO_CODE, NEXO_CODE
 
     version_source = _runtime_version_source()
     if version_source:
@@ -1583,7 +1624,21 @@ def _backup_runtime_tree(dest: Path = NEXO_HOME) -> str:
     backup_dir = NEXO_HOME / "backups" / f"runtime-tree-{timestamp}"
     backup_dir.mkdir(parents=True, exist_ok=True)
 
-    code_dirs = ["hooks", "plugins", "db", "cognitive", "dashboard", "rules", "crons", "scripts", "doctor", "skills-core"]
+    code_dirs = [
+        "hooks",
+        "plugins",
+        "db",
+        "cognitive",
+        "dashboard",
+        "rules",
+        "crons",
+        "scripts",
+        "doctor",
+        "skills",
+        "skills-core",
+        "skills-runtime",
+        "templates",
+    ]
     flat_files = _runtime_flat_files(dest)
     for name in code_dirs:
         src = dest / name
@@ -1635,6 +1690,9 @@ def _copy_runtime_from_source(src_dir: Path, repo_dir: Path, dest: Path = NEXO_H
     copied_scripts = 0
     script_conflicts: list[dict[str, str]] = []
     installed_script_classes = _installed_scripts_classification(dest)
+
+    for dirname in ("bin", "skills", "skills-core", "skills-runtime", "templates"):
+        (dest / dirname).mkdir(parents=True, exist_ok=True)
 
     _emit_progress(progress_fn, "Copying core packages...")
     for pkg in packages:

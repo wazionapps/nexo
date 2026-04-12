@@ -374,7 +374,7 @@ def _open_watcher_followup(result: dict) -> dict:
     )
     description = "\n".join(description_lines)
     verification = (
-        f"sqlite3 ~/claude/data/nexo.db \"SELECT last_health, last_result "
+        f"sqlite3 ~/.nexo/data/nexo.db \"SELECT last_health, last_result "
         f"FROM state_watchers WHERE watcher_id = '{watcher_id}'\""
     )
 

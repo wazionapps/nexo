@@ -1,4 +1,4 @@
-<!-- nexo-claude-md-version: 2.1.3 -->
+<!-- nexo-claude-md-version: 2.1.4 -->
 ******CORE******
 <!-- nexo:core:start -->
 # {{NAME}} — Cognitive Co-Operator
@@ -34,6 +34,12 @@ NEXO updates may rewrite `CORE`, but they must preserve `USER` verbatim.
 - For single-artifact asks (email, message, diary item, reminder, prior fact), retrieve the artifact, summarize it, then decide whether further action is needed.
 - For single-artifact asks, the default cap before the first visible answer is one lookup plus one detail read. Do not keep chaining tools before answering unless the user explicitly asked for more depth.
 - After `nexo_email_read`, `nexo_session_diary_read`, `nexo_reminders`, `nexo_followups`, or equivalent single-artifact retrieval, answer immediately. Do not launch another search, another read, or background analysis before the first user-visible answer unless the user explicitly asked for it.
+
+## Communication Guardrail
+- In the first answer to Francisco on any thread, lead with the direct recommendation, decision, or status.
+- Keep each decision point to 2-3 short sentences maximum. Hold extra detail unless he explicitly asks for it.
+- Do not use internal NEXO jargon in the first answer (`protocol debt`, `cortex evaluation`, `runtime check`, `guard_check`, `heartbeat`, etc.). Translate it into plain operational language.
+- Prefer conclusion plus next action over option dumps, raw diagnostics, or internal process narration. Apply this equally to chat replies, emails, briefings, and headless reports intended for Francisco.
 
 <!-- nexo:start:profile -->
 ## User Profile

@@ -70,6 +70,60 @@ def test_runtime_cli_wrapper_text_probes_fastmcp_and_supports_override():
     assert "NEXO_RUNTIME_PYTHON" in text
     assert 'import fastmcp' in text
     assert 'resolve_python()' in text
+    assert 'DEFAULT_NEXO_HOME=' in text
+    assert '${HOME}/claude' in text
+    assert 'pwd -P' in text
+    assert '$NEXO_HOME/claude/cli.py' not in text
+
+
+def test_resolve_sync_source_supports_hybrid_runtime_code_dir(tmp_path, monkeypatch):
+    import auto_update
+
+    runtime_home = tmp_path / "runtime"
+    runtime_code = runtime_home / "claude"
+    runtime_code.mkdir(parents=True)
+    (runtime_code / "db").mkdir()
+    (runtime_code / "package.json").write_text("{}")
+
+    monkeypatch.setattr(auto_update, "NEXO_HOME", runtime_home)
+    monkeypatch.setattr(auto_update, "NEXO_CODE", runtime_code)
+
+    src_dir, repo_dir = auto_update._resolve_sync_source()
+
+    assert src_dir == runtime_code
+    assert repo_dir == runtime_code
+
+
+def test_copy_runtime_from_source_creates_skill_scaffold_dirs(tmp_path, monkeypatch):
+    import auto_update
+
+    src_dir = tmp_path / "src"
+    repo_dir = tmp_path / "repo"
+    dest = tmp_path / "runtime"
+
+    src_dir.mkdir()
+    repo_dir.mkdir()
+    (src_dir / "db").mkdir()
+    (src_dir / "scripts").mkdir()
+    (src_dir / "skills" / "demo-skill").mkdir(parents=True)
+    (repo_dir / "templates").mkdir()
+
+    (src_dir / "server.py").write_text("print('server')\n")
+    (src_dir / "cli.py").write_text("print('cli')\n")
+    (src_dir / "requirements.txt").write_text("fastmcp\n")
+    (src_dir / "skills" / "demo-skill" / "skill.json").write_text("{}\n")
+    (repo_dir / "templates" / "skill-template.md").write_text("# template\n")
+    (repo_dir / "package.json").write_text("{}\n")
+
+    monkeypatch.setattr(auto_update, "_installed_scripts_classification", lambda _dest: {})
+
+    result = auto_update._copy_runtime_from_source(src_dir, repo_dir, dest)
+
+    assert result["source"] == str(src_dir)
+    assert (dest / "bin").is_dir()
+    assert (dest / "skills").is_dir()
+    assert (dest / "skills-runtime").is_dir()
+    assert (dest / "skills-core" / "demo-skill" / "skill.json").is_file()
 
 
 def test_reinstall_runtime_pip_deps_creates_venv_when_missing(tmp_path, monkeypatch):

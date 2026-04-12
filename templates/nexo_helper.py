@@ -30,11 +30,15 @@ def _detect_nexo_home() -> Path:
     ):
         return inferred_home
 
+    default_home = Path.home() / ".nexo"
+    if default_home.is_dir():
+        return default_home
+
     claude_home = Path.home() / "claude"
     if claude_home.is_dir():
         return claude_home
 
-    return Path.home() / ".nexo"
+    return default_home
 
 
 NEXO_HOME = _detect_nexo_home()
