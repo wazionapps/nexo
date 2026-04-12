@@ -1,0 +1,86 @@
+{
+  "release_line": "v5.3",
+  "target_version": "5.3.6",
+  "scope_owner": "NEXO",
+  "distribution": {
+    "git_updates_on": "merge_to_main",
+    "packaged_release_on": "tag_publish"
+  },
+  "required_repo_files": [
+    "package.json",
+    "CHANGELOG.md",
+    "README.md",
+    "llms.txt",
+    "scripts/sync_release_artifacts.py",
+    "scripts/verify_release_readiness.py",
+    "release-contracts/v5.3.6.json",
+    ".claude-plugin/plugin.json",
+    "clawhub-skill/SKILL.md",
+    "openclaw-plugin/package.json",
+    "openclaw-plugin/src/mcp-bridge.ts",
+    "src/client_sync.py",
+    "src/db/_cron_runs.py",
+    "src/plugins/schedule.py",
+    "src/retroactive_learnings.py",
+    "src/script_registry.py",
+    "src/skills/run-release-final-audit/script.py",
+    "src/skills/run-nexo-audit-phase/guide.md",
+    "src/skills/run-nexo-audit-phase/skill.json",
+    "tests/test_cli_scripts.py",
+    "tests/test_client_sync.py",
+    "tests/test_retroactive_learnings.py",
+    "tests/test_schedule_status.py",
+    "tests/test_script_registry.py"
+  ],
+  "required_website_files": [
+    "index.html",
+    "features/index.html",
+    "blog/index.html",
+    "blog/nexo-5-3-6-claude-mcp-bootstrap-hardening/index.html",
+    "changelog/index.html",
+    "llms.txt",
+    ".well-known/llms.txt",
+    "sitemap.xml"
+  ],
+  "gates": [
+    {
+      "id": "claude_mcp_bootstrap",
+      "title": "Claude Code sees the managed NEXO MCP server from the real user config path",
+      "status": "complete",
+      "evidence_required": [
+        "Managed client sync writes NEXO MCP to ~/.claude.json",
+        "Claude Code settings.json remains in sync for hooks/bootstrap",
+        "Local Claude MCP smoke confirms the NEXO server is connected"
+      ]
+    },
+    {
+      "id": "runtime_hygiene",
+      "title": "Runtime surfaces stay honest around schedules, script boundaries, and retroactive learnings",
+      "status": "complete",
+      "evidence_required": [
+        "Schedule status distinguishes open/running runs from real failures",
+        "Core-vs-personal script classification reads the packaged/runtime surface robustly",
+        "Retroactive learnings ignore keyword-only false positives outside declared applies_to scope"
+      ]
+    },
+    {
+      "id": "release_audit_resilience",
+      "title": "Final release audit works across real repo/runtime layouts",
+      "status": "complete",
+      "evidence_required": [
+        "Final release audit can resolve repo root from cwd, runtime metadata, or Project Atlas",
+        "Release readiness passes against the repo and website roots used for publication"
+      ]
+    },
+    {
+      "id": "public_surface_alignment",
+      "title": "Public package, docs, blog, changelog, llms, and sitemap tell the same release story",
+      "status": "complete",
+      "evidence_required": [
+        "Root package and integration artifacts all point to 5.3.6",
+        "Website home/blog/changelog/llms are updated to 5.3.6",
+        "The release article and sitemap include the new patch release"
+      ]
+    }
+  ]
+}

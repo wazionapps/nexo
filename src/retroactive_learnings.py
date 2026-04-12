@@ -29,7 +29,10 @@ Matching strategy:
          with significant tokens from the decision's
          decision + based_on + alternatives + context_ref. Score is
          intersection_size / max(1, learning_token_count) clipped to 1.0.
-    Combined score: 0.5 * applies_to_score + 0.5 * keyword_score.
+    Guardrail: if a learning defines `applies_to` and that anchor scores
+        below 0.3, auto-dismiss the match even if keyword overlap is high.
+        This blocks keyword-only false positives outside the learning's
+        actual blast radius.
     Default match threshold: 0.4. Default cap: 5 matches per learning.
 
 Anti-spam guards:
@@ -129,16 +132,16 @@ def _score_match(
         keyword_hits = set()
         keyword_score = 0.0
 
-    # max() rather than weighted average so a strong signal alone qualifies.
-    # The two signals (applies_to overlap, keyword overlap) are independent
-    # paths to the same conclusion: this past decision is in the new rule's
-    # blast radius. If either one fires strongly, surface the match.
-    score = max(applies_to_score, keyword_score)
+    gated_by_applies_to = bool(learning_applies_to and applies_to_score < 0.3)
+    # When a learning explicitly scopes its blast radius via applies_to,
+    # keyword overlap alone is too noisy to justify a retroactive review.
+    score = applies_to_score if gated_by_applies_to else max(applies_to_score, keyword_score)
     breakdown = {
         "applies_to_score": round(applies_to_score, 3),
         "applies_to_hits": sorted(applies_to_hits),
         "keyword_score": round(keyword_score, 3),
         "keyword_hits": sorted(keyword_hits),
+        "gated_by_applies_to": gated_by_applies_to,
     }
     return round(score, 3), breakdown
 

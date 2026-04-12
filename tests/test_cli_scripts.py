@@ -512,6 +512,7 @@ class TestClientsCommand:
         assert payload["clients"]["claude_desktop"]["ok"] is True
         assert payload["clients"]["codex"]["ok"] is True
         assert (nexo_home / ".claude" / "settings.json").is_file()
+        assert (nexo_home / ".claude.json").is_file()
         assert client_sync._claude_desktop_config_path(nexo_home).is_file()
 
 

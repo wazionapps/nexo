@@ -56,14 +56,19 @@ def cron_runs_summary(hours: int = 24) -> list[dict]:
                cron_id,
                COUNT(*) as total_runs,
                SUM(CASE WHEN exit_code = 0 THEN 1 ELSE 0 END) as succeeded,
-               SUM(CASE WHEN exit_code != 0 OR exit_code IS NULL THEN 1 ELSE 0 END) as failed,
+               SUM(CASE WHEN exit_code IS NOT NULL AND ended_at IS NOT NULL THEN 1 ELSE 0 END) as completed_runs,
+               SUM(CASE WHEN exit_code IS NOT NULL AND exit_code != 0 THEN 1 ELSE 0 END) as failed,
+               SUM(CASE WHEN exit_code IS NULL OR ended_at IS NULL THEN 1 ELSE 0 END) as open_runs,
                ROUND(AVG(duration_secs), 1) as avg_duration,
                MAX(started_at) as last_run,
                (SELECT exit_code FROM cron_runs cr2
                 WHERE cr2.cron_id = cron_runs.cron_id
                 ORDER BY started_at DESC LIMIT 1) as last_exit_code,
-               (SELECT summary FROM cron_runs cr3
-                WHERE cr3.cron_id = cron_runs.cron_id AND cr3.summary != ''
+               (SELECT ended_at FROM cron_runs cr3
+                WHERE cr3.cron_id = cron_runs.cron_id
+                ORDER BY started_at DESC LIMIT 1) as last_ended_at,
+               (SELECT summary FROM cron_runs cr4
+                WHERE cr4.cron_id = cron_runs.cron_id AND cr4.summary != ''
                 ORDER BY started_at DESC LIMIT 1) as last_summary
            FROM cron_runs
            WHERE started_at >= datetime('now', ?)

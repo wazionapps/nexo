@@ -9,15 +9,74 @@ import sys
 from pathlib import Path
 
 
+def _is_repo_root(candidate: Path) -> bool:
+    return (
+        (candidate / "package.json").is_file()
+        and (candidate / "release-contracts").is_dir()
+        and (candidate / "scripts" / "verify_release_readiness.py").is_file()
+    )
+
+
+def _normalize_candidate(raw: str | Path) -> Path:
+    candidate = Path(raw).expanduser().resolve()
+    if candidate.is_file():
+        candidate = candidate.parent
+    if candidate.name == "src" and (candidate / "server.py").is_file():
+        candidate = candidate.parent
+    return candidate
+
+
+def _resolve_repo_root_from_atlas() -> Path | None:
+    homes = []
+    env_home = os.environ.get("NEXO_HOME", "").strip()
+    if env_home:
+        homes.append(Path(env_home).expanduser())
+    homes.extend((Path.home() / ".nexo", Path.home() / "claude"))
+
+    seen = set()
+    for home in homes:
+        key = str(home)
+        if key in seen:
+            continue
+        seen.add(key)
+        atlas_path = home / "brain" / "project-atlas.json"
+        if not atlas_path.is_file():
+            continue
+        try:
+            payload = json.loads(atlas_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            continue
+        nexo = payload.get("nexo") if isinstance(payload, dict) else None
+        locations = nexo.get("locations") if isinstance(nexo, dict) else None
+        source = locations.get("mcp_server", "") if isinstance(locations, dict) else ""
+        if not isinstance(source, str) or not source.strip():
+            continue
+        candidate = _normalize_candidate(source)
+        if _is_repo_root(candidate):
+            return candidate
+    return None
+
+
 def _resolve_repo_root() -> Path:
     env_code = os.environ.get("NEXO_CODE", "").strip()
     if env_code:
-        candidate = Path(env_code).expanduser().resolve()
-        if candidate.is_file():
-            candidate = candidate.parent
-        if (candidate / "cli.py").is_file():
-            return candidate.parent if candidate.name == "src" else candidate
-    return Path(__file__).resolve().parents[3]
+        candidate = _normalize_candidate(env_code)
+        if _is_repo_root(candidate):
+            return candidate
+
+    cwd = Path.cwd().resolve()
+    for candidate in (cwd, *cwd.parents):
+        if _is_repo_root(candidate):
+            return candidate
+
+    atlas_repo = _resolve_repo_root_from_atlas()
+    if atlas_repo is not None:
+        return atlas_repo
+
+    script_root = _normalize_candidate(Path(__file__).resolve().parents[3])
+    if _is_repo_root(script_root):
+        return script_root
+    return script_root
 
 
 ROOT = _resolve_repo_root()
@@ -77,7 +136,7 @@ def _env(nexo_home: str) -> dict[str, str]:
     env["PYTHONPATH"] = (
         f"{src_path}{os.pathsep}{existing_pythonpath}" if existing_pythonpath else src_path
     )
-    env.setdefault("NEXO_CODE", str(ROOT / "src"))
+    env["NEXO_CODE"] = src_path
     if nexo_home.strip():
         env["NEXO_HOME"] = str(Path(nexo_home).expanduser())
     return env
@@ -128,13 +187,27 @@ def _run(cmd: list[str], *, env: dict[str, str]) -> None:
         raise SystemExit(result.returncode)
 
 
+def _looks_like_nexo_home(raw: str) -> bool:
+    if not raw.strip():
+        return False
+    candidate = Path(raw).expanduser()
+    return (candidate / "skills-runtime").is_dir() or (candidate / "operations" / "tool-logs").is_dir()
+
+
+def _parse_optional_paths(argv: list[str]) -> tuple[str, str]:
+    if len(argv) > 6:
+        return argv[5], argv[6]
+    if len(argv) > 5:
+        return ("", argv[5]) if _looks_like_nexo_home(argv[5]) else (argv[5], "")
+    return "", ""
+
+
 def main() -> int:
     contract_arg = sys.argv[1] if len(sys.argv) > 1 else "auto"
     require_contract_complete = _parse_bool(sys.argv[2] if len(sys.argv) > 2 else "true", True)
     include_smoke = _parse_bool(sys.argv[3] if len(sys.argv) > 3 else "true", True)
     ci = _parse_bool(sys.argv[4] if len(sys.argv) > 4 else "false", False)
-    website_root = sys.argv[5] if len(sys.argv) > 5 else ""
-    nexo_home = sys.argv[6] if len(sys.argv) > 6 else ""
+    website_root, nexo_home = _parse_optional_paths(sys.argv)
 
     version = _package_version()
     contract_path = _resolve_contract(version, contract_arg)

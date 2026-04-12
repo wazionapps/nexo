@@ -1,5 +1,30 @@
 # Changelog
 
+## [5.3.6] - 2026-04-12
+
+### Claude MCP bootstrap + runtime hygiene hardening
+
+- `nexo clients sync` / managed Claude Code sync now writes the NEXO MCP
+  server to `~/.claude.json` as well as `~/.claude/settings.json`, matching
+  current Claude Code user-scoped MCP resolution instead of leaving `nexo chat`
+  and `claude mcp` out of sync.
+- `nexo scripts` now classifies core runtime artifacts more robustly across
+  packaged installs, runtime roots, hook directories, and legacy alias names so
+  operator-facing script inventory stays clean.
+- `nexo schedule status` now distinguishes active/open runs from failures and
+  shows run age for still-running jobs instead of collapsing missing exit codes
+  into false negatives.
+- Retroactive learnings now ignore keyword-only matches when a learning defines
+  `applies_to` but the scoped blast radius does not match, cutting false review
+  followups outside the intended target.
+- The final release-audit skill resolves repo roots more reliably from cwd,
+  runtime metadata, and Project Atlas instead of assuming one fixed checkout
+  layout.
+- Added a published core skill for running NEXO audit phases with empirical
+  verification discipline and autonomous execution defaults.
+- Added regression coverage for Claude root MCP sync, schedule open-run status,
+  retroactive-learning gating, and packaged/runtime release validation paths.
+
 ## [5.3.5] - 2026-04-12
 
 ### Version banner cache correction

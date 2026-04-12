@@ -160,6 +160,11 @@ def _claude_code_settings_path(home: Path | None = None) -> Path:
     return base / ".claude" / "settings.json"
 
 
+def _claude_code_mcp_path(home: Path | None = None) -> Path:
+    base = home or _user_home()
+    return base / ".claude.json"
+
+
 def _claude_desktop_config_path(home: Path | None = None) -> Path:
     base = home or _user_home()
     if sys.platform == "darwin":
@@ -627,10 +632,22 @@ def sync_claude_code(
         python_path=python_path,
         operator_name=operator_name,
     )
+    home_path = Path(user_home).expanduser() if user_home else None
     result = _sync_claude_code_settings(
-        _claude_code_settings_path(Path(user_home).expanduser() if user_home else None),
+        _claude_code_settings_path(home_path),
         server_config,
     )
+    # Claude Code 2.1.x reads user-scoped MCP servers from ~/.claude.json.
+    # Keep settings.json in sync for hooks/runtime preferences, but also write
+    # the managed NEXO MCP server to the root user config so `claude mcp list`
+    # and interactive sessions see the same server.
+    mcp_result = _sync_json_client(
+        _claude_code_mcp_path(home_path),
+        server_config,
+        "claude_code",
+    )
+    result["mcp"] = mcp_result
+    result["mcp_path"] = mcp_result.get("path", "")
     bootstrap_result = sync_client_bootstrap(
         "claude_code",
         nexo_home=nexo_home,

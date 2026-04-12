@@ -1,5 +1,6 @@
 import os
 import sys
+from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
 
@@ -75,3 +76,75 @@ def test_schedule_status_marks_self_audit_findings_as_warning(monkeypatch):
 
     assert "⚠ self-audit" in output
     assert "exit 0 with warnings" in output
+
+
+def test_schedule_status_marks_recent_open_run_as_running(monkeypatch):
+    from plugins import schedule
+
+    monkeypatch.setattr(
+        schedule,
+        "cron_runs_summary",
+        lambda hours: [{
+            "cron_id": "orchestrator-v2",
+            "succeeded": 3,
+            "completed_runs": 3,
+            "total_runs": 4,
+            "avg_duration": 137.0,
+            "last_summary": "2026-04-12 16:10:18 Cycle #111 finished (exit 0)",
+            "last_exit_code": None,
+            "last_run": "2026-04-12 14:25:19",
+            "last_ended_at": None,
+        }],
+    )
+    monkeypatch.setattr(
+        schedule,
+        "get_personal_script_schedule",
+        lambda cron_id: {"schedule_type": "interval", "interval_seconds": 900} if cron_id == "orchestrator-v2" else {},
+    )
+    monkeypatch.setattr(
+        schedule,
+        "_now_utc",
+        lambda: datetime(2026, 4, 12, 14, 27, 0, tzinfo=timezone.utc),
+    )
+
+    output = schedule.handle_schedule_status(hours=24)
+
+    assert "⏳ orchestrator-v2" in output
+    assert "3/3" in output
+    assert "running 2m" in output
+
+
+def test_schedule_status_marks_old_open_run_as_warning(monkeypatch):
+    from plugins import schedule
+
+    monkeypatch.setattr(
+        schedule,
+        "cron_runs_summary",
+        lambda hours: [{
+            "cron_id": "shopify-backup",
+            "succeeded": 1,
+            "completed_runs": 1,
+            "total_runs": 2,
+            "avg_duration": 47.0,
+            "last_summary": "[2026-04-12 03:00:47] All done.",
+            "last_exit_code": None,
+            "last_run": "2026-04-12 11:20:34",
+            "last_ended_at": None,
+        }],
+    )
+    monkeypatch.setattr(
+        schedule,
+        "get_personal_script_schedule",
+        lambda cron_id: {"schedule_type": "calendar"} if cron_id == "shopify-backup" else {},
+    )
+    monkeypatch.setattr(
+        schedule,
+        "_now_utc",
+        lambda: datetime(2026, 4, 12, 16, 27, 0, tzinfo=timezone.utc),
+    )
+
+    output = schedule.handle_schedule_status(hours=24)
+
+    assert "⚠ shopify-backup" in output
+    assert "1/1" in output
+    assert "open run 5.1h" in output

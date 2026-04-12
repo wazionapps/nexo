@@ -53,10 +53,15 @@ def test_sync_claude_code_preserves_existing_settings(tmp_path):
     runtime = _make_runtime(tmp_path)
     home = tmp_path / "home"
     settings_path = home / ".claude" / "settings.json"
+    mcp_path = home / ".claude.json"
     settings_path.parent.mkdir(parents=True)
     settings_path.write_text(json.dumps({
         "mcpServers": {"other": {"command": "node", "args": ["other.js"]}},
         "hooks": {"SessionStart": [{"matcher": "*", "hooks": []}]},
+    }))
+    mcp_path.write_text(json.dumps({
+        "mcpServers": {"legacy-root": {"command": "node", "args": ["root.js"]}},
+        "theme": "dark",
     }))
 
     result = client_sync.sync_claude_code(
@@ -87,6 +92,11 @@ def test_sync_claude_code_preserves_existing_settings(tmp_path):
     assert payload["mcpServers"]["nexo"]["env"]["NEXO_HOME"] == str(runtime)
     assert payload["mcpServers"]["nexo"]["env"]["NEXO_CODE"] == str(runtime)
     assert payload["mcpServers"]["nexo"]["env"]["NEXO_NAME"] == "Atlas"
+    mcp_payload = json.loads(mcp_path.read_text())
+    assert mcp_payload["theme"] == "dark"
+    assert mcp_payload["mcpServers"]["legacy-root"]["args"] == ["root.js"]
+    assert mcp_payload["mcpServers"]["nexo"]["args"] == [str(runtime / "server.py")]
+    assert result["mcp_path"] == str(mcp_path)
     bootstrap_path = home / ".claude" / "CLAUDE.md"
     assert bootstrap_path.is_file()
     bootstrap_text = bootstrap_path.read_text()
