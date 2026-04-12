@@ -87,6 +87,8 @@ Versions `3.1.7` through `3.2.0` close the recent-memory gap:
 - when even that misses, NEXO now exposes raw transcript fallback tools for Claude Code and Codex session stores
 - NEXO can now inspect itself through a live system catalog derived from canonical sources instead of relying only on stale docs or operator memory
 
+Version `5.3.2` hardens the packaged runtime boundary: NEXO now persists which runtime scripts/hooks are core product artifacts, `nexo scripts` no longer mixes those into the personal bucket, and `nexo update` migrates the legacy Claude Code heartbeat wrappers into managed core hooks.
+
 Version `5.3.1` normalizes packaged npm installs so they behave like packaged npm installs: `nexo update` now keeps the runtime anchored to `~/.nexo`, refreshes packaged bootstrap/client artifacts after upgrade, avoids repo-only release-artifact drift in installed runtimes, and keeps personal scripts on the canonical packaged path.
 
 Version `5.3.0` adds `nexo uninstall` — a CLI command that cleanly separates runtime from user data. It stops all crons, removes the MCP server config, and preserves databases, learnings, and personal scripts for safe reinstall.

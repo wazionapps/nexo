@@ -112,7 +112,6 @@ These agents power NEXO's learning and memory systems. Strongly recommended.
 | File | Schedule | What it does |
 |------|----------|-------------|
 | `com.nexo.dashboard.plist` | Persistent (KeepAlive) | Runs the NEXO web dashboard on `http://localhost:6174`. Provides a browser-based view of sessions, reminders, followups, and system health. Only needed if you want the dashboard UI. |
-| `com.nexo.github-monitor.plist` | Daily 08:00 | Checks the NEXO public GitHub repository for open issues, pull requests, and pending releases. Writes results to `~/.nexo/github-status.json` for NEXO to read at startup. Only relevant if you maintain the public NEXO repository. |
 
 ---
 

@@ -93,6 +93,33 @@ function syncWatchdogHashRegistry(nexoHome) {
   }
 }
 
+function writeRuntimeCoreArtifactsManifest(nexoHome, srcDir) {
+  try {
+    const listTopLevelFiles = (dirPath) => {
+      if (!fs.existsSync(dirPath)) return [];
+      return fs.readdirSync(dirPath)
+        .filter((name) => {
+          const full = path.join(dirPath, name);
+          return fs.existsSync(full) && fs.statSync(full).isFile();
+        })
+        .sort();
+    };
+    const configDir = path.join(nexoHome, "config");
+    fs.mkdirSync(configDir, { recursive: true });
+    const payload = {
+      generated_at: new Date().toISOString(),
+      script_names: listTopLevelFiles(path.join(srcDir, "scripts")),
+      hook_names: listTopLevelFiles(path.join(srcDir, "hooks")),
+    };
+    fs.writeFileSync(
+      path.join(configDir, "runtime-core-artifacts.json"),
+      `${JSON.stringify(payload, null, 2)}\n`
+    );
+  } catch (err) {
+    log(`WARN: could not write runtime core-artifacts manifest: ${err.message}`);
+  }
+}
+
 function getCoreRuntimeFlatFiles() {
   return [
     "server.py",
@@ -1538,6 +1565,7 @@ async function main() {
             fs.chmodSync(path.join(scriptsDest, f), "755");
           });
         }
+        writeRuntimeCoreArtifactsManifest(NEXO_HOME, srcDir);
         log("  Scripts updated.");
 
         // Register ALL 8 core hooks in settings.json (additive — don't remove user's custom hooks)
@@ -2359,6 +2387,7 @@ async function main() {
     });
     log("  Hooks installed.");
   }
+  writeRuntimeCoreArtifactsManifest(NEXO_HOME, srcDir);
 
   // Generate personality
   const personality = `# ${operatorName} — Personality

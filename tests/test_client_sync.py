@@ -22,12 +22,15 @@ def _make_runtime(root: Path, *, operator_name: str = "Atlas") -> Path:
         "session-start.sh",
         "session-stop.sh",
         "protocol-pretool-guardrail.sh",
+        "heartbeat-user-msg.sh",
         "capture-tool-logs.sh",
         "capture-session.sh",
         "inbox-hook.sh",
         "protocol-guardrail.sh",
+        "heartbeat-posttool.sh",
         "pre-compact.sh",
         "post-compact.sh",
+        "heartbeat-enforcement.py",
     ):
         (hooks_dir / script).write_text("#!/bin/bash\n")
     payload = {}
@@ -74,8 +77,10 @@ def test_sync_claude_code_preserves_existing_settings(tmp_path):
     ]
     assert any("session-start.sh" in command for command in all_hook_commands)
     assert any("protocol-pretool-guardrail.sh" in command for command in all_hook_commands)
+    assert any("heartbeat-user-msg.sh" in command for command in all_hook_commands)
     assert any("capture-tool-logs.sh" in command for command in all_hook_commands)
     assert any("protocol-guardrail.sh" in command for command in all_hook_commands)
+    assert any("heartbeat-posttool.sh" in command for command in all_hook_commands)
     assert any(".session-start-ts" in command for command in all_hook_commands)
     assert payload["mcpServers"]["other"]["command"] == "node"
     assert payload["mcpServers"]["nexo"]["args"] == [str(runtime / "server.py")]
@@ -136,6 +141,62 @@ def test_sync_claude_code_removes_legacy_managed_hooks_but_keeps_custom_hooks(tm
     assert any("capture-session.sh" in command for command in commands)
     assert any("inbox-hook.sh" in command for command in commands)
     assert any("protocol-guardrail.sh" in command for command in commands)
+    assert any("heartbeat-posttool.sh" in command for command in commands)
+
+
+def test_sync_claude_code_rewrites_legacy_heartbeat_hook_paths_to_core_hooks(tmp_path):
+    import client_sync
+
+    runtime = _make_runtime(tmp_path)
+    home = tmp_path / "home"
+    settings_path = home / ".claude" / "settings.json"
+    settings_path.parent.mkdir(parents=True)
+    settings_path.write_text(json.dumps({
+        "hooks": {
+            "UserPromptSubmit": [
+                {
+                    "matcher": "*",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": "NEXO_HOME=/Users/franciscoc/.nexo bash /Users/franciscoc/.nexo/scripts/heartbeat-user-msg.sh",
+                            "timeout": 3,
+                        }
+                    ],
+                }
+            ],
+            "PostToolUse": [
+                {
+                    "matcher": "*",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": "NEXO_HOME=/Users/franciscoc/.nexo bash /Users/franciscoc/.nexo/scripts/heartbeat-posttool.sh",
+                            "timeout": 3,
+                        }
+                    ],
+                }
+            ],
+        }
+    }))
+
+    result = client_sync.sync_claude_code(
+        nexo_home=runtime,
+        runtime_root=runtime,
+        operator_name="Atlas",
+        user_home=home,
+    )
+
+    assert result["ok"] is True
+    payload = json.loads(settings_path.read_text())
+    user_prompt_hooks = payload["hooks"]["UserPromptSubmit"][0]["hooks"]
+    post_tool_hooks = payload["hooks"]["PostToolUse"][0]["hooks"]
+    user_prompt_commands = [hook["command"] for hook in user_prompt_hooks]
+    post_tool_commands = [hook["command"] for hook in post_tool_hooks]
+    assert any("hooks/heartbeat-user-msg.sh" in command for command in user_prompt_commands)
+    assert not any("scripts/heartbeat-user-msg.sh" in command for command in user_prompt_commands)
+    assert any("hooks/heartbeat-posttool.sh" in command for command in post_tool_commands)
+    assert not any("scripts/heartbeat-posttool.sh" in command for command in post_tool_commands)
 
 
 def test_sync_claude_desktop_preserves_preferences(tmp_path):

@@ -260,6 +260,24 @@ class TestCoreFiltering:
         assert classes["notes"] == "non-script"
         assert classes["nexo-dashboard"] == "ignored"
 
+    def test_runtime_core_manifest_marks_packaged_runtime_files_as_core(self, scripts_dir):
+        config_dir = scripts_dir.parent / "config"
+        config_dir.mkdir()
+        (config_dir / "runtime-core-artifacts.json").write_text(
+            '{"script_names":["nexo-catchup.py"],"hook_names":["capture-tool-logs.sh","heartbeat-posttool.sh"]}\n'
+        )
+        (scripts_dir / "nexo-catchup.py").write_text("print('core')\n")
+        (scripts_dir / "capture-tool-logs.sh").write_text("#!/bin/bash\necho core\n")
+        (scripts_dir / "heartbeat-posttool.sh").write_text("#!/bin/bash\necho core\n")
+        (scripts_dir / "my-tool.py").write_text("# nexo: name=my-tool\nprint('hi')\n")
+
+        report = classify_scripts_dir()
+        classes = {entry["path"].split("/")[-1]: entry["classification"] for entry in report["entries"]}
+        assert classes["nexo-catchup.py"] == "core"
+        assert classes["capture-tool-logs.sh"] == "core"
+        assert classes["heartbeat-posttool.sh"] == "core"
+        assert classes["my-tool.py"] == "personal"
+
     def test_classify_backfills_legacy_wake_recovery_metadata(self, scripts_dir):
         script = scripts_dir / "nexo-wake-recovery.sh"
         script.write_text(
