@@ -350,6 +350,12 @@ CORE_HOOK_SPECS = [
         "script": "protocol-pretool-guardrail.sh",
     },
     {
+        "event": "UserPromptSubmit",
+        "identity": "heartbeat-user-msg.sh",
+        "timeout": 3,
+        "script": "heartbeat-user-msg.sh",
+    },
+    {
         "event": "PostToolUse",
         "identity": "capture-tool-logs.sh",
         "timeout": 5,
@@ -372,6 +378,12 @@ CORE_HOOK_SPECS = [
         "identity": "protocol-guardrail.sh",
         "timeout": 5,
         "script": "protocol-guardrail.sh",
+    },
+    {
+        "event": "PostToolUse",
+        "identity": "heartbeat-posttool.sh",
+        "timeout": 3,
+        "script": "heartbeat-posttool.sh",
     },
     {
         "event": "PreCompact",

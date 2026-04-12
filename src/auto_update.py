@@ -359,6 +359,10 @@ def _cleanup_retired_runtime_files():
     """Remove retired core files that should not survive updates."""
     retired = [
         NEXO_HOME / "scripts" / "nexo-day-orchestrator.sh",
+        NEXO_HOME / "scripts" / "heartbeat-enforcement.py",
+        NEXO_HOME / "scripts" / "heartbeat-posttool.sh",
+        NEXO_HOME / "scripts" / "heartbeat-user-msg.sh",
+        NEXO_HOME / "hooks" / "heartbeat-guard.sh",
     ]
     for target in retired:
         try:

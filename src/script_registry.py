@@ -44,6 +44,14 @@ _LEGACY_WAKE_RECOVERY_METADATA = [
     "# nexo: run_on_boot=true",
 ]
 
+_LEGACY_CORE_RUNTIME_FILES = {
+    "capture-tool-logs.sh",
+    "daily-briefing-check.sh",
+    "heartbeat-enforcement.py",
+    "heartbeat-posttool.sh",
+    "heartbeat-user-msg.sh",
+}
+
 # Forbidden patterns — direct DB access from personal scripts
 _FORBIDDEN_PATTERNS = [
     re.compile(r"\bsqlite3\b"),
@@ -119,7 +127,7 @@ def _apply_legacy_personal_script_backfills() -> None:
 
 
 def load_core_script_names() -> set[str]:
-    """Load script names from crons/manifest.json (these are core, not personal)."""
+    """Load runtime-managed script names (core, not personal)."""
     names: set[str] = set()
     for manifest_path in [NEXO_CODE / "crons" / "manifest.json", NEXO_HOME / "crons" / "manifest.json"]:
         if manifest_path.exists():
@@ -132,6 +140,26 @@ def load_core_script_names() -> set[str]:
                 break
             except Exception:
                 continue
+    runtime_manifest = NEXO_HOME / "config" / "runtime-core-artifacts.json"
+    if runtime_manifest.exists():
+        try:
+            data = json.loads(runtime_manifest.read_text())
+            for key in ("script_names", "hook_names"):
+                for name in data.get(key, []):
+                    clean = Path(str(name)).name
+                    if clean:
+                        names.add(clean)
+        except Exception:
+            pass
+    hooks_dir = NEXO_HOME / "hooks"
+    if hooks_dir.is_dir():
+        try:
+            for item in hooks_dir.iterdir():
+                if item.is_file():
+                    names.add(item.name)
+        except Exception:
+            pass
+    names.update(_LEGACY_CORE_RUNTIME_FILES)
     return names
 
 

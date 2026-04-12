@@ -1,5 +1,28 @@
 # Changelog
 
+## [5.3.2] - 2026-04-12
+
+### Runtime boundary hardening — core vs personal scripts
+
+- **fix(personal-scripts):** packaged installs now persist a runtime
+  core-artifacts manifest, and the personal script registry uses it to
+  classify packaged core scripts and hook shims as core instead of mixing
+  them into the personal bucket.
+- **fix(heartbeat-hooks):** Claude Code heartbeat hooks are now shipped as
+  core hooks, not ad-hoc personal runtime scripts. `nexo update` rewrites
+  managed client configs to the core hook paths and removes retired legacy
+  heartbeat files from `NEXO_HOME/scripts/`.
+- **fix(update):** packaged and source-based update flows now refresh the
+  runtime core-artifacts manifest during sync, so future updates keep the
+  core/personal boundary stable instead of relying on filename guesses.
+- **fix(templates):** removed the stale `com.nexo.github-monitor.plist`
+  template that referenced a non-packaged script, avoiding another false
+  signal that operator-specific maintenance automation was core product
+  surface.
+- **tests:** added regression coverage for runtime core-artifacts manifests,
+  packaged-update cleanup of retired heartbeat files, and the new
+  classification rules.
+
 ## [5.3.1] - 2026-04-12
 
 ### Packaged runtime normalization — clean `nexo update` path

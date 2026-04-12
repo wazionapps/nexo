@@ -73,3 +73,49 @@ def test_sync_packaged_clients_normalizes_preferences_and_targets_runtime_home(t
     updated_schedule = json.loads(schedule_path.read_text())
     assert "interactive_clients" in updated_schedule
     assert "automation_enabled" in updated_schedule
+
+
+def test_refresh_installed_manifest_writes_runtime_core_artifacts(tmp_path, monkeypatch):
+    from plugins import update
+
+    runtime_home = tmp_path / "runtime"
+    src_dir = tmp_path / "src"
+    (src_dir / "crons").mkdir(parents=True)
+    (src_dir / "scripts").mkdir()
+    (src_dir / "hooks").mkdir()
+    (src_dir / "crons" / "manifest.json").write_text('{"crons":[]}\n')
+    (src_dir / "scripts" / "nexo-catchup.py").write_text("print('ok')\n")
+    (src_dir / "hooks" / "capture-tool-logs.sh").write_text("#!/bin/bash\necho ok\n")
+
+    monkeypatch.setattr(update, "NEXO_HOME", runtime_home)
+    monkeypatch.setattr(update, "SRC_DIR", src_dir)
+
+    update._refresh_installed_manifest()
+
+    manifest = json.loads((runtime_home / "config" / "runtime-core-artifacts.json").read_text())
+    assert manifest["script_names"] == ["nexo-catchup.py"]
+    assert manifest["hook_names"] == ["capture-tool-logs.sh"]
+    assert (runtime_home / "crons" / "manifest.json").is_file()
+
+
+def test_cleanup_retired_runtime_files_removes_legacy_heartbeat_files(tmp_path, monkeypatch):
+    from plugins import update
+
+    runtime_home = tmp_path / "runtime"
+    (runtime_home / "scripts").mkdir(parents=True)
+    (runtime_home / "hooks").mkdir()
+    legacy_files = [
+        runtime_home / "scripts" / "heartbeat-enforcement.py",
+        runtime_home / "scripts" / "heartbeat-posttool.sh",
+        runtime_home / "scripts" / "heartbeat-user-msg.sh",
+        runtime_home / "hooks" / "heartbeat-guard.sh",
+    ]
+    for path in legacy_files:
+        path.write_text("legacy\n")
+
+    monkeypatch.setattr(update, "NEXO_HOME", runtime_home)
+
+    removed = update._cleanup_retired_runtime_files()
+
+    assert len(removed) == 4
+    assert all(not path.exists() for path in legacy_files)

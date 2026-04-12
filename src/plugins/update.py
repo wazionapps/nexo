@@ -81,7 +81,7 @@ def _is_git_repo() -> bool:
 
 
 def _refresh_installed_manifest():
-    """Copy source crons/ to NEXO_HOME/crons/ so catchup & watchdog stay current."""
+    """Refresh packaged crons and persist the runtime core-artifacts manifest."""
     try:
         src_crons = SRC_DIR / "crons"
         dst_crons = NEXO_HOME / "crons"
@@ -90,8 +90,43 @@ def _refresh_installed_manifest():
             for f in src_crons.iterdir():
                 if f.is_file():
                     shutil.copy2(str(f), str(dst_crons / f.name))
+        config_dir = NEXO_HOME / "config"
+        config_dir.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "script_names": sorted(
+                f.name for f in (SRC_DIR / "scripts").iterdir()
+                if f.is_file()
+            ) if (SRC_DIR / "scripts").is_dir() else [],
+            "hook_names": sorted(
+                f.name for f in (SRC_DIR / "hooks").iterdir()
+                if f.is_file()
+            ) if (SRC_DIR / "hooks").is_dir() else [],
+        }
+        (config_dir / "runtime-core-artifacts.json").write_text(
+            json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+        )
     except Exception:
         pass
+
+
+def _cleanup_retired_runtime_files() -> list[str]:
+    removed: list[str] = []
+    retired_paths = [
+        NEXO_HOME / "scripts" / "heartbeat-enforcement.py",
+        NEXO_HOME / "scripts" / "heartbeat-posttool.sh",
+        NEXO_HOME / "scripts" / "heartbeat-user-msg.sh",
+        NEXO_HOME / "hooks" / "heartbeat-guard.sh",
+    ]
+    for path in retired_paths:
+        if not path.exists():
+            continue
+        try:
+            path.unlink()
+            removed.append(str(path))
+        except Exception:
+            continue
+    return removed
 
 
 def _read_version() -> str:
@@ -546,10 +581,12 @@ def _handle_packaged_update(progress_fn=None) -> str:
         errors.append(f"verification: {verify_err}")
 
     hook_sync_warning = None
+    retired_runtime_files: list[str] = []
     try:
         _emit_progress(progress_fn, "Refreshing installed hooks and manifests...")
         _refresh_installed_manifest()
         _sync_hooks_to_home()
+        retired_runtime_files = _cleanup_retired_runtime_files()
     except Exception as e:
         hook_sync_warning = f"{e}"
 
@@ -599,6 +636,8 @@ def _handle_packaged_update(progress_fn=None) -> str:
         lines.append("  Hooks: synced to NEXO_HOME")
     else:
         lines.append(f"  WARNING: hook sync: {hook_sync_warning}")
+    if retired_runtime_files:
+        lines.append(f"  Cleanup: removed {len(retired_runtime_files)} retired runtime file(s)")
     if not client_sync_warning:
         lines.append("  Clients: configured client targets synced")
     else:
@@ -714,9 +753,11 @@ def handle_update(remote: str = "origin", branch: str = "main", progress_fn=None
             cron_sync_result = f"Cron sync warning: {e}"
 
         # Step 9: Sync hooks to NEXO_HOME
+        retired_runtime_files: list[str] = []
         try:
             _emit_progress(progress_fn, "Syncing core Claude hooks...")
             _sync_hooks_to_home()
+            retired_runtime_files = _cleanup_retired_runtime_files()
             steps_done.append("hook-sync")
         except Exception as e:
             pass  # Non-critical, log in function
@@ -768,6 +809,8 @@ def handle_update(remote: str = "origin", branch: str = "main", progress_fn=None
             lines.append("  Crons: synced with manifest")
         if "hook-sync" in steps_done:
             lines.append("  Hooks: synced to NEXO_HOME")
+        if retired_runtime_files:
+            lines.append(f"  Cleanup: removed {len(retired_runtime_files)} retired runtime file(s)")
         if "client-sync" in steps_done:
             lines.append("  Clients: configured client targets synced")
         lines.append("")

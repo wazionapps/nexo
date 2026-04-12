@@ -50,6 +50,18 @@
         ]
       }
     ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "NEXO_HOME=\"${CLAUDE_PLUGIN_DATA}\" NEXO_CODE=\"${CLAUDE_PLUGIN_ROOT}/src\" bash \"${CLAUDE_PLUGIN_ROOT}/src/hooks/heartbeat-user-msg.sh\"",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "*",
@@ -73,6 +85,11 @@
             "type": "command",
             "command": "NEXO_HOME=\"${CLAUDE_PLUGIN_DATA}\" NEXO_CODE=\"${CLAUDE_PLUGIN_ROOT}/src\" bash \"${CLAUDE_PLUGIN_ROOT}/src/hooks/protocol-guardrail.sh\"",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "NEXO_HOME=\"${CLAUDE_PLUGIN_DATA}\" NEXO_CODE=\"${CLAUDE_PLUGIN_ROOT}/src\" bash \"${CLAUDE_PLUGIN_ROOT}/src/hooks/heartbeat-posttool.sh\"",
+            "timeout": 3
           }
         ]
       }
