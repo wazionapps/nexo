@@ -1,5 +1,17 @@
 # Changelog
 
+## [5.3.0] - 2026-04-12
+
+### `nexo uninstall` — clean separation of runtime and user data
+
+- **feat(cli):** `nexo uninstall` stops all LaunchAgents/systemd timers,
+  removes MCP server and hooks from Claude Code settings, removes
+  runtime files (server.py, plugins/, hooks/, etc.), and preserves all
+  user data (databases, brain, personal scripts, operations, logs).
+  Supports `--dry-run` to preview and `--delete-data` for full wipe.
+  Writes `.uninstalled` marker so reinstall detects existing data.
+- **docs:** Updated llms.txt and README for v5.2.1 changes.
+
 ## [5.2.1] - 2026-04-12
 
 ### Bug fixes & cortex outcome feedback loop

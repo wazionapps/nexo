@@ -25,6 +25,7 @@ Entry points:
   nexo clients sync [--json]
   nexo contributor status|on|off [--json]
   nexo doctor [--tier boot|runtime|deep|all] [--json] [--fix]
+  nexo uninstall [--dry-run] [--delete-data] [--json]
 """
 from __future__ import annotations
 
@@ -1281,6 +1282,218 @@ def _skills_compose(args):
     return 0 if result.get("ok") else 1
 
 
+def _uninstall(args):
+    """Stop all crons, remove MCP config and hooks, preserve user data."""
+    from pathlib import Path
+
+    nexo_home = Path(os.environ.get("NEXO_HOME", Path.home() / ".nexo"))
+    dry_run = args.dry_run
+    delete_data = args.delete_data
+    use_json = args.json
+    platform = sys.platform
+
+    actions: list[dict] = []
+    errors: list[str] = []
+
+    def log_action(category: str, detail: str, path: str = ""):
+        actions.append({"category": category, "detail": detail, "path": path})
+        if not use_json:
+            tag = "[DRY-RUN] " if dry_run else ""
+            print(f"  {tag}{category}: {detail}")
+
+    # ── 1. Stop and remove LaunchAgents (macOS) ──
+    if platform == "darwin":
+        la_dir = Path.home() / "Library" / "LaunchAgents"
+        if la_dir.exists():
+            uid = os.getuid()
+            for plist in sorted(la_dir.glob("com.nexo.*.plist")):
+                label = plist.stem
+                # Stop the agent
+                if not dry_run:
+                    subprocess.run(
+                        ["launchctl", "bootout", f"gui/{uid}", str(plist)],
+                        capture_output=True,
+                    )
+                log_action("stop-cron", f"launchctl bootout {label}", str(plist))
+                # Remove plist file
+                if not dry_run:
+                    plist.unlink(missing_ok=True)
+                log_action("remove-plist", label, str(plist))
+    # ── systemd (Linux) ──
+    elif platform == "linux":
+        systemd_dir = Path.home() / ".config" / "systemd" / "user"
+        if systemd_dir.exists():
+            for unit in sorted(list(systemd_dir.glob("nexo-*.timer")) + list(systemd_dir.glob("nexo-*.service"))):
+                if not dry_run:
+                    if unit.suffix == ".timer":
+                        subprocess.run(["systemctl", "--user", "stop", unit.name], capture_output=True)
+                        subprocess.run(["systemctl", "--user", "disable", unit.name], capture_output=True)
+                    unit.unlink(missing_ok=True)
+                log_action("remove-systemd", unit.name, str(unit))
+            if not dry_run:
+                subprocess.run(["systemctl", "--user", "daemon-reload"], capture_output=True)
+
+    # ── 2. Remove MCP server and hooks from Claude Code settings ──
+    claude_settings = Path.home() / ".claude" / "settings.json"
+    if claude_settings.exists():
+        try:
+            settings = json.loads(claude_settings.read_text())
+            changed = False
+
+            # Remove nexo MCP server
+            mcp = settings.get("mcpServers", {})
+            if "nexo" in mcp:
+                if not dry_run:
+                    del mcp["nexo"]
+                    changed = True
+                log_action("remove-mcp", "nexo server from settings.json", str(claude_settings))
+
+            # Remove NEXO hooks (hooks referencing NEXO_HOME)
+            hooks = settings.get("hooks", {})
+            nexo_home_str = str(nexo_home)
+            for event_name in list(hooks.keys()):
+                hook_list = hooks[event_name]
+                if isinstance(hook_list, list):
+                    original_len = len(hook_list)
+                    filtered = [
+                        h for h in hook_list
+                        if not (
+                            isinstance(h, dict)
+                            and nexo_home_str in (h.get("command", "") + " ".join(h.get("args", [])))
+                        )
+                    ]
+                    if len(filtered) < original_len:
+                        if not dry_run:
+                            hooks[event_name] = filtered
+                            changed = True
+                        removed_count = original_len - len(filtered)
+                        log_action("remove-hooks", f"{removed_count} hook(s) from {event_name}", str(claude_settings))
+                # Clean up empty hook lists
+                if isinstance(hooks.get(event_name), list) and len(hooks.get(event_name, [])) == 0:
+                    if not dry_run:
+                        del hooks[event_name]
+                        changed = True
+
+            if changed and not dry_run:
+                claude_settings.write_text(json.dumps(settings, indent=2, ensure_ascii=False))
+        except Exception as exc:
+            errors.append(f"Failed to clean settings.json: {exc}")
+
+    # ── 3. Remove Codex AGENTS.md bootstrap ──
+    codex_agents = Path.home() / "AGENTS.md"
+    if codex_agents.exists():
+        try:
+            content = codex_agents.read_text()
+            if "NEXO" in content or "nexo" in content:
+                log_action("preserve-note", "AGENTS.md contains NEXO references — remove manually if desired", str(codex_agents))
+        except Exception:
+            pass
+
+    # ── 4. Remove runtime files, PRESERVE user data ──
+    # User data directories that are NEVER deleted (unless --delete-data)
+    user_data_dirs = {"data", "brain", "operations", "coordination", "config", "logs", "backups"}
+    user_data_files = {"version.json"}  # keeps reinstall detection working
+
+    # Runtime directories that get removed
+    runtime_dirs = {"plugins", "hooks", "dashboard", "cognitive", "db", "rules", "crons", "doctor", "skills"}
+    # Runtime flat files: any .py/.txt at NEXO_HOME root is core runtime.
+    # User data always lives in subdirectories (data/, brain/, scripts/, etc.)
+    # so this is safe and doesn't need updating when new core files are added.
+    runtime_file_extensions = {".py", ".txt"}
+
+    if nexo_home.exists():
+        # Remove runtime directories
+        for d in sorted(runtime_dirs):
+            dir_path = nexo_home / d
+            if dir_path.is_dir():
+                if not dry_run:
+                    shutil.rmtree(dir_path, ignore_errors=True)
+                log_action("remove-runtime-dir", d, str(dir_path))
+
+        # Remove runtime flat files (any .py/.txt at root level)
+        for file_path in sorted(nexo_home.iterdir()):
+            if file_path.is_file() and file_path.suffix in runtime_file_extensions:
+                if not dry_run:
+                    file_path.unlink(missing_ok=True)
+                log_action("remove-runtime-file", file_path.name, str(file_path))
+
+        # Remove core scripts (nexo-*.py/sh in scripts/)
+        scripts_dir = nexo_home / "scripts"
+        if scripts_dir.is_dir():
+            for script in sorted(scripts_dir.glob("nexo-*")):
+                if script.is_file():
+                    if not dry_run:
+                        script.unlink(missing_ok=True)
+                    log_action("remove-core-script", script.name, str(script))
+            # Remove deep-sleep directory (core)
+            ds_dir = scripts_dir / "deep-sleep"
+            if ds_dir.is_dir():
+                if not dry_run:
+                    shutil.rmtree(ds_dir, ignore_errors=True)
+                log_action("remove-runtime-dir", "scripts/deep-sleep", str(ds_dir))
+
+        # List preserved user data
+        for d in sorted(user_data_dirs):
+            dir_path = nexo_home / d
+            if dir_path.is_dir():
+                if delete_data:
+                    if not dry_run:
+                        shutil.rmtree(dir_path, ignore_errors=True)
+                    log_action("DELETE-user-data", d, str(dir_path))
+                else:
+                    log_action("preserve-data", d, str(dir_path))
+
+        # Preserve personal scripts (non nexo-* files in scripts/)
+        if scripts_dir.is_dir():
+            personal = [f.name for f in scripts_dir.iterdir() if f.is_file() and not f.name.startswith("nexo-")]
+            if personal:
+                log_action("preserve-scripts", f"{len(personal)} personal script(s)", str(scripts_dir))
+
+        # Preserve templates/
+        templates_dir = nexo_home / "templates"
+        if templates_dir.is_dir():
+            log_action("preserve-data", "templates", str(templates_dir))
+
+    # ── 5. Write uninstall marker for reinstall detection ──
+    if not dry_run and nexo_home.exists():
+        marker = nexo_home / ".uninstalled"
+        marker.write_text(json.dumps({
+            "uninstalled_at": __import__("datetime").datetime.now().isoformat(),
+            "nexo_home": str(nexo_home),
+            "data_preserved": not delete_data,
+        }, indent=2))
+        log_action("write-marker", ".uninstalled marker for reinstall detection", str(marker))
+
+    # ── Summary ──
+    result = {
+        "ok": len(errors) == 0,
+        "dry_run": dry_run,
+        "nexo_home": str(nexo_home),
+        "actions": actions,
+        "errors": errors,
+        "data_preserved": not delete_data,
+    }
+
+    if use_json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    else:
+        print()
+        if dry_run:
+            print(f"  DRY RUN complete. {len(actions)} action(s) would be taken.")
+            print("  Run without --dry-run to execute.")
+        else:
+            print(f"  Uninstall complete. {len(actions)} action(s) taken.")
+            if not delete_data:
+                print(f"\n  Your data is preserved in: {nexo_home}")
+                print("  To reinstall: npm install -g nexo-brain && nexo-brain")
+            if errors:
+                print(f"\n  {len(errors)} error(s):")
+                for e in errors:
+                    print(f"    - {e}")
+
+    return 1 if errors else 0
+
+
 def _print_help():
     v = _get_version()
     print(f"""NEXO Runtime CLI v{v}
@@ -1293,6 +1506,7 @@ Commands:
   nexo skills list|apply|sync|approve                  Executable skills
   nexo clients sync                                    Sync Claude/Codex shared-brain configs and bootstrap files
   nexo update                                          Update installed runtime
+  nexo uninstall [--dry-run] [--delete-data]            Stop crons, remove runtime (keeps data)
   nexo contributor status|on|off                       Public Draft PR contribution mode
   nexo dashboard on|off|status                         Web dashboard control
 
@@ -1477,6 +1691,12 @@ def main():
     skills_compose_p.add_argument("--trigger-patterns", default="[]", help="JSON array or comma-separated trigger patterns")
     skills_compose_p.add_argument("--json", action="store_true", help="JSON output")
 
+    # -- uninstall --
+    uninstall_parser = sub.add_parser("uninstall", help="Stop all crons, remove runtime, keep user data")
+    uninstall_parser.add_argument("--dry-run", action="store_true", help="Show what would be done without doing it")
+    uninstall_parser.add_argument("--delete-data", action="store_true", help="Also delete databases and user data (DESTRUCTIVE)")
+    uninstall_parser.add_argument("--json", action="store_true", help="JSON output")
+
     # -- dashboard --
     dashboard_parser = sub.add_parser("dashboard", help="Web dashboard control")
     dashboard_parser.add_argument("action", choices=["on", "off", "status"], help="Start, stop, or check dashboard")
@@ -1566,6 +1786,8 @@ def main():
         else:
             skills_parser.print_help()
             return 0
+    elif args.command == "uninstall":
+        return _uninstall(args)
     elif args.command == "dashboard":
         return _dashboard(args)
     else:
