@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 REPO_SRC = REPO_ROOT / "src"
@@ -119,3 +120,88 @@ def test_cleanup_retired_runtime_files_removes_legacy_heartbeat_files(tmp_path, 
 
     assert len(removed) == 4
     assert all(not path.exists() for path in legacy_files)
+
+
+def test_sync_hooks_to_home_skips_samefile_when_packaged_runtime_is_source(tmp_path, monkeypatch):
+    from plugins import update
+
+    runtime_home = tmp_path / "runtime"
+    hooks_dir = runtime_home / "hooks"
+    hooks_dir.mkdir(parents=True)
+    hook = hooks_dir / "session-stop.sh"
+    hook.write_text("#!/bin/bash\nexit 0\n")
+
+    monkeypatch.setattr(update, "NEXO_HOME", runtime_home)
+    monkeypatch.setattr(update, "SRC_DIR", runtime_home)
+
+    update._sync_hooks_to_home()
+
+    assert hook.read_text() == "#!/bin/bash\nexit 0\n"
+
+
+def test_sync_packaged_crons_runs_runtime_sync_script(tmp_path, monkeypatch):
+    from plugins import update
+
+    runtime_home = tmp_path / "runtime"
+    sync_path = runtime_home / "crons" / "sync.py"
+    sync_path.parent.mkdir(parents=True)
+    sync_path.write_text("print('ok')\n")
+
+    captured = {}
+
+    def fake_run(args, **kwargs):
+        captured["args"] = args
+        captured["cwd"] = kwargs.get("cwd")
+        captured["env"] = kwargs.get("env", {})
+        return mock.Mock(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(update, "NEXO_HOME", runtime_home)
+    monkeypatch.setattr(update, "SRC_DIR", runtime_home)
+    monkeypatch.setattr(update.subprocess, "run", fake_run)
+
+    ok, err = update._sync_packaged_crons()
+
+    assert ok is True
+    assert err is None
+    assert captured["args"] == [sys.executable, str(sync_path)]
+    assert captured["cwd"] == str(runtime_home)
+    assert captured["env"]["NEXO_HOME"] == str(runtime_home)
+    assert captured["env"]["NEXO_CODE"] == str(runtime_home)
+
+
+def test_handle_packaged_update_reloads_launchagents_after_successful_bump(monkeypatch):
+    from plugins import update
+
+    versions = iter(["5.3.6", "5.3.7"])
+
+    monkeypatch.setattr(update, "_read_version", lambda: next(versions))
+    monkeypatch.setattr(update, "_backup_databases", lambda: ("backup-dir", None))
+    monkeypatch.setattr(update, "_backup_code_tree", lambda: ("code-backup", None))
+    monkeypatch.setattr(update, "_reinstall_pip_deps", lambda: None)
+    monkeypatch.setattr(update, "_run_migrations", lambda: None)
+    monkeypatch.setattr(update, "_verify_import", lambda: None)
+    monkeypatch.setattr(update, "_sync_packaged_crons", lambda progress_fn=None: (True, None))
+    monkeypatch.setattr(update, "_sync_hooks_to_home", lambda: None)
+    monkeypatch.setattr(update, "_cleanup_retired_runtime_files", lambda: [])
+    monkeypatch.setattr(update, "_sync_packaged_clients", lambda: (True, None))
+    monkeypatch.setattr(
+        update,
+        "_reload_launch_agents_after_bump",
+        lambda: {"scanned": 3, "reloaded": 3, "errors": []},
+    )
+
+    def fake_run(args, **kwargs):
+        if args == ["npm", "update", "-g", "nexo-brain"]:
+            return mock.Mock(returncode=0, stdout="", stderr="")
+        raise AssertionError(f"unexpected subprocess call: {args}")
+
+    monkeypatch.setattr(update.subprocess, "run", fake_run)
+
+    result = update._handle_packaged_update()
+
+    assert "UPDATE SUCCESSFUL (packaged install)" in result
+    assert "Version: 5.3.6 -> 5.3.7" in result
+    assert "Crons: synced with manifest" in result
+    assert "Hooks: synced to NEXO_HOME" in result
+    assert "Clients: configured client targets synced" in result
+    assert "LaunchAgents: reloaded 3/3" in result

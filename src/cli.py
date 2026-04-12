@@ -3,6 +3,8 @@
 
 Entry points:
   nexo chat [PATH]
+  nexo export [PATH] [--json]
+  nexo import PATH [--json]
   nexo scripts list [--all] [--json]
   nexo scripts create NAME [--runtime python|shell] [--description TEXT]
   nexo scripts classify [--json]
@@ -556,6 +558,43 @@ def _scripts_doctor(args):
         return 1 if any_fail else 0
 
     return 0
+
+
+def _export_bundle(args):
+    from user_data_portability import export_user_bundle
+
+    result = export_user_bundle(args.path or "")
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    else:
+        if not result.get("ok"):
+            print(result.get("error", "Export failed"), file=sys.stderr)
+            return 1
+        sections = result.get("sections", {})
+        script_count = sections.get("personal_scripts", {}).get("files", 0)
+        print(f"User data export written to {result['path']}")
+        print(f"  Personal scripts: {script_count}")
+        print(f"  Sections: {', '.join(sorted(sections))}")
+    return 0 if result.get("ok") else 1
+
+
+def _import_bundle(args):
+    from user_data_portability import import_user_bundle
+
+    result = import_user_bundle(args.path)
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    else:
+        if not result.get("ok"):
+            print(result.get("error", "Import failed"), file=sys.stderr)
+            return 1
+        restored = result.get("restored", {})
+        script_count = restored.get("personal_scripts", {}).get("files", 0)
+        print(f"User data imported from {result['path']}")
+        print(f"  Safety backup: {result['safety_backup']}")
+        print(f"  Personal scripts restored: {script_count}")
+        print(f"  Sections: {', '.join(sorted(restored))}")
+    return 0 if result.get("ok") else 1
 
 
 def _runtime_python_candidates() -> list[str]:
@@ -1588,6 +1627,8 @@ def _print_help():
 
 Commands:
   nexo chat [path] [--client claude_code|codex]      Launch a NEXO terminal client
+  nexo export [path]                                 Export a portable user-data bundle
+  nexo import PATH                                   Import a portable user-data bundle
   nexo doctor [--tier boot|runtime|deep|all] [--fix]   System diagnostics
   nexo scripts list|create|classify|sync|reconcile|ensure-schedules|schedules|run|doctor|call|unschedule|remove
                                                       Personal scripts
@@ -1617,6 +1658,16 @@ def main():
         choices=["claude_code", "codex"],
         help="Override the chat picker and launch a specific terminal client",
     )
+
+    # -- export --
+    export_parser = sub.add_parser("export", help="Export a portable user-data bundle")
+    export_parser.add_argument("path", nargs="?", default="", help="Output bundle path (default: NEXO_HOME/exports/...)")
+    export_parser.add_argument("--json", action="store_true", help="JSON output")
+
+    # -- import --
+    import_parser = sub.add_parser("import", help="Import a portable user-data bundle")
+    import_parser.add_argument("path", help="Bundle path created by `nexo export`")
+    import_parser.add_argument("--json", action="store_true", help="JSON output")
 
     # -- scripts --
     scripts_parser = sub.add_parser("scripts", help="Manage personal scripts")
@@ -1828,6 +1879,10 @@ def main():
             return 0
     elif args.command == "chat":
         return _chat(args)
+    elif args.command == "export":
+        return _export_bundle(args)
+    elif args.command == "import":
+        return _import_bundle(args)
     elif args.command == "update":
         return _update(args)
     elif args.command == "clients":

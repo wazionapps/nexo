@@ -1,5 +1,24 @@
 # Changelog
 
+## [5.3.7] - 2026-04-12
+
+### Packaged update self-heal + portable user-data export/import
+
+- `nexo update` on packaged installs now syncs cron definitions, skips
+  same-file hook copy noise, and reloads managed macOS LaunchAgents after a
+  real version bump so the normal happy path no longer depends on immediately
+  running `nexo doctor --tier runtime --fix`.
+- `nexo doctor` now separates active runtime breakage from tracked historical
+  Codex drift more honestly: conditioned-file transcript drift no longer keeps
+  packaged runtimes red once no conditioned protocol debt remains open, while
+  the evidence still stays visible for auditability.
+- Added `nexo export` and `nexo import` for portable user-data bundles covering
+  the active DB, brain state, coordination artifacts, selected config, and
+  personal scripts, with an automatic safety backup before import restore.
+- Added regression coverage for the new export/import CLI flow and for packaged
+  update cron/LaunchAgent self-heal behavior, plus the new doctor severity
+  contract for tracked conditioned-file drift.
+
 ## [5.3.6] - 2026-04-12
 
 ### Claude MCP bootstrap + runtime hygiene hardening

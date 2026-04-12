@@ -1,0 +1,72 @@
+{
+  "release_line": "v5.3",
+  "target_version": "5.3.7",
+  "scope_owner": "NEXO",
+  "distribution": {
+    "git_updates_on": "merge_to_main",
+    "packaged_release_on": "tag_publish"
+  },
+  "required_repo_files": [
+    "package.json",
+    "CHANGELOG.md",
+    "README.md",
+    "llms.txt",
+    "scripts/sync_release_artifacts.py",
+    "scripts/verify_release_readiness.py",
+    "release-contracts/v5.3.7.json",
+    ".claude-plugin/plugin.json",
+    "clawhub-skill/SKILL.md",
+    "openclaw-plugin/package.json",
+    "openclaw-plugin/src/mcp-bridge.ts",
+    "src/cli.py",
+    "src/doctor/providers/runtime.py",
+    "src/plugins/update.py",
+    "src/user_data_portability.py",
+    "tests/test_cli_scripts.py",
+    "tests/test_doctor.py",
+    "tests/test_packaged_update_runtime.py"
+  ],
+  "required_website_files": [
+    "index.html",
+    "features/index.html",
+    "blog/index.html",
+    "blog/nexo-5-3-7-packaged-update-self-heal-and-portable-user-data/index.html",
+    "changelog/index.html",
+    "llms.txt",
+    ".well-known/llms.txt",
+    "sitemap.xml"
+  ],
+  "gates": [
+    {
+      "id": "packaged_update_self_heal",
+      "title": "Packaged update leaves the runtime ready without an immediate doctor repair step",
+      "status": "complete",
+      "evidence_required": [
+        "Packaged update syncs runtime cron definitions after npm bump",
+        "Packaged update reloads managed macOS LaunchAgents after a real version change",
+        "Same-file hook sync noise no longer pollutes the packaged update path",
+        "Runtime doctor no longer keeps cleaned packaged installs red just because recent Codex transcript drift is already tracked with zero open conditioned debt"
+      ]
+    },
+    {
+      "id": "portable_user_data_bundle",
+      "title": "Operators can export and import their active data safely from the CLI",
+      "status": "complete",
+      "evidence_required": [
+        "nexo export writes a portable bundle with active DB, brain state, selected config, and personal scripts",
+        "nexo import restores that bundle into a clean runtime and creates a safety backup first",
+        "Regression tests cover the export/import CLI path end to end"
+      ]
+    },
+    {
+      "id": "public_surface_alignment",
+      "title": "Package, docs, plugin artifacts, and website tell the same v5.3.7 story",
+      "status": "complete",
+      "evidence_required": [
+        "Root package and integration artifacts all point to 5.3.7",
+        "README, changelog, llms, and release contract mention the packaged update self-heal and portable bundle commands",
+        "Website home/blog/changelog/llms are updated to 5.3.7"
+      ]
+    }
+  ]
+}

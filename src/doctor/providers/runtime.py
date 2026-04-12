@@ -2157,10 +2157,8 @@ def check_codex_conditioned_file_discipline() -> DoctorCheck:
         and audit["delete_without_protocol"] == 0
         and audit["delete_without_guard_ack"] == 0
     )
-    historical_write_drift = (
+    tracked_write_without_open_debt = (
         no_open_conditioned_debt
-        and audit.get("latest_violation_age_seconds") is not None
-        and float(audit["latest_violation_age_seconds"]) >= 172800
         and audit["write_without_protocol"] > 0
         and audit["write_without_guard_ack"] == 0
         and audit["delete_without_protocol"] == 0
@@ -2168,7 +2166,7 @@ def check_codex_conditioned_file_discipline() -> DoctorCheck:
     )
 
     if audit["write_without_protocol"] or audit["write_without_guard_ack"]:
-        if historical_write_drift:
+        if tracked_write_without_open_debt:
             status = "healthy"
             severity = "info"
         else:
@@ -2191,7 +2189,9 @@ def check_codex_conditioned_file_discipline() -> DoctorCheck:
         severity=severity,
         summary=(
             "Historical Codex conditioned-file drift has no open protocol debt"
-            if historical_read_only or historical_write_drift
+            if historical_read_only
+            else "Tracked Codex conditioned-file drift has no open protocol debt"
+            if tracked_write_without_open_debt
             else "Recent Codex sessions respect conditioned-file discipline"
             if status == "healthy"
             else "Recent Codex sessions are bypassing conditioned-file discipline"
