@@ -87,7 +87,7 @@ Versions `3.1.7` through `3.2.0` close the recent-memory gap:
 - when even that misses, NEXO now exposes raw transcript fallback tools for Claude Code and Codex session stores
 - NEXO can now inspect itself through a live system catalog derived from canonical sources instead of relying only on stale docs or operator memory
 
-Version `5.3.2` hardens the packaged runtime boundary: NEXO now persists which runtime scripts/hooks are core product artifacts, `nexo scripts` no longer mixes those into the personal bucket, and `nexo update` migrates the legacy Claude Code heartbeat wrappers into managed core hooks.
+Version `5.3.3` closes the remaining packaged-runtime doctor mismatch: the built-in hourly backup helper is now inventoried as a core LaunchAgent, so clean installs no longer get a false unknown-LaunchAgent warning. Version `5.3.2` already hardened the runtime boundary by persisting which runtime scripts/hooks are core product artifacts, keeping `nexo scripts` from mixing those into the personal bucket, and migrating the legacy Claude Code heartbeat wrappers into managed core hooks.
 
 Version `5.3.1` normalizes packaged npm installs so they behave like packaged npm installs: `nexo update` now keeps the runtime anchored to `~/.nexo`, refreshes packaged bootstrap/client artifacts after upgrade, avoids repo-only release-artifact drift in installed runtimes, and keeps personal scripts on the canonical packaged path.
 
