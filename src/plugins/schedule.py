@@ -1,5 +1,6 @@
 """NEXO Schedule — Cron execution history, status, and management tools."""
 
+from datetime import datetime, timezone
 import json
 import os
 import platform
@@ -34,7 +35,13 @@ def handle_schedule_status(hours: int = 24, cron_id: str = '') -> str:
         schedule_meta = get_personal_script_schedule(cron_id) or {}
         lines = [f"CRON RUNS — {cron_id} (last {hours}h): {len(runs)} executions"]
         for r in runs:
-            status, detail = _run_status_marker(r.get("exit_code"), r.get("summary"), schedule_meta=schedule_meta)
+            status, detail = _run_status_marker(
+                r.get("exit_code"),
+                r.get("summary"),
+                schedule_meta=schedule_meta,
+                started_at=r.get("started_at"),
+                ended_at=r.get("ended_at"),
+            )
             if schedule_meta.get("schedule_type") == "keep_alive" and r.get("exit_code") is None:
                 dur = "daemon active"
             else:
@@ -53,11 +60,20 @@ def handle_schedule_status(hours: int = 24, cron_id: str = '') -> str:
     lines = [f"CRON STATUS (last {hours}h):"]
     for s in summary:
         schedule_meta = get_personal_script_schedule(s["cron_id"]) or {}
-        status, detail = _run_status_marker(s.get("last_exit_code"), s.get("last_summary"), schedule_meta=schedule_meta)
+        status, detail = _run_status_marker(
+            s.get("last_exit_code"),
+            s.get("last_summary"),
+            schedule_meta=schedule_meta,
+            started_at=s.get("last_run"),
+            ended_at=s.get("last_ended_at"),
+        )
         if schedule_meta.get("schedule_type") == "keep_alive" and s.get("last_exit_code") is None:
             rate = "daemon active"
         else:
-            rate = f"{s['succeeded']}/{s['total_runs']}"
+            completed_runs = s.get("completed_runs")
+            if completed_runs is None:
+                completed_runs = s["total_runs"]
+            rate = f"{s['succeeded']}/{completed_runs}"
         dur = f"{s['avg_duration']:.0f}s avg" if s.get("avg_duration") else ""
         summary_txt = f" — {s['last_summary'][:80]}" if s.get("last_summary") else ""
         suffix = f" [{detail}]" if detail else ""
@@ -87,16 +103,78 @@ def _summary_has_warning(summary: str = "") -> bool:
     return any(token in lowered for token in warning_tokens)
 
 
-def _run_status_marker(exit_code, summary: str = "", *, schedule_meta: dict | None = None) -> tuple[str, str]:
+def _now_utc() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _parse_db_timestamp(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        return datetime.strptime(text[:19], "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+    except ValueError:
+        pass
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _format_age(seconds: float) -> str:
+    if seconds < 60:
+        return "<1m"
+    if seconds < 3600:
+        return f"{int(round(seconds / 60))}m"
+    return f"{seconds / 3600:.1f}h"
+
+
+def _open_run_stale_after(schedule_meta: dict | None = None) -> int:
+    schedule_meta = schedule_meta or {}
+    if schedule_meta.get("schedule_type") == "interval":
+        try:
+            interval = int(schedule_meta.get("interval_seconds") or schedule_meta.get("schedule_value") or 0)
+        except (TypeError, ValueError):
+            interval = 0
+        if interval > 0:
+            return max(300, interval * 2)
+    if schedule_meta.get("schedule_type") == "calendar":
+        return 3600
+    return 1800
+
+
+def _open_run_marker(started_at: str | None, *, schedule_meta: dict | None = None) -> tuple[str, str]:
+    started = _parse_db_timestamp(started_at)
+    if started is None:
+        return "⚠", "open run"
+    age_secs = max(0.0, (_now_utc() - started).total_seconds())
+    if age_secs <= _open_run_stale_after(schedule_meta):
+        return "⏳", f"running {_format_age(age_secs)}"
+    return "⚠", f"open run {_format_age(age_secs)}"
+
+
+def _run_status_marker(
+    exit_code,
+    summary: str = "",
+    *,
+    schedule_meta: dict | None = None,
+    started_at: str | None = None,
+    ended_at: str | None = None,
+) -> tuple[str, str]:
     schedule_meta = schedule_meta or {}
     if schedule_meta.get("schedule_type") == "keep_alive" and exit_code is None:
         return "🟢", "keep_alive daemon active"
+    if exit_code is None:
+        return _open_run_marker(started_at, schedule_meta=schedule_meta)
     if exit_code == 0 and _summary_has_warning(summary):
         return "⚠", "exit 0 with warnings"
     if exit_code == 0:
         return "✅", "exit 0"
-    if exit_code is None:
-        return "❌", "missing exit code"
     return "❌", f"exit {exit_code}"
 
 

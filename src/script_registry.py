@@ -93,6 +93,12 @@ SUPPORTED_RUNTIMES = {"python", "shell", "node", "php", "unknown"}
 PERSONAL_SCHEDULE_MANAGED_ENV = "NEXO_MANAGED_PERSONAL_CRON"
 SUPPORTED_RECOVERY_POLICIES = {"none", "run_once_on_wake", "catchup", "restart", "restart_daemon"}
 PERSONAL_SCRIPT_FILENAME_PREFIX = "ps-"
+_LEGACY_CORE_SCRIPT_ALIASES = {
+    "nexo-postcompact.sh": "post-compact.sh",
+    "nexo-memory-precompact.sh": "pre-compact.sh",
+    "nexo-memory-stop.sh": "session-stop.sh",
+    "nexo-session-briefing.sh": "session-start.sh",
+}
 
 
 def get_nexo_home() -> Path:
@@ -130,8 +136,33 @@ def _apply_legacy_personal_script_backfills() -> None:
     wake_recovery.write_text("".join(head + lines[start:]))
 
 
+def _add_runtime_artifact_names(names: set[str], artifact_path: Path) -> None:
+    try:
+        data = json.loads(artifact_path.read_text())
+    except Exception:
+        return
+    for key in ("script_names", "hook_names"):
+        for item in data.get(key, []):
+            if isinstance(item, str) and item.strip():
+                names.add(Path(item).name)
+
+
+def _add_filenames_from_dir(names: set[str], directory: Path, *, skip_if_scripts_dir: bool = False) -> None:
+    if not directory.is_dir():
+        return
+    if skip_if_scripts_dir:
+        try:
+            if directory.resolve() == get_scripts_dir().resolve():
+                return
+        except Exception:
+            pass
+    for item in directory.iterdir():
+        if item.is_file() and not item.name.startswith("."):
+            names.add(item.name)
+
+
 def load_core_script_names() -> set[str]:
-    """Load runtime-managed script names (core, not personal)."""
+    """Load every core-managed runtime artifact name that must never be treated as personal."""
     names: set[str] = set()
     for manifest_path in [NEXO_CODE / "crons" / "manifest.json", NEXO_HOME / "crons" / "manifest.json"]:
         if manifest_path.exists():
@@ -144,25 +175,22 @@ def load_core_script_names() -> set[str]:
                 break
             except Exception:
                 continue
-    runtime_manifest = NEXO_HOME / "config" / "runtime-core-artifacts.json"
-    if runtime_manifest.exists():
-        try:
-            data = json.loads(runtime_manifest.read_text())
-            for key in ("script_names", "hook_names"):
-                for name in data.get(key, []):
-                    clean = Path(str(name)).name
-                    if clean:
-                        names.add(clean)
-        except Exception:
-            pass
-    hooks_dir = NEXO_HOME / "hooks"
-    if hooks_dir.is_dir():
-        try:
-            for item in hooks_dir.iterdir():
-                if item.is_file():
-                    names.add(item.name)
-        except Exception:
-            pass
+
+    for artifact_path in (
+        NEXO_HOME / "config" / "runtime-core-artifacts.json",
+        NEXO_CODE / "config" / "runtime-core-artifacts.json",
+        NEXO_CODE.parent / "config" / "runtime-core-artifacts.json",
+    ):
+        if artifact_path.exists():
+            _add_runtime_artifact_names(names, artifact_path)
+
+    _add_filenames_from_dir(names, NEXO_HOME / "hooks")
+    _add_filenames_from_dir(names, NEXO_CODE / "hooks")
+    _add_filenames_from_dir(names, NEXO_CODE / "scripts", skip_if_scripts_dir=True)
+
+    for legacy_name, canonical_name in _LEGACY_CORE_SCRIPT_ALIASES.items():
+        if canonical_name in names:
+            names.add(legacy_name)
     names.update(_LEGACY_CORE_RUNTIME_FILES)
     return names
 

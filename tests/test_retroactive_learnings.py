@@ -218,6 +218,52 @@ class TestApplyLearningRetroactively:
         assert match["breakdown"]["keyword_score"] > 0.0
         assert match["breakdown"]["applies_to_score"] == 0.0
 
+    def test_ignores_keyword_only_match_when_learning_has_applies_to_but_no_hits(self, isolated_db):
+        db, retroactive_learnings, _ = _reload_modules()
+
+        learning_id = _seed_learning(
+            db,
+            title="Translate technical jargon before replying",
+            content="Avoid raw protocol jargon in operator-facing answers",
+            prevention="Always translate protocol jargon before replying to Francisco",
+            applies_to="francisco-briefing,email-digest",
+        )
+        _seed_decision(
+            db,
+            domain="operations",
+            decision="Reply with direct recommendation before extra explanation",
+            based_on="Operator protocol recommends short direct replies",
+            alternatives="Longer technical explanation with protocol details",
+        )
+
+        result = retroactive_learnings.apply_learning_retroactively(
+            learning_id, lookback_days=30, min_score=0.1
+        )
+
+        assert result["scanned"] == 1
+        assert result["matched"] == 0
+        assert result["followups_created"] == 0
+
+        score, breakdown = retroactive_learnings._score_match(
+            learning_keywords=retroactive_learnings._significant_tokens(
+                "Translate technical jargon before replying "
+                "Avoid raw protocol jargon in operator-facing answers "
+                "Always translate protocol jargon before replying to Francisco"
+            ),
+            learning_applies_to=retroactive_learnings._split_applies_to("francisco-briefing,email-digest"),
+            decision_row={
+                "domain": "operations",
+                "decision": "Reply with direct recommendation before extra explanation",
+                "based_on": "Operator protocol recommends short direct replies",
+                "alternatives": "Longer technical explanation with protocol details",
+                "context_ref": "",
+            },
+        )
+        assert score == 0.0
+        assert breakdown["keyword_score"] > 0.0
+        assert breakdown["applies_to_score"] == 0.0
+        assert breakdown["gated_by_applies_to"] is True
+
     def test_caps_at_max_matches(self, isolated_db):
         db, retroactive_learnings, _ = _reload_modules()
 
