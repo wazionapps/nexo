@@ -1,5 +1,17 @@
 # Changelog
 
+## [5.2.1] - 2026-04-12
+
+### Bug fixes & cortex outcome feedback loop
+
+- **fix(deep-sleep):** `_parse_any_datetime` in `apply_findings.py` now
+  explicitly strips timezone info, fixing TypeError when comparing
+  offset-naive and offset-aware datetimes (caused 7/8 Phase 4 failures).
+- **feat(cortex):** `cortex_decide()` auto-creates a `decision_outcome`
+  when no existing outcome is linked, closing the decision → verification
+  feedback loop. The daily `outcome-checker` cron verifies these
+  automatically.
+
 ## [5.2.0] - 2026-04-12
 
 ### Response contract i18n & scoring — cortex-quality snapshot reader
