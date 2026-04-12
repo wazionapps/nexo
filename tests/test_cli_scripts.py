@@ -1,8 +1,10 @@
 """Tests for the CLI scripts commands — list, run, doctor, call."""
 import json
 import os
+import sqlite3
 import subprocess
 import sys
+import tarfile
 from pathlib import Path
 
 import pytest
@@ -12,17 +14,20 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 CLI_PY = os.path.join(os.path.dirname(__file__), "..", "src", "cli.py")
 
 
+def _make_nexo_home(home: Path) -> Path:
+    scripts = home / "scripts"
+    scripts.mkdir(parents=True)
+    for dirname in ["data", "plugins", "hooks", "coordination", "operations", "logs", "config"]:
+        (home / dirname).mkdir(exist_ok=True)
+    (home / "crons").mkdir(exist_ok=True)
+    (home / "crons" / "manifest.json").write_text('{"crons":[]}')
+    return home
+
+
 @pytest.fixture
 def nexo_home(tmp_path):
     """Create a temp NEXO_HOME with scripts/."""
-    home = tmp_path / "nexo"
-    scripts = home / "scripts"
-    scripts.mkdir(parents=True)
-    for dirname in ["data", "plugins", "hooks", "coordination", "operations", "logs"]:
-        (home / dirname).mkdir()
-    (home / "crons").mkdir()
-    (home / "crons" / "manifest.json").write_text('{"crons":[]}')
-    return home
+    return _make_nexo_home(tmp_path / "nexo")
 
 
 def _run_cli(nexo_home, *args, timeout=10):
@@ -479,6 +484,82 @@ class TestRuntimeUpdate:
         assert data["packaged"] is True
         assert data["repo_dir"] == str(runtime_home)
         assert data["version"] == "2.6.0"
+
+
+class TestUserDataPortability:
+    def test_export_writes_portable_user_data_bundle(self, nexo_home):
+        conn = sqlite3.connect(nexo_home / "data" / "nexo.db")
+        conn.execute("CREATE TABLE IF NOT EXISTS marker (value TEXT)")
+        conn.execute("INSERT INTO marker(value) VALUES ('exported')")
+        conn.commit()
+        conn.close()
+
+        (nexo_home / "brain").mkdir()
+        (nexo_home / "brain" / "session.txt").write_text("keep this\n")
+        (nexo_home / "config" / "schedule.json").write_text(json.dumps({"timezone": "UTC"}))
+        (nexo_home / "config" / "runtime-core-artifacts.json").write_text(json.dumps({
+            "script_names": ["core-tool.sh"],
+            "hook_names": [],
+        }))
+        (nexo_home / "scripts" / "daily-report.py").write_text("# nexo: name=daily-report\nprint('ok')\n")
+        (nexo_home / "scripts" / "core-tool.sh").write_text("#!/bin/sh\nexit 0\n")
+
+        bundle_path = nexo_home / "exports" / "user-data.tar.gz"
+        result = _run_cli(nexo_home, "export", str(bundle_path), "--json")
+
+        assert result.returncode == 0, result.stderr
+        payload = json.loads(result.stdout)
+        assert payload["ok"] is True
+        assert bundle_path.is_file()
+
+        with tarfile.open(bundle_path, "r:gz") as archive:
+            names = set(archive.getnames())
+
+        assert "bundle/manifest.json" in names
+        assert "bundle/data/nexo.db" in names
+        assert "bundle/brain/session.txt" in names
+        assert "bundle/config/schedule.json" in names
+        assert "bundle/personal-scripts/daily-report.py" in names
+        assert "bundle/personal-scripts/core-tool.sh" not in names
+
+    def test_import_restores_portable_user_data_bundle(self, tmp_path):
+        source_home = _make_nexo_home(tmp_path / "source")
+        source_conn = sqlite3.connect(source_home / "data" / "nexo.db")
+        source_conn.execute("CREATE TABLE IF NOT EXISTS marker (value TEXT)")
+        source_conn.execute("INSERT INTO marker(value) VALUES ('source-state')")
+        source_conn.commit()
+        source_conn.close()
+
+        (source_home / "brain").mkdir()
+        (source_home / "brain" / "session.txt").write_text("resume me\n")
+        (source_home / "config" / "schedule.json").write_text(json.dumps({"timezone": "Europe/Madrid"}))
+        (source_home / "config" / "runtime-core-artifacts.json").write_text(json.dumps({
+            "script_names": [],
+            "hook_names": [],
+        }))
+        (source_home / "scripts" / "daily-report.py").write_text("# nexo: name=daily-report\nprint('ok')\n")
+
+        bundle_path = tmp_path / "portable-user-data.tar.gz"
+        export_result = _run_cli(source_home, "export", str(bundle_path), "--json")
+        assert export_result.returncode == 0, export_result.stderr
+
+        target_home = _make_nexo_home(tmp_path / "target")
+        (target_home / "config" / "schedule.json").write_text(json.dumps({"timezone": "UTC"}))
+
+        import_result = _run_cli(target_home, "import", str(bundle_path), "--json", timeout=20)
+
+        assert import_result.returncode == 0, import_result.stderr
+        payload = json.loads(import_result.stdout)
+        assert payload["ok"] is True
+        assert Path(payload["safety_backup"]).is_file()
+        assert (target_home / "brain" / "session.txt").read_text() == "resume me\n"
+        assert json.loads((target_home / "config" / "schedule.json").read_text())["timezone"] == "Europe/Madrid"
+        assert (target_home / "scripts" / "daily-report.py").is_file()
+
+        verify_conn = sqlite3.connect(target_home / "data" / "nexo.db")
+        row = verify_conn.execute("SELECT value FROM marker").fetchone()
+        verify_conn.close()
+        assert row[0] == "source-state"
 
 
 class TestClientsCommand:

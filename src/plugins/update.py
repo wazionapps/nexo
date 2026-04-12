@@ -89,7 +89,10 @@ def _refresh_installed_manifest():
             dst_crons.mkdir(parents=True, exist_ok=True)
             for f in src_crons.iterdir():
                 if f.is_file():
-                    shutil.copy2(str(f), str(dst_crons / f.name))
+                    dest = dst_crons / f.name
+                    if _paths_match(f, dest):
+                        continue
+                    shutil.copy2(str(f), str(dest))
         config_dir = NEXO_HOME / "config"
         config_dir.mkdir(parents=True, exist_ok=True)
         payload = {
@@ -355,7 +358,8 @@ def _sync_hooks_to_home():
     for f in hooks_src.iterdir():
         if f.is_file() and f.suffix == ".sh":
             dest = hooks_dest / f.name
-            shutil.copy2(str(f), str(dest))
+            if not _paths_match(f, dest):
+                shutil.copy2(str(f), str(dest))
             os.chmod(str(dest), 0o755)
             synced += 1
     if synced:
@@ -499,6 +503,93 @@ def _emit_progress(progress_fn, message: str) -> None:
             pass
 
 
+def _paths_match(src: Path, dest: Path) -> bool:
+    try:
+        return src.exists() and dest.exists() and src.samefile(dest)
+    except Exception:
+        return False
+
+
+def _sync_packaged_crons(progress_fn=None) -> tuple[bool, str | None]:
+    sync_path = NEXO_HOME / "crons" / "sync.py"
+    if not sync_path.is_file():
+        _refresh_installed_manifest()
+        return True, None
+    try:
+        _emit_progress(progress_fn, "Syncing core cron definitions...")
+        result = subprocess.run(
+            [sys.executable, str(sync_path)],
+            cwd=str(NEXO_HOME),
+            capture_output=True,
+            text=True,
+            timeout=30,
+            env={**os.environ, "NEXO_HOME": str(NEXO_HOME), "NEXO_CODE": str(NEXO_HOME)},
+        )
+        if result.returncode != 0:
+            return False, result.stderr.strip() or result.stdout.strip() or "cron sync failed"
+        _refresh_installed_manifest()
+        return True, None
+    except Exception as e:
+        return False, f"cron sync error: {e}"
+
+
+def _reload_launch_agents_after_bump() -> dict:
+    result: dict = {
+        "scanned": 0,
+        "reloaded": 0,
+        "skipped_missing": 0,
+        "errors": [],
+        "platform": sys.platform,
+    }
+
+    if sys.platform != "darwin":
+        return result
+
+    launch_agents_dir = Path.home() / "Library" / "LaunchAgents"
+    if not launch_agents_dir.is_dir():
+        return result
+
+    try:
+        plists = sorted(launch_agents_dir.glob("com.nexo.*.plist"))
+    except Exception as e:
+        result["errors"].append({"plist": "*", "stderr": f"glob failed: {e}"})
+        return result
+
+    result["scanned"] = len(plists)
+    for plist in plists:
+        try:
+            if not plist.is_file():
+                result["skipped_missing"] += 1
+                continue
+            subprocess.run(
+                ["launchctl", "unload", str(plist)],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            load_proc = subprocess.run(
+                ["launchctl", "load", "-w", str(plist)],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if load_proc.returncode == 0:
+                result["reloaded"] += 1
+            else:
+                result["errors"].append(
+                    {
+                        "plist": plist.name,
+                        "stderr": (load_proc.stderr or load_proc.stdout or "load failed")[:300],
+                    }
+                )
+        except subprocess.TimeoutExpired:
+            result["errors"].append({"plist": plist.name, "stderr": "launchctl timeout"})
+        except Exception as e:
+            result["errors"].append({"plist": plist.name, "stderr": str(e)[:300]})
+
+    return result
+
+
 def _handle_packaged_update(progress_fn=None) -> str:
     """Update a packaged (npm) install — no git repo available."""
     old_version = _read_version()
@@ -581,10 +672,16 @@ def _handle_packaged_update(progress_fn=None) -> str:
         errors.append(f"verification: {verify_err}")
 
     hook_sync_warning = None
+    cron_sync_warning = None
     retired_runtime_files: list[str] = []
+    launchagent_reload_warning = None
+    launchagent_reload_summary = None
+    cron_sync_ok, cron_sync_error = _sync_packaged_crons(progress_fn=progress_fn)
+    if not cron_sync_ok:
+        errors.append(f"cron sync: {cron_sync_error}")
+        cron_sync_warning = cron_sync_error
     try:
         _emit_progress(progress_fn, "Refreshing installed hooks and manifests...")
-        _refresh_installed_manifest()
         _sync_hooks_to_home()
         retired_runtime_files = _cleanup_retired_runtime_files()
     except Exception as e:
@@ -595,6 +692,19 @@ def _handle_packaged_update(progress_fn=None) -> str:
     clients_ok, client_sync_error = _sync_packaged_clients()
     if not clients_ok:
         client_sync_warning = client_sync_error or "unknown client sync error"
+
+    if old_version != new_version:
+        _emit_progress(progress_fn, "Reloading LaunchAgents after version bump...")
+        try:
+            launchagent_reload_summary = _reload_launch_agents_after_bump()
+            if launchagent_reload_summary.get("errors"):
+                launchagent_reload_warning = (
+                    f"reloaded {launchagent_reload_summary['reloaded']}/"
+                    f"{launchagent_reload_summary['scanned']} with "
+                    f"{len(launchagent_reload_summary['errors'])} error(s)"
+                )
+        except Exception as e:
+            launchagent_reload_warning = f"launchagent reload error: {e}"
 
     if errors:
         # 5. Full rollback: restore code tree + DBs + pip deps + rollback npm package
@@ -632,6 +742,10 @@ def _handle_packaged_update(progress_fn=None) -> str:
     lines = ["UPDATE SUCCESSFUL (packaged install)"]
     lines.append(f"  Version: {old_version} -> {new_version}")
     lines.append(f"  Backup: {backup_dir}")
+    if not cron_sync_warning:
+        lines.append("  Crons: synced with manifest")
+    else:
+        lines.append(f"  WARNING: cron sync: {cron_sync_warning}")
     if not hook_sync_warning:
         lines.append("  Hooks: synced to NEXO_HOME")
     else:
@@ -642,6 +756,15 @@ def _handle_packaged_update(progress_fn=None) -> str:
         lines.append("  Clients: configured client targets synced")
     else:
         lines.append(f"  WARNING: client sync: {client_sync_warning}")
+    if launchagent_reload_summary and launchagent_reload_summary.get("scanned"):
+        if not launchagent_reload_warning:
+            lines.append(
+                "  LaunchAgents: reloaded "
+                f"{launchagent_reload_summary['reloaded']}/"
+                f"{launchagent_reload_summary['scanned']}"
+            )
+        else:
+            lines.append(f"  WARNING: launchagent reload: {launchagent_reload_warning}")
     lines.append("")
     lines.append("MCP server restart needed to load new code.")
     return "\n".join(lines)
