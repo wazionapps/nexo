@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.1 normalizes packaged npm installs so nexo update stays anchored to ~/.nexo, refreshes packaged artifacts after upgrade, and avoids repo-only drift in user runtimes.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.2 hardens the runtime boundary for packaged users by separating core runtime artifacts from personal scripts and migrating legacy heartbeat wrappers into managed hooks.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.1 normalizes packaged npm installs so nexo update stays anchored to ~/.nexo, refreshes packaged artifacts after upgrade, and avoids repo-only drift in user runtimes.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.2 hardens the runtime boundary for packaged users by separating core runtime artifacts from personal scripts and migrating legacy heartbeat wrappers into managed hooks.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.1 normalizes packaged npm installs so nexo update stays anchored to ~/.nexo, refreshes packaged artifacts after upgrade, and avoids repo-only drift in user runtimes.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.2 hardens the runtime boundary for packaged users by separating core runtime artifacts from personal scripts and migrating legacy heartbeat wrappers into managed hooks.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.1 normalizes packaged npm installs so nexo update stays anchored to ~/.nexo, refreshes packaged artifacts after upgrade, and avoids repo-only drift in user runtimes.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.2 hardens the runtime boundary for packaged users by separating core runtime artifacts from personal scripts and migrating legacy heartbeat wrappers into managed hooks.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,12 +87,12 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v5.3.1 live</span>
-                    <span class="page-chip">Packaged runtime normalization</span>
-                    <span class="page-chip"><code>nexo update</code> now behaves like a normal npm user path</span>
+                    <span class="page-chip">v5.3.2 live</span>
+                    <span class="page-chip">Runtime boundary hardening</span>
+                    <span class="page-chip"><code>nexo scripts</code> now separates packaged core from personal runtime</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v531" class="btn btn-primary">Start with v5.3.1</a>
+                    <a href="#v532" class="btn btn-primary">Start with v5.3.2</a>
                     <a href="#v400" class="btn btn-secondary">See v4.0.0</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -100,8 +100,8 @@
             <div class="page-visual">
                 <div class="page-stack">
                     <div class="page-stack-card">
-                        <strong>v5.3.1</strong>
-                        <span>Packaged runtime normalization: <code>nexo update</code> stays anchored to <code>~/.nexo</code>, refreshes packaged artifacts, and stops installed runtimes from inheriting repo-only drift.</span>
+                        <strong>v5.3.2</strong>
+                        <span>Runtime boundary hardening: packaged installs now track core runtime artifacts explicitly, keep them out of the personal bucket, and migrate legacy heartbeat wrappers into managed Claude Code hooks.</span>
                     </div>
                     <div class="page-stack-card">
                         <strong>v5.3.0</strong>
@@ -155,6 +155,29 @@
             <div>
                 <div id="changelog-page-meta" class="changelog-page-meta">Loading release pages…</div>
                 <div id="changelog-pager" class="changelog-pager" aria-label="Changelog pagination"></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v5.3.2 runtime boundary hardening -->
+<section id="v532" class="section-compact" style="background:linear-gradient(135deg,#0b1120 0%,#7c3aed 55%,#ec4899 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.3.2 <span style="opacity:.5;font-weight:400;">&mdash; April 12, 2026</span></div>
+        <h2 class="section-title">Runtime Boundary Hardening &amp; Honest Core vs Personal Separation</h2>
+        <p class="section-subtitle">
+            A trust-boundary patch for packaged users. NEXO now persists which scripts and hooks belong to the packaged core runtime, stops mixing them into the personal-script bucket, migrates the legacy Claude Code heartbeat wrappers into managed core hooks, and removes a stale public LaunchAgent template that was not backed by packaged core code.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h3>Personal means personal again</h3>
+                    <p>Packaged installs now write a runtime core-artifacts manifest and the personal script registry reads it. If a file was shipped by the product, it is classified as core instead of being mixed into the operator's own script bucket just because it happens to live under <code>~/.nexo/scripts</code>.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Heartbeat hooks are now real core hooks</h3>
+                    <p>The remaining Claude Code heartbeat wrappers are shipped under the managed hooks surface. <code>nexo update</code> rewrites managed client configs to those hook paths and removes the retired legacy wrappers from <code>NEXO_HOME/scripts</code>.</p>
+                </div>
             </div>
         </div>
     </div>
