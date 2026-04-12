@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.0 adds nexo uninstall for clean runtime/data separation — stops crons, removes runtime, preserves user data for safe reinstall.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.1 normalizes packaged npm installs so nexo update stays anchored to ~/.nexo, refreshes packaged artifacts after upgrade, and avoids repo-only drift in user runtimes.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.0 adds nexo uninstall for clean runtime/data separation — stops crons, removes runtime, preserves user data for safe reinstall.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.1 normalizes packaged npm installs so nexo update stays anchored to ~/.nexo, refreshes packaged artifacts after upgrade, and avoids repo-only drift in user runtimes.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.0 adds nexo uninstall for clean runtime/data separation — stops crons, removes runtime, preserves user data for safe reinstall.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.1 normalizes packaged npm installs so nexo update stays anchored to ~/.nexo, refreshes packaged artifacts after upgrade, and avoids repo-only drift in user runtimes.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.0 adds nexo uninstall for clean runtime/data separation — stops crons, removes runtime, preserves user data for safe reinstall.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.1 normalizes packaged npm installs so nexo update stays anchored to ~/.nexo, refreshes packaged artifacts after upgrade, and avoids repo-only drift in user runtimes.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,18 +87,22 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v5.3.0 live</span>
-                    <span class="page-chip">nexo uninstall &middot; Clean runtime/data separation</span>
-                    <span class="page-chip">Stop crons, preserve user data, reinstall cleanly</span>
+                    <span class="page-chip">v5.3.1 live</span>
+                    <span class="page-chip">Packaged runtime normalization</span>
+                    <span class="page-chip"><code>nexo update</code> now behaves like a normal npm user path</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v530" class="btn btn-primary">Start with v5.3.0</a>
+                    <a href="#v531" class="btn btn-primary">Start with v5.3.1</a>
                     <a href="#v400" class="btn btn-secondary">See v4.0.0</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
             </div>
             <div class="page-visual">
                 <div class="page-stack">
+                    <div class="page-stack-card">
+                        <strong>v5.3.1</strong>
+                        <span>Packaged runtime normalization: <code>nexo update</code> stays anchored to <code>~/.nexo</code>, refreshes packaged artifacts, and stops installed runtimes from inheriting repo-only drift.</span>
+                    </div>
                     <div class="page-stack-card">
                         <strong>v5.3.0</strong>
                         <span><code>nexo uninstall</code> — stops all crons, removes runtime, preserves user data. Clean separation of runtime vs user data for safe reinstall.</span>
@@ -151,6 +155,29 @@
             <div>
                 <div id="changelog-page-meta" class="changelog-page-meta">Loading release pages…</div>
                 <div id="changelog-pager" class="changelog-pager" aria-label="Changelog pagination"></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v5.3.1 packaged runtime normalization -->
+<section id="v531" class="section-compact" style="background:linear-gradient(135deg,#0b1120 0%,#7c3aed 55%,#ec4899 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.3.1 <span style="opacity:.5;font-weight:400;">&mdash; April 12, 2026</span></div>
+        <h2 class="section-title">Packaged Runtime Normalization &amp; Clean <code>nexo update</code> Path</h2>
+        <p class="section-subtitle">
+            A patch release for real npm users. Installed runtimes now stay anchored to <code>~/.nexo</code>, packaged bootstrap and client artifacts are refreshed after upgrade, repo-only release-artifact drift is skipped inside user installs, and personal-script/runtime path resolution stays on the canonical packaged home.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h3>No more legacy path fallback</h3>
+                    <p>Packaged wrappers, helpers, hooks, and migrations now resolve the runtime from <code>~/.nexo</code> instead of drifting back to legacy <code>~/claude</code> assumptions or a local source checkout. A normal user install behaves like a normal user install again.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Update keeps packaged installs coherent</h3>
+                    <p><code>nexo update</code> now refreshes packaged client/bootstrap artifacts after upgrade and keeps personal scripts, startup preflight, and doctor behavior aligned with the packaged runtime. Your data stays in <code>~/.nexo</code>; the runtime stays replaceable.</p>
+                </div>
             </div>
         </div>
     </div>

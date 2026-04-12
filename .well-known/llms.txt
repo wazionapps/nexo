@@ -1,8 +1,13 @@
 # NEXO Brain
 
-> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v5.2.0).
+> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v5.3.1).
 
-NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. Version 5.2.0 ships bilingual response discipline with Spanish and English high-stakes keyword parity and bilingual negation suppression, a numeric confidence safeguard layered on top of the existing response-contract decision tree with positive context signals (pre-action context hits and known project-atlas areas), and a cortex-quality cache reader that finally consumes the write-only snapshot that the `nexo-cortex-cycle` cron has been writing every 6h since v5.1.0. Builds on v5.1.0's closed evolution, adaptive, cognitive, and skills loops, bitemporal knowledge graph export to JSON-LD and GraphML with `as_of` historical replay, OpenTelemetry tool-span path behind a soft-import, and lint, security, coverage, and release-readiness gates on every PR, plus v5.0's goal, decision, outcome, reusable-skill, and public-proof loop across supported clients, configurable terminal and automation backends, recovery-aware background jobs, startup preflight, runtime self-healing, multimodal memory refs, pre-compaction auto-flush, a public claim wiki, readable memory export, richer user-state adaptation, long-horizon overnight analysis, and 150+ MCP tools.
+NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It adds a local shared brain across supported clients, configurable terminal and automation backends, recovery-aware background jobs, startup preflight, runtime self-healing, smarter retrieval defaults, long-horizon overnight analysis, and 150+ MCP tools.
+
+v5.3.1: packaged runtime normalization — `nexo update` keeps normal npm installs anchored to `~/.nexo` and refreshes packaged artifacts cleanly
+v5.3.0: nexo uninstall — stops crons, removes runtime, preserves user data for clean reinstall
+v5.2.1: fix deep-sleep datetime crash in apply_findings.py; cortex_decide() auto-creates outcomes closing decision→verification loop
+v5.2.0: bilingual response-discipline scoring + cortex quality cache reader
 
 ## Core Product Model
 
@@ -12,33 +17,12 @@ NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cogniti
 - Codex is supported as both terminal client and automation backend.
 - Claude Desktop can share the same brain through MCP.
 
-## Current Release Focus
-
-- Bilingual response discipline: Spanish + English high-stakes detection with bilingual negation suppression, so boundary statements like "sin afectar producción" / "without touching production" no longer trigger false positives.
-- Positive signals on the confidence score so tasks that loaded real context and operate in a known project area are rewarded, not punished alongside unprepared ones.
-- Numeric safeguard layered over the boolean response-contract decision tree, monotonic over the existing rules (can only make discipline stricter, never looser).
-- Cortex-quality cache reader: `nexo_cortex_quality` now serves the snapshot that the `nexo-cortex-cycle` cron writes every 6 hours, with silent fallback to live SQL computation on any failure. Observable path via `"source": "cache" | "live"` in the response.
-- Goal profiles and Decision Cortex v2 keep shaping higher-stakes recommendations instead of leaving strategy selection to raw prompting.
-- Outcomes, impact scoring, and structured pattern capture connect action, result, and future prioritization more tightly.
-- Repeated winning patterns can seed or promote reusable skills, while poor evidence can demote or retire them.
-- Public proof combines the LoCoMo memory result with a broader operator runtime pack so the website reflects more than one memory benchmark.
-
 ## Key Features
 
 - Three-store memory: Sensory Register, Short-Term Memory, Long-Term Memory
 - Semantic search with local embeddings and optional HNSW acceleration
 - Claim graph, trust scoring, metacognitive guard, cognitive dissonance detection
-- Multimodal memory references for images, audio, video, PDFs, and other non-text artifacts
-- Structured auto-flush before compaction so actionable continuity survives compression
-- Public claim/wiki tools with evidence, freshness, verification state, and linting
-- Readable markdown memory export for auditability
-- Stronger inspectable user-state model beyond shallow sentiment heuristics
-- Public retrieval knobs for hybrid weighting, decomposition, dream exclusion, and dormant-memory handling
-- Explicit backend contract/status for newer memory layers
 - Episodic memory, reminders, learnings, followups, and session continuity
-- 24-hour hot context for recent operational continuity across sessions and channels
-- Transcript fallback tools for recent Claude Code / Codex conversations when the memory layer is too thin
-- Live system catalog for tools, plugins, skills, scripts, crons, projects, and artifacts
 - Context continuity across Claude Code compaction via hooks
 - Shared-brain client sync for Claude Code, Codex, and Claude Desktop
 - Managed bootstrap parity for `~/.claude/CLAUDE.md` and `~/.codex/AGENTS.md`
@@ -106,7 +90,6 @@ nexo clients sync
 - Changelog: https://nexo-brain.com/changelog/
 - Blog: https://nexo-brain.com/blog/
 - Docs: https://nexo-brain.com/docs/
-- Install flow: https://nexo-brain.com/docs/install-flow/
 - GitHub: https://github.com/wazionapps/nexo
 - npm: https://www.npmjs.com/package/nexo-brain
 

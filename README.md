@@ -6,7 +6,7 @@
 [![GitHub stars](https://img.shields.io/github/stars/wazionapps/nexo?style=social)](https://github.com/wazionapps/nexo/stargazers)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 
-> Local cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Persistent memory, selectable terminal and automation backends, overnight learning, self-healing background jobs, startup preflight, and doctor diagnostics. 150+ MCP tools. Benchmarked on LoCoMo (F1 0.588, +55% vs GPT-4).
+> Local cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Persistent memory, durable workflow runs, selectable terminal and automation backends, overnight learning, self-healing background jobs, startup preflight, and doctor diagnostics. 150+ MCP tools. Benchmarked on LoCoMo (F1 0.588, +55% vs GPT-4).
 
 **NEXO Brain transforms any MCP-compatible AI agent from a stateless assistant into a cognitive partner that remembers, learns, forgets, adapts, and builds a relationship with you over time.**
 
@@ -16,7 +16,22 @@
   </a>
 </p>
 
-[Watch the overview video](https://nexo-brain.com/watch/) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
+[Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
+
+Start here:
+- [5-minute quickstart](docs/quickstart-5-minutes.md)
+- [Workflow quickstart](docs/workflows-quickstart.md)
+- [Recent memory fallbacks + live system catalog](docs/recent-memory-fallbacks-and-system-catalog.md)
+- [Supported client guides](docs/integrations/cursor.md)
+- [Docker setup](docs/docker-setup.md)
+- [Architecture visuals](docs/architecture-visuals.md)
+- [Memory classes](docs/memory-classes.md)
+- [Session portability](docs/session-portability.md)
+- [Python SDK](docs/sdk-python.md)
+- [Reference verticals](docs/reference-verticals.md)
+- [Measured compare scorecard](compare/README.md)
+- [Memory benchmark harness](benchmarks/README.md)
+- [Public contribution guide](docs/public-contribution.md)
 
 Every time you close a session, everything is lost. Your agent doesn't remember yesterday's decisions, repeats the same mistakes, and starts from zero. NEXO Brain fixes this with a cognitive architecture modeled after how human memory actually works.
 
@@ -38,13 +53,101 @@ That means NEXO now manages not only the shared runtime and MCP wiring, but also
 - For Codex specifically, `nexo chat` and Codex headless automation inject the current bootstrap explicitly, so Codex starts as NEXO even when plain global Codex startup is inconsistent about global instructions.
 - Deep Sleep now reads both Claude Code and Codex transcript stores, so overnight analysis still works even when the user spends the day in Codex.
 
-Version `2.6.14` closes those parity gaps in practice, `2.6.15` hardens the installed-runtime migration path so existing users actually receive the managed bootstrap updates cleanly, `2.6.16` pushes the system further in three directions, and `2.6.17` finishes the annoying last-mile migration bugs for real existing installs:
+Versions `2.6.14` through `2.7.0` established the practical shared-brain baseline: managed Claude/Codex bootstrap, Codex config sync, transcript-aware Deep Sleep, 60-day long-horizon analysis, weekly/monthly summary artifacts, retrieval auto-mode, and the first measured engineering loop.
 
-- Codex now gets managed global bootstrap/model sync in `~/.codex/config.toml`, so sessions opened outside `nexo chat` are much less likely to start as plain Codex.
-- Retrieval is smarter by default: HyDE and spreading activation now auto-enable when the query shape benefits, while exact lookups remain conservative.
-- Deep Sleep now blends recent context with older context over a 60-day horizon, and memory decay now tracks per-memory `stability` and `difficulty` instead of relying only on global decay constants.
-- Existing installs that already had NEXO connected to Codex now backfill that client state automatically during update/sync, so the managed Codex bootstrap actually lands without manual cleanup.
-- Bootstrap docs now fall back to the operator name `NEXO` when local metadata is blank, avoiding broken headings in `CLAUDE.md` and `AGENTS.md`.
+Versions `3.0.0` and `3.0.1` close the next execution gap:
+
+- protocol discipline is now a runtime contract, not just instructions:
+  - `nexo_task_open`
+  - `nexo_task_close`
+  - persistent `protocol_debt`
+  - enforceable `Cortex` gates
+- durable execution is now first-class:
+  - resumable workflow runs
+  - checkpoints
+  - replay
+  - retries
+  - durable goals
+- conditioned learnings on critical files are now real guardrails across Claude hooks, Codex transcript audits, and headless automation prompts
+- repair/correction work now routes through canonical learning capture instead of depending on the model to remember to document after the fact
+- runtime truth is stricter:
+  - no more healthy-looking warning storms
+  - no more silent Deep Sleep schema drift
+  - keep-alive jobs report alive/degraded/duplicated honestly
+- public proof is stronger:
+  - measured compare scorecard
+  - external and internal ablations
+  - `cost_per_solved_task`
+  - SDK/API/quickstart surface
+
+Versions `3.1.7` through `3.2.0` close the recent-memory gap:
+
+- recent operational continuity is now first-class through `hot context` and `recent events`
+- the runtime can build a reusable pre-action bundle instead of reconstructing the last few hours from diaries and durable recall only
+- when even that misses, NEXO now exposes raw transcript fallback tools for Claude Code and Codex session stores
+- NEXO can now inspect itself through a live system catalog derived from canonical sources instead of relying only on stale docs or operator memory
+
+Version `5.3.1` normalizes packaged npm installs so they behave like packaged npm installs: `nexo update` now keeps the runtime anchored to `~/.nexo`, refreshes packaged bootstrap/client artifacts after upgrade, avoids repo-only release-artifact drift in installed runtimes, and keeps personal scripts on the canonical packaged path.
+
+Version `5.3.0` adds `nexo uninstall` — a CLI command that cleanly separates runtime from user data. It stops all crons, removes the MCP server config, and preserves databases, learnings, and personal scripts for safe reinstall.
+
+Version `5.2.1` fixes the Deep Sleep datetime regression and closes the decision-to-outcome feedback gap:
+
+- `_parse_any_datetime` in `apply_findings.py` now strips timezone info before comparison, fixing the offset-aware/offset-naive crash that was breaking Deep Sleep verification work.
+- `cortex_decide()` now auto-creates a `decision_outcome` when none is linked yet, so the outcome-checker cron can verify real decisions instead of leaving the loop open.
+
+Version `5.2.0` closes two focused gaps in the Cortex layer that were left open by the v5.1 audit — the high-stakes response-contract detector was English-only, and the `nexo-cortex-cycle` cron was writing a quality snapshot that no reader ever consumed:
+
+- `HIGH_STAKES_KEYWORDS_ES` adds ~45 Spanish keywords to the high-stakes detector with accented and unaccented variants, so a goal written in Spanish (`migrar la base de datos de producción`) trips the same gate as its English twin.
+- `NEGATION_PATTERNS` suppresses false positives when the user explicitly disclaims touching the sensitive area (`sin afectar producción`, `no tocar prod`, `without touching production`, `don't modify`). The raw keyword being present is no longer enough to flag the task.
+- `evaluate_response_confidence` accepts two new optional kwargs, `pre_action_context_hits` (+up to 10) and `area_has_atlas_entry` (+5), so the score can finally reward tasks that loaded real context instead of only punishing unprepared ones. Both signals are capped and cannot override a real risk penalty.
+- A monotonic numeric safeguard layers on top of the boolean decision tree: `answer` downgrades to `verify` when `final_score < 50`, and `verify` downgrades to `defer` when `high_stakes` and `final_score < 30`. The safeguard can only make response discipline stricter, never looser.
+- `handle_cortex_quality` in `src/plugins/cortex.py` now reads `$NEXO_HOME/operations/cortex-quality-latest.json` when the requested window (7 or 1 days) is fresh (<6h 30m) and the schema matches — silent fallback to the live SQL computation on any failure. The handler's JSON response now includes `"source": "cache" | "live"` for observability.
+
+Version `5.1.0` lands the full NEXO-AUDIT-2026-04-11 roadmap as a single minor bump — every open evolution / adaptive / cognitive / skills loop now closes under itself, the knowledge graph exports cleanly, OpenTelemetry spans can be turned on without a hard dependency, and every PR has to clear lint, security, coverage, and release-readiness gates before it can merge:
+
+- Evolution cycle now auto-applies user-approved proposals on the next run (backed by the new idempotent migration `m38`), adaptive learned-weight rollbacks surface as visible followups, outcome patterns auto-promote to draft skills, and a Voyager-style detector exposes co-occurring skill pairs as composite-skill candidates via `nexo_skill_compose_candidates`.
+- `cognitive._search.search()` now accepts `dream_weight` and reranks dream-insights through it, somatic markers fold into the same reranking path (max +0.10 boost), state watchers open and auto-resolve deterministic `NF-WATCHER-{id}` followups, and correction fatigue opens a visible followup instead of only decaying memory.
+- A new Cortex quality cron (every 6h) watches accept rate / linked-success / override gap and opens `NF-CORTEX-QUALITY-DROP` idempotently when the decision engine starts drifting between cycles.
+- Adding a new learning now walks recent decisions through `retroactive_learnings.apply_learning_retroactively()` and opens deterministic `NF-RETRO-L<id>-D<id>` followups for every decision the learning would have changed (exposed via `nexo_learning_apply_retroactively`).
+- Hook lifecycle observability: new `hook_runs` table (migration `m39`) + `nexo_hook_runs` tool expose recent hook runs, failure streaks, and a health summary. Hook drops are no longer invisible.
+- Knowledge graph bitemporal export: `nexo_kg_export` emits JSON-LD (with an `nexo:*` vocabulary) or GraphML, and accepts an `as_of` ISO timestamp that replays the historical snapshot through `kg_edges.valid_from / valid_until` for igraph, Gephi, NetworkX, and Cytoscape.
+- OpenTelemetry integration: new `src/observability.py` soft-imports `opentelemetry` and only activates when `OTEL_EXPORTER_OTLP_ENDPOINT` or `OTEL_SERVICE_NAME` is set. `tool_span()` becomes a real span when enabled and stays a no-op context manager when disabled.
+- CI gates on every PR: new workflows enforce ruff (`E9 / F63 / F7 / F82 / F821`), bandit at high severity / high confidence, coverage baselines, and `verify_release_readiness.py --ci`. A PR that breaks the release contract fails loudly instead of waiting until tag push.
+- Safer update path: `auto_update` is guarded by a POSIX `flock` with stale-steal at 10 minutes, and on macOS it now `launchctl unload`s and reloads every `com.nexo.*.plist` after a version bump so long-lived crons pick up the new codebase immediately.
+
+Version `5.0.4` tightens the local runtime bridge and trims false-positive doctor noise:
+
+- vendorable `nexo_helper.py` now resolves `NEXO_HOME` and the `nexo` CLI path robustly, so personal scripts and subprocess flows stop depending on a lucky PATH
+- doctor no longer degrades because of advisory-only self-audit warnings or a single missing usage-telemetry row
+- managed Claude Code and Codex bootstraps now force an immediate first answer after simple email/diary/reminder/followup reads instead of feeling hung while chaining extra lookups
+
+Version `5.0.3` closes the next post-5.0 runtime gap:
+
+- `nexo chat` now boots Claude Code and Codex with an explicit NEXO startup prompt instead of opening cold or leaking the target path as a fake prompt
+- terminal launches now use the requested working directory as real `cwd`, so the selected project path stops behaving like chat text
+- the vendorable `nexo_helper.py` bridge now bounds helper calls with a timeout instead of letting personal-script subprocess flows wait forever
+- the doctor hardening from `5.0.2` remains validated on a real upgraded runtime after sync
+
+Version `5.0.2` closes the small post-5.0.1 doctor drift:
+
+- deep doctor now reads the live `learnings` schema correctly whether the install uses `status` or the older `archived` flag
+- a real upgraded runtime was revalidated with `nexo update`, `nexo doctor --tier deep`, `nexo doctor --tier all`, and a fresh Claude Code startup smoke
+
+Version `5.0.1` hardens the live 5.0 upgrade path:
+
+- managed Claude Code hooks are now cleaned up when an older release left obsolete core-managed entries behind
+- upgrades no longer preserve the stale `heartbeat-guard.sh` path that could create warning storms and fake "hung" symptoms after `nexo update`
+- the corrected path has been revalidated on a real install with `nexo clients sync`, Codex/Claude Code headless runtime access, email-monitor recovery, and a full `nexo update`
+
+Version `5.0.0` closes the loop between memory, decisions, outcomes, and reusable behavior:
+
+- goal profiles are now explicit and auditable instead of living as hidden heuristics
+- the Cortex can rank alternatives with goals, outcomes, overrides, and structured penalties
+- repeated outcome patterns can become durable learnings that influence later decisions
+- outcome-backed evidence can seed, promote, demote, or retire reusable skills
+- the runtime benchmark pack now shows the operator/runtime advantage with checked-in artifacts instead of relying only on prose
+- personal-script/core runtime paths, protocol debt maintenance, and release doctoring are now strong enough that the live install path can be audited honestly before release
 
 ### Client Capability Matrix
 
@@ -52,12 +155,24 @@ Version `2.6.14` closes those parity gaps in practice, `2.6.15` hardens the inst
 |------------|-------------|-------|----------------|
 | Shared brain / MCP runtime | Yes | Yes | Yes |
 | Managed bootstrap document | `~/.claude/CLAUDE.md` | `~/.codex/AGENTS.md` | Not applicable |
-| Global startup bootstrap sync | Native via hooks + bootstrap | Managed via bootstrap + Codex config `initial_messages` | MCP only |
+| Global startup bootstrap sync | Native via hooks + bootstrap | Managed via bootstrap + Codex config `initial_messages` + `mcp_servers.nexo` | Managed MCP-only shared-brain metadata |
 | `nexo chat` terminal client | Yes | Yes | No |
 | Background automation backend | Recommended | Supported | No |
 | Raw transcript source for Deep Sleep | Yes | Yes | No |
 | Native hook depth | Deepest | Partial, compensated | None |
+| Runtime doctor parity audit | Yes | Yes | Shared-brain only |
 | Recommended today | Yes | Supported | Shared-brain companion |
+
+### Supported Clients
+
+| Client | Status | Integration style | Notes |
+|--------|--------|-------------------|-------|
+| Claude Code | First-class | Managed install + hooks + bootstrap | Deepest NEXO parity today |
+| Codex | First-class | Managed install + bootstrap + transcript parity | Best non-Claude terminal path |
+| Claude Desktop | Companion | MCP-only shared brain | Useful as read/chat companion |
+| Cursor | Documented companion | MCP + `.cursor/rules` | Good editor pairing; no Deep Sleep transcript parity yet |
+| Windsurf | Documented companion | MCP + `.windsurf/rules` or repo `AGENTS.md` | Native MCP support, manual companion mode |
+| Gemini CLI | Adapter included | MCP + `GEMINI.md` | Best when you want Gemini as a shared-brain companion, not the primary NEXO runtime |
 
 ## The Problem
 
@@ -193,6 +308,9 @@ Deep Sleep now also mixes **recent context with older context across a 60-day ho
 - recurring multi-week themes
 - cross-domain links between older learnings and current failures
 - stale followups and topics that keep being mentioned but never formalized
+- weighted project pressure based on diary activity, followups, learnings, and decision outcomes
+
+It now also writes **weekly and monthly Deep Sleep summaries** so the overnight system can reuse higher-horizon signals instead of rediscovering everything from scratch every day.
 
 ## Cognitive Cortex
 
@@ -220,6 +338,20 @@ User message → Fast Path check → Simple chat? → Respond directly
 | **Activation Metrics** | Tracks modes, inhibition rates, and task types for continuous improvement. |
 
 The Cortex was designed through a 3-way AI debate (Claude Opus 4.6 + GPT-5.4 + Gemini 3.1 Pro) and validated against 6 months of real production failures.
+
+## Durable Workflow Runtime
+
+Memory and guardrails are not enough if long work still restarts from zero.
+
+NEXO now ships a durable workflow runtime for multi-step and cross-session execution:
+
+- `nexo_workflow_open` creates a persistent run with step metadata, idempotency key, priority, and shared state
+- `nexo_workflow_update` records replayable checkpoints, retry metadata, approval gates, and the current actionable state
+- `nexo_workflow_resume` tells the agent what to do next without guessing
+- `nexo_workflow_replay` reconstructs the recent execution history honestly instead of pretending the run is still in memory
+- `nexo_workflow_list` keeps active and blocked work visible so it does not disappear into reminders or prose notes
+
+This is the bridge between "good memory" and "reliable execution": tasks can now preserve state, retries, approval gates, and next action across interruptions.
 
 ## Context Continuity (Auto-Compaction)
 
@@ -277,6 +409,15 @@ NEXO Brain provides **150+ MCP tools** across 23 categories. These features impl
 | **Auto-Migration** | Formal schema migration system (schema_migrations table) tracks all database changes. Safe, reversible schema evolution for production systems — upgrades never lose data. |
 | **Auto-Merge Duplicates** | Batch cosine deduplication during the 03:00 sleep cycle. Respects sibling discrimination — similar memories about different contexts are kept separate. |
 | **Memory Dreaming** | Discovers hidden connections between recent memories during the 03:00 sleep cycle and now feeds a 60-day long-horizon Deep Sleep blend, so older patterns can reappear when they become relevant again. |
+
+### Operational Continuity
+
+| Feature | What It Does |
+|---------|-------------|
+| **Hot Context 24h** | Keeps active topics, blockers, and waiting states fresh across sessions, clients, cron ticks, and channel changes. This is the shared recent-memory substrate for operational continuity. |
+| **Pre-Action Context Bundle** | Loads recent contexts, recent events, related reminders, and related followups before acting, so continuity is explicit instead of prompt-only. |
+| **Transcript Fallback** | When recent-memory capture is thin or missing, NEXO can now search and read recent Claude Code / Codex transcripts directly through MCP instead of pretending the conversation is lost. |
+| **Live System Catalog** | NEXO can now inspect its own current surface — core tools, plugin tools, skills, scripts, crons, projects, and artifacts — through a live catalog derived from canonical sources at read time. |
 
 ### Retrieval
 
@@ -514,7 +655,7 @@ npx nexo-brain  # detects current version, migrates automatically
 
 NEXO Brain includes a local CLI that runs independently of any single terminal client:
 
-- `nexo chat` — launch the configured terminal client with NEXO as the operator
+- `nexo chat` — launch a NEXO terminal client; if both Claude Code and Codex are available, it asks every time which one to open and puts the last-used client first
 - `nexo update` — sync runtime from source, run migrations, reconcile schedules
 - `nexo doctor --tier runtime` — boot/runtime/deep diagnostics with `--fix` mode
 - `nexo scripts list` — list all personal scripts and their status
@@ -535,6 +676,8 @@ Scripts in `NEXO_HOME/scripts/` are first-class managed entities:
 - `nexo doctor --tier runtime` detects orphaned schedules, missing plists, and drift
 
 Personal scripts are completely separate from core NEXO processes. The `crons/manifest.json` defines core; everything in `NEXO_HOME/scripts/` is personal.
+
+If you need to decide between a personal script, skill, plugin, or schedule, use [docs/personal-artifacts-manual.md](docs/personal-artifacts-manual.md). That is the canonical operational guide.
 
 ## Recovery-Aware Background Jobs (v2.6.2)
 
@@ -612,7 +755,7 @@ The installer handles everything and syncs the same `nexo` MCP brain into Claude
     - Node.js project detected
   Configuring MCP server...
   Setting up nervous system...
-    13 core recovery-aware jobs configured.
+    15 core recovery-aware jobs configured.
     Dashboard configured at localhost:6174.
   Caffeinate enabled.
   Generating operator instructions...
@@ -622,25 +765,63 @@ The installer handles everything and syncs the same `nexo` MCP brain into Claude
   +----------------------------------------------------------+
 ```
 
+### Docker Compose
+
+NEXO now ships a root-level [`docker-compose.yml`](docs/docker-setup.md) for a persistent containerized runtime. It does two things at once:
+
+- keeps `NEXO_HOME` on a named volume
+- exposes a remote MCP endpoint at `http://localhost:8000/mcp` for IDEs that support HTTP/SSE MCP
+
+Start it with:
+
+```bash
+docker compose up -d
+```
+
+For Claude Code and Codex, keep using stdio and point the MCP command at the running container:
+
+```bash
+docker compose exec -T nexo python src/server.py
+```
+
+That gives you the same persistent brain in the container while keeping terminal clients on their native stdio transport. The full step-by-step flow, health checks, and config examples live in [docs/docker-setup.md](docs/docker-setup.md).
+
 ### Starting a Session
 
 After install, use the runtime CLI:
 
 ```bash
-nexo chat          # Launch the configured terminal client (Claude Code or Codex)
+nexo chat          # Launch a NEXO terminal client (asks if both Claude Code and Codex are available)
 nexo doctor        # Check runtime health
 nexo update        # Pull latest version and sync
 nexo clients sync  # Re-sync Claude Code/Desktop/Codex to the same brain
 nexo scripts list  # See your personal scripts
 ```
 
-During install, NEXO now asks which interactive clients you want to connect, which one `nexo chat` should open by default, whether to enable background automation, which backend should run that automation, and which model profile each active terminal/backend should use. Shared brain stays on in every mode.
+During install, NEXO now asks which interactive clients you want to connect, which one `nexo chat` should suggest first when multiple terminal clients are available, whether to enable background automation, which backend should run that automation, and which model profile each active terminal/backend should use. Shared brain stays on in every mode.
+
+Public entry points for the mental model now stay intentionally small:
+- `nexo_remember`
+- `nexo_memory_recall`
+- `nexo_consolidate`
+- `nexo_run_workflow`
+- `nexo_pre_action_context`
+- `nexo_transcript_search`
+- `nexo_system_catalog`
+
+If you want the shell or Python wrappers instead of raw MCP tools:
+- [docs/quickstart-5-minutes.md](docs/quickstart-5-minutes.md)
+- [docs/memory-classes.md](docs/memory-classes.md)
+- [docs/recent-memory-fallbacks-and-system-catalog.md](docs/recent-memory-fallbacks-and-system-catalog.md)
+- [docs/sdk-python.md](docs/sdk-python.md)
+- [docs/reference-verticals.md](docs/reference-verticals.md)
+- [compare/README.md](compare/README.md)
 
 Recommended defaults:
 - Claude Code: `Opus 4.6 with 1M context`
 - Codex: `gpt-5.4` with `xhigh` reasoning
 
-Or use the shell alias created during install (e.g. `atlas`), which now runs `nexo chat .` so it opens whichever terminal client you selected as default.
+Or use the shell alias created during install (e.g. `atlas`), which now runs `nexo chat .` so it opens the terminal client you pick for that session, with the last-used option shown first.
 
 Your operator will greet you immediately — adapted to the time of day, resuming from where you left off. No cold starts.
 
@@ -653,6 +834,10 @@ NEXO is being hardened in public, and the best contributions now are not only co
 - If you use NEXO in production-like daily work, include exact runtime symptoms and commands in bug reports. This project improves fastest when the operational reality is concrete.
 
 The project still recommends Claude Code as the primary path, but contributions that improve Codex, client parity, installer clarity, and ecosystem integrations are especially valuable.
+
+Maintainers and contributors touching startup, bootstrap, Deep Sleep, or shared-brain behavior should also use the client parity checklist:
+- [docs/client-parity-checklist.md](docs/client-parity-checklist.md)
+- `python3 scripts/verify_release_readiness.py`
 
 ### What Gets Installed
 
@@ -704,9 +889,9 @@ nexo doctor --tier runtime --json  # Machine-readable health report
 nexo doctor --fix              # Apply deterministic repairs
 ```
 
-Personal scripts live in `NEXO_HOME/scripts/` with inline metadata. Their Python templates now include `run_automation_text(...)`, which routes work through the configured NEXO automation backend instead of hardcoding `claude -p` or provider-specific model names. See `docs/writing-scripts.md` for details.
+Personal scripts live in `NEXO_HOME/scripts/` with inline metadata. Their Python templates now include `run_automation_text(...)`, which routes work through the configured NEXO automation backend instead of hardcoding `claude -p` or provider-specific model names. `nexo-agent-run.py` now also supports task profiles (`fast`, `balanced`, `deep`) plus safe backend fallback, so automations can prefer cheaper/faster Codex paths or deeper Claude paths without hardcoding one provider forever. See `docs/writing-scripts.md` for details and `docs/personal-artifacts-manual.md` for the canonical artifact decision guide.
 
-Skills v2 combine procedural guides with optional executable scripts. Personal skills live in `NEXO_HOME/skills/`, packaged core skills live in `NEXO_CODE/skills/` during development and `NEXO_HOME/skills-core/` in installed environments, and staged runtime copies live in `NEXO_HOME/skills-runtime/`. Execution is fully autonomous: Deep Sleep can evolve mature guide skills into executable drafts automatically, and runtime execution no longer waits for manual approval. See `docs/skills-v2.md` for the full model.
+Skills v2 combine procedural guides with optional executable scripts. Personal skills live in `NEXO_HOME/skills/`, packaged core skills live in `NEXO_CODE/skills/` during development and `NEXO_HOME/skills-core/` in installed environments, and staged runtime copies live in `NEXO_HOME/skills-runtime/`. Execution is fully autonomous: Deep Sleep can evolve mature guide skills into executable drafts automatically, and runtime execution no longer waits for manual approval. See `docs/skills-v2.md` for the full model and `docs/personal-artifacts-manual.md` for the boundary between skills, scripts, plugins, and schedules.
 
 The Doctor system reads existing health artifacts (immune, watchdog, self-audit) without triggering repairs in default mode.
 
@@ -783,6 +968,8 @@ TOOLS = [
 
 Reload without restarting: `nexo_plugin_load("my_plugin.py")`
 
+Use a personal plugin only when you need a new MCP tool in the runtime surface. If the real need is autonomous execution or scheduling, use a personal script plus managed schedule instead. The canonical decision guide is [docs/personal-artifacts-manual.md](docs/personal-artifacts-manual.md).
+
 ### Data Privacy
 
 - **Everything stays local.** All data in `~/.nexo/`, never uploaded anywhere.
@@ -830,7 +1017,19 @@ When Claude Desktop is installed, `nexo-brain`, `nexo update`, and `nexo clients
 
 ### Codex
 
-When Codex CLI is available, `nexo-brain`, `nexo update`, and `nexo clients sync` register the same `nexo` MCP server via `codex mcp add`, so Codex uses the same local memory store as Claude Code and Claude Desktop. If selected during install, `nexo chat` can open Codex directly and background automation can also run through Codex. The current recommended Codex profile is `gpt-5.4` with `xhigh` reasoning.
+When Codex CLI is available, `nexo-brain`, `nexo update`, and `nexo clients sync` register the same `nexo` MCP server via `codex mcp add`, so Codex uses the same local memory store as Claude Code and Claude Desktop. If selected during install, `nexo chat` can open Codex directly and background automation can also run through Codex. Interactive `nexo chat` launches use Codex's aggressive no-confirmation mode so the session does not stall on repetitive approval prompts. The current recommended Codex profile is `gpt-5.4` with `xhigh` reasoning. Runtime Doctor also audits recent Codex sessions for NEXO startup markers and conditioned-file protocol discipline so parity drift does not hide behind the lack of native Claude-style hooks.
+
+### Cursor
+
+Cursor works well as a documented companion client. Point Cursor at the same local `nexo` MCP server and add a project rule that forces `nexo_startup`, `nexo_heartbeat`, and the protocol path on real work. See [docs/integrations/cursor.md](docs/integrations/cursor.md).
+
+### Windsurf
+
+Windsurf/Cascade supports MCP plus durable repo rules. Use the same local `nexo` server and add NEXO startup/protocol instructions in `.windsurf/rules/` or your repo `AGENTS.md`. See [docs/integrations/windsurf.md](docs/integrations/windsurf.md).
+
+### Gemini CLI
+
+Gemini CLI can share the same local NEXO brain through `mcpServers` in `~/.gemini/settings.json` plus a repo `GEMINI.md`. NEXO now ships a starter adapter in [adapters/gemini/README.md](adapters/gemini/README.md).
 
 ### OpenClaw
 
@@ -912,10 +1111,45 @@ If NEXO Brain is useful to you, consider:
 - **[Sponsor on GitHub](https://github.com/sponsors/wazionapps)** — support ongoing development directly
 - **Share your experience** — tell others how you're using cognitive memory in your AI workflows
 - **Contribute** — see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines. Issues and PRs welcome
+- **Client parity / shared-brain maintenance** — see [docs/client-parity-checklist.md](docs/client-parity-checklist.md)
 
 [![Star History Chart](https://api.star-history.com/svg?repos=wazionapps/nexo&type=Date)](https://star-history.com/#wazionapps/nexo&Date)
 
+## Memory Benchmark Snapshot
+
+The full harness is in [benchmarks/README.md](benchmarks/README.md). The first checked-in micro-benchmark compares the NEXO runtime against a static `CLAUDE.md`-only baseline on five recall-heavy scenarios:
+
+| Scenario | NEXO full stack | Static `CLAUDE.md` | No memory |
+|----------|-----------------|--------------------|-----------|
+| Decision rationale recall | Pass | Partial | Fail |
+| User preference recall | Pass | Partial | Fail |
+| Repeat-error avoidance | Pass | Partial | Fail |
+| Resume interrupted task | Pass | Partial | Fail |
+| Related-context stitching | Pass | Fail | Fail |
+
+See [benchmarks/results/memory-recall-vs-static.md](benchmarks/results/memory-recall-vs-static.md) for the rubric, prompt shape, and first-run notes.
+
 ## Changelog
+
+### v3.0.1 — Python 3.10 Compatibility Patch (2026-04-06)
+- Restored Python 3.10 compatibility by replacing Python 3.11-only `datetime.UTC` with `timezone.utc`.
+- Added `tomllib` → `tomli` fallback plus declared runtime dependency for Python < 3.11.
+- Boot doctor now validates all critical JSON config artifacts: `schedule.json`, `optionals.json`, `crons/manifest.json`.
+
+### v3.0.0 — Protocol Discipline, Durable Execution, Measured Runtime (2026-04-06)
+- **Protocol discipline runtime**: Enforceable `nexo_task_open`/`nexo_task_close`, persistent `protocol_debt`, `Cortex` gates with durable `check_id`, conditioned-file guardrails across Claude hooks and Codex transcript audits.
+- **Durable workflow runtime**: `nexo_workflow_open`/`update`/`resume`/`replay`/`list` with persistent runs, steps, checkpoints, replay history, retry bookkeeping, and idempotent open keys.
+- **Durable goals**: `nexo_goal_open`/`update`/`get`/`list` for long-running work that stays active/blocked/abandoned/completed.
+- **Operational truth**: Deep Sleep survives schema drift, `keep_alive` reports alive/degraded/duplicated honestly, warning storms no longer count as healthy.
+- **Measured product surface**: 5-minute quickstart, Python SDK, reference verticals, measured compare scorecard with LoCoMo baselines and `cost_per_solved_task`.
+- **Skill lifecycle**: Testing, promotion, retirement, and composition flows. Evolution public-core peer-review for opt-in PRs.
+
+### v2.7.0 — Shared Brain Baseline (2026-04-06)
+- Managed Claude Code + Codex bootstrap with explicit `CORE`/`USER` contract.
+- Codex config sync and transcript-aware Deep Sleep across both clients.
+- 60-day long-horizon analysis, weekly/monthly summary artifacts.
+- Retrieval auto-mode and first measured engineering loop.
+- `nexo chat` opens the configured client instead of assuming Claude Code.
 
 ### v2.6.9 — Integration Sync, CI/CD Pipeline (2026-04-04)
 - **Release artifact sync**: Automated version synchronization across Claude Code plugin, OpenClaw package, and ClawHub skill before every publish.
@@ -943,7 +1177,7 @@ If NEXO Brain is useful to you, consider:
 - **Personal scripts registry**: Scripts in `NEXO_HOME/scripts/` tracked in SQLite with metadata, categories, schedules. Full lifecycle: create, sync, reconcile, schedule, unschedule, remove.
 - **Orchestrator removed from core** (breaking): Was opt-in personal automation adding complexity for all users. Existing users keep their setup in `NEXO_HOME/scripts/`.
 - **Claude Code plugin structure**: `plugin.json`, entry point, packaging for marketplace submission.
-- **`nexo chat`**: Official command to launch the configured terminal client with NEXO as operator.
+- **`nexo chat`**: Official command to launch a NEXO terminal client, asking when multiple supported terminal clients are available.
 - **Managed Evolution hardening**: Can modify core behavior modules with rollback followups.
 - Cron recovery hardened: TCC diagnostics, keepalive sync, personal schedule catchup.
 
