@@ -671,6 +671,7 @@ class TestRuntimeChecks:
 
         launch_agents = nexo_home / "launchagents"
         launch_agents.mkdir()
+        (launch_agents / "com.nexo.backup.plist").write_text("<plist/>")
         (launch_agents / "com.nexo.dashboard.plist").write_text("<plist/>")
         (launch_agents / "com.nexo.email-monitor.plist").write_text("<plist/>")
 
@@ -687,7 +688,7 @@ class TestRuntimeChecks:
         def fake_run(args, **kwargs):
             return SimpleNamespace(
                 returncode=0,
-                stdout="123\t0\tcom.nexo.dashboard\n124\t0\tcom.nexo.email-monitor\n",
+                stdout="123\t0\tcom.nexo.backup\n124\t0\tcom.nexo.dashboard\n125\t0\tcom.nexo.email-monitor\n",
                 stderr="",
             )
 

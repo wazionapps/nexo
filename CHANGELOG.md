@@ -1,5 +1,12 @@
 # Changelog
 
+## [5.3.3] - 2026-04-12
+
+### Doctor inventory alignment
+
+- `nexo doctor` now recognizes `com.nexo.backup` as a core auxiliary LaunchAgent, matching the packaged installer/runtime inventory.
+- Eliminates the false "Unknown com.nexo LaunchAgents" warning on clean packaged installs that still use the built-in hourly DB backup helper.
+
 ## [5.3.2] - 2026-04-12
 
 ### Runtime boundary hardening — core vs personal scripts
