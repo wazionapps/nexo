@@ -87,6 +87,20 @@ def test_help_prints_version_status_from_cache(nexo_home):
     assert "NEXO Latest: v9.9.10 | Installed: v9.9.9" in result.stdout
 
 
+def test_help_prefers_installed_when_cached_latest_is_older(nexo_home):
+    (nexo_home / "config").mkdir(exist_ok=True)
+    (nexo_home / "config" / "cli-version-status.json").write_text(json.dumps({
+        "latest": "9.9.8",
+        "checked_at": 4102444800,
+    }))
+    (nexo_home / "version.json").write_text(json.dumps({"version": "9.9.9"}))
+
+    result = _run_cli(nexo_home)
+
+    assert result.returncode == 0
+    assert "NEXO Latest: v9.9.9 | Installed: v9.9.9" in result.stdout
+
+
 class TestScriptsList:
     def test_empty_list(self, nexo_home):
         result = _run_cli(nexo_home, "scripts", "list")
@@ -565,6 +579,39 @@ class TestChatCommand:
 
         assert result.returncode == 0
         assert "[NEXO] NEXO Latest: v9.9.10 | Installed: v9.9.9" in result.stderr
+
+    def test_chat_prefers_installed_when_cached_latest_is_older(self, nexo_home, tmp_path):
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        fake_claude = tmp_path / "claude"
+        out_file = tmp_path / "claude-invocation.json"
+        fake_claude.write_text(
+            "#!/usr/bin/env python3\n"
+            "import json, sys\n"
+            f"open({json.dumps(str(out_file))}, 'w').write(json.dumps(sys.argv[1:]))\n"
+        )
+        fake_claude.chmod(0o755)
+        (nexo_home / "config").mkdir(exist_ok=True)
+        (nexo_home / "config" / "cli-version-status.json").write_text(json.dumps({
+            "latest": "9.9.8",
+            "checked_at": 4102444800,
+        }))
+        (nexo_home / "version.json").write_text(json.dumps({"version": "9.9.9"}))
+
+        env = {
+            **os.environ,
+            "NEXO_HOME": str(nexo_home),
+            "NEXO_CODE": os.path.join(os.path.dirname(__file__), "..", "src"),
+            "HOME": str(nexo_home),
+            "CLAUDE_BIN": str(fake_claude),
+        }
+        result = subprocess.run(
+            [sys.executable, CLI_PY, "chat", str(workspace)],
+            capture_output=True, text=True, timeout=30, env=env,
+        )
+
+        assert result.returncode == 0
+        assert "[NEXO] NEXO Latest: v9.9.9 | Installed: v9.9.9" in result.stderr
 
     def test_chat_uses_configured_codex_client(self, nexo_home, tmp_path):
         workspace = tmp_path / "workspace"
