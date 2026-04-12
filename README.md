@@ -18,6 +18,8 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
+Version `5.3.4` closes the last packaged-runtime core/personal leak from the hook migration work: legacy hook aliases stay out of the personal bucket, `nexo update` removes those retired aliases when the canonical hooks already exist, and both `nexo` and `nexo chat` now show latest vs installed version at a glance.
+
 Start here:
 - [5-minute quickstart](docs/quickstart-5-minutes.md)
 - [Workflow quickstart](docs/workflows-quickstart.md)
