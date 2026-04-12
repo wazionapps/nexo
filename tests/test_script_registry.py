@@ -1,4 +1,5 @@
 """Tests for script_registry — metadata parsing, runtime detection, doctor validation."""
+import json
 import os
 import stat
 import sys
@@ -42,6 +43,17 @@ def scripts_dir(tmp_path, monkeypatch):
     crons_dir = nexo_home / "crons"
     crons_dir.mkdir()
     (crons_dir / "manifest.json").write_text('{"crons":[{"id":"immune","script":"scripts/nexo-immune.py"}]}')
+
+    config_dir = nexo_home / "config"
+    config_dir.mkdir()
+    (config_dir / "runtime-core-artifacts.json").write_text(json.dumps({
+        "script_names": ["nexo-update.sh"],
+        "hook_names": ["post-compact.sh"],
+    }))
+
+    hooks_dir = nexo_home / "hooks"
+    hooks_dir.mkdir()
+    (hooks_dir / "post-compact.sh").write_text("#!/bin/bash\necho hook\n")
 
     monkeypatch.setenv("NEXO_HOME", str(nexo_home))
     monkeypatch.setenv("HOME", str(nexo_home))
@@ -236,6 +248,20 @@ class TestCoreFiltering:
         assert "my-backup" in names
         assert "nexo-immune" in names
 
+    def test_runtime_core_artifacts_mark_non_cron_core_scripts(self, scripts_dir):
+        (scripts_dir / "nexo-update.sh").write_text("#!/bin/bash\necho update\n")
+
+        entries = {entry["path"].split("/")[-1]: entry for entry in classify_scripts_dir()["entries"]}
+        assert entries["nexo-update.sh"]["classification"] == "core"
+        assert entries["nexo-update.sh"]["core"] is True
+
+    def test_legacy_hook_aliases_are_not_personal(self, scripts_dir):
+        (scripts_dir / "nexo-postcompact.sh").write_text("#!/bin/bash\necho legacy post compact\n")
+
+        entries = {entry["path"].split("/")[-1]: entry for entry in classify_scripts_dir()["entries"]}
+        assert entries["nexo-postcompact.sh"]["classification"] == "core"
+        assert entries["nexo-postcompact.sh"]["core"] is True
+
     def test_non_script_artifacts_ignored(self, scripts_dir):
         (scripts_dir / "notes.csv").write_text("a,b,c\n")
         (scripts_dir / "debug.log").write_text("hello\n")
@@ -262,7 +288,7 @@ class TestCoreFiltering:
 
     def test_runtime_core_manifest_marks_packaged_runtime_files_as_core(self, scripts_dir):
         config_dir = scripts_dir.parent / "config"
-        config_dir.mkdir()
+        config_dir.mkdir(exist_ok=True)
         (config_dir / "runtime-core-artifacts.json").write_text(
             '{"script_names":["nexo-catchup.py"],"hook_names":["capture-tool-logs.sh","heartbeat-posttool.sh"]}\n'
         )

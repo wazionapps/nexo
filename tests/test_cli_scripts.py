@@ -73,6 +73,20 @@ def test_doctor_prints_progress_message(nexo_home):
     assert "NEXO Doctor" in result.stdout
 
 
+def test_help_prints_version_status_from_cache(nexo_home):
+    (nexo_home / "config").mkdir(exist_ok=True)
+    (nexo_home / "config" / "cli-version-status.json").write_text(json.dumps({
+        "latest": "9.9.10",
+        "checked_at": 4102444800,
+    }))
+    (nexo_home / "version.json").write_text(json.dumps({"version": "9.9.9"}))
+
+    result = _run_cli(nexo_home)
+
+    assert result.returncode == 0
+    assert "NEXO Latest: v9.9.10 | Installed: v9.9.9" in result.stdout
+
+
 class TestScriptsList:
     def test_empty_list(self, nexo_home):
         result = _run_cli(nexo_home, "scripts", "list")
@@ -197,6 +211,7 @@ class TestRuntimeUpdate:
             "NEXO_HOME": str(runtime_home),
             "NEXO_CODE": str(runtime_home),
             "HOME": str(tmp_path),
+            "PYTHONPATH": str(runtime_home),
         }
         result = subprocess.run(
             [sys.executable, CLI_PY, "update", "--json"],
@@ -228,6 +243,7 @@ class TestRuntimeUpdate:
         current_src = Path(os.path.dirname(__file__)).parent / "src"
         (runtime_home / "cli.py").write_text((current_src / "cli.py").read_text())
         (runtime_home / "auto_update.py").write_text((current_src / "auto_update.py").read_text())
+        (runtime_home / "runtime_home.py").write_text((current_src / "runtime_home.py").read_text())
         (runtime_home / "runtime_power.py").write_text(
             "def ensure_power_policy_choice(**kwargs):\n"
             "    return {'policy': 'disabled', 'prompted': False}\n\n"
@@ -302,6 +318,7 @@ class TestRuntimeUpdate:
             "NEXO_HOME": str(runtime_home),
             "NEXO_CODE": str(runtime_home),
             "HOME": str(tmp_path),
+            "PYTHONPATH": str(runtime_home),
         }
         result = subprocess.run(
             [sys.executable, str(runtime_home / "cli.py"), "update", "--json"],
@@ -393,6 +410,7 @@ class TestRuntimeUpdate:
             "NEXO_HOME": str(runtime_home),
             "NEXO_CODE": str(runtime_home),
             "HOME": str(tmp_path),
+            "PYTHONPATH": str(runtime_home),
         }
         result = subprocess.run(
             [sys.executable, CLI_PY, "update"],
@@ -415,6 +433,9 @@ class TestRuntimeUpdate:
         src_update = Path(os.path.dirname(__file__)).parent / "src" / "plugins" / "update.py"
         update_copy = plugins_dir / "update.py"
         update_copy.write_text(src_update.read_text())
+        (runtime_home / "runtime_home.py").write_text(
+            (Path(os.path.dirname(__file__)).parent / "src" / "runtime_home.py").read_text()
+        )
 
         probe = (
             "import importlib.util, json, pathlib; "
@@ -429,6 +450,7 @@ class TestRuntimeUpdate:
             "NEXO_HOME": str(runtime_home),
             "NEXO_CODE": str(runtime_home),
             "HOME": str(tmp_path),
+            "PYTHONPATH": str(runtime_home),
         }
         result = subprocess.run(
             [sys.executable, "-c", probe],
@@ -504,11 +526,45 @@ class TestChatCommand:
             capture_output=True, text=True, timeout=30, env=env,
         )
         assert result.returncode == 0
+        assert "[NEXO] NEXO " in result.stderr
         payload = json.loads(out_file.read_text())
         assert payload["argv"][:3] == ["--model", "claude-opus-4-6[1m]", "--dangerously-skip-permissions"]
         assert "nexo_startup" in payload["argv"][-1]
         assert "nexo_heartbeat" in payload["argv"][-1]
         assert payload["cwd"] == str(workspace.resolve())
+
+    def test_chat_prints_version_status_from_cache(self, nexo_home, tmp_path):
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        fake_claude = tmp_path / "claude"
+        out_file = tmp_path / "claude-invocation.json"
+        fake_claude.write_text(
+            "#!/usr/bin/env python3\n"
+            "import json, sys\n"
+            f"open({json.dumps(str(out_file))}, 'w').write(json.dumps(sys.argv[1:]))\n"
+        )
+        fake_claude.chmod(0o755)
+        (nexo_home / "config").mkdir(exist_ok=True)
+        (nexo_home / "config" / "cli-version-status.json").write_text(json.dumps({
+            "latest": "9.9.10",
+            "checked_at": 4102444800,
+        }))
+        (nexo_home / "version.json").write_text(json.dumps({"version": "9.9.9"}))
+
+        env = {
+            **os.environ,
+            "NEXO_HOME": str(nexo_home),
+            "NEXO_CODE": os.path.join(os.path.dirname(__file__), "..", "src"),
+            "HOME": str(nexo_home),
+            "CLAUDE_BIN": str(fake_claude),
+        }
+        result = subprocess.run(
+            [sys.executable, CLI_PY, "chat", str(workspace)],
+            capture_output=True, text=True, timeout=30, env=env,
+        )
+
+        assert result.returncode == 0
+        assert "[NEXO] NEXO Latest: v9.9.10 | Installed: v9.9.9" in result.stderr
 
     def test_chat_uses_configured_codex_client(self, nexo_home, tmp_path):
         workspace = tmp_path / "workspace"

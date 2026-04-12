@@ -364,6 +364,12 @@ def _cleanup_retired_runtime_files():
         NEXO_HOME / "scripts" / "heartbeat-user-msg.sh",
         NEXO_HOME / "hooks" / "heartbeat-guard.sh",
     ]
+    conditional_retired = [
+        (NEXO_HOME / "scripts" / "nexo-postcompact.sh", NEXO_HOME / "hooks" / "post-compact.sh"),
+        (NEXO_HOME / "scripts" / "nexo-memory-precompact.sh", NEXO_HOME / "hooks" / "pre-compact.sh"),
+        (NEXO_HOME / "scripts" / "nexo-memory-stop.sh", NEXO_HOME / "hooks" / "session-stop.sh"),
+        (NEXO_HOME / "scripts" / "nexo-session-briefing.sh", NEXO_HOME / "hooks" / "session-start.sh"),
+    ]
     for target in retired:
         try:
             if target.exists():
@@ -375,6 +381,13 @@ def _cleanup_retired_runtime_files():
                 _log(f"Removed retired runtime file: {target.name}")
         except Exception as e:
             _log(f"Retired runtime cleanup warning ({target.name}): {e}")
+    for target, canonical in conditional_retired:
+        try:
+            if target.exists() and canonical.exists():
+                target.unlink()
+                _log(f"Removed retired runtime alias: {target.name} (canonical: {canonical.name})")
+        except Exception as e:
+            _log(f"Retired runtime alias cleanup warning ({target.name}): {e}")
 
 
 def _sync_crons():

@@ -38,6 +38,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 from runtime_home import export_resolved_nexo_home
@@ -49,6 +50,8 @@ TERMINAL_CLIENT_LABELS = {
     "codex": "Codex",
 }
 TERMINAL_CLIENT_ORDER = ("claude_code", "codex")
+VERSION_STATUS_CACHE = NEXO_HOME / "config" / "cli-version-status.json"
+LATEST_NPM_PACKAGE = "nexo-brain"
 
 
 def _get_version() -> str:
@@ -66,6 +69,67 @@ def _get_version() -> str:
         except Exception:
             continue
     return "?"
+
+
+def _load_latest_version_cache(max_age_seconds: int = 6 * 3600) -> str | None:
+    try:
+        payload = json.loads(VERSION_STATUS_CACHE.read_text())
+    except Exception:
+        return None
+    version = str(payload.get("latest", "")).strip()
+    checked_at = float(payload.get("checked_at", 0) or 0)
+    if not version:
+        return None
+    if checked_at and (time.time() - checked_at) > max_age_seconds:
+        return None
+    return version
+
+
+def _save_latest_version_cache(version: str) -> None:
+    VERSION_STATUS_CACHE.parent.mkdir(parents=True, exist_ok=True)
+    VERSION_STATUS_CACHE.write_text(json.dumps({
+        "latest": version,
+        "checked_at": time.time(),
+    }))
+
+
+def _fetch_latest_version(timeout_seconds: int = 2) -> str | None:
+    try:
+        result = subprocess.run(
+            ["npm", "view", LATEST_NPM_PACKAGE, "version"],
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds,
+        )
+    except Exception:
+        return None
+    if result.returncode != 0:
+        return None
+    latest = result.stdout.strip()
+    if not latest:
+        return None
+    try:
+        _save_latest_version_cache(latest)
+    except Exception:
+        pass
+    return latest
+
+
+def _should_refresh_latest_version() -> bool:
+    try:
+        return sys.stdout.isatty() or sys.stderr.isatty()
+    except Exception:
+        return False
+
+
+def _version_status_line() -> str:
+    installed = _get_version()
+    latest = _load_latest_version_cache()
+    if latest is None and _should_refresh_latest_version():
+        latest = _fetch_latest_version()
+    if latest:
+        return f"NEXO Latest: v{latest} | Installed: v{installed}"
+    return f"NEXO Installed: v{installed}"
 
 # Ensure src/ is on path for imports
 if str(NEXO_CODE) not in sys.path:
@@ -1011,6 +1075,7 @@ def _prompt_for_terminal_client(
 def _chat(args):
     target = args.path or "."
     selected_client = getattr(args, "client", None)
+    print(f"[NEXO] {_version_status_line()}", file=sys.stderr)
 
     try:
         from auto_update import startup_preflight
@@ -1499,6 +1564,7 @@ def _uninstall(args):
 def _print_help():
     v = _get_version()
     print(f"""NEXO Runtime CLI v{v}
+{_version_status_line()}
 
 Commands:
   nexo chat [path] [--client claude_code|codex]      Launch a NEXO terminal client

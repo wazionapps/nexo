@@ -50,6 +50,10 @@ _LEGACY_CORE_RUNTIME_FILES = {
     "heartbeat-enforcement.py",
     "heartbeat-posttool.sh",
     "heartbeat-user-msg.sh",
+    "nexo-memory-precompact.sh",
+    "nexo-memory-stop.sh",
+    "nexo-postcompact.sh",
+    "nexo-session-briefing.sh",
 }
 
 # Forbidden patterns — direct DB access from personal scripts

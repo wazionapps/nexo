@@ -1,5 +1,20 @@
 # Changelog
 
+## [5.3.4] - 2026-04-12
+
+### Core/personal runtime boundary cleanup + version visibility
+
+- `nexo scripts` now keeps legacy hook aliases (`nexo-postcompact.sh`,
+  `nexo-memory-precompact.sh`, `nexo-memory-stop.sh`,
+  `nexo-session-briefing.sh`) out of the personal bucket on packaged
+  installs.
+- `nexo update` now removes those retired aliases from `NEXO_HOME/scripts/`
+  when the canonical hook already exists in `NEXO_HOME/hooks/`.
+- `nexo` and `nexo chat` now show a lightweight version status line with the
+  installed runtime version and the latest published npm version.
+- Added regression coverage for alias cleanup and the CLI version-status
+  banner.
+
 ## [5.3.3] - 2026-04-12
 
 ### Doctor inventory alignment
