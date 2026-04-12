@@ -87,9 +87,16 @@ Versions `3.1.7` through `3.2.0` close the recent-memory gap:
 - when even that misses, NEXO now exposes raw transcript fallback tools for Claude Code and Codex session stores
 - NEXO can now inspect itself through a live system catalog derived from canonical sources instead of relying only on stale docs or operator memory
 
+Version `5.3.1` normalizes packaged npm installs so they behave like packaged npm installs: `nexo update` now keeps the runtime anchored to `~/.nexo`, refreshes packaged bootstrap/client artifacts after upgrade, avoids repo-only release-artifact drift in installed runtimes, and keeps personal scripts on the canonical packaged path.
+
 Version `5.3.0` adds `nexo uninstall` — a CLI command that cleanly separates runtime from user data. It stops all crons, removes the MCP server config, and preserves databases, learnings, and personal scripts for safe reinstall.
 
-Version `5.2.1` closes two focused gaps in the Cortex layer that were left open by the v5.1 audit — the high-stakes response-contract detector was English-only, and the `nexo-cortex-cycle` cron was writing a quality snapshot that no reader ever consumed:
+Version `5.2.1` fixes the Deep Sleep datetime regression and closes the decision-to-outcome feedback gap:
+
+- `_parse_any_datetime` in `apply_findings.py` now strips timezone info before comparison, fixing the offset-aware/offset-naive crash that was breaking Deep Sleep verification work.
+- `cortex_decide()` now auto-creates a `decision_outcome` when none is linked yet, so the outcome-checker cron can verify real decisions instead of leaving the loop open.
+
+Version `5.2.0` closes two focused gaps in the Cortex layer that were left open by the v5.1 audit — the high-stakes response-contract detector was English-only, and the `nexo-cortex-cycle` cron was writing a quality snapshot that no reader ever consumed:
 
 - `HIGH_STAKES_KEYWORDS_ES` adds ~45 Spanish keywords to the high-stakes detector with accented and unaccented variants, so a goal written in Spanish (`migrar la base de datos de producción`) trips the same gate as its English twin.
 - `NEGATION_PATTERNS` suppresses false positives when the user explicitly disclaims touching the sensitive area (`sin afectar producción`, `no tocar prod`, `without touching production`, `don't modify`). The raw keyword being present is no longer enough to flag the task.

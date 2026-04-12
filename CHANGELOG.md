@@ -1,5 +1,26 @@
 # Changelog
 
+## [5.3.1] - 2026-04-12
+
+### Packaged runtime normalization — clean `nexo update` path
+
+- **fix(runtime-home):** packaged installs now resolve the canonical runtime
+  home from `~/.nexo` instead of drifting back to legacy `~/claude` or a
+  source checkout. This closes the gap where a normal npm user could end up
+  with wrappers, hooks, or helper scripts still pointing at non-packaged paths.
+- **fix(update):** `nexo update` now refreshes packaged client/bootstrap
+  artifacts after upgrade and preserves the runtime/data split expected by
+  normal npm installs. Existing users can move forward without needing a repo
+  checkout on disk.
+- **fix(doctor):** packaged runtimes no longer fail repo-only release-artifact
+  checks that make sense in source trees but not in installed user runtimes.
+- **fix(personal-scripts):** script registry and helper/runtime path resolution
+  now consistently use the canonical packaged home, so personal scripts,
+  startup preflight, and managed clients keep working after update.
+- **tests:** added packaged-runtime coverage for runtime-home resolution,
+  startup preflight, client sync, doctor behavior, update flow, and personal
+  script registry migration handling.
+
 ## [5.3.0] - 2026-04-12
 
 ### `nexo uninstall` — clean separation of runtime and user data
