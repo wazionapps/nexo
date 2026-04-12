@@ -1,4 +1,5 @@
 """Tests for the CLI scripts commands — list, run, doctor, call."""
+import io
 import json
 import os
 import sqlite3
@@ -560,6 +561,35 @@ class TestUserDataPortability:
         row = verify_conn.execute("SELECT value FROM marker").fetchone()
         verify_conn.close()
         assert row[0] == "source-state"
+
+    def test_import_rejects_path_traversal_member(self, tmp_path):
+        target_home = _make_nexo_home(tmp_path / "target")
+        bundle_path = tmp_path / "unsafe-portable-user-data.tar.gz"
+
+        with tarfile.open(bundle_path, "w:gz") as archive:
+            manifest = json.dumps(
+                {
+                    "kind": "nexo-user-data-bundle",
+                    "version": "5.3.8",
+                    "sections": {},
+                }
+            ).encode("utf-8")
+            manifest_info = tarfile.TarInfo("bundle/manifest.json")
+            manifest_info.size = len(manifest)
+            archive.addfile(manifest_info, io.BytesIO(manifest))
+
+            bad = b"owned\n"
+            bad_info = tarfile.TarInfo("bundle/../../escape.txt")
+            bad_info.size = len(bad)
+            archive.addfile(bad_info, io.BytesIO(bad))
+
+        import_result = _run_cli(target_home, "import", str(bundle_path), "--json", timeout=20)
+
+        assert import_result.returncode == 1
+        payload = json.loads(import_result.stdout)
+        assert payload["ok"] is False
+        assert "escapes destination" in payload["error"]
+        assert not (tmp_path / "escape.txt").exists()
 
 
 class TestClientsCommand:

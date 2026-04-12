@@ -95,12 +95,32 @@ def _copy_file_if_present(src: Path, dest: Path) -> bool:
 
 
 def _safe_extract(archive_path: Path, dest_dir: Path) -> None:
+    resolved_dest = dest_dir.resolve()
     with tarfile.open(archive_path, "r:*") as tar:
-        for member in tar.getmembers():
+        members = tar.getmembers()
+        for member in members:
             target = (dest_dir / member.name).resolve()
-            if not str(target).startswith(str(dest_dir.resolve())):
+            if target != resolved_dest and resolved_dest not in target.parents:
                 raise ValueError(f"archive path escapes destination: {member.name}")
-        tar.extractall(dest_dir)
+            if member.issym() or member.islnk():
+                raise ValueError(f"archive contains unsupported link member: {member.name}")
+
+        for member in members:
+            target = (dest_dir / member.name).resolve()
+            if member.isdir():
+                target.mkdir(parents=True, exist_ok=True)
+                target.chmod(member.mode & 0o777)
+                continue
+            if not member.isfile():
+                raise ValueError(f"archive contains unsupported member type: {member.name}")
+
+            target.parent.mkdir(parents=True, exist_ok=True)
+            extracted = tar.extractfile(member)
+            if extracted is None:
+                raise ValueError(f"archive member could not be read: {member.name}")
+            with extracted, target.open("wb") as handle:
+                shutil.copyfileobj(extracted, handle)
+            target.chmod(member.mode & 0o777)
 
 
 def _load_personal_scripts() -> tuple[list[dict], list[dict]]:
@@ -297,6 +317,12 @@ def import_user_bundle(bundle_path: str) -> dict:
             "safety_backup": str(safety_backup),
             "restored": restored,
             "reconciled": reconcile_result,
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "error": str(exc),
+            "safety_backup": str(safety_backup),
         }
     finally:
         shutil.rmtree(stage_dir, ignore_errors=True)

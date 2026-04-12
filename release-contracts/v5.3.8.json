@@ -1,0 +1,73 @@
+{
+  "release_line": "v5.3",
+  "target_version": "5.3.8",
+  "scope_owner": "NEXO",
+  "distribution": {
+    "git_updates_on": "merge_to_main",
+    "packaged_release_on": "tag_publish"
+  },
+  "required_repo_files": [
+    "package.json",
+    "CHANGELOG.md",
+    "README.md",
+    "llms.txt",
+    "bin/nexo-brain.js",
+    "scripts/sync_release_artifacts.py",
+    "scripts/verify_release_readiness.py",
+    "release-contracts/v5.3.8.json",
+    ".claude-plugin/plugin.json",
+    "clawhub-skill/SKILL.md",
+    "openclaw-plugin/package.json",
+    "openclaw-plugin/src/mcp-bridge.ts",
+    "src/cli.py",
+    "src/doctor/providers/runtime.py",
+    "src/plugins/update.py",
+    "src/user_data_portability.py",
+    "tests/test_cli_scripts.py",
+    "tests/test_doctor.py",
+    "tests/test_packaged_update_runtime.py"
+  ],
+  "required_website_files": [
+    "index.html",
+    "features/index.html",
+    "blog/index.html",
+    "blog/nexo-5-3-8-packaged-migration-hotfix/index.html",
+    "changelog/index.html",
+    "llms.txt",
+    ".well-known/llms.txt",
+    "sitemap.xml"
+  ],
+  "gates": [
+    {
+      "id": "packaged_update_self_heal",
+      "title": "Packaged update still leaves the runtime ready without an immediate doctor repair step",
+      "status": "complete",
+      "evidence_required": [
+        "Packaged update syncs runtime cron definitions after npm bump",
+        "Packaged update reloads managed macOS LaunchAgents after a real version change",
+        "Same-file hook sync noise no longer pollutes the packaged update path",
+        "Runtime doctor no longer keeps cleaned packaged installs red just because recent Codex transcript drift is already tracked with zero open conditioned debt"
+      ]
+    },
+    {
+      "id": "packaged_migration_root_modules",
+      "title": "Packaged migration carries newly added root runtime modules into ~/.nexo on upgraded installs",
+      "status": "complete",
+      "evidence_required": [
+        "The packaged installer discovers top-level runtime Python modules dynamically instead of relying only on a manual allowlist",
+        "Real-machine validation confirms newly shipped commands such as nexo export / nexo import work after nexo update on an existing packaged install",
+        "Regression coverage fails if future releases stop discovering new root runtime modules"
+      ]
+    },
+    {
+      "id": "public_surface_alignment",
+      "title": "Package, docs, plugin artifacts, and website tell the same v5.3.8 story",
+      "status": "complete",
+      "evidence_required": [
+        "Root package and integration artifacts all point to 5.3.8",
+        "README, changelog, llms, and release contract mention the packaged migration hotfix clearly",
+        "Website home, blog, changelog, llms, and sitemap are updated to 5.3.8"
+      ]
+    }
+  ]
+}

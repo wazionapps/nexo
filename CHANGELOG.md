@@ -1,5 +1,18 @@
 # Changelog
 
+## [5.3.8] - 2026-04-12
+
+### Packaged migration hotfix for new root runtime modules
+
+- Packaged auto-migration now discovers and copies all top-level runtime Python
+  modules from `src/` into `~/.nexo` instead of depending on a manual allowlist.
+  That closes the real 5.3.7 regression where `nexo export` / `nexo import`
+  could be published and documented correctly but still fail on upgraded
+  packaged runtimes because `user_data_portability.py` never reached the live
+  runtime tree.
+- Added a regression contract test so the packaged installer keeps discovering
+  new root runtime modules instead of silently omitting them in future releases.
+
 ## [5.3.7] - 2026-04-12
 
 ### Packaged update self-heal + portable user-data export/import
