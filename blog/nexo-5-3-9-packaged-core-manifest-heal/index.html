@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXO 5.3.9: Packaged Core-Artifact Manifest Heal for Personal-Script Recovery</title>
+    <meta name="description" content="NEXO 5.3.9 fixes the packaged regression exposed after 5.3.8: updates now rebuild the runtime core-artifact manifest from the canonical npm package source, so personal scripts stop being mistaken for core and portable exports work again.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-5-3-9-packaged-core-manifest-heal/">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/blog/nexo-5-3-9-packaged-core-manifest-heal/">
+    <meta property="og:title" content="NEXO 5.3.9: Packaged Core-Artifact Manifest Heal for Personal-Script Recovery">
+    <meta property="og:description" content="A real-machine hotfix for packaged users: updates now rebuild the core-artifact manifest from the canonical npm source, so personal scripts stay personal and doctor/export recover cleanly after a bad 5.3.8 install.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+    <meta property="article:published_time" content="2026-04-13">
+    <meta property="article:author" content="Francisco Cerda Puigserver">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO 5.3.9: Packaged Core-Artifact Manifest Heal for Personal-Script Recovery">
+    <meta name="twitter:description" content="5.3.9 heals the packaged core-artifact manifest path so personal scripts stop being reclassified as core and real installs recover their export/doctor surfaces cleanly.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "NEXO 5.3.9: Packaged Core-Artifact Manifest Heal for Personal-Script Recovery",
+        "description": "NEXO 5.3.9 fixes the packaged regression exposed after 5.3.8: updates now rebuild the runtime core-artifact manifest from the canonical npm package source, so personal scripts stop being mistaken for core and portable exports work again.",
+        "datePublished": "2026-04-13",
+        "dateModified": "2026-04-13",
+        "author": {
+            "@type": "Person",
+            "name": "Francisco Cerda Puigserver"
+        },
+        "publisher": {
+            "@type": "Organization",
+            "name": "WAzion",
+            "url": "https://www.wazion.com"
+        },
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https://nexo-brain.com/blog/nexo-5-3-9-packaged-core-manifest-heal/"
+        },
+        "url": "https://nexo-brain.com/blog/nexo-5-3-9-packaged-core-manifest-heal/",
+        "image": "https://nexo-brain.com/assets/nexo-brain-infographic-v5.png",
+        "keywords": ["NEXO 5.3.9", "runtime-core-artifacts.json", "personal scripts", "nexo export", "nexo doctor", "packaged update"]
+    }
+    </script>
+
+    <style>
+        .article-header { padding-top: 128px; padding-bottom: 40px; text-align: center; }
+        .article-meta { font-size: 14px; color: var(--text-muted); margin-bottom: 16px; }
+        .article-body {
+            max-width: 720px; margin: 0 auto; padding: 0 24px 80px;
+            font-size: 17px; line-height: 1.8; color: var(--text);
+        }
+        .article-body h2 { font-size: 28px; font-weight: 700; margin: 48px 0 16px; letter-spacing: -0.01em; }
+        .article-body p { margin-bottom: 20px; color: var(--text-muted); }
+        .article-body strong { color: var(--text); }
+        .article-body a { color: var(--purple-light); }
+        .article-body a:hover { color: var(--pink); }
+        .article-body code {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 14px; color: var(--pink);
+            background: rgba(236, 72, 153, 0.1);
+            padding: 2px 8px; border-radius: 4px;
+        }
+        .article-back {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 14px; font-weight: 600; color: var(--text-muted);
+            margin-bottom: 24px;
+        }
+        .article-back:hover { color: var(--purple-light); }
+        .article-visual { margin: 32px 0 40px; text-align: center; }
+        .article-visual img {
+            max-width: 100%;
+            border-radius: 16px;
+            border: 1px solid var(--dark-border);
+            box-shadow: 0 8px 32px rgba(37,99,235,0.18);
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-64.png" alt="NEXO Brain" class="logo-image">
+            <span class="logo-text">NEXO Brain</span>
+        </a>
+        <button class="mobile-menu-toggle" aria-label="Toggle navigation" onclick="toggleMobileMenu()">
+            <span></span><span></span><span></span>
+        </button>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/features/">Features</a>
+            <a href="/evolution/">Evolution</a>
+            <a href="/compare/">Compare</a>
+            <a href="/blog/">Blog</a>
+            <a href="/changelog/">Changelog</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta">GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<section class="article-header">
+    <div class="container">
+        <a href="/blog/" class="article-back">← Back to blog</a>
+        <div class="article-meta">April 13, 2026 · Patch release · packaged runtime / script ownership recovery</div>
+        <h1 class="section-title" style="font-size:clamp(28px,4.5vw,48px);max-width:920px;margin:0 auto 16px;">NEXO 5.3.9: Packaged Core-Artifact Manifest Heal for Personal-Script Recovery</h1>
+        <p class="section-subtitle" style="max-width:760px;margin:0 auto;">5.3.8 fixed the missing root-module migration path, but real-machine validation exposed a worse packaged regression immediately after: the runtime could rebuild its core-artifact manifest from the live <code>~/.nexo/scripts</code> tree, blurring the line between product files and the operator's own automations. 5.3.9 heals that boundary directly.</p>
+    </div>
+</section>
+
+<section>
+    <div class="article-body">
+        <div class="article-visual">
+            <img src="/assets/nexo-brain-infographic-v5.png" alt="NEXO Brain 5.3.9 release">
+        </div>
+
+        <p><strong>5.3.9 exists to restore trust in the packaged runtime boundary.</strong> Personal scripts under <code>~/.nexo/scripts</code> are not product artifacts. If an update path starts treating them as core runtime files, daily automation, diagnostics, and portable export all stop telling the truth about the machine.</p>
+
+        <h2>What the real-machine validation exposed after 5.3.8</h2>
+        <p>The 5.3.8 update succeeded on paper: the runtime had the new portability module, Claude MCP still connected, and the published package looked correct. But the actual machine immediately showed a deeper problem. Portable export started omitting personal scripts, and runtime doctor began treating personal <code>com.nexo.*</code> LaunchAgents like unexplained core drift.</p>
+
+        <h2>Why it happened</h2>
+        <p>In packaged mode, the update path rebuilt <code>runtime-core-artifacts.json</code> from the live runtime tree instead of the canonical npm package source. That meant the manifest could absorb files from the operator's own <code>~/.nexo/scripts</code> directory. Once that happened, script classification started trusting a poisoned manifest and personal scripts stopped looking personal.</p>
+
+        <h2>What 5.3.9 changes in the packaged update path</h2>
+        <p>The packaged updater now resolves the canonical npm package <code>src/</code> directory and rebuilds the runtime core-artifact manifest from that authoritative source. Product-owned scripts, hooks, and cron definitions still stay tracked, but personal files no longer leak into the core inventory just because they exist in the live runtime tree.</p>
+
+        <h2>How existing bad installs recover</h2>
+        <p>Fixing the updater alone would not have been enough for machines already hit by the bad 5.3.8 manifest. So 5.3.9 also changes the script registry to prefer the canonical packaged source whenever it is available. Existing installs can self-heal their personal-script classification instead of staying permanently dependent on a poisoned runtime manifest.</p>
+
+        <h2>Why doctor also changes in this release</h2>
+        <p>Runtime doctor now re-syncs personal scripts before it audits unknown <code>com.nexo.*</code> LaunchAgents. That is what lets a recovered machine stop looking broken for the wrong reason. Personal automations become personal again, and doctor starts describing the runtime honestly instead of reporting operator-owned jobs as mysterious drift.</p>
+
+        <h2>What this means for portable continuity</h2>
+        <p><code>nexo export</code> and <code>nexo import</code> remain the explicit operator-continuity surface introduced in 5.3.7 and made real in 5.3.8. 5.3.9 ensures those surfaces stay truthful by keeping personal scripts inside the operator bundle instead of letting them vanish behind a broken core manifest.</p>
+
+        <h2>Upgrade</h2>
+        <p>Open the <a href="/changelog/#v539">5.3.9 changelog section</a> for the exact release note. For installed users, the intended path now looks like this:</p>
+        <p><code>npm install -g nexo-brain@5.3.9</code><br><code>nexo update</code><br><code>nexo export</code><br><code>nexo doctor --tier runtime</code></p>
+        <p>The important outcome is simple: packaged updates keep the runtime replaceable, the operator data explicit, and personal automation ownership intact. That is the boundary a daily-work cognitive runtime has to preserve if it wants to stay trustworthy.</p>
+    </div>
+</section>
+
+<footer>
+    <div class="container">
+        <div class="footer-content">
+            <div class="footer-left">
+                Created by <strong>Francisco Cerd&agrave; Puigserver</strong> &amp; <strong>NEXO</strong> (Claude Opus) &bull; Built by <a href="https://www.wazion.com">WAzion</a> &bull; AGPL-3.0 License &bull; &copy; 2026
+            </div>
+            <div class="footer-links">
+                <a href="https://github.com/wazionapps/nexo">GitHub</a>
+                <a href="https://x.com/NEXOBRAIN">X / Twitter</a>
+                <a href="https://github.com/sponsors/wazionapps">Sponsor</a>
+                <a href="/docs/">Docs</a>
+                <a href="/compare/">Compare</a>
+                <a href="/blog/">Blog</a>
+                <a href="https://www.npmjs.com/package/nexo-brain">npm</a>
+                <a href="https://github.com/wazionapps/nexo/releases">Releases</a>
+            </div>
+            <div style="text-align:center;margin-top:12px;color:#6b7280;font-size:12px;">Last updated: April 2026</div>
+        </div>
+    </div>
+</footer>
+
+</body>
+</html>

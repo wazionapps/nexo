@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Blog — NEXO Brain</title>
-    <meta name="description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.8 packaged-migration hotfix that makes new root runtime modules land in ~/.nexo after update.">
+    <meta name="description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.9 packaged core-artifact manifest heal that keeps personal scripts personal after update.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/blog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/blog/">
     <meta property="og:title" content="Blog — NEXO Brain">
-    <meta property="og:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.8 packaged-migration hotfix that makes new root runtime modules land in ~/.nexo after update.">
+    <meta property="og:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.9 packaged core-artifact manifest heal that keeps personal scripts personal after update.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Blog — NEXO Brain">
-    <meta name="twitter:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.8 packaged-migration hotfix that makes new root runtime modules land in ~/.nexo after update.">
+    <meta name="twitter:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.9 packaged core-artifact manifest heal that keeps personal scripts personal after update.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Blog — NEXO Brain",
-        "description": "Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.8 packaged-migration hotfix that makes new root runtime modules land in ~/.nexo after update.",
+        "description": "Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.9 packaged core-artifact manifest heal that keeps personal scripts personal after update.",
         "url": "https://nexo-brain.com/blog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -134,7 +134,7 @@
                     <span class="page-chip">Competitive analysis</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="/blog/nexo-5-3-8-packaged-migration-hotfix/" class="btn btn-primary">Read latest release</a>
+                    <a href="/blog/nexo-5-3-9-packaged-core-manifest-heal/" class="btn btn-primary">Read latest release</a>
                     <a href="/changelog/" class="btn btn-secondary">Latest release notes</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -142,23 +142,23 @@
             <div class="blog-featured-card">
                 <div class="section-label">Latest release</div>
                 <div class="blog-featured-meta">
-                    <span class="compare-chip">April 12, 2026</span>
-                    <span class="compare-chip">Packaged migration hotfix</span>
+                    <span class="compare-chip">April 13, 2026</span>
+                    <span class="compare-chip">Packaged core-artifact manifest heal</span>
                 </div>
-                <h2>NEXO 5.3.8: Packaged Migration Hotfix for New Root Runtime Modules</h2>
-                <p>NEXO 5.3.8 closes the last gap exposed by the real-machine 5.3.7 validation: packaged updates now migrate newly added top-level runtime Python modules into <code>~/.nexo</code>, so commands like <code>nexo export</code> / <code>nexo import</code> work immediately after update instead of existing only in the npm package.</p>
+                <h2>NEXO 5.3.9: Packaged Core-Artifact Manifest Heal for Personal-Script Recovery</h2>
+                <p>NEXO 5.3.9 fixes the regression uncovered on a real 5.3.8 machine: packaged updates now rebuild the runtime core-artifact manifest from the canonical npm package source, so personal scripts stop being reclassified as core, portable exports include them again, and runtime doctor recovers personal LaunchAgents cleanly.</p>
                 <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
-                    <a href="/blog/nexo-5-3-8-packaged-migration-hotfix/" class="btn btn-primary">Open article</a>
-                    <a href="/changelog/#v538" class="btn btn-secondary">Open changelog</a>
+                    <a href="/blog/nexo-5-3-9-packaged-core-manifest-heal/" class="btn btn-primary">Open article</a>
+                    <a href="/changelog/#v539" class="btn btn-secondary">Open changelog</a>
                 </div>
                 <div class="blog-mini-stack">
                     <div class="blog-mini-card">
                         <strong>Companion view</strong>
-                        <span><a href="/changelog/#v538">The 5.3.8 changelog section</a></span>
+                        <span><a href="/changelog/#v539">The 5.3.9 changelog section</a></span>
                     </div>
                     <div class="blog-mini-card">
                         <strong>Previous release</strong>
-                        <span><a href="/blog/nexo-5-3-7-packaged-update-self-heal-and-portable-user-data/">NEXO 5.3.7: Packaged Update Self-Heal and Portable User-Data Bundles</a>.</span>
+                        <span><a href="/blog/nexo-5-3-8-packaged-migration-hotfix/">NEXO 5.3.8: Packaged Migration Hotfix for New Root Runtime Modules</a>.</span>
                     </div>
                 </div>
             </div>
@@ -170,6 +170,13 @@
 <section class="section-flush-top">
     <div class="container">
         <div class="blog-grid">
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 13, 2026</div>
+                <h2><a href="/blog/nexo-5-3-9-packaged-core-manifest-heal/">NEXO 5.3.9: Packaged Core-Artifact Manifest Heal for Personal-Script Recovery</a></h2>
+                <p>A real-machine recovery hotfix for packaged users: updates now rebuild the core-artifact manifest from the canonical npm source, so personal scripts stop being mistaken for core and runtime doctor/export recover cleanly after a bad 5.3.8 install.</p>
+                <a href="/blog/nexo-5-3-9-packaged-core-manifest-heal/" class="read-more">Read article <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></a>
+            </div>
 
             <div class="blog-card">
                 <div class="blog-card-date">April 12, 2026</div>

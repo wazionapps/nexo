@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.8 hotfixes packaged migration so newly added root runtime modules really reach ~/.nexo after update.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.9 heals the packaged core-artifact manifest so personal scripts stay personal, exports stay complete, and doctor recovers cleanly after update.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.8 hotfixes packaged migration so newly added root runtime modules really reach ~/.nexo after update.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.9 heals the packaged core-artifact manifest so personal scripts stay personal, exports stay complete, and doctor recovers cleanly after update.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.8 hotfixes packaged migration so newly added root runtime modules really reach ~/.nexo after update.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.9 heals the packaged core-artifact manifest so personal scripts stay personal, exports stay complete, and doctor recovers cleanly after update.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.8 hotfixes packaged migration so newly added root runtime modules really reach ~/.nexo after update.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.9 heals the packaged core-artifact manifest so personal scripts stay personal, exports stay complete, and doctor recovers cleanly after update.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,12 +87,12 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v5.3.8 live</span>
-                    <span class="page-chip">Packaged migration hotfix</span>
-                    <span class="page-chip">Root runtime modules reach ~/.nexo</span>
+                    <span class="page-chip">v5.3.9 live</span>
+                    <span class="page-chip">Packaged core-artifact manifest heal</span>
+                    <span class="page-chip">Personal scripts stay personal after update</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v538" class="btn btn-primary">Start with v5.3.8</a>
+                    <a href="#v539" class="btn btn-primary">Start with v5.3.9</a>
                     <a href="#v400" class="btn btn-secondary">See v4.0.0</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -100,8 +100,8 @@
             <div class="page-visual">
                 <div class="page-stack">
                     <div class="page-stack-card">
-                        <strong>v5.3.8</strong>
-                        <span>Packaged migration now discovers newly added top-level runtime Python modules automatically, so shipped commands like <code>nexo export</code> / <code>nexo import</code> really land inside <code>~/.nexo</code> after update on existing installs.</span>
+                        <strong>v5.3.9</strong>
+                        <span>Packaged updates now rebuild the runtime core-artifact manifest from the canonical npm package source, so personal scripts stop being reclassified as core and doctor/export recover cleanly after a bad 5.3.8 install.</span>
                     </div>
                     <div class="page-stack-card">
                         <strong>v5.3.0</strong>
@@ -155,6 +155,37 @@
             <div>
                 <div id="changelog-page-meta" class="changelog-page-meta">Loading release pages…</div>
                 <div id="changelog-pager" class="changelog-pager" aria-label="Changelog pagination"></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v5.3.9 packaged core-artifact manifest heal -->
+<section id="v539" class="section-compact" style="background:linear-gradient(135deg,#07111f 0%,#13233f 32%,#2563eb 68%,#14b8a6 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.3.9 <span style="opacity:.5;font-weight:400;">&mdash; April 13, 2026</span></div>
+        <h2 class="section-title">Packaged Core-Artifact Manifest Heal for Personal-Script Recovery</h2>
+        <p class="section-subtitle">
+            Real-machine validation of 5.3.8 exposed a more serious packaged regression: the update path could rebuild the runtime core-artifact manifest from the live <code>~/.nexo/scripts</code> directory instead of the canonical npm package source. That reclassified personal scripts as core, hid them from portable export, and made runtime doctor treat personal LaunchAgents like unexplained drift. 5.3.9 heals that boundary directly.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h3>Packaged updates now rebuild the manifest from the canonical package source</h3>
+                    <p>Instead of scanning the live runtime tree during packaged updates, NEXO now resolves the canonical npm package <code>src/</code> directory and rebuilds <code>runtime-core-artifacts.json</code> from that authoritative source. Personal files under <code>~/.nexo/scripts</code> stop leaking into the core manifest.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Bad 5.3.8 installs now self-heal instead of staying poisoned</h3>
+                    <p>The script registry now prefers the canonical packaged source when it is available, even if the runtime manifest was already poisoned by an older update. That means existing installs recover their personal-script classification instead of requiring manual cleanup or trusting a broken manifest forever.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Doctor re-syncs personal scripts before LaunchAgent inventory</h3>
+                    <p>Runtime doctor now restores personal script ownership before auditing unknown <code>com.nexo.*</code> LaunchAgents. Personal automations stop looking like unexplained core drift, and LaunchAgent inventory starts matching the real runtime again.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Why this hotfix matters</h3>
+                    <p>5.3.8 made the portability commands real on upgraded installs. 5.3.9 makes sure the same packaged update path does not silently erase the boundary between core runtime files and the operator's own automations. That boundary is what keeps daily work, export/import, and diagnostics trustworthy.</p>
+                </div>
             </div>
         </div>
     </div>
