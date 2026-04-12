@@ -1621,6 +1621,13 @@ def check_launchagent_inventory() -> DoctorCheck:
             summary="No com.nexo LaunchAgents discovered on this Mac",
         )
 
+    try:
+        from script_registry import sync_personal_scripts
+
+        sync_personal_scripts(prune_missing=True)
+    except Exception:
+        pass
+
     known_ids = _known_nexo_launchagent_ids()
     unknown_ids = sorted(actual_ids - known_ids)
     if not unknown_ids:

@@ -1,5 +1,19 @@
 # Changelog
 
+## [5.3.9] - 2026-04-13
+
+### Packaged core-artifact manifest heal for personal-script recovery
+
+- Packaged `nexo update` no longer rebuilds `runtime-core-artifacts.json`
+  from the live `~/.nexo/scripts` directory. It now uses the canonical `src/`
+  tree from the installed npm package, so personal scripts stop being
+  reclassified as core during update.
+- Packaged runtimes now self-heal personal-script ownership even after a bad
+  `5.3.8` update. Script classification prefers the canonical npm package
+  source when available, and runtime doctor syncs personal scripts before
+  LaunchAgent inventory checks so personal automations stop appearing as
+  unknown core drift.
+
 ## [5.3.8] - 2026-04-12
 
 ### Packaged migration hotfix for new root runtime modules

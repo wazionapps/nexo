@@ -304,6 +304,34 @@ class TestCoreFiltering:
         assert classes["heartbeat-posttool.sh"] == "core"
         assert classes["my-tool.py"] == "personal"
 
+    def test_packaged_core_source_overrides_poisoned_runtime_manifest(self, scripts_dir, monkeypatch):
+        import script_registry
+
+        packaged_src = scripts_dir.parent / "npm-src"
+        (packaged_src / "crons").mkdir(parents=True)
+        (packaged_src / "scripts").mkdir()
+        (packaged_src / "hooks").mkdir()
+        (packaged_src / "crons" / "manifest.json").write_text(
+            '{"crons":[{"id":"immune","script":"scripts/nexo-immune.py"}]}\n'
+        )
+        (packaged_src / "scripts" / "nexo-immune.py").write_text("print('core')\n")
+        (packaged_src / "hooks" / "capture-tool-logs.sh").write_text("#!/bin/bash\necho core\n")
+
+        config_dir = scripts_dir.parent / "config"
+        (config_dir / "runtime-core-artifacts.json").write_text(
+            '{"script_names":["my-tool.py"],"hook_names":[]}\n'
+        )
+        (scripts_dir / "my-tool.py").write_text("# nexo: name=my-tool\nprint('hi')\n")
+        monkeypatch.setattr(script_registry, "_find_packaged_core_source_dir", lambda: packaged_src)
+
+        names = load_core_script_names()
+        assert "my-tool.py" not in names
+        assert "nexo-immune.py" in names
+
+        report = classify_scripts_dir()
+        classes = {entry["path"].split("/")[-1]: entry["classification"] for entry in report["entries"]}
+        assert classes["my-tool.py"] == "personal"
+
     def test_classify_backfills_legacy_wake_recovery_metadata(self, scripts_dir):
         script = scripts_dir / "nexo-wake-recovery.sh"
         script.write_text(
