@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXO 5.3.7: Packaged Update Self-Heal and Portable User-Data Bundles</title>
+    <meta name="description" content="NEXO 5.3.7 closes the next packaged-user gap after the Claude bootstrap fix: updates now self-heal cron and LaunchAgent state, export/import commands make operator continuity explicit, and doctor stops overstating tracked historical Codex drift.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-5-3-7-packaged-update-self-heal-and-portable-user-data/">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/blog/nexo-5-3-7-packaged-update-self-heal-and-portable-user-data/">
+    <meta property="og:title" content="NEXO 5.3.7: Packaged Update Self-Heal and Portable User-Data Bundles">
+    <meta property="og:description" content="A daily-work release for packaged users: cron and LaunchAgent state now self-heal after update, operator data exports/imports cleanly, and doctor stops overstating tracked historical Codex drift.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+    <meta property="article:published_time" content="2026-04-12">
+    <meta property="article:author" content="Francisco Cerda Puigserver">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO 5.3.7: Packaged Update Self-Heal and Portable User-Data Bundles">
+    <meta name="twitter:description" content="Packaged updates now re-sync crons and reload LaunchAgents after version bumps, operators get explicit export/import commands for continuity, and doctor stops overstating tracked historical Codex drift.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "NEXO 5.3.7: Packaged Update Self-Heal and Portable User-Data Bundles",
+        "description": "NEXO 5.3.7 closes the next packaged-user gap after the Claude bootstrap fix: updates now self-heal cron and LaunchAgent state, export/import commands make operator continuity explicit, and doctor stops overstating tracked historical Codex drift.",
+        "datePublished": "2026-04-12",
+        "dateModified": "2026-04-12",
+        "author": {
+            "@type": "Person",
+            "name": "Francisco Cerda Puigserver"
+        },
+        "publisher": {
+            "@type": "Organization",
+            "name": "WAzion",
+            "url": "https://www.wazion.com"
+        },
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https://nexo-brain.com/blog/nexo-5-3-7-packaged-update-self-heal-and-portable-user-data/"
+        },
+        "url": "https://nexo-brain.com/blog/nexo-5-3-7-packaged-update-self-heal-and-portable-user-data/",
+        "image": "https://nexo-brain.com/assets/nexo-brain-infographic-v5.png",
+        "keywords": ["NEXO 5.3.7", "nexo update", "LaunchAgents", "cron sync", "nexo export", "nexo import", "nexo doctor"]
+    }
+    </script>
+
+    <style>
+        .article-header { padding-top: 128px; padding-bottom: 40px; text-align: center; }
+        .article-meta { font-size: 14px; color: var(--text-muted); margin-bottom: 16px; }
+        .article-body {
+            max-width: 720px; margin: 0 auto; padding: 0 24px 80px;
+            font-size: 17px; line-height: 1.8; color: var(--text);
+        }
+        .article-body h2 { font-size: 28px; font-weight: 700; margin: 48px 0 16px; letter-spacing: -0.01em; }
+        .article-body p { margin-bottom: 20px; color: var(--text-muted); }
+        .article-body strong { color: var(--text); }
+        .article-body a { color: var(--purple-light); }
+        .article-body a:hover { color: var(--pink); }
+        .article-body code {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 14px; color: var(--pink);
+            background: rgba(236, 72, 153, 0.1);
+            padding: 2px 8px; border-radius: 4px;
+        }
+        .article-back {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 14px; font-weight: 600; color: var(--text-muted);
+            margin-bottom: 24px;
+        }
+        .article-back:hover { color: var(--purple-light); }
+        .article-visual { margin: 32px 0 40px; text-align: center; }
+        .article-visual img {
+            max-width: 100%;
+            border-radius: 16px;
+            border: 1px solid var(--dark-border);
+            box-shadow: 0 8px 32px rgba(37,99,235,0.18);
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-64.png" alt="NEXO Brain" class="logo-image">
+            <span class="logo-text">NEXO Brain</span>
+        </a>
+        <button class="mobile-menu-toggle" aria-label="Toggle navigation" onclick="toggleMobileMenu()">
+            <span></span><span></span><span></span>
+        </button>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/features/">Features</a>
+            <a href="/evolution/">Evolution</a>
+            <a href="/compare/">Compare</a>
+            <a href="/blog/">Blog</a>
+            <a href="/changelog/">Changelog</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta">GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<section class="article-header">
+    <div class="container">
+        <a href="/blog/" class="article-back">← Back to blog</a>
+        <div class="article-meta">April 12, 2026 · Patch release · packaged runtime / operator continuity</div>
+        <h1 class="section-title" style="font-size:clamp(28px,4.5vw,48px);max-width:920px;margin:0 auto 16px;">NEXO 5.3.7: Packaged Update Self-Heal and Portable User-Data Bundles</h1>
+        <p class="section-subtitle" style="max-width:760px;margin:0 auto;">This is the follow-through release after the Claude MCP bootstrap fix. The runtime path was better, but packaged users could still hit a second repair step after update and still see doctor stay red for already-tracked Codex drift. 5.3.7 closes both gaps and turns operator continuity into an explicit product surface.</p>
+    </div>
+</section>
+
+<section>
+    <div class="article-body">
+        <div class="article-visual">
+            <img src="/assets/nexo-brain-infographic-v5.png" alt="NEXO Brain 5.3.7 release">
+        </div>
+
+        <p><strong>5.3.7 is about making the packaged path behave like a packaged path.</strong> If a user installs NEXO from npm, updates it, restarts the machine, and expects the runtime to just keep working, the product should not quietly depend on a second repair command to finish the job.</p>
+
+        <h2>What we saw after 5.3.6</h2>
+        <p>5.3.6 fixed the Claude Code MCP bootstrap mismatch by syncing the managed NEXO server into the user config Claude actually reads. That part mattered. But validating the release on a real daily-work Mac immediately exposed the next gap: packaged <code>nexo update</code> could still leave cron or LaunchAgent state needing <code>nexo doctor --tier runtime --fix</code> to feel truly clean again.</p>
+
+        <h2>What 5.3.7 changes in the update path</h2>
+        <p>Packaged updates now re-sync runtime cron definitions after the npm bump, skip noisy same-file hook copies when the runtime already points at its canonical source, and reload managed macOS LaunchAgents after a real version change. The point is simple: the normal update path should converge by itself more often, not ask the operator to know which second command happens to finish the repair.</p>
+
+        <h2>Portable continuity is now explicit</h2>
+        <p>This release also adds <code>nexo export</code> and <code>nexo import</code>. The export command writes a portable user-data bundle with the active DB, brain state, coordination artifacts, selected config, and personal scripts. The import command restores that bundle into a clean runtime and creates a safety backup first. Operator continuity is no longer an undocumented combination of folders, backups, and memory about where things live.</p>
+
+        <h2>Doctor now reports the packaged path more honestly</h2>
+        <p>Another gap surfaced during the same validation pass: the runtime could already be operationally clean while <code>nexo doctor</code> stayed red because recent Codex transcript drift was still visible even though no conditioned protocol debt remained open. 5.3.7 keeps that evidence for auditability without treating it like a broken install.</p>
+
+        <h2>Why this matters</h2>
+        <p>Product trust is mostly about the path users repeat. A bootstrap bug breaks trust. An update that only becomes “really done” after an extra repair step also breaks trust. And when continuity depends on tribal knowledge instead of an explicit command, the runtime feels more fragile than it is. 5.3.7 exists to remove those extra edges for real packaged use.</p>
+
+        <h2>Upgrade</h2>
+        <p>Open the <a href="/changelog/#v537">5.3.7 changelog section</a> for the exact release note. For installed users, the intended path now looks like this:</p>
+        <p><code>npm install -g nexo-brain@5.3.7</code><br><code>nexo update</code><br><code>nexo doctor</code></p>
+        <p>And if you want to move or safeguard the operator side explicitly:</p>
+        <p><code>nexo export</code><br><code>nexo import /path/to/nexo-user-data-*.tar.gz</code></p>
+        <p>The runtime still stays replaceable. The difference is that the packaged lifecycle and the operator continuity story are finally cleaner by default.</p>
+    </div>
+</section>
+
+<footer>
+    <div class="container">
+        <div class="footer-content">
+            <div class="footer-left">
+                Created by <strong>Francisco Cerd&agrave; Puigserver</strong> &amp; <strong>NEXO</strong> (Claude Opus) &bull; Built by <a href="https://www.wazion.com">WAzion</a> &bull; AGPL-3.0 License &bull; &copy; 2026
+            </div>
+            <div class="footer-links">
+                <a href="https://github.com/wazionapps/nexo">GitHub</a>
+                <a href="https://x.com/NEXOBRAIN">X / Twitter</a>
+                <a href="https://github.com/sponsors/wazionapps">Sponsor</a>
+                <a href="/docs/">Docs</a>
+                <a href="/compare/">Compare</a>
+                <a href="/blog/">Blog</a>
+                <a href="https://www.npmjs.com/package/nexo-brain">npm</a>
+                <a href="https://github.com/wazionapps/nexo/releases">Releases</a>
+            </div>
+            <div style="text-align:center;margin-top:12px;color:#6b7280;font-size:12px;">Last updated: April 2026</div>
+        </div>
+    </div>
+</footer>
+
+</body>
+</html>

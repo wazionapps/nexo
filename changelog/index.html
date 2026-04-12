@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.6 hardens the Claude Code MCP bootstrap path and tightens runtime hygiene for packaged daily work.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.7 makes packaged updates self-heal across crons and LaunchAgents, adds portable operator data bundles, and keeps doctor honest about tracked Codex drift.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.6 hardens the Claude Code MCP bootstrap path and tightens runtime hygiene for packaged daily work.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.7 makes packaged updates self-heal across crons and LaunchAgents, adds portable operator data bundles, and keeps doctor honest about tracked Codex drift.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.6 hardens the Claude Code MCP bootstrap path and tightens runtime hygiene for packaged daily work.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.7 makes packaged updates self-heal across crons and LaunchAgents, adds portable operator data bundles, and keeps doctor honest about tracked Codex drift.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.6 hardens the Claude Code MCP bootstrap path and tightens runtime hygiene for packaged daily work.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.7 makes packaged updates self-heal across crons and LaunchAgents, adds portable operator data bundles, and keeps doctor honest about tracked Codex drift.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,12 +87,12 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v5.3.6 live</span>
-                    <span class="page-chip">Claude MCP bootstrap hardening</span>
-                    <span class="page-chip">Daily-work runtime hygiene for packaged users</span>
+                    <span class="page-chip">v5.3.7 live</span>
+                    <span class="page-chip">Packaged update self-heal</span>
+                    <span class="page-chip">Portable user-data bundles</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v536" class="btn btn-primary">Start with v5.3.6</a>
+                    <a href="#v537" class="btn btn-primary">Start with v5.3.7</a>
                     <a href="#v400" class="btn btn-secondary">See v4.0.0</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -100,8 +100,8 @@
             <div class="page-visual">
                 <div class="page-stack">
                     <div class="page-stack-card">
-                        <strong>v5.3.6</strong>
-                        <span>Claude Code now reads the managed NEXO MCP server from the right user config, schedule status separates running jobs from broken ones, and runtime hygiene keeps tightening around real packaged use.</span>
+                        <strong>v5.3.7</strong>
+                        <span>Packaged updates now re-sync runtime crons, reload managed LaunchAgents after version bumps, operators get explicit <code>nexo export</code> / <code>nexo import</code> commands for continuity, and doctor stops overstating tracked Codex drift as runtime breakage.</span>
                     </div>
                     <div class="page-stack-card">
                         <strong>v5.3.0</strong>
@@ -155,6 +155,37 @@
             <div>
                 <div id="changelog-page-meta" class="changelog-page-meta">Loading release pages…</div>
                 <div id="changelog-pager" class="changelog-pager" aria-label="Changelog pagination"></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v5.3.7 packaged update self-heal -->
+<section id="v537" class="section-compact" style="background:linear-gradient(135deg,#081225 0%,#0f172a 35%,#2563eb 72%,#06b6d4 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.3.7 <span style="opacity:.5;font-weight:400;">&mdash; April 12, 2026</span></div>
+        <h2 class="section-title">Packaged Update Self-Heal &amp; Portable User-Data Bundles</h2>
+        <p class="section-subtitle">
+            After fixing the Claude bootstrap path, the next real packaged-user gap showed up immediately on a real Mac: <code>nexo update</code> could still leave cron or LaunchAgent state needing a follow-up repair, and <code>nexo doctor</code> could stay red on tracked Codex drift even after the runtime itself was clean. 5.3.7 closes that happy-path gap and finally exposes explicit operator export/import commands for continuity.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h3>Packaged updates now self-heal more of the runtime</h3>
+                    <p>After a successful npm bump, packaged installs now re-sync runtime cron definitions, skip same-file hook-copy noise when the runtime already points at its canonical source, and reload managed macOS LaunchAgents so the updated code is actually the code the machine runs.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Operator continuity is now a first-class CLI path</h3>
+                    <p><code>nexo export</code> writes a portable user-data bundle with the active DB, brain state, coordination artifacts, selected config, and personal scripts. <code>nexo import</code> restores that bundle into a clean runtime and creates a safety backup first instead of making continuity an implicit manual ritual.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Doctor severity now matches runtime reality</h3>
+                    <p>Tracked historical Codex drift with zero open conditioned protocol debt now degrades instead of going critical, so cleaned packaged runtimes stop looking broken just because transcript history still exists.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Why this release exists</h3>
+                    <p>5.3.6 fixed the Claude MCP bootstrap path. 5.3.7 is the release that makes that fix hold up in the normal packaged lifecycle too, so a real operator can update, restart, and keep working without having to know which extra repair command to run next or wonder whether doctor is describing the runtime honestly.</p>
+                </div>
             </div>
         </div>
     </div>

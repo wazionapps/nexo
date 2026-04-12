@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Blog — NEXO Brain</title>
-    <meta name="description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.6 patch that hardens Claude Code MCP bootstrap and runtime hygiene for packaged users.">
+    <meta name="description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.7 patch that makes packaged updates self-heal, adds portable user-data bundles, and clarifies doctor severity for tracked Codex drift.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/blog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/blog/">
     <meta property="og:title" content="Blog — NEXO Brain">
-    <meta property="og:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.6 patch that hardens Claude Code MCP bootstrap and runtime hygiene for packaged users.">
+    <meta property="og:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.7 patch that makes packaged updates self-heal, adds portable user-data bundles, and clarifies doctor severity for tracked Codex drift.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Blog — NEXO Brain">
-    <meta name="twitter:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.6 patch that hardens Claude Code MCP bootstrap and runtime hygiene for packaged users.">
+    <meta name="twitter:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.7 patch that makes packaged updates self-heal, adds portable user-data bundles, and clarifies doctor severity for tracked Codex drift.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Blog — NEXO Brain",
-        "description": "Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.6 patch that hardens Claude Code MCP bootstrap and runtime hygiene for packaged users.",
+        "description": "Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.7 patch that makes packaged updates self-heal, adds portable user-data bundles, and clarifies doctor severity for tracked Codex drift.",
         "url": "https://nexo-brain.com/blog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -134,7 +134,7 @@
                     <span class="page-chip">Competitive analysis</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="/blog/nexo-5-3-6-claude-mcp-bootstrap-hardening/" class="btn btn-primary">Read latest release</a>
+                    <a href="/blog/nexo-5-3-7-packaged-update-self-heal-and-portable-user-data/" class="btn btn-primary">Read latest release</a>
                     <a href="/changelog/" class="btn btn-secondary">Latest release notes</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -143,22 +143,22 @@
                 <div class="section-label">Latest release</div>
                 <div class="blog-featured-meta">
                     <span class="compare-chip">April 12, 2026</span>
-                    <span class="compare-chip">Claude MCP bootstrap + runtime hygiene</span>
+                    <span class="compare-chip">Packaged update self-heal + portable user-data</span>
                 </div>
-                <h2>NEXO 5.3.6: Claude MCP Bootstrap Hardening for Real Daily Work</h2>
-                <p>NEXO 5.3.6 fixes the real-world Claude Code bootstrap path by syncing the managed NEXO MCP server into the user config Claude actually reads, while tightening schedule status, runtime classification, and release hygiene around it.</p>
+                <h2>NEXO 5.3.7: Packaged Update Self-Heal and Portable User-Data Bundles</h2>
+                <p>NEXO 5.3.7 closes the next daily-work gap after the Claude bootstrap fix: packaged updates now re-sync runtime crons, reload managed LaunchAgents after version bumps, expose explicit <code>nexo export</code> / <code>nexo import</code> commands for safe operator continuity, and keep doctor from treating tracked Codex drift as a broken install.</p>
                 <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
-                    <a href="/blog/nexo-5-3-6-claude-mcp-bootstrap-hardening/" class="btn btn-primary">Open article</a>
-                    <a href="/changelog/#v536" class="btn btn-secondary">Open changelog</a>
+                    <a href="/blog/nexo-5-3-7-packaged-update-self-heal-and-portable-user-data/" class="btn btn-primary">Open article</a>
+                    <a href="/changelog/#v537" class="btn btn-secondary">Open changelog</a>
                 </div>
                 <div class="blog-mini-stack">
                     <div class="blog-mini-card">
                         <strong>Companion view</strong>
-                        <span><a href="/changelog/#v536">The 5.3.6 changelog section</a></span>
+                        <span><a href="/changelog/#v537">The 5.3.7 changelog section</a></span>
                     </div>
                     <div class="blog-mini-card">
                         <strong>Previous release</strong>
-                        <span><a href="/blog/nexo-5-3-3-doctor-inventory-alignment/">NEXO 5.3.3: Doctor Inventory Alignment for Clean Packaged Installs</a>.</span>
+                        <span><a href="/blog/nexo-5-3-6-claude-mcp-bootstrap-hardening/">NEXO 5.3.6: Claude MCP Bootstrap Hardening for Real Daily Work</a>.</span>
                     </div>
                 </div>
             </div>
@@ -170,6 +170,13 @@
 <section class="section-flush-top">
     <div class="container">
         <div class="blog-grid">
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 12, 2026</div>
+                <h2><a href="/blog/nexo-5-3-7-packaged-update-self-heal-and-portable-user-data/">NEXO 5.3.7: Packaged Update Self-Heal and Portable User-Data Bundles</a></h2>
+                <p>A daily-work release for packaged users: <code>nexo update</code> now re-syncs runtime crons and reloads LaunchAgents after version bumps, new <code>nexo export</code> / <code>nexo import</code> commands finally make operator continuity explicit, and doctor stops overstating tracked Codex drift.</p>
+                <a href="/blog/nexo-5-3-7-packaged-update-self-heal-and-portable-user-data/" class="read-more">Read article <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></a>
+            </div>
 
             <div class="blog-card">
                 <div class="blog-card-date">April 12, 2026</div>
