@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.2.0 ships bilingual response discipline (Spanish and English high-stakes detection with negation suppression), a numeric confidence safeguard with positive context signals, and a cortex-quality cache reader that closes the v5.1.0 cron's write-only snapshot loop.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.2.1 fixes a deep-sleep datetime crash (7/8 Phase 4 failures) and closes the cortex decision-verification feedback loop with auto-outcome creation.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.2.0 ships bilingual response discipline (Spanish and English high-stakes detection with negation suppression), a numeric confidence safeguard with positive context signals, and a cortex-quality cache reader that closes the v5.1.0 cron's write-only snapshot loop.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.2.1 fixes a deep-sleep datetime crash (7/8 Phase 4 failures) and closes the cortex decision-verification feedback loop with auto-outcome creation.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.2.0 ships bilingual response discipline (Spanish and English high-stakes detection with negation suppression), a numeric confidence safeguard with positive context signals, and a cortex-quality cache reader that closes the v5.1.0 cron's write-only snapshot loop.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.2.1 fixes a deep-sleep datetime crash (7/8 Phase 4 failures) and closes the cortex decision-verification feedback loop with auto-outcome creation.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v5.2.0 ships bilingual response discipline (Spanish and English high-stakes detection with negation suppression), a numeric confidence safeguard with positive context signals, and a cortex-quality cache reader that closes the v5.1.0 cron's write-only snapshot loop.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v5.2.1 fixes a deep-sleep datetime crash (7/8 Phase 4 failures) and closes the cortex decision-verification feedback loop with auto-outcome creation.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,18 +87,22 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v5.2.0 live</span>
-                    <span class="page-chip">Bilingual response discipline &middot; ES/EN high-stakes detection</span>
-                    <span class="page-chip">Cortex-quality cache reader closes the v5.1.0 cron loop</span>
+                    <span class="page-chip">v5.2.1 live</span>
+                    <span class="page-chip">Deep-sleep datetime fix &middot; Cortex outcome feedback loop</span>
+                    <span class="page-chip">Closed decision &rarr; verification circuit</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v520" class="btn btn-primary">Start with v5.2.0</a>
+                    <a href="#v521" class="btn btn-primary">Start with v5.2.1</a>
                     <a href="#v400" class="btn btn-secondary">See v4.0.0</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
             </div>
             <div class="page-visual">
                 <div class="page-stack">
+                    <div class="page-stack-card">
+                        <strong>v5.2.1</strong>
+                        <span>Deep-sleep datetime crash fix (7/8 Phase 4 failures) and cortex auto-outcome creation that closes the decision→verification feedback loop.</span>
+                    </div>
                     <div class="page-stack-card">
                         <strong>v5.2.0</strong>
                         <span>Bilingual response discipline (Spanish + English high-stakes detection with negation suppression), numeric confidence safeguard with positive context signals, and a cortex-quality cache reader that closes the v5.1.0 cron's write-only snapshot loop.</span>
@@ -143,6 +147,29 @@
             <div>
                 <div id="changelog-page-meta" class="changelog-page-meta">Loading release pages…</div>
                 <div id="changelog-pager" class="changelog-pager" aria-label="Changelog pagination"></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v5.2.1 Bug fixes & cortex outcome feedback loop -->
+<section id="v521" class="section-compact" style="background:linear-gradient(135deg,#0b1120 0%,#7c3aed 55%,#ec4899 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.2.1 <span style="opacity:.5;font-weight:400;">&mdash; April 12, 2026</span></div>
+        <h2 class="section-title">Deep-Sleep Crash Fix &amp; Cortex Outcome Feedback Loop</h2>
+        <p class="section-subtitle">
+            A patch release that fixes a datetime crash causing 7/8 Deep Sleep Phase 4 failures and closes the cortex decision&rarr;verification feedback loop by auto-creating outcomes when none exist.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h3>Deep-Sleep datetime fix</h3>
+                    <p><code>_parse_any_datetime</code> in <code>apply_findings.py</code> now explicitly strips timezone info with <code>dt.replace(tzinfo=None)</code>, fixing a <code>TypeError</code> when comparing offset-naive and offset-aware datetimes during Phase 4. This bug caused 7 out of 8 Deep Sleep runs to fail on a single night.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Cortex outcome auto-creation</h3>
+                    <p><code>cortex_decide()</code> now auto-creates a <code>decision_outcome</code> when no existing outcome is linked to the task. The daily <code>outcome-checker</code> cron verifies these automatically, closing the decision&rarr;verification feedback loop that was previously open (<code>linked_outcomes_total</code> was always 0).</p>
+                </div>
             </div>
         </div>
     </div>
