@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXO 5.3.1: Packaged Runtime Normalization for Real npm Users</title>
+    <meta name="description" content="NEXO 5.3.1 fixes the packaged install path that older users actually feel: nexo update now stays anchored to ~/.nexo, refreshes packaged bootstrap and client artifacts, avoids repo-only drift in installed runtimes, and keeps personal scripts on the canonical packaged path.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-5-3-1-packaged-runtime-normalization/">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/blog/nexo-5-3-1-packaged-runtime-normalization/">
+    <meta property="og:title" content="NEXO 5.3.1: Packaged Runtime Normalization for Real npm Users">
+    <meta property="og:description" content="A packaging patch that makes nexo update behave like a normal npm user expects: anchored to ~/.nexo, packaged artifacts refreshed after upgrade, repo-only drift kept out of installed runtimes, and personal scripts resolved from the canonical packaged home.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+    <meta property="article:published_time" content="2026-04-12">
+    <meta property="article:author" content="Francisco Cerda Puigserver">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO 5.3.1: Packaged Runtime Normalization for Real npm Users">
+    <meta name="twitter:description" content="nexo update now stays anchored to ~/.nexo, refreshes packaged artifacts after upgrade, and avoids repo-only drift in installed runtimes.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "NEXO 5.3.1: Packaged Runtime Normalization for Real npm Users",
+        "description": "NEXO 5.3.1 fixes the packaged install path that older users actually feel: nexo update now stays anchored to ~/.nexo, refreshes packaged bootstrap and client artifacts, avoids repo-only drift in installed runtimes, and keeps personal scripts on the canonical packaged path.",
+        "datePublished": "2026-04-12",
+        "dateModified": "2026-04-12",
+        "author": {
+            "@type": "Person",
+            "name": "Francisco Cerda Puigserver"
+        },
+        "publisher": {
+            "@type": "Organization",
+            "name": "WAzion",
+            "url": "https://www.wazion.com"
+        },
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https://nexo-brain.com/blog/nexo-5-3-1-packaged-runtime-normalization/"
+        },
+        "url": "https://nexo-brain.com/blog/nexo-5-3-1-packaged-runtime-normalization/",
+        "image": "https://nexo-brain.com/assets/nexo-brain-infographic-v5.png",
+        "keywords": ["NEXO 5.3.1", "nexo update", "npm install", "packaged runtime", "runtime normalization", "~/.nexo"]
+    }
+    </script>
+
+    <style>
+        .article-header { padding-top: 128px; padding-bottom: 40px; text-align: center; }
+        .article-meta { font-size: 14px; color: var(--text-muted); margin-bottom: 16px; }
+        .article-body {
+            max-width: 720px; margin: 0 auto; padding: 0 24px 80px;
+            font-size: 17px; line-height: 1.8; color: var(--text);
+        }
+        .article-body h2 { font-size: 28px; font-weight: 700; margin: 48px 0 16px; letter-spacing: -0.01em; }
+        .article-body p { margin-bottom: 20px; color: var(--text-muted); }
+        .article-body strong { color: var(--text); }
+        .article-body a { color: var(--purple-light); }
+        .article-body a:hover { color: var(--pink); }
+        .article-body ul { margin: 0 0 20px 24px; color: var(--text-muted); }
+        .article-body li { margin-bottom: 8px; }
+        .article-body code {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 14px; color: var(--pink);
+            background: rgba(236, 72, 153, 0.1);
+            padding: 2px 8px; border-radius: 4px;
+        }
+        .article-back {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 14px; font-weight: 600; color: var(--text-muted);
+            margin-bottom: 24px;
+        }
+        .article-back:hover { color: var(--purple-light); }
+        .article-visual { margin: 32px 0 40px; text-align: center; }
+        .article-visual img {
+            max-width: 100%;
+            border-radius: 16px;
+            border: 1px solid var(--dark-border);
+            box-shadow: 0 8px 32px rgba(124,58,237,0.15);
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-64.png" alt="NEXO Brain" class="logo-image">
+            <span class="logo-text">NEXO Brain</span>
+        </a>
+        <button class="mobile-menu-toggle" aria-label="Toggle navigation" onclick="toggleMobileMenu()">
+            <span></span><span></span><span></span>
+        </button>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/features/">Features</a>
+            <a href="/evolution/">Evolution</a>
+            <a href="/compare/">Compare</a>
+            <a href="/blog/">Blog</a>
+            <a href="/changelog/">Changelog</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta">GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<section class="article-header">
+    <div class="container">
+        <a href="/blog/" class="article-back">← Back to blog</a>
+        <div class="article-meta">April 12, 2026 · Patch release · Packaging / update path</div>
+        <h1 class="section-title" style="font-size:clamp(28px,4.5vw,48px);max-width:920px;margin:0 auto 16px;">NEXO 5.3.1: Packaged Runtime Normalization for Real npm Users</h1>
+        <p class="section-subtitle" style="max-width:760px;margin:0 auto;">The public 5.3.0 line added <code>nexo uninstall</code>. 5.3.1 closes the next practical gap: older packaged installs could still carry legacy path assumptions after <code>nexo update</code>. This patch makes the installed runtime behave like a normal npm install again.</p>
+    </div>
+</section>
+
+<section>
+    <div class="article-body">
+        <div class="article-visual">
+            <img src="/assets/nexo-brain-infographic-v5.png" alt="NEXO Brain 5.3.1 release">
+        </div>
+
+        <p><strong>5.3.1 is a packaging and upgrade-path patch.</strong> It does not introduce a new cognitive subsystem. It fixes the path a real user feels after installation: upgrade the runtime, keep the data, and do not accidentally reintroduce legacy layout assumptions from earlier local installs or source checkouts.</p>
+
+        <h2>The user-facing problem</h2>
+        <p>NEXO has long separated runtime and user data conceptually, but a packaged install could still retain hidden assumptions from older layouts. In practice that meant wrappers, helpers, bootstrap refreshes, doctor checks, or personal-script flows could look at a legacy path such as <code>~/claude</code> or assume a source-tree shape that only makes sense inside the repo. A normal npm user should never need the source checkout present on disk to keep using <code>nexo update</code>.</p>
+
+        <h2>What 5.3.1 changes</h2>
+        <ul>
+            <li><strong>Canonical packaged home.</strong> Runtime-home resolution is normalized around <code>~/.nexo</code> for packaged installs instead of drifting toward legacy paths.</li>
+            <li><strong>Update refreshes packaged artifacts.</strong> After upgrade, managed bootstrap and client-facing packaged artifacts are refreshed so the installed runtime stays coherent.</li>
+            <li><strong>Doctor stays honest in user installs.</strong> Repo-only release-artifact drift checks no longer pollute packaged runtimes that are not source trees.</li>
+            <li><strong>Personal scripts stay on the packaged path.</strong> Script registry, helper resolution, startup preflight, and related runtime surfaces now consistently resolve against the canonical packaged home.</li>
+        </ul>
+
+        <h2>Why this matters</h2>
+        <p>The difference is operational, not cosmetic. A user can install NEXO from npm, keep years of their own data in <code>~/.nexo</code>, work on the source repo separately if they want to, and still use <code>nexo update</code> as a normal packaged workflow. The runtime remains replaceable; the data remains durable.</p>
+
+        <h2>Validation</h2>
+        <p>This release is backed by dedicated packaged-runtime tests covering runtime-home resolution, startup preflight, client sync, doctor behavior, update flow, and personal-script registry handling. It was also revalidated on a real packaged user runtime where legacy visible home paths were removed and personal scripts plus scheduled automations continued to work from the canonical <code>~/.nexo</code> install.</p>
+
+        <h2>Upgrade</h2>
+        <p>If you want the exact release record, open the <a href="/changelog/#v531">5.3.1 changelog section</a>. If you are already installed, the intended path is simply:</p>
+        <p><code>npm install -g nexo-brain@5.3.1</code><br><code>nexo update</code></p>
+        <p>Your data stays in <code>~/.nexo</code>. The runtime stays replaceable.</p>
+    </div>
+</section>
+
+<footer>
+    <div class="container">
+        <div class="footer-content">
+            <div class="footer-left">
+                Created by <strong>Francisco Cerd&agrave; Puigserver</strong> &amp; <strong>NEXO</strong> (Claude Opus) &bull; Built by <a href="https://www.wazion.com">WAzion</a> &bull; AGPL-3.0 License &bull; &copy; 2026
+            </div>
+            <div class="footer-links">
+                <a href="https://github.com/wazionapps/nexo">GitHub</a>
+                <a href="https://x.com/NEXOBRAIN">X / Twitter</a>
+                <a href="https://github.com/sponsors/wazionapps">Sponsor</a>
+                <a href="/docs/">Docs</a>
+                <a href="/compare/">Compare</a>
+                <a href="/blog/">Blog</a>
+                <a href="https://www.npmjs.com/package/nexo-brain">npm</a>
+                <a href="https://github.com/wazionapps/nexo/releases">Releases</a>
+            </div>
+            <div style="text-align:center;margin-top:12px;color:#6b7280;font-size:12px;">Last updated: April 2026</div>
+        </div>
+    </div>
+</footer>
+
+</body>
+</html>
