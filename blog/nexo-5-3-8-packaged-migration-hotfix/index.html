@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXO 5.3.8: Packaged Migration Hotfix for New Root Runtime Modules</title>
+    <meta name="description" content="NEXO 5.3.8 closes the real-machine regression exposed after 5.3.7: packaged updates now migrate newly added top-level runtime Python modules into ~/.nexo, so shipped commands like nexo export and nexo import actually work on upgraded installs.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-5-3-8-packaged-migration-hotfix/">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/blog/nexo-5-3-8-packaged-migration-hotfix/">
+    <meta property="og:title" content="NEXO 5.3.8: Packaged Migration Hotfix for New Root Runtime Modules">
+    <meta property="og:description" content="A real-machine hotfix for packaged users: newly added root runtime modules now migrate into ~/.nexo during update, so portability commands actually arrive in the live runtime instead of staying only in the npm tarball.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+    <meta property="article:published_time" content="2026-04-12">
+    <meta property="article:author" content="Francisco Cerda Puigserver">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO 5.3.8: Packaged Migration Hotfix for New Root Runtime Modules">
+    <meta name="twitter:description" content="5.3.8 fixes the last real packaged regression from 5.3.7 by migrating newly added top-level runtime Python modules into ~/.nexo on upgraded installs.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "NEXO 5.3.8: Packaged Migration Hotfix for New Root Runtime Modules",
+        "description": "NEXO 5.3.8 closes the real-machine regression exposed after 5.3.7: packaged updates now migrate newly added top-level runtime Python modules into ~/.nexo, so shipped commands like nexo export and nexo import actually work on upgraded installs.",
+        "datePublished": "2026-04-12",
+        "dateModified": "2026-04-12",
+        "author": {
+            "@type": "Person",
+            "name": "Francisco Cerda Puigserver"
+        },
+        "publisher": {
+            "@type": "Organization",
+            "name": "WAzion",
+            "url": "https://www.wazion.com"
+        },
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https://nexo-brain.com/blog/nexo-5-3-8-packaged-migration-hotfix/"
+        },
+        "url": "https://nexo-brain.com/blog/nexo-5-3-8-packaged-migration-hotfix/",
+        "image": "https://nexo-brain.com/assets/nexo-brain-infographic-v5.png",
+        "keywords": ["NEXO 5.3.8", "nexo update", "packaged migration", "nexo export", "nexo import", "user_data_portability.py"]
+    }
+    </script>
+
+    <style>
+        .article-header { padding-top: 128px; padding-bottom: 40px; text-align: center; }
+        .article-meta { font-size: 14px; color: var(--text-muted); margin-bottom: 16px; }
+        .article-body {
+            max-width: 720px; margin: 0 auto; padding: 0 24px 80px;
+            font-size: 17px; line-height: 1.8; color: var(--text);
+        }
+        .article-body h2 { font-size: 28px; font-weight: 700; margin: 48px 0 16px; letter-spacing: -0.01em; }
+        .article-body p { margin-bottom: 20px; color: var(--text-muted); }
+        .article-body strong { color: var(--text); }
+        .article-body a { color: var(--purple-light); }
+        .article-body a:hover { color: var(--pink); }
+        .article-body code {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 14px; color: var(--pink);
+            background: rgba(236, 72, 153, 0.1);
+            padding: 2px 8px; border-radius: 4px;
+        }
+        .article-back {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 14px; font-weight: 600; color: var(--text-muted);
+            margin-bottom: 24px;
+        }
+        .article-back:hover { color: var(--purple-light); }
+        .article-visual { margin: 32px 0 40px; text-align: center; }
+        .article-visual img {
+            max-width: 100%;
+            border-radius: 16px;
+            border: 1px solid var(--dark-border);
+            box-shadow: 0 8px 32px rgba(37,99,235,0.18);
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-64.png" alt="NEXO Brain" class="logo-image">
+            <span class="logo-text">NEXO Brain</span>
+        </a>
+        <button class="mobile-menu-toggle" aria-label="Toggle navigation" onclick="toggleMobileMenu()">
+            <span></span><span></span><span></span>
+        </button>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/features/">Features</a>
+            <a href="/evolution/">Evolution</a>
+            <a href="/compare/">Compare</a>
+            <a href="/blog/">Blog</a>
+            <a href="/changelog/">Changelog</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta">GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<section class="article-header">
+    <div class="container">
+        <a href="/blog/" class="article-back">← Back to blog</a>
+        <div class="article-meta">April 12, 2026 · Patch release · packaged runtime / migration integrity</div>
+        <h1 class="section-title" style="font-size:clamp(28px,4.5vw,48px);max-width:920px;margin:0 auto 16px;">NEXO 5.3.8: Packaged Migration Hotfix for New Root Runtime Modules</h1>
+        <p class="section-subtitle" style="max-width:760px;margin:0 auto;">5.3.7 shipped the right public story, but real-machine validation found one last packaged regression: upgraded installs could still miss newly added root runtime modules inside <code>~/.nexo</code>. 5.3.8 fixes that exact boundary so the live runtime actually matches the package, the docs, and the release note.</p>
+    </div>
+</section>
+
+<section>
+    <div class="article-body">
+        <div class="article-visual">
+            <img src="/assets/nexo-brain-infographic-v5.png" alt="NEXO Brain 5.3.8 release">
+        </div>
+
+        <p><strong>5.3.8 is about making the packaged runtime receive everything the package really ships.</strong> If a release adds a new root Python module, an upgraded install should not keep running an incomplete runtime tree just because the migration step still depends on a stale hard-coded list.</p>
+
+        <h2>What the real-machine validation exposed</h2>
+        <p>5.3.7 closed the packaged happy path and added explicit <code>nexo export</code> / <code>nexo import</code> commands. But validating the release on the actual Mac that uses NEXO every day surfaced a new failure immediately: after <code>nexo update</code>, <code>nexo export</code> still crashed because <code>user_data_portability.py</code> never made it into the live runtime under <code>~/.nexo</code>.</p>
+
+        <h2>Why it happened</h2>
+        <p>The npm tarball already contained the new portability module. The problem was the installer-side migration path for existing packaged installs: it copied only a manual allowlist of top-level runtime files from <code>src/</code>. That meant a release could be technically published correctly while the upgraded runtime silently stayed incomplete.</p>
+
+        <h2>What 5.3.8 changes in the migration path</h2>
+        <p>The packaged installer now discovers top-level runtime Python modules dynamically instead of depending only on that allowlist. New root modules from <code>src/</code> get copied into <code>~/.nexo</code> automatically during the update path, so the live runtime no longer drifts behind the published package whenever a new command surface is introduced.</p>
+
+        <h2>What this means for operator continuity</h2>
+        <p>The portability commands introduced in 5.3.7 now become true packaged-runtime features instead of package-only features. <code>nexo export</code> and <code>nexo import</code> remain the explicit continuity surface, but now they also work on the upgraded live install without requiring a hidden manual file repair.</p>
+
+        <h2>Why this hotfix matters</h2>
+        <p>Trust is not just about passing CI or publishing npm successfully. It is about whether the upgraded runtime on a real machine actually contains the product surfaces the release says it contains. 5.3.8 exists because that boundary still mattered after 5.3.7, and because packaged users should not have to debug missing root modules after a normal update.</p>
+
+        <h2>Upgrade</h2>
+        <p>Open the <a href="/changelog/#v538">5.3.8 changelog section</a> for the exact release note. For installed users, the intended path now looks like this:</p>
+        <p><code>npm install -g nexo-brain@5.3.8</code><br><code>nexo update</code><br><code>nexo export</code><br><code>nexo doctor</code></p>
+        <p>If you want to move or safeguard the operator side explicitly, the continuity commands are the same:</p>
+        <p><code>nexo export</code><br><code>nexo import /path/to/nexo-user-data-*.tar.gz</code></p>
+        <p>The difference is that the live runtime now receives the new root modules those commands depend on. That makes the packaged lifecycle match the product story users are actually asked to trust.</p>
+    </div>
+</section>
+
+<footer>
+    <div class="container">
+        <div class="footer-content">
+            <div class="footer-left">
+                Created by <strong>Francisco Cerd&agrave; Puigserver</strong> &amp; <strong>NEXO</strong> (Claude Opus) &bull; Built by <a href="https://www.wazion.com">WAzion</a> &bull; AGPL-3.0 License &bull; &copy; 2026
+            </div>
+            <div class="footer-links">
+                <a href="https://github.com/wazionapps/nexo">GitHub</a>
+                <a href="https://x.com/NEXOBRAIN">X / Twitter</a>
+                <a href="https://github.com/sponsors/wazionapps">Sponsor</a>
+                <a href="/docs/">Docs</a>
+                <a href="/compare/">Compare</a>
+                <a href="/blog/">Blog</a>
+                <a href="https://www.npmjs.com/package/nexo-brain">npm</a>
+                <a href="https://github.com/wazionapps/nexo/releases">Releases</a>
+            </div>
+            <div style="text-align:center;margin-top:12px;color:#6b7280;font-size:12px;">Last updated: April 2026</div>
+        </div>
+    </div>
+</footer>
+
+</body>
+</html>

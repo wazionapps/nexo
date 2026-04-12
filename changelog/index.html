@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.7 makes packaged updates self-heal across crons and LaunchAgents, adds portable operator data bundles, and keeps doctor honest about tracked Codex drift.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.8 hotfixes packaged migration so newly added root runtime modules really reach ~/.nexo after update.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.7 makes packaged updates self-heal across crons and LaunchAgents, adds portable operator data bundles, and keeps doctor honest about tracked Codex drift.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.8 hotfixes packaged migration so newly added root runtime modules really reach ~/.nexo after update.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.7 makes packaged updates self-heal across crons and LaunchAgents, adds portable operator data bundles, and keeps doctor honest about tracked Codex drift.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.8 hotfixes packaged migration so newly added root runtime modules really reach ~/.nexo after update.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.7 makes packaged updates self-heal across crons and LaunchAgents, adds portable operator data bundles, and keeps doctor honest about tracked Codex drift.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.8 hotfixes packaged migration so newly added root runtime modules really reach ~/.nexo after update.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,12 +87,12 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v5.3.7 live</span>
-                    <span class="page-chip">Packaged update self-heal</span>
-                    <span class="page-chip">Portable user-data bundles</span>
+                    <span class="page-chip">v5.3.8 live</span>
+                    <span class="page-chip">Packaged migration hotfix</span>
+                    <span class="page-chip">Root runtime modules reach ~/.nexo</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v537" class="btn btn-primary">Start with v5.3.7</a>
+                    <a href="#v538" class="btn btn-primary">Start with v5.3.8</a>
                     <a href="#v400" class="btn btn-secondary">See v4.0.0</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -100,8 +100,8 @@
             <div class="page-visual">
                 <div class="page-stack">
                     <div class="page-stack-card">
-                        <strong>v5.3.7</strong>
-                        <span>Packaged updates now re-sync runtime crons, reload managed LaunchAgents after version bumps, operators get explicit <code>nexo export</code> / <code>nexo import</code> commands for continuity, and doctor stops overstating tracked Codex drift as runtime breakage.</span>
+                        <strong>v5.3.8</strong>
+                        <span>Packaged migration now discovers newly added top-level runtime Python modules automatically, so shipped commands like <code>nexo export</code> / <code>nexo import</code> really land inside <code>~/.nexo</code> after update on existing installs.</span>
                     </div>
                     <div class="page-stack-card">
                         <strong>v5.3.0</strong>
@@ -155,6 +155,37 @@
             <div>
                 <div id="changelog-page-meta" class="changelog-page-meta">Loading release pages…</div>
                 <div id="changelog-pager" class="changelog-pager" aria-label="Changelog pagination"></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v5.3.8 packaged migration hotfix -->
+<section id="v538" class="section-compact" style="background:linear-gradient(135deg,#07111f 0%,#0f172a 32%,#2563eb 70%,#22c55e 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.3.8 <span style="opacity:.5;font-weight:400;">&mdash; April 12, 2026</span></div>
+        <h2 class="section-title">Packaged Migration Hotfix for New Root Runtime Modules</h2>
+        <p class="section-subtitle">
+            Real-machine validation of 5.3.7 exposed one last packaged gap: the npm package shipped <code>nexo export</code> / <code>nexo import</code>, but upgraded installs could still miss <code>user_data_portability.py</code> inside <code>~/.nexo</code> because the runtime migrator only copied a manual allowlist of root modules. 5.3.8 closes that gap directly.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h3>The packaged migrator now discovers root modules dynamically</h3>
+                    <p>Instead of relying only on a static list, the packaged installer now scans <code>src/</code> for top-level Python modules and carries them into the live runtime. New product surfaces stop getting stranded in the npm tarball while the existing install keeps running an older incomplete file set.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>The portability commands now work on real upgraded installs</h3>
+                    <p>The user-facing effect is simple: when 5.3.8 ships a new root runtime module, upgraded packaged installs actually receive it. That is what makes commands such as <code>nexo export</code> and <code>nexo import</code> reliable after <code>nexo update</code> instead of only looking correct in docs and package contents.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Regression coverage now protects the migration boundary</h3>
+                    <p>A dedicated packaged-update regression test now asserts that the installer keeps discovering newly added root modules. Future releases have to preserve that behavior instead of silently omitting new files again.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Why this hotfix matters</h3>
+                    <p>5.3.7 fixed the packaged happy path and exposed portable continuity. 5.3.8 makes that work real on existing installs. Without this hotfix, the release story was coherent in GitHub, npm, docs, and website, but incomplete in the actual runtime the operator uses every day.</p>
+                </div>
             </div>
         </div>
     </div>
