@@ -855,7 +855,8 @@ def _parse_any_datetime(value) -> datetime | None:
         except Exception:
             continue
     try:
-        return datetime.fromisoformat(raw.replace("Z", "+00:00").replace("+00:00", ""))
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        return dt.replace(tzinfo=None)
     except Exception:
         return None
 

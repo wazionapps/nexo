@@ -19,7 +19,7 @@ import os
 import re
 import secrets
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 
@@ -896,6 +896,27 @@ def handle_cortex_decide(
         linked_outcome_id=linked_outcome_id,
         task_id=task_id,
     )
+
+    # Auto-create outcome when none exists, so cortex decisions
+    # get verified by outcome-checker and close the feedback loop.
+    if resolved_outcome_id is None and clean_goal and task_id:
+        try:
+            from db import create_outcome
+
+            _deadline = (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d")
+            _outcome = create_outcome(
+                action_type="cortex_decision",
+                description=f"Cortex decision: {clean_goal[:120]}",
+                expected_result=f"Recommended '{scored[0]['name']}' succeeds",
+                metric_source="decision_outcome",
+                action_id=task_id,
+                session_id=session_id,
+                deadline=_deadline,
+            )
+            if isinstance(_outcome, dict) and _outcome.get("id"):
+                resolved_outcome_id = int(_outcome["id"])
+        except Exception:
+            pass  # non-critical: decision still records without outcome
 
     try:
         from db import create_cortex_evaluation
