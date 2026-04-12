@@ -9,6 +9,8 @@ import sys
 import time
 from pathlib import Path
 
+from runtime_home import export_resolved_nexo_home
+
 # Code root is the parent of plugins/:
 # - source checkout: <repo>/src
 # - packaged runtime: <NEXO_HOME>
@@ -16,7 +18,7 @@ _THIS_DIR = Path(__file__).resolve().parent
 CODE_ROOT = _THIS_DIR.parent
 _REPO_CANDIDATE = CODE_ROOT.parent
 
-NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+NEXO_HOME = export_resolved_nexo_home()
 DATA_DIR = NEXO_HOME / "data"
 BACKUP_BASE = NEXO_HOME / "backups"
 
@@ -330,8 +332,23 @@ def _backup_code_tree() -> tuple[str | None, str | None]:
     timestamp = time.strftime("%Y-%m-%d-%H%M%S")
     backup_dir = BACKUP_BASE / f"code-tree-{timestamp}"
     # Directories and flat files that postinstall copies into NEXO_HOME
-    code_dirs = ["hooks", "plugins", "db", "cognitive", "dashboard", "rules", "crons", "scripts"]
-    code_files_glob = ["*.py", "requirements.txt"]
+    code_dirs = [
+        "bin",
+        "hooks",
+        "plugins",
+        "db",
+        "cognitive",
+        "dashboard",
+        "rules",
+        "crons",
+        "scripts",
+        "doctor",
+        "skills",
+        "skills-core",
+        "skills-runtime",
+        "templates",
+    ]
+    code_files_glob = ["*.py", "requirements.txt", "package.json"]
     try:
         backup_dir.mkdir(parents=True, exist_ok=True)
         # Backup directories
@@ -370,6 +387,54 @@ def _restore_code_tree(backup_dir: str) -> str | None:
     except Exception as e:
         return f"Code tree restore failed: {e}"
     return None
+
+
+def _normalize_preferences_for_client_sync() -> dict:
+    from client_preferences import normalize_client_preferences
+
+    schedule_path = NEXO_HOME / "config" / "schedule.json"
+    schedule_payload = json.loads(schedule_path.read_text()) if schedule_path.exists() else {}
+    normalized_preferences = normalize_client_preferences(schedule_payload)
+    if normalized_preferences != {
+        key: schedule_payload.get(key)
+        for key in normalized_preferences
+    }:
+        merged_schedule = dict(schedule_payload)
+        merged_schedule.update(normalized_preferences)
+        schedule_path.parent.mkdir(parents=True, exist_ok=True)
+        schedule_path.write_text(json.dumps(merged_schedule, indent=2, ensure_ascii=False) + "\n")
+    return normalized_preferences
+
+
+def _sync_packaged_clients() -> tuple[bool, str | None]:
+    try:
+        from client_sync import sync_all_clients
+    except Exception as e:
+        return False, f"client sync import failed: {e}"
+
+    try:
+        preferences = _normalize_preferences_for_client_sync()
+        result = sync_all_clients(
+            nexo_home=NEXO_HOME,
+            runtime_root=NEXO_HOME,
+            operator_name=os.environ.get("NEXO_NAME", ""),
+            preferences=preferences,
+        )
+    except Exception as e:
+        return False, f"client sync failed: {e}"
+
+    if result.get("ok"):
+        return True, None
+
+    clients = result.get("clients", {})
+    failures = []
+    for key, payload in clients.items():
+        if payload.get("ok") or payload.get("skipped"):
+            continue
+        failures.append(f"{key}: {payload.get('error', 'unknown error')}")
+    if not failures:
+        failures.append("unknown client sync failure")
+    return False, "; ".join(failures)
 
 
 def _rollback_npm_package(target_version: str) -> str | None:
@@ -480,6 +545,20 @@ def _handle_packaged_update(progress_fn=None) -> str:
     if verify_err:
         errors.append(f"verification: {verify_err}")
 
+    hook_sync_warning = None
+    try:
+        _emit_progress(progress_fn, "Refreshing installed hooks and manifests...")
+        _refresh_installed_manifest()
+        _sync_hooks_to_home()
+    except Exception as e:
+        hook_sync_warning = f"{e}"
+
+    client_sync_warning = None
+    _emit_progress(progress_fn, "Refreshing shared client configs...")
+    clients_ok, client_sync_error = _sync_packaged_clients()
+    if not clients_ok:
+        client_sync_warning = client_sync_error or "unknown client sync error"
+
     if errors:
         # 5. Full rollback: restore code tree + DBs + pip deps + rollback npm package
         if code_backup_dir:
@@ -516,6 +595,14 @@ def _handle_packaged_update(progress_fn=None) -> str:
     lines = ["UPDATE SUCCESSFUL (packaged install)"]
     lines.append(f"  Version: {old_version} -> {new_version}")
     lines.append(f"  Backup: {backup_dir}")
+    if not hook_sync_warning:
+        lines.append("  Hooks: synced to NEXO_HOME")
+    else:
+        lines.append(f"  WARNING: hook sync: {hook_sync_warning}")
+    if not client_sync_warning:
+        lines.append("  Clients: configured client targets synced")
+    else:
+        lines.append(f"  WARNING: client sync: {client_sync_warning}")
     lines.append("")
     lines.append("MCP server restart needed to load new code.")
     return "\n".join(lines)

@@ -63,7 +63,7 @@ def _open_correction_fatigue_followup(fatigued: list) -> str:
         lines.append(f"... and {len(fatigued) - 10} more")
     description = "\n".join(lines)
     verification = (
-        "sqlite3 ~/claude/data/cognitive.db \"SELECT id, content, strength, tags "
+        "sqlite3 ~/.nexo/data/cognitive.db \"SELECT id, content, strength, tags "
         "FROM ltm_memories WHERE tags LIKE '%under_review%' ORDER BY strength ASC LIMIT 50\""
     )
     now_epoch = datetime.now().timestamp()

@@ -37,6 +37,13 @@ def _make_runtime(root: Path, *, operator_name: str = "Atlas") -> Path:
     return runtime
 
 
+def _normalize_home(path: Path, home: Path) -> str:
+    try:
+        return "~/" + path.resolve().relative_to(home.resolve()).as_posix()
+    except Exception:
+        return str(path)
+
+
 def test_sync_claude_code_preserves_existing_settings(tmp_path):
     import client_sync
 
@@ -342,6 +349,71 @@ def test_sync_claude_bootstrap_preserves_user_block(tmp_path):
     assert "nexo-claude-md-version:" in updated
 
 
+def test_sync_claude_bootstrap_migrates_legacy_home_references_in_user_block(tmp_path):
+    import client_sync
+
+    runtime = _make_runtime(tmp_path)
+    home = tmp_path / "home"
+    bootstrap_path = home / ".claude" / "CLAUDE.md"
+    bootstrap_path.parent.mkdir(parents=True)
+    bootstrap_path.write_text(
+        "<!-- nexo-claude-md-version: 1.0.0 -->\n"
+        "******CORE******\n"
+        "<!-- nexo:core:start -->\nold core\n<!-- nexo:core:end -->\n\n"
+        "******USER******\n"
+        "<!-- nexo:user:start -->\n"
+        "cat ~/claude/operations/.watchdog-alert\n"
+        f"policy={home / 'claude' / 'brain' / 'policies.md'}\n"
+        "<!-- nexo:user:end -->\n"
+    )
+
+    result = client_sync.sync_claude_code(
+        nexo_home=runtime,
+        runtime_root=runtime,
+        operator_name="Atlas",
+        user_home=home,
+    )
+
+    assert result["ok"] is True
+    updated = bootstrap_path.read_text()
+    assert "~/claude" not in updated
+    assert str(home / "claude") not in updated
+    assert f"cat {_normalize_home(runtime, home)}/operations/.watchdog-alert" in updated
+    assert f"policy={runtime / 'brain' / 'policies.md'}" in updated
+
+
+def test_sync_claude_bootstrap_migrates_legacy_home_references_when_legacy_home_is_symlink(tmp_path):
+    import client_sync
+
+    runtime = _make_runtime(tmp_path)
+    home = tmp_path / "home"
+    home.mkdir(parents=True, exist_ok=True)
+    (home / "claude").symlink_to(runtime, target_is_directory=True)
+    bootstrap_path = home / ".claude" / "CLAUDE.md"
+    bootstrap_path.parent.mkdir(parents=True)
+    bootstrap_path.write_text(
+        "<!-- nexo-claude-md-version: 1.0.0 -->\n"
+        "******CORE******\n"
+        "<!-- nexo:core:start -->\nold core\n<!-- nexo:core:end -->\n\n"
+        "******USER******\n"
+        "<!-- nexo:user:start -->\n"
+        "cat ~/claude/operations/.watchdog-alert\n"
+        "<!-- nexo:user:end -->\n"
+    )
+
+    result = client_sync.sync_claude_code(
+        nexo_home=runtime,
+        runtime_root=runtime,
+        operator_name="Atlas",
+        user_home=home,
+    )
+
+    assert result["ok"] is True
+    updated = bootstrap_path.read_text()
+    assert "~/claude" not in updated
+    assert f"cat {_normalize_home(runtime, home)}/operations/.watchdog-alert" in updated
+
+
 def test_sync_claude_bootstrap_migrates_legacy_file_into_core_user_contract(tmp_path):
     import client_sync
 
@@ -369,6 +441,40 @@ def test_sync_claude_bootstrap_migrates_legacy_file_into_core_user_contract(tmp_
     assert "******CORE******" in updated
     assert "******USER******" in updated
     assert "Operator note: remember the private QA machine." in updated
+
+
+def test_sync_codex_bootstrap_migrates_legacy_home_references_in_user_block(tmp_path, monkeypatch):
+    import client_sync
+
+    runtime = _make_runtime(tmp_path)
+    home = tmp_path / "home"
+    bootstrap_path = home / ".codex" / "AGENTS.md"
+    bootstrap_path.parent.mkdir(parents=True)
+    bootstrap_path.write_text(
+        "<!-- nexo-codex-agents-version: 1.0.0 -->\n"
+        "******CORE******\n"
+        "<!-- nexo:core:start -->\nold core\n<!-- nexo:core:end -->\n\n"
+        "******USER******\n"
+        "<!-- nexo:user:start -->\n"
+        "Atlas: ~/claude/brain/project-atlas.json\n"
+        f"db={home / 'claude' / 'data' / 'nexo.db'}\n"
+        "<!-- nexo:user:end -->\n"
+    )
+    monkeypatch.setattr(client_sync.shutil, "which", lambda name: None)
+
+    result = client_sync.sync_codex(
+        nexo_home=runtime,
+        runtime_root=runtime,
+        operator_name="Atlas",
+        user_home=home,
+    )
+
+    assert result["ok"] is True
+    updated = bootstrap_path.read_text()
+    assert "~/claude" not in updated
+    assert str(home / "claude") not in updated
+    assert f"Atlas: {_normalize_home(runtime, home)}/brain/project-atlas.json" in updated
+    assert f"db={runtime / 'data' / 'nexo.db'}" in updated
 
 
 def test_bootstrap_docs_resolve_templates_for_runtime_layout(tmp_path):

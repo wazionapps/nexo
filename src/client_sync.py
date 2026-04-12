@@ -18,6 +18,7 @@ except ModuleNotFoundError:  # Python < 3.11
     import tomli as tomllib
 
 from bootstrap_docs import sync_client_bootstrap
+from runtime_home import resolve_nexo_home
 
 try:
     from client_preferences import (
@@ -73,7 +74,7 @@ def _user_home() -> Path:
 
 
 def _default_nexo_home() -> Path:
-    return Path(os.environ.get("NEXO_HOME", str(_user_home() / ".nexo"))).expanduser()
+    return resolve_nexo_home(os.environ.get("NEXO_HOME", str(_user_home() / ".nexo")))
 
 
 def _resolve_operator_name(nexo_home: Path, explicit: str = "") -> str:

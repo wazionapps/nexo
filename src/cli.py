@@ -40,7 +40,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+from runtime_home import export_resolved_nexo_home
+
+NEXO_HOME = export_resolved_nexo_home()
 NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parent)))
 TERMINAL_CLIENT_LABELS = {
     "claude_code": "Claude Code",

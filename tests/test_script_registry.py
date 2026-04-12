@@ -7,7 +7,13 @@ import pytest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
 
-from db import init_db, get_personal_script, list_personal_scripts, list_personal_script_schedules
+from db import (
+    init_db,
+    get_personal_script,
+    list_personal_scripts,
+    list_personal_script_schedules,
+    sync_personal_scripts_registry,
+)
 from script_registry import (
     parse_inline_metadata,
     classify_runtime,
@@ -432,6 +438,45 @@ class TestRegistrySync:
         assert len(scripts) == 2
         assert {script["path"] for script in scripts} == {str(python_script), str(shell_script)}
         assert len({script["id"] for script in scripts}) == 2
+
+    def test_sync_personal_scripts_registry_normalizes_legacy_symlink_paths(self, scripts_dir):
+        init_db()
+        nexo_home = scripts_dir.parent
+        legacy_home = nexo_home.parent / "claude"
+        legacy_home.symlink_to(nexo_home, target_is_directory=True)
+
+        script = scripts_dir / "nexo-email-monitor.py"
+        script.write_text(
+            "#!/usr/bin/env python3\n"
+            "# nexo: name=email-monitor\n"
+            "# nexo: runtime=python\n"
+            "print('ok')\n"
+        )
+
+        legacy_record = {
+            "name": "email-monitor",
+            "path": str(legacy_home / "scripts" / script.name),
+            "runtime": "python",
+            "description": "",
+            "metadata": {"name": "email-monitor", "runtime": "python"},
+        }
+        current_record = {
+            "name": "email-monitor",
+            "path": str(script),
+            "runtime": "python",
+            "description": "",
+            "metadata": {"name": "email-monitor", "runtime": "python"},
+        }
+
+        first = sync_personal_scripts_registry([legacy_record], [])
+        second = sync_personal_scripts_registry([current_record], [])
+
+        assert first["registered_scripts"] == 1
+        assert second["registered_scripts"] == 1
+        scripts = list_personal_scripts()
+        assert len(scripts) == 1
+        assert scripts[0]["id"] == "ps-email-monitor"
+        assert scripts[0]["path"] == str(script)
 
     def test_ensure_personal_schedules_dry_run(self, scripts_dir, monkeypatch):
         import script_registry

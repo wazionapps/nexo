@@ -16,7 +16,9 @@ import stat
 import subprocess
 from pathlib import Path
 
-NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+from runtime_home import export_resolved_nexo_home
+
+NEXO_HOME = export_resolved_nexo_home()
 NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parent)))
 
 # Internal artifacts to always ignore
@@ -73,6 +75,7 @@ METADATA_KEYS = {
     "run_on_wake",
     "idempotent",
     "max_catchup_age",
+    "doctor_allow_db",
 }
 SUPPORTED_RUNTIMES = {"python", "shell", "node", "php", "unknown"}
 PERSONAL_SCHEDULE_MANAGED_ENV = "NEXO_MANAGED_PERSONAL_CRON"
@@ -213,7 +216,11 @@ def _is_ignored(path: Path) -> bool:
         return True
     if path.name.startswith("."):
         return True
-    for parent in path.relative_to(get_scripts_dir()).parents:
+    try:
+        relative_path = path.resolve().relative_to(get_scripts_dir().resolve())
+    except Exception:
+        return False
+    for parent in relative_path.parents:
         if parent.name in _IGNORED_DIRS:
             return True
     return False
@@ -1425,14 +1432,19 @@ def doctor_script(path_or_name: str) -> dict:
             elif cmd:
                 items.append({"level": "pass", "msg": f"Required command found: {cmd}"})
 
+    allow_db_access = str(meta.get("doctor_allow_db", "")).strip().lower() in {"1", "true", "yes", "on"}
+    if allow_db_access:
+        items.append({"level": "pass", "msg": "Doctor DB access explicitly allowed"})
+
     # Forbidden patterns (only for personal scripts)
     if not is_core:
         try:
             content = p.read_text(errors="ignore")
-            for pat in _FORBIDDEN_PATTERNS:
-                match = pat.search(content)
-                if match:
-                    items.append({"level": "fail", "msg": f"Forbidden DB pattern found: {match.group()}"})
+            if not allow_db_access:
+                for pat in _FORBIDDEN_PATTERNS:
+                    match = pat.search(content)
+                    if match:
+                        items.append({"level": "fail", "msg": f"Forbidden DB pattern found: {match.group()}"})
         except Exception:
             pass
 

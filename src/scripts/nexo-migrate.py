@@ -7,7 +7,7 @@ Usage:
     python3 nexo-migrate.py --from 1.6.0 # override detected current version
 
 Reads current version from $NEXO_HOME/version.json.
-Reads target version from the repo's package.json.
+Reads target version from the installed runtime package.json.
 Backs up NEXO_HOME/db/ before any migration.
 Runs DB schema migrations via the existing _schema.py system.
 """
@@ -16,13 +16,43 @@ import argparse
 import json
 import os
 import shutil
-import sqlite3
 import sys
 from datetime import datetime
 from pathlib import Path
 
-NEXO_HOME = Path(os.environ.get("NEXO_HOME", Path.home() / ".nexo"))
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent  # nexo/src/scripts -> nexo/
+NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo"))).expanduser()
+SCRIPT_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _resolve_runtime_root() -> Path:
+    candidates: list[Path] = []
+
+    raw_code = os.environ.get("NEXO_CODE", "").strip()
+    if raw_code:
+        env_code = Path(raw_code).expanduser()
+        candidates.append(env_code)
+        if env_code.name == "src":
+            candidates.append(env_code.parent)
+
+    candidates.extend([SCRIPT_ROOT, NEXO_HOME])
+
+    seen: set[str] = set()
+    for candidate in candidates:
+        candidate = candidate if candidate.is_dir() else candidate.parent
+        key = str(candidate)
+        if key in seen:
+            continue
+        seen.add(key)
+        if (candidate / "package.json").is_file():
+            return candidate
+        if (candidate / "src" / "server.py").is_file() and (candidate / "package.json").is_file():
+            return candidate
+
+    return SCRIPT_ROOT
+
+
+RUNTIME_ROOT = _resolve_runtime_root()
+SOURCE_ROOT = RUNTIME_ROOT / "src" if (RUNTIME_ROOT / "src" / "db").is_dir() else RUNTIME_ROOT
 
 
 # ── Version helpers ──────────────────────────────────────────────
@@ -56,8 +86,8 @@ def get_current_version() -> str:
 
 
 def get_target_version() -> str:
-    """Read target version from repo package.json."""
-    pkg = REPO_ROOT / "package.json"
+    """Read target version from installed runtime package.json."""
+    pkg = RUNTIME_ROOT / "package.json"
     if not pkg.exists():
         print(f"ERROR: package.json not found at {pkg}", file=sys.stderr)
         sys.exit(1)
@@ -107,10 +137,8 @@ def ensure_nexo_home_dirs():
 
 def run_db_schema_migrations():
     """Run the formal DB schema migration system from _schema.py."""
-    # Add src/ to path so we can import the db module
-    src_dir = REPO_ROOT / "src"
-    if str(src_dir) not in sys.path:
-        sys.path.insert(0, str(src_dir))
+    if str(SOURCE_ROOT) not in sys.path:
+        sys.path.insert(0, str(SOURCE_ROOT))
 
     # Set NEXO_HOME env for the db module
     os.environ["NEXO_HOME"] = str(NEXO_HOME)

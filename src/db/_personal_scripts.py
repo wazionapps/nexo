@@ -12,13 +12,28 @@ import os
 from pathlib import Path
 
 from db._core import get_db
+from runtime_home import resolve_nexo_home
 
 
-NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+NEXO_HOME = resolve_nexo_home()
 
 
 def _now_text() -> str:
     return datetime.datetime.now().isoformat(timespec="seconds")
+
+
+def _canonical_scripts_dir() -> Path:
+    home = resolve_nexo_home(os.environ.get("NEXO_HOME", str(NEXO_HOME)))
+    return home / "scripts"
+
+
+def _normalize_script_path(path: str | Path) -> str:
+    candidate = Path(path).expanduser()
+    try:
+        relative = candidate.resolve(strict=False).relative_to(_canonical_scripts_dir().resolve(strict=False))
+    except Exception:
+        return str(candidate)
+    return str(_canonical_scripts_dir() / relative)
 
 
 def _row_to_dict(row) -> dict:
@@ -61,6 +76,7 @@ def _safe_slug(value: str) -> str:
 
 
 def _ensure_script_id(conn, name: str, path: str) -> str:
+    path = _normalize_script_path(path)
     existing = conn.execute(
         "SELECT id FROM personal_scripts WHERE path = ? LIMIT 1",
         (path,),
@@ -90,6 +106,7 @@ def upsert_personal_script(
     has_inline_metadata: bool = False,
 ) -> dict:
     conn = get_db()
+    path = _normalize_script_path(path)
     script_id = _ensure_script_id(conn, name, path)
     now = _now_text()
     conn.execute(
@@ -132,11 +149,12 @@ def upsert_personal_script(
 
 def delete_missing_personal_scripts(active_paths: list[str]) -> int:
     conn = get_db()
-    if active_paths:
-        placeholders = ",".join("?" for _ in active_paths)
+    normalized_paths = [_normalize_script_path(path) for path in active_paths]
+    if normalized_paths:
+        placeholders = ",".join("?" for _ in normalized_paths)
         rows = conn.execute(
             f"SELECT id FROM personal_scripts WHERE path NOT IN ({placeholders})",
-            tuple(active_paths),
+            tuple(normalized_paths),
         ).fetchall()
     else:
         rows = conn.execute("SELECT id FROM personal_scripts").fetchall()
@@ -160,6 +178,7 @@ def register_personal_script_schedule(
     enabled: bool = True,
 ) -> dict | None:
     conn = get_db()
+    script_path = _normalize_script_path(script_path)
     script = conn.execute(
         "SELECT id FROM personal_scripts WHERE path = ?",
         (script_path,),
@@ -342,6 +361,7 @@ def list_personal_scripts(include_disabled: bool = True) -> list[dict]:
 
 def get_personal_script(name_or_path: str) -> dict | None:
     conn = get_db()
+    normalized_path = _normalize_script_path(name_or_path)
     row = conn.execute(
         """
         SELECT * FROM personal_scripts
@@ -349,7 +369,7 @@ def get_personal_script(name_or_path: str) -> dict | None:
         ORDER BY path = ? DESC
         LIMIT 1
         """,
-        (name_or_path, name_or_path, name_or_path),
+        (normalized_path, name_or_path, normalized_path),
     ).fetchone()
     if not row:
         return None
@@ -361,9 +381,10 @@ def get_personal_script(name_or_path: str) -> dict | None:
 
 def delete_personal_script(name_or_path: str) -> int:
     conn = get_db()
+    normalized_path = _normalize_script_path(name_or_path)
     result = conn.execute(
         "DELETE FROM personal_scripts WHERE path = ? OR name = ? OR id = ?",
-        (name_or_path, name_or_path, name_or_path),
+        (normalized_path, name_or_path, name_or_path),
     )
     return int(result.rowcount or 0)
 
@@ -371,13 +392,14 @@ def delete_personal_script(name_or_path: str) -> int:
 def record_personal_script_run(name_or_path: str, exit_code: int, run_at: str | None = None) -> None:
     conn = get_db()
     run_at = run_at or _now_text()
+    normalized_path = _normalize_script_path(name_or_path)
     conn.execute(
         """
         UPDATE personal_scripts
         SET last_run_at = ?, last_exit_code = ?, updated_at = ?
         WHERE path = ? OR name = ?
         """,
-        (run_at, exit_code, _now_text(), name_or_path, name_or_path),
+        (run_at, exit_code, _now_text(), normalized_path, name_or_path),
     )
 
 
@@ -393,7 +415,7 @@ def sync_personal_scripts_registry(
     scheduled = 0
 
     for record in script_records:
-        path = str(record["path"])
+        path = _normalize_script_path(record["path"])
         active_paths.append(path)
         upsert_personal_script(
             name=record.get("name") or Path(path).stem,
