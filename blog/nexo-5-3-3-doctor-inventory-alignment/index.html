@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXO 5.3.3: Doctor Inventory Alignment for Clean Packaged Installs</title>
+    <meta name="description" content="NEXO 5.3.3 closes the last packaged-runtime doctor mismatch: the installer already ships the built-in backup LaunchAgent as core, and now nexo doctor inventories it the same way.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-5-3-3-doctor-inventory-alignment/">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/blog/nexo-5-3-3-doctor-inventory-alignment/">
+    <meta property="og:title" content="NEXO 5.3.3: Doctor Inventory Alignment for Clean Packaged Installs">
+    <meta property="og:description" content="A small but important packaging honesty patch: clean npm installs no longer show a false unknown LaunchAgent warning for the built-in backup helper.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+    <meta property="article:published_time" content="2026-04-12">
+    <meta property="article:author" content="Francisco Cerda Puigserver">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO 5.3.3: Doctor Inventory Alignment for Clean Packaged Installs">
+    <meta name="twitter:description" content="The packaged installer and runtime doctor now agree that the built-in hourly backup helper is core.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "NEXO 5.3.3: Doctor Inventory Alignment for Clean Packaged Installs",
+        "description": "NEXO 5.3.3 closes the last packaged-runtime doctor mismatch: the installer already ships the built-in backup LaunchAgent as core, and now nexo doctor inventories it the same way.",
+        "datePublished": "2026-04-12",
+        "dateModified": "2026-04-12",
+        "author": {
+            "@type": "Person",
+            "name": "Francisco Cerda Puigserver"
+        },
+        "publisher": {
+            "@type": "Organization",
+            "name": "WAzion",
+            "url": "https://www.wazion.com"
+        },
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https://nexo-brain.com/blog/nexo-5-3-3-doctor-inventory-alignment/"
+        },
+        "url": "https://nexo-brain.com/blog/nexo-5-3-3-doctor-inventory-alignment/",
+        "image": "https://nexo-brain.com/assets/nexo-brain-infographic-v5.png",
+        "keywords": ["NEXO 5.3.3", "nexo doctor", "LaunchAgent", "packaged runtime", "backup helper", "~/.nexo"]
+    }
+    </script>
+
+    <style>
+        .article-header { padding-top: 128px; padding-bottom: 40px; text-align: center; }
+        .article-meta { font-size: 14px; color: var(--text-muted); margin-bottom: 16px; }
+        .article-body {
+            max-width: 720px; margin: 0 auto; padding: 0 24px 80px;
+            font-size: 17px; line-height: 1.8; color: var(--text);
+        }
+        .article-body h2 { font-size: 28px; font-weight: 700; margin: 48px 0 16px; letter-spacing: -0.01em; }
+        .article-body p { margin-bottom: 20px; color: var(--text-muted); }
+        .article-body strong { color: var(--text); }
+        .article-body a { color: var(--purple-light); }
+        .article-body a:hover { color: var(--pink); }
+        .article-body code {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 14px; color: var(--pink);
+            background: rgba(236, 72, 153, 0.1);
+            padding: 2px 8px; border-radius: 4px;
+        }
+        .article-back {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 14px; font-weight: 600; color: var(--text-muted);
+            margin-bottom: 24px;
+        }
+        .article-back:hover { color: var(--purple-light); }
+        .article-visual { margin: 32px 0 40px; text-align: center; }
+        .article-visual img {
+            max-width: 100%;
+            border-radius: 16px;
+            border: 1px solid var(--dark-border);
+            box-shadow: 0 8px 32px rgba(37,99,235,0.18);
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-64.png" alt="NEXO Brain" class="logo-image">
+            <span class="logo-text">NEXO Brain</span>
+        </a>
+        <button class="mobile-menu-toggle" aria-label="Toggle navigation" onclick="toggleMobileMenu()">
+            <span></span><span></span><span></span>
+        </button>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/features/">Features</a>
+            <a href="/evolution/">Evolution</a>
+            <a href="/compare/">Compare</a>
+            <a href="/blog/">Blog</a>
+            <a href="/changelog/">Changelog</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta">GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<section class="article-header">
+    <div class="container">
+        <a href="/blog/" class="article-back">← Back to blog</a>
+        <div class="article-meta">April 12, 2026 · Patch release · Packaged runtime / doctor</div>
+        <h1 class="section-title" style="font-size:clamp(28px,4.5vw,48px);max-width:920px;margin:0 auto 16px;">NEXO 5.3.3: Doctor Inventory Alignment for Clean Packaged Installs</h1>
+        <p class="section-subtitle" style="max-width:760px;margin:0 auto;">5.3.2 fixed the runtime boundary. 5.3.3 closes the last honesty gap on top of that: a clean npm install should not look suspicious to <code>nexo doctor</code> just because the product itself shipped a backup helper.</p>
+    </div>
+</section>
+
+<section>
+    <div class="article-body">
+        <div class="article-visual">
+            <img src="/assets/nexo-brain-infographic-v5.png" alt="NEXO Brain 5.3.3 release">
+        </div>
+
+        <p><strong>5.3.3 is a packaging truthfulness patch.</strong> It does not add a new cognitive subsystem. It removes a contradiction between two product surfaces that should have agreed all along: the packaged installer and runtime doctor.</p>
+
+        <h2>The mismatch</h2>
+        <p>NEXO already shipped an hourly backup helper as part of the packaged runtime. The installer treated <code>com.nexo.backup</code> as a built-in auxiliary LaunchAgent. But runtime doctor did not inventory that same helper as core, which meant a clean npm install could still show a false “Unknown com.nexo LaunchAgents” warning.</p>
+
+        <h2>What 5.3.3 changes</h2>
+        <p>Runtime doctor now recognizes the built-in backup LaunchAgent as part of the core auxiliary inventory. That means the packaged installer, the runtime filesystem, and <code>nexo doctor</code> now describe the same system instead of pulling in different directions.</p>
+
+        <h2>Why this matters</h2>
+        <p>Small inventory mismatches create trust erosion. If a user installs from npm, keeps their own data in <code>~/.nexo</code>, and runs doctor on a healthy runtime, the tool should not imply there is a ghost legacy process when the process was actually shipped by the product. Packaging cleanup is only credible when diagnostics tell the same story.</p>
+
+        <h2>Relationship to 5.3.2</h2>
+        <p>The boundary fix from <a href="/blog/nexo-5-3-2-runtime-boundary-hardening/">5.3.2</a> remains the bigger change: packaged core scripts and hooks are tracked as product artifacts, the personal bucket stops absorbing them by accident, and legacy heartbeat wrappers move into managed core hooks. Version 5.3.3 is the follow-through that makes doctor reflect that cleaned-up packaged surface honestly.</p>
+
+        <h2>Upgrade</h2>
+        <p>Open the <a href="/changelog/#v533">5.3.3 changelog section</a> for the exact release note. If you are already installed, the intended path stays simple:</p>
+        <p><code>npm install -g nexo-brain@5.3.3</code><br><code>nexo update</code></p>
+        <p>Your data stays in <code>~/.nexo</code>. The runtime stays replaceable. Now the packaged installer and runtime doctor agree about the built-in backup surface too.</p>
+    </div>
+</section>
+
+<footer>
+    <div class="container">
+        <div class="footer-content">
+            <div class="footer-left">
+                Created by <strong>Francisco Cerd&agrave; Puigserver</strong> &amp; <strong>NEXO</strong> (Claude Opus) &bull; Built by <a href="https://www.wazion.com">WAzion</a> &bull; AGPL-3.0 License &bull; &copy; 2026
+            </div>
+            <div class="footer-links">
+                <a href="https://github.com/wazionapps/nexo">GitHub</a>
+                <a href="https://x.com/NEXOBRAIN">X / Twitter</a>
+                <a href="https://github.com/sponsors/wazionapps">Sponsor</a>
+                <a href="/docs/">Docs</a>
+                <a href="/compare/">Compare</a>
+                <a href="/blog/">Blog</a>
+                <a href="https://www.npmjs.com/package/nexo-brain">npm</a>
+                <a href="https://github.com/wazionapps/nexo/releases">Releases</a>
+            </div>
+            <div style="text-align:center;margin-top:12px;color:#6b7280;font-size:12px;">Last updated: April 2026</div>
+        </div>
+    </div>
+</footer>
+
+</body>
+</html>

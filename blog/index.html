@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Blog — NEXO Brain</title>
-    <meta name="description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.2 runtime-boundary release that makes core product surface and personal runtime behave like separate layers again.">
+    <meta name="description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.3 patch that makes packaged runtime doctor output match what the installer actually ships.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/blog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/blog/">
     <meta property="og:title" content="Blog — NEXO Brain">
-    <meta property="og:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.2 runtime-boundary release that makes core product surface and personal runtime behave like separate layers again.">
+    <meta property="og:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.3 patch that makes packaged runtime doctor output match what the installer actually ships.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Blog — NEXO Brain">
-    <meta name="twitter:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.2 runtime-boundary release that makes core product surface and personal runtime behave like separate layers again.">
+    <meta name="twitter:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.3 patch that makes packaged runtime doctor output match what the installer actually ships.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Blog — NEXO Brain",
-        "description": "Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.2 runtime-boundary release that makes core product surface and personal runtime behave like separate layers again.",
+        "description": "Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.3 patch that makes packaged runtime doctor output match what the installer actually ships.",
         "url": "https://nexo-brain.com/blog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -134,7 +134,7 @@
                     <span class="page-chip">Competitive analysis</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="/blog/nexo-5-3-2-runtime-boundary-hardening/" class="btn btn-primary">Read latest release</a>
+                    <a href="/blog/nexo-5-3-3-doctor-inventory-alignment/" class="btn btn-primary">Read latest release</a>
                     <a href="/changelog/" class="btn btn-secondary">Latest release notes</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -143,22 +143,22 @@
                 <div class="section-label">Latest release</div>
                 <div class="blog-featured-meta">
                     <span class="compare-chip">April 12, 2026</span>
-                    <span class="compare-chip">Runtime boundary hardening</span>
+                    <span class="compare-chip">Doctor inventory alignment</span>
                 </div>
-                <h2>NEXO 5.3.2: Runtime Boundary Hardening for Real Shared-Brain Installs</h2>
-                <p>NEXO 5.3.2 finishes the packaging cleanup by making the boundary explicit: packaged core scripts/hooks are tracked as product artifacts, <code>nexo scripts</code> stops mixing them into the personal bucket, and <code>nexo update</code> migrates the last legacy heartbeat wrappers into managed core hooks.</p>
+                <h2>NEXO 5.3.3: Doctor Inventory Alignment for Clean Packaged Installs</h2>
+                <p>NEXO 5.3.3 removes the last misleading packaged-runtime warning: the built-in hourly backup helper is now inventoried as core, so <code>nexo doctor</code> stops flagging a clean npm install as if it had an unexplained legacy LaunchAgent.</p>
                 <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
-                    <a href="/blog/nexo-5-3-2-runtime-boundary-hardening/" class="btn btn-primary">Open article</a>
-                    <a href="/changelog/#v532" class="btn btn-secondary">Open changelog</a>
+                    <a href="/blog/nexo-5-3-3-doctor-inventory-alignment/" class="btn btn-primary">Open article</a>
+                    <a href="/changelog/#v533" class="btn btn-secondary">Open changelog</a>
                 </div>
                 <div class="blog-mini-stack">
                     <div class="blog-mini-card">
                         <strong>Companion view</strong>
-                        <span><a href="/changelog/#v532">The 5.3.2 changelog section</a></span>
+                        <span><a href="/changelog/#v533">The 5.3.3 changelog section</a></span>
                     </div>
                     <div class="blog-mini-card">
                         <strong>Previous release</strong>
-                        <span><a href="/blog/nexo-5-3-1-packaged-runtime-normalization/">NEXO 5.3.1: Packaged Runtime Normalization for Real npm Users</a>.</span>
+                        <span><a href="/blog/nexo-5-3-2-runtime-boundary-hardening/">NEXO 5.3.2: Runtime Boundary Hardening for Real Shared-Brain Installs</a>.</span>
                     </div>
                 </div>
             </div>
@@ -170,6 +170,13 @@
 <section class="section-flush-top">
     <div class="container">
         <div class="blog-grid">
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 12, 2026</div>
+                <h2><a href="/blog/nexo-5-3-3-doctor-inventory-alignment/">NEXO 5.3.3: Doctor Inventory Alignment for Clean Packaged Installs</a></h2>
+                <p>A small packaging honesty patch: the installer already shipped the built-in backup LaunchAgent as core, and now <code>nexo doctor</code> recognizes that same inventory instead of flagging a clean runtime as unknown.</p>
+                <a href="/blog/nexo-5-3-3-doctor-inventory-alignment/" class="read-more">Read article <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></a>
+            </div>
 
             <div class="blog-card">
                 <div class="blog-card-date">April 12, 2026</div>

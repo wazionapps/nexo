@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.2 hardens the runtime boundary for packaged users by separating core runtime artifacts from personal scripts and migrating legacy heartbeat wrappers into managed hooks.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.3 aligns runtime doctor with the packaged installer by recognizing the built-in backup LaunchAgent as core.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.2 hardens the runtime boundary for packaged users by separating core runtime artifacts from personal scripts and migrating legacy heartbeat wrappers into managed hooks.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.3 aligns runtime doctor with the packaged installer by recognizing the built-in backup LaunchAgent as core.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.2 hardens the runtime boundary for packaged users by separating core runtime artifacts from personal scripts and migrating legacy heartbeat wrappers into managed hooks.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.3 aligns runtime doctor with the packaged installer by recognizing the built-in backup LaunchAgent as core.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.2 hardens the runtime boundary for packaged users by separating core runtime artifacts from personal scripts and migrating legacy heartbeat wrappers into managed hooks.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.3 aligns runtime doctor with the packaged installer by recognizing the built-in backup LaunchAgent as core.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,12 +87,12 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v5.3.2 live</span>
-                    <span class="page-chip">Runtime boundary hardening</span>
-                    <span class="page-chip"><code>nexo scripts</code> now separates packaged core from personal runtime</span>
+                    <span class="page-chip">v5.3.3 live</span>
+                    <span class="page-chip">Doctor inventory alignment</span>
+                    <span class="page-chip">Clean npm installs no longer show a false unknown backup LaunchAgent</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v532" class="btn btn-primary">Start with v5.3.2</a>
+                    <a href="#v533" class="btn btn-primary">Start with v5.3.3</a>
                     <a href="#v400" class="btn btn-secondary">See v4.0.0</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -100,8 +100,8 @@
             <div class="page-visual">
                 <div class="page-stack">
                     <div class="page-stack-card">
-                        <strong>v5.3.2</strong>
-                        <span>Runtime boundary hardening: packaged installs now track core runtime artifacts explicitly, keep them out of the personal bucket, and migrate legacy heartbeat wrappers into managed Claude Code hooks.</span>
+                        <strong>v5.3.3</strong>
+                        <span>Doctor inventory alignment: the built-in backup LaunchAgent is now recognized as core, so clean packaged installs stop looking like they have an unexplained legacy plist.</span>
                     </div>
                     <div class="page-stack-card">
                         <strong>v5.3.0</strong>
@@ -155,6 +155,29 @@
             <div>
                 <div id="changelog-page-meta" class="changelog-page-meta">Loading release pages…</div>
                 <div id="changelog-pager" class="changelog-pager" aria-label="Changelog pagination"></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v5.3.3 doctor inventory alignment -->
+<section id="v533" class="section-compact" style="background:linear-gradient(135deg,#0b1120 0%,#2563eb 45%,#06b6d4 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.3.3 <span style="opacity:.5;font-weight:400;">&mdash; April 12, 2026</span></div>
+        <h2 class="section-title">Doctor Inventory Alignment for Clean Packaged Installs</h2>
+        <p class="section-subtitle">
+            A small but important packaging honesty patch. NEXO already shipped an hourly built-in backup helper as part of the packaged runtime. Now <code>nexo doctor</code> inventories that helper as core too, so clean npm installs stop surfacing a false “unknown LaunchAgent” warning.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h3>Installer and doctor now agree</h3>
+                    <p>The packaged installer has treated <code>com.nexo.backup</code> as a core auxiliary LaunchAgent. Runtime doctor now uses that same inventory, instead of acting as if the built-in hourly DB backup helper appeared from nowhere.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>No more false dirty-runtime signal</h3>
+                    <p>This removes the last misleading warning from the packaged cleanup sequence. Users can install from npm, keep their data in <code>~/.nexo</code>, and run <code>nexo doctor</code> without seeing a fake “unknown LaunchAgent” on an otherwise healthy runtime.</p>
+                </div>
             </div>
         </div>
     </div>
