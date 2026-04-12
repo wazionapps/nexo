@@ -122,11 +122,31 @@ def _should_refresh_latest_version() -> bool:
         return False
 
 
+def _version_sort_key(raw: str) -> tuple[tuple[int, ...], int, str]:
+    value = str(raw or "").strip()
+    base, _, suffix = value.partition("-")
+    parts: list[int] = []
+    for piece in base.split("."):
+        try:
+            parts.append(int(piece))
+        except Exception:
+            parts.append(-1)
+    while len(parts) < 3:
+        parts.append(0)
+    return (tuple(parts), 1 if not suffix else 0, suffix)
+
+
 def _version_status_line() -> str:
     installed = _get_version()
     latest = _load_latest_version_cache()
     if latest is None and _should_refresh_latest_version():
         latest = _fetch_latest_version()
+    if latest and installed and _version_sort_key(latest) < _version_sort_key(installed):
+        latest = installed
+        try:
+            _save_latest_version_cache(installed)
+        except Exception:
+            pass
     if latest:
         return f"NEXO Latest: v{latest} | Installed: v{installed}"
     return f"NEXO Installed: v{installed}"

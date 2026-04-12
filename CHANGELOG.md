@@ -1,5 +1,17 @@
 # Changelog
 
+## [5.3.5] - 2026-04-12
+
+### Version banner cache correction
+
+- `nexo` and `nexo chat` no longer show a cached `Latest` version that is
+  older than the runtime you just installed.
+- When the cached npm version lags behind the installed runtime version, the
+  CLI now treats the installed runtime as the floor and refreshes the cache
+  accordingly.
+- Added regression coverage for both help and chat banner paths so post-update
+  version visibility stays honest.
+
 ## [5.3.4] - 2026-04-12
 
 ### Core/personal runtime boundary cleanup + version visibility
