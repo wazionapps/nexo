@@ -205,3 +205,12 @@ def test_handle_packaged_update_reloads_launchagents_after_successful_bump(monke
     assert "Hooks: synced to NEXO_HOME" in result
     assert "Clients: configured client targets synced" in result
     assert "LaunchAgents: reloaded 3/3" in result
+
+
+def test_packaged_installer_discovers_root_python_modules_for_migration():
+    installer = REPO_ROOT / "bin" / "nexo-brain.js"
+    text = installer.read_text(encoding="utf-8")
+
+    assert 'function getCoreRuntimeFlatFiles(srcDir = path.join(__dirname, "..", "src"))' in text
+    assert 'name.endsWith(".py")' in text
+    assert 'new Set([...staticFiles, ...discoveredRootModules])' in text

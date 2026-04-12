@@ -120,8 +120,8 @@ function writeRuntimeCoreArtifactsManifest(nexoHome, srcDir) {
   }
 }
 
-function getCoreRuntimeFlatFiles() {
-  return [
+function getCoreRuntimeFlatFiles(srcDir = path.join(__dirname, "..", "src")) {
+  const staticFiles = [
     "server.py",
     "plugin_loader.py",
     "knowledge_graph.py",
@@ -155,6 +155,11 @@ function getCoreRuntimeFlatFiles() {
     "runtime_power.py",
     "requirements.txt",
   ];
+  const discoveredRootModules = fs.existsSync(srcDir)
+    ? fs.readdirSync(srcDir)
+      .filter((name) => name.endsWith(".py") && fs.statSync(path.join(srcDir, name)).isFile())
+    : [];
+  return [...new Set([...staticFiles, ...discoveredRootModules])];
 }
 
 function getCoreRuntimePackages() {
@@ -1480,7 +1485,7 @@ async function main() {
         log("  Hooks updated.");
 
         // Update core Python files (flat .py files in src/)
-        const coreFlatFiles = getCoreRuntimeFlatFiles();
+        const coreFlatFiles = getCoreRuntimeFlatFiles(srcDir);
         coreFlatFiles.forEach((f) => {
           const src = path.join(srcDir, f);
           if (fs.existsSync(src)) {
