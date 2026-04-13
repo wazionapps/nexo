@@ -6,6 +6,7 @@ import time
 import traceback
 
 from doctor.models import DoctorCheck, DoctorReport
+from doctor.planes import diagnostic_plane_preflight
 from doctor.providers.boot import run_boot_checks
 from doctor.providers.runtime import run_runtime_checks
 from doctor.providers.deep import run_deep_checks
@@ -22,12 +23,13 @@ _TIER_ORDER = ["boot", "runtime", "deep"]
 VALID_TIERS = frozenset(_TIER_ORDER) | {"all"}
 
 
-def run_doctor(tier: str = "boot", fix: bool = False) -> DoctorReport:
+def run_doctor(tier: str = "boot", fix: bool = False, plane: str = "") -> DoctorReport:
     """Run diagnostic checks for the specified tier(s).
 
     Args:
         tier: "boot", "runtime", "deep", or "all"
         fix: If True, apply deterministic fixes where possible
+        plane: Explicit diagnostic plane — runtime_personal, installation_live, or database_real
     """
     report = DoctorReport(overall_status="healthy")
     start = time.monotonic()
@@ -40,6 +42,13 @@ def run_doctor(tier: str = "boot", fix: bool = False) -> DoctorReport:
             severity="error",
             summary=f"Unknown tier '{tier}' — valid options: {', '.join(sorted(VALID_TIERS))}",
         ))
+        report.compute_status()
+        report.duration_ms = int((time.monotonic() - start) * 1000)
+        return report
+
+    _, preflight = diagnostic_plane_preflight(plane)
+    if preflight is not None:
+        report.add(preflight)
         report.compute_status()
         report.duration_ms = int((time.monotonic() - start) * 1000)
         return report

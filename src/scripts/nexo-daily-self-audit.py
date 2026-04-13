@@ -479,6 +479,43 @@ def _upsert_workflow_goal_inline(conn: sqlite3.Connection, *, area: str, sample_
 
     columns = _table_columns(conn, "workflow_goals")
     signature = _topic_signature(sample_goal)
+    goal_id = f"WG-AUDIT-{hashlib.sha1(f'{area}:{signature or sample_goal}'.encode('utf-8'), usedforsecurity=False).hexdigest()[:8].upper()}"
+
+    def _write_goal(existing_row: sqlite3.Row, *, reactivated: bool) -> dict:
+        updates: dict[str, object] = {}
+        if "title" in columns:
+            updates["title"] = sample_goal[:140]
+        if "objective" in columns:
+            updates["objective"] = objective
+        if "priority" in columns:
+            updates["priority"] = "high"
+        if "owner" in columns:
+            updates["owner"] = AUDIT_GOAL_OWNER
+        if "next_action" in columns:
+            updates["next_action"] = next_action
+        if "success_signal" in columns:
+            updates["success_signal"] = success_signal
+        if "shared_state" in columns:
+            updates["shared_state"] = json.dumps({"area": area, "signature": signature, "source": "self-audit"})
+        if reactivated and "status" in columns:
+            updates["status"] = "active"
+        if reactivated and "blocker_reason" in columns:
+            updates["blocker_reason"] = ""
+        if reactivated and "closed_at" in columns:
+            updates["closed_at"] = None
+        if "updated_at" in columns:
+            updates["updated_at"] = now_iso
+        assignments = ", ".join(f"{column} = ?" for column in updates)
+        conn.execute(
+            f"UPDATE workflow_goals SET {assignments} WHERE goal_id = ?",
+            [updates[column] for column in updates] + [existing_row["goal_id"]],
+        )
+        return {
+            "ok": True,
+            "action": "reactivated" if reactivated else "updated",
+            "goal_id": str(existing_row["goal_id"]),
+        }
+
     rows = conn.execute(
         """SELECT * FROM workflow_goals
            WHERE status NOT IN ('completed', 'cancelled', 'abandoned')
@@ -499,31 +536,21 @@ def _upsert_workflow_goal_inline(conn: sqlite3.Connection, *, area: str, sample_
     next_action = AUDIT_GOAL_NEXT_ACTION
     success_signal = "The theme stops resurfacing in unresolved protocol tasks."
     now_iso = datetime.now().isoformat(timespec="seconds")
-    if existing:
-        updates: dict[str, object] = {}
-        if "title" in columns:
-            updates["title"] = sample_goal[:140]
-        if "objective" in columns:
-            updates["objective"] = objective
-        if "priority" in columns:
-            updates["priority"] = "high"
-        if "owner" in columns:
-            updates["owner"] = AUDIT_GOAL_OWNER
-        if "next_action" in columns:
-            updates["next_action"] = next_action
-        if "success_signal" in columns:
-            updates["success_signal"] = success_signal
-        if "updated_at" in columns:
-            updates["updated_at"] = now_iso
-        assignments = ", ".join(f"{column} = ?" for column in updates)
-        conn.execute(
-            f"UPDATE workflow_goals SET {assignments} WHERE goal_id = ?",
-            [updates[column] for column in updates] + [existing["goal_id"]],
+    exact = conn.execute(
+        "SELECT * FROM workflow_goals WHERE goal_id = ? LIMIT 1",
+        (goal_id,),
+    ).fetchone()
+    if exact is not None:
+        exact_status = str(exact["status"] or "").lower()
+        return _write_goal(
+            exact,
+            reactivated=exact_status in {"completed", "cancelled", "abandoned"},
         )
-        return {"ok": True, "action": "updated", "goal_id": str(existing["goal_id"])}
+
+    if existing:
+        return _write_goal(existing, reactivated=False)
 
     # Content fingerprint, not security-sensitive.
-    goal_id = f"WG-AUDIT-{hashlib.sha1(f'{area}:{signature or sample_goal}'.encode('utf-8'), usedforsecurity=False).hexdigest()[:8].upper()}"
     values: dict[str, object] = {"goal_id": goal_id}
     if "session_id" in columns:
         values["session_id"] = ""

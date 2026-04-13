@@ -18,9 +18,9 @@ What this script does (idempotent and best-effort):
 3. Detects degradation signals on the 7-day window. The criteria are
    intentionally conservative to avoid false alarms on small samples:
      a. recommendation_accept_rate < 50% AND total_evaluations >= 10
-     b. linked_outcome_success_rate < 50% AND linked_outcomes_total >= 5
+     b. linked_outcome_success_rate < 50% AND linked_outcomes_resolved >= 5
      c. override_success_rate > recommended_success_rate by >= 20pp
-        AND linked_outcomes_total >= 5
+        AND linked_outcomes_resolved >= 5
 4. Opens (or refreshes) NF-CORTEX-QUALITY-DROP followup with the offending
    metrics when degradation is detected. Idempotent: if a non-PENDING /
    resolved followup of the same id already exists, it is updated in
@@ -96,6 +96,13 @@ def detect_quality_signals(summary: dict) -> list[dict]:
     total = int(summary.get("total_evaluations") or 0)
     accept_rate = float(summary.get("recommendation_accept_rate") or 0.0)
     linked_total = int(summary.get("linked_outcomes_total") or 0)
+    linked_met = int(summary.get("linked_outcomes_met") or 0)
+    linked_missed = int(summary.get("linked_outcomes_missed") or 0)
+    linked_pending = int(summary.get("linked_outcomes_pending") or 0)
+    linked_resolved = linked_met + linked_missed
+    if linked_resolved <= 0 and linked_total > 0:
+        # Older callers may omit the met/missed counters; fall back to total minus pending.
+        linked_resolved = max(0, linked_total - linked_pending)
     linked_success = float(summary.get("linked_outcome_success_rate") or 0.0)
     recommended_success = float(summary.get("recommended_success_rate") or 0.0)
     override_success = float(summary.get("override_success_rate") or 0.0)
@@ -114,21 +121,25 @@ def detect_quality_signals(summary: dict) -> list[dict]:
             ),
         })
 
-    if linked_total >= LINKED_MIN_SAMPLE and linked_success < LINKED_SUCCESS_FLOOR:
+    linked_scope = f"{linked_resolved} resolved linked outcomes"
+    if linked_pending > 0:
+        linked_scope += f" ({linked_total} total, {linked_pending} pending)"
+
+    if linked_resolved >= LINKED_MIN_SAMPLE and linked_success < LINKED_SUCCESS_FLOOR:
         signals.append({
             "kind": "linked_success",
             "severity": "warn",
             "metric_value": linked_success,
             "threshold": LINKED_SUCCESS_FLOOR,
-            "sample_size": linked_total,
+            "sample_size": linked_resolved,
             "message": (
                 f"Cortex linked-outcome success rate {linked_success:.1f}% on "
-                f"{linked_total} linked outcomes is below the "
+                f"{linked_scope} is below the "
                 f"{LINKED_SUCCESS_FLOOR:.0f}% floor."
             ),
         })
 
-    if linked_total >= LINKED_MIN_SAMPLE:
+    if linked_resolved >= LINKED_MIN_SAMPLE:
         gap = override_success - recommended_success
         if gap >= OVERRIDE_GAP_THRESHOLD:
             signals.append({
@@ -136,12 +147,12 @@ def detect_quality_signals(summary: dict) -> list[dict]:
                 "severity": "error",
                 "metric_value": gap,
                 "threshold": OVERRIDE_GAP_THRESHOLD,
-                "sample_size": linked_total,
+                "sample_size": linked_resolved,
                 "message": (
                     f"Cortex overrides outperform recommendations by {gap:.1f}pp "
                     f"(override {override_success:.1f}% vs recommended "
-                    f"{recommended_success:.1f}% on {linked_total} linked "
-                    "outcomes). The recommender is mis-ranking choices."
+                    f"{recommended_success:.1f}% on {linked_scope}). The "
+                    "recommender is mis-ranking choices."
                 ),
             })
 
@@ -171,14 +182,36 @@ def _upsert_quality_followup(signals: list[dict]) -> str:
     resolved, a fresh row is inserted with the same id (REPLACE) so the
     new degradation pattern is visible.
     """
-    if not signals:
-        return "no_signal"
-
     try:
-        from db import get_followup, get_db
+        from db import complete_followup, get_followup, get_db
     except Exception as e:
         _log(f"WARN: cannot import db helpers: {e}")
         return "skipped_no_db"
+
+    try:
+        existing = get_followup(FOLLOWUP_ID)
+    except Exception as e:
+        _log(f"WARN: get_followup raised: {e}")
+        existing = None
+
+    if not signals:
+        if not existing:
+            return "no_signal"
+        status = str(existing.get("status") or "").upper()
+        if status.startswith("COMPLETED") or status in {"DELETED", "ARCHIVED", "BLOCKED", "WAITING", "CANCELLED"}:
+            return "no_signal"
+        try:
+            complete_followup(
+                FOLLOWUP_ID,
+                result=(
+                    "Auto-resolved by cortex-cycle: no active degradation signals in the "
+                    "current 7d window."
+                ),
+            )
+        except Exception as e:
+            _log(f"WARN: failed to close followup: {e}")
+            return "failed_close"
+        return "closed"
 
     summary_lines = ["Cortex continuous validation found quality degradation:"]
     for sig in signals:
@@ -196,12 +229,6 @@ def _upsert_quality_followup(signals: list[dict]) -> str:
         "created_at FROM cortex_evaluations ORDER BY id DESC LIMIT 20"
     )
     now_epoch = datetime.now().timestamp()
-
-    try:
-        existing = get_followup(FOLLOWUP_ID)
-    except Exception as e:
-        _log(f"WARN: get_followup raised: {e}")
-        existing = None
 
     try:
         conn = get_db()
@@ -255,8 +282,8 @@ def run() -> int:
             f"signals={len(signals)}"
         )
 
-    if signals:
-        action = _upsert_quality_followup(signals)
+    action = _upsert_quality_followup(signals)
+    if signals or action not in {"no_signal"}:
         _log(f"Cortex cycle: followup {FOLLOWUP_ID} {action} ({len(signals)} signal(s))")
 
     return 0

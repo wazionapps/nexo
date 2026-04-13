@@ -36,11 +36,114 @@ TEMPLATE_FILE = REPO_DIR / "templates" / "CLAUDE.md.template"
 
 CHECK_COOLDOWN_SECONDS = 3600  # 1 hour
 GIT_TIMEOUT_SECONDS = 4  # stay well under the 5s total budget
+CRITICAL_BACKUP_TABLES = ("learnings", "session_diary", "guard_checks", "protocol_debt")
 
 
 def _log(msg: str):
     """Log to stderr with prefix."""
     print(f"[NEXO auto-update] {msg}", file=sys.stderr)
+
+
+def _critical_table_count(db_path: Path, table: str) -> int | None:
+    """Return COUNT(*) for a critical table when it exists, otherwise None."""
+    import sqlite3
+
+    conn = None
+    try:
+        conn = sqlite3.connect(str(db_path))
+        exists = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name = ?",
+            (table,),
+        ).fetchone()
+        if not exists:
+            return None
+        row = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()
+        return int(row[0]) if row else 0
+    except Exception:
+        return None
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+def _find_primary_db_path() -> Path | None:
+    """Return the main nexo.db path if present."""
+    for candidate in (DATA_DIR / "nexo.db", NEXO_HOME / "nexo.db", SRC_DIR / "nexo.db"):
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _validate_db_backup(source_db: Path, backup_db: Path) -> dict:
+    """Check that a backup preserves non-empty critical tables from the source DB."""
+    report = {
+        "ok": True,
+        "source_db": str(source_db),
+        "backup_db": str(backup_db),
+        "source_counts": {},
+        "backup_counts": {},
+        "regressions": [],
+        "errors": [],
+    }
+    if not source_db.is_file():
+        report["ok"] = False
+        report["errors"].append(f"source db missing: {source_db}")
+        return report
+    if not backup_db.is_file():
+        report["ok"] = False
+        report["errors"].append(f"backup db missing: {backup_db}")
+        return report
+
+    for table in CRITICAL_BACKUP_TABLES:
+        source_count = _critical_table_count(source_db, table)
+        backup_count = _critical_table_count(backup_db, table)
+        report["source_counts"][table] = source_count
+        report["backup_counts"][table] = backup_count
+
+        if source_count is None:
+            continue
+        if backup_count is None:
+            report["regressions"].append({
+                "table": table,
+                "source": source_count,
+                "backup": None,
+                "reason": "missing_in_backup",
+            })
+            continue
+        if source_count > 0 and backup_count == 0:
+            report["regressions"].append({
+                "table": table,
+                "source": source_count,
+                "backup": backup_count,
+                "reason": "critical_rows_lost",
+            })
+
+    if report["regressions"] or report["errors"]:
+        report["ok"] = False
+    return report
+
+
+def _create_validated_db_backup() -> tuple[str | None, dict | None]:
+    """Create a DB backup and validate that critical tables still contain data."""
+    backup_dir = _backup_dbs()
+    if not backup_dir:
+        return None, None
+
+    source_db = _find_primary_db_path()
+    if source_db is None:
+        return backup_dir, None
+
+    report = _validate_db_backup(source_db, Path(backup_dir) / source_db.name)
+    if not report["ok"]:
+        details = ", ".join(
+            f"{item['table']} {item['source']}->{item['backup']}"
+            for item in report["regressions"]
+        ) or "; ".join(report["errors"])
+        _log(f"DB backup validation failed: {details}")
+    return backup_dir, report
 
 
 def _read_last_check() -> dict:
@@ -677,6 +780,11 @@ def _check_git_updates() -> str | None:
     if rc != 0:
         return None
 
+    db_backup_dir, backup_report = _create_validated_db_backup()
+    if backup_report is not None and not backup_report["ok"]:
+        _log("Skipping auto-update because the validated pre-update DB backup is not trustworthy.")
+        return None
+
     rc, pull_out, pull_err = _git("pull", "--ff-only")
     if rc != 0:
         _log(f"git pull --ff-only failed: {pull_err}")
@@ -684,9 +792,6 @@ def _check_git_updates() -> str | None:
 
     new_version = _read_package_version()
     new_req_hash = _requirements_hash()
-
-    # Backup databases before any changes that might run migrations
-    db_backup_dir = _backup_dbs()
 
     # Reinstall pip deps if requirements.txt content changed (not just version)
     if old_req_hash != new_req_hash:
@@ -2057,7 +2162,14 @@ def manual_sync_update(*, interactive: bool = False, allow_source_pull: bool = T
             pulled = True
 
     _emit_progress(progress_fn, "Creating runtime backups...")
-    db_backup_dir = _backup_dbs()
+    db_backup_dir, backup_report = _create_validated_db_backup()
+    if backup_report is not None and not backup_report["ok"]:
+        return {
+            "ok": False,
+            "mode": "sync",
+            "error": "DB backup validation failed before runtime sync.",
+            "backup_dir": db_backup_dir,
+        }
     tree_backup_dir = _backup_runtime_tree(NEXO_HOME)
     sync_result = {"ok": False, "mode": "sync", "pulled_source": pulled, "backup_dir": db_backup_dir, "tree_backup": tree_backup_dir}
     try:

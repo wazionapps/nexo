@@ -2154,14 +2154,14 @@ class TestDeepChecks:
 class TestOrchestrator:
     def test_boot_tier(self, nexo_home):
         from doctor.orchestrator import run_doctor
-        report = run_doctor(tier="boot")
+        report = run_doctor(tier="boot", plane="installation_live")
         assert report.overall_status in ("healthy", "degraded", "critical")
         assert report.duration_ms >= 0
         assert len(report.checks) > 0
 
     def test_all_tiers(self, nexo_home):
         from doctor.orchestrator import run_doctor
-        report = run_doctor(tier="all")
+        report = run_doctor(tier="all", plane="installation_live")
         tiers = {c.tier for c in report.checks}
         assert "boot" in tiers
         assert "runtime" in tiers
@@ -2169,11 +2169,31 @@ class TestOrchestrator:
 
     def test_invalid_tier_returns_critical(self, nexo_home):
         from doctor.orchestrator import run_doctor
-        report = run_doctor(tier="nonexistent")
+        report = run_doctor(tier="nonexistent", plane="installation_live")
         assert report.overall_status == "critical"
         assert len(report.checks) == 1
         assert report.checks[0].id == "orchestrator.invalid_tier"
         assert "nonexistent" in report.checks[0].summary
+
+    def test_doctor_requires_explicit_plane(self, nexo_home):
+        from doctor.orchestrator import run_doctor
+
+        report = run_doctor(tier="boot")
+
+        assert report.overall_status == "critical"
+        assert len(report.checks) == 1
+        assert report.checks[0].id == "orchestrator.diagnostic_plane_required"
+        assert "plano" in report.checks[0].summary.lower()
+
+    def test_doctor_rejects_cooperator_plane(self, nexo_home):
+        from doctor.orchestrator import run_doctor
+
+        report = run_doctor(tier="boot", plane="cooperator")
+
+        assert report.overall_status == "degraded"
+        assert len(report.checks) == 1
+        assert report.checks[0].id == "orchestrator.diagnostic_plane_mismatch"
+        assert "co-operador" in report.checks[0].summary.lower()
 
     def test_tier_crash_is_caught_and_reported(self, nexo_home, monkeypatch):
         from doctor import orchestrator
@@ -2183,7 +2203,7 @@ class TestOrchestrator:
 
         monkeypatch.setitem(orchestrator._TIER_RUNNERS, "boot", exploding_runner)
 
-        report = orchestrator.run_doctor(tier="boot")
+        report = orchestrator.run_doctor(tier="boot", plane="installation_live")
         assert report.overall_status == "critical"
         crash_checks = [c for c in report.checks if c.id == "orchestrator.boot_crashed"]
         assert len(crash_checks) == 1
@@ -2198,7 +2218,7 @@ class TestOrchestrator:
 
         monkeypatch.setitem(orchestrator._TIER_RUNNERS, "runtime", exploding_runtime)
 
-        report = orchestrator.run_doctor(tier="all")
+        report = orchestrator.run_doctor(tier="all", plane="installation_live")
         tiers = {c.tier for c in report.checks}
         assert "boot" in tiers
         assert "deep" in tiers
@@ -2210,7 +2230,7 @@ class TestFormatters:
     def test_json_format(self, nexo_home):
         from doctor.orchestrator import run_doctor
         from doctor.formatters import format_report
-        report = run_doctor(tier="boot")
+        report = run_doctor(tier="boot", plane="installation_live")
         output = format_report(report, fmt="json")
         data = json.loads(output)
         assert "overall_status" in data
@@ -2219,7 +2239,7 @@ class TestFormatters:
     def test_text_format(self, nexo_home):
         from doctor.orchestrator import run_doctor
         from doctor.formatters import format_report
-        report = run_doctor(tier="boot")
+        report = run_doctor(tier="boot", plane="installation_live")
         output = format_report(report, fmt="text")
         assert "NEXO Doctor" in output
         assert "BOOT" in output

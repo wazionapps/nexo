@@ -1,5 +1,17 @@
 # Changelog
 
+## [5.3.12] - 2026-04-13
+
+### Centralized model selection
+
+- All automation profiles, task backends, and Codex defaults now inherit the
+  user's configured model instead of hardcoding third-party model strings.
+  The `fast` profile no longer defaults to Codex — it uses the user's backend
+  and model.
+- Added `resolve_user_model()` to `client_preferences` so scripts can query
+  the single source of truth instead of hardcoding a model name.
+- README updated to reflect the one-model-everywhere design.
+
 ## [5.3.11] - 2026-04-13
 
 ### Protocol + Cortex contract hardening

@@ -821,9 +821,7 @@ If you want the shell or Python wrappers instead of raw MCP tools:
 - [docs/reference-verticals.md](docs/reference-verticals.md)
 - [compare/README.md](compare/README.md)
 
-Recommended defaults:
-- Claude Code: `Opus 4.6 with 1M context`
-- Codex: `gpt-5.4` with `xhigh` reasoning
+The model you pick during install is used everywhere — interactive sessions, automation scripts, and all task profiles.  Change it once in your preferences and every part of the system follows.  Default: `Opus 4.6 with 1M context`.
 
 Or use the shell alias created during install (e.g. `atlas`), which now runs `nexo chat .` so it opens the terminal client you pick for that session, with the last-used option shown first.
 
@@ -904,7 +902,7 @@ The Doctor system reads existing health artifacts (immune, watchdog, self-audit)
 - **macOS or Linux** (Windows via [WSL](https://learn.microsoft.com/en-us/windows/wsl/install))
 - **Node.js 18+** (for the installer)
 - **Claude Code is the primary recommended client.** It remains the most mature NEXO path: native hooks, the most battle-tested automation contract, and the clearest parity with historical production behavior.
-- **Recommended profiles:** Claude Code + `Opus 4.6 with 1M context`; Codex + `gpt-5.4` with `xhigh` reasoning if you prefer Codex as your terminal or automation backend.
+- **Model:** You pick your model during install and every component uses it.  Default is `Opus 4.6 with 1M context`.  Scripts and automation profiles read from a single preference — no hardcoded model strings.
 - Python 3, Homebrew, and the selected required client/backend can be installed automatically when NEXO has a supported installer path for that dependency.
 
 ## Architecture
@@ -1021,7 +1019,7 @@ When Claude Desktop is installed, `nexo-brain`, `nexo update`, and `nexo clients
 
 ### Codex
 
-When Codex CLI is available, `nexo-brain`, `nexo update`, and `nexo clients sync` register the same `nexo` MCP server via `codex mcp add`, so Codex uses the same local memory store as Claude Code and Claude Desktop. If selected during install, `nexo chat` can open Codex directly and background automation can also run through Codex. Interactive `nexo chat` launches use Codex's aggressive no-confirmation mode so the session does not stall on repetitive approval prompts. The current recommended Codex profile is `gpt-5.4` with `xhigh` reasoning. Runtime Doctor also audits recent Codex sessions for NEXO startup markers and conditioned-file protocol discipline so parity drift does not hide behind the lack of native Claude-style hooks.
+When Codex CLI is available, `nexo-brain`, `nexo update`, and `nexo clients sync` register the same `nexo` MCP server via `codex mcp add`, so Codex uses the same local memory store as Claude Code and Claude Desktop. If selected during install, `nexo chat` can open Codex directly and background automation can also run through Codex. Interactive `nexo chat` launches use Codex's aggressive no-confirmation mode so the session does not stall on repetitive approval prompts. Codex uses the same model you configured during install — no separate model override is needed. Runtime Doctor also audits recent Codex sessions for NEXO startup markers and conditioned-file protocol discipline so parity drift does not hide behind the lack of native Claude-style hooks.
 
 ### Cursor
 

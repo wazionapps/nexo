@@ -80,7 +80,9 @@ class TestReleaseReadinessGates:
         assert VERIFIER.exists()
         text = VERIFIER.read_text()
         assert "def _check_contract" in text
+        assert "def _check_protocol_closeout" in text
         assert "evidence_required" in text
+        assert "--final-closeout" in text
 
     def test_release_contracts_directory_has_versions(self):
         assert CONTRACTS_DIR.is_dir()

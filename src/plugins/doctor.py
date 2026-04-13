@@ -11,13 +11,14 @@ if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
 
-def handle_doctor(tier: str = "boot", fix: bool = False, output: str = "text") -> str:
+def handle_doctor(tier: str = "boot", fix: bool = False, output: str = "text", plane: str = "") -> str:
     """Unified diagnostic report for boot/runtime/deep health.
 
     Args:
         tier: Diagnostic tier — boot, runtime, deep, or all (default: boot)
         fix: Apply deterministic fixes (default: False)
         output: Output format — text or json (default: text)
+        plane: Diagnostic plane — runtime_personal, installation_live, or database_real
     """
     from doctor.orchestrator import run_doctor
     from doctor.formatters import format_report
@@ -27,7 +28,7 @@ def handle_doctor(tier: str = "boot", fix: bool = False, output: str = "text") -
     if output not in ("text", "json"):
         return f"Invalid output '{output}'. Use: text, json"
 
-    report = run_doctor(tier=tier, fix=fix)
+    report = run_doctor(tier=tier, fix=fix, plane=plane)
     return format_report(report, fmt=output)
 
 

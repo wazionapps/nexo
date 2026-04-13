@@ -67,8 +67,9 @@ MACOS_FDA_PROBE_PATHS = (
 )
 DEFAULT_CLAUDE_CODE_MODEL = "claude-opus-4-6[1m]"
 DEFAULT_CLAUDE_CODE_REASONING_EFFORT = ""
-DEFAULT_CODEX_MODEL = "gpt-5.4"
-DEFAULT_CODEX_REASONING_EFFORT = "xhigh"
+# Codex defaults mirror the user's primary model — no hardcoded third-party models.
+DEFAULT_CODEX_MODEL = DEFAULT_CLAUDE_CODE_MODEL
+DEFAULT_CODEX_REASONING_EFFORT = ""
 
 
 def _schedule_defaults() -> dict:

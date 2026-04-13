@@ -275,8 +275,8 @@ def test_sync_codex_uses_codex_cli_when_available(tmp_path, monkeypatch):
     assert "NEXO Shared Brain for Codex" in bootstrap_text
     config_path = home / ".codex" / "config.toml"
     config_text = config_path.read_text()
-    assert 'model = "gpt-5.4"' in config_text
-    assert 'model_reasoning_effort = "xhigh"' in config_text
+    assert 'model = "claude-opus-4-6[1m]"' in config_text
+    assert 'model_reasoning_effort = ""' in config_text
     assert "initial_messages = [{ role = \"system\"" in config_text
     assert "[nexo.codex]" in config_text
     assert "bootstrap_managed = true" in config_text
