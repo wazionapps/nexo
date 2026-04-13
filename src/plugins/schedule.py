@@ -13,6 +13,7 @@ from db import (
     upsert_personal_script, register_personal_script_schedule,
     get_personal_script_schedule,
 )
+from runtime_power import resolve_launchagent_path
 from script_registry import (
     PERSONAL_SCHEDULE_MANAGED_ENV,
     parse_inline_metadata,
@@ -447,7 +448,7 @@ def _add_launchagent(cron_id, script_path, wrapper_path, schedule, interval_seco
         "EnvironmentVariables": {
             "HOME": str(Path.home()),
             "NEXO_HOME": str(nexo_home),
-            "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:" + str(Path.home() / ".local/bin"),
+            "PATH": resolve_launchagent_path(),
             PERSONAL_SCHEDULE_MANAGED_ENV: "1",
             "NEXO_PERSONAL_CRON_ID": cron_id,
         },

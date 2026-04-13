@@ -37,7 +37,7 @@
         <key>HOME</key>
         <string>{{HOME}}</string>
         <key>PATH</key>
-        <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:__NEXO_HOME__/bin</string>
         <key>NEXO_HOME</key>
         <string>{{NEXO_HOME}}</string>
         <key>NEXO_CODE</key>

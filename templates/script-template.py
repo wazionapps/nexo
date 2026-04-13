@@ -33,13 +33,14 @@ except ImportError:
     from nexo_helper import call_tool_text, run_automation_text
 
 # If this script ever needs an autonomous model call:
-#   1. use run_automation_text(...)
-#   2. pass a legacy task profile like model="opus" when useful
-#   3. DO NOT hardcode `claude -p` or provider-specific model defaults
+#   1. use resolve_user_model() to get the user's configured model
+#   2. pass it to run_automation_text(...)
+#   3. DO NOT hardcode model names — the user picks their model once
 # Example:
+#   from client_preferences import resolve_user_model
 #   result = run_automation_text(
 #       "Summarize pending issues",
-#       model="opus",  # legacy task profile; NEXO maps it per backend
+#       model=resolve_user_model(),
 #   )
 
 

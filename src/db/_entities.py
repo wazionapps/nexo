@@ -125,7 +125,7 @@ def delete_preference(key: str) -> bool:
 
 # ── Agents ────────────────────────────────────────────────────────
 
-def create_agent(id: str, name: str, specialization: str, model: str = "sonnet",
+def create_agent(id: str, name: str, specialization: str, model: str = "",
                  tools: str = "", context_files: str = "", rules: str = "") -> dict:
     """Register a new agent. Uses INSERT OR REPLACE to allow re-registration."""
     conn = get_db()
