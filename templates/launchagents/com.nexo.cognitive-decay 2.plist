@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- com.nexo.cognitive-decay
+     Runs nexo-cognitive-decay.py every day at 03:00 to apply Ebbinghaus
+     forgetting curve decay to the cognitive memory database. Memories
+     that have not been reinforced recently have their confidence scores
+     reduced. This prevents stale or superseded information from
+     dominating retrieval results and keeps the semantic memory fresh.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.nexo.cognitive-decay</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>{{NEXO_HOME}}/scripts/nexo-cognitive-decay.py</string>
+    </array>
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>3</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>{{NEXO_HOME}}/logs/cognitive-decay-stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>{{NEXO_HOME}}/logs/cognitive-decay-stderr.log</string>
+    <key>RunAtLoad</key>
+    <false/>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>NEXO_HOME</key>
+        <string>{{NEXO_HOME}}</string>
+        <key>NEXO_CODE</key>
+        <string>{{NEXO_CODE}}</string>
+    </dict>
+</dict>
+</plist>

@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- com.nexo.dashboard
+     Keeps the NEXO web dashboard running persistently on port 6174.
+     The dashboard provides a browser-based view of sessions, reminders,
+     followups, learnings, and system health. Uses KeepAlive so macOS
+     automatically restarts it if it crashes. Access it at
+     http://localhost:6174 while the LaunchAgent is loaded.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.nexo.dashboard</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>-m</string>
+        <string>dashboard.app</string>
+        <string>--port</string>
+        <string>6174</string>
+        <string>--no-browser</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>{{NEXO_HOME}}</string>
+    <key>KeepAlive</key>
+    <true/>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/tmp/nexo-dashboard.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/nexo-dashboard.err</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:__NEXO_HOME__/bin</string>
+        <key>NEXO_HOME</key>
+        <string>{{NEXO_HOME}}</string>
+        <key>NEXO_CODE</key>
+        <string>{{NEXO_CODE}}</string>
+    </dict>
+</dict>
+</plist>

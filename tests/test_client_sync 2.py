@@ -1,0 +1,561 @@
+"""Tests for shared client sync across Claude Code, Claude Desktop, and Codex."""
+
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
+
+
+def _make_runtime(root: Path, *, operator_name: str = "Atlas") -> Path:
+    runtime = root / "runtime"
+    (runtime / ".venv" / "bin").mkdir(parents=True)
+    (runtime / ".venv" / "bin" / "python3").write_text("")
+    (runtime / "server.py").write_text("print('server')\n")
+    hooks_dir = runtime / "hooks"
+    hooks_dir.mkdir(parents=True)
+    for script in (
+        "daily-briefing-check.sh",
+        "session-start.sh",
+        "session-stop.sh",
+        "protocol-pretool-guardrail.sh",
+        "heartbeat-user-msg.sh",
+        "capture-tool-logs.sh",
+        "capture-session.sh",
+        "inbox-hook.sh",
+        "protocol-guardrail.sh",
+        "heartbeat-posttool.sh",
+        "pre-compact.sh",
+        "post-compact.sh",
+        "heartbeat-enforcement.py",
+    ):
+        (hooks_dir / script).write_text("#!/bin/bash\n")
+    payload = {}
+    if operator_name is not None:
+        payload["operator_name"] = operator_name
+    (runtime / "version.json").write_text(json.dumps(payload))
+    return runtime
+
+
+def _normalize_home(path: Path, home: Path) -> str:
+    try:
+        return "~/" + path.resolve().relative_to(home.resolve()).as_posix()
+    except Exception:
+        return str(path)
+
+
+def test_sync_claude_code_preserves_existing_settings(tmp_path):
+    import client_sync
+
+    runtime = _make_runtime(tmp_path)
+    home = tmp_path / "home"
+    settings_path = home / ".claude" / "settings.json"
+    mcp_path = home / ".claude.json"
+    settings_path.parent.mkdir(parents=True)
+    settings_path.write_text(json.dumps({
+        "mcpServers": {"other": {"command": "node", "args": ["other.js"]}},
+        "hooks": {"SessionStart": [{"matcher": "*", "hooks": []}]},
+    }))
+    mcp_path.write_text(json.dumps({
+        "mcpServers": {"legacy-root": {"command": "node", "args": ["root.js"]}},
+        "theme": "dark",
+    }))
+
+    result = client_sync.sync_claude_code(
+        nexo_home=runtime,
+        runtime_root=runtime,
+        operator_name="Atlas",
+        user_home=home,
+    )
+
+    assert result["ok"] is True
+    payload = json.loads(settings_path.read_text())
+    assert payload["hooks"]["SessionStart"][0]["matcher"] == "*"
+    all_hook_commands = [
+        hook["command"]
+        for sections in payload["hooks"].values()
+        for section in sections
+        for hook in section.get("hooks", [])
+    ]
+    assert any("session-start.sh" in command for command in all_hook_commands)
+    assert any("protocol-pretool-guardrail.sh" in command for command in all_hook_commands)
+    assert any("heartbeat-user-msg.sh" in command for command in all_hook_commands)
+    assert any("capture-tool-logs.sh" in command for command in all_hook_commands)
+    assert any("protocol-guardrail.sh" in command for command in all_hook_commands)
+    assert any("heartbeat-posttool.sh" in command for command in all_hook_commands)
+    assert any(".session-start-ts" in command for command in all_hook_commands)
+    assert payload["mcpServers"]["other"]["command"] == "node"
+    assert payload["mcpServers"]["nexo"]["args"] == [str(runtime / "server.py")]
+    assert payload["mcpServers"]["nexo"]["env"]["NEXO_HOME"] == str(runtime)
+    assert payload["mcpServers"]["nexo"]["env"]["NEXO_CODE"] == str(runtime)
+    assert payload["mcpServers"]["nexo"]["env"]["NEXO_NAME"] == "Atlas"
+    mcp_payload = json.loads(mcp_path.read_text())
+    assert mcp_payload["theme"] == "dark"
+    assert mcp_payload["mcpServers"]["legacy-root"]["args"] == ["root.js"]
+    assert mcp_payload["mcpServers"]["nexo"]["args"] == [str(runtime / "server.py")]
+    assert result["mcp_path"] == str(mcp_path)
+    bootstrap_path = home / ".claude" / "CLAUDE.md"
+    assert bootstrap_path.is_file()
+    bootstrap_text = bootstrap_path.read_text()
+    assert "******CORE******" in bootstrap_text
+    assert "******USER******" in bootstrap_text
+    assert "Evolution" in bootstrap_text
+
+
+def test_sync_claude_code_removes_legacy_managed_hooks_but_keeps_custom_hooks(tmp_path):
+    import client_sync
+
+    runtime = _make_runtime(tmp_path)
+    home = tmp_path / "home"
+    settings_path = home / ".claude" / "settings.json"
+    settings_path.parent.mkdir(parents=True)
+    settings_path.write_text(json.dumps({
+        "hooks": {
+            "PostToolUse": [
+                {
+                    "matcher": "*",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": "NEXO_HOME=/Users/franciscoc/claude bash /Users/franciscoc/claude/hooks/heartbeat-guard.sh",
+                            "timeout": 5,
+                        },
+                        {
+                            "type": "command",
+                            "command": "bash /tmp/custom-post-tool.sh",
+                            "timeout": 9,
+                        },
+                    ],
+                }
+            ]
+        }
+    }))
+
+    result = client_sync.sync_claude_code(
+        nexo_home=runtime,
+        runtime_root=runtime,
+        operator_name="Atlas",
+        user_home=home,
+    )
+
+    assert result["ok"] is True
+    payload = json.loads(settings_path.read_text())
+    post_tool_hooks = payload["hooks"]["PostToolUse"][0]["hooks"]
+    commands = [hook["command"] for hook in post_tool_hooks]
+    assert not any("heartbeat-guard.sh" in command for command in commands)
+    assert any("custom-post-tool.sh" in command for command in commands)
+    assert any("capture-tool-logs.sh" in command for command in commands)
+    assert any("capture-session.sh" in command for command in commands)
+    assert any("inbox-hook.sh" in command for command in commands)
+    assert any("protocol-guardrail.sh" in command for command in commands)
+    assert any("heartbeat-posttool.sh" in command for command in commands)
+
+
+def test_sync_claude_code_rewrites_legacy_heartbeat_hook_paths_to_core_hooks(tmp_path):
+    import client_sync
+
+    runtime = _make_runtime(tmp_path)
+    home = tmp_path / "home"
+    settings_path = home / ".claude" / "settings.json"
+    settings_path.parent.mkdir(parents=True)
+    settings_path.write_text(json.dumps({
+        "hooks": {
+            "UserPromptSubmit": [
+                {
+                    "matcher": "*",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": "NEXO_HOME=/Users/franciscoc/.nexo bash /Users/franciscoc/.nexo/scripts/heartbeat-user-msg.sh",
+                            "timeout": 3,
+                        }
+                    ],
+                }
+            ],
+            "PostToolUse": [
+                {
+                    "matcher": "*",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": "NEXO_HOME=/Users/franciscoc/.nexo bash /Users/franciscoc/.nexo/scripts/heartbeat-posttool.sh",
+                            "timeout": 3,
+                        }
+                    ],
+                }
+            ],
+        }
+    }))
+
+    result = client_sync.sync_claude_code(
+        nexo_home=runtime,
+        runtime_root=runtime,
+        operator_name="Atlas",
+        user_home=home,
+    )
+
+    assert result["ok"] is True
+    payload = json.loads(settings_path.read_text())
+    user_prompt_hooks = payload["hooks"]["UserPromptSubmit"][0]["hooks"]
+    post_tool_hooks = payload["hooks"]["PostToolUse"][0]["hooks"]
+    user_prompt_commands = [hook["command"] for hook in user_prompt_hooks]
+    post_tool_commands = [hook["command"] for hook in post_tool_hooks]
+    assert any("hooks/heartbeat-user-msg.sh" in command for command in user_prompt_commands)
+    assert not any("scripts/heartbeat-user-msg.sh" in command for command in user_prompt_commands)
+    assert any("hooks/heartbeat-posttool.sh" in command for command in post_tool_commands)
+    assert not any("scripts/heartbeat-posttool.sh" in command for command in post_tool_commands)
+
+
+def test_sync_claude_desktop_preserves_preferences(tmp_path):
+    import client_sync
+
+    runtime = _make_runtime(tmp_path)
+    home = tmp_path / "home"
+    desktop_path = client_sync._claude_desktop_config_path(home)
+    desktop_path.parent.mkdir(parents=True)
+    desktop_path.write_text(json.dumps({
+        "preferences": {"sidebarMode": "chat"},
+        "mcpServers": {"legacy": {"command": "python3", "args": ["legacy.py"]}},
+    }))
+
+    result = client_sync.sync_claude_desktop(
+        nexo_home=runtime,
+        runtime_root=runtime,
+        operator_name="Atlas",
+        user_home=home,
+    )
+
+    assert result["ok"] is True
+    payload = json.loads(desktop_path.read_text())
+    assert payload["preferences"]["sidebarMode"] == "chat"
+    assert payload["mcpServers"]["legacy"]["args"] == ["legacy.py"]
+    assert payload["mcpServers"]["nexo"]["env"]["NEXO_NAME"] == "Atlas"
+    assert payload["nexo"]["claude_desktop"]["shared_brain_managed"] is True
+    assert payload["nexo"]["claude_desktop"]["shared_brain_mode"] == "mcp_only"
+
+
+def test_sync_codex_uses_codex_cli_when_available(tmp_path, monkeypatch):
+    import client_sync
+
+    runtime = _make_runtime(tmp_path)
+    home = tmp_path / "home"
+    captured = {}
+
+    monkeypatch.setattr(client_sync.shutil, "which", lambda name: "/tmp/fake-codex" if name == "codex" else None)
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        captured["env"] = kwargs["env"]
+        return subprocess.CompletedProcess(cmd, 0, "Added global MCP server 'nexo'.", "")
+
+    monkeypatch.setattr(client_sync.subprocess, "run", fake_run)
+
+    result = client_sync.sync_codex(
+        nexo_home=runtime,
+        runtime_root=runtime,
+        operator_name="Atlas",
+        user_home=home,
+    )
+
+    assert result["ok"] is True
+    assert captured["cmd"][:4] == ["/tmp/fake-codex", "mcp", "add", "nexo"]
+    assert f"NEXO_HOME={runtime}" in captured["cmd"]
+    assert f"NEXO_CODE={runtime}" in captured["cmd"]
+    assert "NEXO_NAME=Atlas" in captured["cmd"]
+    assert captured["cmd"][-2:] == [str(runtime / ".venv" / "bin" / "python3"), str(runtime / "server.py")]
+    assert captured["env"]["HOME"] == str(home)
+    bootstrap_path = home / ".codex" / "AGENTS.md"
+    assert bootstrap_path.is_file()
+    bootstrap_text = bootstrap_path.read_text()
+    assert "******CORE******" in bootstrap_text
+    assert "******USER******" in bootstrap_text
+    assert "NEXO Shared Brain for Codex" in bootstrap_text
+    config_path = home / ".codex" / "config.toml"
+    config_text = config_path.read_text()
+    assert 'model = "claude-opus-4-6[1m]"' in config_text
+    assert 'model_reasoning_effort = ""' in config_text
+    assert "initial_messages = [{ role = \"system\"" in config_text
+    assert "[nexo.codex]" in config_text
+    assert "bootstrap_managed = true" in config_text
+    assert "mcp_managed = true" in config_text
+    assert "[mcp_servers.nexo]" in config_text
+
+
+def test_sync_all_clients_treats_missing_codex_as_non_fatal(tmp_path, monkeypatch):
+    import client_sync
+
+    runtime = _make_runtime(tmp_path)
+    home = tmp_path / "home"
+
+    monkeypatch.setattr(client_sync.shutil, "which", lambda name: None)
+
+    result = client_sync.sync_all_clients(
+        nexo_home=runtime,
+        runtime_root=runtime,
+        operator_name="Atlas",
+        user_home=home,
+    )
+
+    assert result["ok"] is True
+    assert result["clients"]["codex"]["skipped"] is True
+    assert "codex binary not found" in result["clients"]["codex"]["reason"]
+    assert (home / ".codex" / "AGENTS.md").is_file()
+    assert "[mcp_servers.nexo]" in (home / ".codex" / "config.toml").read_text()
+
+
+def test_sync_codex_defaults_operator_name_when_runtime_version_has_blank_value(tmp_path, monkeypatch):
+    import client_sync
+
+    runtime = _make_runtime(tmp_path, operator_name="")
+    home = tmp_path / "home"
+    captured = {}
+
+    monkeypatch.setattr(client_sync.shutil, "which", lambda name: "/tmp/fake-codex" if name == "codex" else None)
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        return subprocess.CompletedProcess(cmd, 0, "Added global MCP server 'nexo'.", "")
+
+    monkeypatch.setattr(client_sync.subprocess, "run", fake_run)
+
+    result = client_sync.sync_codex(
+        nexo_home=runtime,
+        runtime_root=runtime,
+        user_home=home,
+    )
+
+    assert result["ok"] is True
+    assert "NEXO_NAME=NEXO" in captured["cmd"]
+    bootstrap_text = (home / ".codex" / "AGENTS.md").read_text()
+    assert "You are NEXO" in bootstrap_text
+
+
+def test_sync_codex_falls_back_to_managed_config_when_cli_add_fails(tmp_path, monkeypatch):
+    import client_sync
+
+    runtime = _make_runtime(tmp_path)
+    home = tmp_path / "home"
+
+    monkeypatch.setattr(client_sync.shutil, "which", lambda name: "/tmp/fake-codex" if name == "codex" else None)
+
+    def fake_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(cmd, 1, "", "mcp add exploded")
+
+    monkeypatch.setattr(client_sync.subprocess, "run", fake_run)
+
+    result = client_sync.sync_codex(
+        nexo_home=runtime,
+        runtime_root=runtime,
+        operator_name="Atlas",
+        user_home=home,
+    )
+
+    assert result["ok"] is True
+    assert result["mode"] == "config_only"
+    assert "mcp add exploded" in result["warning"]
+    config_text = (home / ".codex" / "config.toml").read_text()
+    assert "[mcp_servers.nexo]" in config_text
+
+
+def test_sync_all_clients_can_limit_to_configured_clients(tmp_path, monkeypatch):
+    import client_sync
+
+    runtime = _make_runtime(tmp_path)
+    home = tmp_path / "home"
+
+    monkeypatch.setattr(client_sync.shutil, "which", lambda name: None)
+
+    result = client_sync.sync_all_clients(
+        nexo_home=runtime,
+        runtime_root=runtime,
+        operator_name="Atlas",
+        user_home=home,
+        preferences={
+            "interactive_clients": {
+                "claude_code": False,
+                "codex": True,
+                "claude_desktop": False,
+            },
+            "default_terminal_client": "codex",
+            "automation_enabled": False,
+            "automation_backend": "none",
+        },
+    )
+
+    assert result["enabled_clients"] == ["codex"]
+    assert result["clients"]["claude_code"]["reason"] == "disabled in client preferences"
+    assert result["clients"]["claude_desktop"]["reason"] == "disabled in client preferences"
+    assert result["clients"]["codex"]["skipped"] is True
+
+
+def test_sync_claude_bootstrap_preserves_user_block(tmp_path):
+    import client_sync
+
+    runtime = _make_runtime(tmp_path)
+    home = tmp_path / "home"
+    bootstrap_path = home / ".claude" / "CLAUDE.md"
+    bootstrap_path.parent.mkdir(parents=True)
+    bootstrap_path.write_text(
+        "<!-- nexo-claude-md-version: 1.0.0 -->\n"
+        "******CORE******\n"
+        "<!-- nexo:core:start -->\nold core\n<!-- nexo:core:end -->\n\n"
+        "******USER******\n"
+        "<!-- nexo:user:start -->\nSPECIAL USER RULE\n<!-- nexo:user:end -->\n"
+    )
+
+    result = client_sync.sync_claude_code(
+        nexo_home=runtime,
+        runtime_root=runtime,
+        operator_name="Atlas",
+        user_home=home,
+    )
+
+    assert result["ok"] is True
+    updated = bootstrap_path.read_text()
+    assert "SPECIAL USER RULE" in updated
+    assert "old core" not in updated
+    assert "nexo-claude-md-version:" in updated
+
+
+def test_sync_claude_bootstrap_migrates_legacy_home_references_in_user_block(tmp_path):
+    import client_sync
+
+    runtime = _make_runtime(tmp_path)
+    home = tmp_path / "home"
+    bootstrap_path = home / ".claude" / "CLAUDE.md"
+    bootstrap_path.parent.mkdir(parents=True)
+    bootstrap_path.write_text(
+        "<!-- nexo-claude-md-version: 1.0.0 -->\n"
+        "******CORE******\n"
+        "<!-- nexo:core:start -->\nold core\n<!-- nexo:core:end -->\n\n"
+        "******USER******\n"
+        "<!-- nexo:user:start -->\n"
+        "cat ~/claude/operations/.watchdog-alert\n"
+        f"policy={home / 'claude' / 'brain' / 'policies.md'}\n"
+        "<!-- nexo:user:end -->\n"
+    )
+
+    result = client_sync.sync_claude_code(
+        nexo_home=runtime,
+        runtime_root=runtime,
+        operator_name="Atlas",
+        user_home=home,
+    )
+
+    assert result["ok"] is True
+    updated = bootstrap_path.read_text()
+    assert "~/claude" not in updated
+    assert str(home / "claude") not in updated
+    assert f"cat {_normalize_home(runtime, home)}/operations/.watchdog-alert" in updated
+    assert f"policy={runtime / 'brain' / 'policies.md'}" in updated
+
+
+def test_sync_claude_bootstrap_migrates_legacy_home_references_when_legacy_home_is_symlink(tmp_path):
+    import client_sync
+
+    runtime = _make_runtime(tmp_path)
+    home = tmp_path / "home"
+    home.mkdir(parents=True, exist_ok=True)
+    (home / "claude").symlink_to(runtime, target_is_directory=True)
+    bootstrap_path = home / ".claude" / "CLAUDE.md"
+    bootstrap_path.parent.mkdir(parents=True)
+    bootstrap_path.write_text(
+        "<!-- nexo-claude-md-version: 1.0.0 -->\n"
+        "******CORE******\n"
+        "<!-- nexo:core:start -->\nold core\n<!-- nexo:core:end -->\n\n"
+        "******USER******\n"
+        "<!-- nexo:user:start -->\n"
+        "cat ~/claude/operations/.watchdog-alert\n"
+        "<!-- nexo:user:end -->\n"
+    )
+
+    result = client_sync.sync_claude_code(
+        nexo_home=runtime,
+        runtime_root=runtime,
+        operator_name="Atlas",
+        user_home=home,
+    )
+
+    assert result["ok"] is True
+    updated = bootstrap_path.read_text()
+    assert "~/claude" not in updated
+    assert f"cat {_normalize_home(runtime, home)}/operations/.watchdog-alert" in updated
+
+
+def test_sync_claude_bootstrap_migrates_legacy_file_into_core_user_contract(tmp_path):
+    import client_sync
+
+    runtime = _make_runtime(tmp_path)
+    home = tmp_path / "home"
+    bootstrap_path = home / ".claude" / "CLAUDE.md"
+    bootstrap_path.parent.mkdir(parents=True)
+    bootstrap_path.write_text(
+        "<!-- nexo-claude-md-version: 1.0.0 -->\n"
+        "# Atlas — Cognitive Co-Operator\n"
+        "I am Atlas, a cognitive co-operator powered by NEXO Brain.\n"
+        "<!-- nexo:start:startup -->\nlegacy startup\n<!-- nexo:end:startup -->\n"
+        "Operator note: remember the private QA machine.\n"
+    )
+
+    result = client_sync.sync_claude_code(
+        nexo_home=runtime,
+        runtime_root=runtime,
+        operator_name="Atlas",
+        user_home=home,
+    )
+
+    assert result["ok"] is True
+    updated = bootstrap_path.read_text()
+    assert "******CORE******" in updated
+    assert "******USER******" in updated
+    assert "Operator note: remember the private QA machine." in updated
+
+
+def test_sync_codex_bootstrap_migrates_legacy_home_references_in_user_block(tmp_path, monkeypatch):
+    import client_sync
+
+    runtime = _make_runtime(tmp_path)
+    home = tmp_path / "home"
+    bootstrap_path = home / ".codex" / "AGENTS.md"
+    bootstrap_path.parent.mkdir(parents=True)
+    bootstrap_path.write_text(
+        "<!-- nexo-codex-agents-version: 1.0.0 -->\n"
+        "******CORE******\n"
+        "<!-- nexo:core:start -->\nold core\n<!-- nexo:core:end -->\n\n"
+        "******USER******\n"
+        "<!-- nexo:user:start -->\n"
+        "Atlas: ~/claude/brain/project-atlas.json\n"
+        f"db={home / 'claude' / 'data' / 'nexo.db'}\n"
+        "<!-- nexo:user:end -->\n"
+    )
+    monkeypatch.setattr(client_sync.shutil, "which", lambda name: None)
+
+    result = client_sync.sync_codex(
+        nexo_home=runtime,
+        runtime_root=runtime,
+        operator_name="Atlas",
+        user_home=home,
+    )
+
+    assert result["ok"] is True
+    updated = bootstrap_path.read_text()
+    assert "~/claude" not in updated
+    assert str(home / "claude") not in updated
+    assert f"Atlas: {_normalize_home(runtime, home)}/brain/project-atlas.json" in updated
+    assert f"db={runtime / 'data' / 'nexo.db'}" in updated
+
+
+def test_bootstrap_docs_resolve_templates_for_runtime_layout(tmp_path):
+    import bootstrap_docs
+
+    runtime_root = tmp_path / "runtime"
+    (runtime_root / "templates").mkdir(parents=True)
+    module_file = runtime_root / "bootstrap_docs.py"
+    module_file.write_text("# placeholder\n")
+
+    resolved = bootstrap_docs._resolve_templates_dir(module_file)
+
+    assert resolved == runtime_root / "templates"

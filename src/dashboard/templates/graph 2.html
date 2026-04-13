@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+
+{% block title %}Knowledge Graph{% endblock %}
+{% block page_title %}Knowledge Graph{% endblock %}
+
+{% block head %}
+<style>
+    .node circle { transition: filter 0.15s ease; }
+    .node:hover circle { filter: drop-shadow(0 0 10px currentColor); }
+    .link-label { fill: #64748b; font-size: 10px; pointer-events: none; opacity: 0.6; }
+</style>
+{% endblock %}
+
+{% block header_actions %}
+<input type="number" id="center" placeholder="Node ID"
+    class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1 text-xs w-24 text-slate-200 focus:outline-none focus:ring-1 focus:ring-violet-500">
+<select id="depth" class="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-violet-500">
+    <option>1</option><option selected>2</option><option>3</option>
+</select>
+<button onclick="loadGraph()" class="px-3 py-1 text-xs bg-violet-600 text-white rounded-lg hover:bg-violet-500 transition-colors">Load</button>
+<span id="info" class="text-xs text-slate-500 font-mono"></span>
+<div class="flex items-center gap-3 ml-2 text-xs text-slate-400">
+    <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-violet-500 inline-block"></span>area</span>
+    <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>file</span>
+    <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-blue-500 inline-block"></span>learning</span>
+    <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-amber-500 inline-block"></span>decision</span>
+    <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-pink-500 inline-block"></span>entity</span>
+    <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-slate-500 inline-block"></span>change</span>
+    <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-cyan-500 inline-block"></span>memory</span>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="flex overflow-hidden" style="height: calc(100vh - 8.5rem);">
+    <!-- Graph canvas -->
+    <div id="graph-container" class="flex-1 overflow-hidden">
+        <svg id="svg" class="w-full h-full"></svg>
+    </div>
+
+    <!-- Node detail sidebar -->
+    <div id="sidebar" class="overflow-hidden bg-slate-900 border-l border-slate-800 transition-all duration-300 flex-shrink-0" style="width:0">
+        <div class="p-5 w-80">
+            <div class="flex items-center justify-between mb-3">
+                <h3 id="sb-label" class="text-sm font-display font-semibold text-violet-400 pr-4 leading-tight"></h3>
+                <button onclick="closeSidebar()" class="text-slate-400 hover:text-white text-lg leading-none flex-shrink-0">&times;</button>
+            </div>
+            <div id="sb-meta" class="text-xs text-slate-500 mb-3 font-mono space-y-0.5"></div>
+            <div class="text-xs font-display font-semibold text-slate-400 uppercase tracking-wide mb-2">Connections</div>
+            <div id="sb-neighbors" class="space-y-1"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script>
+    const typeColors = {
+        area: '#8B5CF6',
+        file: '#10B981',
+        learning: '#3B82F6',
+        decision: '#F59E0B',
+        entity: '#EC4899',
+        change: '#64748B',
+        memory: '#06B6D4'
+    };
+
+    function nodeColor(type) { return typeColors[type] || '#64748B'; }
+    function nodeRadius(d) { return d.depth === 0 ? 16 : d.depth === 1 ? 10 : 7; }
+
+    let currentSim = null;
+
+    async function loadGraph() {
+        const center = document.getElementById('center').value;
+        const depth = document.getElementById('depth').value;
+        const url = center ? `/api/graph?center=${center}&depth=${depth}` : '/api/graph';
+        const data = await fetch(url).then(r => r.json());
+
+        if (!data.nodes || data.nodes.length === 0) {
+            const hints = (data.hints || []).map(h => `${h.label} (id:${h.id})`).join(', ');
+            document.getElementById('info').textContent = hints ? `No subgraph found. Top: ${hints}` : 'No graph data found';
+            if (data.hints && data.hints.length > 0) {
+                document.getElementById('center').value = data.hints[0].id;
+                loadGraph();
+            }
+            return;
+        }
+
+        document.getElementById('info').textContent = `${data.nodes.length} nodes · ${data.edges.length} edges`;
+        renderGraph(data);
+    }
+
+    function renderGraph(data) {
+        const svg = d3.select('#svg');
+        svg.selectAll('*').remove();
+        const width = svg.node().clientWidth;
+        const height = svg.node().clientHeight;
+        const g = svg.append('g');
+
+        svg.call(d3.zoom().scaleExtent([0.1, 8]).on('zoom', e => g.attr('transform', e.transform)));
+
+        if (currentSim) currentSim.stop();
+        currentSim = d3.forceSimulation(data.nodes)
+            .force('link', d3.forceLink(data.edges).id(d => d.id).distance(80))
+            .force('charge', d3.forceManyBody().strength(-300))
+            .force('center', d3.forceCenter(width / 2, height / 2))
+            .force('collision', d3.forceCollide().radius(d => nodeRadius(d) + 20));
+
+        const link = g.selectAll('.link').data(data.edges).join('line')
+            .attr('class', 'link')
+            .attr('stroke', '#334155')
+            .attr('stroke-width', d => Math.max(1, (d.weight || 0.5) * 2.5))
+            .attr('stroke-opacity', d => Math.min(0.6, 0.2 + (d.weight || 0.3) * 0.4));
+
+        const linkLabel = g.selectAll('.link-label').data(data.edges).join('text')
+            .attr('class', 'link-label')
+            .text(d => d.relation);
+
+        const node = g.selectAll('.node').data(data.nodes).join('g')
+            .attr('class', 'node')
+            .style('cursor', 'pointer')
+            .on('click', (e, d) => showNodeDetail(d))
+            .call(d3.drag()
+                .on('start', (e, d) => { if (!e.active) currentSim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+                .on('drag', (e, d) => { d.fx = e.x; d.fy = e.y; })
+                .on('end', (e, d) => { if (!e.active) currentSim.alphaTarget(0); d.fx = null; d.fy = null; }));
+
+        node.append('circle')
+            .attr('r', d => nodeRadius(d))
+            .attr('fill', d => nodeColor(d.type))
+            .attr('stroke', d => d.depth === 0 ? '#fff' : nodeColor(d.type))
+            .attr('stroke-width', d => d.depth === 0 ? 2.5 : 1)
+            .attr('stroke-opacity', d => d.depth === 0 ? 0.8 : 0.3)
+            .style('color', d => nodeColor(d.type));
+
+        node.filter(d => d.depth <= 1).append('text')
+            .attr('dx', d => nodeRadius(d) + 5)
+            .attr('dy', 4)
+            .attr('fill', '#94a3b8')
+            .attr('font-size', d => d.depth === 0 ? '13px' : '11px')
+            .attr('font-weight', d => d.depth === 0 ? '600' : '400')
+            .attr('font-family', 'Space Grotesk, system-ui, sans-serif')
+            .text(d => d.label.length > 40 ? d.label.slice(0, 37) + '...' : d.label);
+
+        node.filter(d => d.depth > 1).append('title')
+            .text(d => `[${d.type}] ${d.label}`);
+
+        currentSim.on('tick', () => {
+            link.attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+                .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+            linkLabel.attr('x', d => (d.source.x + d.target.x) / 2)
+                .attr('y', d => (d.source.y + d.target.y) / 2);
+            node.attr('transform', d => `translate(${d.x},${d.y})`);
+        });
+    }
+
+    async function showNodeDetail(d) {
+        document.getElementById('sb-label').textContent = d.label;
+        document.getElementById('sb-meta').innerHTML =
+            `<div>Type: <span style="color:${nodeColor(d.type)}">${d.type}</span></div>` +
+            `<div>ID: ${d.id}</div>` +
+            `<div>Depth: ${d.depth}</div>`;
+
+        document.getElementById('sidebar').style.width = '320px';
+
+        const resp = await fetch(`/api/graph?center=${d.id}&depth=1`);
+        const data = await resp.json();
+        const nbDiv = document.getElementById('sb-neighbors');
+
+        if (!data.edges || data.edges.length === 0) {
+            nbDiv.innerHTML = '<p class="text-sm text-slate-500">No connections found</p>';
+            return;
+        }
+
+        const neighbors = data.nodes.filter(n => n.id !== d.id).slice(0, 20);
+        nbDiv.innerHTML = `<p class="text-xs text-slate-500 mb-2">${data.edges.length} connections</p>` +
+            neighbors.map(n => {
+                const label = n.label.length > 45 ? n.label.slice(0, 42) + '...' : n.label;
+                return `<div class="neighbor-item px-2 py-1.5 rounded-md hover:bg-slate-800 cursor-pointer transition-colors" data-id="${n.id}">
+                    <span class="text-xs font-semibold" style="color:${nodeColor(n.type)}">[${n.type}]</span>
+                    <span class="text-sm text-slate-300 ml-1">${label.replace(/</g, '&lt;')}</span>
+                    <div class="text-xs text-slate-600 mt-0.5">Click to center</div>
+                </div>`;
+            }).join('');
+
+        nbDiv.querySelectorAll('.neighbor-item').forEach(el => {
+            el.addEventListener('click', () => {
+                document.getElementById('center').value = el.dataset.id;
+                loadGraph();
+            });
+        });
+    }
+
+    function closeSidebar() {
+        document.getElementById('sidebar').style.width = '0';
+    }
+
+    // Auto-load on page open
+    loadGraph();
+</script>
+{% endblock %}

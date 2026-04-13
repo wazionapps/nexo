@@ -1,0 +1,860 @@
+"""Tests for script_registry — metadata parsing, runtime detection, doctor validation."""
+import json
+import os
+import stat
+import sys
+
+import pytest
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
+
+from db import (
+    init_db,
+    get_personal_script,
+    list_personal_scripts,
+    list_personal_script_schedules,
+    sync_personal_scripts_registry,
+)
+from script_registry import (
+    parse_inline_metadata,
+    classify_runtime,
+    classify_scripts_dir,
+    audit_personal_schedules,
+    get_declared_schedule,
+    list_scripts,
+    resolve_script,
+    doctor_script,
+    load_core_script_names,
+    create_script,
+    ensure_personal_schedules,
+    sync_personal_scripts,
+    unschedule_personal_script,
+)
+
+
+@pytest.fixture
+def scripts_dir(tmp_path, monkeypatch):
+    """Create a temp NEXO_HOME with scripts/ and crons/manifest.json."""
+    nexo_home = tmp_path / "nexo"
+    scripts = nexo_home / "scripts"
+    scripts.mkdir(parents=True)
+
+    # Minimal manifest with one core script
+    crons_dir = nexo_home / "crons"
+    crons_dir.mkdir()
+    (crons_dir / "manifest.json").write_text('{"crons":[{"id":"immune","script":"scripts/nexo-immune.py"}]}')
+
+    config_dir = nexo_home / "config"
+    config_dir.mkdir()
+    (config_dir / "runtime-core-artifacts.json").write_text(json.dumps({
+        "script_names": ["nexo-update.sh"],
+        "hook_names": ["post-compact.sh"],
+    }))
+
+    hooks_dir = nexo_home / "hooks"
+    hooks_dir.mkdir()
+    (hooks_dir / "post-compact.sh").write_text("#!/bin/bash\necho hook\n")
+
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
+    monkeypatch.setenv("HOME", str(nexo_home))
+    # Patch module-level constants
+    import script_registry
+    monkeypatch.setattr(script_registry, "NEXO_HOME", nexo_home)
+
+    return scripts
+
+
+class TestMetadataParsing:
+    def test_basic_metadata(self, tmp_path):
+        script = tmp_path / "test.py"
+        script.write_text(
+            "#!/usr/bin/env python3\n"
+            "# nexo: name=my-script\n"
+            "# nexo: description=A test script\n"
+            "# nexo: runtime=python\n"
+            "# nexo: timeout=30\n"
+            "# nexo: requires=git,rsync\n"
+            "# nexo: tools=nexo_learning_search\n"
+            "print('hello')\n"
+        )
+        meta = parse_inline_metadata(script)
+        assert meta["name"] == "my-script"
+        assert meta["description"] == "A test script"
+        assert meta["runtime"] == "python"
+        assert meta["timeout"] == "30"
+        assert meta["requires"] == "git,rsync"
+        assert meta["tools"] == "nexo_learning_search"
+
+    def test_no_metadata(self, tmp_path):
+        script = tmp_path / "test.py"
+        script.write_text("print('no metadata')\n")
+        meta = parse_inline_metadata(script)
+        assert meta == {}
+
+    def test_only_first_25_lines(self, tmp_path):
+        script = tmp_path / "test.py"
+        lines = ["# filler\n"] * 26 + ["# nexo: name=hidden\n"]
+        script.write_text("".join(lines))
+        meta = parse_inline_metadata(script)
+        assert "name" not in meta
+
+    def test_invalid_key_ignored(self, tmp_path):
+        script = tmp_path / "test.py"
+        script.write_text("# nexo: invalidkey=value\n# nexo: name=valid\n")
+        meta = parse_inline_metadata(script)
+        assert "invalidkey" not in meta
+        assert meta["name"] == "valid"
+
+    def test_js_comment_metadata(self, tmp_path):
+        script = tmp_path / "test.js"
+        script.write_text("// nexo: name=valid-js\n")
+        meta = parse_inline_metadata(script)
+        assert meta["name"] == "valid-js"
+
+    def test_schedule_metadata(self, tmp_path):
+        script = tmp_path / "test.py"
+        script.write_text(
+            "# nexo: name=monitor\n"
+            "# nexo: runtime=python\n"
+            "# nexo: cron_id=monitor\n"
+            "# nexo: interval_seconds=300\n"
+            "# nexo: schedule_required=true\n"
+        )
+        meta = parse_inline_metadata(script)
+        declared = get_declared_schedule(meta, "monitor")
+        assert declared["valid"] is True
+        assert declared["schedule_type"] == "interval"
+        assert declared["interval_seconds"] == 300
+
+    def test_schedule_metadata_defaults_recovery_policy(self, tmp_path):
+        script = tmp_path / "mail.py"
+        script.write_text(
+            "# nexo: name=mail-poller\n"
+            "# nexo: runtime=python\n"
+            "# nexo: cron_id=mail-poller\n"
+            "# nexo: interval_seconds=300\n"
+            "# nexo: schedule_required=true\n"
+        )
+        meta = parse_inline_metadata(script)
+        declared = get_declared_schedule(meta, "mail-poller")
+        assert declared["valid"] is True
+        assert declared["recovery_policy"] == "run_once_on_wake"
+        assert declared["run_on_wake"] is True
+        assert declared["idempotent"] is True
+        assert declared["max_catchup_age"] >= 1200
+
+    def test_schedule_metadata_accepts_explicit_recovery_contract(self, tmp_path):
+        script = tmp_path / "calendar.py"
+        script.write_text(
+            "# nexo: name=daily-review\n"
+            "# nexo: runtime=python\n"
+            "# nexo: cron_id=daily-review\n"
+            "# nexo: schedule=06:30\n"
+            "# nexo: schedule_required=true\n"
+            "# nexo: recovery_policy=catchup\n"
+            "# nexo: run_on_boot=true\n"
+            "# nexo: run_on_wake=false\n"
+            "# nexo: idempotent=true\n"
+            "# nexo: max_catchup_age=7200\n"
+        )
+        meta = parse_inline_metadata(script)
+        declared = get_declared_schedule(meta, "daily-review")
+        assert declared["valid"] is True
+        assert declared["recovery_policy"] == "catchup"
+        assert declared["run_on_boot"] is True
+        assert declared["run_on_wake"] is False
+        assert declared["idempotent"] is True
+        assert declared["max_catchup_age"] == 7200
+
+    def test_schedule_metadata_supports_keep_alive_restart_daemon(self, tmp_path):
+        script = tmp_path / "wake.sh"
+        script.write_text(
+            "# nexo: name=nexo-wake-recovery\n"
+            "# nexo: runtime=shell\n"
+            "# nexo: cron_id=wake-recovery\n"
+            "# nexo: schedule_required=true\n"
+            "# nexo: recovery_policy=restart_daemon\n"
+            "# nexo: run_on_boot=true\n"
+            "echo ok\n"
+        )
+        meta = parse_inline_metadata(script)
+        declared = get_declared_schedule(meta, "nexo-wake-recovery")
+        assert declared["valid"] is True
+        assert declared["schedule_type"] == "keep_alive"
+        assert declared["schedule_label"] == "keep alive"
+        assert declared["run_on_boot"] is True
+        assert declared["recovery_policy"] == "restart_daemon"
+
+
+class TestRuntimeDetection:
+    def test_metadata_runtime(self, tmp_path):
+        script = tmp_path / "test.sh"
+        assert classify_runtime(script, {"runtime": "python"}) == "python"
+
+    def test_shebang_python(self, tmp_path):
+        script = tmp_path / "test"
+        script.write_text("#!/usr/bin/env python3\nprint('hi')\n")
+        assert classify_runtime(script, {}) == "python"
+
+    def test_shebang_bash(self, tmp_path):
+        script = tmp_path / "test"
+        script.write_text("#!/bin/bash\necho hi\n")
+        assert classify_runtime(script, {}) == "shell"
+
+    def test_extension_py(self, tmp_path):
+        script = tmp_path / "test.py"
+        script.write_text("print('hi')\n")
+        assert classify_runtime(script, {}) == "python"
+
+    def test_extension_sh(self, tmp_path):
+        script = tmp_path / "test.sh"
+        script.write_text("echo hi\n")
+        assert classify_runtime(script, {}) == "shell"
+
+    def test_unknown(self, tmp_path):
+        script = tmp_path / "test.rb"
+        script.write_text("puts 'hi'\n")
+        assert classify_runtime(script, {}) == "unknown"
+
+    def test_extension_js(self, tmp_path):
+        script = tmp_path / "test.js"
+        script.write_text("console.log('hi')\n")
+        assert classify_runtime(script, {}) == "node"
+
+    def test_extension_php(self, tmp_path):
+        script = tmp_path / "test.php"
+        script.write_text("<?php echo 'hi';\n")
+        assert classify_runtime(script, {}) == "php"
+
+
+class TestCoreFiltering:
+    def test_core_excluded_by_default(self, scripts_dir):
+        # Create a core script
+        (scripts_dir / "nexo-immune.py").write_text("# core script\n")
+        # Create a personal script
+        (scripts_dir / "my-backup.py").write_text("# nexo: name=my-backup\nprint('hi')\n")
+
+        scripts = list_scripts(include_core=False)
+        names = [s["name"] for s in scripts]
+        assert "my-backup" in names
+        assert "nexo-immune" not in names
+
+    def test_core_included_with_flag(self, scripts_dir):
+        (scripts_dir / "nexo-immune.py").write_text("# core script\n")
+        (scripts_dir / "my-backup.py").write_text("# nexo: name=my-backup\nprint('hi')\n")
+
+        scripts = list_scripts(include_core=True)
+        names = [s["name"] for s in scripts]
+        assert "my-backup" in names
+        assert "nexo-immune" in names
+
+    def test_runtime_core_artifacts_mark_non_cron_core_scripts(self, scripts_dir):
+        (scripts_dir / "nexo-update.sh").write_text("#!/bin/bash\necho update\n")
+
+        entries = {entry["path"].split("/")[-1]: entry for entry in classify_scripts_dir()["entries"]}
+        assert entries["nexo-update.sh"]["classification"] == "core"
+        assert entries["nexo-update.sh"]["core"] is True
+
+    def test_legacy_hook_aliases_are_not_personal(self, scripts_dir):
+        (scripts_dir / "nexo-postcompact.sh").write_text("#!/bin/bash\necho legacy post compact\n")
+
+        entries = {entry["path"].split("/")[-1]: entry for entry in classify_scripts_dir()["entries"]}
+        assert entries["nexo-postcompact.sh"]["classification"] == "core"
+        assert entries["nexo-postcompact.sh"]["core"] is True
+
+    def test_non_script_artifacts_ignored(self, scripts_dir):
+        (scripts_dir / "notes.csv").write_text("a,b,c\n")
+        (scripts_dir / "debug.log").write_text("hello\n")
+        scripts = list_scripts(include_core=False)
+        assert scripts == []
+
+    def test_internal_runtime_scripts_ignored(self, scripts_dir):
+        (scripts_dir / "nexo-dashboard.sh").write_text("#!/bin/bash\necho dashboard\n")
+        scripts = list_scripts(include_core=False)
+        assert scripts == []
+
+    def test_classify_scripts_dir(self, scripts_dir):
+        (scripts_dir / "nexo-immune.py").write_text("# core script\n")
+        (scripts_dir / "my-tool.py").write_text("# nexo: name=my-tool\nprint('hi')\n")
+        (scripts_dir / "notes.csv").write_text("a,b,c\n")
+        (scripts_dir / "nexo-dashboard.sh").write_text("#!/bin/bash\necho dashboard\n")
+
+        report = classify_scripts_dir()
+        classes = {entry["name"]: entry["classification"] for entry in report["entries"]}
+        assert classes["nexo-immune"] == "core"
+        assert classes["my-tool"] == "personal"
+        assert classes["notes"] == "non-script"
+        assert classes["nexo-dashboard"] == "ignored"
+
+    def test_runtime_core_manifest_marks_packaged_runtime_files_as_core(self, scripts_dir):
+        config_dir = scripts_dir.parent / "config"
+        config_dir.mkdir(exist_ok=True)
+        (config_dir / "runtime-core-artifacts.json").write_text(
+            '{"script_names":["nexo-catchup.py"],"hook_names":["capture-tool-logs.sh","heartbeat-posttool.sh"]}\n'
+        )
+        (scripts_dir / "nexo-catchup.py").write_text("print('core')\n")
+        (scripts_dir / "capture-tool-logs.sh").write_text("#!/bin/bash\necho core\n")
+        (scripts_dir / "heartbeat-posttool.sh").write_text("#!/bin/bash\necho core\n")
+        (scripts_dir / "my-tool.py").write_text("# nexo: name=my-tool\nprint('hi')\n")
+
+        report = classify_scripts_dir()
+        classes = {entry["path"].split("/")[-1]: entry["classification"] for entry in report["entries"]}
+        assert classes["nexo-catchup.py"] == "core"
+        assert classes["capture-tool-logs.sh"] == "core"
+        assert classes["heartbeat-posttool.sh"] == "core"
+        assert classes["my-tool.py"] == "personal"
+
+    def test_packaged_core_source_overrides_poisoned_runtime_manifest(self, scripts_dir, monkeypatch):
+        import script_registry
+
+        packaged_src = scripts_dir.parent / "npm-src"
+        (packaged_src / "crons").mkdir(parents=True)
+        (packaged_src / "scripts").mkdir()
+        (packaged_src / "hooks").mkdir()
+        (packaged_src / "crons" / "manifest.json").write_text(
+            '{"crons":[{"id":"immune","script":"scripts/nexo-immune.py"}]}\n'
+        )
+        (packaged_src / "scripts" / "nexo-immune.py").write_text("print('core')\n")
+        (packaged_src / "hooks" / "capture-tool-logs.sh").write_text("#!/bin/bash\necho core\n")
+
+        config_dir = scripts_dir.parent / "config"
+        (config_dir / "runtime-core-artifacts.json").write_text(
+            '{"script_names":["my-tool.py"],"hook_names":[]}\n'
+        )
+        (scripts_dir / "my-tool.py").write_text("# nexo: name=my-tool\nprint('hi')\n")
+        monkeypatch.setattr(script_registry, "_find_packaged_core_source_dir", lambda: packaged_src)
+
+        names = load_core_script_names()
+        assert "my-tool.py" not in names
+        assert "nexo-immune.py" in names
+
+        report = classify_scripts_dir()
+        classes = {entry["path"].split("/")[-1]: entry["classification"] for entry in report["entries"]}
+        assert classes["my-tool.py"] == "personal"
+
+    def test_classify_backfills_legacy_wake_recovery_metadata(self, scripts_dir):
+        script = scripts_dir / "nexo-wake-recovery.sh"
+        script.write_text(
+            "#!/bin/bash\n"
+            "# NEXO Wake Recovery — Detects sleep/wake gaps and reloads StartInterval LaunchAgents.\n"
+            "# Runs as KeepAlive daemon.\n"
+            "echo ok\n"
+        )
+
+        report = classify_scripts_dir()
+        wake_entry = next(entry for entry in report["entries"] if entry["name"] == "nexo-wake-recovery")
+        assert wake_entry["classification"] == "personal"
+        assert wake_entry["declared_schedule"]["schedule_type"] == "keep_alive"
+        text = script.read_text()
+        assert "# nexo: cron_id=wake-recovery" in text
+
+
+class TestResolveScript:
+    def test_resolve_by_name(self, scripts_dir):
+        (scripts_dir / "my-tool.py").write_text("# nexo: name=my-tool\n# nexo: description=A tool\n")
+        info = resolve_script("my-tool")
+        assert info is not None
+        assert info["name"] == "my-tool"
+
+    def test_resolve_by_stem(self, scripts_dir):
+        (scripts_dir / "quick-check.sh").write_text("#!/bin/bash\necho ok\n")
+        info = resolve_script("quick-check")
+        assert info is not None
+
+    def test_resolve_not_found(self, scripts_dir):
+        assert resolve_script("nonexistent") is None
+
+
+class TestDoctorScript:
+    def test_healthy_script(self, scripts_dir):
+        script = scripts_dir / "good.py"
+        script.write_text(
+            "#!/usr/bin/env python3\n"
+            "# nexo: name=good\n"
+            "# nexo: runtime=python\n"
+            "# nexo: timeout=30\n"
+            "print('hello')\n"
+        )
+        result = doctor_script(str(script))
+        assert result["status"] == "pass"
+
+    def test_forbidden_pattern(self, scripts_dir):
+        script = scripts_dir / "bad.py"
+        script.write_text(
+            "# nexo: name=bad\n"
+            "import sqlite3\n"
+            "conn = sqlite3.connect('nexo.db')\n"
+        )
+        result = doctor_script(str(script))
+        assert result["status"] == "fail"
+        fail_msgs = [i["msg"] for i in result["items"] if i["level"] == "fail"]
+        assert any("sqlite3" in m for m in fail_msgs)
+
+    def test_missing_executable_bit(self, scripts_dir):
+        script = scripts_dir / "noexec.sh"
+        script.write_text("#!/bin/bash\necho hello\n")
+        os.chmod(str(script), 0o644)  # no exec bit
+        result = doctor_script(str(script))
+        warn_msgs = [i["msg"] for i in result["items"] if i["level"] == "warn"]
+        assert any("executable" in m.lower() for m in warn_msgs)
+
+    def test_not_found(self, scripts_dir):
+        result = doctor_script("nonexistent")
+        assert result["status"] == "fail"
+
+
+class TestRegistrySync:
+    def test_create_script_registers_in_db(self, scripts_dir, monkeypatch):
+        import script_registry
+
+        init_db()
+        result = create_script("My Script", description="Created by test", runtime="python")
+        assert result["ok"] is True
+        assert result["name"] == "my-script"
+        assert result["filename"] == "ps-my-script.py"
+        assert result["requested_name"] == "My Script"
+        assert os.path.basename(result["path"]) == "ps-my-script.py"
+
+        registered = get_personal_script(result["path"])
+        assert registered is not None
+        assert registered["description"] == "Created by test"
+        assert registered["runtime"] == "python"
+
+    def test_classify_scripts_dir_marks_legacy_personal_filename_policy(self, scripts_dir):
+        script = scripts_dir / "legacy-tool.py"
+        script.write_text("# nexo: name=legacy-tool\nprint('hi')\n")
+
+        report = classify_scripts_dir()
+        entry = next(item for item in report["entries"] if item["name"] == "legacy-tool")
+        assert entry["classification"] == "personal"
+        assert entry["filename_prefixed"] is False
+        assert entry["naming_policy"] == "legacy-nonprefixed"
+
+    def test_classify_scripts_dir_marks_prefixed_personal_filename_policy(self, scripts_dir):
+        script = scripts_dir / "ps-fresh-tool.py"
+        script.write_text("# nexo: name=fresh-tool\nprint('hi')\n")
+
+        report = classify_scripts_dir()
+        entry = next(item for item in report["entries"] if item["name"] == "fresh-tool")
+        assert entry["classification"] == "personal"
+        assert entry["filename_prefixed"] is True
+        assert entry["naming_policy"] == "preferred"
+
+    def test_sync_personal_scripts_links_schedule(self, scripts_dir, monkeypatch):
+        import script_registry
+
+        init_db()
+        script = scripts_dir / "backup.py"
+        script.write_text(
+            "# nexo: name=backup\n"
+            "# nexo: description=Backup\n"
+            "# nexo: runtime=python\n"
+            "# nexo: cron_id=backup\n"
+            "# nexo: interval_seconds=300\n"
+            "# nexo: schedule_required=true\n"
+            "print('ok')\n"
+        )
+
+        monkeypatch.setattr(
+            script_registry,
+            "_discover_personal_schedule_records",
+            lambda: [{
+                "cron_id": "backup",
+                "script_path": str(script),
+                "schedule_type": "interval",
+                "schedule_value": "300",
+                "schedule_label": "every 300s",
+                "launchd_label": "com.nexo.backup",
+                "plist_path": "/tmp/com.nexo.backup.plist",
+                "enabled": True,
+                "description": "Backup schedule",
+                "managed_marker": True,
+                "script_exists": True,
+                "script_within_scripts_dir": True,
+            }],
+        )
+
+        result = sync_personal_scripts()
+        assert result["scripts_upserted"] == 1
+        assert result["schedules_upserted"] == 1
+
+        scripts = list_personal_scripts()
+        assert len(scripts) == 1
+        assert scripts[0]["has_schedule"] is True
+        schedules = list_personal_script_schedules()
+        assert len(schedules) == 1
+        assert schedules[0]["cron_id"] == "backup"
+
+    def test_sync_personal_scripts_allows_duplicate_names_with_distinct_paths(self, scripts_dir, monkeypatch):
+        init_db()
+        python_script = scripts_dir / "shopify-delivery-times.py"
+        shell_script = scripts_dir / "shopify-delivery-times.sh"
+        python_script.write_text(
+            "# nexo: name=shopify-delivery-times\n"
+            "# nexo: runtime=python\n"
+            "print('ok')\n"
+        )
+        shell_script.write_text(
+            "#!/bin/bash\n"
+            "# nexo: name=shopify-delivery-times\n"
+            "# nexo: runtime=shell\n"
+            "echo ok\n"
+        )
+
+        monkeypatch.setattr("script_registry._discover_personal_schedule_records", lambda: [])
+
+        result = sync_personal_scripts()
+
+        assert result["scripts_upserted"] == 2
+        scripts = list_personal_scripts()
+        assert len(scripts) == 2
+        assert {script["path"] for script in scripts} == {str(python_script), str(shell_script)}
+        assert len({script["id"] for script in scripts}) == 2
+
+    def test_sync_personal_scripts_registry_normalizes_legacy_symlink_paths(self, scripts_dir):
+        init_db()
+        nexo_home = scripts_dir.parent
+        legacy_home = nexo_home.parent / "claude"
+        legacy_home.symlink_to(nexo_home, target_is_directory=True)
+
+        script = scripts_dir / "nexo-email-monitor.py"
+        script.write_text(
+            "#!/usr/bin/env python3\n"
+            "# nexo: name=email-monitor\n"
+            "# nexo: runtime=python\n"
+            "print('ok')\n"
+        )
+
+        legacy_record = {
+            "name": "email-monitor",
+            "path": str(legacy_home / "scripts" / script.name),
+            "runtime": "python",
+            "description": "",
+            "metadata": {"name": "email-monitor", "runtime": "python"},
+        }
+        current_record = {
+            "name": "email-monitor",
+            "path": str(script),
+            "runtime": "python",
+            "description": "",
+            "metadata": {"name": "email-monitor", "runtime": "python"},
+        }
+
+        first = sync_personal_scripts_registry([legacy_record], [])
+        second = sync_personal_scripts_registry([current_record], [])
+
+        assert first["registered_scripts"] == 1
+        assert second["registered_scripts"] == 1
+        scripts = list_personal_scripts()
+        assert len(scripts) == 1
+        assert scripts[0]["id"] == "ps-email-monitor"
+        assert scripts[0]["path"] == str(script)
+
+    def test_ensure_personal_schedules_dry_run(self, scripts_dir, monkeypatch):
+        import script_registry
+
+        init_db()
+        script = scripts_dir / "monitor.py"
+        script.write_text(
+            "# nexo: name=email-monitor\n"
+            "# nexo: description=Monitor inbox\n"
+            "# nexo: runtime=python\n"
+            "# nexo: cron_id=email-monitor\n"
+            "# nexo: interval_seconds=300\n"
+            "# nexo: schedule_required=true\n"
+            "print('ok')\n"
+        )
+        monkeypatch.setattr(script_registry, "_discover_personal_schedule_records", lambda: [])
+
+        result = ensure_personal_schedules(dry_run=True)
+        assert result["created"][0]["cron_id"] == "email-monitor"
+        assert result["sync"]["missing_declared_schedules"][0]["name"] == "email-monitor"
+
+    def test_ensure_personal_keep_alive_schedule_repairs_manual_daemon(self, scripts_dir, monkeypatch):
+        import script_registry
+        from plugins import schedule as schedule_plugin
+
+        init_db()
+        script = scripts_dir / "nexo-wake-recovery.sh"
+        script.write_text(
+            "#!/bin/bash\n"
+            "# nexo: name=nexo-wake-recovery\n"
+            "# nexo: runtime=shell\n"
+            "# nexo: cron_id=wake-recovery\n"
+            "# nexo: schedule_required=true\n"
+            "# nexo: recovery_policy=restart_daemon\n"
+            "# nexo: run_on_boot=true\n"
+            "echo ok\n"
+        )
+
+        plist_path = scripts_dir / "com.nexo.wake-recovery.plist"
+        plist_path.write_text("plist")
+
+        monkeypatch.setattr(
+            script_registry,
+            "_discover_personal_schedule_records",
+            lambda: [{
+                "cron_id": "wake-recovery",
+                "script_path": str(script),
+                "schedule_type": "keep_alive",
+                "schedule_value": "true",
+                "schedule_label": "keep alive",
+                "launchd_label": "com.nexo.wake-recovery",
+                "plist_path": str(plist_path),
+                "enabled": True,
+                "description": "Wake recovery",
+                "managed_marker": False,
+                "script_exists": True,
+                "script_within_scripts_dir": True,
+                "run_at_load": True,
+            }],
+        )
+        monkeypatch.setattr(script_registry, "_remove_schedule_file", lambda **kwargs: {"cron_id": kwargs["cron_id"], "deleted": True})
+        monkeypatch.setattr(
+            schedule_plugin,
+            "handle_schedule_add",
+            lambda **kwargs: f"keep_alive={kwargs.get('keep_alive')} cron_id={kwargs.get('cron_id')}",
+        )
+
+        result = ensure_personal_schedules(dry_run=False)
+        assert result["repaired"][0]["cron_id"] == "wake-recovery"
+        assert "keep_alive=True" in result["repaired"][0]["result"]
+
+    def test_unschedule_personal_script_prunes_schedule(self, scripts_dir, monkeypatch):
+        import script_registry
+
+        init_db()
+        script = scripts_dir / "backup.py"
+        script.write_text(
+            "# nexo: name=backup\n"
+            "# nexo: runtime=python\n"
+            "# nexo: cron_id=backup\n"
+            "# nexo: interval_seconds=300\n"
+            "# nexo: schedule_required=true\n"
+            "print('ok')\n"
+        )
+        plist_path = scripts_dir / "com.nexo.backup.plist"
+        plist_path.write_text("plist")
+
+        def _discover():
+            if not plist_path.exists():
+                return []
+            return [{
+                "cron_id": "backup",
+                "script_path": str(script),
+                "schedule_type": "interval",
+                "schedule_value": "300",
+                "schedule_label": "every 300s",
+                "launchd_label": "com.nexo.backup",
+                "plist_path": str(plist_path),
+                "enabled": True,
+                "description": "Backup schedule",
+                "managed_marker": True,
+                "script_exists": True,
+                "script_within_scripts_dir": True,
+            }]
+
+        monkeypatch.setattr(script_registry, "_discover_personal_schedule_records", _discover)
+        monkeypatch.setattr(script_registry.platform, "system", lambda: "Darwin")
+        monkeypatch.setattr(script_registry.subprocess, "run", lambda *args, **kwargs: None)
+
+        sync_personal_scripts()
+        result = unschedule_personal_script("backup")
+        assert result["ok"] is True
+        assert result["removed_schedules"][0]["cron_id"] == "backup"
+        assert list_personal_script_schedules() == []
+
+    def test_sync_reports_manual_schedule_without_blessing_it(self, scripts_dir, monkeypatch):
+        import script_registry
+
+        init_db()
+        script = scripts_dir / "backup.py"
+        script.write_text(
+            "# nexo: name=backup\n"
+            "# nexo: runtime=python\n"
+            "# nexo: cron_id=backup\n"
+            "# nexo: interval_seconds=300\n"
+            "# nexo: schedule_required=true\n"
+            "print('ok')\n"
+        )
+
+        monkeypatch.setattr(
+            script_registry,
+            "_discover_personal_schedule_records",
+            lambda: [{
+                "cron_id": "backup",
+                "script_path": str(script),
+                "schedule_type": "interval",
+                "schedule_value": "300",
+                "schedule_label": "every 300s",
+                "launchd_label": "com.nexo.backup",
+                "plist_path": "/tmp/com.nexo.backup.plist",
+                "enabled": True,
+                "description": "Backup schedule",
+                "managed_marker": False,
+                "script_exists": True,
+                "script_within_scripts_dir": True,
+            }],
+        )
+
+        result = sync_personal_scripts()
+        assert result["schedules_upserted"] == 0
+        assert result["schedule_audit"]["summary"]["discovered_manual"] == 1
+        assert result["missing_declared_schedules"][0]["reason"].startswith("schedule discovered but not managed")
+
+    def test_audit_personal_schedules_marks_keep_alive_daemon_alive(self, scripts_dir, monkeypatch):
+        import script_registry
+
+        script = scripts_dir / "nexo-wake-recovery.sh"
+        script.write_text(
+            "#!/bin/bash\n"
+            "# nexo: name=nexo-wake-recovery\n"
+            "# nexo: runtime=shell\n"
+            "# nexo: cron_id=wake-recovery\n"
+            "# nexo: schedule_required=true\n"
+            "# nexo: recovery_policy=restart_daemon\n"
+            "echo ok\n"
+        )
+
+        monkeypatch.setattr(script_registry.platform, "system", lambda: "Darwin")
+        monkeypatch.setattr(
+            script_registry,
+            "_discover_personal_schedule_records",
+            lambda: [{
+                "cron_id": "wake-recovery",
+                "script_path": str(script),
+                "schedule_type": "keep_alive",
+                "schedule_value": "true",
+                "schedule_label": "keep alive",
+                "launchd_label": "com.nexo.wake-recovery",
+                "plist_path": "/tmp/com.nexo.wake-recovery.plist",
+                "enabled": True,
+                "description": "Wake recovery",
+                "managed_marker": True,
+                "script_exists": True,
+                "script_within_scripts_dir": True,
+                "run_at_load": True,
+            }],
+        )
+        monkeypatch.setattr(
+            script_registry,
+            "_launchctl_service_state",
+            lambda label: {"loaded": True, "pid": "123", "state": "running", "last_exit_status": "", "error": ""},
+        )
+
+        audit = audit_personal_schedules()
+        record = audit["schedules"][0]
+
+        assert record["runtime_state"] == "alive"
+        assert "pid 123" in record["runtime_summary"]
+        assert audit["summary"]["runtime_alive"] == 1
+
+    def test_audit_personal_schedules_marks_duplicate_keep_alive_daemons(self, scripts_dir, monkeypatch):
+        import script_registry
+
+        script = scripts_dir / "nexo-wake-recovery.sh"
+        script.write_text(
+            "#!/bin/bash\n"
+            "# nexo: name=nexo-wake-recovery\n"
+            "# nexo: runtime=shell\n"
+            "# nexo: cron_id=wake-recovery\n"
+            "# nexo: schedule_required=true\n"
+            "# nexo: recovery_policy=restart_daemon\n"
+            "echo ok\n"
+        )
+
+        monkeypatch.setattr(script_registry.platform, "system", lambda: "Darwin")
+        monkeypatch.setattr(
+            script_registry,
+            "_discover_personal_schedule_records",
+            lambda: [
+                {
+                    "cron_id": "wake-recovery",
+                    "script_path": str(script),
+                    "schedule_type": "keep_alive",
+                    "schedule_value": "true",
+                    "schedule_label": "keep alive",
+                    "launchd_label": "com.nexo.wake-recovery",
+                    "plist_path": "/tmp/com.nexo.wake-recovery-a.plist",
+                    "enabled": True,
+                    "description": "Wake recovery A",
+                    "managed_marker": True,
+                    "script_exists": True,
+                    "script_within_scripts_dir": True,
+                    "run_at_load": True,
+                },
+                {
+                    "cron_id": "wake-recovery",
+                    "script_path": str(script),
+                    "schedule_type": "keep_alive",
+                    "schedule_value": "true",
+                    "schedule_label": "keep alive",
+                    "launchd_label": "com.nexo.wake-recovery-2",
+                    "plist_path": "/tmp/com.nexo.wake-recovery-b.plist",
+                    "enabled": True,
+                    "description": "Wake recovery B",
+                    "managed_marker": True,
+                    "script_exists": True,
+                    "script_within_scripts_dir": True,
+                    "run_at_load": True,
+                },
+            ],
+        )
+        monkeypatch.setattr(
+            script_registry,
+            "_launchctl_service_state",
+            lambda label: {"loaded": True, "pid": "123", "state": "running", "last_exit_status": "", "error": ""},
+        )
+
+        audit = audit_personal_schedules()
+
+        assert audit["summary"]["runtime_duplicated"] == 2
+        assert all(item["runtime_state"] == "duplicated" for item in audit["schedules"])
+        assert any("duplicate keep_alive schedules" in problem for problem in audit["schedules"][0]["runtime_problems"])
+
+    def test_audit_personal_schedules_marks_unloaded_keep_alive_as_stale(self, scripts_dir, monkeypatch):
+        import script_registry
+
+        script = scripts_dir / "nexo-wake-recovery.sh"
+        script.write_text(
+            "#!/bin/bash\n"
+            "# nexo: name=nexo-wake-recovery\n"
+            "# nexo: runtime=shell\n"
+            "# nexo: cron_id=wake-recovery\n"
+            "# nexo: schedule_required=true\n"
+            "# nexo: recovery_policy=restart_daemon\n"
+            "echo ok\n"
+        )
+
+        monkeypatch.setattr(script_registry.platform, "system", lambda: "Darwin")
+        monkeypatch.setattr(
+            script_registry,
+            "_discover_personal_schedule_records",
+            lambda: [{
+                "cron_id": "wake-recovery",
+                "script_path": str(script),
+                "schedule_type": "keep_alive",
+                "schedule_value": "true",
+                "schedule_label": "keep alive",
+                "launchd_label": "com.nexo.wake-recovery",
+                "plist_path": "/tmp/com.nexo.wake-recovery.plist",
+                "enabled": True,
+                "description": "Wake recovery",
+                "managed_marker": True,
+                "script_exists": True,
+                "script_within_scripts_dir": True,
+                "run_at_load": True,
+            }],
+        )
+        monkeypatch.setattr(
+            script_registry,
+            "_launchctl_service_state",
+            lambda label: {"loaded": False, "pid": "", "state": "", "last_exit_status": "", "error": "not loaded"},
+        )
+
+        audit = audit_personal_schedules()
+        record = audit["schedules"][0]
+
+        assert record["runtime_state"] == "stale"
+        assert "not loaded" in record["runtime_summary"]
+        assert audit["summary"]["runtime_stale"] == 1

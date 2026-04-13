@@ -1,0 +1,25 @@
+#!/bin/bash
+# NEXO DB hourly backup — crontab: 0 * * * * $NEXO_HOME/scripts/nexo-backup.sh
+NEXO_HOME="${NEXO_HOME:-$HOME/.nexo}"
+NEXO_DIR="$NEXO_HOME"
+BACKUP_DIR="$NEXO_HOME/backups"
+WEEKLY_DIR="$BACKUP_DIR/weekly"
+DB="$NEXO_HOME/data/nexo.db"
+RETENTION_HOURS=48
+
+mkdir -p "$BACKUP_DIR" "$WEEKLY_DIR"
+
+# Hourly backup
+TIMESTAMP=$(date +%Y-%m-%d-%H%M)
+sqlite3 "$DB" ".backup '$BACKUP_DIR/nexo-$TIMESTAMP.db'"
+
+# Weekly backup — save one per week (Sundays)
+WEEK=$(date +%Y-W%V)
+WEEKLY_FILE="$WEEKLY_DIR/weekly-$WEEK.db"
+if [ ! -f "$WEEKLY_FILE" ] && [ "$(date +%u)" = "7" ]; then
+    cp "$BACKUP_DIR/nexo-$TIMESTAMP.db" "$WEEKLY_FILE"
+fi
+
+# Cleanup: hourly >48h, weekly >90 days
+find "$BACKUP_DIR" -maxdepth 1 -name "nexo-*.db" -mmin +$((RETENTION_HOURS * 60)) -delete
+find "$WEEKLY_DIR" -name "weekly-*.db" -mtime +90 -delete

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- com.nexo.synthesis
+     Runs nexo-synthesis.py every 2 hours to generate a daily synthesis
+     document. Aggregates session diaries, error patterns, pending items,
+     and self-evaluation notes into coordination/daily-synthesis.md.
+     This file is read at the start of each session to give NEXO context
+     about what happened recently without replaying full session logs.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.nexo.synthesis</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>{{NEXO_HOME}}/scripts/nexo-synthesis.py</string>
+    </array>
+
+    <key>StartInterval</key>
+    <integer>7200</integer>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>{{NEXO_HOME}}/coordination/synthesis-stdout.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>{{NEXO_HOME}}/coordination/synthesis-stderr.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>HOME</key>
+        <string>{{HOME}}</string>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:__NEXO_HOME__/bin</string>
+        <key>NEXO_HOME</key>
+        <string>{{NEXO_HOME}}</string>
+        <key>NEXO_CODE</key>
+        <string>{{NEXO_CODE}}</string>
+    </dict>
+</dict>
+</plist>

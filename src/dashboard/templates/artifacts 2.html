@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+
+{% block title %}Artifact Registry{% endblock %}
+{% block page_title %}Artifact Registry{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+  <!-- Filter bar -->
+  <div class="flex items-center gap-2 flex-wrap">
+    <span class="text-xs text-slate-500">Kind:</span>
+    <button onclick="filterKind('all')" class="kind-btn active px-2.5 py-1 rounded-md text-xs bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors" data-kind="all">All</button>
+    <div id="kind-filters" class="flex items-center gap-2 flex-wrap"></div>
+    <div class="flex-1"></div>
+    <input type="text" id="artifact-search" placeholder="Search artifacts..." class="px-3 py-1.5 rounded-lg bg-slate-800/50 border border-slate-700/50 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-violet-500 w-48" oninput="searchArtifacts(this.value)">
+    <span class="text-xs font-mono text-slate-500" id="artifact-count">--</span>
+  </div>
+
+  <!-- Artifact grid -->
+  <div class="grid grid-cols-3 gap-4" id="artifacts-grid">
+    <div class="text-xs text-slate-600 py-8 text-center col-span-3">loading...</div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let allArtifacts = [];
+let currentKind = 'all';
+
+const KIND_ICONS = {
+  script: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>',
+  service: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2"/></svg>',
+  app: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>',
+  database: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/></svg>',
+  config: '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>',
+};
+const KIND_COLORS = {
+  script: 'text-violet-400', service: 'text-emerald-400', app: 'text-blue-400',
+  database: 'text-pink-400', config: 'text-amber-400',
+};
+const STATE_STYLES = {
+  running: 'bg-emerald-500/10 text-emerald-400', active: 'bg-emerald-500/10 text-emerald-400',
+  stopped: 'bg-red-500/10 text-red-400', draft: 'bg-slate-500/10 text-slate-400',
+  deployed: 'bg-blue-500/10 text-blue-400', archived: 'bg-slate-500/10 text-slate-500',
+};
+
+function filterKind(kind) {
+  currentKind = kind;
+  document.querySelectorAll('.kind-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.kind === kind);
+    b.classList.toggle('bg-slate-800', b.dataset.kind === kind);
+    b.classList.toggle('text-slate-300', b.dataset.kind === kind);
+    b.classList.toggle('bg-slate-800/50', b.dataset.kind !== kind);
+    b.classList.toggle('text-slate-400', b.dataset.kind !== kind);
+  });
+  renderGrid();
+}
+
+function searchArtifacts(query) {
+  const q = query.toLowerCase();
+  document.querySelectorAll('#artifacts-grid .artifact-card').forEach(el => {
+    el.style.display = el.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+
+function renderGrid() {
+  const container = document.getElementById('artifacts-grid');
+  const artifacts = currentKind === 'all' ? allArtifacts : allArtifacts.filter(a => a.kind === currentKind);
+  document.getElementById('artifact-count').textContent = artifacts.length + ' artifacts';
+
+  if (!artifacts.length) {
+    container.innerHTML = '<div class="col-span-3 text-xs text-slate-600 py-8 text-center">No artifacts found</div>';
+    return;
+  }
+
+  container.innerHTML = artifacts.map(a => {
+    const kind = a.kind || 'script';
+    const icon = KIND_ICONS[kind] || KIND_ICONS.script;
+    const kindColor = KIND_COLORS[kind] || 'text-slate-400';
+    const state = a.state || 'draft';
+    const stateStyle = STATE_STYLES[state] || STATE_STYLES.draft;
+    const expanded = a._expanded;
+
+    return `<div class="artifact-card bg-slate-900/50 border border-slate-800/50 rounded-xl p-5 card">
+      <div class="flex items-start gap-3 mb-3">
+        <div class="${kindColor} mt-0.5">${icon}</div>
+        <div class="flex-1 min-w-0">
+          <div class="text-sm font-display font-medium text-slate-200 truncate">${escapeHtml(a.canonical_name || '--')}</div>
+          <div class="flex items-center gap-2 mt-1">
+            <span class="text-[10px] px-1.5 py-0.5 rounded ${stateStyle}">${escapeHtml(state)}</span>
+            <span class="text-[10px] text-slate-500">${escapeHtml(kind)}</span>
+          </div>
+        </div>
+      </div>
+      ${a.description ? `<p class="text-xs text-slate-400 leading-relaxed mb-3">${escapeHtml(a.description)}</p>` : ''}
+      ${a.uri ? `<a href="${escapeHtml(a.uri)}" target="_blank" class="text-xs text-violet-400 hover:text-violet-300 truncate block mb-2">${escapeHtml(a.uri)}</a>` : ''}
+      <button onclick="toggleDetail(this)" class="text-[10px] text-slate-500 hover:text-slate-300 transition-colors">Details +</button>
+      <div class="detail-panel hidden mt-3 pt-3 border-t border-slate-800/50 space-y-1.5">
+        ${a.ports ? `<div class="text-[10px]"><span class="text-slate-500">Ports:</span> <span class="text-slate-300 font-mono">${escapeHtml(String(a.ports))}</span></div>` : ''}
+        ${a.paths ? `<div class="text-[10px]"><span class="text-slate-500">Paths:</span> <span class="text-slate-300 font-mono">${escapeHtml(String(a.paths))}</span></div>` : ''}
+        ${a.run_cmd ? `<div class="text-[10px]"><span class="text-slate-500">Run:</span> <code class="text-slate-300 font-mono bg-slate-800/50 px-1.5 py-0.5 rounded">${escapeHtml(a.run_cmd)}</code></div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleDetail(btn) {
+  const panel = btn.nextElementSibling;
+  panel.classList.toggle('hidden');
+  btn.textContent = panel.classList.contains('hidden') ? 'Details +' : 'Details -';
+}
+
+async function loadArtifacts() {
+  const data = await fetchJSON('/api/artifacts');
+  if (!data) return;
+
+  allArtifacts = data.artifacts || [];
+  const kinds = data.kinds || [...new Set(allArtifacts.map(a => a.kind).filter(Boolean))];
+
+  // Render kind filters
+  const kindContainer = document.getElementById('kind-filters');
+  kindContainer.innerHTML = kinds.map(k => {
+    const color = KIND_COLORS[k] || 'text-slate-400';
+    return `<button onclick="filterKind('${escapeHtml(k)}')" class="kind-btn px-2.5 py-1 rounded-md text-xs bg-slate-800/50 text-slate-400 hover:bg-slate-700 transition-colors" data-kind="${escapeHtml(k)}">${escapeHtml(k)}</button>`;
+  }).join('');
+
+  renderGrid();
+}
+
+loadArtifacts();
+setInterval(loadArtifacts, 60000);
+</script>
+{% endblock %}

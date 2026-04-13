@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+
+{% block title %}Email Monitor{% endblock %}
+{% block page_title %}Email Monitor{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+  <!-- Stats cards -->
+  <div class="grid grid-cols-4 gap-4">
+    <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-4 card">
+      <div class="text-xs uppercase tracking-wider text-slate-400 font-medium mb-2">Total Emails</div>
+      <div class="text-xl font-mono font-semibold text-slate-200" id="email-total">--</div>
+    </div>
+    <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-4 card">
+      <div class="text-xs uppercase tracking-wider text-emerald-400/70 font-medium mb-2">Processed</div>
+      <div class="text-xl font-mono font-semibold text-emerald-400" id="email-processed">--</div>
+    </div>
+    <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-4 card">
+      <div class="text-xs uppercase tracking-wider text-amber-400/70 font-medium mb-2">Pending</div>
+      <div class="text-xl font-mono font-semibold text-amber-400" id="email-pending">--</div>
+    </div>
+    <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-4 card">
+      <div class="text-xs uppercase tracking-wider text-slate-400 font-medium mb-2">Processing Rate</div>
+      <div class="text-xl font-mono font-semibold text-violet-400" id="email-rate">--%</div>
+    </div>
+  </div>
+
+  <!-- Processing funnel -->
+  <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-5 card">
+    <div class="text-xs uppercase tracking-wider text-slate-400 font-medium mb-4">Processing Funnel</div>
+    <div class="flex items-end gap-1 justify-center" id="funnel" style="height: 80px;">
+      <!-- JS fills -->
+    </div>
+  </div>
+
+  <!-- Recent emails table -->
+  <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-5 card">
+    <div class="text-xs uppercase tracking-wider text-slate-400 font-medium mb-4">Recent Emails</div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left">
+        <thead>
+          <tr class="border-b border-slate-800/50">
+            <th class="text-[10px] uppercase tracking-wider text-slate-500 font-medium pb-2 pr-4">Status</th>
+            <th class="text-[10px] uppercase tracking-wider text-slate-500 font-medium pb-2 pr-4">From</th>
+            <th class="text-[10px] uppercase tracking-wider text-slate-500 font-medium pb-2 pr-4">Subject</th>
+            <th class="text-[10px] uppercase tracking-wider text-slate-500 font-medium pb-2 text-right">Received</th>
+          </tr>
+        </thead>
+        <tbody id="email-table" class="divide-y divide-slate-800/30">
+          <tr><td colspan="4" class="text-xs text-slate-600 py-8 text-center">loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Thread grouping -->
+  <div class="bg-slate-900/50 border border-slate-800/50 rounded-xl p-5 card">
+    <div class="text-xs uppercase tracking-wider text-slate-400 font-medium mb-4">Thread Groups</div>
+    <div class="space-y-2" id="thread-groups">
+      <div class="text-xs text-slate-600 py-4 text-center">loading...</div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const EMAIL_STATUS = {
+  processed: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', dot: 'bg-emerald-500' },
+  pending: { bg: 'bg-amber-500/10', text: 'text-amber-400', dot: 'bg-amber-500' },
+  failed: { bg: 'bg-red-500/10', text: 'text-red-400', dot: 'bg-red-500' },
+  skipped: { bg: 'bg-slate-500/10', text: 'text-slate-400', dot: 'bg-slate-600' },
+};
+
+function renderFunnel(stats) {
+  const container = document.getElementById('funnel');
+  const total = stats.total || 1;
+  const processed = stats.processed || 0;
+  const pending = stats.pending || 0;
+  const failed = total - processed - pending;
+
+  const stages = [
+    { label: 'Received', value: total, color: 'bg-violet-500' },
+    { label: 'Processed', value: processed, color: 'bg-emerald-500' },
+    { label: 'Pending', value: pending, color: 'bg-amber-500' },
+  ];
+  if (failed > 0) stages.push({ label: 'Failed', value: failed, color: 'bg-red-500' });
+
+  const maxVal = Math.max(...stages.map(s => s.value), 1);
+
+  container.innerHTML = stages.map(s => {
+    const pct = Math.max(8, (s.value / maxVal) * 100);
+    return `<div class="flex-1 flex flex-col items-center gap-1">
+      <span class="text-xs font-mono text-slate-300">${s.value}</span>
+      <div class="w-full rounded-t-md ${s.color} transition-all duration-500" style="height:${pct}%"></div>
+      <span class="text-[10px] text-slate-500">${s.label}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderTable(emails) {
+  const tbody = document.getElementById('email-table');
+  if (!emails || !emails.length) {
+    tbody.innerHTML = '<tr><td colspan="4" class="text-xs text-slate-600 py-8 text-center">No emails found</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = emails.map(e => {
+    const status = e.status || 'pending';
+    const sc = EMAIL_STATUS[status] || EMAIL_STATUS.pending;
+    return `<tr class="hover:bg-slate-800/20 transition-colors">
+      <td class="py-2.5 pr-4"><span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-medium ${sc.bg} ${sc.text}"><span class="w-1.5 h-1.5 rounded-full ${sc.dot}"></span>${escapeHtml(status)}</span></td>
+      <td class="py-2.5 pr-4 text-xs text-slate-300 truncate max-w-[200px]">${escapeHtml(e.from_addr || '--')}</td>
+      <td class="py-2.5 pr-4 text-xs text-slate-400 truncate max-w-[300px]">${escapeHtml(e.subject || '(no subject)')}</td>
+      <td class="py-2.5 text-xs text-slate-500 text-right whitespace-nowrap">${relativeTime(e.received_at)}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderThreads(threads) {
+  const container = document.getElementById('thread-groups');
+  if (!threads || !threads.length) {
+    container.innerHTML = '<div class="text-xs text-slate-600 py-4 text-center">No thread data</div>';
+    return;
+  }
+
+  container.innerHTML = threads.map(t => {
+    const count = t.count || t.messages || 1;
+    return `<div class="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-slate-800/20 transition-colors">
+      <svg class="w-4 h-4 text-slate-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
+      <div class="flex-1 min-w-0">
+        <div class="text-xs text-slate-300 truncate">${escapeHtml(t.subject || t.thread_id || '--')}</div>
+        <div class="text-[10px] text-slate-500">${count} message${count !== 1 ? 's' : ''}</div>
+      </div>
+      <span class="text-[10px] text-slate-600">${relativeTime(t.last_at || t.updated_at)}</span>
+    </div>`;
+  }).join('');
+}
+
+async function loadEmail() {
+  const data = await fetchJSON('/api/email');
+  if (!data) return;
+
+  const stats = data.stats || {};
+  document.getElementById('email-total').textContent = formatNumber(stats.total || 0);
+  document.getElementById('email-processed').textContent = formatNumber(stats.processed || 0);
+  document.getElementById('email-pending').textContent = formatNumber(stats.pending || 0);
+
+  const rate = stats.total ? Math.round((stats.processed / stats.total) * 100) : 0;
+  document.getElementById('email-rate').textContent = rate + '%';
+
+  renderFunnel(stats);
+  renderTable(data.recent || []);
+  renderThreads(data.threads || []);
+}
+
+loadEmail();
+setInterval(loadEmail, 60000);
+</script>
+{% endblock %}

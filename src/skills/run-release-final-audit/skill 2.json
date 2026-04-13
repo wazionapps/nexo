@@ -1,0 +1,77 @@
+{
+  "id": "SK-RUN-RELEASE-FINAL-AUDIT",
+  "name": "Run Release Final Audit",
+  "description": "Runs the final release audit for NEXO: smoke when available, release-readiness checks, contract completeness, and optional closeout gates for GitHub Release, npm, runtime update/doctor, and protocol evidence.",
+  "level": "published",
+  "mode": "hybrid",
+  "source_kind": "core",
+  "execution_level": "read-only",
+  "approval_required": false,
+  "tags": ["release", "audit", "readiness", "consistency", "reversibility"],
+  "trigger_patterns": [
+    "final release audit",
+    "release readiness audit",
+    "pre-release audit",
+    "release closeout audit",
+    "auditoria final release",
+    "auditoria final publicacion",
+    "seguridad reversibilidad consistencia"
+  ],
+  "params_schema": {
+    "contract": {
+      "type": "string",
+      "required": false,
+      "default": "auto"
+    },
+    "require_contract_complete": {
+      "type": "boolean",
+      "required": false,
+      "default": true
+    },
+    "include_smoke": {
+      "type": "boolean",
+      "required": false,
+      "default": true
+    },
+    "ci": {
+      "type": "boolean",
+      "required": false,
+      "default": false
+    },
+    "final_closeout": {
+      "type": "boolean",
+      "required": false,
+      "default": false
+    },
+    "protocol_task_id": {
+      "type": "string",
+      "required": false,
+      "default": ""
+    },
+    "website_root": {
+      "type": "string",
+      "required": false,
+      "default": ""
+    },
+    "nexo_home": {
+      "type": "string",
+      "required": false,
+      "default": ""
+    }
+  },
+  "command_template": {
+    "argv": [
+      "{{file_path}}",
+      "{{contract}}",
+      "{{require_contract_complete}}",
+      "{{include_smoke}}",
+      "{{ci}}",
+      "{{website_root}}",
+      "{{nexo_home}}",
+      "{{final_closeout}}",
+      "{{protocol_task_id}}"
+    ]
+  },
+  "executable_entry": "script.py",
+  "stable_after_uses": 5
+}

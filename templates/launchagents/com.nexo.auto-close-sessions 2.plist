@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- com.nexo.auto-close-sessions
+     Runs auto_close_sessions.py every 5 minutes to expire stale NEXO
+     sessions. Sessions are considered stale after 15 minutes of no
+     heartbeat activity. Closing them prevents ghost sessions from
+     appearing in the active sessions list at startup. Runs at load
+     so it is always active immediately after login.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.nexo.auto-close-sessions</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>{{NEXO_HOME}}/auto_close_sessions.py</string>
+    </array>
+    <key>StartInterval</key>
+    <integer>300</integer>
+    <key>StandardOutPath</key>
+    <string>{{NEXO_HOME}}/coordination/auto-close-stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>{{NEXO_HOME}}/coordination/auto-close-stderr.log</string>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:__NEXO_HOME__/bin</string>
+        <key>NEXO_SKIP_FS_INDEX</key>
+        <string>1</string>
+        <key>NEXO_HOME</key>
+        <string>{{NEXO_HOME}}</string>
+        <key>NEXO_CODE</key>
+        <string>{{NEXO_CODE}}</string>
+    </dict>
+</dict>
+</plist>

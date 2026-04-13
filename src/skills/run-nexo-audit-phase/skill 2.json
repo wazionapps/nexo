@@ -1,0 +1,59 @@
+{
+  "id": "SK-RUN-NEXO-AUDIT-PHASE",
+  "name": "Run NEXO Audit Phase",
+  "description": "Workflow para ejecutar una fase de auditoria de NEXO con autonomia total y verificacion empirica. Cubre el patron repetido de decidir el scope de evolution_apply y arrancar una tanda de items sin checkpoints manuales.",
+  "level": "published",
+  "mode": "guide",
+  "source_kind": "core",
+  "execution_level": "none",
+  "approval_required": false,
+  "tags": [
+    "nexo",
+    "audit",
+    "evolution",
+    "sandbox",
+    "verification",
+    "core"
+  ],
+  "trigger_patterns": [
+    "evolution_apply sandbox scope",
+    "fase 2 item 1",
+    "arrancar verificacion empirica",
+    "ejecutar fase de auditoria nexo",
+    "audit phase nexo",
+    "7 items audit"
+  ],
+  "steps": [
+    "Abrir goal, workflow y task antes de tocar la auditoria; resolver repo/runtime real, DB real, tests y estado git antes de interpretar el informe.",
+    "Fijar la regla de autonomia: NEXO hace branches, PRs, merge y progreso periodico; no pedir checkpoints uno-a-uno a Francisco para trabajo mecanico.",
+    "Para `evolution_apply`, separar dos planos: el sandbox es para materializar/aplicar cambios aceptados con snapshot/rollback; no es un freno para el modo de trabajo autonomo del agente.",
+    "Lanzar verificacion empirica de TODOS los items en paralelo: grep+read, SQL/schema real, AST/tests, logs. Partir de la hipotesis de FP hasta tener evidencia.",
+    "Clasificar cada item en `real_gap`, `casi_fp` o `fp` y ordenar solo los reales por blast radius/riesgo.",
+    "Si hay que tocar core, usar worktree aislado; por item real: guard_check -> track -> branch -> implement -> tests adyacentes -> PR -> auto-merge squash.",
+    "Para items FP o casi-FP, capturar learning o ajustar el patron reusable en vez de reimplementar.",
+    "Cerrar con evidencia de PRs, tests y merge status reales; no usar diarios o workflow text como sustituto."
+  ],
+  "gotchas": [
+    "No pedir aprobacion manual a Francisco para cada PR: learning #198 confirma autonomia total con transparencia y reportes periodicos.",
+    "No duplicar el sandbox de evolution en otros sitios: el apply de cambios aceptados ya reutiliza evolution_log + sandbox/snapshot/rollback.",
+    "El ratio historico de FPs en esta clase de auditoria es alto; si no hay evidencia concreta, el item no se toca."
+  ],
+  "params_schema": {
+    "audit_file": {
+      "type": "string",
+      "required": true
+    },
+    "phase_label": {
+      "type": "string",
+      "required": false,
+      "default": ""
+    },
+    "repo_path": {
+      "type": "string",
+      "required": false,
+      "default": ""
+    }
+  },
+  "command_template": {},
+  "stable_after_uses": 5
+}
