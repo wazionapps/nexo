@@ -1,6 +1,12 @@
 """Agents plugin — registry of known agent types with their configs."""
 from db import create_agent, get_agent, list_agents, update_agent, delete_agent
 
+try:
+    from client_preferences import resolve_user_model
+    _DEFAULT_AGENT_MODEL = resolve_user_model()
+except Exception:
+    _DEFAULT_AGENT_MODEL = ""
+
 def handle_agent_get(id: str) -> str:
     """Get an agent's full profile by ID."""
     a = get_agent(id)
@@ -11,11 +17,12 @@ def handle_agent_get(id: str) -> str:
     if a["rules"]: lines.append(f"  Reglas: {a['rules']}")
     return "\n".join(lines)
 
-def handle_agent_create(id: str, name: str, specialization: str, model: str = "sonnet",
+def handle_agent_create(id: str, name: str, specialization: str, model: str = "",
                         tools: str = "", context_files: str = "", rules: str = "") -> str:
     """Register a new agent in the registry."""
-    create_agent(id, name, specialization, model, tools, context_files, rules)
-    return f"Agent '{id}' ({name}) registered. Model: {model}"
+    effective_model = model or _DEFAULT_AGENT_MODEL
+    create_agent(id, name, specialization, effective_model, tools, context_files, rules)
+    return f"Agent '{id}' ({name}) registered. Model: {effective_model}"
 
 def handle_agent_update(id: str, name: str = "", specialization: str = "", model: str = "",
                         tools: str = "", context_files: str = "", rules: str = "") -> str:

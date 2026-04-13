@@ -33,7 +33,7 @@
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
-        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:__NEXO_HOME__/bin</string>
         <key>NEXO_HOME</key>
         <string>{{NEXO_HOME}}</string>
         <key>NEXO_CODE</key>

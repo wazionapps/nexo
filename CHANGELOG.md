@@ -1,5 +1,17 @@
 # Changelog
 
+## [5.3.14] - 2026-04-13
+
+### LaunchAgent PATH detection + tomli dependency fix
+
+- `resolve_launchagent_path()` now auto-detects nvm node paths so headless
+  automation (email-monitor, followup-runner, catchup) finds `claude` even
+  when node is installed via nvm instead of Homebrew.
+- `tomli` moved from optional Dashboard section to Core in `requirements.txt`
+  — fixes `ModuleNotFoundError` on Python < 3.11 installations.
+- All LaunchAgent generators (`crons/sync.py`, `plugins/schedule.py`,
+  `runtime_power.py`) use the dynamic PATH helper.
+
 ## [5.3.13] - 2026-04-13
 
 ### Core scripts use centralized model

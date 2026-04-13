@@ -2,6 +2,7 @@
 # Core (required)
 fastmcp>=2.9.0
 numpy
+tomli; python_version < "3.11"
 
 # Embedding model (optional but recommended for cognitive features)
 fastembed
@@ -11,4 +12,3 @@ fastapi
 uvicorn
 pydantic
 jinja2
-tomli; python_version < "3.11"

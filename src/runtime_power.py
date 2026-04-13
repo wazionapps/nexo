@@ -72,6 +72,23 @@ DEFAULT_CODEX_MODEL = DEFAULT_CLAUDE_CODE_MODEL
 DEFAULT_CODEX_REASONING_EFFORT = ""
 
 
+def resolve_launchagent_path() -> str:
+    """Build a PATH string for LaunchAgent plists that includes nvm node if present."""
+    home = Path.home()
+    parts = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin",
+             str(home / ".local/bin"), str(home / ".nexo/bin")]
+    # Detect nvm node
+    nvm_dir = home / ".nvm/versions/node"
+    if nvm_dir.is_dir():
+        versions = sorted(nvm_dir.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True)
+        for v in versions:
+            node_bin = v / "bin"
+            if (node_bin / "node").exists():
+                parts.insert(0, str(node_bin))
+                break
+    return ":".join(parts)
+
+
 def _schedule_defaults() -> dict:
     return {
         "timezone": "UTC",
@@ -714,7 +731,7 @@ def _macos_prevent_sleep_plist() -> tuple[Path, dict]:
             "HOME": str(Path.home()),
             "NEXO_HOME": str(NEXO_HOME),
             "NEXO_CODE": str(NEXO_HOME),
-            "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:" + str(Path.home() / ".local/bin"),
+            "PATH": resolve_launchagent_path(),
         },
     }
     return plist_path, plist

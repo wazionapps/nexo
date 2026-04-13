@@ -32,6 +32,23 @@ if str(_runtime_root) not in sys.path:
     sys.path.insert(0, str(_runtime_root))
 
 from cron_recovery import resolve_declared_schedule, should_run_at_load
+try:
+    from runtime_power import resolve_launchagent_path
+except ImportError:
+    def resolve_launchagent_path() -> str:
+        """Fallback when runtime_power is not importable."""
+        home = Path.home()
+        parts = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin",
+                 str(home / ".local/bin"), str(home / ".nexo/bin")]
+        nvm_dir = home / ".nvm/versions/node"
+        if nvm_dir.is_dir():
+            versions = sorted(nvm_dir.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True)
+            for v in versions:
+                node_bin = v / "bin"
+                if (node_bin / "node").exists():
+                    parts.insert(0, str(node_bin))
+                    break
+        return ":".join(parts)
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 SOURCE_ROOT = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parent.parent)))
@@ -221,10 +238,7 @@ def build_plist(cron: dict) -> dict:
         "StandardOutPath": str(LOG_DIR / f"{cron_id}-stdout.log"),
         "StandardErrorPath": str(LOG_DIR / f"{cron_id}-stderr.log"),
         "EnvironmentVariables": {
-            "PATH": "/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin:"
-                    + str(Path.home() / ".local" / "bin") + ":"
-                    + str(Path.home() / ".nvm/versions/node/v22.14.0/bin") + ":"
-                    + "/Library/Frameworks/Python.framework/Versions/3.12/bin",
+            "PATH": resolve_launchagent_path(),
             "HOME": str(Path.home()),
             "NEXO_HOME": str(NEXO_HOME),
             "NEXO_CODE": str(RUNTIME_ROOT),

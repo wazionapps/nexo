@@ -38,8 +38,9 @@ def main() -> int:
 
 
 # Agentic example for future edits:
+#   from client_preferences import resolve_user_model
 #   from nexo_helper import run_automation_text
-#   result = run_automation_text("Analyze this", model="opus")
+#   result = run_automation_text("Analyze this", model=resolve_user_model())
 #   print(result)
 
 

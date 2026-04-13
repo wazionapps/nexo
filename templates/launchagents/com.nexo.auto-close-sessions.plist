@@ -27,7 +27,7 @@
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
-        <string>/usr/bin:/usr/local/bin:/bin:/opt/homebrew/bin</string>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:__NEXO_HOME__/bin</string>
         <key>NEXO_SKIP_FS_INDEX</key>
         <string>1</string>
         <key>NEXO_HOME</key>
