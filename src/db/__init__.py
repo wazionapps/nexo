@@ -147,13 +147,16 @@ from db._cron_runs import (
 
 # Protocol discipline runtime
 from db._protocol import (
+    VALID_IMPACT_LEVELS,
+    VALID_TASK_TYPES,
+    VALID_CLOSE_OUTCOMES,
     create_protocol_task, get_protocol_task, close_protocol_task,
     create_protocol_debt, resolve_protocol_debts, list_protocol_debts,
     protocol_compliance_summary,
     create_cortex_evaluation, get_cortex_evaluation, list_cortex_evaluations,
     cortex_evaluation_summary,
     latest_cortex_evaluation_for_task, task_has_cortex_evaluation,
-    override_cortex_evaluation,
+    override_cortex_evaluation, validate_close_outcome, validate_impact_level, validate_task_type,
 )
 
 # Durable workflow runtime

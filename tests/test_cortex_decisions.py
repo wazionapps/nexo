@@ -52,6 +52,61 @@ def test_cortex_decide_persists_recommendation_and_scores():
     assert row["selection_source"] == "recommended"
 
 
+def test_cortex_check_rejects_invalid_task_type():
+    from plugins.cortex import handle_cortex_check
+
+    payload = handle_cortex_check(
+        goal="Run malformed cortex check",
+        task_type="ship",
+        plan='["inspect"]',
+    )
+
+    assert payload.startswith("ERROR: Invalid task_type")
+    assert "Valid task types: analyze, answer, delegate, edit, execute" in payload
+
+
+def test_cortex_decide_rejects_invalid_task_type():
+    from plugins.cortex import handle_cortex_decide
+
+    payload = json.loads(
+        handle_cortex_decide(
+            goal="Choose a release strategy",
+            task_type="ship",
+            impact_level="high",
+            area="release",
+            alternatives=json.dumps([
+                {"name": "staged_release", "description": "Run staged release with smoke tests and rollback ready"},
+                {"name": "direct_release", "description": "Push straight to production and skip staged verification"},
+            ]),
+        )
+    )
+
+    assert payload["ok"] is False
+    assert "Invalid task_type" in payload["error"]
+    assert payload["valid_task_types"] == ["analyze", "answer", "delegate", "edit", "execute"]
+
+
+def test_cortex_decide_rejects_invalid_impact_level():
+    from plugins.cortex import handle_cortex_decide
+
+    payload = json.loads(
+        handle_cortex_decide(
+            goal="Choose a release strategy",
+            task_type="execute",
+            impact_level="urgent",
+            area="release",
+            alternatives=json.dumps([
+                {"name": "staged_release", "description": "Run staged release with smoke tests and rollback ready"},
+                {"name": "direct_release", "description": "Push straight to production and skip staged verification"},
+            ]),
+        )
+    )
+
+    assert payload["ok"] is False
+    assert "Invalid impact_level" in payload["error"]
+    assert payload["valid_impact_levels"] == ["critical", "high", "medium"]
+
+
 def test_cortex_override_preserves_override_reason():
     from db import get_db
     from plugins.cortex import handle_cortex_decide, handle_cortex_override

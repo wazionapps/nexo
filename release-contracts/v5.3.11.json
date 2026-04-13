@@ -1,0 +1,91 @@
+{
+  "release_line": "v5.3",
+  "target_version": "5.3.11",
+  "scope_owner": "NEXO",
+  "distribution": {
+    "git_updates_on": "merge_to_main",
+    "packaged_release_on": "tag_publish"
+  },
+  "required_repo_files": [
+    "package.json",
+    "CHANGELOG.md",
+    "README.md",
+    "llms.txt",
+    "bin/nexo-brain.js",
+    "scripts/sync_release_artifacts.py",
+    "scripts/verify_release_readiness.py",
+    "release-contracts/v5.3.11.json",
+    ".claude-plugin/plugin.json",
+    "clawhub-skill/SKILL.md",
+    "openclaw-plugin/package.json",
+    "openclaw-plugin/src/mcp-bridge.ts",
+    "src/db/_protocol.py",
+    "src/db/__init__.py",
+    "src/plugins/protocol.py",
+    "src/plugins/cortex.py",
+    "tests/test_protocol.py",
+    "tests/test_cortex_decisions.py"
+  ],
+  "required_website_files": [
+    "index.html",
+    "features/index.html",
+    "blog/index.html",
+    "blog/nexo-5-3-11-protocol-and-cortex-contract-hardening/index.html",
+    "changelog/index.html",
+    "llms.txt",
+    ".well-known/llms.txt",
+    "sitemap.xml"
+  ],
+  "gates": [
+    {
+      "id": "invalid_close_outcomes_fail_without_state_mutation",
+      "title": "Protocol close rejects malformed outcomes instead of recording false failures",
+      "status": "complete",
+      "evidence_required": [
+        "nexo_task_close returns an explicit error for invalid close outcomes",
+        "Malformed close requests leave the protocol task status and closed_at fields untouched",
+        "Regression coverage pins the non-mutation contract"
+      ]
+    },
+    {
+      "id": "public_task_type_contract_hardening",
+      "title": "Protocol and Cortex tools reject malformed task types instead of silently changing their meaning",
+      "status": "complete",
+      "evidence_required": [
+        "nexo_task_open and nexo_confidence_check reject invalid task_type values",
+        "nexo_cortex_check and nexo_cortex_decide reject invalid task_type values",
+        "Regression coverage pins both the JSON and text-path error surfaces"
+      ]
+    },
+    {
+      "id": "impact_level_contract_hardening",
+      "title": "Cortex decisions reject malformed impact levels instead of silently promoting them to high",
+      "status": "complete",
+      "evidence_required": [
+        "nexo_cortex_decide returns an explicit error for invalid impact_level values",
+        "Persisted cortex evaluations only receive canonical impact levels",
+        "Regression coverage pins the invalid-impact rejection path"
+      ]
+    },
+    {
+      "id": "internal_db_contract_consistency",
+      "title": "Internal DB helpers enforce the same task-type, close-outcome, and impact-level contracts as the public tools",
+      "status": "complete",
+      "evidence_required": [
+        "create_protocol_task validates task_type before writing a row",
+        "close_protocol_task validates close outcomes before writing a row",
+        "create_cortex_evaluation validates impact_level before writing a row"
+      ]
+    },
+    {
+      "id": "public_surface_alignment",
+      "title": "Package, docs, plugin artifacts, and website tell the same v5.3.11 story",
+      "status": "complete",
+      "evidence_required": [
+        "Root package and integration artifacts all point to 5.3.11",
+        "README, changelog, llms, and release contract mention protocol/cortex contract hardening clearly",
+        "Website home, blog, changelog, llms, and sitemap are updated to 5.3.11"
+      ]
+    }
+  ]
+}

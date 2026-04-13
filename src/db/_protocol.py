@@ -9,6 +9,7 @@ from db._core import get_db
 
 VALID_TASK_TYPES = {"answer", "analyze", "edit", "execute", "delegate"}
 VALID_OUTCOMES = {"open", "done", "partial", "blocked", "failed", "cancelled"}
+VALID_CLOSE_OUTCOMES = VALID_OUTCOMES - {"open"}
 VALID_DEBT_STATUS = {"open", "forgiven", "resolved"}
 VALID_IMPACT_LEVELS = {"medium", "high", "critical"}
 
@@ -31,6 +32,30 @@ def _as_bool(value) -> int:
 
 def _row_to_dict(row):
     return dict(row) if row else None
+
+
+def validate_task_type(task_type: str) -> str:
+    clean_type = (task_type or "").strip()
+    if clean_type not in VALID_TASK_TYPES:
+        expected = ", ".join(sorted(VALID_TASK_TYPES))
+        raise ValueError(f"Invalid task_type '{clean_type or '<empty>'}'. Expected one of: {expected}.")
+    return clean_type
+
+
+def validate_impact_level(impact_level: str) -> str:
+    clean_level = (impact_level or "").strip()
+    if clean_level not in VALID_IMPACT_LEVELS:
+        expected = ", ".join(sorted(VALID_IMPACT_LEVELS))
+        raise ValueError(f"Invalid impact_level '{clean_level or '<empty>'}'. Expected one of: {expected}.")
+    return clean_level
+
+
+def validate_close_outcome(outcome: str) -> str:
+    clean_outcome = (outcome or "").strip()
+    if clean_outcome not in VALID_CLOSE_OUTCOMES:
+        expected = ", ".join(sorted(VALID_CLOSE_OUTCOMES))
+        raise ValueError(f"Invalid close outcome '{clean_outcome or '<empty>'}'. Expected one of: {expected}.")
+    return clean_outcome
 
 
 def create_protocol_task(
@@ -68,7 +93,7 @@ def create_protocol_task(
 ) -> dict:
     conn = get_db()
     task_id = _task_id()
-    clean_type = task_type if task_type in VALID_TASK_TYPES else "answer"
+    clean_type = validate_task_type(task_type)
     conn.execute(
         """INSERT INTO protocol_tasks (
                task_id, session_id, goal, task_type, area, project_hint, context_hint,
@@ -144,7 +169,7 @@ def create_cortex_evaluation(
     selection_source: str = "recommended",
 ) -> dict:
     conn = get_db()
-    clean_level = impact_level if impact_level in VALID_IMPACT_LEVELS else "high"
+    clean_level = validate_impact_level(impact_level)
     cursor = conn.execute(
         """INSERT INTO cortex_evaluations (
                session_id, task_id, goal, task_type, area, impact_level, context_hint,
@@ -335,7 +360,7 @@ def close_protocol_task(
     outcome_notes: str = "",
 ) -> dict:
     conn = get_db()
-    clean_outcome = outcome if outcome in VALID_OUTCOMES else "failed"
+    clean_outcome = validate_close_outcome(outcome)
     conn.execute(
         """UPDATE protocol_tasks
            SET status = ?,

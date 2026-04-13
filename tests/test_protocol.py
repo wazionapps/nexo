@@ -208,6 +208,40 @@ def test_task_open_requires_files_for_edit_in_strict_mode(monkeypatch):
     assert "requires explicit `files`" in payload["error"]
 
 
+def test_task_open_rejects_invalid_task_type():
+    import plugins.protocol as protocol
+
+    sid = _register_session("nexo-1005-2008")
+    payload = json.loads(
+        protocol.handle_task_open(
+            sid=sid,
+            goal="Open task with invalid type",
+            task_type="ship",
+            area="nexo-ops",
+        )
+    )
+
+    assert payload["ok"] is False
+    assert "Invalid task_type" in payload["error"]
+    assert payload["valid_task_types"] == ["analyze", "answer", "delegate", "edit", "execute"]
+
+
+def test_confidence_check_rejects_invalid_task_type():
+    from plugins.protocol import handle_confidence_check
+
+    payload = json.loads(
+        handle_confidence_check(
+            goal="Assess a malformed protocol task",
+            task_type="ship",
+            area="nexo-ops",
+        )
+    )
+
+    assert payload["ok"] is False
+    assert "Invalid task_type" in payload["error"]
+    assert payload["valid_task_types"] == ["analyze", "answer", "delegate", "edit", "execute"]
+
+
 def test_task_acknowledge_guard_resolves_guard_debt(monkeypatch):
     from db import get_db
     from plugins.protocol import handle_task_open, handle_task_acknowledge_guard
@@ -371,6 +405,66 @@ def test_task_close_opens_protocol_debt_when_done_without_evidence():
         (opened["task_id"],),
     ).fetchone()[0]
     assert count == 1
+
+
+def test_task_close_rejects_invalid_outcome_without_mutating_task():
+    from db import get_db
+    from plugins.protocol import handle_task_open, handle_task_close
+
+    sid = _register_session("nexo-1003-2004")
+    opened = json.loads(
+        handle_task_open(
+            sid=sid,
+            goal="Exercise invalid close outcome handling",
+            task_type="edit",
+            area="nexo-ops",
+            files="/Users/franciscoc/Documents/_PhpstormProjects/nexo/src/plugins/protocol.py",
+            plan='["inspect", "validate"]',
+            verification_step="run pytest",
+        )
+    )
+    closed = json.loads(
+        handle_task_close(
+            sid=sid,
+            task_id=opened["task_id"],
+            outcome="wrapped-up cleanly",
+            evidence="pytest -q tests/test_protocol.py passed",
+        )
+    )
+
+    assert closed["ok"] is False
+    assert "Invalid close outcome" in closed["error"]
+    assert closed["valid_outcomes"] == ["blocked", "cancelled", "done", "failed", "partial"]
+    row = get_db().execute(
+        "SELECT status, closed_at FROM protocol_tasks WHERE task_id = ?",
+        (opened["task_id"],),
+    ).fetchone()
+    assert row["status"] == "open"
+    assert row["closed_at"] is None
+
+
+def test_close_protocol_task_rejects_invalid_outcome():
+    from db import create_protocol_task, close_protocol_task
+
+    task = create_protocol_task(
+        session_id="nexo-1003-2005",
+        goal="Reject invalid internal close outcome",
+        task_type="execute",
+    )
+
+    with pytest.raises(ValueError, match="Invalid close outcome"):
+        close_protocol_task(task["task_id"], outcome="open")
+
+
+def test_create_protocol_task_rejects_invalid_task_type():
+    from db import create_protocol_task
+
+    with pytest.raises(ValueError, match="Invalid task_type"):
+        create_protocol_task(
+            session_id="nexo-1003-2006",
+            goal="Reject invalid internal task type",
+            task_type="ship",
+        )
 
 
 def test_task_close_auto_captures_learning_when_correction_has_no_learning():

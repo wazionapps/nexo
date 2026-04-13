@@ -22,6 +22,8 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from db import VALID_IMPACT_LEVELS, VALID_TASK_TYPES, validate_impact_level, validate_task_type
+
 
 def _get_db():
     from db import get_db
@@ -734,9 +736,19 @@ def handle_cortex_check(
     Returns:
         Mode (ask/propose/act), available tools, warnings, and relevant Core Rules
     """
+    try:
+        clean_type = validate_task_type(task_type)
+    except ValueError as exc:
+        return "\n".join(
+            [
+                f"ERROR: {exc}",
+                f"Valid task types: {', '.join(sorted(VALID_TASK_TYPES))}",
+            ]
+        )
+
     state = {
         "goal": goal.strip() if goal else "",
-        "task_type": task_type if task_type in ("answer", "analyze", "edit", "execute", "delegate") else "answer",
+        "task_type": clean_type,
         "plan": _parse_json_list(plan),
         "known_facts": _parse_json_list(known_facts),
         "unknowns": _parse_json_list(unknowns),
@@ -860,8 +872,30 @@ def handle_cortex_decide(
             indent=2,
         )
 
-    clean_type = task_type if task_type in {"answer", "analyze", "edit", "execute", "delegate"} else "execute"
-    clean_level = impact_level if impact_level in {"medium", "high", "critical"} else "high"
+    try:
+        clean_type = validate_task_type(task_type)
+    except ValueError as exc:
+        return json.dumps(
+            {
+                "ok": False,
+                "error": str(exc),
+                "valid_task_types": sorted(VALID_TASK_TYPES),
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    try:
+        clean_level = validate_impact_level(impact_level)
+    except ValueError as exc:
+        return json.dumps(
+            {
+                "ok": False,
+                "error": str(exc),
+                "valid_impact_levels": sorted(VALID_IMPACT_LEVELS),
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
     parsed_constraints = _parse_json_list(constraints)
     parsed_evidence = _parse_json_list(evidence_refs)
     try:
