@@ -28,11 +28,30 @@ SRC_DIR = Path(__file__).resolve().parent
 NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(SRC_DIR)))
 REPO_DIR = SRC_DIR.parent
 
+
+def _resolve_repo_dir() -> Path:
+    """Return the source repo root, falling back to NEXO_HOME for npm installs.
+
+    On git installs SRC_DIR is ``<repo>/src`` so parent is the repo root.
+    On npm installs SRC_DIR *is* NEXO_HOME (``~/.nexo``) so parent is ``~``,
+    which has no ``templates/`` or ``migrations/``.  In that case we fall back
+    to NEXO_HOME itself where the installer already copied the runtime files.
+    """
+    candidate = SRC_DIR.parent
+    if (candidate / "templates").is_dir():
+        return candidate
+    if (NEXO_HOME / "templates").is_dir():
+        return NEXO_HOME
+    return candidate
+
+
+_RESOLVED_REPO_DIR = _resolve_repo_dir()
+
 LAST_CHECK_FILE = DATA_DIR / "auto_update_last_check.json"
 MIGRATION_VERSION_FILE = DATA_DIR / "migration_version"
 CLAUDE_MD_VERSION_FILE = DATA_DIR / "claude_md_version.txt"
-MIGRATIONS_DIR = REPO_DIR / "migrations"
-TEMPLATE_FILE = REPO_DIR / "templates" / "CLAUDE.md.template"
+MIGRATIONS_DIR = _RESOLVED_REPO_DIR / "migrations"
+TEMPLATE_FILE = _RESOLVED_REPO_DIR / "templates" / "CLAUDE.md.template"
 
 CHECK_COOLDOWN_SECONDS = 3600  # 1 hour
 GIT_TIMEOUT_SECONDS = 4  # stay well under the 5s total budget
@@ -1514,7 +1533,7 @@ def _auto_update_check_locked() -> dict:
 
     # Backfill all templates for existing installs (no hardcoded list)
     try:
-        templates_src = REPO_DIR / "templates"
+        templates_src = _RESOLVED_REPO_DIR / "templates"
         templates_dest = NEXO_HOME / "templates"
         templates_dest.mkdir(parents=True, exist_ok=True)
         import shutil
@@ -1569,8 +1588,8 @@ def _auto_update_check_locked() -> dict:
             result["git_update"] = _check_git_updates()
         else:
             # Non-git install — check npm for newer version
-            version_json = REPO_DIR / "version.json"
-            pkg_json = REPO_DIR / "package.json"
+            version_json = _RESOLVED_REPO_DIR / "version.json"
+            pkg_json = _RESOLVED_REPO_DIR / "package.json"
             if version_json.exists() or pkg_json.exists():
                 result["npm_notice"] = _check_npm_version()
 
