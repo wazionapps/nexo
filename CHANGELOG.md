@@ -1,5 +1,15 @@
 # Changelog
 
+## [5.3.17] - 2026-04-13
+
+### Template copy fix in auto_update (git-based updates)
+
+- Removed last hardcoded template file lists from `auto_update.py`.
+  Both the backfill path and the packaged-update path now scan the full
+  templates directory including subdirectories (`launchagents/`).
+- Fixes `startup_preflight` FileNotFoundError for `CLAUDE.md.template`
+  that blocked bootstrap sync and cron regeneration on npm installs.
+
 ## [5.3.16] - 2026-04-13
 
 ### Packaged installer fixes: client detection, template copy, doctor nvm
