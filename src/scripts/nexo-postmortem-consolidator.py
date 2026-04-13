@@ -38,6 +38,13 @@ sys.path.insert(0, str(NEXO_CODE))
 
 from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
 
+try:
+    from client_preferences import resolve_user_model as _resolve_user_model
+    _USER_MODEL = _resolve_user_model()
+except Exception:
+    _USER_MODEL = ""
+
+
 NEXO_DB = NEXO_HOME / "data" / "nexo.db"
 # Memory directory — adjust to match your project's memory location
 MEMORY_DIR = NEXO_HOME / "memory"
@@ -212,7 +219,7 @@ Execute without asking."""
     try:
         result = run_automation_prompt(
             prompt,
-            model="opus",
+            model=_USER_MODEL or "opus",
             timeout=21600,
             output_format="text",
             allowed_tools="Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__*",
@@ -348,6 +355,7 @@ def analyze_force_events():
     log(f"  {len(today_forces)} --force events")
 
     from collections import Counter
+
     memory_counts = Counter(r["memory_id"] for r in today_forces)
     for mem_id, count in memory_counts.most_common():
         mem = db.execute(

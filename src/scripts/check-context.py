@@ -21,6 +21,12 @@ if str(NEXO_CODE) not in sys.path:
     sys.path.insert(0, str(NEXO_CODE))
 
 from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
+try:
+    from client_preferences import resolve_user_model as _resolve_user_model
+    _USER_MODEL = _resolve_user_model()
+except Exception:
+    _USER_MODEL = ""
+
 
 
 class ContextChecker:
@@ -192,7 +198,7 @@ Rules:
     try:
         result = run_automation_prompt(
             prompt,
-            model="opus",
+            model=_USER_MODEL or "opus",
             timeout=300,
             output_format="text",
             append_system_prompt="Return exactly one valid JSON object.",

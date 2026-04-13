@@ -37,6 +37,13 @@ if str(NEXO_CODE) not in sys.path:
 
 from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
 
+try:
+    from client_preferences import resolve_user_model as _resolve_user_model
+    _USER_MODEL = _resolve_user_model()
+except Exception:
+    _USER_MODEL = ""
+
+
 
 NEXO_DB = NEXO_HOME / "data" / "nexo.db"
 JSON_ONLY_SYSTEM_PROMPT = (
@@ -151,7 +158,7 @@ Rules:
     try:
         result = run_automation_prompt(
             prompt,
-            model="sonnet",
+            model=_USER_MODEL or "sonnet",
             timeout=60,
             output_format="text",
             append_system_prompt=JSON_ONLY_SYSTEM_PROMPT,
@@ -231,6 +238,7 @@ def _extract_keywords(text: str) -> set:
 
 def main():
     import argparse
+
     parser = argparse.ArgumentParser(description="Validate findings against existing NEXO learnings")
     parser.add_argument("finding", help="The finding text to validate")
     parser.add_argument("--category", "-c", help="Filter learnings by category")

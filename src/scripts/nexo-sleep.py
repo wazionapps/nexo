@@ -37,6 +37,12 @@ if str(NEXO_CODE) not in sys.path:
     sys.path.insert(0, str(NEXO_CODE))
 
 from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
+try:
+    from client_preferences import resolve_user_model as _resolve_user_model
+    _USER_MODEL = _resolve_user_model()
+except Exception:
+    _USER_MODEL = ""
+
 
 # ─── Paths ────────────────────────────────────────────────────────────────────
 CLAUDE_DIR = NEXO_HOME
@@ -439,7 +445,7 @@ Execute without asking."""
     try:
         result = run_automation_prompt(
             prompt,
-            model="opus",
+            model=_USER_MODEL or "opus",
             timeout=21600,
             output_format="text",
             allowed_tools="Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__*",

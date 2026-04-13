@@ -1,5 +1,15 @@
 # Changelog
 
+## [5.3.13] - 2026-04-13
+
+### Core scripts use centralized model
+
+- All core automation scripts (`nexo-catchup`, `nexo-sleep`, `nexo-immune`,
+  `nexo-evolution-run`, `nexo-daily-self-audit`, `nexo-synthesis`,
+  `nexo-postmortem-consolidator`, `deep-sleep/extract`, `deep-sleep/synthesize`,
+  and others) now call `resolve_user_model()` instead of hardcoding `"opus"` or
+  `"sonnet"`.  The user's model choice is respected everywhere.
+
 ## [5.3.12] - 2026-04-13
 
 ### Centralized model selection

@@ -23,6 +23,13 @@ import time
 from datetime import datetime, date, timedelta
 from pathlib import Path
 
+
+try:
+    from client_preferences import resolve_user_model as _resolve_user_model
+    _USER_MODEL = _resolve_user_model()
+except Exception:
+    _USER_MODEL = ""
+
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 _script_dir = Path(__file__).resolve().parent
 _repo_src = _script_dir.parent
@@ -908,7 +915,7 @@ Write the report. Be concise — max 40 lines."""
     try:
         result = run_automation_prompt(
             prompt,
-            model="opus",
+            model=_USER_MODEL or "opus",
             timeout=21600,
             output_format="text",
             allowed_tools="Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__*",

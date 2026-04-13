@@ -13,6 +13,13 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+
+try:
+    from client_preferences import resolve_user_model as _resolve_user_model
+    _USER_MODEL = _resolve_user_model()
+except Exception:
+    _USER_MODEL = ""
+
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _DEFAULT_RUNTIME_ROOT = _SCRIPT_DIR.parent
 _runtime_root = Path(os.environ.get("NEXO_CODE", str(_DEFAULT_RUNTIME_ROOT)))
@@ -126,7 +133,6 @@ def _heal_personal_schedules() -> dict:
     summary = {"created": 0, "repaired": 0, "invalid": 0, "error": ""}
     try:
         from script_registry import reconcile_personal_scripts
-
         result = reconcile_personal_scripts(dry_run=False)
         ensured = result.get("ensure_schedules", {})
         summary["created"] = len(ensured.get("created", []))
@@ -273,7 +279,7 @@ Format:
     try:
         result = run_automation_prompt(
             prompt,
-            model="opus",
+            model=_USER_MODEL or "opus",
             timeout=21600,
             output_format="text",
             allowed_tools="Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__*",
