@@ -1,5 +1,19 @@
 # Changelog
 
+## [5.3.22] - 2026-04-14
+
+### Fix headless crons stalling on permission approval
+
+- Claude Code: installer/updater now populates `permissions.allow` in
+  `~/.claude/settings.json` with the minimum entries required for NEXO
+  headless automation (followup-runner, email-monitor, deep-sleep, etc.)
+  including `mcp__*` wildcard. Idempotent: preserves user customizations.
+- Codex: installer/updater now sets `approval_policy = "never"` and
+  `sandbox_mode = "danger-full-access"` as defaults in
+  `~/.codex/config.toml` when unset. Existing user values are preserved.
+- Fixes zombie crons on fresh installs that never had an interactive
+  session populate the allowlist manually.
+
 ## [5.3.21] - 2026-04-14
 
 ### Fix update crash on slow source repos
