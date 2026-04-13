@@ -1,5 +1,14 @@
 # Changelog
 
+## [5.3.20] - 2026-04-13
+
+### Fix operator alias lost after update
+
+- Migration now restores the custom operator shell alias (e.g. `nora`) in
+  `.zshrc`/`.bash_profile` if it was lost during a previous update.
+- Skip alias creation when operator name is "nexo" to avoid shadowing the
+  CLI binary.
+
 ## [5.3.19] - 2026-04-13
 
 ### Deep scan: know the user better than they know themselves

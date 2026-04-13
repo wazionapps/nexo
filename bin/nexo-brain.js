@@ -1692,6 +1692,40 @@ async function main() {
           }
         }
 
+        // Restore operator shell alias + PATH if lost during previous updates
+        const migOperatorName = installed.operator_name || "NEXO";
+        const migAliasName = migOperatorName.toLowerCase();
+        if (migAliasName !== "nexo") {
+          const migAliasLine = `alias ${migAliasName}='nexo chat .'`;
+          const migAliasComment = `# ${migOperatorName} — open the configured NEXO terminal client`;
+          const migNexoPathLine = `export PATH="${path.join(NEXO_HOME, "bin")}:$PATH"`;
+          const migNexoPathComment = "# NEXO runtime CLI";
+          const migUserShell = process.env.SHELL || "/bin/bash";
+          const migHomeDir = require("os").homedir();
+          const migRcFiles = [];
+          if (migUserShell.includes("zsh")) {
+            migRcFiles.push(path.join(migHomeDir, ".zshrc"));
+          } else {
+            migRcFiles.push(path.join(migHomeDir, ".bash_profile"));
+            migRcFiles.push(path.join(migHomeDir, ".bashrc"));
+          }
+          for (const rcFile of migRcFiles) {
+            let rcContent = "";
+            if (fs.existsSync(rcFile)) {
+              rcContent = fs.readFileSync(rcFile, "utf8");
+            }
+            if (!rcContent.includes(migNexoPathLine)) {
+              fs.appendFileSync(rcFile, `\n${migNexoPathComment}\n${migNexoPathLine}\n`);
+              log(`  Restored NEXO runtime CLI in ${path.basename(rcFile)}`);
+              rcContent += `\n${migNexoPathComment}\n${migNexoPathLine}\n`;
+            }
+            if (!rcContent.includes(`alias ${migAliasName}=`)) {
+              fs.appendFileSync(rcFile, `\n${migAliasComment}\n${migAliasLine}\n`);
+              log(`  Restored '${migAliasName}' alias in ${path.basename(rcFile)}`);
+            }
+          }
+        }
+
         console.log("");
         log(`Migration complete: v${installedVersion} → v${currentVersion}`);
         log("Your data (memories, learnings, preferences) is untouched.");
@@ -3138,14 +3172,11 @@ ${doScan ? `- Stack: ${Object.keys(profileData.code.languages || {}).slice(0, 5)
   await setupKeychainPassFile(NEXO_HOME);
 
   // Step 8: Create shell alias and add runtime CLI to PATH
-  log("Creating shell alias...");
   const aliasName = operatorName.toLowerCase();
-  const aliasLine = `alias ${aliasName}='nexo chat .'`;
-  const aliasComment = `# ${operatorName} — open the configured NEXO terminal client`;
   const nexoPathLine = `export PATH="${path.join(NEXO_HOME, "bin")}:$PATH"`;
   const nexoPathComment = "# NEXO runtime CLI";
 
-  // Detect shell and add alias
+  // Detect shell rc files
   const userShell = process.env.SHELL || "/bin/bash";
   const homeDir = require("os").homedir();
   const rcFiles = [];
@@ -3159,6 +3190,11 @@ ${doScan ? `- Stack: ${Object.keys(profileData.code.languages || {}).slice(0, 5)
     const bashrc = path.join(homeDir, ".bashrc");
     rcFiles.push(bashrc);
   }
+
+  // Skip alias when operator name matches the CLI binary ("nexo") to avoid shadowing it
+  const skipAlias = aliasName === "nexo";
+  const aliasLine = skipAlias ? null : `alias ${aliasName}='nexo chat .'`;
+  const aliasComment = skipAlias ? null : `# ${operatorName} — open the configured NEXO terminal client`;
 
   for (const rcFile of rcFiles) {
     let rcContent = "";
@@ -3174,14 +3210,20 @@ ${doScan ? `- Stack: ${Object.keys(profileData.code.languages || {}).slice(0, 5)
       log(`Runtime CLI already present in ${path.basename(rcFile)}`);
     }
 
-    if (!rcContent.includes(`alias ${aliasName}=`)) {
-      fs.appendFileSync(rcFile, `\n${aliasComment}\n${aliasLine}\n`);
-      log(`Added '${aliasName}' alias to ${path.basename(rcFile)}`);
-    } else {
-      log(`Alias '${aliasName}' already exists in ${path.basename(rcFile)}`);
+    if (!skipAlias) {
+      if (!rcContent.includes(`alias ${aliasName}=`)) {
+        fs.appendFileSync(rcFile, `\n${aliasComment}\n${aliasLine}\n`);
+        log(`Added '${aliasName}' alias to ${path.basename(rcFile)}`);
+      } else {
+        log(`Alias '${aliasName}' already exists in ${path.basename(rcFile)}`);
+      }
     }
   }
-  log(`After setup, open a new terminal and type: ${aliasName} or nexo`);
+  if (skipAlias) {
+    log(`Operator name is 'nexo' — skipping alias (CLI binary already provides 'nexo' command)`);
+  } else {
+    log(`After setup, open a new terminal and type: ${aliasName} or nexo`);
+  }
   console.log("");
 
   // Step 9: Generate CLAUDE.md template
