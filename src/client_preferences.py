@@ -48,10 +48,13 @@ INSTALL_PREFERENCE_KEYS = {
 }
 DEFAULT_CLAUDE_CODE_MODEL = "claude-opus-4-6[1m]"
 DEFAULT_CLAUDE_CODE_REASONING_EFFORT = ""
-DEFAULT_CODEX_MODEL = "gpt-5.4"
-DEFAULT_CODEX_REASONING_EFFORT = "xhigh"
-DEFAULT_FAST_MODEL = "gpt-5.4-mini"
-DEFAULT_FAST_REASONING_EFFORT = "medium"
+# Codex/fast defaults: fall back to the user's configured model, not a hardcoded
+# third-party model.  The user picks their model once at install time; every
+# profile and backend should honour that choice.
+DEFAULT_CODEX_MODEL = DEFAULT_CLAUDE_CODE_MODEL
+DEFAULT_CODEX_REASONING_EFFORT = ""
+DEFAULT_FAST_MODEL = DEFAULT_CLAUDE_CODE_MODEL
+DEFAULT_FAST_REASONING_EFFORT = ""
 
 
 def _user_home() -> Path:
@@ -260,9 +263,9 @@ def default_automation_task_profiles() -> dict[str, dict[str, str]]:
             "reasoning_effort": "",
         },
         "fast": {
-            "backend": CLIENT_CODEX,
-            "model": DEFAULT_FAST_MODEL,
-            "reasoning_effort": DEFAULT_FAST_REASONING_EFFORT,
+            "backend": "",
+            "model": "",
+            "reasoning_effort": "",
         },
         "balanced": {
             "backend": "",
@@ -521,6 +524,22 @@ def resolve_terminal_client(requested: str | None = None, *, preferences: dict |
         normalized["default_terminal_client"],
         interactive_clients=normalized["interactive_clients"],
     )
+
+
+def resolve_user_model(preferences: dict | None = None) -> str:
+    """Return the single model the user has configured.
+
+    Scripts and automation tasks should call this instead of hardcoding a model
+    string.  The value comes from the user's ``client_runtime_profiles`` for
+    their ``default_terminal_client`` (usually ``claude_code``).
+    """
+    normalized = preferences or load_client_preferences()
+    client = normalize_default_terminal_client(
+        normalized["default_terminal_client"],
+        interactive_clients=normalized["interactive_clients"],
+    )
+    profile = resolve_client_runtime_profile(client, preferences=normalized)
+    return profile["model"]
 
 
 def resolve_automation_backend(preferences: dict | None = None) -> str:

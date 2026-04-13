@@ -164,6 +164,68 @@ def test_process_tool_event_records_debt_when_writing_before_guard_ack(guardrail
     assert debt["severity"] == "error"
 
 
+def test_process_tool_event_warns_on_non_trivial_work_without_task_open(guardrail_env):
+    db, hook_guardrails = _reload_guardrail_stack()
+    db.init_db()
+    db.register_session(
+        "nexo-2009-3009",
+        "bash without task",
+        external_session_id="claude-bash-1",
+        session_client="claude_code",
+    )
+
+    result = hook_guardrails.process_tool_event(
+        {
+            "session_id": "claude-bash-1",
+            "tool_name": "Bash",
+            "tool_input": {"cmd": "rg -n protocol src"},
+        }
+    )
+
+    assert result["status"] == "warn"
+    messages = [item["message"] for item in result["warnings"]]
+    assert any("nexo_task_open" in message for message in messages)
+    assert any("nexo_workflow_open" in message for message in messages)
+    assert any("nexo_task_close" in message for message in messages)
+
+
+def test_process_tool_event_warns_when_multi_step_action_task_lacks_workflow(guardrail_env):
+    db, hook_guardrails = _reload_guardrail_stack()
+    db.init_db()
+    sid = "nexo-2010-3010"
+    db.register_session(
+        sid,
+        "edit without workflow",
+        external_session_id="claude-edit-3",
+        session_client="claude_code",
+    )
+    db.create_protocol_task(
+        sid,
+        "Implement multi-step fix",
+        task_type="edit",
+        files=["/repo/src/plugins/protocol.py"],
+        plan=["inspect", "patch", "verify"],
+        verification_step="pytest -q tests/test_protocol.py",
+        opened_with_guard=True,
+        must_verify=True,
+        must_change_log=True,
+    )
+
+    result = hook_guardrails.process_tool_event(
+        {
+            "session_id": "claude-edit-3",
+            "tool_name": "Bash",
+            "tool_input": {"cmd": "pytest -q tests/test_protocol.py"},
+        }
+    )
+
+    assert result["status"] == "warn"
+    messages = [item["message"] for item in result["warnings"]]
+    assert any("nexo_workflow_open" in message for message in messages)
+    assert any("nexo_task_close" in message for message in messages)
+    assert any("nexo_change_log" in message for message in messages)
+
+
 def test_process_pre_tool_event_blocks_write_without_open_task_in_strict_mode(guardrail_env):
     db, hook_guardrails = _reload_guardrail_stack()
     db.init_db()

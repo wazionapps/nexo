@@ -194,3 +194,92 @@ def test_restore_dbs_handles_missing_gracefully(tmp_path, monkeypatch):
     row = verify.execute("SELECT x FROM t").fetchone()
     verify.close()
     assert row[0] == 42
+
+
+def test_validate_db_backup_detects_critical_table_regression(tmp_path):
+    """Critical source tables with rows must not become empty in the backup."""
+    import auto_update
+
+    source_db = tmp_path / "source.db"
+    backup_db = tmp_path / "backup.db"
+
+    src = sqlite3.connect(str(source_db))
+    src.execute("CREATE TABLE learnings (id INTEGER)")
+    src.execute("CREATE TABLE session_diary (id INTEGER)")
+    src.execute("CREATE TABLE guard_checks (id INTEGER)")
+    src.execute("CREATE TABLE protocol_debt (id INTEGER)")
+    src.execute("INSERT INTO learnings VALUES (1)")
+    src.execute("INSERT INTO session_diary VALUES (1)")
+    src.execute("INSERT INTO guard_checks VALUES (1)")
+    src.execute("INSERT INTO protocol_debt VALUES (1)")
+    src.commit()
+    src.close()
+
+    dst = sqlite3.connect(str(backup_db))
+    dst.execute("CREATE TABLE learnings (id INTEGER)")
+    dst.execute("CREATE TABLE session_diary (id INTEGER)")
+    dst.execute("CREATE TABLE guard_checks (id INTEGER)")
+    dst.execute("CREATE TABLE protocol_debt (id INTEGER)")
+    dst.commit()
+    dst.close()
+
+    report = auto_update._validate_db_backup(source_db, backup_db)
+
+    assert report["ok"] is False
+    tables = {item["table"] for item in report["regressions"]}
+    assert {"learnings", "session_diary", "guard_checks", "protocol_debt"} <= tables
+
+
+def test_validate_db_backup_accepts_non_empty_critical_tables(tmp_path):
+    """A valid backup must preserve non-empty critical tables."""
+    import auto_update
+
+    source_db = tmp_path / "source.db"
+    backup_db = tmp_path / "backup.db"
+
+    src = sqlite3.connect(str(source_db))
+    dst = sqlite3.connect(str(backup_db))
+    for conn in (src, dst):
+        conn.execute("CREATE TABLE learnings (id INTEGER)")
+        conn.execute("CREATE TABLE session_diary (id INTEGER)")
+        conn.execute("INSERT INTO learnings VALUES (1)")
+        conn.execute("INSERT INTO session_diary VALUES (1)")
+        conn.commit()
+    src.close()
+    dst.close()
+
+    report = auto_update._validate_db_backup(source_db, backup_db)
+
+    assert report["ok"] is True
+    assert report["regressions"] == []
+
+
+def test_check_git_updates_aborts_before_pull_when_backup_invalid(monkeypatch):
+    """Backup validation must gate the pull so bad snapshots never protect migrations."""
+    import auto_update
+
+    calls: list[tuple[str, ...]] = []
+
+    def _fake_git(*args):
+        calls.append(tuple(args))
+        if args == ("fetch", "--quiet"):
+            return 0, "", ""
+        if args == ("rev-parse", "HEAD"):
+            return 0, "local-head", ""
+        if args == ("rev-parse", "@{u}"):
+            return 0, "remote-head", ""
+        if args == ("merge-base", "HEAD", "@{u}"):
+            return 0, "local-head", ""
+        raise AssertionError(f"unexpected git call: {args}")
+
+    monkeypatch.setattr(auto_update, "_git", _fake_git)
+    monkeypatch.setattr(auto_update, "_read_package_version", lambda: "5.3.11")
+    monkeypatch.setattr(auto_update, "_requirements_hash", lambda: "same-hash")
+    monkeypatch.setattr(
+        auto_update,
+        "_create_validated_db_backup",
+        lambda: ("/tmp/pre-autoupdate", {"ok": False, "regressions": [{"table": "learnings", "source": 212, "backup": 0}]}),
+    )
+
+    assert auto_update._check_git_updates() is None
+    assert ("pull", "--ff-only") not in calls

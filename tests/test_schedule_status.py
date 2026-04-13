@@ -148,3 +148,87 @@ def test_schedule_status_marks_old_open_run_as_warning(monkeypatch):
     assert "⚠ shopify-backup" in output
     assert "1/1" in output
     assert "open run 5.1h" in output
+
+
+def test_schedule_status_prefers_legacy_backup_runs_when_newer_than_cron_runs(monkeypatch):
+    from plugins import schedule
+
+    monkeypatch.setattr(
+        schedule,
+        "cron_runs_recent",
+        lambda hours, cron_id: [{
+            "started_at": "2026-04-12 16:43:09",
+            "ended_at": "2026-04-12 16:43:10",
+            "exit_code": 0,
+            "summary": "",
+            "error": "",
+            "duration_secs": 1.0,
+        }] if cron_id == "backup" else [],
+    )
+    monkeypatch.setattr(
+        schedule,
+        "_legacy_backup_runs",
+        lambda hours: [{
+            "started_at": "2026-04-13 06:22:00",
+            "ended_at": "2026-04-13 06:22:00",
+            "exit_code": 0,
+            "summary": "legacy backup file evidence",
+            "error": "",
+            "duration_secs": 1.0,
+        }],
+    )
+    monkeypatch.setattr(schedule, "get_personal_script_schedule", lambda cron_id: {})
+
+    output = schedule.handle_schedule_status(hours=24, cron_id="backup")
+
+    assert "2026-04-13 06:22:00" in output
+    assert "legacy backup file evidence" in output
+    assert "2026-04-12 16:43:09" not in output
+
+
+def test_schedule_status_summary_prefers_legacy_backup_when_db_row_is_stale(monkeypatch):
+    from plugins import schedule
+
+    monkeypatch.setattr(
+        schedule,
+        "cron_runs_summary",
+        lambda hours: [{
+            "cron_id": "backup",
+            "succeeded": 5,
+            "completed_runs": 5,
+            "total_runs": 5,
+            "avg_duration": 1.0,
+            "last_summary": "",
+            "last_exit_code": 0,
+            "last_run": "2026-04-12 16:43:09",
+            "last_ended_at": "2026-04-12 16:43:10",
+        }],
+    )
+    monkeypatch.setattr(
+        schedule,
+        "_legacy_backup_runs",
+        lambda hours: [
+            {
+                "started_at": "2026-04-13 06:22:00",
+                "ended_at": "2026-04-13 06:22:00",
+                "exit_code": 0,
+                "summary": "legacy backup file evidence",
+                "error": "",
+                "duration_secs": 1.0,
+            },
+            {
+                "started_at": "2026-04-13 05:22:00",
+                "ended_at": "2026-04-13 05:22:00",
+                "exit_code": 0,
+                "summary": "legacy backup file evidence",
+                "error": "",
+                "duration_secs": 1.0,
+            },
+        ],
+    )
+    monkeypatch.setattr(schedule, "get_personal_script_schedule", lambda cron_id: {})
+
+    output = schedule.handle_schedule_status(hours=24)
+
+    assert "✅ backup: 2/2" in output
+    assert "legacy backup file evidence" in output

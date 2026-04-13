@@ -95,6 +95,9 @@ class TestDetectQualitySignals:
             "total_evaluations": 40,
             "recommendation_accept_rate": 90.0,  # healthy
             "linked_outcomes_total": 8,
+            "linked_outcomes_met": 1,
+            "linked_outcomes_missed": 7,
+            "linked_outcomes_pending": 0,
             "linked_outcome_success_rate": 25.0,  # below floor
             "recommended_success_rate": 25.0,
             "override_success_rate": 0.0,
@@ -104,6 +107,24 @@ class TestDetectQualitySignals:
         assert "linked_success" in kinds
         assert "accept_rate" not in kinds  # accept rate is healthy
 
+    def test_linked_success_ignored_when_all_linked_outcomes_pending(
+        self, cortex_env, monkeypatch
+    ):
+        cycle = _load_cycle_module(monkeypatch, cortex_env)
+        summary = {
+            "total_evaluations": 40,
+            "recommendation_accept_rate": 90.0,
+            "linked_outcomes_total": 10,
+            "linked_outcomes_met": 0,
+            "linked_outcomes_missed": 0,
+            "linked_outcomes_pending": 10,
+            "linked_outcome_success_rate": 0.0,
+            "recommended_success_rate": 0.0,
+            "override_success_rate": 0.0,
+        }
+        signals = cycle.detect_quality_signals(summary)
+        assert all(s["kind"] != "linked_success" for s in signals)
+
     def test_override_gap_signal_when_overrides_outperform(
         self, cortex_env, monkeypatch
     ):
@@ -112,6 +133,9 @@ class TestDetectQualitySignals:
             "total_evaluations": 30,
             "recommendation_accept_rate": 70.0,
             "linked_outcomes_total": 10,
+            "linked_outcomes_met": 6,
+            "linked_outcomes_missed": 4,
+            "linked_outcomes_pending": 0,
             "linked_outcome_success_rate": 65.0,
             "recommended_success_rate": 50.0,
             "override_success_rate": 80.0,  # 30pp gap
@@ -131,6 +155,9 @@ class TestDetectQualitySignals:
             "total_evaluations": 30,
             "recommendation_accept_rate": 70.0,
             "linked_outcomes_total": 3,  # below LINKED_MIN_SAMPLE
+            "linked_outcomes_met": 2,
+            "linked_outcomes_missed": 1,
+            "linked_outcomes_pending": 0,
             "linked_outcome_success_rate": 50.0,
             "recommended_success_rate": 30.0,
             "override_success_rate": 80.0,
@@ -199,6 +226,9 @@ class TestPersistAndUpsert:
             "total_evaluations": 25,
             "recommendation_accept_rate": 88.0,
             "linked_outcomes_total": 10,
+            "linked_outcomes_met": 8,
+            "linked_outcomes_missed": 2,
+            "linked_outcomes_pending": 0,
             "linked_outcome_success_rate": 80.0,
             "recommended_success_rate": 82.0,
             "override_success_rate": 70.0,
@@ -234,6 +264,9 @@ class TestPersistAndUpsert:
             "total_evaluations": 30,
             "recommendation_accept_rate": 30.0,
             "linked_outcomes_total": 8,
+            "linked_outcomes_met": 2,
+            "linked_outcomes_missed": 6,
+            "linked_outcomes_pending": 0,
             "linked_outcome_success_rate": 25.0,
             "recommended_success_rate": 20.0,
             "override_success_rate": 80.0,
@@ -265,3 +298,42 @@ class TestPersistAndUpsert:
         ).fetchone()
         conn.close()
         assert rows[0] == 1
+
+    def test_run_with_pending_only_linked_outcomes_closes_existing_followup(
+        self, cortex_env, monkeypatch, isolated_db
+    ):
+        cycle = _load_cycle_module(monkeypatch, cortex_env)
+
+        pending_only = {
+            "days": 7,
+            "total_evaluations": 28,
+            "recommendation_accept_rate": 78.6,
+            "linked_outcomes_total": 10,
+            "linked_outcomes_met": 0,
+            "linked_outcomes_missed": 0,
+            "linked_outcomes_pending": 10,
+            "linked_outcome_success_rate": 0.0,
+            "recommended_success_rate": 0.0,
+            "override_success_rate": 0.0,
+        }
+
+        import db as nexo_db
+        monkeypatch.setattr(nexo_db, "cortex_evaluation_summary", lambda days=30: pending_only)
+
+        from db import create_followup, get_followup
+
+        create_followup(
+            cycle.FOLLOWUP_ID,
+            "Existing Cortex quality warning",
+            priority="high",
+        )
+
+        rc = cycle.run()
+        assert rc == 0
+
+        existing = get_followup(cycle.FOLLOWUP_ID)
+        assert existing is not None
+        assert str(existing["status"]).startswith("COMPLETED")
+
+        snapshot = json.loads((cortex_env / "operations" / "cortex-quality-latest.json").read_text())
+        assert snapshot["signals"] == []

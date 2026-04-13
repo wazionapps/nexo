@@ -194,12 +194,14 @@ def _looks_like_nexo_home(raw: str) -> bool:
     return (candidate / "skills-runtime").is_dir() or (candidate / "operations" / "tool-logs").is_dir()
 
 
-def _parse_optional_paths(argv: list[str]) -> tuple[str, str]:
-    if len(argv) > 6:
-        return argv[5], argv[6]
-    if len(argv) > 5:
-        return ("", argv[5]) if _looks_like_nexo_home(argv[5]) else (argv[5], "")
-    return "", ""
+def _parse_optional_args(argv: list[str]) -> tuple[str, str, str, str]:
+    website_root = argv[5] if len(argv) > 5 else ""
+    nexo_home = argv[6] if len(argv) > 6 else ""
+    final_closeout = argv[7] if len(argv) > 7 else ""
+    protocol_task_id = argv[8] if len(argv) > 8 else ""
+    if website_root and not nexo_home and _looks_like_nexo_home(website_root):
+        nexo_home, website_root = website_root, ""
+    return website_root, nexo_home, final_closeout, protocol_task_id
 
 
 def main() -> int:
@@ -207,7 +209,8 @@ def main() -> int:
     require_contract_complete = _parse_bool(sys.argv[2] if len(sys.argv) > 2 else "true", True)
     include_smoke = _parse_bool(sys.argv[3] if len(sys.argv) > 3 else "true", True)
     ci = _parse_bool(sys.argv[4] if len(sys.argv) > 4 else "false", False)
-    website_root, nexo_home = _parse_optional_paths(sys.argv)
+    website_root, nexo_home, final_closeout_raw, protocol_task_id = _parse_optional_args(sys.argv)
+    final_closeout = _parse_bool(final_closeout_raw, False)
 
     version = _package_version()
     contract_path = _resolve_contract(version, contract_arg)
@@ -216,8 +219,10 @@ def main() -> int:
 
     print(f"[release-final-audit] version={version}")
     print(f"[release-final-audit] contract={contract_path or 'none'}")
-    print(f"[release-final-audit] include_smoke={include_smoke} ci={ci}")
+    print(f"[release-final-audit] include_smoke={include_smoke} ci={ci} final_closeout={final_closeout}")
     print(f"[release-final-audit] python={python_bin}")
+    if final_closeout and protocol_task_id.strip():
+        print(f"[release-final-audit] protocol_task_id={protocol_task_id.strip()}")
 
     if include_smoke:
         smoke_runner = _resolve_smoke_runner(version)
@@ -240,6 +245,10 @@ def main() -> int:
             readiness_cmd.append("--require-contract-complete")
     elif require_contract_complete:
         print("[release-final-audit] require_contract_complete ignored because contract=none")
+    if final_closeout:
+        readiness_cmd.append("--final-closeout")
+        if protocol_task_id.strip():
+            readiness_cmd.extend(["--protocol-task-id", protocol_task_id.strip()])
 
     _run(readiness_cmd, env=env)
     print("[release-final-audit] OK")

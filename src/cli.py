@@ -26,7 +26,7 @@ Entry points:
   nexo skills evolution [--json]
   nexo clients sync [--json]
   nexo contributor status|on|off [--json]
-  nexo doctor [--tier boot|runtime|deep|all] [--json] [--fix]
+  nexo doctor [--tier boot|runtime|deep|all] [--plane runtime_personal|installation_live|database_real] [--json] [--fix]
   nexo uninstall [--dry-run] [--delete-data] [--json]
 """
 from __future__ import annotations
@@ -1210,7 +1210,7 @@ def _doctor(args):
     init_db()
     tier_label = getattr(args, "tier", "boot") or "boot"
     print(f"[NEXO] Inspecting {tier_label} diagnostics... please wait.", file=sys.stderr, flush=True)
-    report = run_doctor(tier=args.tier, fix=args.fix)
+    report = run_doctor(tier=args.tier, fix=args.fix, plane=getattr(args, "plane", ""))
     output = format_report(report, fmt="json" if args.json else "text")
     print(output)
 
@@ -1749,6 +1749,12 @@ def main():
     doctor_parser = sub.add_parser("doctor", help="Unified diagnostics")
     doctor_parser.add_argument("--tier", default="boot", choices=["boot", "runtime", "deep", "all"],
                                help="Diagnostic tier (default: boot)")
+    doctor_parser.add_argument(
+        "--plane",
+        default="",
+        choices=["", "runtime_personal", "installation_live", "database_real", "product_public", "cooperator"],
+        help="Diagnostic plane. Doctor only runs on runtime_personal, installation_live, or database_real.",
+    )
     doctor_parser.add_argument("--json", action="store_true", help="JSON output")
     doctor_parser.add_argument("--fix", action="store_true", help="Apply deterministic fixes")
 

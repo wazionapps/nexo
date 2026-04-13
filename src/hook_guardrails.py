@@ -14,6 +14,21 @@ from protocol_settings import get_protocol_strictness
 READ_LIKE_TOOLS = {"Read"}
 WRITE_LIKE_TOOLS = {"Edit", "MultiEdit", "Write"}
 DELETE_LIKE_TOOLS = {"Delete"}
+NON_TRIVIAL_PROTOCOL_TOOLS = {"Read", "Bash", "Grep", "Glob", "Edit", "MultiEdit", "Write", "Delete"}
+PROTOCOL_SKIP_TOOLS = {
+    "nexo_startup",
+    "nexo_smart_startup",
+    "nexo_stop",
+    "nexo_heartbeat",
+    "nexo_task_open",
+    "nexo_task_close",
+    "nexo_workflow_open",
+    "nexo_workflow_update",
+    "nexo_guard_check",
+    "nexo_guard_file_check",
+    "nexo_rules_check",
+}
+ACTION_TASK_TYPES = {"edit", "execute", "delegate"}
 NEXO_CODE_ROOT = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parent))).expanduser().resolve()
 LIVE_REPO_ROOT = NEXO_CODE_ROOT.parent if NEXO_CODE_ROOT.name == "src" else NEXO_CODE_ROOT
 PUBLIC_REPO_DIRS = {
@@ -48,6 +63,11 @@ def _operation_kind(tool_name: str) -> str:
     if tool_name in DELETE_LIKE_TOOLS:
         return "delete"
     return "other"
+
+
+def _short_tool_name(tool_name: str) -> str:
+    clean = str(tool_name or "").strip()
+    return clean.rsplit("__", 1)[-1] if "__" in clean else clean
 
 
 def _normalize_file_path(path: str) -> str:
@@ -154,7 +174,8 @@ def _resolve_nexo_sid(conn, external_session_id: str) -> str:
 def _find_open_task_for_file(conn, sid: str, filepath: str) -> dict | None:
     target = _normalize_file_path(filepath)
     rows = conn.execute(
-        """SELECT task_id, files, guard_has_blocking
+        """SELECT task_id, files, guard_has_blocking, task_type, plan, unknowns,
+                  verification_step, opened_with_guard, must_change_log, must_verify
            FROM protocol_tasks
            WHERE session_id = ? AND status = 'open'
            ORDER BY opened_at DESC""",
@@ -173,7 +194,8 @@ def _find_open_task_for_file(conn, sid: str, filepath: str) -> dict | None:
 
 def _find_any_open_task(conn, sid: str) -> dict | None:
     row = conn.execute(
-        """SELECT task_id, files, guard_has_blocking
+        """SELECT task_id, files, guard_has_blocking, task_type, plan, unknowns,
+                  verification_step, opened_with_guard, must_change_log, must_verify
            FROM protocol_tasks
            WHERE session_id = ? AND status = 'open'
            ORDER BY opened_at DESC
@@ -181,6 +203,26 @@ def _find_any_open_task(conn, sid: str) -> dict | None:
         (sid,),
     ).fetchone()
     return dict(row) if row else None
+
+
+def _find_any_open_workflow(conn, sid: str) -> dict | None:
+    row = conn.execute(
+        """SELECT run_id, protocol_task_id, current_step_key
+           FROM workflow_runs
+           WHERE session_id = ? AND status IN ('open', 'running', 'blocked', 'waiting_approval')
+           ORDER BY updated_at DESC, run_id DESC
+           LIMIT 1""",
+        (sid,),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def _session_has_guard_check(conn, sid: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM guard_checks WHERE session_id = ? LIMIT 1",
+        (sid,),
+    ).fetchone()
+    return bool(row)
 
 
 def _find_open_debt(conn, *, session_id: str, task_id: str, debt_type: str, file_token: str) -> dict | None:
@@ -239,6 +281,98 @@ def _ensure_protocol_debt(
         task_id=task_id,
         evidence=evidence,
     )
+
+
+def _task_list_field(task: dict | None, key: str) -> list:
+    if not task:
+        return []
+    try:
+        parsed = json.loads(task.get(key) or "[]")
+    except Exception:
+        return []
+    return parsed if isinstance(parsed, list) else []
+
+
+def _task_needs_workflow(task: dict | None) -> bool:
+    if not task:
+        return False
+    if str(task.get("task_type") or "").strip() not in ACTION_TASK_TYPES:
+        return False
+    if len(_task_list_field(task, "plan")) > 1:
+        return True
+    if len(_task_list_field(task, "unknowns")) > 0:
+        return True
+    if len(_task_list_field(task, "files")) > 1:
+        return True
+    return bool(str(task.get("verification_step") or "").strip())
+
+
+def _append_protocol_warning(warnings: list[dict], message: str) -> None:
+    clean = (message or "").strip()
+    if not clean:
+        return
+    if any((item.get("message") or "").strip() == clean for item in warnings):
+        return
+    warnings.append({"message": clean})
+
+
+def _collect_protocol_warnings(conn, *, sid: str, tool_name: str) -> list[dict]:
+    short_name = _short_tool_name(tool_name)
+    if short_name in PROTOCOL_SKIP_TOOLS or short_name not in NON_TRIVIAL_PROTOCOL_TOOLS:
+        return []
+
+    warnings: list[dict] = []
+    if not sid:
+        _append_protocol_warning(
+            warnings,
+            "Trabajo no trivial detectado antes de `nexo_startup(...)`. Arranca NEXO, abre `nexo_task_open(...)`, y si esto va a durar varias fases abre también `nexo_workflow_open(...)` antes de seguir.",
+        )
+        return warnings
+
+    task = _find_any_open_task(conn, sid)
+    has_guard = _session_has_guard_check(conn, sid)
+    if not task:
+        guard_note = (
+            " Ejecuta `nexo_guard_check(...)` antes de leer código condicionado o compartido."
+            if short_name in {"Read", "Bash", "Grep", "Glob"} and not has_guard
+            else ""
+        )
+        _append_protocol_warning(
+            warnings,
+            "Trabajo no trivial detectado sin `nexo_task_open(...)`. Ábrelo ahora y, si esto va a cruzar varios pasos o mensajes, añade `nexo_workflow_open(...)`." + guard_note,
+        )
+        _append_protocol_warning(
+            warnings,
+            "Recordatorio protocolario: mantén `nexo_heartbeat(...)` al día y no cierres en optimista; si hay cambios reales, registra `nexo_change_log(...)` o cierra con `nexo_task_close(...)` más evidencia.",
+        )
+        return warnings
+
+    task_id = str(task.get("task_id") or "").strip()
+    if str(task.get("task_type") or "").strip() in ACTION_TASK_TYPES and not (task.get("opened_with_guard") or has_guard):
+        _append_protocol_warning(
+            warnings,
+            f"La tarea {task_id} está activa sin guard visible. Ejecuta `nexo_guard_check(...)` antes de tocar código condicionado o compartido.",
+        )
+
+    workflow = _find_any_open_workflow(conn, sid)
+    if _task_needs_workflow(task) and not workflow:
+        _append_protocol_warning(
+            warnings,
+            f"La tarea {task_id} ya tiene pinta de multi-step y sigue sin `nexo_workflow_open(...)`. Ábrelo para que checkpoints, resume y replay no dependan de memoria implícita.",
+        )
+
+    if str(task.get("task_type") or "").strip() in ACTION_TASK_TYPES and short_name in {"Bash", "Edit", "MultiEdit", "Write", "Delete"}:
+        change_note = (
+            " Si editas de verdad y no vas a usar `nexo_task_close(...)` inmediatamente, captura `nexo_change_log(...)`."
+            if task.get("must_change_log")
+            else ""
+        )
+        _append_protocol_warning(
+            warnings,
+            f"Recordatorio protocolario para {task_id}: mantén `nexo_heartbeat(...)` al día y ciérrala con `nexo_task_close(...)` más evidencia antes de decir que está resuelta.{change_note}",
+        )
+
+    return warnings
 
 
 def _collect_automation_live_repo_blocks(
@@ -429,21 +563,20 @@ def process_pre_tool_event(payload: dict) -> dict:
 def process_tool_event(payload: dict) -> dict:
     tool_name = str(payload.get("tool_name", "")).strip()
     op = _operation_kind(tool_name)
-    if op == "other":
-        return {"ok": True, "skipped": True, "reason": "tool not monitored"}
-
     tool_input = payload.get("tool_input")
     files = _extract_touched_files(tool_input)
-    if not files:
-        return {"ok": True, "skipped": True, "reason": "no touched files found"}
-
     conn = get_db()
     sid = _resolve_nexo_sid(conn, str(payload.get("session_id", "")))
-    if not sid:
+    warnings = _collect_protocol_warnings(conn, sid=sid, tool_name=tool_name)
+
+    if op == "other" and not warnings:
+        return {"ok": True, "skipped": True, "reason": "tool not monitored"}
+    if not files and op in {"read", "write", "delete"} and not warnings:
+        return {"ok": True, "skipped": True, "reason": "no touched files found"}
+    if not sid and not warnings:
         return {"ok": True, "skipped": True, "reason": "session not mapped to nexo"}
 
-    conditioned = _load_conditioned_learnings(conn, files)
-    warnings: list[dict] = []
+    conditioned = _load_conditioned_learnings(conn, files) if sid else {}
     violations: list[dict] = []
 
     for filepath in files:
@@ -545,6 +678,9 @@ def format_hook_message(result: dict) -> str:
         return ""
     lines = ["NEXO DISCIPLINE:"]
     for item in result.get("warnings", []):
+        if item.get("message") and not item.get("learning_ids"):
+            lines.append(f"- PROTOCOL REMINDER: {item['message']}")
+            continue
         if item.get("debt_id"):
             lines.append(
                 f"- REVIEW FILE RULES: {item['file']} -> learnings {item['learning_ids']}. "

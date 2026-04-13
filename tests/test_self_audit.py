@@ -746,6 +746,78 @@ def test_retire_stale_audit_goals_inline_abandons_old_placeholders(self_audit_en
     assert goal[3] is not None
 
 
+def test_upsert_workflow_goal_inline_reactivates_matching_abandoned_goal(self_audit_env):
+    module = _load_self_audit_module()
+    conn = sqlite3.connect(str(self_audit_env / "data" / "nexo.db"))
+    conn.row_factory = sqlite3.Row
+    conn.execute(
+        """CREATE TABLE workflow_goals (
+            goal_id TEXT PRIMARY KEY,
+            session_id TEXT,
+            title TEXT,
+            objective TEXT,
+            parent_goal_id TEXT,
+            status TEXT,
+            priority TEXT,
+            owner TEXT,
+            next_action TEXT,
+            success_signal TEXT,
+            shared_state TEXT,
+            blocker_reason TEXT,
+            opened_at TEXT,
+            updated_at TEXT,
+            closed_at TEXT
+        )"""
+    )
+    sample_goal = "Prepare release readiness checks for v3"
+    signature = module._topic_signature(sample_goal)
+    goal_id = (
+        "WG-AUDIT-"
+        + module.hashlib.sha1(
+            f"nexo:{signature or sample_goal}".encode("utf-8"),
+            usedforsecurity=False,
+        ).hexdigest()[:8].upper()
+    )
+    conn.execute(
+        """INSERT INTO workflow_goals (
+            goal_id, session_id, title, objective, parent_goal_id, status, priority, owner,
+            next_action, success_signal, shared_state, blocker_reason, opened_at, updated_at, closed_at
+        ) VALUES (?, '', ?, ?, '', 'abandoned', 'normal', ?, '', '', '{}', 'stale >24h', datetime('now', '-3 days'), datetime('now', '-3 days'), datetime('now', '-2 days'))""",
+        (
+            goal_id,
+            "Old placeholder",
+            "Outdated objective",
+            module.AUDIT_GOAL_OWNER,
+        ),
+    )
+    conn.commit()
+
+    result = module._upsert_workflow_goal_inline(
+        conn,
+        area="nexo",
+        sample_goal=sample_goal,
+        count=2,
+    )
+    goal = conn.execute(
+        "SELECT status, title, priority, next_action, blocker_reason, closed_at FROM workflow_goals WHERE goal_id = ?",
+        (goal_id,),
+    ).fetchone()
+    row_count = conn.execute(
+        "SELECT COUNT(*) FROM workflow_goals WHERE goal_id = ?",
+        (goal_id,),
+    ).fetchone()[0]
+    conn.close()
+
+    assert result == {"ok": True, "action": "reactivated", "goal_id": goal_id}
+    assert row_count == 1
+    assert goal["status"] == "active"
+    assert "Prepare release readiness checks" in goal["title"]
+    assert goal["priority"] == "high"
+    assert goal["next_action"] == module.AUDIT_GOAL_NEXT_ACTION
+    assert goal["blocker_reason"] == ""
+    assert goal["closed_at"] is None
+
+
 def test_check_automation_opportunities_creates_opportunity_followup(self_audit_env):
     module = _load_self_audit_module()
     module.findings.clear()

@@ -12,7 +12,7 @@ def main() -> int:
         return 1
 
     cli_py = os.path.join(nexo_code, "cli.py")
-    cmd = [sys.executable, cli_py, "doctor", "--tier", tier, "--json"]
+    cmd = [sys.executable, cli_py, "doctor", "--tier", tier, "--plane", "runtime_personal", "--json"]
     result = subprocess.run(cmd, text=True)
     return result.returncode
 

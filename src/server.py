@@ -202,6 +202,8 @@ mcp = FastMCP(
         "- **Workflow runtime (MANDATORY for long multi-step or cross-session work):** open `nexo_goal_open(...)` when the objective must survive sessions, then `nexo_workflow_open(...)`, "
         "update meaningful checkpoints with `nexo_workflow_update(...)`, then use `nexo_workflow_resume(...)` / "
         "`nexo_workflow_replay(...)` instead of restarting blindly.\n"
+        "- **Diagnostic plane (MANDATORY before diagnosing NEXO):** fix the plane explicitly first — `product_public`, `runtime_personal`, `installation_live`, `database_real`, or `cooperator`. "
+        "Do not mix product, runtime, install, DB, and agent-behavior explanations in the same diagnosis.\n"
         "- **Guard (MANDATORY before ANY code edit):** `nexo_guard_check(files='...', area='...')` BEFORE editing code. "
         "No exceptions. Blocking rules→resolve first. `nexo_track(sid=SID, paths=[...])` before shared files\n"
         "- **Skills (MANDATORY before multi-step tasks):** `nexo_skill_match(task)` to find reusable procedures. "

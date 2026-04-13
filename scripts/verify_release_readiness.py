@@ -12,8 +12,13 @@ import argparse
 import json
 import os
 import re
+import shutil
+import sqlite3
 import subprocess
 import sys
+import urllib.error
+import urllib.parse
+import urllib.request
 from pathlib import Path
 
 
@@ -35,12 +40,60 @@ def _run(cmd: list[str], *, env: dict[str, str] | None = None) -> None:
         raise SystemExit(result.returncode)
 
 
-def _package_version() -> str:
-    payload = json.loads(PACKAGE_JSON.read_text())
+def _package_manifest() -> dict:
+    payload = json.loads(PACKAGE_JSON.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise SystemExit("[release-readiness] package.json must contain a JSON object")
+    return payload
+
+
+def _package_version(payload: dict | None = None) -> str:
+    payload = payload or _package_manifest()
     version = str(payload.get("version", "") or "").strip()
     if not version:
         raise SystemExit("[release-readiness] package.json missing version")
     return version
+
+
+def _package_name(payload: dict | None = None) -> str:
+    payload = payload or _package_manifest()
+    name = str(payload.get("name", "") or "").strip()
+    if not name:
+        raise SystemExit("[release-readiness] package.json missing package name")
+    return name
+
+
+def _resolve_repository_slug(payload: dict | None = None) -> str:
+    payload = payload or _package_manifest()
+    repository = payload.get("repository")
+    if isinstance(repository, dict):
+        raw = str(repository.get("url", "") or "").strip()
+    else:
+        raw = str(repository or "").strip()
+    match = re.search(r"github\.com[:/](?P<slug>[^/]+/[^/.]+?)(?:\.git)?$", raw)
+    if not match:
+        raise SystemExit(f"[release-readiness] cannot resolve GitHub repository slug from {raw!r}")
+    return match.group("slug")
+
+
+def _fetch_json(url: str, *, label: str) -> dict:
+    request = urllib.request.Request(
+        url,
+        headers={
+            "Accept": "application/json",
+            "User-Agent": "nexo-release-readiness",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        raise SystemExit(f"[release-readiness] {label} HTTP {exc.code}: {url}") from exc
+    except urllib.error.URLError as exc:
+        raise SystemExit(f"[release-readiness] {label} request failed: {exc.reason}") from exc
+    if not isinstance(payload, dict):
+        raise SystemExit(f"[release-readiness] {label} must return a JSON object")
+    return payload
 
 
 def _resolve_nexo_home(explicit_home: str = "") -> Path:
@@ -93,6 +146,36 @@ def _check_website(version: str, website_root: Path) -> None:
     if missing:
         raise SystemExit("[release-readiness] website drift:\n- " + "\n- ".join(missing))
     print(f"[release-readiness] website OK ({website_root})")
+
+
+def _check_github_release(version: str, repository_slug: str) -> None:
+    payload = _fetch_json(
+        f"https://api.github.com/repos/{repository_slug}/releases/tags/v{version}",
+        label="github release",
+    )
+    tag_name = str(payload.get("tag_name", "") or "").strip()
+    if tag_name != f"v{version}":
+        raise SystemExit(
+            f"[release-readiness] GitHub release tag {tag_name!r} != expected v{version}"
+        )
+    html_url = str(payload.get("html_url", "") or "").strip()
+    if not html_url:
+        raise SystemExit("[release-readiness] GitHub release missing html_url")
+    print(f"[release-readiness] github release OK ({html_url})")
+
+
+def _check_npm_package(version: str, package_name: str) -> None:
+    encoded_name = urllib.parse.quote(package_name, safe="@/")
+    payload = _fetch_json(
+        f"https://registry.npmjs.org/{encoded_name}/latest",
+        label="npm registry",
+    )
+    live_version = str(payload.get("version", "") or "").strip()
+    if live_version != version:
+        raise SystemExit(
+            f"[release-readiness] npm latest version {live_version!r} != package.json {version}"
+        )
+    print(f"[release-readiness] npm registry OK ({package_name}@{live_version})")
 
 
 def _load_contract(contract_path: Path) -> dict:
@@ -203,7 +286,7 @@ def _run_runtime_doctor(nexo_home: Path) -> None:
             "-c",
             (
                 "from doctor.orchestrator import run_doctor; "
-                "report = run_doctor(tier='runtime', fix=False); "
+                "report = run_doctor(tier='runtime', fix=False, plane='installation_live'); "
                 "import sys; "
                 "bad = [c for c in report.checks if c.status in ('degraded','critical')]; "
                 "print(f'runtime doctor: {report.overall_status} ({len(bad)} issues)'); "
@@ -212,6 +295,68 @@ def _run_runtime_doctor(nexo_home: Path) -> None:
         ],
         env=env,
     )
+
+
+def _run_runtime_update(nexo_home: Path) -> None:
+    node_bin = shutil.which("node")
+    if not node_bin:
+        raise SystemExit("[release-readiness] node is required to run `nexo update`")
+    env = os.environ.copy()
+    env["NEXO_HOME"] = str(nexo_home)
+    env["NEXO_CODE"] = str(ROOT / "src")
+    print(f"[release-readiness] runtime update home: {nexo_home}")
+    _run([node_bin, str(ROOT / "bin" / "nexo.js"), "update"], env=env)
+
+
+def _check_protocol_closeout(nexo_home: Path, task_id: str) -> None:
+    db_path = nexo_home / "data" / "nexo.db"
+    if not db_path.is_file():
+        raise SystemExit(f"[release-readiness] runtime DB missing for protocol closeout: {db_path}")
+
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        task = conn.execute(
+            """
+            SELECT task_id, status, must_verify, close_evidence, must_change_log, change_log_id
+            FROM protocol_tasks
+            WHERE task_id = ?
+            """,
+            (task_id,),
+        ).fetchone()
+        if task is None:
+            raise SystemExit(f"[release-readiness] protocol task not found: {task_id}")
+        if str(task["status"] or "").strip() != "done":
+            raise SystemExit(
+                f"[release-readiness] protocol task {task_id} must be closed as 'done', found {task['status']!r}"
+            )
+        if int(task["must_verify"] or 0) and not str(task["close_evidence"] or "").strip():
+            raise SystemExit(
+                f"[release-readiness] protocol task {task_id} is missing close_evidence"
+            )
+        change_log_id = task["change_log_id"]
+        if int(task["must_change_log"] or 0) and not change_log_id:
+            raise SystemExit(
+                f"[release-readiness] protocol task {task_id} is missing change_log_id"
+            )
+        if change_log_id:
+            change = conn.execute(
+                "SELECT id, what_changed, why, verify FROM change_log WHERE id = ?",
+                (change_log_id,),
+            ).fetchone()
+            if change is None:
+                raise SystemExit(
+                    f"[release-readiness] change_log row {change_log_id} missing for task {task_id}"
+                )
+            if not str(change["what_changed"] or "").strip() or not str(change["why"] or "").strip():
+                raise SystemExit(
+                    f"[release-readiness] change_log row {change_log_id} is missing what_changed/why"
+                )
+        print(
+            f"[release-readiness] protocol closeout OK ({task_id}, change_log_id={change_log_id or 'none'})"
+        )
+    finally:
+        conn.close()
 
 
 def main() -> int:
@@ -241,9 +386,26 @@ def main() -> int:
         action="store_true",
         help="Fail if any gate in the provided contract is not marked complete.",
     )
+    parser.add_argument(
+        "--final-closeout",
+        action="store_true",
+        help="Run the final post-publish closeout gate: GitHub Release, npm, runtime update/doctor, and protocol closeout.",
+    )
+    parser.add_argument(
+        "--protocol-task-id",
+        default="",
+        help="Protocol task to verify for change_log/task_close evidence during final closeout.",
+    )
     args = parser.parse_args()
 
-    version = _package_version()
+    if args.final_closeout and args.ci:
+        raise SystemExit("[release-readiness] --final-closeout requires a live runtime; do not combine it with --ci")
+    if args.final_closeout and not args.protocol_task_id.strip():
+        raise SystemExit("[release-readiness] --final-closeout requires --protocol-task-id")
+
+    manifest = _package_manifest()
+    version = _package_version(manifest)
+    package_name = _package_name(manifest)
     nexo_home = _resolve_nexo_home(args.nexo_home)
     website_root = Path(args.website_root).expanduser()
     _check_changelog(version)
@@ -257,8 +419,15 @@ def main() -> int:
             website_root=website_root,
             require_complete=args.require_contract_complete,
         )
+    if args.final_closeout:
+        _check_github_release(version, _resolve_repository_slug(manifest))
+        _check_npm_package(version, package_name)
     if not args.ci:
+        if args.final_closeout:
+            _run_runtime_update(nexo_home)
         _run_runtime_doctor(nexo_home)
+    if args.final_closeout:
+        _check_protocol_closeout(nexo_home, args.protocol_task_id.strip())
     print("[release-readiness] OK")
     return 0
 

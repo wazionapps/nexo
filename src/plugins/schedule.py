@@ -20,6 +20,9 @@ from script_registry import (
     get_declared_schedule,
 )
 
+LEGACY_BACKUP_CRON_ID = "backup"
+LEGACY_BACKUP_SUMMARY = "legacy backup file evidence"
+
 
 def handle_schedule_status(hours: int = 24, cron_id: str = '') -> str:
     """Show cron execution status — what ran, what failed, durations.
@@ -30,6 +33,8 @@ def handle_schedule_status(hours: int = 24, cron_id: str = '') -> str:
     """
     if cron_id:
         runs = cron_runs_recent(hours, cron_id)
+        if cron_id == LEGACY_BACKUP_CRON_ID:
+            runs = _select_backup_runs(runs, hours)
         if not runs:
             return f"No runs for '{cron_id}' in the last {hours}h."
         schedule_meta = get_personal_script_schedule(cron_id) or {}
@@ -53,7 +58,7 @@ def handle_schedule_status(hours: int = 24, cron_id: str = '') -> str:
         return "\n".join(lines)
 
     # Summary view — one line per cron
-    summary = cron_runs_summary(hours)
+    summary = _merge_legacy_summaries(cron_runs_summary(hours), hours)
     if not summary:
         return f"No cron executions recorded in the last {hours}h."
 
@@ -80,6 +85,119 @@ def handle_schedule_status(hours: int = 24, cron_id: str = '') -> str:
         lines.append(f"  {status} {s['cron_id']}: {rate}, {dur}{summary_txt}{suffix}")
 
     return "\n".join(lines)
+
+
+def _select_backup_runs(db_runs: list[dict], hours: int) -> list[dict]:
+    legacy_runs = _legacy_backup_runs(hours)
+    if _prefer_legacy_over_db(db_runs, legacy_runs):
+        return legacy_runs
+    return db_runs
+
+
+def _merge_legacy_summaries(summary_rows: list[dict], hours: int) -> list[dict]:
+    rows = [dict(row) for row in (summary_rows or [])]
+    legacy_summary = _legacy_backup_summary(hours)
+    if not legacy_summary:
+        return rows
+    by_cron_id = {row["cron_id"]: row for row in rows}
+    existing = by_cron_id.get(LEGACY_BACKUP_CRON_ID)
+    if _prefer_legacy_summary(existing, legacy_summary):
+        by_cron_id[LEGACY_BACKUP_CRON_ID] = legacy_summary
+    return sorted(
+        by_cron_id.values(),
+        key=lambda row: row.get("last_run") or "",
+        reverse=True,
+    )
+
+
+def _prefer_legacy_over_db(db_runs: list[dict], legacy_runs: list[dict]) -> bool:
+    if not legacy_runs:
+        return False
+    if not db_runs:
+        return True
+    latest_db = _parse_db_timestamp(db_runs[0].get("started_at"))
+    latest_legacy = _parse_db_timestamp(legacy_runs[0].get("started_at"))
+    if latest_legacy is None:
+        return False
+    if latest_db is None:
+        return True
+    return latest_legacy > latest_db
+
+
+def _prefer_legacy_summary(existing: dict | None, legacy: dict) -> bool:
+    if not legacy:
+        return False
+    if not existing:
+        return True
+    latest_existing = _parse_db_timestamp(existing.get("last_run"))
+    latest_legacy = _parse_db_timestamp(legacy.get("last_run"))
+    if latest_legacy is None:
+        return False
+    if latest_existing is None:
+        return True
+    return latest_legacy > latest_existing
+
+
+def _legacy_backup_summary(hours: int) -> dict | None:
+    runs = _legacy_backup_runs(hours)
+    if not runs:
+        return None
+    return _build_summary_from_runs(LEGACY_BACKUP_CRON_ID, runs)
+
+
+def _legacy_backup_runs(hours: int) -> list[dict]:
+    nexo_home = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+    backup_dir = nexo_home / "backups"
+    if not backup_dir.exists():
+        return []
+    cutoff = _now_utc().timestamp() - (hours * 3600)
+    runs: list[dict] = []
+    for backup_file in backup_dir.glob("nexo-*.db"):
+        try:
+            stat = backup_file.stat()
+        except OSError:
+            continue
+        if stat.st_mtime < cutoff:
+            continue
+        started = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).replace(microsecond=0)
+        started_at = started.strftime("%Y-%m-%d %H:%M:%S")
+        runs.append(
+            {
+                "cron_id": LEGACY_BACKUP_CRON_ID,
+                "started_at": started_at,
+                "ended_at": started_at,
+                "exit_code": 0,
+                "summary": LEGACY_BACKUP_SUMMARY,
+                "error": "",
+                "duration_secs": 1.0,
+            }
+        )
+    runs.sort(key=lambda row: row["started_at"], reverse=True)
+    return runs
+
+
+def _build_summary_from_runs(cron_id: str, runs: list[dict]) -> dict:
+    completed_runs = [
+        row for row in runs if row.get("exit_code") is not None and row.get("ended_at")
+    ]
+    duration_values = [
+        float(row["duration_secs"])
+        for row in completed_runs
+        if row.get("duration_secs") is not None
+    ]
+    return {
+        "cron_id": cron_id,
+        "total_runs": len(runs),
+        "succeeded": sum(1 for row in completed_runs if row.get("exit_code") == 0),
+        "completed_runs": len(completed_runs),
+        "failed": sum(1 for row in completed_runs if row.get("exit_code") not in (None, 0)),
+        "open_runs": len(runs) - len(completed_runs),
+        "avg_duration": round(sum(duration_values) / len(duration_values), 1) if duration_values else None,
+        "last_run": runs[0].get("started_at"),
+        "last_exit_code": runs[0].get("exit_code"),
+        "last_ended_at": runs[0].get("ended_at"),
+        "last_summary": next((row.get("summary") for row in runs if row.get("summary")), ""),
+    }
 
 
 def _summary_has_warning(summary: str = "") -> bool:
