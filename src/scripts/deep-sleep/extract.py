@@ -26,6 +26,12 @@ if str(NEXO_CODE) not in sys.path:
     sys.path.insert(0, str(NEXO_CODE))
 
 from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
+try:
+    from client_preferences import resolve_user_model as _resolve_user_model
+    _USER_MODEL = _resolve_user_model()
+except Exception:
+    _USER_MODEL = ""
+
 
 # No timeout -- headless automation can take as long as needed
 CLAUDE_TIMEOUT = 21600  # 3h safety net (prevents zombie processes)
@@ -128,7 +134,7 @@ def analyze_session(
 
         result = run_automation_prompt(
             prompt,
-            model="opus",
+            model=_USER_MODEL or "opus",
             timeout=CLAUDE_TIMEOUT,
             output_format="text",
             append_system_prompt=JSON_SYSTEM_PROMPT,
@@ -158,7 +164,7 @@ def analyze_session(
             )
             convert_result = run_automation_prompt(
                 convert_prompt,
-                model="sonnet",
+                model=_USER_MODEL or "sonnet",
                 timeout=120,
                 output_format="text",
                 append_system_prompt=JSON_SYSTEM_PROMPT,

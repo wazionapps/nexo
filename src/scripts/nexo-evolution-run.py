@@ -20,6 +20,14 @@ import sys
 from datetime import datetime, date, timedelta
 from pathlib import Path
 
+
+try:
+    from client_preferences import resolve_user_model as _resolve_user_model
+    _USER_MODEL = _resolve_user_model()
+except Exception:
+    _USER_MODEL = ""
+
+
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 # Auto-detect: if running from repo (src/scripts/), use src/ as NEXO_CODE
 _script_dir = Path(__file__).resolve().parent
@@ -218,7 +226,7 @@ def call_claude_cli(prompt: str) -> str:
     """Call the configured automation backend for the managed evolution prompt."""
     result = run_automation_prompt(
         prompt,
-        model="opus",
+        model=_USER_MODEL or "opus",
         timeout=CLI_TIMEOUT,
         output_format="text",
         allowed_tools="Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__*",
@@ -234,7 +242,7 @@ def call_public_claude_cli(prompt: str, *, cwd: Path) -> str:
         prompt,
         cwd=cwd,
         env={"NEXO_PUBLIC_CONTRIBUTION": "1"},
-        model="opus",
+        model=_USER_MODEL or "opus",
         timeout=CLI_TIMEOUT,
         output_format="text",
         allowed_tools="Read,Write,Edit,Glob,Grep,Bash",

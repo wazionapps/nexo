@@ -2005,6 +2005,12 @@ actually wrong, not just list findings.
 CRITICAL — SEARCH BEFORE CREATING LEARNINGS:
 Before calling nexo_learning_add, you MUST call nexo_learning_search with keywords
 from the finding's area and topic. If a matching active learning already exists:
+try:
+    from client_preferences import resolve_user_model as _resolve_user_model
+    _USER_MODEL = _resolve_user_model()
+except Exception:
+    _USER_MODEL = ""
+
   - Call nexo_learning_update(id=<existing_id>, ...) to refresh it with the new
     evidence/date instead of creating a duplicate.
   - Only use nexo_learning_add (with supersedes_id=<old_id>) when the existing
@@ -2043,7 +2049,7 @@ Also write the machine-readable summary to {LOG_DIR}/self-audit-summary.json.
     try:
         result = run_automation_prompt(
             prompt,
-            model="opus",
+            model=_USER_MODEL or "opus",
             timeout=21600,
             output_format="text",
             allowed_tools="Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__*",
