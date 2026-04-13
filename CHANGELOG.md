@@ -1,5 +1,15 @@
 # Changelog
 
+## [5.3.18] - 2026-04-13
+
+### Fix REPO_DIR resolution for npm installs
+
+- `auto_update.py` now resolves templates, migrations, and version metadata
+  from NEXO_HOME when running inside an npm-installed runtime (where
+  `SRC_DIR.parent` points to the user home, not a repo root).
+- Fixes `FileNotFoundError: CLAUDE.md.template` that blocked bootstrap sync,
+  cron regeneration, and LaunchAgent updates on all npm-based installs.
+
 ## [5.3.17] - 2026-04-13
 
 ### Template copy fix in auto_update (git-based updates)
