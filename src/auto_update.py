@@ -1512,18 +1512,27 @@ def _auto_update_check_locked() -> dict:
     except Exception as e:
         _log(f"Doctor plugin backfill error: {e}")
 
-    # Backfill script/skill templates for existing installs
+    # Backfill all templates for existing installs (no hardcoded list)
     try:
         templates_src = REPO_DIR / "templates"
         templates_dest = NEXO_HOME / "templates"
         templates_dest.mkdir(parents=True, exist_ok=True)
-        for fname in ("script-template.py", "nexo_helper.py", "skill-template.md", "skill-script-template.py"):
-            src_file = templates_src / fname
-            dest_file = templates_dest / fname
-            if src_file.is_file() and (not dest_file.exists() or src_file.stat().st_mtime > dest_file.stat().st_mtime):
-                import shutil
-                shutil.copy2(str(src_file), str(dest_file))
-                _log(f"Backfilled template {fname}")
+        import shutil
+        if templates_src.is_dir():
+            for item in templates_src.iterdir():
+                if item.name == "__pycache__":
+                    continue
+                dest_item = templates_dest / item.name
+                if item.is_file():
+                    if not dest_item.exists() or item.stat().st_mtime > dest_item.stat().st_mtime:
+                        shutil.copy2(str(item), str(dest_item))
+                elif item.is_dir():
+                    dest_item.mkdir(parents=True, exist_ok=True)
+                    for sub in item.iterdir():
+                        if sub.is_file():
+                            dest_sub = dest_item / sub.name
+                            if not dest_sub.exists() or sub.stat().st_mtime > dest_sub.stat().st_mtime:
+                                shutil.copy2(str(sub), str(dest_sub))
     except Exception as e:
         _log(f"Template backfill error: {e}")
 
@@ -1888,8 +1897,16 @@ def _copy_runtime_from_source(src_dir: Path, repo_dir: Path, dest: Path = NEXO_H
     if templates_src.is_dir():
         templates_dest.mkdir(parents=True, exist_ok=True)
         for item in templates_src.iterdir():
+            if item.name == "__pycache__":
+                continue
             if item.is_file():
                 shutil.copy2(str(item), str(templates_dest / item.name))
+            elif item.is_dir():
+                sub_dest = templates_dest / item.name
+                sub_dest.mkdir(parents=True, exist_ok=True)
+                for sub in item.iterdir():
+                    if sub.is_file():
+                        shutil.copy2(str(sub), str(sub_dest / sub.name))
 
     package_json = repo_dir / "package.json"
     if package_json.is_file():
