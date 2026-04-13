@@ -1,5 +1,18 @@
 # Changelog
 
+## [5.3.19] - 2026-04-13
+
+### Deep scan: know the user better than they know themselves
+
+- Email detection now uses 4 fallback methods (sandboxed container, legacy
+  plist, Internet Accounts, Mail directory scan) — works on all macOS versions.
+- Added Notes detection (macOS Notes.app SQLite + Linux Obsidian vaults).
+- Added Reminders detection (macOS Reminders.app + Linux todo files).
+- Added Photos library count (macOS Photos.app SQLite).
+- Profile summary now shows life data (email, notes, reminders, contacts,
+  photos, documents) alongside dev data.
+- Linux equivalents for Notes (Obsidian) and Reminders (todo.txt).
+
 ## [5.3.18] - 2026-04-13
 
 ### Fix REPO_DIR resolution for npm installs

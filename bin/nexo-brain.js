@@ -2511,6 +2511,9 @@ I am ${operatorName}, a cognitive co-operator. Not an assistant — an operation
     calendar: {},
     contacts: [],
     documents: {},
+    notes: { count: 0, folders: [] },
+    reminders: { count: 0, lists: [] },
+    photos: { count: 0 },
     messaging: [],
     interests: [],
     summary: {},
@@ -2747,16 +2750,27 @@ I am ${operatorName}, a cognitive co-operator. Not an assistant — an operation
     // --- Email accounts ---
     process.stdout.write("  \u280B Email accounts...\r");
     if (platform === "darwin") {
-      // macOS Mail.app accounts
-      const mailAccounts = run("defaults read com.apple.mail MailAccounts 2>/dev/null | grep AccountName | head -20");
+      // macOS Mail.app accounts — try multiple detection methods
+      // Method 1: sandboxed container (modern macOS)
+      let mailAccounts = run("defaults read ~/Library/Containers/com.apple.mail/Data/Library/Preferences/com.apple.mail MailAccounts 2>/dev/null | grep -E 'AccountName|EmailAddresses' | head -30");
+      // Method 2: legacy plist (older macOS)
+      if (!mailAccounts) mailAccounts = run("defaults read com.apple.mail MailAccounts 2>/dev/null | grep -E 'AccountName|EmailAddresses' | head -30");
+      // Method 3: Internet Accounts (covers Mail, Calendar, Contacts, etc.)
+      if (!mailAccounts) mailAccounts = run("defaults read com.apple.internetaccounts Accounts 2>/dev/null | grep -E 'AccountDescription|Username' | head -30");
+      // Method 4: scan Mail directory for account folders
+      if (!mailAccounts) {
+        const mailDir = run("ls -1 ~/Library/Mail/V*/  2>/dev/null | grep -v '^$' | head -20");
+        if (mailDir) mailAccounts = mailDir;
+      }
       if (mailAccounts) {
         profileData.email = mailAccounts.split("\n")
-          .map(l => l.replace(/.*=\s*"?/, "").replace(/"?\s*;?\s*$/, "").trim())
-          .filter(Boolean);
+          .map(l => l.replace(/.*=\s*"?/, "").replace(/"?\s*;?\s*$/, "").replace(/\/$/, "").trim())
+          .filter(l => l && l.length > 1 && !l.startsWith("(") && !l.startsWith(")") && !l.includes("{") && !l.includes("}"))
+          .filter((v, i, a) => a.indexOf(v) === i); // dedupe
       }
     }
     if (profileData.email.length > 0) {
-      log(`\u2713 ${profileData.email.length} email accounts configured`);
+      log(`\u2713 ${profileData.email.length} email accounts detected`);
     }
 
     // --- Calendar (macOS) ---
@@ -2815,6 +2829,76 @@ I am ${operatorName}, a cognitive co-operator. Not an assistant — an operation
       log(`\u2713 ${totalDocs} recent documents (${typesSummary})`);
     }
 
+    // --- Notes ---
+    process.stdout.write("  \u280B Notes...\r");
+    profileData.notes = { count: 0, folders: [] };
+    if (platform === "linux") {
+      // GNOME Notes / Tomboy / Obsidian vaults
+      const obsidianVaults = run(`find "${home}" -maxdepth 3 -name ".obsidian" -type d 2>/dev/null | head -5`);
+      if (obsidianVaults) {
+        const vaults = obsidianVaults.split("\n").filter(Boolean);
+        let totalNotes = 0;
+        for (const v of vaults) {
+          const vaultDir = path.dirname(v);
+          const count = run(`find "${vaultDir}" -name "*.md" -type f 2>/dev/null | wc -l`);
+          totalNotes += parseInt((count || "0").trim());
+        }
+        profileData.notes.count = totalNotes;
+        profileData.notes.folders = vaults.map(v => path.basename(path.dirname(v)));
+      }
+    } else if (platform === "darwin") {
+      const notesDb = path.join(home, "Library", "Group Containers", "group.com.apple.notes", "NoteStore.sqlite");
+      if (fs.existsSync(notesDb)) {
+        const noteCount = run(`sqlite3 "${notesDb}" "SELECT COUNT(*) FROM ZICCLOUDSYNCINGOBJECT WHERE ZTITLE IS NOT NULL AND ZMARKEDFORDELETION != 1" 2>/dev/null`);
+        profileData.notes.count = parseInt((noteCount || "0").trim());
+        const folders = run(`sqlite3 "${notesDb}" "SELECT DISTINCT ZTITLE2 FROM ZICCLOUDSYNCINGOBJECT WHERE ZTITLE2 IS NOT NULL AND ZMARKEDFORDELETION != 1 LIMIT 15" 2>/dev/null`);
+        if (folders) profileData.notes.folders = folders.split("\n").filter(Boolean);
+      }
+    }
+    if (profileData.notes.count > 0) {
+      log(`\u2713 ${profileData.notes.count} notes${profileData.notes.folders.length ? ` in ${profileData.notes.folders.length} folders` : ""}`);
+    }
+
+    // --- Reminders ---
+    process.stdout.write("  \u280B Reminders...\r");
+    profileData.reminders = { count: 0, lists: [] };
+    if (platform === "linux") {
+      // GNOME Reminders / Todoist / task files
+      const todoFiles = run(`find "${home}" -maxdepth 2 -name "todo.txt" -o -name "TODO.md" -o -name "tasks.md" 2>/dev/null | head -5`);
+      if (todoFiles) {
+        let count = 0;
+        todoFiles.split("\n").filter(Boolean).forEach(f => {
+          const lines = run(`wc -l < "${f}" 2>/dev/null`);
+          count += parseInt((lines || "0").trim());
+        });
+        profileData.reminders.count = count;
+        profileData.reminders.lists = todoFiles.split("\n").filter(Boolean).map(f => path.basename(f));
+      }
+    } else if (platform === "darwin") {
+      // Reminders uses EventKit, but we can count via the Calendars directory or osascript
+      const reminderCount = run('osascript -e \'tell application "Reminders" to count of (every reminder whose completed is false)\' 2>/dev/null');
+      if (reminderCount) profileData.reminders.count = parseInt(reminderCount.trim()) || 0;
+      const reminderLists = run('osascript -e \'tell application "Reminders" to get name of every list\' 2>/dev/null');
+      if (reminderLists) profileData.reminders.lists = reminderLists.split(", ").filter(Boolean);
+    }
+    if (profileData.reminders.count > 0) {
+      log(`\u2713 ${profileData.reminders.count} active reminders across ${profileData.reminders.lists.length} lists`);
+    }
+
+    // --- Photos library size (macOS) ---
+    process.stdout.write("  \u280B Photos...\r");
+    profileData.photos = { count: 0 };
+    if (platform === "darwin") {
+      const photosDb = path.join(home, "Pictures", "Photos Library.photoslibrary", "database", "Photos.sqlite");
+      if (fs.existsSync(photosDb)) {
+        const photoCount = run(`sqlite3 "${photosDb}" "SELECT COUNT(*) FROM ZASSET WHERE ZTRASHEDSTATE = 0" 2>/dev/null`);
+        if (photoCount) profileData.photos.count = parseInt(photoCount.trim()) || 0;
+      }
+    }
+    if (profileData.photos.count > 0) {
+      log(`\u2713 ${profileData.photos.count.toLocaleString()} photos in library`);
+    }
+
     // --- Messaging apps ---
     process.stdout.write("  \u280B Messaging...\r");
     const msgApps = { "WhatsApp": "WhatsApp.app", "Telegram": "Telegram.app", "Slack": "Slack.app", "Discord": "Discord.app", "Signal": "Signal.app", "Teams": "Microsoft Teams.app", "Zoom": "zoom.us.app" };
@@ -2839,6 +2923,11 @@ I am ${operatorName}, a cognitive co-operator. Not an assistant — an operation
       repos: repos.length,
       servers: profileData.ssh.length,
       email_accounts: profileData.email.length,
+      notes: profileData.notes.count,
+      reminders: profileData.reminders.count,
+      photos: profileData.photos.count,
+      recent_documents: profileData.documents.recent_count || 0,
+      contacts: profileData.contacts.count || 0,
       key_tools: topApps.slice(0, 8),
       work_hours: profileData.terminal.peak_hours || [],
       peak_days: profileData.terminal.peak_days || [],
@@ -2855,12 +2944,24 @@ I am ${operatorName}, a cognitive co-operator. Not an assistant — an operation
     line(`${t.profileTitle}: ${userName || profileData.git.name || "User"}`);
     line("");
     if (topLangs.length) line(`Stack: ${topLangs.join(", ")}`);
-    line(`${repos.length} repos \u00B7 ${profileData.ssh.length} servers \u00B7 ${profileData.email.length} email accounts`);
+    // Life data
+    const lifeParts = [];
+    if (profileData.email.length) lifeParts.push(`${profileData.email.length} email`);
+    if (profileData.notes.count) lifeParts.push(`${profileData.notes.count} notes`);
+    if (profileData.reminders.count) lifeParts.push(`${profileData.reminders.count} reminders`);
+    if (profileData.contacts.count) lifeParts.push(`${profileData.contacts.count} contacts`);
+    if (profileData.photos.count) lifeParts.push(`${profileData.photos.count.toLocaleString()} photos`);
+    if (profileData.documents.recent_count) lifeParts.push(`${profileData.documents.recent_count} docs`);
+    if (lifeParts.length) line(lifeParts.join(" \u00B7 "));
+    // Dev data
+    if (repos.length || profileData.ssh.length) {
+      line(`${repos.length} repos \u00B7 ${profileData.ssh.length} servers`);
+    }
+    if (topLangs.length) line(`Stack: ${topLangs.join(", ")}`);
     if (topApps.length) line(`Tools: ${topApps.slice(0, 6).join(", ")}`);
     if (totalCommits) line(`${totalCommits.toLocaleString()} commits/year`);
     if (profileData.terminal.peak_hours) {
       const hours = profileData.terminal.peak_hours;
-      // Group consecutive hours into ranges
       const ranges = [];
       let start = hours[0], prev = hours[0];
       for (let i = 1; i <= hours.length; i++) {
@@ -2871,6 +2972,7 @@ I am ${operatorName}, a cognitive co-operator. Not an assistant — an operation
       line(`Hours: ${ranges.join(", ")}${profileData.terminal.peak_days ? ` \u00B7 Peak: ${profileData.terminal.peak_days.join(", ")}` : ""}`);
     }
     if (profileData.messaging.length) line(`Messaging: ${profileData.messaging.join(", ")}`);
+    if (profileData.calendar.events) line(`Calendar: ${profileData.calendar.events} events`);
     line(`Timezone: ${profileData.system.timezone}`);
     line("");
     line(lang === "es" ? "Ya te conozco. Vamos a trabajar." : lang === "fr" ? "Je te connais. Au travail." : lang === "de" ? "Ich kenne dich. Los geht's." : lang === "it" ? "Ti conosco. Al lavoro." : lang === "pt" ? "J\u00E1 te conhe\u00E7o. Ao trabalho." : "I know you now. Let's work.");
