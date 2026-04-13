@@ -141,6 +141,28 @@ class TestEvolutionObjective:
 
         assert objective["evolution_mode"] == "public_core"
 
+    def test_build_evolution_prompt_requests_dimension_scores_and_uses_objective_fallback(self, evolution_env, monkeypatch):
+        objective_file = evolution_env / "brain" / "evolution-objective.json"
+        objective_file.write_text(json.dumps({
+            "objective": "Improve operational excellence and reduce repeated errors",
+            "focus_areas": ["error_prevention"],
+            "evolution_enabled": True,
+            "evolution_mode": "managed",
+            "dimensions": {
+                "autonomy": {"current": 37, "target": 80},
+            },
+            "total_evolutions": 2,
+        }, indent=2))
+
+        evolution_cycle, _ = _load_runner_module(monkeypatch, evolution_env)
+        objective = evolution_cycle.load_objective()
+        prompt = evolution_cycle.build_evolution_prompt({"current_metrics": {}}, objective)
+
+        assert '"dimension_scores": {' in prompt
+        assert '"score_evidence": {' in prompt
+        assert "Always include all five canonical keys" in prompt
+        assert '"autonomy": 37' in prompt
+
 
 class TestEvolutionModes:
     def test_managed_mode_allows_core_paths_but_auto_does_not(self, evolution_env, monkeypatch):
@@ -216,6 +238,36 @@ class TestManagedExecution:
         assert followup[0].startswith("NF-EVO-L")
         assert "Patch repair.py" in followup[1]
         assert target_file.read_text() == "print('original')\n"
+
+
+class TestEvolutionStatus:
+    def test_status_falls_back_to_objective_when_metrics_are_missing(self, evolution_env, monkeypatch):
+        objective_file = evolution_env / "brain" / "evolution-objective.json"
+        objective_file.write_text(json.dumps({
+            "objective": "Improve operational excellence and reduce repeated errors",
+            "focus_areas": ["error_prevention"],
+            "evolution_enabled": True,
+            "evolution_mode": "managed",
+            "dimensions": {
+                "episodic_memory": {"current": 41, "target": 80},
+                "autonomy": {"current": 52, "target": 80},
+            },
+            "total_evolutions": 3,
+            "last_evolution": "2026-04-12",
+        }, indent=2))
+
+        monkeypatch.setenv("NEXO_HOME", str(evolution_env))
+        sys.modules.pop("plugins.evolution", None)
+        import plugins.evolution as evolution_plugin
+
+        importlib.reload(evolution_plugin)
+        monkeypatch.setattr(evolution_plugin, "get_latest_metrics", lambda: {})
+
+        status = evolution_plugin.handle_evolution_status()
+
+        assert "objective fallback" in status
+        assert "Last evolution: 2026-04-12" in status
+        assert "41%" in status
 
 
 class TestPublicContributionExecution:

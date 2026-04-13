@@ -135,6 +135,36 @@ def _impact_reasoning(row: dict) -> str:
     return str(factors.get("reasoning") or "").strip()
 
 
+def _load_json_summary(path: Path, *, actionable) -> tuple[dict | None, str | None]:
+    if not path.exists():
+        return None, None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        return None, str(exc)
+    if not isinstance(payload, dict):
+        return None, "summary payload is not a JSON object"
+    if not actionable(payload):
+        return None, None
+    return payload, None
+
+
+def _load_coordination_summary(filename: str, *, actionable) -> tuple[dict | None, str | None]:
+    return _load_json_summary(COORD_DIR / filename, actionable=actionable)
+
+
+def _update_summary_actionable(payload: dict) -> bool:
+    if any(payload.get(key) for key in ("error", "updated", "deferred_reason", "git_update", "npm_notice")):
+        return True
+    for action in payload.get("actions") or []:
+        if str(action).startswith("personal-schedules-"):
+            return True
+    for message in payload.get("client_bootstrap_updates") or []:
+        if "already current" not in str(message).lower():
+            return True
+    return False
+
+
 def collect_data() -> dict:
     """Collect all raw data for synthesis."""
     data = {"date": TODAY_STR}
@@ -206,6 +236,43 @@ def collect_data() -> dict:
             data["impact_queue_summary"] = json.loads(impact_summary_file.read_text(encoding="utf-8"))
         except Exception as exc:
             data["impact_queue_summary_error"] = str(exc)
+
+    followup_hygiene_summary, followup_hygiene_error = _load_coordination_summary(
+        "followup-hygiene-summary.json",
+        actionable=lambda payload: any(
+            int(payload.get(key, 0) or 0) > 0
+            for key in ("dirty_normalized", "stale_count", "orphan_count")
+        ),
+    )
+    if followup_hygiene_summary is not None:
+        data["followup_hygiene_summary"] = followup_hygiene_summary
+    elif followup_hygiene_error:
+        data["followup_hygiene_summary_error"] = followup_hygiene_error
+
+    outcome_checker_summary, outcome_checker_error = _load_coordination_summary(
+        "outcome-checker-summary.json",
+        actionable=lambda payload: (
+            any(
+                int(payload.get(key, 0) or 0) > 0
+                for key in ("checked", "met", "missed", "pending", "errors")
+            )
+            or bool(payload.get("ids"))
+            or bool(((payload.get("auto_promoted_patterns") or {}).get("promoted") or []))
+        ),
+    )
+    if outcome_checker_summary is not None:
+        data["outcome_checker_summary"] = outcome_checker_summary
+    elif outcome_checker_error:
+        data["outcome_checker_summary_error"] = outcome_checker_error
+
+    update_summary, update_summary_error = _load_json_summary(
+        NEXO_HOME / "logs" / "update-last-summary.json",
+        actionable=_update_summary_actionable,
+    )
+    if update_summary is not None:
+        data["update_summary"] = update_summary
+    elif update_summary_error:
+        data["update_summary_error"] = update_summary_error
 
     # Guard stats
     data["guard_stats"] = safe_query(

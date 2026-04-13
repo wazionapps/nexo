@@ -242,3 +242,12 @@ def test_packaged_installer_discovers_root_python_modules_for_migration():
     assert 'function getCoreRuntimeFlatFiles(srcDir = path.join(__dirname, "..", "src"))' in text
     assert 'name.endsWith(".py")' in text
     assert 'new Set([...staticFiles, ...discoveredRootModules])' in text
+
+
+def test_packaged_installer_syncs_runtime_package_metadata():
+    installer = REPO_ROOT / "bin" / "nexo-brain.js"
+    text = installer.read_text(encoding="utf-8")
+
+    assert 'function syncRuntimePackageMetadata(repoRoot = path.join(__dirname, ".."), runtimeHome = NEXO_HOME)' in text
+    assert 'fs.copyFileSync(pkgSrc, path.join(runtimeHome, "package.json"));' in text
+    assert text.count('syncRuntimePackageMetadata(path.join(__dirname, ".."), NEXO_HOME);') >= 3

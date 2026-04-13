@@ -1,0 +1,93 @@
+{
+  "release_line": "v5.3",
+  "target_version": "5.3.10",
+  "scope_owner": "NEXO",
+  "distribution": {
+    "git_updates_on": "merge_to_main",
+    "packaged_release_on": "tag_publish"
+  },
+  "required_repo_files": [
+    "package.json",
+    "CHANGELOG.md",
+    "README.md",
+    "llms.txt",
+    "bin/nexo-brain.js",
+    "scripts/sync_release_artifacts.py",
+    "scripts/verify_release_readiness.py",
+    "release-contracts/v5.3.10.json",
+    ".claude-plugin/plugin.json",
+    "clawhub-skill/SKILL.md",
+    "openclaw-plugin/package.json",
+    "openclaw-plugin/src/mcp-bridge.ts",
+    "src/evolution_cycle.py",
+    "src/plugins/evolution.py",
+    "src/doctor/providers/deep.py",
+    "src/scripts/nexo-synthesis.py",
+    "tests/test_doctor.py",
+    "tests/test_evolution.py",
+    "tests/test_packaged_update_runtime.py",
+    "tests/test_synthesis.py"
+  ],
+  "required_website_files": [
+    "index.html",
+    "features/index.html",
+    "blog/index.html",
+    "blog/nexo-5-3-10-runtime-metadata-and-deep-doctor-hardening/index.html",
+    "changelog/index.html",
+    "llms.txt",
+    ".well-known/llms.txt",
+    "sitemap.xml"
+  ],
+  "gates": [
+    {
+      "id": "packaged_runtime_metadata_sync",
+      "title": "Packaged installs and updates keep runtime metadata aligned with the published npm package",
+      "status": "complete",
+      "evidence_required": [
+        "Fresh install, migration, and same-version refresh paths all copy root package.json into ~/.nexo/package.json",
+        "Runtime metadata no longer reports a stale package version after a successful packaged update",
+        "Regression coverage pins the installer metadata-sync contract"
+      ]
+    },
+    {
+      "id": "deep_doctor_fresh_bootstrap_honesty",
+      "title": "Deep doctor does not imply breakage before the first self-audit artifact exists",
+      "status": "complete",
+      "evidence_required": [
+        "Missing self-audit-summary stays advisory when self-audit is disabled or the runtime was just installed/updated",
+        "A genuinely missing or stale self-audit summary still degrades once the bootstrap grace window has passed",
+        "Regression coverage pins the deep doctor bootstrap contract"
+      ]
+    },
+    {
+      "id": "public_surface_alignment",
+      "title": "Package, docs, plugin artifacts, and website tell the same v5.3.10 story",
+      "status": "complete",
+      "evidence_required": [
+        "Root package and integration artifacts all point to 5.3.10",
+        "README, changelog, llms, and release contract mention packaged runtime truth, evolution telemetry, and synthesis loop closure clearly",
+        "Website home, blog, changelog, llms, and sitemap are updated to 5.3.10"
+      ]
+    },
+    {
+      "id": "evolution_telemetry_contract_restored",
+      "title": "Weekly Evolution explicitly emits score telemetry and the status surface stays informative when rows are missing",
+      "status": "complete",
+      "evidence_required": [
+        "build_evolution_prompt requires all five canonical dimension_scores and score_evidence keys",
+        "nexo_evolution_status falls back to the objective file instead of returning a blank status when metrics rows are missing",
+        "Regression coverage pins both the prompt contract and the status fallback"
+      ]
+    },
+    {
+      "id": "startup_update_summaries_feed_synthesis_only_when_actionable",
+      "title": "Startup/update summaries stop being write-only without polluting daily synthesis",
+      "status": "complete",
+      "evidence_required": [
+        "nexo-synthesis reads update-last-summary.json only when it contains deferred syncs, bootstrap changes, schedule heals, update notices, or errors",
+        "Routine cooldown/no-op summaries remain omitted from synthesis data",
+        "Regression coverage pins actionable vs non-actionable ingestion"
+      ]
+    }
+  ]
+}

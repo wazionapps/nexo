@@ -120,6 +120,17 @@ function writeRuntimeCoreArtifactsManifest(nexoHome, srcDir) {
   }
 }
 
+function syncRuntimePackageMetadata(repoRoot = path.join(__dirname, ".."), runtimeHome = NEXO_HOME) {
+  try {
+    const pkgSrc = path.join(repoRoot, "package.json");
+    if (fs.existsSync(pkgSrc)) {
+      fs.copyFileSync(pkgSrc, path.join(runtimeHome, "package.json"));
+    }
+  } catch (err) {
+    log(`WARN: could not sync runtime package metadata: ${err.message}`);
+  }
+}
+
 function getCoreRuntimeFlatFiles(srcDir = path.join(__dirname, "..", "src")) {
   const staticFiles = [
     "server.py",
@@ -1606,6 +1617,7 @@ async function main() {
           updated_at: new Date().toISOString(),
           migrated_from: installedVersion,
         }, null, 2));
+        syncRuntimePackageMetadata(path.join(__dirname, ".."), NEXO_HOME);
 
         // Save updated CLAUDE.md template as reference (don't overwrite user's)
         const templateSrc = path.join(__dirname, "..", "templates", "CLAUDE.md.template");
@@ -1699,6 +1711,7 @@ async function main() {
           fs.copyFileSync(srcFile, destFile);
         }
       });
+      syncRuntimePackageMetadata(path.join(__dirname, ".."), NEXO_HOME);
 
       const templatesSrc = path.join(__dirname, "..", "templates");
       const templatesDest = path.join(NEXO_HOME, "templates");
@@ -2205,6 +2218,7 @@ async function main() {
       files_updated: 0,
     }, null, 2)
   );
+  syncRuntimePackageMetadata(path.join(__dirname, ".."), NEXO_HOME);
 
   // Copy source files
   log("Copying core runtime files...");

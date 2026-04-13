@@ -261,6 +261,19 @@ def dry_run_restore_test() -> bool:
 def build_evolution_prompt(week_data: dict, objective: dict) -> str:
     """Build a SHORT prompt — CLI investigates on its own using tools."""
 
+    objective_dims = normalize_objective(objective).get("dimensions", {})
+    current_scores = {
+        dim: int(m["score"])
+        for dim, m in week_data.get("current_metrics", {}).items()
+        if isinstance(m, dict) and isinstance(m.get("score"), (int, float))
+    }
+    if not current_scores:
+        current_scores = {
+            dim: int((payload or {}).get("current", 0) or 0)
+            for dim, payload in objective_dims.items()
+            if isinstance(payload, dict)
+        }
+
     # Summary stats only — CLI will dig deeper with tools
     stats = {
         "learnings_this_week": len(week_data.get("learnings", [])),
@@ -268,7 +281,7 @@ def build_evolution_prompt(week_data: dict, objective: dict) -> str:
         "changes_this_week": len(week_data.get("changes", [])),
         "diaries_this_week": len(week_data.get("diaries", [])),
         "evolution_history": len(week_data.get("evolution_history", [])),
-        "current_scores": {dim: m["score"] for dim, m in week_data.get("current_metrics", {}).items()},
+        "current_scores": current_scores,
     }
 
     mode = normalize_objective(objective).get("evolution_mode", "auto")
@@ -332,6 +345,20 @@ SAFETY:
 OUTPUT FORMAT (JSON):
 {{
   "analysis": "one paragraph summary of what you found",
+  "dimension_scores": {{
+    "episodic_memory": 0,
+    "autonomy": 0,
+    "proactivity": 0,
+    "self_improvement": 0,
+    "agi": 0
+  }},
+  "score_evidence": {{
+    "episodic_memory": "why this score changed or stayed flat",
+    "autonomy": "why this score changed or stayed flat",
+    "proactivity": "why this score changed or stayed flat",
+    "self_improvement": "why this score changed or stayed flat",
+    "agi": "why this score changed or stayed flat"
+  }},
   "patterns": [{{"type": "...", "description": "...", "frequency": "..."}}],
   "proposals": [
     {{
@@ -345,6 +372,8 @@ OUTPUT FORMAT (JSON):
   ]
 }}
 
+Always include all five canonical keys in `dimension_scores` and `score_evidence`.
+Scores must be integers in the 0-100 range and reflect the current week, not targets.
 Max 3 proposals. Quality over quantity. If nothing needs improving, say so."""
 
     return prompt
