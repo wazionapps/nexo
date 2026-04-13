@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO Brain v5.3.13 — Centralized Model Selection | nexo-brain.com</title>
+<meta name="description" content="Pick your model once, everything follows. NEXO Brain v5.3.13 eliminates hardcoded model strings from all automation scripts.">
+<link rel="stylesheet" href="../../assets/blog.css">
+</head>
+<body>
+<article class="blog-post">
+<header>
+<h1>v5.3.13 — Pick Your Model Once, Everything Follows</h1>
+<time datetime="2026-04-13">April 13, 2026</time>
+</header>
+
+<p>When you install NEXO Brain, you pick your model. Until today, that choice was only half-respected: interactive sessions used your model, but automation scripts — the ones running in the background doing real work — had their own hardcoded defaults.</p>
+
+<h2>The Problem</h2>
+
+<p>Eleven core automation scripts (deep sleep, evolution, immune system, daily self-audit, synthesis, catchup, and others) hardcoded <code>model="opus"</code> or <code>model="sonnet"</code>. The <code>fast</code> task profile defaulted to a completely different provider. If you changed your model preference, background automation ignored it.</p>
+
+<h2>The Fix</h2>
+
+<p><strong>v5.3.12</strong> added <code>resolve_user_model()</code> — a single function that returns the model you configured. All automation profiles and task backends now inherit from it instead of hardcoding strings.</p>
+
+<p><strong>v5.3.13</strong> migrated all 11 core scripts to use it. The <code>fast</code> profile no longer defaults to a different backend. Every component respects your choice.</p>
+
+<h2>For Script Authors</h2>
+
+<p>If you write personal automation scripts, use:</p>
+
+<pre><code>from client_preferences import resolve_user_model
+model = resolve_user_model()  # Returns whatever the user configured
+</code></pre>
+
+<p>Never hardcode a model string. The user picked theirs for a reason.</p>
+
+<h2>Update</h2>
+
+<pre><code>npx nexo-brain init
+# or, for existing git installs:
+nexo update
+</code></pre>
+
+</article>
+</body>
+</html>
