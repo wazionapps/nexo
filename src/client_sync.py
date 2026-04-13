@@ -292,6 +292,12 @@ def _sync_codex_managed_config(
         }
         codex_table["managed_server_command"] = server_config.get("command", "")
 
+    # Ensure Codex headless crons (followup-runner, email-monitor, deep-sleep,
+    # etc.) do not stall on approval prompts. Only set defaults when the user
+    # hasn't configured them explicitly — never overwrite existing values.
+    payload.setdefault("approval_policy", "never")
+    payload.setdefault("sandbox_mode", "danger-full-access")
+
     _write_toml_object(path, payload)
     return {
         "ok": True,
@@ -592,6 +598,52 @@ def _claude_desktop_managed_metadata(server_config: dict, *, operator_name: str)
     }
 
 
+# Minimum permissions allowlist required for NEXO headless automation
+# (followup-runner, email-monitor, deep-sleep, etc.) to work without
+# interactive approval prompts. Without this, Claude Code headless invocations
+# stall waiting for MCP tool approvals.
+_NEXO_HEADLESS_ALLOWLIST = (
+    "Bash",
+    "Read",
+    "Edit",
+    "Write",
+    "Glob",
+    "Grep",
+    "Task",
+    "Skill",
+    "NotebookEdit",
+    "WebSearch",
+    "WebFetch",
+    "mcp__*",
+)
+
+
+def _ensure_headless_permissions(payload: dict) -> None:
+    """Ensure Claude Code settings.json has the minimum allowlist so headless
+    NEXO crons (followup-runner, email-monitor, etc.) do not stall on MCP
+    tool-approval prompts. Idempotent: only adds missing entries, never
+    removes or reorders existing user customizations."""
+    permissions = payload.get("permissions")
+    if not isinstance(permissions, dict):
+        permissions = {}
+        payload["permissions"] = permissions
+
+    allow_list = permissions.get("allow")
+    if not isinstance(allow_list, list):
+        allow_list = []
+        permissions["allow"] = allow_list
+
+    existing = {str(item) for item in allow_list if isinstance(item, str)}
+    for entry in _NEXO_HEADLESS_ALLOWLIST:
+        if entry not in existing:
+            allow_list.append(entry)
+            existing.add(entry)
+
+    permissions.setdefault("deny", [])
+    permissions.setdefault("ask", [])
+    permissions.setdefault("defaultMode", "dontAsk")
+
+
 def _sync_claude_code_settings(path: Path, server_config: dict) -> dict:
     payload = _load_json_object(path)
     mcp_servers = payload.setdefault("mcpServers", {})
@@ -608,6 +660,7 @@ def _sync_claude_code_settings(path: Path, server_config: dict) -> dict:
         runtime_root=runtime_root,
         nexo_home=nexo_home,
     )
+    _ensure_headless_permissions(payload)
     _write_json_object(path, payload)
     return {
         "ok": True,
