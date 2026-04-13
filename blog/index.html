@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Blog — NEXO Brain</title>
-    <meta name="description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.10 packaged runtime truth, Evolution telemetry, and synthesis loop-closure release.">
+    <meta name="description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.11 protocol and Cortex contract-hardening release.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/blog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/blog/">
     <meta property="og:title" content="Blog — NEXO Brain">
-    <meta property="og:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.10 packaged runtime truth, Evolution telemetry, and synthesis loop-closure release.">
+    <meta property="og:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.11 protocol and Cortex contract-hardening release.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Blog — NEXO Brain">
-    <meta name="twitter:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.10 packaged runtime truth, Evolution telemetry, and synthesis loop-closure release.">
+    <meta name="twitter:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.11 protocol and Cortex contract-hardening release.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Blog — NEXO Brain",
-        "description": "Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.10 packaged runtime truth, Evolution telemetry, and synthesis loop-closure release.",
+        "description": "Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.11 protocol and Cortex contract-hardening release.",
         "url": "https://nexo-brain.com/blog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -134,7 +134,7 @@
                     <span class="page-chip">Competitive analysis</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="/blog/nexo-5-3-10-runtime-metadata-and-deep-doctor-hardening/" class="btn btn-primary">Read latest release</a>
+                    <a href="/blog/nexo-5-3-11-protocol-and-cortex-contract-hardening/" class="btn btn-primary">Read latest release</a>
                     <a href="/changelog/" class="btn btn-secondary">Latest release notes</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -143,23 +143,24 @@
                 <div class="section-label">Latest release</div>
                 <div class="blog-featured-meta">
                     <span class="compare-chip">April 13, 2026</span>
-                    <span class="compare-chip">Packaged runtime truth</span>
-                    <span class="compare-chip">Evolution telemetry</span>
+                    <span class="compare-chip">Protocol contracts</span>
+                    <span class="compare-chip">Cortex contracts</span>
+                    <span class="compare-chip">No silent coercion</span>
                 </div>
-                <h2>NEXO 5.3.10: Packaged Runtime Truth, Evolution Telemetry, and Synthesis Loop Closure</h2>
-                <p>NEXO 5.3.10 closes the last quiet truth gaps from the 5.3.x repair line: installs keep <code>~/.nexo/package.json</code> aligned, deep doctor no longer warns too early, weekly Evolution asks for explicit score telemetry again, and startup/update summaries only enter synthesis when they matter.</p>
+                <h2>NEXO 5.3.11: Protocol and Cortex Contract Hardening</h2>
+                <p>NEXO 5.3.11 hardens the runtime's trust layer: malformed <code>outcome</code>, <code>task_type</code>, and <code>impact_level</code> payloads now fail explicitly instead of being silently coerced into other valid states.</p>
                 <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
-                    <a href="/blog/nexo-5-3-10-runtime-metadata-and-deep-doctor-hardening/" class="btn btn-primary">Open article</a>
-                    <a href="/changelog/#v5310" class="btn btn-secondary">Open changelog</a>
+                    <a href="/blog/nexo-5-3-11-protocol-and-cortex-contract-hardening/" class="btn btn-primary">Open article</a>
+                    <a href="/changelog/#v5311" class="btn btn-secondary">Open changelog</a>
                 </div>
                 <div class="blog-mini-stack">
                     <div class="blog-mini-card">
                         <strong>Companion view</strong>
-                        <span><a href="/changelog/#v5310">The 5.3.10 changelog section</a></span>
+                        <span><a href="/changelog/#v5311">The 5.3.11 changelog section</a></span>
                     </div>
                     <div class="blog-mini-card">
                         <strong>Previous release</strong>
-                        <span><a href="/blog/nexo-5-3-9-packaged-core-manifest-heal/">NEXO 5.3.9: Packaged Core-Artifact Manifest Heal for Personal-Script Recovery</a>.</span>
+                        <span><a href="/blog/nexo-5-3-10-runtime-metadata-and-deep-doctor-hardening/">NEXO 5.3.10: Packaged Runtime Truth, Evolution Telemetry, and Synthesis Loop Closure</a>.</span>
                     </div>
                 </div>
             </div>
@@ -171,6 +172,13 @@
 <section class="section-flush-top">
     <div class="container">
         <div class="blog-grid">
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 13, 2026</div>
+                <h2><a href="/blog/nexo-5-3-11-protocol-and-cortex-contract-hardening/">NEXO 5.3.11: Protocol and Cortex Contract Hardening</a></h2>
+                <p>A trust-layer patch for the shared brain: malformed <code>outcome</code>, <code>task_type</code>, and <code>impact_level</code> payloads now fail explicitly instead of being silently rewritten into other valid states.</p>
+                <a href="/blog/nexo-5-3-11-protocol-and-cortex-contract-hardening/" class="read-more">Read article <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></a>
+            </div>
 
             <div class="blog-card">
                 <div class="blog-card-date">April 13, 2026</div>

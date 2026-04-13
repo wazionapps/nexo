@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.10 keeps packaged runtime metadata aligned after update, makes deep doctor honest during fresh bootstrap, restores explicit Evolution telemetry, and closes a write-only startup/update summary loop.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.11 hardens protocol and Cortex contracts so malformed outcome, task_type, and impact_level payloads fail explicitly instead of silently mutating persisted state.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.10 keeps packaged runtime metadata aligned after update, makes deep doctor honest during fresh bootstrap, restores explicit Evolution telemetry, and closes a write-only startup/update summary loop.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.11 hardens protocol and Cortex contracts so malformed outcome, task_type, and impact_level payloads fail explicitly instead of silently mutating persisted state.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.10 keeps packaged runtime metadata aligned after update, makes deep doctor honest during fresh bootstrap, restores explicit Evolution telemetry, and closes a write-only startup/update summary loop.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.11 hardens protocol and Cortex contracts so malformed outcome, task_type, and impact_level payloads fail explicitly instead of silently mutating persisted state.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.10 keeps packaged runtime metadata aligned after update, makes deep doctor honest during fresh bootstrap, restores explicit Evolution telemetry, and closes a write-only startup/update summary loop.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.11 hardens protocol and Cortex contracts so malformed outcome, task_type, and impact_level payloads fail explicitly instead of silently mutating persisted state.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,13 +87,13 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v5.3.10 live</span>
-                    <span class="page-chip">Packaged runtime truth</span>
-                    <span class="page-chip">Evolution telemetry restored</span>
-                    <span class="page-chip">Synthesis loop closure</span>
+                    <span class="page-chip">v5.3.11 live</span>
+                    <span class="page-chip">Protocol contracts</span>
+                    <span class="page-chip">Cortex contracts</span>
+                    <span class="page-chip">No silent coercion</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v5310" class="btn btn-primary">Start with v5.3.10</a>
+                    <a href="#v5311" class="btn btn-primary">Start with v5.3.11</a>
                     <a href="#v400" class="btn btn-secondary">See v4.0.0</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -101,8 +101,8 @@
             <div class="page-visual">
                 <div class="page-stack">
                     <div class="page-stack-card">
-                        <strong>v5.3.10</strong>
-                        <span>Packaged installs now keep <code>~/.nexo/package.json</code> aligned, deep doctor stays honest during fresh bootstrap, weekly Evolution emits explicit score telemetry again, and startup/update summaries stop being write-only.</span>
+                        <strong>v5.3.11</strong>
+                        <span>Malformed <code>outcome</code>, <code>task_type</code>, and <code>impact_level</code> payloads now fail explicitly instead of being silently rewritten into other valid states.</span>
                     </div>
                     <div class="page-stack-card">
                         <strong>v5.3.0</strong>
@@ -161,7 +161,38 @@
     </div>
 </section>
 
-<!-- v5.3.9 packaged core-artifact manifest heal -->
+<!-- v5.3.11 protocol and cortex contract hardening -->
+<section id="v5311" class="section-compact" style="background:linear-gradient(135deg,#07111f 0%,#18253f 34%,#2563eb 68%,#8b5cf6 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.3.11 <span style="opacity:.5;font-weight:400;">&mdash; April 13, 2026</span></div>
+        <h2 class="section-title">Protocol + Cortex Contract Hardening</h2>
+        <p class="section-subtitle">
+            5.3.10 closed quiet truth gaps in packaged runtime metadata, deep doctor, Evolution telemetry, and synthesis. The next issue that surfaced was more subtle: several protocol/Cortex surfaces still accepted malformed structured parameters and silently rewrote them into different valid states. 5.3.11 closes that trust leak directly.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h3>Malformed close outcomes stop creating false failures</h3>
+                    <p><code>nexo_task_close</code> now rejects invalid <code>outcome</code> values explicitly instead of silently coercing them to <code>failed</code>. Bad payloads no longer poison protocol history, debt, or hot-context summaries with failures that never really happened.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Protocol tools no longer invent a different task type</h3>
+                    <p><code>nexo_task_open</code> and <code>nexo_confidence_check</code> now reject invalid <code>task_type</code> values instead of quietly degrading them to another valid type. The runtime now says the contract is wrong instead of guessing what the caller meant.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Cortex checks and decisions enforce the same contract</h3>
+                    <p><code>nexo_cortex_check</code> and <code>nexo_cortex_decide</code> now reject malformed <code>task_type</code>, and Cortex decisions also reject malformed <code>impact_level</code> instead of silently promoting it to <code>high</code>. Decision weighting stays faithful to the actual request.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Internal DB writes cannot bypass the hardening</h3>
+                    <p>The DB helpers behind protocol and Cortex now validate the same canonical values before writing rows. Malformed internal calls can no longer sneak bad semantics into persisted task, debt, context, or evaluation data.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v5.3.10 packaged runtime truth -->
 <section id="v5310" class="section-compact" style="background:linear-gradient(135deg,#07111f 0%,#12223d 34%,#2563eb 68%,#22c55e 100%);">
     <div class="container">
         <div class="section-label">New in v5.3.10 <span style="opacity:.5;font-weight:400;">&mdash; April 13, 2026</span></div>

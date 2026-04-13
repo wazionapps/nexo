@@ -1,9 +1,10 @@
 # NEXO Brain
 
-> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v5.3.10).
+> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v5.3.11).
 
 NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It adds a local shared brain across supported clients, configurable terminal and automation backends, recovery-aware background jobs, startup preflight, runtime self-healing, smarter retrieval defaults, long-horizon overnight analysis, and 150+ MCP tools.
 
+v5.3.11: protocol + cortex contract hardening — malformed `outcome`, `task_type`, and `impact_level` values now fail explicitly instead of being silently coerced into other valid states, so persisted task/debt/context/decision data stays trustworthy
 v5.3.10: packaged runtime truth + evolution telemetry + synthesis loop closure — installs and updates now keep `~/.nexo/package.json` aligned with the published npm package, deep doctor stays honest during fresh bootstrap, weekly Evolution asks for explicit dimension telemetry again, and daily synthesis only absorbs actionable startup/update summaries
 v5.3.9: packaged core-artifact manifest heal — packaged updates now rebuild the runtime core-artifact manifest from the canonical npm package source, so personal scripts stop being reclassified as core, portable exports include them again, and runtime doctor recovers personal LaunchAgents cleanly after a bad `5.3.8` update
 v5.3.8: packaged migration hotfix — the packaged installer now copies new top-level runtime Python modules into `~/.nexo` automatically, so newly shipped commands like `nexo export` / `nexo import` work immediately after update on real packaged installs

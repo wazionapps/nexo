@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXO 5.3.11: Protocol and Cortex Contract Hardening</title>
+    <meta name="description" content="NEXO 5.3.11 hardens the shared-brain contract layer so malformed outcome, task_type, and impact_level payloads fail explicitly instead of silently mutating persisted task, debt, context, and decision data.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-5-3-11-protocol-and-cortex-contract-hardening/">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/blog/nexo-5-3-11-protocol-and-cortex-contract-hardening/">
+    <meta property="og:title" content="NEXO 5.3.11: Protocol and Cortex Contract Hardening">
+    <meta property="og:description" content="A trust-layer patch for the shared brain: malformed outcome, task_type, and impact_level payloads now fail explicitly instead of being silently rewritten into other valid states.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+    <meta property="article:published_time" content="2026-04-13">
+    <meta property="article:author" content="Francisco Cerda Puigserver">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO 5.3.11: Protocol and Cortex Contract Hardening">
+    <meta name="twitter:description" content="5.3.11 makes malformed outcome, task_type, and impact_level payloads fail explicitly so the shared brain stops recording false semantics.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "NEXO 5.3.11: Protocol and Cortex Contract Hardening",
+        "description": "NEXO 5.3.11 hardens the shared-brain contract layer so malformed outcome, task_type, and impact_level payloads fail explicitly instead of silently mutating persisted task, debt, context, and decision data.",
+        "datePublished": "2026-04-13",
+        "dateModified": "2026-04-13",
+        "author": {
+            "@type": "Person",
+            "name": "Francisco Cerda Puigserver"
+        },
+        "publisher": {
+            "@type": "Organization",
+            "name": "WAzion",
+            "url": "https://www.wazion.com"
+        },
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https://nexo-brain.com/blog/nexo-5-3-11-protocol-and-cortex-contract-hardening/"
+        },
+        "url": "https://nexo-brain.com/blog/nexo-5-3-11-protocol-and-cortex-contract-hardening/",
+        "image": "https://nexo-brain.com/assets/nexo-brain-infographic-v5.png",
+        "keywords": ["NEXO 5.3.11", "protocol contract", "cortex contract", "nexo_task_close", "task_type validation", "impact_level validation"]
+    }
+    </script>
+
+    <style>
+        .article-header { padding-top: 128px; padding-bottom: 40px; text-align: center; }
+        .article-meta { font-size: 14px; color: var(--text-muted); margin-bottom: 16px; }
+        .article-body {
+            max-width: 720px; margin: 0 auto; padding: 0 24px 80px;
+            font-size: 17px; line-height: 1.8; color: var(--text);
+        }
+        .article-body h2 { font-size: 28px; font-weight: 700; margin: 48px 0 16px; letter-spacing: -0.01em; }
+        .article-body p { margin-bottom: 20px; color: var(--text-muted); }
+        .article-body strong { color: var(--text); }
+        .article-body a { color: var(--purple-light); }
+        .article-body a:hover { color: var(--pink); }
+        .article-body code {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 14px; color: var(--pink);
+            background: rgba(236, 72, 153, 0.1);
+            padding: 2px 8px; border-radius: 4px;
+        }
+        .article-back {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 14px; font-weight: 600; color: var(--text-muted);
+            margin-bottom: 24px;
+        }
+        .article-back:hover { color: var(--purple-light); }
+        .article-visual { margin: 32px 0 40px; text-align: center; }
+        .article-visual img {
+            max-width: 100%;
+            border-radius: 16px;
+            border: 1px solid var(--dark-border);
+            box-shadow: 0 8px 32px rgba(37,99,235,0.18);
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-64.png" alt="NEXO Brain" class="logo-image">
+            <span class="logo-text">NEXO Brain</span>
+        </a>
+        <button class="mobile-menu-toggle" aria-label="Toggle navigation" onclick="toggleMobileMenu()">
+            <span></span><span></span><span></span>
+        </button>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/features/">Features</a>
+            <a href="/evolution/">Evolution</a>
+            <a href="/compare/">Compare</a>
+            <a href="/blog/">Blog</a>
+            <a href="/changelog/">Changelog</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta">GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<section class="article-header">
+    <div class="container">
+        <a href="/blog/" class="article-back">← Back to blog</a>
+        <div class="article-meta">April 13, 2026 · Patch release · protocol / cortex / trust layer</div>
+        <h1 class="section-title" style="font-size:clamp(28px,4.5vw,48px);max-width:920px;margin:0 auto 16px;">NEXO 5.3.11: Protocol and Cortex Contract Hardening</h1>
+        <p class="section-subtitle" style="max-width:760px;margin:0 auto;">5.3.10 made the packaged runtime tell the truth more consistently. 5.3.11 applies the same standard to the shared-brain contract layer itself: when a caller passes a malformed structured parameter, NEXO now rejects it explicitly instead of silently translating it into a different valid meaning.</p>
+    </div>
+</section>
+
+<section>
+    <div class="article-body">
+        <div class="article-visual">
+            <img src="/assets/nexo-brain-infographic-v5.png" alt="NEXO Brain 5.3.11 release">
+        </div>
+
+        <p><strong>5.3.11 is about refusing to lie quietly.</strong> If a shared-brain runtime silently rewrites malformed structured input into some other valid state, it may keep going, but it leaves behind poisoned traces: a task that looks failed when it was really malformed, a decision weighted as high urgency when the caller did not ask for that, or a protocol record that says “answer” because the original task type was invalid and the runtime guessed.</p>
+
+        <h2>What surfaced after 5.3.10</h2>
+        <p>Once packaged runtime truth, deep doctor bootstrap honesty, Evolution telemetry, and synthesis ingestion were repaired, the next real gap was smaller but more insidious. Some protocol and Cortex paths still treated malformed structured values as a cue to coerce them into another valid value instead of rejecting the payload.</p>
+        <p><code>nexo_task_close</code> could take an invalid <code>outcome</code> and silently convert it to <code>failed</code>. Several public tool paths accepted invalid <code>task_type</code> values and quietly downgraded them to another valid type. And <code>nexo_cortex_decide</code> could treat a malformed <code>impact_level</code> as <code>high</code>. None of that crashes the runtime, but it does damage trust because persisted semantics stop matching the original request.</p>
+
+        <h2>Why malformed close outcomes were the worst case</h2>
+        <p>A malformed <code>outcome</code> being rewritten to <code>failed</code> is not a harmless default. It changes protocol history, shapes debt, appears in recent context, and can make it look like the runtime or operator genuinely failed a task when what actually happened was a bad caller payload.</p>
+        <p>5.3.11 closes that path directly. Invalid close outcomes now return an explicit error and the task stays untouched. No status flip, no fake close timestamp, no contaminated failure trace.</p>
+
+        <h2>Why task-type coercion mattered across protocol and Cortex</h2>
+        <p><code>task_type</code> is not cosmetic metadata. It influences how NEXO interprets work, when it should demand evidence, how it scores response confidence, and how Cortex frames risk and alternatives. Quietly changing an invalid task type into a valid one means the runtime is no longer processing the task the caller actually submitted.</p>
+        <p>5.3.11 hardens both sides of that boundary. <code>nexo_task_open</code> and <code>nexo_confidence_check</code> now reject malformed task types, and the same is true for <code>nexo_cortex_check</code> and <code>nexo_cortex_decide</code>. The runtime now says the contract is wrong instead of inventing a corrected meaning.</p>
+
+        <h2>Why impact level needed the same treatment</h2>
+        <p>Cortex decisions use <code>impact_level</code> to weight tradeoffs. If a malformed value is silently promoted to <code>high</code>, the persisted evaluation starts carrying a stronger urgency class than the caller actually asked for. That undermines the point of having explicit, inspectable decision support in the first place.</p>
+        <p>5.3.11 now rejects malformed impact levels explicitly. If the caller wants a high-stakes evaluation, it has to say so with a canonical value.</p>
+
+        <h2>Why the internal DB helpers also had to change</h2>
+        <p>Public-tool validation alone is not enough if internal code paths can still write malformed semantics into the database. That is why this patch also hardens the DB helpers behind protocol tasks and Cortex evaluations.</p>
+        <p>The same canonical checks now exist before those rows are persisted. That keeps internal callers from bypassing the public hardening and pushing misleading semantics into task history, debt, context, or evaluation records anyway.</p>
+
+        <h2>What changes for the operator</h2>
+        <p>The visible effect is simple: when a caller is wrong, NEXO tells you the contract is wrong. It no longer keeps the system moving by silently picking a different meaning. That makes protocol traces, decision telemetry, and trust signals more faithful to reality, which is exactly what a shared-brain runtime should optimize for over time.</p>
+
+        <h2>Upgrade</h2>
+        <p>Open the <a href="/changelog/#v5311">5.3.11 changelog section</a> for the exact release note. For installed users, the intended path looks like this:</p>
+        <p><code>npm install -g nexo-brain@5.3.11</code><br><code>nexo update</code><br><code>nexo doctor --tier runtime</code><br><code>nexo doctor --tier deep</code></p>
+        <p>The headline is not a new feature. It is a more trustworthy shared brain: malformed structured payloads fail loudly, valid ones keep their original meaning, and the rows NEXO stores about your work better match what really happened.</p>
+    </div>
+</section>
+
+<footer>
+    <div class="container">
+        <div class="footer-content">
+            <div class="footer-left">
+                Created by <strong>Francisco Cerd&agrave; Puigserver</strong> &amp; <strong>NEXO</strong> (Claude Opus) &bull; Built by <a href="https://www.wazion.com">WAzion</a> &bull; AGPL-3.0 License &bull; &copy; 2026
+            </div>
+            <div class="footer-links">
+                <a href="https://github.com/wazionapps/nexo">GitHub</a>
+                <a href="https://x.com/NEXOBRAIN">X / Twitter</a>
+                <a href="https://github.com/sponsors/wazionapps">Sponsor</a>
+                <a href="/docs/">Docs</a>
+                <a href="/compare/">Compare</a>
+                <a href="/blog/">Blog</a>
+                <a href="https://www.npmjs.com/package/nexo-brain">npm</a>
+                <a href="https://github.com/wazionapps/nexo/releases">Releases</a>
+            </div>
+            <div style="text-align:center;margin-top:12px;color:#6b7280;font-size:12px;">Last updated: April 2026</div>
+        </div>
+    </div>
+</footer>
+
+</body>
+</html>
