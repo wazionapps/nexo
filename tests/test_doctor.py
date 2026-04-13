@@ -2051,6 +2051,16 @@ class TestDeepChecks:
         check = check_self_audit_summary()
         assert check.status == "degraded"
 
+    def test_missing_self_audit_is_advisory_during_fresh_bootstrap(self, nexo_home):
+        (nexo_home / "version.json").write_text(json.dumps({
+            "version": "5.3.9",
+            "installed_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        }))
+        from doctor.providers.deep import check_self_audit_summary
+        check = check_self_audit_summary()
+        assert check.status == "healthy"
+        assert "no summary yet" in check.summary.lower()
+
     def test_self_audit_errors_are_critical(self, nexo_home):
         (nexo_home / "logs" / "self-audit-summary.json").write_text(json.dumps({
             "findings": [{"severity": "ERROR", "msg": "boom"}],

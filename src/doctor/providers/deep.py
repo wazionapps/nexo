@@ -1,17 +1,20 @@
 """Deep tier checks — read existing artifacts for richer validation. Target <60s."""
 from __future__ import annotations
 
+import datetime as dt
 import json
 import os
 import time
 from pathlib import Path
 
+from cron_recovery import load_enabled_crons
 from doctor.models import DoctorCheck, safe_check
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 
 # Freshness thresholds
 SELF_AUDIT_FRESHNESS = 86400 * 2  # 2 days (runs daily)
+SELF_AUDIT_BOOTSTRAP_GRACE = 86400  # 1 day grace after install/update before the first summary exists
 PREFLIGHT_FRESHNESS = 86400  # 1 day
 WATCHDOG_SMOKE_FRESHNESS = 86400  # 1 day
 
@@ -29,12 +32,70 @@ def _load_json(path: Path) -> dict:
     return json.loads(path.read_text())
 
 
+def _timestamp_age_seconds(value: str) -> float | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        parsed = dt.datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except Exception:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=dt.timezone.utc)
+    return max(0.0, time.time() - parsed.timestamp())
+
+
+def _runtime_bootstrap_age_seconds() -> float | None:
+    version_file = NEXO_HOME / "version.json"
+    try:
+        payload = _load_json(version_file)
+    except Exception:
+        payload = {}
+    for key in ("updated_at", "installed_at"):
+        age = _timestamp_age_seconds(str(payload.get(key, "") or ""))
+        if age is not None:
+            return age
+    return _file_age_seconds(version_file)
+
+
+def _self_audit_enabled() -> bool | None:
+    try:
+        return any(str(cron.get("id") or "").strip() == "self-audit" for cron in load_enabled_crons())
+    except Exception:
+        return None
+
+
 def check_self_audit_summary() -> DoctorCheck:
     """Check latest self-audit summary exists and is recent."""
     summary_file = NEXO_HOME / "logs" / "self-audit-summary.json"
     age = _file_age_seconds(summary_file)
 
     if age is None:
+        enabled = _self_audit_enabled()
+        if enabled is False:
+            return DoctorCheck(
+                id="deep.self_audit",
+                tier="deep",
+                status="healthy",
+                severity="info",
+                summary="Self-audit automation disabled or not installed",
+            )
+
+        bootstrap_age = _runtime_bootstrap_age_seconds()
+        if enabled and bootstrap_age is not None and bootstrap_age <= SELF_AUDIT_BOOTSTRAP_GRACE:
+            bootstrap_hours = bootstrap_age / 3600
+            return DoctorCheck(
+                id="deep.self_audit",
+                tier="deep",
+                status="healthy",
+                severity="info",
+                summary="Self-audit scheduled but no summary yet",
+                evidence=[
+                    f"Runtime install/update {bootstrap_hours:.0f} hours ago",
+                    f"Expected later at: {summary_file}",
+                ],
+            )
+
         return DoctorCheck(
             id="deep.self_audit",
             tier="deep",

@@ -1,5 +1,29 @@
 # Changelog
 
+## [5.3.10] - 2026-04-13
+
+### Packaged runtime truth + evolution telemetry + synthesis loop closure
+
+- Packaged installs and updates now refresh `~/.nexo/package.json` from the
+  published npm package during fresh install, migration, and same-version
+  refreshes, so runtime metadata and doctor evidence stop carrying stale
+  package versions after a successful update.
+- `nexo doctor --tier deep` no longer marks a fresh packaged runtime as
+  degraded just because `self-audit-summary.json` does not exist yet. When the
+  daily self-audit is configured but the install/update is still fresh, doctor
+  reports that the summary is pending instead of implying breakage.
+- Weekly Evolution now asks the automation backend for explicit
+  `dimension_scores` and `score_evidence`, and `nexo_evolution_status` falls
+  back to the objective file when persisted metrics are still missing, so the
+  status surface stops going blank after a real cycle.
+- Daily synthesis now ingests `update-last-summary.json` only when it contains
+  actionable runtime events such as deferred syncs, bootstrap changes, healed
+  personal schedules, or update errors; routine cooldown/no-op summaries stay
+  out of the briefing.
+- Added regression coverage for the packaged installer metadata sync, the
+  deep-doctor bootstrap contract, the Evolution telemetry contract, and the
+  new synthesis/update-summary ingestion path.
+
 ## [5.3.9] - 2026-04-13
 
 ### Packaged core-artifact manifest heal for personal-script recovery

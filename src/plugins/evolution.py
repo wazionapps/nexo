@@ -1,33 +1,77 @@
 """Evolution plugin — NEXO self-improvement tools for interactive sessions."""
 
+import json
 import os
+from pathlib import Path
 from db import get_latest_metrics, get_evolution_history, update_evolution_log_status, get_db
+
+
+CANONICAL_DIMENSIONS = {
+    "episodic_memory": "Episodic Memory",
+    "autonomy": "Autonomy",
+    "proactivity": "Proactivity",
+    "self_improvement": "Self-improvement",
+    "agi": "AGI",
+}
+
+
+def _resolve_objective_file() -> Path:
+    nexo_home = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+    for candidate in (
+        nexo_home / "brain" / "evolution-objective.json",
+        nexo_home / "cortex" / "evolution-objective.json",
+    ):
+        if candidate.exists():
+            return candidate
+    return nexo_home / "brain" / "evolution-objective.json"
+
+
+def _load_objective() -> dict:
+    try:
+        raw = json.loads(_resolve_objective_file().read_text())
+    except Exception:
+        return {}
+    return raw if isinstance(raw, dict) else {}
 
 
 def handle_evolution_status() -> str:
     """Show current NEXO dimension scores and recent trend."""
     metrics = get_latest_metrics()
-    if not metrics:
-        return "No evolution metrics recorded."
-
-    BARS = {
-        "episodic_memory": "Episodic Memory",
-        "autonomy": "Autonomy",
-        "proactivity": "Proactivity",
-        "self_improvement": "Self-improvement",
-        "agi": "AGI",
-    }
+    objective = _load_objective()
+    objective_dims = objective.get("dimensions", {}) if isinstance(objective.get("dimensions"), dict) else {}
 
     from user_context import get_context
     lines = [f"{get_context().assistant_name} EVOLUTION STATUS:"]
-    for key, label in BARS.items():
+    has_output = False
+    for key, label in CANONICAL_DIMENSIONS.items():
         m = metrics.get(key)
         if m:
             score = m["score"]
             delta = m["delta"]
             bar = "█" * (score // 5) + "░" * (20 - score // 5)
             delta_str = f" (+{delta})" if delta > 0 else f" ({delta})" if delta < 0 else " (=)"
-            lines.append(f"  {label:<20} {bar} {score}%{delta_str}")
+            target = ""
+            if isinstance(objective_dims.get(key), dict) and objective_dims[key].get("target") is not None:
+                target = f" / target {int(objective_dims[key].get('target', 0) or 0)}%"
+            lines.append(f"  {label:<20} {bar} {score}%{delta_str}{target}")
+            has_output = True
+            continue
+
+        objective_entry = objective_dims.get(key)
+        if isinstance(objective_entry, dict):
+            score = int(objective_entry.get("current", 0) or 0)
+            target = int(objective_entry.get("target", 0) or 0)
+            bar = "█" * (score // 5) + "░" * (20 - score // 5)
+            lines.append(f"  {label:<20} {bar} {score}% (objective fallback, target {target}%)")
+            has_output = True
+
+    if not has_output:
+        return "No evolution metrics recorded."
+
+    if not metrics:
+        lines.append("  Note: no persisted evolution_metrics rows yet; showing objective fallback.")
+    if objective.get("last_evolution"):
+        lines.append(f"  Last evolution: {objective['last_evolution']}")
     return "\n".join(lines)
 
 
