@@ -1,5 +1,13 @@
 # Changelog
 
+## [5.3.21] - 2026-04-14
+
+### Fix update crash on slow source repos
+
+- Catch `subprocess.TimeoutExpired` in `_git_in_repo()` so `nexo update`
+  no longer crashes when the source repo has heavy untracked directories.
+- Add `.venv/` to `.gitignore`.
+
 ## [5.3.20] - 2026-04-13
 
 ### Fix operator alias lost after update

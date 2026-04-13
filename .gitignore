@@ -6,6 +6,7 @@ dist/
 build/
 .eggs/
 *.egg
+.venv/
 
 # Node
 node_modules/

@@ -1653,14 +1653,17 @@ def _resolve_sync_source() -> tuple[Path | None, Path | None]:
 
 
 def _git_in_repo(repo_dir: Path, *args, timeout: int = 10) -> tuple[int, str, str]:
-    result = subprocess.run(
-        ["git"] + list(args),
-        cwd=str(repo_dir),
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-    )
-    return result.returncode, result.stdout.strip(), result.stderr.strip()
+    try:
+        result = subprocess.run(
+            ["git"] + list(args),
+            cwd=str(repo_dir),
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+        return result.returncode, result.stdout.strip(), result.stderr.strip()
+    except subprocess.TimeoutExpired:
+        return 128, "", f"git {' '.join(str(a) for a in args)} timed out after {timeout}s"
 
 
 def _source_repo_status(repo_dir: Path) -> dict:
