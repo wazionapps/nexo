@@ -10,6 +10,8 @@ import secrets
 import time
 
 from db import (
+    VALID_TASK_TYPES,
+    VALID_CLOSE_OUTCOMES,
     close_protocol_task,
     create_followup,
     latest_cortex_evaluation_for_task,
@@ -28,6 +30,8 @@ from db import (
     resolve_protocol_debts,
     search_learnings,
     task_has_cortex_evaluation,
+    validate_close_outcome,
+    validate_task_type,
 )
 from plugins.cortex import evaluate_cortex_state
 from plugins.guard import handle_guard_check
@@ -651,7 +655,18 @@ def handle_confidence_check(
     clean_goal = (goal or "").strip()
     if not clean_goal:
         return json.dumps({"ok": False, "error": "goal is required"}, ensure_ascii=False, indent=2)
-    clean_type = task_type if task_type in {"answer", "analyze", "edit", "execute", "delegate"} else "answer"
+    try:
+        clean_type = validate_task_type(task_type)
+    except ValueError as exc:
+        return json.dumps(
+            {
+                "ok": False,
+                "error": str(exc),
+                "valid_task_types": sorted(VALID_TASK_TYPES),
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
     result = evaluate_response_confidence(
         goal=clean_goal,
         task_type=clean_type,
@@ -693,7 +708,18 @@ def handle_task_open(
     if not clean_goal:
         return json.dumps({"ok": False, "error": "goal is required"}, ensure_ascii=False, indent=2)
 
-    clean_type = task_type if task_type in {"answer", "analyze", "edit", "execute", "delegate"} else "answer"
+    try:
+        clean_type = validate_task_type(task_type)
+    except ValueError as exc:
+        return json.dumps(
+            {
+                "ok": False,
+                "error": str(exc),
+                "valid_task_types": sorted(VALID_TASK_TYPES),
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
     files_list = _parse_list(files)
     protocol_strictness = get_protocol_strictness()
     if protocol_strictness in {"strict", "learning"} and clean_type == "edit" and not files_list:
@@ -949,7 +975,19 @@ def handle_task_close(
             indent=2,
         )
 
-    clean_outcome = outcome if outcome in {"done", "partial", "blocked", "failed", "cancelled"} else "failed"
+    try:
+        clean_outcome = validate_close_outcome(outcome)
+    except ValueError as exc:
+        return json.dumps(
+            {
+                "ok": False,
+                "error": str(exc),
+                "task_id": task_id,
+                "valid_outcomes": sorted(VALID_CLOSE_OUTCOMES),
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
     clean_evidence = (evidence or "").strip()
     files_changed_list = _parse_list(files_changed)
     planned_files = _parse_list(task.get("files") or "[]")

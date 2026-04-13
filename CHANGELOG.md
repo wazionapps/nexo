@@ -1,5 +1,27 @@
 # Changelog
 
+## [5.3.11] - 2026-04-13
+
+### Protocol + Cortex contract hardening
+
+- `nexo_task_close` no longer coerces malformed `outcome` values into
+  `failed`. Invalid close outcomes now return an explicit error and leave the
+  protocol task untouched, so hot context, debt, and task history stop
+  recording false failures.
+- `nexo_task_open`, `nexo_confidence_check`, `nexo_cortex_check`, and
+  `nexo_cortex_decide` now reject invalid `task_type` values instead of
+  silently degrading them to a different valid type. The runtime says the
+  contract is wrong rather than inventing a new meaning.
+- `nexo_cortex_decide` now rejects invalid `impact_level` values instead of
+  silently treating them as `high`, so Cortex evaluations stop inheriting a
+  stronger urgency class than the caller actually supplied.
+- The DB helpers behind protocol and Cortex now enforce the same task-type,
+  close-outcome, and impact-level validation, so malformed internal calls can
+  no longer bypass the public-tool hardening and contaminate persisted rows.
+- Added regression coverage for invalid close outcomes, invalid task types,
+  invalid impact levels, and the “do not mutate state on malformed close”
+  contract across protocol and Cortex.
+
 ## [5.3.10] - 2026-04-13
 
 ### Packaged runtime truth + evolution telemetry + synthesis loop closure
