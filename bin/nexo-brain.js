@@ -1765,12 +1765,21 @@ async function main() {
       const templatesDest = path.join(NEXO_HOME, "templates");
       if (fs.existsSync(templatesSrc)) {
         fs.mkdirSync(templatesDest, { recursive: true });
-        ["script-template.py", "nexo_helper.py", "skill-template.md", "skill-script-template.py"].forEach((f) => {
+        for (const f of fs.readdirSync(templatesSrc)) {
           const src = path.join(templatesSrc, f);
-          if (fs.existsSync(src)) {
-            fs.copyFileSync(src, path.join(templatesDest, f));
+          const dest = path.join(templatesDest, f);
+          if (fs.statSync(src).isFile()) {
+            fs.copyFileSync(src, dest);
+          } else if (fs.statSync(src).isDirectory()) {
+            fs.mkdirSync(dest, { recursive: true });
+            for (const sf of fs.readdirSync(src)) {
+              const ssrc = path.join(src, sf);
+              if (fs.statSync(ssrc).isFile()) {
+                fs.copyFileSync(ssrc, path.join(dest, sf));
+              }
+            }
           }
-        });
+        }
       }
 
       logMacPermissionsNotice(NEXO_HOME, syncPython);
@@ -2434,13 +2443,23 @@ async function main() {
   const templatesDest = path.join(NEXO_HOME, "templates");
   fs.mkdirSync(templatesDest, { recursive: true });
   if (fs.existsSync(templateDir)) {
-    ["script-template.py", "nexo_helper.py", "skill-template.md", "skill-script-template.py"].forEach(f => {
+    // Copy all template files (not just a hardcoded subset)
+    for (const f of fs.readdirSync(templateDir)) {
       const src = path.join(templateDir, f);
-      if (fs.existsSync(src)) {
-        fs.copyFileSync(src, path.join(templatesDest, f));
+      const dest = path.join(templatesDest, f);
+      if (fs.statSync(src).isFile()) {
+        fs.copyFileSync(src, dest);
+      } else if (fs.statSync(src).isDirectory()) {
+        fs.mkdirSync(dest, { recursive: true });
+        for (const sf of fs.readdirSync(src)) {
+          const ssrc = path.join(src, sf);
+          if (fs.statSync(ssrc).isFile()) {
+            fs.copyFileSync(ssrc, path.join(dest, sf));
+          }
+        }
       }
-    });
-    log("  Script and skill templates installed.");
+    }
+    log("  All templates installed.");
   }
 
   // Hooks directory

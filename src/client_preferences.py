@@ -474,11 +474,35 @@ def _claude_desktop_config_path(home: Path) -> Path:
     return home / ".config" / "Claude" / "claude_desktop_config.json"
 
 
+def _which_with_nvm(name: str, home: Path | None = None) -> str:
+    """Like shutil.which but also searches nvm and ~/.nexo/bin."""
+    found = shutil.which(name)
+    if found:
+        return found
+    home = home or _user_home()
+    # Check ~/.nexo/bin
+    candidate = home / ".nexo" / "bin" / name
+    if candidate.exists():
+        return str(candidate)
+    # Check nvm node bins
+    nvm_dir = home / ".nvm" / "versions" / "node"
+    if nvm_dir.is_dir():
+        try:
+            versions = sorted(nvm_dir.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True)
+            for v in versions:
+                candidate = v / "bin" / name
+                if candidate.exists():
+                    return str(candidate)
+        except OSError:
+            pass
+    return ""
+
+
 def detect_installed_clients(user_home: str | os.PathLike[str] | None = None) -> dict[str, dict]:
     home = Path(user_home).expanduser() if user_home else _user_home()
 
-    claude_bin = os.environ.get("CLAUDE_BIN", "").strip() or shutil.which("claude") or ""
-    codex_bin = os.environ.get("CODEX_BIN", "").strip() or shutil.which("codex") or ""
+    claude_bin = os.environ.get("CLAUDE_BIN", "").strip() or _which_with_nvm("claude", home)
+    codex_bin = os.environ.get("CODEX_BIN", "").strip() or _which_with_nvm("codex", home)
 
     if sys.platform == "darwin":
         desktop_app = next(

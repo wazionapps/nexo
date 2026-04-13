@@ -1,5 +1,16 @@
 # Changelog
 
+## [5.3.16] - 2026-04-13
+
+### Packaged installer fixes: client detection, template copy, doctor nvm
+
+- `detect_installed_clients()` now searches nvm and `~/.nexo/bin` for `claude`
+  — fixes `nexo doctor` reporting "claude_code not installed" on nvm setups.
+- `npx nexo-brain init` and `nexo update` (npm path) now copy **all** template
+  files including `CLAUDE.md.template`, `CODEX.AGENTS.md.template`, and the
+  `launchagents/` directory — fixes `client_bootstrap_parity` crash.
+- Removed hardcoded template file lists in the installer; uses directory scan.
+
 ## [5.3.15] - 2026-04-13
 
 ### Installer nvm PATH + Keychain unlock for headless
