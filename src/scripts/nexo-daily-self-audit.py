@@ -40,6 +40,12 @@ from agent_runner import AutomationBackendUnavailableError, run_automation_promp
 import db as nexo_db
 from public_evolution_queue import queue_public_port_candidate
 
+try:
+    from client_preferences import resolve_user_model as _resolve_user_model
+    _USER_MODEL = _resolve_user_model()
+except Exception:
+    _USER_MODEL = ""
+
 LOG_DIR = NEXO_HOME / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 AUDIT_HISTORY_DIR = LOG_DIR / "self-audit"
@@ -2005,12 +2011,6 @@ actually wrong, not just list findings.
 CRITICAL — SEARCH BEFORE CREATING LEARNINGS:
 Before calling nexo_learning_add, you MUST call nexo_learning_search with keywords
 from the finding's area and topic. If a matching active learning already exists:
-try:
-    from client_preferences import resolve_user_model as _resolve_user_model
-    _USER_MODEL = _resolve_user_model()
-except Exception:
-    _USER_MODEL = ""
-
   - Call nexo_learning_update(id=<existing_id>, ...) to refresh it with the new
     evidence/date instead of creating a duplicate.
   - Only use nexo_learning_add (with supersedes_id=<old_id>) when the existing
