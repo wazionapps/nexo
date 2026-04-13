@@ -177,6 +177,54 @@ function getCoreRuntimePackages() {
   return ["db", "cognitive", "doctor"];
 }
 
+function resolveLaunchAgentPath(home) {
+  const parts = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin",
+    path.join(home, ".local/bin"), path.join(home, ".nexo/bin")];
+  // Detect nvm node
+  const nvmDir = path.join(home, ".nvm/versions/node");
+  try {
+    const versions = fs.readdirSync(nvmDir)
+      .map(v => ({ name: v, mtime: fs.statSync(path.join(nvmDir, v)).mtimeMs }))
+      .sort((a, b) => b.mtime - a.mtime);
+    for (const v of versions) {
+      const nodeBin = path.join(nvmDir, v.name, "bin");
+      if (fs.existsSync(path.join(nodeBin, "node"))) {
+        parts.unshift(nodeBin);
+        break;
+      }
+    }
+  } catch { /* nvm not installed — skip */ }
+  return parts.join(":");
+}
+
+function setupKeychainPassFile(nexoHome) {
+  if (process.platform !== "darwin") return;
+  const configDir = path.join(nexoHome, "config");
+  const passFile = path.join(configDir, ".keychain-pass");
+  if (fs.existsSync(passFile)) return; // already set up
+  fs.mkdirSync(configDir, { recursive: true });
+  log("");
+  log("macOS Keychain setup for headless automation:");
+  log("  Claude Code stores auth in the login Keychain, which auto-locks.");
+  log("  Background jobs need to unlock it. Enter your macOS login password");
+  log("  (stored locally in ~/.nexo/config/.keychain-pass, chmod 600).");
+  log("");
+  return new Promise((resolve) => {
+    const rl = require("readline").createInterface({ input: process.stdin, output: process.stdout });
+    rl.question("  macOS login password (or Enter to skip): ", (answer) => {
+      rl.close();
+      if (answer && answer.trim()) {
+        fs.writeFileSync(passFile, answer.trim(), { mode: 0o600 });
+        log("  Keychain password saved. Background jobs will auto-unlock.");
+      } else {
+        log("  Skipped. Background jobs may fail with 'Not logged in' if Keychain locks.");
+        log("  Run: echo 'YOUR_PASSWORD' > ~/.nexo/config/.keychain-pass && chmod 600 ~/.nexo/config/.keychain-pass");
+      }
+      resolve();
+    });
+  });
+}
+
 function isProtectedMacPath(candidate) {
   if (process.platform !== "darwin" || !candidate) return false;
   const homeDir = require("os").homedir();
@@ -1250,7 +1298,7 @@ function installAllProcesses(platform, pythonPath, nexoHome, schedule, launchAge
         <key>NEXO_CODE</key>
         <string>${nexoCode}</string>
         <key>PATH</key>
-        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <string>${resolveLaunchAgentPath(home)}</string>
     </dict>
 </dict>
 </plist>`;
@@ -2964,6 +3012,9 @@ ${doScan ? `- Stack: ${Object.keys(profileData.code.languages || {}).slice(0, 5)
 
   // Note: prevent-sleep and tcc-approve are now part of ALL_PROCESSES
   // and installed by installAllProcesses() above. No separate caffeinate block needed.
+
+  // Step 7b: macOS Keychain setup for headless automation
+  await setupKeychainPassFile(NEXO_HOME);
 
   // Step 8: Create shell alias and add runtime CLI to PATH
   log("Creating shell alias...");
