@@ -1,5 +1,16 @@
 # Changelog
 
+## [5.3.15] - 2026-04-13
+
+### Installer nvm PATH + Keychain unlock for headless
+
+- `nexo-brain init` installer now uses `resolveLaunchAgentPath()` to auto-detect
+  nvm node paths in generated LaunchAgent plists (was hardcoded to Homebrew paths).
+- New Keychain setup step during install: stores macOS login password (chmod 600)
+  so `nexo-cron-wrapper.sh` can `security unlock-keychain` before headless runs.
+- `nexo-cron-wrapper.sh` now unlocks the login Keychain before executing commands,
+  fixing "Not logged in" errors in headless Claude Code sessions.
+
 ## [5.3.14] - 2026-04-13
 
 ### LaunchAgent PATH detection + tomli dependency fix
