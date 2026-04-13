@@ -145,6 +145,12 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://nexo-brain.com/blog/nexo-5-3-10-runtime-metadata-and-deep-doctor-hardening/</loc>
+    <lastmod>2026-04-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.95</priority>
+  </url>
+  <url>
     <loc>https://nexo-brain.com/blog/nexo-5-3-9-packaged-core-manifest-heal/</loc>
     <lastmod>2026-04-13</lastmod>
     <changefreq>monthly</changefreq>

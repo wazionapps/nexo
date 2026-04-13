@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXO 5.3.10: Packaged Runtime Truth, Evolution Telemetry, and Synthesis Loop Closure</title>
+    <meta name="description" content="NEXO 5.3.10 keeps packaged runtime metadata aligned with the published npm package, makes deep doctor honest during fresh bootstrap, restores explicit Evolution score telemetry, and feeds actionable startup/update summaries back into synthesis.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-5-3-10-runtime-metadata-and-deep-doctor-hardening/">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/blog/nexo-5-3-10-runtime-metadata-and-deep-doctor-hardening/">
+    <meta property="og:title" content="NEXO 5.3.10: Packaged Runtime Truth, Evolution Telemetry, and Synthesis Loop Closure">
+    <meta property="og:description" content="A truthfulness patch for packaged users and the shared-brain loop: installs keep ~/.nexo/package.json aligned, deep doctor waits for bootstrap honestly, Evolution asks for explicit scores again, and actionable startup/update summaries re-enter synthesis.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+    <meta property="article:published_time" content="2026-04-13">
+    <meta property="article:author" content="Francisco Cerda Puigserver">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO 5.3.10: Packaged Runtime Truth, Evolution Telemetry, and Synthesis Loop Closure">
+    <meta name="twitter:description" content="5.3.10 keeps packaged runtime metadata aligned, makes deep doctor honest during fresh bootstrap, restores explicit Evolution score telemetry, and closes a write-only startup/update summary loop.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "NEXO 5.3.10: Packaged Runtime Truth, Evolution Telemetry, and Synthesis Loop Closure",
+        "description": "NEXO 5.3.10 keeps packaged runtime metadata aligned with the published npm package, makes deep doctor honest during fresh bootstrap, restores explicit Evolution score telemetry, and feeds actionable startup/update summaries back into synthesis.",
+        "datePublished": "2026-04-13",
+        "dateModified": "2026-04-13",
+        "author": {
+            "@type": "Person",
+            "name": "Francisco Cerda Puigserver"
+        },
+        "publisher": {
+            "@type": "Organization",
+            "name": "WAzion",
+            "url": "https://www.wazion.com"
+        },
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https://nexo-brain.com/blog/nexo-5-3-10-runtime-metadata-and-deep-doctor-hardening/"
+        },
+        "url": "https://nexo-brain.com/blog/nexo-5-3-10-runtime-metadata-and-deep-doctor-hardening/",
+        "image": "https://nexo-brain.com/assets/nexo-brain-infographic-v5.png",
+        "keywords": ["NEXO 5.3.10", "~/.nexo/package.json", "nexo doctor --tier deep", "evolution_metrics", "update-last-summary.json", "packaged update"]
+    }
+    </script>
+
+    <style>
+        .article-header { padding-top: 128px; padding-bottom: 40px; text-align: center; }
+        .article-meta { font-size: 14px; color: var(--text-muted); margin-bottom: 16px; }
+        .article-body {
+            max-width: 720px; margin: 0 auto; padding: 0 24px 80px;
+            font-size: 17px; line-height: 1.8; color: var(--text);
+        }
+        .article-body h2 { font-size: 28px; font-weight: 700; margin: 48px 0 16px; letter-spacing: -0.01em; }
+        .article-body p { margin-bottom: 20px; color: var(--text-muted); }
+        .article-body strong { color: var(--text); }
+        .article-body a { color: var(--purple-light); }
+        .article-body a:hover { color: var(--pink); }
+        .article-body code {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 14px; color: var(--pink);
+            background: rgba(236, 72, 153, 0.1);
+            padding: 2px 8px; border-radius: 4px;
+        }
+        .article-back {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 14px; font-weight: 600; color: var(--text-muted);
+            margin-bottom: 24px;
+        }
+        .article-back:hover { color: var(--purple-light); }
+        .article-visual { margin: 32px 0 40px; text-align: center; }
+        .article-visual img {
+            max-width: 100%;
+            border-radius: 16px;
+            border: 1px solid var(--dark-border);
+            box-shadow: 0 8px 32px rgba(37,99,235,0.18);
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-64.png" alt="NEXO Brain" class="logo-image">
+            <span class="logo-text">NEXO Brain</span>
+        </a>
+        <button class="mobile-menu-toggle" aria-label="Toggle navigation" onclick="toggleMobileMenu()">
+            <span></span><span></span><span></span>
+        </button>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/features/">Features</a>
+            <a href="/evolution/">Evolution</a>
+            <a href="/compare/">Compare</a>
+            <a href="/blog/">Blog</a>
+            <a href="/changelog/">Changelog</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta">GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<section class="article-header">
+    <div class="container">
+        <a href="/blog/" class="article-back">← Back to blog</a>
+        <div class="article-meta">April 13, 2026 · Patch release · packaged runtime / evolution / synthesis</div>
+        <h1 class="section-title" style="font-size:clamp(28px,4.5vw,48px);max-width:920px;margin:0 auto 16px;">NEXO 5.3.10: Packaged Runtime Truth, Evolution Telemetry, and Synthesis Loop Closure</h1>
+        <p class="section-subtitle" style="max-width:760px;margin:0 auto;">The 5.3.7 through 5.3.9 line fixed real packaged-runtime regressions on real machines. 5.3.10 closes the smaller but still important truth gaps that remained: stale runtime metadata, deep doctor warning too early, weekly Evolution finishing without score telemetry, and startup/update summaries that were still getting written without re-entering the shared-brain loop.</p>
+    </div>
+</section>
+
+<section>
+    <div class="article-body">
+        <div class="article-visual">
+            <img src="/assets/nexo-brain-infographic-v5.png" alt="NEXO Brain 5.3.10 release">
+        </div>
+
+        <p><strong>5.3.10 is about making the runtime tell the truth end to end.</strong> When an installed runtime says one version in one place and a different version in another, when doctor warns before the first expected artifact can exist, when Evolution runs without emitting its intended scores, or when startup/update summaries die in a log file, the product creates uncertainty without a real failure.</p>
+
+        <h2>What real-machine validation still exposed after 5.3.9</h2>
+        <p>By 5.3.9 the packaged runtime path was functionally healthy again: Claude MCP connected, exports worked, personal-script ownership recovered, and runtime doctor was honest about the larger runtime boundary. But a few smaller mismatches still showed up under real usage.</p>
+        <p><code>~/.nexo/package.json</code> could stay on an older version even after the published npm package and <code>version.json</code> had moved forward successfully. <code>nexo doctor --tier deep</code> could report a degraded self-audit state immediately after install or update simply because <code>self-audit-summary.json</code> had not been produced yet. Weekly Evolution expected <code>dimension_scores</code> and <code>score_evidence</code> but its prompt never required them, so <code>nexo_evolution_status</code> could stay blank even after a real cycle. And <code>update-last-summary.json</code> was still being written without feeding any reader in the daily synthesis path.</p>
+
+        <h2>Why the runtime metadata drift mattered</h2>
+        <p>The runtime already trusted <code>version.json</code> first for the real version check, so the system was not broken. But stale <code>package.json</code> inside <code>~/.nexo</code> still polluted secondary diagnostics and made the packaged runtime look less coherent than it actually was.</p>
+        <p>5.3.10 fixes that by refreshing the root runtime <code>package.json</code> during fresh install, migration, and same-version refresh paths. The runtime metadata under <code>~/.nexo</code> now matches the package that was really installed.</p>
+
+        <h2>Why deep doctor looked worse than reality</h2>
+        <p>The self-audit check was treating the absence of <code>self-audit-summary.json</code> as a degraded state without first asking whether the daily self-audit was actually enabled or whether the runtime had only just been installed. On a fresh packaged machine, that turned a pending daily artifact into a warning that sounded like breakage.</p>
+        <p>5.3.10 makes that logic more honest. If self-audit automation is disabled, doctor says so. If the runtime was just installed or updated and the self-audit is configured, doctor reports that the summary is still pending instead of degrading the deep health result prematurely.</p>
+
+        <h2>Why Evolution telemetry had gone silent</h2>
+        <p>The weekly runner already knew how to persist <code>dimension_scores</code> and <code>score_evidence</code> into <code>evolution_metrics</code>, but the prompt contract never asked the automation backend to return those keys. The cycle could finish with analysis and proposals while leaving the score table empty.</p>
+        <p>5.3.10 restores that contract explicitly. The prompt now requires all five canonical dimension keys every time, and the status surface falls back to the objective file if the score table is still empty. That makes the operator-facing Evolution status useful again instead of failing silently.</p>
+
+        <h2>Why startup/update summaries needed a reader</h2>
+        <p><code>update-last-summary.json</code> captured useful runtime events such as deferred syncs, bootstrap changes, healed personal schedules, and update errors, but nothing in the daily intelligence loop was reading it back. That is exactly the kind of low-grade write-only artifact that makes a shared-brain runtime feel less coherent over time.</p>
+        <p>5.3.10 closes that loop carefully. Daily synthesis ingests the summary only when it carries something actionable. Routine cooldown and no-op startup summaries stay silent instead of polluting the briefing.</p>
+
+        <h2>What changes for the operator</h2>
+        <p>The outcome is small but important: after a successful packaged update, the runtime metadata looks the way the runtime really is, the first deep doctor pass stops creating doubt where there is no real fault, Evolution exposes score telemetry again, and startup/update signals only surface in synthesis when they can change behavior. That matters because daily trust is built from dozens of tiny honest signals, not just from major bugfix releases.</p>
+
+        <h2>Upgrade</h2>
+        <p>Open the <a href="/changelog/#v5310">5.3.10 changelog section</a> for the exact release note. For installed users, the intended path now looks like this:</p>
+        <p><code>npm install -g nexo-brain@5.3.10</code><br><code>nexo update</code><br><code>nexo doctor --tier deep</code><br><code>nexo doctor --tier runtime</code></p>
+        <p>The important effect is not a new headline feature. It is a more trustworthy runtime: the packaged install keeps its own metadata aligned, doctor distinguishes “not run yet” from “actually unhealthy,” Evolution exposes its intended telemetry again, and operational startup/update signals stop disappearing into a write-only file.</p>
+    </div>
+</section>
+
+<footer>
+    <div class="container">
+        <div class="footer-content">
+            <div class="footer-left">
+                Created by <strong>Francisco Cerd&agrave; Puigserver</strong> &amp; <strong>NEXO</strong> (Claude Opus) &bull; Built by <a href="https://www.wazion.com">WAzion</a> &bull; AGPL-3.0 License &bull; &copy; 2026
+            </div>
+            <div class="footer-links">
+                <a href="https://github.com/wazionapps/nexo">GitHub</a>
+                <a href="https://x.com/NEXOBRAIN">X / Twitter</a>
+                <a href="https://github.com/sponsors/wazionapps">Sponsor</a>
+                <a href="/docs/">Docs</a>
+                <a href="/compare/">Compare</a>
+                <a href="/blog/">Blog</a>
+                <a href="https://www.npmjs.com/package/nexo-brain">npm</a>
+                <a href="https://github.com/wazionapps/nexo/releases">Releases</a>
+            </div>
+            <div style="text-align:center;margin-top:12px;color:#6b7280;font-size:12px;">Last updated: April 2026</div>
+        </div>
+    </div>
+</footer>
+
+</body>
+</html>
