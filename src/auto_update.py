@@ -2267,6 +2267,14 @@ def manual_sync_update(*, interactive: bool = False, allow_source_pull: bool = T
             sync_result["warnings"].append(
                 f"Preserved {len(copy_stats['script_conflicts'])} personal runtime script collision(s) in NEXO_HOME/scripts"
             )
+        # Update runtime dependencies (best-effort)
+        try:
+            from plugins.update import _update_runtime_dependencies, _format_dep_results
+            dep_results = _update_runtime_dependencies(progress_fn=progress_fn)
+            sync_result["runtime_dependencies"] = dep_results
+        except Exception:
+            pass  # Non-critical
+
         _emit_progress(progress_fn, "Runtime update completed.")
     except Exception as e:
         _emit_progress(progress_fn, "Update failed; restoring previous runtime state...")

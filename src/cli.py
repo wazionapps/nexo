@@ -903,6 +903,17 @@ def _update(args):
                 print(f"  Personal schedules: {invalid} declarations need review")
             if result.get("pulled_source"):
                 print("  Source repo: pulled latest fast-forward before sync")
+            for dep in result.get("runtime_dependencies") or []:
+                dep_name = dep.get("name", "")
+                dep_status = dep.get("status", "")
+                if dep_status == "updated":
+                    print(f"  Dependencies: {dep_name} {dep.get('old_version')} -> {dep.get('new_version')}")
+                elif dep_status == "installed":
+                    print(f"  Dependencies: {dep_name} installed ({dep.get('new_version')})")
+                elif dep_status == "already_latest":
+                    print(f"  Dependencies: {dep_name} {dep.get('old_version')} (latest)")
+                elif dep_status == "failed":
+                    print(f"  WARNING: {dep_name} update failed: {dep.get('error', 'unknown')}")
             if choice.get("prompted"):
                 print(f"  Power policy: {runtime_power['format_power_policy_label'](choice.get('policy'))}")
             if power_result.get("message"):

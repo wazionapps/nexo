@@ -145,6 +145,12 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://nexo-brain.com/blog/nexo-5-4-6-runtime-dependency-management/</loc>
+    <lastmod>2026-04-14</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.95</priority>
+  </url>
+  <url>
     <loc>https://nexo-brain.com/blog/nexo-5-4-5-ci-timeout-fix/</loc>
     <lastmod>2026-04-14</lastmod>
     <changefreq>monthly</changefreq>

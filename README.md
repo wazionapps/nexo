@@ -18,9 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `5.4.5` is the current packaged-runtime line: test isolation for tree_hygiene module + fake venv to prevent CI timeout — completes the publish workflow fix from v5.4.3.
+Version `5.4.6` is the current packaged-runtime line: runtime dependency management in `nexo update` + daily auto-update cron. `nexo update` now manages external dependencies declared in `runtimeDependencies` (starting with Claude Code).
 
-Previously in `5.4.0`: runtime event bus at `~/.nexo/runtime/events.ndjson`, `nexo notify`, `nexo health --json`, `nexo logs --tail --json`, and a safe flat→nested migration for `calibration.json`.
+Previously in `5.4.5`: test isolation for tree_hygiene module + fake venv to prevent CI timeout.
 
 Start here:
 - [5-minute quickstart](docs/quickstart-5-minutes.md)
