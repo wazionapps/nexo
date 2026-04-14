@@ -1,5 +1,15 @@
 # Changelog
 
+## [5.3.28] - 2026-04-14
+
+### Feature: guardrail requires `guard_check` per-file, not per-session
+
+- `process_pre_tool_event` now verifies that `nexo_guard_check` was
+  invoked specifically for the file being edited, not merely once
+  somewhere in the session. Opens a `guard_unacknowledged` protocol
+  debt otherwise. Closes the loophole where a single early guard_check
+  satisfied the gate for every subsequent file in the session.
+
 ## [5.3.27] - 2026-04-14
 
 ### Feature: heartbeat exposes authoritative NOW_UTC
