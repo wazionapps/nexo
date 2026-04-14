@@ -181,6 +181,17 @@
     </div>
 </section>
 
+<!-- v5.4.3 test isolation fix -->
+<section id="v543" class="section-compact" style="background:linear-gradient(135deg,#09111f 0%,#14253a 50%,#1e3a5f 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.4.3 <span style="opacity:.5;font-weight:400;">&mdash; April 14, 2026</span></div>
+        <h2 class="section-title">Test isolation fix for tree_hygiene module</h2>
+        <p class="section-subtitle">
+            Hotfix: 2 tests in <code>TestRuntimeUpdate</code> that broke the v5.4.2 publish workflow now correctly copy <code>tree_hygiene.py</code> into their isolated runtime directories, resolving the <code>ModuleNotFoundError</code> that prevented the CI publish job from completing.
+        </p>
+    </div>
+</section>
+
 <!-- v5.4.2 traceability truth + buffer close-loop -->
 <section id="v542" class="section-compact" style="background:linear-gradient(135deg,#09111f 0%,#12324a 34%,#0f766e 68%,#22d3ee 100%);">
     <div class="container">

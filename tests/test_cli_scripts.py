@@ -264,6 +264,7 @@ class TestRuntimeUpdate:
         (runtime_home / "cli.py").write_text((current_src / "cli.py").read_text())
         (runtime_home / "auto_update.py").write_text((current_src / "auto_update.py").read_text())
         (runtime_home / "runtime_home.py").write_text((current_src / "runtime_home.py").read_text())
+        (runtime_home / "tree_hygiene.py").write_text((current_src / "tree_hygiene.py").read_text())
         (runtime_home / "runtime_power.py").write_text(
             "def ensure_power_policy_choice(**kwargs):\n"
             "    return {'policy': 'disabled', 'prompted': False}\n\n"
@@ -455,6 +456,9 @@ class TestRuntimeUpdate:
         update_copy.write_text(src_update.read_text())
         (runtime_home / "runtime_home.py").write_text(
             (Path(os.path.dirname(__file__)).parent / "src" / "runtime_home.py").read_text()
+        )
+        (runtime_home / "tree_hygiene.py").write_text(
+            (Path(os.path.dirname(__file__)).parent / "src" / "tree_hygiene.py").read_text()
         )
 
         probe = (
