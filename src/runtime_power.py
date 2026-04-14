@@ -65,11 +65,16 @@ MACOS_FDA_PROBE_PATHS = (
     Path.home() / "Library" / "Safari",
     Path.home() / "Library" / "Application Support" / "AddressBook",
 )
-DEFAULT_CLAUDE_CODE_MODEL = "claude-opus-4-6[1m]"
-DEFAULT_CLAUDE_CODE_REASONING_EFFORT = ""
-# Codex defaults mirror the user's primary model — no hardcoded third-party models.
-DEFAULT_CODEX_MODEL = DEFAULT_CLAUDE_CODE_MODEL
-DEFAULT_CODEX_REASONING_EFFORT = ""
+# Model defaults loaded from src/model_defaults.json (single source of truth).
+from model_defaults import client_default as _model_client_default
+
+_CLAUDE_DEFAULTS = _model_client_default("claude_code")
+_CODEX_DEFAULTS = _model_client_default("codex")
+
+DEFAULT_CLAUDE_CODE_MODEL = _CLAUDE_DEFAULTS["model"]
+DEFAULT_CLAUDE_CODE_REASONING_EFFORT = _CLAUDE_DEFAULTS["reasoning_effort"]
+DEFAULT_CODEX_MODEL = _CODEX_DEFAULTS["model"]
+DEFAULT_CODEX_REASONING_EFFORT = _CODEX_DEFAULTS["reasoning_effort"]
 
 
 def resolve_launchagent_path() -> str:

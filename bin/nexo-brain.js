@@ -33,10 +33,32 @@ const LAUNCH_AGENTS = path.join(
 );
 const MACOS_FDA_SETTINGS_URL = "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles";
 const PUBLIC_CONTRIBUTION_UPSTREAM = "wazionapps/nexo";
-const DEFAULT_CLAUDE_CODE_MODEL = "claude-opus-4-6[1m]";
-const DEFAULT_CLAUDE_CODE_REASONING_EFFORT = "";
-const DEFAULT_CODEX_MODEL = "gpt-5.4";
-const DEFAULT_CODEX_REASONING_EFFORT = "xhigh";
+// Model defaults loaded from src/model_defaults.json — single source of truth
+// shared with the Python runtime (src/model_defaults.py). Edit the JSON to
+// change the recommended default for new installs and to offer an upgrade
+// prompt to existing users via `nexo update`.
+const MODEL_DEFAULTS_PATH = path.join(__dirname, "..", "src", "model_defaults.json");
+function _loadModelDefaults() {
+  const fallback = {
+    claude_code: { model: "claude-opus-4-6[1m]", reasoning_effort: "", display_name: "Opus 4.6 with 1M context" },
+    codex: { model: "gpt-5.4", reasoning_effort: "xhigh", display_name: "GPT-5.4 with max reasoning" },
+  };
+  try {
+    const raw = JSON.parse(fs.readFileSync(MODEL_DEFAULTS_PATH, "utf8"));
+    if (raw && typeof raw === "object") {
+      return {
+        claude_code: { ...fallback.claude_code, ...(raw.claude_code || {}) },
+        codex: { ...fallback.codex, ...(raw.codex || {}) },
+      };
+    }
+  } catch (_) {}
+  return fallback;
+}
+const _MODEL_DEFAULTS = _loadModelDefaults();
+const DEFAULT_CLAUDE_CODE_MODEL = _MODEL_DEFAULTS.claude_code.model;
+const DEFAULT_CLAUDE_CODE_REASONING_EFFORT = _MODEL_DEFAULTS.claude_code.reasoning_effort || "";
+const DEFAULT_CODEX_MODEL = _MODEL_DEFAULTS.codex.model;
+const DEFAULT_CODEX_REASONING_EFFORT = _MODEL_DEFAULTS.codex.reasoning_effort || "";
 
 function isEphemeralInstall(nexoHome) {
   const homeDir = require("os").homedir();

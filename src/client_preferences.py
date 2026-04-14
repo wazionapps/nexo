@@ -46,13 +46,18 @@ INSTALL_PREFERENCE_KEYS = {
     "skip",
     "manual",
 }
-DEFAULT_CLAUDE_CODE_MODEL = "claude-opus-4-6[1m]"
-DEFAULT_CLAUDE_CODE_REASONING_EFFORT = ""
-# Codex/fast defaults: fall back to the user's configured model, not a hardcoded
-# third-party model.  The user picks their model once at install time; every
-# profile and backend should honour that choice.
-DEFAULT_CODEX_MODEL = DEFAULT_CLAUDE_CODE_MODEL
-DEFAULT_CODEX_REASONING_EFFORT = ""
+# Model defaults are loaded from src/model_defaults.json (single source of
+# truth shared with bin/nexo-brain.js). Do not hardcode model values here —
+# edit the JSON instead.
+from model_defaults import client_default as _model_client_default
+
+_CLAUDE_DEFAULTS = _model_client_default("claude_code")
+_CODEX_DEFAULTS = _model_client_default("codex")
+
+DEFAULT_CLAUDE_CODE_MODEL = _CLAUDE_DEFAULTS["model"]
+DEFAULT_CLAUDE_CODE_REASONING_EFFORT = _CLAUDE_DEFAULTS["reasoning_effort"]
+DEFAULT_CODEX_MODEL = _CODEX_DEFAULTS["model"]
+DEFAULT_CODEX_REASONING_EFFORT = _CODEX_DEFAULTS["reasoning_effort"]
 DEFAULT_FAST_MODEL = DEFAULT_CLAUDE_CODE_MODEL
 DEFAULT_FAST_REASONING_EFFORT = ""
 
@@ -99,6 +104,14 @@ def default_client_preferences() -> dict:
             CLIENT_CLAUDE_CODE: "ask",
             CLIENT_CODEX: "ask",
             CLIENT_CLAUDE_DESKTOP: "manual",
+        },
+        # Tracks which model-recommendation version the user has already
+        # acknowledged per client. If an update ships a newer
+        # recommendation_version in src/model_defaults.json, the update flow
+        # offers a one-time upgrade prompt (see auto_update.py).
+        "acknowledged_model_recommendations": {
+            CLIENT_CLAUDE_CODE: 0,
+            CLIENT_CODEX: 0,
         },
     }
 
@@ -384,7 +397,28 @@ def normalize_client_preferences(
             schedule.get("automation_task_profiles")
         ),
         "client_install_preferences": install_preferences,
+        "acknowledged_model_recommendations": normalize_acknowledged_model_recommendations(
+            schedule.get("acknowledged_model_recommendations")
+        ),
     }
+
+
+def normalize_acknowledged_model_recommendations(value) -> dict[str, int]:
+    """Normalize the per-client acknowledged recommendation_version map.
+    Missing clients default to 0 (never acknowledged)."""
+    defaults = {CLIENT_CLAUDE_CODE: 0, CLIENT_CODEX: 0}
+    if not isinstance(value, dict):
+        return defaults
+    result = dict(defaults)
+    for raw_key, raw_val in value.items():
+        client_key = normalize_client_key(raw_key)
+        if client_key not in TERMINAL_CLIENT_KEYS:
+            continue
+        try:
+            result[client_key] = max(0, int(raw_val))
+        except (TypeError, ValueError):
+            continue
+    return result
 
 
 def apply_client_preferences(
@@ -398,6 +432,7 @@ def apply_client_preferences(
     client_runtime_profiles: dict | None = None,
     automation_task_profiles: dict | None = None,
     client_install_preferences: dict | None = None,
+    acknowledged_model_recommendations: dict | None = None,
 ) -> dict:
     merged = dict(schedule or {})
     current = normalize_client_preferences(schedule)
@@ -434,6 +469,13 @@ def apply_client_preferences(
         if client_install_preferences is not None
         else current["client_install_preferences"]
     )
+    merged["acknowledged_model_recommendations"] = (
+        normalize_acknowledged_model_recommendations(
+            acknowledged_model_recommendations
+            if acknowledged_model_recommendations is not None
+            else current.get("acknowledged_model_recommendations")
+        )
+    )
     return merged
 
 
@@ -451,6 +493,7 @@ def save_client_preferences(
     client_runtime_profiles: dict | None = None,
     automation_task_profiles: dict | None = None,
     client_install_preferences: dict | None = None,
+    acknowledged_model_recommendations: dict | None = None,
 ) -> Path:
     schedule = apply_client_preferences(
         load_schedule_config(),
@@ -462,6 +505,7 @@ def save_client_preferences(
         client_runtime_profiles=client_runtime_profiles,
         automation_task_profiles=automation_task_profiles,
         client_install_preferences=client_install_preferences,
+        acknowledged_model_recommendations=acknowledged_model_recommendations,
     )
     return save_schedule_config(schedule)
 

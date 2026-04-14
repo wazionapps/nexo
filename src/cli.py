@@ -915,9 +915,92 @@ def _update(args):
                 print(f"  Contributor mode: {public_contribution['format_public_contribution_label'](contrib_choice)}")
             if contrib_choice.get("message"):
                 print(f"  Contributor mode: {contrib_choice.get('message')}")
+            # One-time model-recommendation upgrade prompt (interactive only).
+            try:
+                _prompt_model_recommendations(interactive=interactive)
+            except Exception as exc:
+                print(f"  Model recommendation check skipped: {exc}", file=sys.stderr)
         else:
             print(f"UPDATE FAILED: {result.get('error', 'sync failed')}", file=sys.stderr)
     return 0 if result.get("ok") else 1
+
+
+def _prompt_model_recommendations(*, interactive: bool) -> None:
+    """If model_defaults.json has bumped recommendation_version beyond what
+    the user has acknowledged, offer a one-time upgrade prompt. In
+    non-interactive (cron/headless) contexts, only log a hint. Honours
+    customized models by skipping silently (see was_nexo_default)."""
+    from client_preferences import (
+        load_client_preferences,
+        save_client_preferences,
+        normalize_client_key,
+    )
+    from model_defaults import detect_outdated_recommendations, client_default
+
+    preferences = load_client_preferences()
+    pending = detect_outdated_recommendations(preferences)
+    if not pending:
+        return
+
+    is_tty = bool(interactive and sys.stdin.isatty() and sys.stdout.isatty())
+    if not is_tty:
+        for entry in pending:
+            print(
+                f"  ⭐ Model recommendation available for "
+                f"{entry['client']}: {entry['display_name']}. "
+                f"Run `nexo update` interactively to review and apply.",
+                file=sys.stderr,
+            )
+        return
+
+    updated_profiles = dict(preferences.get("client_runtime_profiles") or {})
+    updated_ack = dict(preferences.get("acknowledged_model_recommendations") or {})
+    changed = False
+    for entry in pending:
+        client = entry["client"]
+        effort_str = f" / {entry['current_effort']}" if entry["current_effort"] else ""
+        prev_effort = f" / {entry['user_effort']}" if entry["user_effort"] else ""
+        print()
+        print(f"[NEXO] ⭐ Nueva recomendación de modelo para {client}:")
+        print(
+            f"       {entry['current_model']}{effort_str}  "
+            f"(antes: {entry['user_model']}{prev_effort})"
+        )
+        print(f"       {entry['display_name']} — recomendado por NEXO.")
+        answer = input("       ¿Migrar tu configuración? [y/N/later]: ").strip().lower()
+        client_key = normalize_client_key(client) or client
+        if answer in {"y", "yes", "s", "si", "sí"}:
+            updated_profiles[client_key] = {
+                "model": entry["current_model"],
+                "reasoning_effort": entry["current_effort"],
+            }
+            updated_ack[client_key] = entry["current_version"]
+            print(f"       ✅ Migrado a {entry['current_model']}.")
+            changed = True
+        elif answer in {"later", "l", "luego"}:
+            # Do NOT acknowledge — will prompt again next interactive update.
+            print("       ↻ Te lo preguntaré en el próximo update.")
+        else:
+            # "N" / empty / anything else → record ack so we don't re-ask.
+            updated_ack[client_key] = entry["current_version"]
+            print(f"       Mantenido {entry['user_model']}. No te preguntaré de nuevo para esta versión.")
+            changed = True
+
+    if changed:
+        save_client_preferences(
+            client_runtime_profiles=updated_profiles,
+            acknowledged_model_recommendations=updated_ack,
+        )
+        # Re-sync clients so config.toml / settings.json reflect the new model.
+        try:
+            from client_sync import sync_all_clients
+            sync_all_clients(
+                nexo_home=NEXO_HOME,
+                runtime_root=NEXO_CODE,
+                preferences=load_client_preferences(),
+            )
+        except Exception:
+            pass
 
 
 def _clients_sync(args):
