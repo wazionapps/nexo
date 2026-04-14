@@ -126,9 +126,22 @@ def heal_runtime_profiles(profiles: dict) -> tuple[dict, list[str]]:
 
 def detect_outdated_recommendations(
     preferences: dict,
-) -> list[dict]:
-    """Return a list of clients whose user is on an older recommendation and
-    hasn't acknowledged the current one. Entries shape:
+) -> dict:
+    """Classify clients into "needs interactive prompt" vs "silent ack".
+
+    Returns a dict with two keys:
+      - ``pending``: list of entries that require an interactive prompt
+        because the user is still on an older NEXO-recommended model and a
+        newer recommendation is available.
+      - ``auto_ack``: mapping of ``{client: recommendation_version}`` that
+        should be acknowledged silently without prompting (because either
+        the user already matches the current recommended model, or they
+        have customized their model and we must respect that silently).
+
+    Saving the ``auto_ack`` entries prevents repeated stderr spam in
+    non-interactive (cron/headless) update runs.
+
+    ``pending`` entry shape:
       {
         "client": "codex",
         "current_model": "gpt-5.9",
@@ -139,7 +152,8 @@ def detect_outdated_recommendations(
         "display_name": "GPT-5.9 with high reasoning",
       }
     """
-    out: list[dict] = []
+    pending: list[dict] = []
+    auto_ack: dict[str, int] = {}
     profiles = preferences.get("client_runtime_profiles") or {}
     acknowledged = preferences.get("acknowledged_model_recommendations") or {}
     for client in ("claude_code", "codex"):
@@ -153,15 +167,22 @@ def detect_outdated_recommendations(
         ack_v = int(acknowledged.get(client) or 0)
         if current_v <= ack_v:
             continue
-        # Only offer upgrade if user is on a prior NEXO default.
-        # If they customized, respect their choice silently.
+        # User customized their model entirely (not a previously recommended
+        # NEXO default) — respect their choice and record ack silently so we
+        # don't log a hint every `nexo update`.
         if not was_nexo_default(client, user_model):
+            auto_ack[client] = current_v
             continue
-        # No change needed if they already match current (race: install wrote
-        # the new default but ack wasn't bumped). Treat as auto-acknowledged.
-        if user_model == default["model"] and user_effort == default["reasoning_effort"]:
+        # User is already on the current recommended model. Even if their
+        # reasoning_effort differs (e.g. they picked "max" at onboarding and
+        # the JSON stores ""), nothing to migrate — their effort is a
+        # personal choice layered on top of the recommended model.
+        if user_model == default["model"]:
+            auto_ack[client] = current_v
             continue
-        out.append({
+        # User is on a prior NEXO default and the current recommendation is
+        # a different model → offer interactive upgrade.
+        pending.append({
             "client": client,
             "current_model": default["model"],
             "current_effort": default["reasoning_effort"],
@@ -170,4 +191,4 @@ def detect_outdated_recommendations(
             "user_effort": user_effort,
             "display_name": default.get("display_name") or default["model"],
         })
-    return out
+    return {"pending": pending, "auto_ack": auto_ack}
