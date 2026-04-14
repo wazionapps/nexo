@@ -1773,7 +1773,7 @@ def check_personal_script_registry(fix: bool = False) -> DoctorCheck:
     )
 
 
-def check_client_backend_preferences() -> DoctorCheck:
+def check_client_backend_preferences(fix: bool = False) -> DoctorCheck:
     schedule = {}
     try:
         if SCHEDULE_FILE.is_file():
@@ -1828,7 +1828,28 @@ def check_client_backend_preferences() -> DoctorCheck:
             repair_plan.append(f"Install {automation_backend} or disable automation in schedule.json")
 
     if not repair_plan and status != "healthy":
-        repair_plan.append("Run `nexo update` or `nexo clients sync` after installing the selected client/backend")
+        repair_plan.append(
+            "Run `nexo doctor --tier runtime --fix` or `nexo update` so the selected client/backend is installed and re-synced where possible"
+        )
+
+    if fix and status != "healthy":
+        try:
+            from client_sync import sync_all_clients
+
+            sync_all_clients(
+                nexo_home=NEXO_HOME,
+                runtime_root=NEXO_CODE,
+                user_home=Path.home(),
+                preferences=prefs,
+                auto_install_missing_claude=True,
+            )
+        except Exception:
+            pass
+        post = check_client_backend_preferences(fix=False)
+        if post.status == "healthy":
+            post.fixed = True
+            post.summary += " (fixed)"
+        return post
 
     def _profile_label(client_key: str, profile: dict[str, str]) -> str:
         bits = [client_key]
@@ -3151,7 +3172,7 @@ def run_runtime_checks(fix: bool = False) -> list[DoctorCheck]:
         safe_check(check_watchdog_status),
         safe_check(check_stale_sessions),
         safe_check(check_cron_freshness),
-        safe_check(check_client_backend_preferences),
+        safe_check(check_client_backend_preferences, fix=fix),
         safe_check(check_client_bootstrap_parity, fix=fix),
         safe_check(check_codex_session_parity),
         safe_check(check_codex_conditioned_file_discipline),

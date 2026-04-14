@@ -306,6 +306,60 @@ def test_sync_all_clients_treats_missing_codex_as_non_fatal(tmp_path, monkeypatc
     assert "[mcp_servers.nexo]" in (home / ".codex" / "config.toml").read_text()
 
 
+def test_sync_all_clients_auto_installs_selected_claude_code_when_missing(tmp_path, monkeypatch):
+    import client_sync
+
+    runtime = _make_runtime(tmp_path)
+    home = tmp_path / "home"
+    attempts = []
+    install_state = {"installed": False}
+
+    def fake_detect(user_home=None):
+        return {
+            "claude_code": {
+                "installed": install_state["installed"],
+                "path": "/tmp/fake-claude" if install_state["installed"] else "",
+                "detected_by": "binary" if install_state["installed"] else "missing",
+            },
+            "codex": {"installed": False, "path": "", "detected_by": "missing"},
+            "claude_desktop": {"installed": False, "path": "", "detected_by": "missing"},
+        }
+
+    def fake_run(cmd, **kwargs):
+        attempts.append(cmd)
+        if cmd[:2] == ["npm", "install"]:
+            install_state["installed"] = True
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(client_sync, "detect_installed_clients", fake_detect)
+    monkeypatch.setattr(client_sync.subprocess, "run", fake_run)
+    monkeypatch.setattr(client_sync.sys, "platform", "darwin")
+
+    result = client_sync.sync_all_clients(
+        nexo_home=runtime,
+        runtime_root=runtime,
+        operator_name="Atlas",
+        user_home=home,
+        preferences={
+            "interactive_clients": {
+                "claude_code": True,
+                "codex": False,
+                "claude_desktop": False,
+            },
+            "default_terminal_client": "claude_code",
+            "automation_enabled": True,
+            "automation_backend": "claude_code",
+        },
+        auto_install_missing_claude=True,
+    )
+
+    assert result["ok"] is True
+    assert attempts[0] == ["npx", "-y", "@anthropic-ai/claude-code", "--version"]
+    assert attempts[1] == ["npm", "install", "-g", "@anthropic-ai/claude-code"]
+    assert result["install_results"]["claude_code"]["action"] == "installed"
+    assert result["install_results"]["claude_code"]["path"] == "/tmp/fake-claude"
+
+
 def test_sync_codex_defaults_operator_name_when_runtime_version_has_blank_value(tmp_path, monkeypatch):
     import client_sync
 

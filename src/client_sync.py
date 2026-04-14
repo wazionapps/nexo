@@ -24,6 +24,7 @@ try:
     from client_preferences import (
         BACKEND_NONE,
         INTERACTIVE_CLIENT_KEYS,
+        detect_installed_clients,
         normalize_backend_key,
         normalize_client_key,
         normalize_client_preferences,
@@ -67,6 +68,16 @@ except Exception:
             "codex": {"model": _default_model, "reasoning_effort": ""},
         }
         return dict(defaults.get(client, {}))
+
+    def detect_installed_clients(user_home: str | os.PathLike[str] | None = None) -> dict[str, dict]:
+        return {
+            "claude_code": {"installed": False, "path": "", "detected_by": "missing"},
+            "codex": {"installed": False, "path": "", "detected_by": "missing"},
+            "claude_desktop": {"installed": False, "path": "", "detected_by": "missing"},
+        }
+
+
+CLAUDE_CODE_NPM_PACKAGE = "@anthropic-ai/claude-code"
 
 
 
@@ -131,6 +142,108 @@ def _resolve_python(nexo_home: Path, explicit: str = "") -> str:
         if candidate and Path(candidate).exists():
             return str(Path(candidate))
     return explicit or sys.executable
+
+
+def _cli_install_env(user_home: Path | None = None) -> dict[str, str]:
+    env = os.environ.copy()
+    if user_home is not None:
+        env["HOME"] = str(user_home)
+    return env
+
+
+def _installed_client_path(client_key: str, *, user_home: Path | None = None) -> str:
+    info = detect_installed_clients(user_home=user_home).get(client_key, {})
+    if info.get("installed"):
+        return str(info.get("path") or "")
+    return ""
+
+
+def ensure_claude_code_installed(*, user_home: str | os.PathLike[str] | None = None) -> dict:
+    home_path = Path(user_home).expanduser() if user_home else _user_home()
+    existing = _installed_client_path("claude_code", user_home=home_path)
+    if existing:
+        return {
+            "ok": True,
+            "client": "claude_code",
+            "installed": True,
+            "changed": False,
+            "action": "already_installed",
+            "path": existing,
+            "attempts": [],
+        }
+
+    attempts: list[str] = []
+    env = _cli_install_env(home_path)
+
+    try:
+        probe = subprocess.run(
+            ["npx", "-y", CLAUDE_CODE_NPM_PACKAGE, "--version"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            env=env,
+        )
+        if probe.returncode != 0:
+            attempts.append((probe.stderr or probe.stdout or "npx probe failed").strip())
+    except Exception as exc:
+        attempts.append(f"npx probe failed: {exc}")
+
+    installed_after_probe = _installed_client_path("claude_code", user_home=home_path)
+    if installed_after_probe:
+        return {
+            "ok": True,
+            "client": "claude_code",
+            "installed": True,
+            "changed": True,
+            "action": "installed_via_npx",
+            "path": installed_after_probe,
+            "attempts": attempts,
+        }
+
+    install_cmd = (
+        ["sudo", "npm", "install", "-g", CLAUDE_CODE_NPM_PACKAGE]
+        if sys.platform == "linux"
+        else ["npm", "install", "-g", CLAUDE_CODE_NPM_PACKAGE]
+    )
+    install_error = ""
+    try:
+        install = subprocess.run(
+            install_cmd,
+            capture_output=True,
+            text=True,
+            timeout=180,
+            env=env,
+        )
+        if install.returncode != 0:
+            install_error = (install.stderr or install.stdout or "npm install failed").strip()
+            attempts.append(install_error)
+    except Exception as exc:
+        install_error = f"npm install failed: {exc}"
+        attempts.append(install_error)
+
+    installed_path = _installed_client_path("claude_code", user_home=home_path)
+    if installed_path:
+        return {
+            "ok": True,
+            "client": "claude_code",
+            "installed": True,
+            "changed": True,
+            "action": "installed",
+            "path": installed_path,
+            "attempts": attempts,
+        }
+
+    error = install_error or "Claude Code install did not produce a `claude` binary in PATH"
+    return {
+        "ok": False,
+        "client": "claude_code",
+        "installed": False,
+        "changed": False,
+        "action": "failed",
+        "path": "",
+        "attempts": attempts,
+        "error": error,
+    }
 
 
 def build_server_config(
@@ -856,6 +969,7 @@ def sync_all_clients(
     user_home: str | os.PathLike[str] | None = None,
     enabled_clients: list[str] | tuple[str, ...] | set[str] | None = None,
     preferences: dict | None = None,
+    auto_install_missing_claude: bool = False,
 ) -> dict:
     if enabled_clients is None:
         if preferences is None:
@@ -876,6 +990,10 @@ def sync_all_clients(
         enabled_set = {normalize_client_key(item) for item in enabled_clients if normalize_client_key(item)}
         if not enabled_set:
             enabled_set = {"claude_code"}
+
+    install_results: dict[str, dict] = {}
+    if auto_install_missing_claude and "claude_code" in enabled_set:
+        install_results["claude_code"] = ensure_claude_code_installed(user_home=user_home)
 
     def _safe(label: str, fn) -> dict:
         if label not in enabled_set:
@@ -902,7 +1020,10 @@ def sync_all_clients(
         "claude_desktop": _safe("claude_desktop", sync_claude_desktop),
         "codex": _safe("codex", sync_codex),
     }
-    ok = all(item.get("ok") or item.get("skipped") for item in results.values())
+    ok = (
+        all(item.get("ok") or item.get("skipped") for item in results.values())
+        and all(item.get("ok") for item in install_results.values())
+    )
     return {
         "ok": ok,
         "nexo_home": str(Path(nexo_home).expanduser() if nexo_home else _default_nexo_home()),
@@ -911,6 +1032,7 @@ def sync_all_clients(
             runtime_root,
         )),
         "enabled_clients": sorted(enabled_set),
+        "install_results": install_results,
         "clients": results,
     }
 
