@@ -87,19 +87,23 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v5.4.0 live</span>
-                    <span class="page-chip">Events bus</span>
-                    <span class="page-chip">Health + logs</span>
-                    <span class="page-chip">Calibration migration</span>
+                    <span class="page-chip">v5.4.1 live</span>
+                    <span class="page-chip">Hook hygiene</span>
+                    <span class="page-chip">Sensory Register fix</span>
+                    <span class="page-chip">Honest post-mortem</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v540" class="btn btn-primary">Start with v5.4.0</a>
+                    <a href="#v541" class="btn btn-primary">Start with v5.4.1</a>
                     <a href="#v400" class="btn btn-secondary">See v4.0.0</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
             </div>
             <div class="page-visual">
                 <div class="page-stack">
+                    <div class="page-stack-card">
+                        <strong>v5.4.1</strong>
+                        <span>Hook hygiene fix. The PostToolUse <code>capture-session.sh</code> hook had been reading a nonexistent env var since 2026-04-12, silently writing <code>"tool":"unknown"</code> to the Sensory Register for 48 hours. v5.4.1 parses <code>tool_name</code> from stdin JSON, stops filtering <code>Bash</code>, removes a runtime-only duplicate, and purges pre-fix entries on update.</span>
+                    </div>
                     <div class="page-stack-card">
                         <strong>v5.4.0</strong>
                         <span>Runtime events bus at <code>~/.nexo/runtime/events.ndjson</code>, <code>nexo notify</code> for one-shot proactive events, <code>nexo health --json</code> subsystem snapshot, <code>nexo logs --tail --json</code> structured log access, and a safe flat→nested <code>calibration.json</code> migration that runs silently inside <code>nexo update</code>.</span>
@@ -170,6 +174,25 @@
                 <div id="changelog-pager" class="changelog-pager" aria-label="Changelog pagination"></div>
             </div>
         </div>
+    </div>
+</section>
+
+<!-- v5.4.1 hook hygiene fix -->
+<section id="v541" class="section-compact" style="background:linear-gradient(135deg,#09111f 0%,#3b1d1d 34%,#dc2626 68%,#22d3ee 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.4.1 <span style="opacity:.5;font-weight:400;">&mdash; April 14, 2026</span></div>
+        <h2 class="section-title">Hook hygiene fix — the Sensory Register was writing "unknown" for 48 hours</h2>
+        <p class="section-subtitle">
+            A post-mortem first and a patch second. The PostToolUse <code>capture-session.sh</code> hook had been reading a nonexistent env var since its introduction, polluting the Sensory Register with 100% noise. This release fixes the hook, removes a runtime-only duplicate, and purges pre-fix entries from the buffer on update.
+        </p>
+        <ul style="list-style:none;padding:0;margin:24px 0 0;display:grid;gap:12px;">
+            <li><strong>Root cause.</strong> The hook read <code>$CLAUDE_TOOL_NAME</code> — an environment variable Claude Code has never set. Tool name arrives in a JSON payload on stdin. A later "hardening" commit absorbed stdin but never parsed it, entrenching the bug behind a plausible-looking defensive change.</li>
+            <li><strong>Fix.</strong> Parse <code>tool_name</code> from stdin JSON with python3 (same pattern <code>capture-tool-logs.sh</code> already used). Empty tool name exits silently instead of writing noise. <code>Bash</code> is no longer filtered — it is where commits, pushes, and npm publishes live.</li>
+            <li><strong>Contamination removed.</strong> <code>~/.nexo/hooks/capture-session 2.sh</code> duplicate deleted. v5.3.29 gates block these in the repo tree but not in the runtime bucket; v5.4.1 supersedes both copies.</li>
+            <li><strong>One-time purge.</strong> <code>nexo update</code> strips pre-existing <code>"tool":"unknown"</code> lines from <code>session_buffer.jsonl</code>, keeps a <code>.pre-v5.4.1.bak</code> backup, runs once per host.</li>
+            <li><strong>Lesson.</strong> Release-readiness gates protect the source. Runtime hygiene gates need to reach the runtime too. Hooks that write data deserve a test that at least asserts the data is not a constant.</li>
+        </ul>
+        <p style="margin-top:24px;">See the <a href="/blog/nexo-5-4-1-hook-hygiene-fix/" style="color:inherit;text-decoration:underline;">full post-mortem</a>.</p>
     </div>
 </section>
 

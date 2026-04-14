@@ -134,7 +134,7 @@
                     <span class="page-chip">Competitive analysis</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="/blog/nexo-5-4-0-events-health-logs/" class="btn btn-primary">Read latest release</a>
+                    <a href="/blog/nexo-5-4-1-hook-hygiene-fix/" class="btn btn-primary">Read latest release</a>
                     <a href="/changelog/" class="btn btn-secondary">Latest release notes</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -143,24 +143,24 @@
                 <div class="section-label">Latest release</div>
                 <div class="blog-featured-meta">
                     <span class="compare-chip">April 14, 2026</span>
-                    <span class="compare-chip">Runtime events</span>
-                    <span class="compare-chip">Health + logs</span>
-                    <span class="compare-chip">Calibration migration</span>
+                    <span class="compare-chip">Hook hygiene</span>
+                    <span class="compare-chip">Sensory Register</span>
+                    <span class="compare-chip">Honest post-mortem</span>
                 </div>
-                <h2>NEXO 5.4.0: Runtime events bus + nexo notify / health / logs + safe calibration migration</h2>
-                <p>NEXO 5.4.0: append-only event bus at <code>~/.nexo/runtime/events.ndjson</code>, <code>nexo notify</code> for one-shot proactive events, <code>nexo health --json</code> for a rolled-up subsystem snapshot, <code>nexo logs --tail --json</code> for structured log access, and a silent flat→nested <code>calibration.json</code> migration that runs with a pre-migrate backup.</p>
+                <h2>NEXO 5.4.1: Hook hygiene fix — the Sensory Register was silently writing "unknown" for 48 hours</h2>
+                <p>NEXO 5.4.1: the PostToolUse <code>capture-session.sh</code> hook had been reading a nonexistent env var since its introduction on 2026-04-12, polluting <code>~/.nexo/brain/session_buffer.jsonl</code> with 100% noise. v5.4.1 parses <code>tool_name</code> from stdin JSON (same pattern <code>capture-tool-logs.sh</code> already used), keeps <code>Bash</code> in the stream instead of filtering it, removes a contaminating runtime-only duplicate, and purges pre-fix entries on update.</p>
                 <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
-                    <a href="/blog/nexo-5-4-0-events-health-logs/" class="btn btn-primary">Open article</a>
-                    <a href="/changelog/#v540" class="btn btn-secondary">Open changelog</a>
+                    <a href="/blog/nexo-5-4-1-hook-hygiene-fix/" class="btn btn-primary">Open article</a>
+                    <a href="/changelog/#v541" class="btn btn-secondary">Open changelog</a>
                 </div>
                 <div class="blog-mini-stack">
                     <div class="blog-mini-card">
                         <strong>Companion view</strong>
-                        <span><a href="/changelog/#v540">The 5.4.0 changelog section</a></span>
+                        <span><a href="/changelog/#v541">The 5.4.1 changelog section</a></span>
                     </div>
                     <div class="blog-mini-card">
                         <strong>Previous release</strong>
-                        <span><a href="/blog/nexo-5-3-30-desktop-bridge/">NEXO 5.3.30: Desktop Bridge — four read-only CLI commands</a>.</span>
+                        <span><a href="/blog/nexo-5-4-0-events-health-logs/">NEXO 5.4.0: Runtime events + notify / health / logs + calibration migration</a>.</span>
                     </div>
                 </div>
             </div>
@@ -172,6 +172,13 @@
 <section class="section-flush-top">
     <div class="container">
         <div class="blog-grid">
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 14, 2026</div>
+                <h2><a href="/blog/nexo-5-4-1-hook-hygiene-fix/">NEXO 5.4.1: Hook hygiene fix — Sensory Register writing "unknown" for 48h</a></h2>
+                <p>NEXO 5.4.1: the PostToolUse hook that feeds <code>~/.nexo/brain/session_buffer.jsonl</code> had been reading a nonexistent env var since its introduction two days earlier, writing 100% noise. This release parses the tool name from stdin JSON, keeps <code>Bash</code> in the stream, removes a runtime-only duplicate, and purges pre-fix entries on update. Honest post-mortem inside.</p>
+                <a href="/blog/nexo-5-4-1-hook-hygiene-fix/" class="read-more">Read article <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></a>
+            </div>
 
             <div class="blog-card">
                 <div class="blog-card-date">April 14, 2026</div>
