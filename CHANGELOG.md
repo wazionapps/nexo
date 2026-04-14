@@ -1,5 +1,14 @@
 # Changelog
 
+## [5.4.9] - 2026-04-15
+
+### Feat: headless Protocol Enforcer in run_automation_prompt
+
+- All headless sessions (Deep Sleep, email-monitor, followup-runner, catchup,
+  synthesis, evolution, etc.) now receive enforcement rules via append_system_prompt.
+- Reads tool-enforcement-map.json and injects must/should rules automatically.
+- Single integration point: covers ~15 scripts without modifying any of them.
+
 ## [5.4.8] - 2026-04-15
 
 ### Feat: tool-enforcement-map v2.0 — multi-dimensional enforcement
