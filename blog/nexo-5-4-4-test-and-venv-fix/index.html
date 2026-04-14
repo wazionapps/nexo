@@ -3,21 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>NEXO 5.4.3: Test Isolation Fix for tree_hygiene Module</title>
-    <meta name="description" content="NEXO 5.4.3 fixes 2 test failures that broke the v5.4.2 publish workflow by copying tree_hygiene.py into isolated runtime directories used by TestRuntimeUpdate.">
+    <title>NEXO 5.4.4: Test Isolation + CI Venv Timeout Fix</title>
+    <meta name="description" content="NEXO 5.4.4 fixes 2 test failures that broke the v5.4.2 publish workflow by copying tree_hygiene.py into isolated runtime directories used by TestRuntimeUpdate.">
     <meta name="robots" content="index, follow">
-    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-5-4-3-test-isolation-fix/">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-5-4-4-test-and-venv-fix/">
 
     <meta property="og:type" content="article">
-    <meta property="og:url" content="https://nexo-brain.com/blog/nexo-5-4-3-test-isolation-fix/">
-    <meta property="og:title" content="NEXO 5.4.3: Test Isolation Fix for tree_hygiene Module">
+    <meta property="og:url" content="https://nexo-brain.com/blog/nexo-5-4-4-test-and-venv-fix/">
+    <meta property="og:title" content="NEXO 5.4.4: Test Isolation + CI Venv Timeout Fix">
     <meta property="og:description" content="Hotfix: 2 tests that broke the v5.4.2 publish workflow now correctly copy tree_hygiene.py into their isolated runtime directories.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
     <meta property="article:published_time" content="2026-04-14">
     <meta property="article:author" content="Francisco Cerda Puigserver">
 
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="NEXO 5.4.3: Test Isolation Fix for tree_hygiene Module">
+    <meta name="twitter:title" content="NEXO 5.4.4: Test Isolation + CI Venv Timeout Fix">
     <meta name="twitter:description" content="Hotfix: 2 tests that broke the v5.4.2 publish workflow now correctly copy tree_hygiene.py into their isolated runtime directories.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
 
@@ -38,8 +38,8 @@
     {
         "@context": "https://schema.org",
         "@type": "BlogPosting",
-        "headline": "NEXO 5.4.3: Test Isolation Fix for tree_hygiene Module",
-        "description": "NEXO 5.4.3 fixes 2 test failures that broke the v5.4.2 publish workflow by copying tree_hygiene.py into isolated runtime directories used by TestRuntimeUpdate.",
+        "headline": "NEXO 5.4.4: Test Isolation + CI Venv Timeout Fix",
+        "description": "NEXO 5.4.4 fixes 2 test failures that broke the v5.4.2 publish workflow by copying tree_hygiene.py into isolated runtime directories used by TestRuntimeUpdate.",
         "datePublished": "2026-04-14",
         "dateModified": "2026-04-14",
         "author": {
@@ -53,11 +53,11 @@
         },
         "mainEntityOfPage": {
             "@type": "WebPage",
-            "@id": "https://nexo-brain.com/blog/nexo-5-4-3-test-isolation-fix/"
+            "@id": "https://nexo-brain.com/blog/nexo-5-4-4-test-and-venv-fix/"
         },
-        "url": "https://nexo-brain.com/blog/nexo-5-4-3-test-isolation-fix/",
+        "url": "https://nexo-brain.com/blog/nexo-5-4-4-test-and-venv-fix/",
         "image": "https://nexo-brain.com/assets/og/og-blog.png",
-        "keywords": ["NEXO 5.4.3", "test isolation", "tree_hygiene", "CI fix", "publish workflow"]
+        "keywords": ["NEXO 5.4.4", "test isolation", "tree_hygiene", "CI fix", "publish workflow"]
     }
     </script>
 
@@ -115,7 +115,7 @@
     <div class="container">
         <a href="/blog/" class="article-back">&larr; Back to blog</a>
         <div class="article-meta">April 14, 2026 &middot; Hotfix &middot; CI / tests</div>
-        <h1 class="section-title" style="font-size:clamp(28px,4.5vw,48px);max-width:920px;margin:0 auto 16px;">NEXO 5.4.3: Test Isolation Fix for tree_hygiene Module</h1>
+        <h1 class="section-title" style="font-size:clamp(28px,4.5vw,48px);max-width:920px;margin:0 auto 16px;">NEXO 5.4.4: Test Isolation + CI Venv Timeout Fix</h1>
         <p class="section-subtitle" style="max-width:760px;margin:0 auto;">The v5.4.2 publish workflow failed because two tests set up isolated runtime directories without copying the newly required <code>tree_hygiene.py</code> module. This hotfix adds the missing copy.</p>
     </div>
 </section>
@@ -126,11 +126,11 @@
         <h2>What happened</h2>
         <p>When v5.4.2 introduced <code>from tree_hygiene import is_duplicate_artifact_name</code> in both <code>auto_update.py</code> and <code>plugins/update.py</code>, two existing tests in <code>TestRuntimeUpdate</code> broke. These tests create isolated temporary directories that simulate a packaged NEXO runtime, copying specific source files but not <code>tree_hygiene.py</code>. The result was a <code>ModuleNotFoundError</code> that caused the CI publish job to fail with 2 failed / 857 passed.</p>
 
-        <h2>The fix</h2>
-        <p>Both <code>test_installed_runtime_update_repairs_missing_public_contribution_module</code> and <code>test_packaged_update_reads_runtime_version_from_version_json</code> now copy <code>tree_hygiene.py</code> from the real source directory into their isolated runtime directories, matching the pattern already used for <code>runtime_home.py</code> and <code>auto_update.py</code>.</p>
+        <h2>The fix (v5.4.3 + v5.4.4)</h2>
+        <p><strong>v5.4.3</strong> added the missing <code>tree_hygiene.py</code> copy to both tests. <strong>v5.4.4</strong> adds fake <code>.venv/bin/python3</code> and <code>.venv/bin/pip</code> stubs to tests that run <code>nexo update</code>, so <code>_ensure_runtime_venv</code> finds a pre-existing venv and skips the slow creation that exceeded the 10-second subprocess timeout on GitHub Actions runners.</p>
 
         <h2>Impact</h2>
-        <p>This is a test-only change. No runtime behavior is modified. The publish workflow should now complete successfully, allowing npm and GitHub Release artifacts for the 5.4.x line to be created.</p>
+        <p>Test-only changes. No runtime behavior is modified. The publish workflow should now complete successfully, allowing npm and GitHub Release artifacts for the 5.4.x line to be created.</p>
 
     </div>
 </section>
