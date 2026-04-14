@@ -1,9 +1,10 @@
 # NEXO Brain
 
-> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v5.4.8).
+> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v5.4.9).
 
 NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It adds a local shared brain across supported clients, configurable terminal and automation backends, recovery-aware background jobs, startup preflight, runtime self-healing, smarter retrieval defaults, long-horizon overnight analysis, and 150+ MCP tools.
 
+v5.4.9: headless Protocol Enforcer — all crons/scripts get enforcement rules via append_system_prompt automatically
 v5.4.8: tool-enforcement-map v2.0 — multi-dimensional enforcement with must/should/may levels, dependency chains, internal calls tracking. 11 must + 10 should + 225 none
 v5.4.7: tool-enforcement-map.json — canonical map of all 247 tools with enforcement metadata for Protocol Enforcer. Includes verify_tool_map.py for drift detection
 v5.4.6: runtime dependency management — `nexo update` now manages external dependencies declared in `runtimeDependencies` (starting with Claude Code) + daily auto-update cron at 02:00
