@@ -25,15 +25,36 @@ echo "============================================================"
 echo "NEXO Preflight — $(date '+%Y-%m-%d %H:%M:%S')"
 echo "============================================================"
 
-# ── 1. py_compile for all Python scripts in src/scripts/ ──────────────────
+# ── 1. duplicate artifact hygiene ─────────────────────────────────────────
+echo ""
+echo "--- Check 1: Duplicate artifact hygiene ---"
+DUPLICATES=$(python3 - <<PY
+import sys
+from pathlib import Path
+sys.path.insert(0, "$SRC")
+from tree_hygiene import find_duplicate_artifact_paths
+
+repo_root = Path("$REPO_ROOT")
+for path in find_duplicate_artifact_paths(repo_root):
+    print(path.relative_to(repo_root))
+PY
+)
+if [ -n "$DUPLICATES" ]; then
+    while IFS= read -r duplicate; do
+        [ -n "$duplicate" ] || continue
+        fail "$duplicate — duplicate artifact copy detected"
+    done <<< "$DUPLICATES"
+else
+    pass "no duplicate artifact copies found"
+fi
+
+# ── 2. py_compile for all Python scripts in src/scripts/ ──────────────────
 echo ""
 # Non-core scripts to exclude from compilation checks
 NON_CORE="check-context.py"
 
-echo "--- Check 1: Python syntax (src/scripts/*.py) ---"
+echo "--- Check 2: Python syntax (src/scripts/*.py) ---"
 for pyfile in "$SRC"/scripts/*.py; do
-    # Skip " 2" duplicate files (backup copies)
-    [[ "$pyfile" == *" 2"* ]] && continue
     [ -f "$pyfile" ] || continue
     name=$(basename "$pyfile")
     # Skip non-core scripts
@@ -47,9 +68,9 @@ for pyfile in "$SRC"/scripts/*.py; do
     fi
 done
 
-# ── 2. py_compile for auto_close_sessions.py ──────────────────────────────
+# ── 3. py_compile for auto_close_sessions.py ──────────────────────────────
 echo ""
-echo "--- Check 2: Python syntax (auto_close_sessions.py) ---"
+echo "--- Check 3: Python syntax (auto_close_sessions.py) ---"
 ACS="$SRC/auto_close_sessions.py"
 if [ -f "$ACS" ]; then
     if python3 -m py_compile "$ACS" 2>/dev/null; then
@@ -61,12 +82,10 @@ else
     fail "auto_close_sessions.py — file not found"
 fi
 
-# ── 3. bash -n for all shell scripts in src/scripts/ ─────────────────────
+# ── 4. bash -n for all shell scripts in src/scripts/ ─────────────────────
 echo ""
-echo "--- Check 3: Shell syntax (src/scripts/*.sh) ---"
+echo "--- Check 4: Shell syntax (src/scripts/*.sh) ---"
 for shfile in "$SRC"/scripts/*.sh; do
-    # Skip " 2" duplicate files (backup copies)
-    [[ "$shfile" == *" 2"* ]] && continue
     [ -f "$shfile" ] || continue
     name=$(basename "$shfile")
     if bash -n "$shfile" 2>/dev/null; then
@@ -76,9 +95,9 @@ for shfile in "$SRC"/scripts/*.sh; do
     fi
 done
 
-# ── 4. Manifest<->file consistency ────────────────────────────────────────
+# ── 5. Manifest<->file consistency ────────────────────────────────────────
 echo ""
-echo "--- Check 4: Manifest crons have existing script files ---"
+echo "--- Check 5: Manifest crons have existing script files ---"
 if [ ! -f "$MANIFEST" ]; then
     fail "manifest.json not found at $MANIFEST"
 else
@@ -109,9 +128,9 @@ except Exception as e:
     fi
 fi
 
-# ── 5. Manifest<->watchdog MONITORS consistency ──────────────────────────
+# ── 6. Manifest<->watchdog MONITORS consistency ──────────────────────────
 echo ""
-echo "--- Check 5: Manifest crons present in watchdog MONITORS ---"
+echo "--- Check 6: Manifest crons present in watchdog MONITORS ---"
 if [ ! -f "$WATCHDOG" ]; then
     fail "nexo-watchdog.sh not found at $WATCHDOG"
 else
@@ -141,9 +160,9 @@ else
     fi
 fi
 
-# ── 6. Manifest<->README consistency ─────────────────────────────────────
+# ── 7. Manifest<->README consistency ─────────────────────────────────────
 echo ""
-echo "--- Check 6: Manifest crons mentioned in README ---"
+echo "--- Check 7: Manifest crons mentioned in README ---"
 README="$REPO_ROOT/README.md"
 if [ -f "$README" ] && [ -f "$MANIFEST" ]; then
     manifest_ids=$(python3 -c "
@@ -164,9 +183,9 @@ else
     warn "README.md or manifest.json not found, skipping"
 fi
 
-# ── 7. Smoke tests ──────────────────────────────────────────────────────
+# ── 8. Smoke tests ──────────────────────────────────────────────────────
 echo ""
-echo "--- Check 7: Smoke tests ---"
+echo "--- Check 8: Smoke tests ---"
 
 # 7a: catchup weekday conversion (manifest 0=Sunday -> python 6)
 WEEKDAY_TEST=$(python3 -c "

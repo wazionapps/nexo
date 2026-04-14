@@ -18,6 +18,7 @@ import time
 from pathlib import Path
 
 from runtime_home import export_resolved_nexo_home, managed_nexo_home
+from tree_hygiene import is_duplicate_artifact_name
 
 NEXO_HOME = export_resolved_nexo_home()
 DATA_DIR = NEXO_HOME / "data"
@@ -61,6 +62,20 @@ CRITICAL_BACKUP_TABLES = ("learnings", "session_diary", "guard_checks", "protoco
 def _log(msg: str):
     """Log to stderr with prefix."""
     print(f"[NEXO auto-update] {msg}", file=sys.stderr)
+
+
+def _runtime_copy_ignore(*extra_patterns: str):
+    base_ignore = shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo", "*.db", *extra_patterns)
+
+    def _ignore(dir_name: str, names: list[str]) -> set[str]:
+        ignored = set(base_ignore(dir_name, names))
+        ignored.update(
+            name for name in names
+            if is_duplicate_artifact_name(Path(dir_name) / name)
+        )
+        return ignored
+
+    return _ignore
 
 
 def _critical_table_count(db_path: Path, table: str) -> int | None:
@@ -470,7 +485,7 @@ def _refresh_installed_manifest():
         if src_crons.exists():
             dst_crons.mkdir(parents=True, exist_ok=True)
             for f in src_crons.iterdir():
-                if f.is_file():
+                if f.is_file() and not is_duplicate_artifact_name(f):
                     shutil.copy2(str(f), str(dst_crons / f.name))
             _log("Refreshed installed crons manifest")
     except Exception as e:
@@ -746,7 +761,7 @@ def _sync_hooks():
     hooks_dest.mkdir(parents=True, exist_ok=True)
     synced = 0
     for f in hooks_src.iterdir():
-        if f.is_file() and f.suffix == ".sh":
+        if f.is_file() and f.suffix == ".sh" and not is_duplicate_artifact_name(f):
             dest = hooks_dest / f.name
             shutil.copy2(str(f), str(dest))
             os.chmod(str(dest), 0o755)
@@ -1441,7 +1456,7 @@ def _auto_update_check_locked() -> dict:
             import shutil
             scripts_dest.mkdir(parents=True, exist_ok=True)
             for f in scripts_src.iterdir():
-                if f.name.startswith('.') or f.name == '__pycache__':
+                if f.name.startswith('.') or f.name == '__pycache__' or is_duplicate_artifact_name(f):
                     continue
                 dest = scripts_dest / f.name
                 if f.is_file() and not dest.exists():
@@ -1475,12 +1490,12 @@ def _auto_update_check_locked() -> dict:
         if doctor_src.is_dir():
             import shutil
             if not doctor_dest.is_dir():
-                shutil.copytree(str(doctor_src), str(doctor_dest), ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+                shutil.copytree(str(doctor_src), str(doctor_dest), ignore=_runtime_copy_ignore())
                 _log("Backfilled doctor package")
             else:
                 # Update existing files
                 for root, dirs, files in os.walk(str(doctor_src)):
-                    dirs[:] = [d for d in dirs if d != "__pycache__"]
+                    dirs[:] = [d for d in dirs if d != "__pycache__" and not is_duplicate_artifact_name(Path(root) / d)]
                     rel = os.path.relpath(root, str(doctor_src))
                     dest_dir = doctor_dest / rel
                     dest_dir.mkdir(parents=True, exist_ok=True)
@@ -1488,6 +1503,8 @@ def _auto_update_check_locked() -> dict:
                         if f.endswith(".pyc"):
                             continue
                         src_f = Path(root) / f
+                        if is_duplicate_artifact_name(src_f):
+                            continue
                         dst_f = dest_dir / f
                         if not dst_f.exists() or src_f.stat().st_mtime > dst_f.stat().st_mtime:
                             shutil.copy2(str(src_f), str(dst_f))
@@ -1501,11 +1518,11 @@ def _auto_update_check_locked() -> dict:
         if skills_src.is_dir():
             import shutil
             if not skills_dest.is_dir():
-                shutil.copytree(str(skills_src), str(skills_dest), ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+                shutil.copytree(str(skills_src), str(skills_dest), ignore=_runtime_copy_ignore())
                 _log("Backfilled skills-core")
             else:
                 for root, dirs, files in os.walk(str(skills_src)):
-                    dirs[:] = [d for d in dirs if d != "__pycache__"]
+                    dirs[:] = [d for d in dirs if d != "__pycache__" and not is_duplicate_artifact_name(Path(root) / d)]
                     rel = os.path.relpath(root, str(skills_src))
                     dest_dir = skills_dest / rel
                     dest_dir.mkdir(parents=True, exist_ok=True)
@@ -1513,6 +1530,8 @@ def _auto_update_check_locked() -> dict:
                         if f.endswith(".pyc"):
                             continue
                         src_f = Path(root) / f
+                        if is_duplicate_artifact_name(src_f):
+                            continue
                         dst_f = dest_dir / f
                         if not dst_f.exists() or src_f.stat().st_mtime > dst_f.stat().st_mtime:
                             shutil.copy2(str(src_f), str(dst_f))
@@ -1539,7 +1558,7 @@ def _auto_update_check_locked() -> dict:
         import shutil
         if templates_src.is_dir():
             for item in templates_src.iterdir():
-                if item.name == "__pycache__":
+                if item.name == "__pycache__" or is_duplicate_artifact_name(item):
                     continue
                 dest_item = templates_dest / item.name
                 if item.is_file():
@@ -1548,7 +1567,7 @@ def _auto_update_check_locked() -> dict:
                 elif item.is_dir():
                     dest_item.mkdir(parents=True, exist_ok=True)
                     for sub in item.iterdir():
-                        if sub.is_file():
+                        if sub.is_file() and not is_duplicate_artifact_name(sub):
                             dest_sub = dest_item / sub.name
                             if not dest_sub.exists() or sub.stat().st_mtime > dest_sub.stat().st_mtime:
                                 shutil.copy2(str(sub), str(dest_sub))
@@ -1735,6 +1754,8 @@ def _discover_runtime_root_python_modules(base_dir: Path) -> list[str]:
             continue
         if item.name.startswith(".") or item.name == "__init__.py":
             continue
+        if is_duplicate_artifact_name(item):
+            continue
         modules.append(item.name)
     return modules
 
@@ -1857,7 +1878,7 @@ def _copy_runtime_from_source(src_dir: Path, repo_dir: Path, dest: Path = NEXO_H
             shutil.copytree(
                 str(pkg_src),
                 str(pkg_dest),
-                ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo", "*.db"),
+                ignore=_runtime_copy_ignore(),
             )
             copied_packages += 1
 
@@ -1874,7 +1895,7 @@ def _copy_runtime_from_source(src_dir: Path, repo_dir: Path, dest: Path = NEXO_H
     if plugins_src.is_dir():
         plugins_dest.mkdir(parents=True, exist_ok=True)
         for item in plugins_src.iterdir():
-            if item.is_file() and item.suffix == ".py":
+            if item.is_file() and item.suffix == ".py" and not is_duplicate_artifact_name(item):
                 shutil.copy2(str(item), str(plugins_dest / item.name))
 
     _emit_progress(progress_fn, "Copying scripts...")
@@ -1883,13 +1904,13 @@ def _copy_runtime_from_source(src_dir: Path, repo_dir: Path, dest: Path = NEXO_H
     if scripts_src.is_dir():
         scripts_dest.mkdir(parents=True, exist_ok=True)
         for item in scripts_src.iterdir():
-            if item.name == "__pycache__" or item.name.startswith("."):
+            if item.name == "__pycache__" or item.name.startswith(".") or is_duplicate_artifact_name(item):
                 continue
             dst = scripts_dest / item.name
             if item.is_dir():
                 if dst.exists():
                     shutil.rmtree(str(dst), ignore_errors=True)
-                shutil.copytree(str(item), str(dst), ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+                shutil.copytree(str(item), str(dst), ignore=_runtime_copy_ignore())
             elif item.is_file():
                 existing_class = installed_script_classes.get(item.name, "")
                 if dst.exists() and existing_class in {"personal", "non-script"}:
@@ -1919,7 +1940,7 @@ def _copy_runtime_from_source(src_dir: Path, repo_dir: Path, dest: Path = NEXO_H
     if templates_src.is_dir():
         templates_dest.mkdir(parents=True, exist_ok=True)
         for item in templates_src.iterdir():
-            if item.name == "__pycache__":
+            if item.name == "__pycache__" or is_duplicate_artifact_name(item):
                 continue
             if item.is_file():
                 shutil.copy2(str(item), str(templates_dest / item.name))
@@ -1927,7 +1948,7 @@ def _copy_runtime_from_source(src_dir: Path, repo_dir: Path, dest: Path = NEXO_H
                 sub_dest = templates_dest / item.name
                 sub_dest.mkdir(parents=True, exist_ok=True)
                 for sub in item.iterdir():
-                    if sub.is_file():
+                    if sub.is_file() and not is_duplicate_artifact_name(sub):
                         shutil.copy2(str(sub), str(sub_dest / sub.name))
 
     package_json = repo_dir / "package.json"
@@ -1948,7 +1969,7 @@ def _copy_runtime_from_source(src_dir: Path, repo_dir: Path, dest: Path = NEXO_H
     if skills_src.is_dir():
         if skills_dest.exists():
             shutil.rmtree(str(skills_dest), ignore_errors=True)
-        shutil.copytree(str(skills_src), str(skills_dest), ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+        shutil.copytree(str(skills_src), str(skills_dest), ignore=_runtime_copy_ignore())
 
     bin_dir = dest / "bin"
     bin_dir.mkdir(parents=True, exist_ok=True)

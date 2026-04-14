@@ -10,6 +10,7 @@ import time
 
 from db import get_db
 from fastmcp.tools import Tool
+from tree_hygiene import is_duplicate_artifact_name
 
 SERVER_DIR = os.path.dirname(os.path.abspath(__file__))
 PLUGINS_DIR = os.path.join(SERVER_DIR, "plugins")
@@ -47,12 +48,16 @@ def load_all_plugins(mcp) -> int:
     if os.path.isdir(PLUGINS_DIR):
         for f in sorted(os.listdir(PLUGINS_DIR)):
             if f.endswith(".py") and f != "__init__.py":
+                if is_duplicate_artifact_name(os.path.join(PLUGINS_DIR, f)):
+                    continue
                 plugin_map[f] = (PLUGINS_DIR, "repo")
 
     # 2. Personal plugins (override if same filename)
     if os.path.isdir(PERSONAL_PLUGINS_DIR):
         for f in sorted(os.listdir(PERSONAL_PLUGINS_DIR)):
             if f.endswith(".py") and f != "__init__.py":
+                if is_duplicate_artifact_name(os.path.join(PERSONAL_PLUGINS_DIR, f)):
+                    continue
                 source = "personal (override)" if f in plugin_map else "personal"
                 plugin_map[f] = (PERSONAL_PLUGINS_DIR, source)
 

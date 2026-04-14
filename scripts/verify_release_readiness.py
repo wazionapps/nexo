@@ -23,6 +23,12 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+SRC_ROOT = ROOT / "src"
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
+
+from tree_hygiene import find_duplicate_artifact_paths
+
 PACKAGE_JSON = ROOT / "package.json"
 CHANGELOG = ROOT / "CHANGELOG.md"
 DEFAULT_WEBSITE_ROOT = ROOT.parent / "nexo-gh-pages"
@@ -130,6 +136,14 @@ def _check_changelog(version: str) -> None:
             f"[release-readiness] top changelog version {top_version} != package.json {version}"
         )
     print(f"[release-readiness] changelog OK ({version})")
+
+
+def _check_duplicate_artifacts(repo_root: Path = ROOT) -> None:
+    duplicates = find_duplicate_artifact_paths(repo_root)
+    if duplicates:
+        rendered = "\n- ".join(str(path.relative_to(repo_root)) for path in duplicates)
+        raise SystemExit("[release-readiness] duplicate artifacts found:\n- " + rendered)
+    print(f"[release-readiness] duplicate artifact hygiene OK ({repo_root})")
 
 
 def _check_website(version: str, website_root: Path) -> None:
@@ -409,6 +423,7 @@ def main() -> int:
     nexo_home = _resolve_nexo_home(args.nexo_home)
     website_root = Path(args.website_root).expanduser()
     _check_changelog(version)
+    _check_duplicate_artifacts()
     _run([sys.executable, "scripts/sync_release_artifacts.py", "--check"])
     _run([sys.executable, "scripts/verify_client_parity.py"])
     _check_website(version, website_root)

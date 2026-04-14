@@ -168,6 +168,22 @@ def test_check_contract_requires_completion_when_requested(tmp_path):
         )
 
 
+def test_check_duplicate_artifacts_accepts_clean_tree(tmp_path):
+    module = _load_module()
+    (tmp_path / "alpha.py").write_text("print('ok')\n", encoding="utf-8")
+
+    module._check_duplicate_artifacts(tmp_path)
+
+
+def test_check_duplicate_artifacts_rejects_duplicate_copy(tmp_path):
+    module = _load_module()
+    (tmp_path / "alpha.py").write_text("print('ok')\n", encoding="utf-8")
+    (tmp_path / "alpha 2.py").write_text("print('old')\n", encoding="utf-8")
+
+    with pytest.raises(SystemExit, match="duplicate artifacts found"):
+        module._check_duplicate_artifacts(tmp_path)
+
+
 def test_check_protocol_closeout_accepts_done_task_with_change_log(tmp_path):
     module = _load_module()
     nexo_home = tmp_path / "nexo-home"

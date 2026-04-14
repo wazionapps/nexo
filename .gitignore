@@ -39,7 +39,5 @@ credentials*.json
 .mcpregistry_*
 .clawhub/
 
-# macOS Finder duplicates
-* 2*
-* 2.*
+# Duplicate artifact copies must stay visible so preflight/release can fail.
 .githooks/

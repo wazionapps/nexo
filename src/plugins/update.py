@@ -10,6 +10,7 @@ import time
 from pathlib import Path
 
 from runtime_home import export_resolved_nexo_home
+from tree_hygiene import is_duplicate_artifact_name
 
 # Code root is the parent of plugins/:
 # - source checkout: <repo>/src
@@ -100,7 +101,7 @@ def _refresh_installed_manifest():
         if src_crons.exists():
             dst_crons.mkdir(parents=True, exist_ok=True)
             for f in src_crons.iterdir():
-                if f.is_file():
+                if f.is_file() and not is_duplicate_artifact_name(f):
                     dest = dst_crons / f.name
                     if _paths_match(f, dest):
                         continue
@@ -111,11 +112,11 @@ def _refresh_installed_manifest():
             "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "script_names": sorted(
                 f.name for f in (artifact_src / "scripts").iterdir()
-                if f.is_file()
+                if f.is_file() and not is_duplicate_artifact_name(f)
             ) if (artifact_src / "scripts").is_dir() else [],
             "hook_names": sorted(
                 f.name for f in (artifact_src / "hooks").iterdir()
-                if f.is_file()
+                if f.is_file() and not is_duplicate_artifact_name(f)
             ) if (artifact_src / "hooks").is_dir() else [],
         }
         (config_dir / "runtime-core-artifacts.json").write_text(
@@ -368,7 +369,7 @@ def _sync_hooks_to_home():
     hooks_dest.mkdir(parents=True, exist_ok=True)
     synced = 0
     for f in hooks_src.iterdir():
-        if f.is_file() and f.suffix == ".sh":
+        if f.is_file() and f.suffix == ".sh" and not is_duplicate_artifact_name(f):
             dest = hooks_dest / f.name
             if not _paths_match(f, dest):
                 shutil.copy2(str(f), str(dest))

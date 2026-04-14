@@ -488,7 +488,9 @@ NEXO Brain doesn't just respond — it runs 13 core recovery-aware background jo
 | **followup-hygiene** | Weekly (Sun) | Normalizes statuses, flags stale followups, cleans orphans |
 | **learning-housekeep** | 03:15 daily | Dedup learnings, adjust weights by usage, process overdue reviews, reconcile decision outcomes |
 | **immune** | Every 30 min | Quarantine processing, memory promotion/rejection, synaptic pruning |
+| **impact-scorer** | 05:45 daily | Scores active followups so queues can prioritize by expected impact |
 | **synthesis** | 06:00 daily | Memory synthesis — discovers cross-memory patterns |
+| **outcome-checker** | 08:00 daily | Verifies tracked outcomes and marks them met, pending, or missed |
 | **watchdog** | Every 30 min | Monitors services, LaunchAgents, and infrastructure health |
 | **auto-close-sessions** | Every 5 min | Cleans stale sessions |
 

@@ -88,6 +88,20 @@ function log(msg) {
   console.log(`  ${msg}`);
 }
 
+function duplicateArtifactCanonicalName(name) {
+  const ext = path.extname(name);
+  const stem = ext ? name.slice(0, -ext.length) : name;
+  const match = stem.match(/^(.*) ([2-9]\d*)$/);
+  if (!match) return null;
+  return `${match[1]}${ext}`;
+}
+
+function isDuplicateArtifactName(name, dirPath = "") {
+  const canonical = duplicateArtifactCanonicalName(name);
+  if (!canonical || !dirPath) return false;
+  return fs.existsSync(path.join(dirPath, canonical));
+}
+
 function syncWatchdogHashRegistry(nexoHome) {
   try {
     const watchdogPath = path.join(nexoHome, "scripts", "nexo-watchdog.sh");
@@ -122,7 +136,7 @@ function writeRuntimeCoreArtifactsManifest(nexoHome, srcDir) {
       return fs.readdirSync(dirPath)
         .filter((name) => {
           const full = path.join(dirPath, name);
-          return fs.existsSync(full) && fs.statSync(full).isFile();
+          return fs.existsSync(full) && fs.statSync(full).isFile() && !isDuplicateArtifactName(name, dirPath);
         })
         .sort();
     };
@@ -192,6 +206,7 @@ function getCoreRuntimeFlatFiles(srcDir = path.join(__dirname, "..", "src")) {
   const discoveredRootModules = fs.existsSync(srcDir)
     ? fs.readdirSync(srcDir)
       .filter((name) => {
+        if (isDuplicateArtifactName(name, srcDir)) return false;
         const stat = fs.statSync(path.join(srcDir, name));
         if (!stat.isFile()) return false;
         // Include Python modules and any flat JSON config the Python runtime
@@ -1551,7 +1566,7 @@ async function main() {
         const copyDirRec = (src, dest) => {
           fs.mkdirSync(dest, { recursive: true });
           fs.readdirSync(src).forEach(item => {
-            if (item === "__pycache__" || item.endsWith(".pyc") || item.endsWith(".db")) return;
+            if (item === "__pycache__" || item.endsWith(".pyc") || item.endsWith(".db") || isDuplicateArtifactName(item, src)) return;
             const srcPath = path.join(src, item);
             const destPath = path.join(dest, item);
             if (fs.statSync(srcPath).isDirectory()) {
@@ -1620,7 +1635,7 @@ async function main() {
         const pluginsDest = path.join(NEXO_HOME, "plugins");
         fs.mkdirSync(pluginsDest, { recursive: true });
         if (fs.existsSync(pluginsSrc)) {
-          fs.readdirSync(pluginsSrc).filter(f => f.endsWith(".py")).forEach((f) => {
+          fs.readdirSync(pluginsSrc).filter(f => f.endsWith(".py") && !isDuplicateArtifactName(f, pluginsSrc)).forEach((f) => {
             fs.copyFileSync(path.join(pluginsSrc, f), path.join(pluginsDest, f));
           });
         }
@@ -1772,7 +1787,7 @@ async function main() {
         const copyDirRec2 = (src, dest) => {
           fs.mkdirSync(dest, { recursive: true });
           fs.readdirSync(src).forEach(item => {
-            if (item === "__pycache__" || item.endsWith(".pyc") || item.endsWith(".db")) return;
+            if (item === "__pycache__" || item.endsWith(".pyc") || item.endsWith(".db") || isDuplicateArtifactName(item, src)) return;
             const srcP = path.join(src, item);
             const destP = path.join(dest, item);
             if (fs.statSync(srcP).isDirectory()) copyDirRec2(srcP, destP);
@@ -1806,7 +1821,7 @@ async function main() {
         const copyDirRec3 = (src, dest) => {
           fs.mkdirSync(dest, { recursive: true });
           fs.readdirSync(src).forEach(item => {
-            if (item === "__pycache__" || item.endsWith(".pyc")) return;
+            if (item === "__pycache__" || item.endsWith(".pyc") || isDuplicateArtifactName(item, src)) return;
             const srcP = path.join(src, item);
             const destP = path.join(dest, item);
             if (fs.statSync(srcP).isDirectory()) copyDirRec3(srcP, destP);
@@ -1831,6 +1846,7 @@ async function main() {
       if (fs.existsSync(templatesSrc)) {
         fs.mkdirSync(templatesDest, { recursive: true });
         for (const f of fs.readdirSync(templatesSrc)) {
+          if (isDuplicateArtifactName(f, templatesSrc)) continue;
           const src = path.join(templatesSrc, f);
           const dest = path.join(templatesDest, f);
           if (fs.statSync(src).isFile()) {
@@ -1838,6 +1854,7 @@ async function main() {
           } else if (fs.statSync(src).isDirectory()) {
             fs.mkdirSync(dest, { recursive: true });
             for (const sf of fs.readdirSync(src)) {
+              if (isDuplicateArtifactName(sf, src)) continue;
               const ssrc = path.join(src, sf);
               if (fs.statSync(ssrc).isFile()) {
                 fs.copyFileSync(ssrc, path.join(dest, sf));
@@ -2354,7 +2371,7 @@ async function main() {
   const copyDirRecursive = (src, dest) => {
     fs.mkdirSync(dest, { recursive: true });
     fs.readdirSync(src).forEach(item => {
-      if (item === "__pycache__" || item.endsWith(".pyc") || item.endsWith(".db")) return;
+      if (item === "__pycache__" || item.endsWith(".pyc") || item.endsWith(".db") || isDuplicateArtifactName(item, src)) return;
       const srcPath = path.join(src, item);
       const destPath = path.join(dest, item);
       if (fs.statSync(srcPath).isDirectory()) {
@@ -2461,7 +2478,7 @@ async function main() {
   // Plugins (all .py files in plugins/)
   fs.mkdirSync(path.join(NEXO_HOME, "plugins"), { recursive: true });
   if (fs.existsSync(pluginsSrcDir)) {
-    fs.readdirSync(pluginsSrcDir).filter(f => f.endsWith(".py")).forEach((f) => {
+    fs.readdirSync(pluginsSrcDir).filter(f => f.endsWith(".py") && !isDuplicateArtifactName(f, pluginsSrcDir)).forEach((f) => {
       fs.copyFileSync(path.join(pluginsSrcDir, f), path.join(NEXO_HOME, "plugins", f));
     });
   }
