@@ -1,9 +1,10 @@
 # NEXO Brain
 
-> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v5.4.0).
+> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v5.4.1).
 
 NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It adds a local shared brain across supported clients, configurable terminal and automation backends, recovery-aware background jobs, startup preflight, runtime self-healing, smarter retrieval defaults, long-horizon overnight analysis, and 150+ MCP tools.
 
+v5.4.1: hook hygiene fix — the PostToolUse `capture-session.sh` hook had been reading a nonexistent env var since 2026-04-12, silently writing `"tool":"unknown"` to `~/.nexo/brain/session_buffer.jsonl` for 48 hours. v5.4.1 parses `tool_name` from stdin JSON, removes the filter that was hiding `Bash`, deletes the contaminating `capture-session 2.sh` duplicate, and purges pre-fix entries from the buffer on update with a `.pre-v5.4.1.bak` backup
 v5.4.0: runtime events + health + logs + calibration migration — append-only event bus at `~/.nexo/runtime/events.ndjson` with stable envelope, `nexo notify` for one-shot proactive events, `nexo health --json` for a rolled-up subsystem snapshot, `nexo logs --tail --json` for structured log access, and a safe flat→nested migration for `calibration.json` that runs silently inside `nexo update` with a pre-migrate backup
 v5.3.30: desktop bridge — four read-only CLI commands (`nexo schema`, `nexo identity`, `nexo onboard`, `nexo scan-profile`) let external UIs like NEXO Desktop render preferences, onboarding, identity, and profile heuristics from live JSON instead of hardcoding field lists and releasing in lockstep
 v5.3.29: runtime hygiene + fail-closed startup + honest cron tracing — duplicate `* 2` artifacts now fail release gates instead of hiding in the tree, update paths converge on one canonical core, startup preflight runs synchronously, corrupt DB state no longer respawns an empty brain by default, and cron runs spool locally when SQLite is unavailable

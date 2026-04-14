@@ -18,9 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `5.4.0` is the current packaged-runtime line: runtime event bus at `~/.nexo/runtime/events.ndjson`, `nexo notify` for one-shot proactive events, `nexo health --json` for a rolled-up subsystem snapshot, `nexo logs --tail --json` for structured log access, and a safe flat→nested migration for `calibration.json` on older installs.
+Version `5.4.1` is the current packaged-runtime line: hook hygiene fix — the PostToolUse `capture-session.sh` hook had been reading a nonexistent env var since 2026-04-12, silently writing `"tool":"unknown"` to the Sensory Register for 48 hours. v5.4.1 parses the tool name from stdin JSON, removes the filter that was hiding `Bash`, and purges pre-fix entries from the buffer on update.
 
-Previously in `5.3.30`: four read-only CLI commands (`nexo schema`, `nexo identity`, `nexo onboard`, `nexo scan-profile`) let external UIs auto-adapt to the editable schema, identity, onboarding wizard, and profile heuristics.
+Previously in `5.4.0`: runtime event bus at `~/.nexo/runtime/events.ndjson`, `nexo notify`, `nexo health --json`, `nexo logs --tail --json`, and a safe flat→nested migration for `calibration.json`.
 
 Start here:
 - [5-minute quickstart](docs/quickstart-5-minutes.md)

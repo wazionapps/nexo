@@ -1,5 +1,33 @@
 # Changelog
 
+## [5.4.1] - 2026-04-14
+
+### Fix: PostToolUse capture-session hook was always writing "unknown"
+
+Forensic finding: `src/hooks/capture-session.sh` has been reading
+`$CLAUDE_TOOL_NAME` — an environment variable Claude Code has never
+set — since the hook was introduced on 2026-04-12. Claude Code passes
+the tool name in a JSON payload over stdin. Result: 100% of entries
+written to `session_buffer.jsonl` in the last 48 hours have
+`"tool":"unknown"`, which silently blinded the Sensory Register.
+
+This release:
+
+- Parses `tool_name` from stdin JSON with python3 (same pattern as
+  `capture-tool-logs.sh`) and falls back to an empty string when the
+  payload is malformed. An empty name now exits silently instead of
+  polluting the buffer with "unknown" noise.
+- Keeps `Bash`, `Write`, `Edit`, `MultiEdit`, `Task`, and MCP tools in
+  the stream — these are where real state change happens. The old
+  filter skipped `Bash`, which was the other half of the bug.
+- Removes the contaminating duplicate `~/.nexo/hooks/capture-session 2.sh`
+  that had survived the v5.3.29 hygiene gates because it lived in the
+  runtime bucket, not in the repo.
+- On upgrade, a one-time purge strips pre-existing `"tool":"unknown"`
+  lines from `session_buffer.jsonl` (with a `.pre-v5.4.1.bak` backup).
+
+No feature changes. No API changes. Hook hygiene only.
+
 ## [5.4.0] - 2026-04-14
 
 ### Add: calibration migration + runtime events bus + notify/health/logs
