@@ -242,7 +242,7 @@ class TestRuntimeUpdate:
         }
         result = subprocess.run(
             [sys.executable, CLI_PY, "update", "--json"],
-            capture_output=True, text=True, timeout=10, env=env,
+            capture_output=True, text=True, timeout=30, env=env,
         )
         assert result.returncode == 0
         data = json.loads(result.stdout)

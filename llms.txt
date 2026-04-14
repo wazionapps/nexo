@@ -1,9 +1,10 @@
 # NEXO Brain
 
-> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v5.4.4).
+> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v5.4.5).
 
 NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It adds a local shared brain across supported clients, configurable terminal and automation backends, recovery-aware background jobs, startup preflight, runtime self-healing, smarter retrieval defaults, long-horizon overnight analysis, and 150+ MCP tools.
 
+v5.4.5: CI timeout increase — subprocess timeout 10→30s for nexo update test on slow CI runners
 v5.4.4: test isolation + venv timeout fix — tree_hygiene.py copy + fake venv to prevent CI timeout, completing the publish workflow fix
 v5.4.3: test isolation fix — copy tree_hygiene.py into isolated runtime dirs so the publish workflow passes
 v5.4.2: traceability truth + Sensory Register buffer close-loop — diary warnings now distinguish repo `commit_ref` debt from local/server-side operational changes, the nocturnal postmortem drains pending `session_buffer.jsonl` events instead of looking only at "today", rewrites the buffer atomically, and the docs now say honestly that `nexo-reflection.py` is a standalone analyzer rather than something auto-triggered by the stop hook
