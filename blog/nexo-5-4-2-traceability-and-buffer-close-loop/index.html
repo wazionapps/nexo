@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO Brain v5.4.2 — Traceability truth + Sensory Register buffer close-loop | nexo-brain.com</title>
+<meta name="description" content="v5.4.2 stops inflating local/runtime operations into fake repo commit debt, drains pending session_buffer events through the nocturnal postmortem, rewrites the buffer atomically, and aligns the docs with the real hook/runtime boundary.">
+<link rel="stylesheet" href="../../assets/blog.css">
+</head>
+<body>
+<article class="blog-post">
+<header>
+<h1>v5.4.2 — Traceability truth + Sensory Register buffer close-loop</h1>
+<time datetime="2026-04-14">April 14, 2026</time>
+</header>
+
+<p>This release is about making the low-level truth match the story again. It does not remove any Claude/Opus/Codex-assisted path. It hardens the mechanical layer around that assisted intelligence so warnings, queues, and docs stop lying by accident.</p>
+
+<h2>What was misleading</h2>
+
+<p>The diary warning for missing <code>commit_ref</code> was counting too much. Repo edits, local runtime writes, server-side operations, and other out-of-band changes were all being collapsed into one scary number. That made the release traceability signal noisier than the underlying reality.</p>
+
+<p>At the same time, <code>session_buffer.jsonl</code> was behaving more like a leaky bucket than a queue: the nocturnal postmortem only looked at "today", ignored older pending events, and did not actually prune the lines it had already consumed.</p>
+
+<h2>What changed in v5.4.2</h2>
+
+<ul>
+<li><strong>Traceability warnings are honest again.</strong> Repo-tracked files still require a real git hash. Local/runtime/server-side operations can now be recorded with explicit markers such as <code>server-direct</code> or <code>local-uncommitted</code> instead of being treated as if they were missing repo commits.</li>
+<li><strong>The Sensory Register buffer now closes its loop.</strong> The nocturnal postmortem consumes pending events from <code>session_buffer.jsonl</code>, renders useful hook/tool activity into the Sensory Register, and removes only the lines that were actually ingested.</li>
+<li><strong>Pending means pending, not "today only".</strong> If an event stayed in the buffer from an earlier run, it no longer gets stranded forever just because the calendar day changed.</li>
+<li><strong>Buffer rewrite is atomic.</strong> The queue is now rewritten through a temp file + replace step so a partial write cannot leave the file truncated mid-drain.</li>
+<li><strong>Docs now describe the real boundary.</strong> README and the reflection script both say plainly that <code>nexo-reflection.py</code> is a standalone analyzer, not something the stop hook auto-triggers today.</li>
+</ul>
+
+<h2>What did not change</h2>
+
+<p>The assisted layer stays. Nightly consolidation can still use Claude/Opus/Codex-backed intelligence where the product expects it. This patch does not replace that with "dumb Python". It only makes the purely mechanical edges more trustworthy.</p>
+
+<h2>Why this matters</h2>
+
+<p>Shared-brain systems degrade when low-level evidence becomes noisy. A warning that overcounts debt teaches the operator to ignore warnings. A queue that never quite drains teaches the operator to distrust the memory pipeline. A doc that describes an old trigger path teaches the next session the wrong architecture. v5.4.2 closes those gaps without changing the higher-level product promise.</p>
+
+<h2>Update</h2>
+
+<pre><code>npm update -g nexo-brain
+nexo update
+</code></pre>
+
+</article>
+</body>
+</html>
