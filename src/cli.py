@@ -922,6 +922,19 @@ def _update(args):
                 print(f"  Model recommendation check skipped: {exc}", file=sys.stderr)
         else:
             print(f"UPDATE FAILED: {result.get('error', 'sync failed')}", file=sys.stderr)
+
+    # Auto-migrate calibration.json flat → nested once per user. Silent on
+    # no-op; logs a line if an actual migration happened.
+    try:
+        from calibration_migration import detect as _cal_detect, apply_migration as _cal_apply
+        if _cal_detect()["shape"] == "flat":
+            mig = _cal_apply()
+            if mig.get("status") == "migrated" and not args.json:
+                print(f"[NEXO] calibration.json migrated flat → nested (backup: {mig.get('backup')})",
+                      flush=True)
+    except Exception:
+        pass
+
     return 0 if result.get("ok") else 1
 
 
@@ -1295,6 +1308,105 @@ def _chat(args):
     return int(result.returncode)
 
 
+def _notify(args):
+    """Emit an event to the runtime events bus (events.ndjson)."""
+    from events_bus import emit
+    try:
+        event = emit(
+            args.type,
+            text=getattr(args, "text", "") or "",
+            reason=getattr(args, "reason", "") or "",
+            priority=getattr(args, "priority", "normal"),
+            source=getattr(args, "source", "nexo-brain"),
+        )
+    except ValueError as exc:
+        print(json.dumps({"ok": False, "error": str(exc)}), file=sys.stderr)
+        return 2
+    if args.json:
+        print(json.dumps({"ok": True, "event": event}, ensure_ascii=False, indent=2))
+    else:
+        print(f"notify: id={event['id']} type={event['type']} priority={event['priority']}")
+    return 0
+
+
+def _health(args):
+    """Collect a health snapshot and print it."""
+    from health_check import collect
+    report = collect()
+    if getattr(args, "json", True) is False:
+        # minimal text mode
+        print(f"status: {report.get('status', 'unknown')}")
+        for name, sub in report.get("subsystems", {}).items():
+            print(f"  {name:10s} {sub.get('status', '?')}")
+        return 0 if report.get("status") == "ok" else 1
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+    return 0 if report.get("status") == "ok" else 1
+
+
+def _logs(args):
+    """Tail recent logs: events bus + operations/*.log."""
+    import glob as _glob
+    lines_want = max(1, int(getattr(args, "lines", 100)))
+    source = (getattr(args, "source", "all") or "all").lower()
+
+    results: dict = {"source": source, "lines": lines_want, "entries": []}
+    home = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+
+    def _collect_events(n: int) -> list[dict]:
+        try:
+            from events_bus import tail as _tail
+            return _tail(lines=n)
+        except Exception as exc:
+            return [{"error": f"events tail failed: {exc}"}]
+
+    def _collect_ops(n: int) -> list[dict]:
+        ops_dir = home / "operations"
+        if not ops_dir.is_dir():
+            return []
+        files = sorted(
+            ops_dir.glob("*.log"),
+            key=lambda p: p.stat().st_mtime if p.exists() else 0,
+            reverse=True,
+        )[:5]
+        out: list[dict] = []
+        for log in files:
+            try:
+                text = log.read_text(errors="ignore").splitlines()[-n:]
+            except Exception as exc:
+                out.append({"file": str(log), "error": str(exc)})
+                continue
+            for line in text:
+                out.append({"file": log.name, "line": line})
+        return out[-n:]
+
+    if source in ("all", "events"):
+        results["entries"].extend({"kind": "event", **e} for e in _collect_events(lines_want))
+    if source in ("all", "operations"):
+        results["entries"].extend({"kind": "log", **e} for e in _collect_ops(lines_want))
+    if source not in ("all", "events", "operations"):
+        # Treat as filename match inside operations/
+        specific = home / "operations" / source
+        if specific.is_file():
+            try:
+                text = specific.read_text(errors="ignore").splitlines()[-lines_want:]
+                results["entries"] = [{"kind": "log", "file": specific.name, "line": ln} for ln in text]
+            except Exception as exc:
+                results["error"] = str(exc)
+        else:
+            results["error"] = f"unknown log source: {source}"
+
+    if args.json:
+        print(json.dumps(results, ensure_ascii=False, indent=2))
+    else:
+        for entry in results["entries"][-lines_want:]:
+            if entry.get("kind") == "event":
+                print(f"[event] id={entry.get('id')} {entry.get('type')} "
+                      f"{entry.get('priority')} {entry.get('text','')}")
+            else:
+                print(f"[{entry.get('file','?')}] {entry.get('line','')}")
+    return 0
+
+
 def _doctor(args):
     """Run unified doctor diagnostics."""
     try:
@@ -1306,6 +1418,22 @@ def _doctor(args):
         return 1
 
     init_db()
+
+    # Calibration migration hook — runs before the orchestrator so the rest
+    # of doctor sees the canonical nested shape.
+    want_migrate = getattr(args, "migrate_calibration", False) or args.fix
+    dry = getattr(args, "calibration_dry_run", False)
+    if want_migrate or dry:
+        from calibration_migration import detect, apply_migration
+        shape = detect()
+        if shape["shape"] == "flat":
+            mig = apply_migration(dry_run=dry)
+            if args.json:
+                print(json.dumps({"calibration_migration": mig}, ensure_ascii=False, indent=2))
+            else:
+                print(f"[NEXO] calibration migration: {mig.get('status')} — {mig.get('reason','')}",
+                      file=sys.stderr, flush=True)
+
     tier_label = getattr(args, "tier", "boot") or "boot"
     print(f"[NEXO] Inspecting {tier_label} diagnostics... please wait.", file=sys.stderr, flush=True)
     report = run_doctor(tier=args.tier, fix=args.fix, plane=getattr(args, "plane", ""))
@@ -1855,6 +1983,10 @@ def main():
     )
     doctor_parser.add_argument("--json", action="store_true", help="JSON output")
     doctor_parser.add_argument("--fix", action="store_true", help="Apply deterministic fixes")
+    doctor_parser.add_argument("--migrate-calibration", action="store_true",
+                               help="Force calibration.json flat → nested migration")
+    doctor_parser.add_argument("--calibration-dry-run", action="store_true",
+                               help="Preview the calibration migration without writing")
 
     # -- contributor --
     contributor_parser = sub.add_parser("contributor", help="Public Draft PR contribution mode")
@@ -1959,6 +2091,28 @@ def main():
     scan_profile_parser.add_argument("--apply", action="store_true", help="Write profile.json (default is preview)")
     scan_profile_parser.add_argument("--force", action="store_true", help="Overwrite existing profile.json on --apply")
 
+    # -- runtime events bus + operational observability --
+    notify_parser = sub.add_parser("notify", help="Emit an event to the runtime event bus")
+    notify_parser.add_argument("type", choices=[
+        "attention_required", "proactive_message", "followup_alert",
+        "health_alert", "info",
+    ], help="Event type")
+    notify_parser.add_argument("--text", default="", help="Short user-facing message")
+    notify_parser.add_argument("--reason", default="", help="Internal reason / trigger")
+    notify_parser.add_argument("--priority", choices=["low", "normal", "high", "urgent"], default="normal")
+    notify_parser.add_argument("--source", default="nexo-brain", help="Who emitted this event")
+    notify_parser.add_argument("--json", action="store_true", help="JSON output")
+
+    health_parser = sub.add_parser("health", help="Snapshot of NEXO Brain subsystem health")
+    health_parser.add_argument("--json", action="store_true", help="JSON output (default)")
+
+    logs_parser = sub.add_parser("logs", help="Tail recent operational logs")
+    logs_parser.add_argument("--tail", action="store_true", help="Tail mode (default)")
+    logs_parser.add_argument("--lines", type=int, default=100, help="How many lines to return")
+    logs_parser.add_argument("--source", default="all",
+                             help="Log source: all | events | operations | <logname>")
+    logs_parser.add_argument("--json", action="store_true", help="JSON output")
+
     args = parser.parse_args()
 
     if args.help or (not args.command and not args.version):
@@ -2060,6 +2214,12 @@ def main():
             "onboard": cmd_onboard,
             "scan-profile": cmd_scan_profile,
         }[args.command](args)
+    elif args.command == "notify":
+        return _notify(args)
+    elif args.command == "health":
+        return _health(args)
+    elif args.command == "logs":
+        return _logs(args)
     else:
         _print_help()
         return 0
