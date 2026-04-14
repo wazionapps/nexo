@@ -187,10 +187,19 @@ function getCoreRuntimeFlatFiles(srcDir = path.join(__dirname, "..", "src")) {
     "cron_recovery.py",
     "runtime_power.py",
     "requirements.txt",
+    "model_defaults.json",
   ];
   const discoveredRootModules = fs.existsSync(srcDir)
     ? fs.readdirSync(srcDir)
-      .filter((name) => name.endsWith(".py") && fs.statSync(path.join(srcDir, name)).isFile())
+      .filter((name) => {
+        const stat = fs.statSync(path.join(srcDir, name));
+        if (!stat.isFile()) return false;
+        // Include Python modules and any flat JSON config the Python runtime
+        // reads at import time (e.g. model_defaults.json). The "_defaults.json"
+        // suffix convention lets us add future config JSONs without touching
+        // this list.
+        return name.endsWith(".py") || name.endsWith("_defaults.json");
+      })
     : [];
   return [...new Set([...staticFiles, ...discoveredRootModules])];
 }

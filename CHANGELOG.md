@@ -1,5 +1,18 @@
 # Changelog
 
+## [5.3.26] - 2026-04-14
+
+### Fix: sync model_defaults.json into NEXO_HOME
+
+- The npm installer's runtime-file sync only copied `.py` files from
+  `src/` into `~/.nexo/`, so `src/model_defaults.json` (introduced in
+  v5.3.24) never reached the runtime. Python then fell back to hardcoded
+  defaults inside `model_defaults.py`, meaning future
+  `recommendation_version` bumps in the JSON would not propagate until
+  the fallback was also edited. Installer now also copies
+  `*_defaults.json` files, and `model_defaults.json` is added to the
+  static file list explicitly.
+
 ## [5.3.25] - 2026-04-14
 
 ### Fix headless Claude Code automation actually running (add --dangerously-skip-permissions)
