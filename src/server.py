@@ -304,6 +304,9 @@ def nexo_heartbeat(sid: str, task: str, context_hint: str = '') -> str:
     """Update session task, check inbox and pending questions. Auto-detects trust events.
 
     Call this at the START of every user interaction (before doing work).
+    Output always begins with a NOW_UTC line (ISO-8601, UTC) — use it as the
+    authoritative wall-clock time for any artifact (emails, diaries, followups)
+    to avoid date/day-of-week drift across long sessions.
     Args:
         sid: Your session ID from nexo_startup.
         task: Brief description of current work (5-10 words).
