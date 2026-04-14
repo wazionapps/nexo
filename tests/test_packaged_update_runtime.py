@@ -86,7 +86,9 @@ def test_refresh_installed_manifest_writes_runtime_core_artifacts(tmp_path, monk
     (src_dir / "hooks").mkdir()
     (src_dir / "crons" / "manifest.json").write_text('{"crons":[]}\n')
     (src_dir / "scripts" / "nexo-catchup.py").write_text("print('ok')\n")
+    (src_dir / "scripts" / "nexo-catchup 2.py").write_text("print('old')\n")
     (src_dir / "hooks" / "capture-tool-logs.sh").write_text("#!/bin/bash\necho ok\n")
+    (src_dir / "hooks" / "capture-tool-logs 2.sh").write_text("#!/bin/bash\necho old\n")
 
     monkeypatch.setattr(update, "NEXO_HOME", runtime_home)
     monkeypatch.setattr(update, "SRC_DIR", src_dir)

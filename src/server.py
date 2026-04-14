@@ -72,6 +72,140 @@ def _shutdown_handler(signum, frame):
     sys.exit(0)
 
 
+def _resolved_nexo_home() -> str:
+    return os.environ.get("NEXO_HOME", os.path.join(os.path.expanduser("~"), ".nexo"))
+
+
+def _data_dir() -> str:
+    return os.path.join(_resolved_nexo_home(), "data")
+
+
+def _backup_dir() -> str:
+    return os.path.join(_resolved_nexo_home(), "backups")
+
+
+def _allow_fresh_db_on_corruption() -> bool:
+    value = str(os.environ.get("NEXO_ALLOW_FRESH_DB_ON_CORRUPTION", "") or "").strip().lower()
+    return value in {"1", "true", "yes", "on"}
+
+
+def _quarantine_corrupt_db_file(db_path: str) -> None:
+    if os.path.exists(db_path):
+        corrupt_path = db_path + ".corrupt"
+        os.rename(db_path, corrupt_path)
+        print(f"[NEXO] Corrupt DB moved to {os.path.basename(corrupt_path)}", file=sys.stderr)
+    for ext in (".db-wal", ".db-shm"):
+        wal_path = db_path.replace(".db", ext)
+        if os.path.exists(wal_path):
+            os.remove(wal_path)
+
+
+def _restore_valid_db_backup() -> bool:
+    import glob
+    import shutil
+    import sqlite3
+
+    from db._core import DB_PATH as db_path
+
+    backups = sorted(glob.glob(os.path.join(_backup_dir(), "nexo-*.db")), reverse=True)
+    for backup_path in backups:
+        try:
+            test_conn = sqlite3.connect(backup_path)
+            integrity = test_conn.execute("PRAGMA integrity_check").fetchone()
+            test_conn.close()
+            if not integrity or integrity[0] != "ok":
+                continue
+            try:
+                close_db()
+            except Exception:
+                pass
+            shutil.copy2(backup_path, db_path)
+            print(f"[NEXO] Restored DB from backup: {os.path.basename(backup_path)}", file=sys.stderr)
+            init_db()
+            return True
+        except Exception:
+            continue
+    return False
+
+
+def _init_db_or_exit() -> None:
+    import sqlite3
+
+    try:
+        init_db()
+        return
+    except sqlite3.DatabaseError as exc:
+        print(f"[NEXO] DB init failed: {exc}", file=sys.stderr)
+
+    restored = False
+    try:
+        restored = _restore_valid_db_backup()
+    except Exception as restore_exc:
+        print(f"[NEXO] Backup restore failed: {restore_exc}", file=sys.stderr)
+
+    if restored:
+        return
+
+    try:
+        close_db()
+    except Exception:
+        pass
+
+    try:
+        from db._core import DB_PATH as db_path
+        _quarantine_corrupt_db_file(db_path)
+    except Exception:
+        pass
+
+    if not _allow_fresh_db_on_corruption():
+        print(
+            "[NEXO] Refusing to create a fresh empty database automatically. "
+            "Restore a valid backup or set NEXO_ALLOW_FRESH_DB_ON_CORRUPTION=1 to override.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    try:
+        init_db()
+        print("[NEXO] Fresh database created because override is enabled.", file=sys.stderr)
+    except Exception as fresh_exc:
+        print(f"[NEXO] FATAL: Cannot initialize database: {fresh_exc}", file=sys.stderr)
+        print("[NEXO] Check permissions on NEXO_HOME/data/ and disk space.", file=sys.stderr)
+        sys.exit(1)
+
+
+def _emit_startup_preflight_messages(result: dict) -> None:
+    if result.get("updated"):
+        print("[NEXO] Startup update applied.", file=sys.stderr)
+    if result.get("deferred_reason"):
+        print(f"[NEXO] Startup update deferred: {result['deferred_reason']}", file=sys.stderr)
+    if result.get("git_update"):
+        print(f"[NEXO] {result['git_update']}", file=sys.stderr)
+    if result.get("npm_notice"):
+        print(f"[NEXO] {result['npm_notice']}", file=sys.stderr)
+    if result.get("claude_md_update"):
+        print(f"[NEXO] {result['claude_md_update']}", file=sys.stderr)
+    for message in result.get("client_bootstrap_updates", []):
+        if message != result.get("claude_md_update"):
+            print(f"[NEXO] {message}", file=sys.stderr)
+    for migration in result.get("migrations", []):
+        if migration.get("status") == "failed":
+            print(
+                f"[NEXO] Migration {migration.get('file', '?')} FAILED: {migration.get('message', '')}",
+                file=sys.stderr,
+            )
+
+
+def _run_startup_preflight_sync() -> None:
+    try:
+        from auto_update import startup_preflight
+
+        result = startup_preflight(entrypoint="server", interactive=False)
+        _emit_startup_preflight_messages(result)
+    except Exception as e:
+        print(f"[NEXO auto-update] error: {e}", file=sys.stderr)
+
+
 def _server_init():
     """Run all side effects: signals, PID, DB, auto-update, plugins.
 
@@ -81,110 +215,17 @@ def _server_init():
     signal.signal(signal.SIGINT, _shutdown_handler)
 
     # ── Write PID file for stale process detection ─────────────────
-    _data_dir = os.path.join(os.environ.get("NEXO_HOME", os.path.join(os.path.expanduser("~"), ".nexo")), "data")
-    os.makedirs(_data_dir, exist_ok=True)
-    _pid_file = os.path.join(_data_dir, "nexo.pid")
+    data_dir = _data_dir()
+    os.makedirs(data_dir, exist_ok=True)
+    _pid_file = os.path.join(data_dir, "nexo.pid")
     with open(_pid_file, "w") as f:
         f.write(str(os.getpid()))
 
     # ── Database initialization with recovery ─────────────────────
-    import sqlite3
-    try:
-        init_db()
-    except sqlite3.DatabaseError as exc:
-        # Corruption or unreadable DB — attempt restore from backup
-        print(f"[NEXO] DB init failed: {exc}", file=sys.stderr)
-        _recovered = False
-        try:
-            from db._core import DB_PATH as _db_path
-            import glob as _glob
-            _backup_dir = os.path.join(
-                os.environ.get("NEXO_HOME", os.path.join(os.path.expanduser("~"), ".nexo")),
-                "backups",
-            )
-            _backups = sorted(_glob.glob(os.path.join(_backup_dir, "nexo-*.db")), reverse=True)
-            for _bk in _backups:
-                try:
-                    _test = sqlite3.connect(_bk)
-                    _result = _test.execute("PRAGMA integrity_check").fetchone()
-                    _test.close()
-                    if _result and _result[0] == "ok":
-                        # Valid backup found — replace corrupt DB
-                        import shutil
-                        # Close any open connection before replacing
-                        try:
-                            close_db()
-                        except Exception:
-                            pass
-                        shutil.copy2(_bk, _db_path)
-                        print(f"[NEXO] Restored DB from backup: {os.path.basename(_bk)}", file=sys.stderr)
-                        init_db()
-                        _recovered = True
-                        break
-                except Exception:
-                    continue
-        except Exception as restore_exc:
-            print(f"[NEXO] Backup restore failed: {restore_exc}", file=sys.stderr)
+    _init_db_or_exit()
 
-        if not _recovered:
-            # No valid backup — nuke corrupt file and start fresh
-            try:
-                close_db()
-            except Exception:
-                pass
-            try:
-                from db._core import DB_PATH as _db_path
-                if os.path.exists(_db_path):
-                    _corrupt_path = _db_path + ".corrupt"
-                    os.rename(_db_path, _corrupt_path)
-                    print(f"[NEXO] Corrupt DB moved to {os.path.basename(_corrupt_path)}", file=sys.stderr)
-                # Remove WAL/SHM files too
-                for _ext in (".db-wal", ".db-shm"):
-                    _wal = _db_path.replace(".db", _ext)
-                    if os.path.exists(_wal):
-                        os.remove(_wal)
-            except Exception:
-                pass
-            try:
-                init_db()
-                print("[NEXO] Fresh database created.", file=sys.stderr)
-            except Exception as fresh_exc:
-                print(f"[NEXO] FATAL: Cannot initialize database: {fresh_exc}", file=sys.stderr)
-                print("[NEXO] Check permissions on NEXO_HOME/data/ and disk space.", file=sys.stderr)
-                sys.exit(1)
-
-    # ── Auto-update check (non-blocking, max 5s) ──────────────────
-    try:
-        from auto_update import startup_preflight
-        import threading
-
-        def _bg_update():
-            try:
-                result = startup_preflight(entrypoint="server", interactive=False)
-                if result.get("updated"):
-                    print("[NEXO] Startup update applied.", file=sys.stderr)
-                if result.get("deferred_reason"):
-                    print(f"[NEXO] Startup update deferred: {result['deferred_reason']}", file=sys.stderr)
-                if result.get("git_update"):
-                    print(f"[NEXO] {result['git_update']}", file=sys.stderr)
-                if result.get("npm_notice"):
-                    print(f"[NEXO] {result['npm_notice']}", file=sys.stderr)
-                if result.get("claude_md_update"):
-                    print(f"[NEXO] {result['claude_md_update']}", file=sys.stderr)
-                for message in result.get("client_bootstrap_updates", []):
-                    if message != result.get("claude_md_update"):
-                        print(f"[NEXO] {message}", file=sys.stderr)
-                for m in result.get("migrations", []):
-                    if m["status"] == "failed":
-                        print(f"[NEXO] Migration {m['file']} FAILED: {m['message']}", file=sys.stderr)
-            except Exception as e:
-                print(f"[NEXO auto-update] error: {e}", file=sys.stderr)
-
-        _update_thread = threading.Thread(target=_bg_update, daemon=True)
-        _update_thread.start()
-        _update_thread.join(timeout=5)  # Wait at most 5 seconds
-    except Exception:
-        pass  # Never break startup
+    # ── Auto-update / startup preflight (synchronous) ─────────────
+    _run_startup_preflight_sync()
 
     # ── Load plugins ───────────────────────────────────────────────
     load_all_plugins(mcp)

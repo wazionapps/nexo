@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Blog — NEXO Brain</title>
-    <meta name="description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.24 single-source model defaults and headless-safe update release.">
+    <meta name="description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.29 runtime hygiene, fail-closed startup, and honest cron tracing release.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/blog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/blog/">
     <meta property="og:title" content="Blog — NEXO Brain">
-    <meta property="og:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.24 single-source model defaults and headless-safe update release.">
+    <meta property="og:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.29 runtime hygiene, fail-closed startup, and honest cron tracing release.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Blog — NEXO Brain">
-    <meta name="twitter:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.24 single-source model defaults and headless-safe update release.">
+    <meta name="twitter:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.29 runtime hygiene, fail-closed startup, and honest cron tracing release.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Blog — NEXO Brain",
-        "description": "Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.24 single-source model defaults and headless-safe update release.",
+        "description": "Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.29 runtime hygiene, fail-closed startup, and honest cron tracing release.",
         "url": "https://nexo-brain.com/blog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -134,7 +134,7 @@
                     <span class="page-chip">Competitive analysis</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="/blog/nexo-5-3-24-model-defaults-and-headless-safe-update/" class="btn btn-primary">Read latest release</a>
+                    <a href="/blog/nexo-5-3-29-runtime-hygiene-and-fail-closed-startup/" class="btn btn-primary">Read latest release</a>
                     <a href="/changelog/" class="btn btn-secondary">Latest release notes</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -142,25 +142,25 @@
             <div class="blog-featured-card">
                 <div class="section-label">Latest release</div>
                 <div class="blog-featured-meta">
-                    <span class="compare-chip">April 13, 2026</span>
-                    <span class="compare-chip">Protocol contracts</span>
-                    <span class="compare-chip">Cortex contracts</span>
-                    <span class="compare-chip">No silent coercion</span>
+                    <span class="compare-chip">April 14, 2026</span>
+                    <span class="compare-chip">Runtime hygiene</span>
+                    <span class="compare-chip">Fail-closed startup</span>
+                    <span class="compare-chip">Honest cron tracing</span>
                 </div>
-                <h2>NEXO 5.3.11: Protocol and Cortex Contract Hardening</h2>
-                <p>NEXO 5.3.11 hardens the runtime's trust layer: malformed <code>outcome</code>, <code>task_type</code>, and <code>impact_level</code> payloads now fail explicitly instead of being silently coerced into other valid states.</p>
+                <h2>NEXO 5.3.29: Runtime Hygiene, Fail-Closed Startup, and Honest Cron Tracing</h2>
+                <p>NEXO 5.3.29 turns several quiet failure paths into explicit contracts: duplicate <code>* 2</code> artifacts now fail hygiene gates, packaged/runtime updates converge on one core, corrupt DB state no longer spawns an empty brain by default, and cron evidence survives transient SQLite failure.</p>
                 <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
-                    <a href="/blog/nexo-5-3-24-model-defaults-and-headless-safe-update/" class="btn btn-primary">Open article</a>
-                    <a href="/changelog/#v5311" class="btn btn-secondary">Open changelog</a>
+                    <a href="/blog/nexo-5-3-29-runtime-hygiene-and-fail-closed-startup/" class="btn btn-primary">Open article</a>
+                    <a href="/changelog/#v5329" class="btn btn-secondary">Open changelog</a>
                 </div>
                 <div class="blog-mini-stack">
                     <div class="blog-mini-card">
                         <strong>Companion view</strong>
-                        <span><a href="/changelog/#v5311">The 5.3.11 changelog section</a></span>
+                        <span><a href="/changelog/#v5329">The 5.3.29 changelog section</a></span>
                     </div>
                     <div class="blog-mini-card">
                         <strong>Previous release</strong>
-                        <span><a href="/blog/nexo-5-3-10-runtime-metadata-and-deep-doctor-hardening/">NEXO 5.3.10: Packaged Runtime Truth, Evolution Telemetry, and Synthesis Loop Closure</a>.</span>
+                        <span><a href="/blog/nexo-5-3-24-model-defaults-and-headless-safe-update/">NEXO 5.3.24: Single-Source Model Defaults + Headless-Safe Update</a>.</span>
                     </div>
                 </div>
             </div>
@@ -175,9 +175,9 @@
 
             <div class="blog-card">
                 <div class="blog-card-date">April 14, 2026</div>
-                <h2><a href="/blog/nexo-5-3-24-model-defaults-and-headless-safe-update/">NEXO 5.3.24: Single-Source Model Defaults + Headless-Safe Update</a></h2>
-                <p>One JSON shared by the Python runtime and JS installer for all model defaults. Codex profiles self-heal on update, fresh installs get headless-safe <code>permissions.allow</code> so cron automation stops zombie-waiting for approvals, and a one-time upgrade prompt ships when a new model recommendation is published.</p>
-                <a href="/blog/nexo-5-3-24-model-defaults-and-headless-safe-update/" class="read-more">Read article <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></a>
+                <h2><a href="/blog/nexo-5-3-29-runtime-hygiene-and-fail-closed-startup/">NEXO 5.3.29: Runtime Hygiene, Fail-Closed Startup, and Honest Cron Tracing</a></h2>
+                <p>A release-engineering hardening pass for the shared brain: duplicate <code>* 2</code> artifacts now fail hygiene gates instead of hiding in the tree, update paths converge on one core, startup preflight runs synchronously, corrupt DB state fails closed, and cron runs spool locally when SQLite is unavailable.</p>
+                <a href="/blog/nexo-5-3-29-runtime-hygiene-and-fail-closed-startup/" class="read-more">Read article <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></a>
             </div>
 
             <div class="blog-card">

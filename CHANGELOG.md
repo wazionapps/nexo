@@ -1,5 +1,15 @@
 # Changelog
 
+## [5.3.29] - 2026-04-14
+
+### Fix: runtime hygiene, fail-closed startup, and honest release surfaces
+
+- Duplicate `* 2` artifacts are now treated as contamination instead of tolerated noise: `.gitignore` no longer hides them, runtime/plugin/update loaders skip them, and preflight/release checks fail if they return.
+- `src/scripts/nexo-update.sh` no longer carries a parallel shell update path; it delegates to the canonical Python update handler so packaged/runtime updates stop diverging.
+- Server startup now runs preflight synchronously, and corrupt SQLite state no longer respawns a fresh empty brain by default. Fresh-DB recovery requires explicit `NEXO_ALLOW_FRESH_DB_ON_CORRUPTION=1`.
+- Cron execution logging now writes a complete row after command exit and spools JSON under `~/.nexo/operations/cron-spool` when SQLite is unavailable, so runs stop disappearing silently.
+- `scripts/verify_release_readiness.py` now also checks repo-facing public surfaces (`README.md`, `llms.txt`, `index.html`, `blog/index.html`, `changelog/index.html`, `sitemap.xml`) so code, docs, and public web copy cannot drift apart quietly before tag publish.
+
 ## [5.3.28] - 2026-04-14
 
 ### Feature: guardrail requires `guard_check` per-file, not per-session

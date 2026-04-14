@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO Brain v5.3.29 — Runtime Hygiene, Fail-Closed Startup, and Honest Cron Tracing | nexo-brain.com</title>
+<meta name="description" content="v5.3.29 hardens duplicate-artifact hygiene, converges update paths on one core, makes startup fail closed on corrupt DB state, and preserves cron evidence even when SQLite is down.">
+<link rel="stylesheet" href="../../assets/blog.css">
+</head>
+<body>
+<article class="blog-post">
+<header>
+<h1>v5.3.29 — Runtime Hygiene, Fail-Closed Startup, and Honest Cron Tracing</h1>
+<time datetime="2026-04-14">April 14, 2026</time>
+</header>
+
+<p>This release closes a class of problems that are easy to dismiss as “local mess” until they turn into user-facing drift. The audit behind Block 1 found that the published repo was cleaner than the live worktree looked, but that was not comforting: duplicate <code>* 2</code> artifacts were being hidden instead of rejected, the shell update path still carried logic parallel to the Python core, server startup could keep mutating state in the background, and cron evidence still depended too much on SQLite being healthy at the exact moment the wrapper tried to write.</p>
+
+<p>v5.3.29 turns those soft failure paths into explicit contracts. The runtime now fails closed where it used to improvise, and the public release surface is finally forced to stay aligned with the packaged line before a tag can ship.</p>
+
+<h2>1. Duplicate artifacts are now contamination, not tolerated noise</h2>
+
+<p>Files such as <code>alpha 2.py</code> or duplicated test files were not always in <code>HEAD</code>, but they could still poison a live checkout because <code>.gitignore</code> hid them and several loaders walked the tree too permissively. That meant a local repo could behave differently from the clean published tree without anyone noticing.</p>
+
+<p>Now:</p>
+
+<ul>
+  <li><code>.gitignore</code> stops hiding those duplicates</li>
+  <li>runtime/plugin/update loaders skip duplicate artifacts explicitly</li>
+  <li><code>nexo-preflight.sh</code> and <code>verify_release_readiness.py</code> fail if they reappear</li>
+</ul>
+
+<p>The point is simple: if the tree is contaminated, release gates should say so loudly instead of hoping the operator notices.</p>
+
+<h2>2. There is one update core again</h2>
+
+<p><code>src/scripts/nexo-update.sh</code> no longer carries a parallel shell implementation of update behavior. It now delegates to the canonical Python update handler, so packaged/runtime updates stop diverging depending on which entry point happened to run.</p>
+
+<p>That matters because update logic is not a harmless convenience layer. Divergent paths create different runtime states, and one of them can quietly preserve bugs the other already fixed.</p>
+
+<h2>3. Startup now fails closed on corrupt DB state</h2>
+
+<p>The server no longer starts while a mutating preflight still runs in the background, and corrupt SQLite state no longer spawns a brand-new empty brain by default. If the DB is broken, the runtime now stops and tells the truth unless the operator explicitly opts into fresh-DB recovery with <code>NEXO_ALLOW_FRESH_DB_ON_CORRUPTION=1</code>.</p>
+
+<p>That change matters more than it sounds. “Keep the process alive” is the wrong priority if staying alive means erasing the very continuity the product exists to preserve.</p>
+
+<h2>4. Cron tracing survives transient DB failure</h2>
+
+<p>The cron wrapper used to create an open row and then patch it later. If the DB write path failed at the wrong time, the command could still run while leaving misleading or incomplete telemetry behind.</p>
+
+<p>Now the wrapper records a complete row after execution, and if SQLite is unavailable it writes a spool JSON artifact under <code>~/.nexo/operations/cron-spool</code>. The evidence survives long enough to be recovered instead of vanishing into a blank spot in history.</p>
+
+<h2>5. Release discipline is now enforced more honestly</h2>
+
+<p>This patch also hardens the release audit itself. <code>verify_release_readiness.py</code> now checks repo-facing public surfaces too: <code>README.md</code>, <code>llms.txt</code>, <code>index.html</code>, <code>blog/index.html</code>, <code>changelog/index.html</code>, and <code>sitemap.xml</code>. A tag is no longer considered “ready” just because code and npm metadata line up while the public copy still describes an older release.</p>
+
+<p>That is the release-engineering lesson behind this patch: the code can be correct and the release can still be dishonest if the outward-facing surfaces drift.</p>
+
+<h2>Update</h2>
+
+<pre><code>npm update -g nexo-brain
+nexo update
+</code></pre>
+
+<p>If your runtime is clean, the update should stay boring. If it is not, boring is exactly what the new gates are designed to restore.</p>
+
+</article>
+</body>
+</html>

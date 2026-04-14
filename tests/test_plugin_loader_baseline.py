@@ -121,6 +121,27 @@ class TestListAndRemovePlugins:
         result = remove_plugin(_StubMCP(), "non_existent")
         assert result == []
 
+    def test_load_all_plugins_skips_duplicate_copy_filenames(self, isolated_db, monkeypatch, tmp_path):
+        import plugin_loader
+
+        repo_plugins = tmp_path / "repo-plugins"
+        personal_plugins = tmp_path / "personal-plugins"
+        repo_plugins.mkdir()
+        personal_plugins.mkdir()
+        (personal_plugins / "alpha.py").write_text("TOOLS = []\n", encoding="utf-8")
+        (personal_plugins / "alpha 2.py").write_text("TOOLS = []\n", encoding="utf-8")
+
+        loaded = []
+
+        monkeypatch.setattr(plugin_loader, "PLUGINS_DIR", str(repo_plugins))
+        monkeypatch.setattr(plugin_loader, "PERSONAL_PLUGINS_DIR", str(personal_plugins))
+        monkeypatch.setattr(plugin_loader, "load_plugin", lambda mcp, filename, plugins_dir=None: loaded.append(filename) or 0)
+
+        total = plugin_loader.load_all_plugins(_StubMCP())
+
+        assert total == 0
+        assert loaded == ["alpha.py"]
+
 
 # ── _PluginTimeout exception class ───────────────────────────────────────
 

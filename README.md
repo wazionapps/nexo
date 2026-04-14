@@ -18,7 +18,7 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `5.3.11` is the current packaged-runtime line: protocol and Cortex now reject malformed `outcome`, `task_type`, and `impact_level` values explicitly instead of silently coercing them into other valid states, so task history, debt, hot context, and decision telemetry stay trustworthy even when a caller passes a bad contract payload.
+Version `5.3.29` is the current packaged-runtime line: duplicate `* 2` artifacts now fail hygiene gates instead of hiding in the tree, packaged/runtime update paths converge on one canonical core, startup preflight runs synchronously, corrupt DB state no longer respawns an empty brain by default, and cron runs spool locally when SQLite is unavailable.
 
 Start here:
 - [5-minute quickstart](docs/quickstart-5-minutes.md)
@@ -488,7 +488,9 @@ NEXO Brain doesn't just respond — it runs 13 core recovery-aware background jo
 | **followup-hygiene** | Weekly (Sun) | Normalizes statuses, flags stale followups, cleans orphans |
 | **learning-housekeep** | 03:15 daily | Dedup learnings, adjust weights by usage, process overdue reviews, reconcile decision outcomes |
 | **immune** | Every 30 min | Quarantine processing, memory promotion/rejection, synaptic pruning |
+| **impact-scorer** | 05:45 daily | Scores active followups so queues can prioritize by expected impact |
 | **synthesis** | 06:00 daily | Memory synthesis — discovers cross-memory patterns |
+| **outcome-checker** | 08:00 daily | Verifies tracked outcomes and marks them met, pending, or missed |
 | **watchdog** | Every 30 min | Monitors services, LaunchAgents, and infrastructure health |
 | **auto-close-sessions** | Every 5 min | Cleans stale sessions |
 
