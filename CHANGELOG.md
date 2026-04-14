@@ -1,5 +1,42 @@
 # Changelog
 
+## [5.4.0] - 2026-04-14
+
+### Add: calibration migration + runtime events bus + notify/health/logs
+
+Second iteration of the NEXO Desktop integration plan. External UIs can
+now react to live Brain state, not just read a static schema.
+
+- `src/calibration_migration.py` — detects flat `calibration.json` from
+  older installs and migrates to nested (user/personality/preferences/meta)
+  with a pre-migrate backup. Unknown keys go to `legacy_unmapped`. Reverts
+  automatically on write failure.
+- `src/user_context.py` — loader accepts both flat and nested shapes so
+  no upgrade race breaks existing users.
+- `nexo doctor --migrate-calibration [--calibration-dry-run]` — explicit
+  knob for the migration. Also runs implicitly with `nexo doctor --fix`.
+- `nexo update` — migrates once per user after the code sync. Silent no-op
+  if already nested.
+
+- `src/events_bus.py` — append-only NDJSON stream at
+  `~/.nexo/runtime/events.ndjson` with monotonic `id`, locked writes,
+  5 MB rotation, and a stable envelope
+  `{id, ts, type, priority, text, reason, source, extra}`.
+  Event types: `attention_required`, `proactive_message`, `followup_alert`,
+  `health_alert`, `info`. Priorities: `low|normal|high|urgent`.
+- `nexo notify <type> [--text] [--reason] [--priority] [--source] [--json]`
+  — one-shot emitter. Lets Brain internals (recovery, followup runner,
+  health watchers) wake up a UI without polling.
+- `src/health_check.py` + `nexo health --json` — snapshot of runtime,
+  database integrity, crons, MCP wiring, recent errors, and events.
+  Top-level `status` rolls up to `ok|degraded|error`.
+- `nexo logs --tail [--lines N] [--source all|events|operations|<file>]
+  [--json]` — single entry point to tail the event bus or
+  `~/.nexo/operations/*.log` without opening a terminal.
+
+No existing commands changed behavior. Pure additive surface plus a safe,
+idempotent calibration migration that runs in the background of `update`.
+
 ## [5.3.30] - 2026-04-14
 
 ### Add: Desktop bridge — read-only commands for external UIs

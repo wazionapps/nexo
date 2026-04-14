@@ -18,14 +18,32 @@ class UserContext:
         self.user_name = ""
         self.user_language = "en"
 
-        # calibration.json has operator_name + user info
+        # calibration.json has operator_name + user info.
+        # v5.4.0+: tolerate both nested ({user:{name,language}}) and legacy flat
+        # ({user_name, language}) shapes. Nested wins when both exist.
         if cal_path.exists():
             try:
                 cal = json.loads(cal_path.read_text())
-                self.assistant_name = cal.get("operator_name", "") or \
-                    cal.get("user", {}).get("assistant_name", "") or "NEXO"
-                self.user_name = cal.get("user", {}).get("name", "")
-                self.user_language = cal.get("user", {}).get("language", "en")
+                user_block = cal.get("user") if isinstance(cal.get("user"), dict) else {}
+
+                self.assistant_name = (
+                    user_block.get("assistant_name", "")
+                    or cal.get("operator_name", "")
+                    or cal.get("assistant_name", "")
+                    or "NEXO"
+                )
+                self.user_name = (
+                    user_block.get("name", "")
+                    or cal.get("user_name", "")
+                    or cal.get("name", "")
+                    or ""
+                )
+                self.user_language = (
+                    user_block.get("language", "")
+                    or cal.get("language", "")
+                    or cal.get("lang", "")
+                    or "en"
+                )
             except Exception:
                 pass
 
