@@ -1,5 +1,16 @@
 # Changelog
 
+## [5.3.27] - 2026-04-14
+
+### Feature: heartbeat exposes authoritative NOW_UTC
+
+- `nexo_heartbeat` output now begins with a `NOW_UTC: <ISO-8601>` line so
+  clients always have an authoritative wall-clock time on every user turn.
+  Prevents date/day-of-week drift in long sessions (e.g. emails or diaries
+  saying "ayer domingo" when yesterday was actually Monday).
+- Neutral UTC, no locale/timezone baked into core — clients format per
+  operator preferences in runtime personal.
+
 ## [5.3.26] - 2026-04-14
 
 ### Fix: sync model_defaults.json into NEXO_HOME

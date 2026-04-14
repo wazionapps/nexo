@@ -431,7 +431,12 @@ def _handle_heartbeat_inner(sid: str, task: str, context_hint: str = '') -> str:
     """Inner body of handle_heartbeat — wrapped by tool_span above."""
     from db import get_db
     update_session(sid, task)
-    parts = [f"OK: {sid} — {task}"]
+
+    # Temporal anchor — surface authoritative UTC time so clients never drift
+    # on date/day-of-week across long sessions. Neutral ISO-8601, no locale,
+    # no timezone assumption: clients format per operator preferences.
+    _now_iso = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+    parts = [f"NOW_UTC: {_now_iso}", f"OK: {sid} — {task}"]
 
     inbox = get_inbox(sid)
     if inbox:
