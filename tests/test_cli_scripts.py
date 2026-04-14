@@ -190,6 +190,13 @@ class TestRuntimeUpdate:
         runtime_home.mkdir()
         (runtime_home / "bin").mkdir()
         (runtime_home / "db").mkdir()
+        (runtime_home / ".venv" / "bin").mkdir(parents=True)
+        fake_python = runtime_home / ".venv" / "bin" / "python3"
+        fake_python.write_text("#!/bin/sh\nexit 0\n")
+        fake_python.chmod(0o755)
+        fake_pip = runtime_home / ".venv" / "bin" / "pip"
+        fake_pip.write_text("#!/bin/sh\nexit 0\n")
+        fake_pip.chmod(0o755)
 
         repo = tmp_path / "repo"
         src = repo / "src"
@@ -362,6 +369,13 @@ class TestRuntimeUpdate:
         runtime_home.mkdir()
         (runtime_home / "bin").mkdir()
         (runtime_home / "db").mkdir()
+        (runtime_home / ".venv" / "bin").mkdir(parents=True)
+        fake_python = runtime_home / ".venv" / "bin" / "python3"
+        fake_python.write_text("#!/bin/sh\nexit 0\n")
+        fake_python.chmod(0o755)
+        fake_pip = runtime_home / ".venv" / "bin" / "pip"
+        fake_pip.write_text("#!/bin/sh\nexit 0\n")
+        fake_pip.chmod(0o755)
 
         repo = tmp_path / "repo"
         src = repo / "src"
