@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO Brain v5.4.0 — Calibration Migration + Runtime Events + notify/health/logs | nexo-brain.com</title>
+<meta name="description" content="v5.4.0 adds a real-time event bus, a one-shot health snapshot, structured log tailing, and a safe calibration.json migration. External UIs stop polling and start reacting to live Brain state.">
+<link rel="stylesheet" href="../../assets/blog.css">
+</head>
+<body>
+<article class="blog-post">
+<header>
+<h1>v5.4.0 — Calibration migration + runtime events + <code>notify</code>, <code>health</code>, <code>logs</code></h1>
+<time datetime="2026-04-14">April 14, 2026</time>
+</header>
+
+<p>v5.3.30 gave external UIs a static description of the Brain — schema, identity, onboarding, profile. That unblocks rendering, but it does not let a UI <em>react</em> to anything. A user interface that can only read configuration is still a waiting room.</p>
+
+<p>v5.4.0 closes that gap. There is now a runtime event bus, a snapshot of subsystem health, a single way to tail logs, and a migration that quietly cleans up older installs before they ossify around a legacy shape.</p>
+
+<h2>1. Calibration migration, silent and reversible</h2>
+
+<p>Older NEXO installs wrote <code>calibration.json</code> with flat top-level keys — <code>user_name</code>, <code>autonomy</code>, <code>role</code>, and so on. Newer installs nest those inside <code>user.*</code>, <code>personality.*</code>, <code>preferences.*</code>, and <code>meta.*</code>. Both shapes worked, but every downstream client had to re-implement the probe — and some wrote back to the wrong place.</p>
+
+<p>v5.4.0 ships a migration that runs automatically inside <code>nexo update</code>, once per user, with a pre-migrate backup (<code>calibration.json.pre-migrate-5.4.0</code>). Unknown keys are preserved under <code>legacy_unmapped</code>. If the write step fails, the backup is restored. If the shape is already nested, the migration is a no-op. You can also run it explicitly with <code>nexo doctor --migrate-calibration</code>, or preview it with <code>--calibration-dry-run</code>.</p>
+
+<p>The loader in <code>user_context.py</code> still reads both shapes, so nothing breaks during the release window. The flat shape just goes extinct naturally.</p>
+
+<h2>2. <code>~/.nexo/runtime/events.ndjson</code> — an append-only runtime bus</h2>
+
+<p>The new event bus is deliberately simple: one JSON object per line, monotonic <code>id</code>, unix <code>ts</code>, a stable envelope <code>{id, ts, type, priority, text, reason, source, extra}</code>. Writes are protected by an <code>fcntl</code> lock; the file rotates automatically at 5 MB. Any UI can tail it the same way <code>tail -f</code> does.</p>
+
+<p>Event types are intentionally few and stable:</p>
+
+<ul>
+  <li><code>attention_required</code> — the user should look at something</li>
+  <li><code>proactive_message</code> — Brain wants to initiate dialogue</li>
+  <li><code>followup_alert</code> — overdue or urgent followup</li>
+  <li><code>health_alert</code> — a core subsystem is degraded</li>
+  <li><code>info</code> — general update, no attention needed</li>
+</ul>
+
+<p>Priorities are <code>low | normal | high | urgent</code>. That is the whole contract.</p>
+
+<h2>3. <code>nexo notify</code> — one-shot emitter</h2>
+
+<p><code>nexo notify proactive_message --text "An important email from Maria just arrived, should we look?" --reason "email-alerts" --priority high --json</code> returns the full event. That is what a recovery script or followup runner calls when it needs the user's attention, instead of silently modifying state and hoping someone notices.</p>
+
+<h2>4. <code>nexo health --json</code> — one snapshot, all subsystems</h2>
+
+<p>Runtime, database, crons, MCP wiring, recent errors, and the event bus — rolled up into a single <code>status: ok | degraded | error</code>. A panel in NEXO Desktop can render that in red/yellow/green without stack traces. A CI cron can diff successive snapshots without teaching itself where every log lives.</p>
+
+<h2>5. <code>nexo logs --tail</code> — structured log access</h2>
+
+<p>Last N entries across the event bus and <code>~/.nexo/operations/*.log</code>, JSON by default. Point at a specific file with <code>--source</code>. This is the line between "Maria asks Francisco to open a terminal" and "Maria reads the error herself from Desktop." One command, two consumers.</p>
+
+<h2>What stays the same</h2>
+
+<p>No existing commands changed behavior. The MCP server, crons, hooks, and startup contract are untouched. This release is additive surface plus one quiet, safe migration that brings older installs into line with the canonical schema.</p>
+
+<h2>Update</h2>
+
+<pre><code>npm update -g nexo-brain
+nexo update
+</code></pre>
+
+<p>If the install was already on the nested calibration shape, <code>update</code> stays boring. If it was on the flat shape, you will see one extra line: <code>calibration.json migrated flat → nested</code>. Boring is the feature.</p>
+
+</article>
+</body>
+</html>

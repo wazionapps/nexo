@@ -87,19 +87,23 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v5.3.30 live</span>
-                    <span class="page-chip">Desktop bridge</span>
-                    <span class="page-chip">Read-only CLI</span>
-                    <span class="page-chip">Auto-adaptive UI</span>
+                    <span class="page-chip">v5.4.0 live</span>
+                    <span class="page-chip">Events bus</span>
+                    <span class="page-chip">Health + logs</span>
+                    <span class="page-chip">Calibration migration</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v5330" class="btn btn-primary">Start with v5.3.30</a>
+                    <a href="#v540" class="btn btn-primary">Start with v5.4.0</a>
                     <a href="#v400" class="btn btn-secondary">See v4.0.0</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
             </div>
             <div class="page-visual">
                 <div class="page-stack">
+                    <div class="page-stack-card">
+                        <strong>v5.4.0</strong>
+                        <span>Runtime events bus at <code>~/.nexo/runtime/events.ndjson</code>, <code>nexo notify</code> for one-shot proactive events, <code>nexo health --json</code> subsystem snapshot, <code>nexo logs --tail --json</code> structured log access, and a safe flat→nested <code>calibration.json</code> migration that runs silently inside <code>nexo update</code>.</span>
+                    </div>
                     <div class="page-stack-card">
                         <strong>v5.3.30</strong>
                         <span>Desktop bridge: four read-only CLI commands (<code>nexo schema</code>, <code>nexo identity</code>, <code>nexo onboard</code>, <code>nexo scan-profile</code>) expose editable schema, identity, onboarding wizard, and profile heuristics as JSON so external UIs auto-adapt.</span>
@@ -166,6 +170,25 @@
                 <div id="changelog-pager" class="changelog-pager" aria-label="Changelog pagination"></div>
             </div>
         </div>
+    </div>
+</section>
+
+<!-- v5.4.0 events + health + logs + calibration migration -->
+<section id="v540" class="section-compact" style="background:linear-gradient(135deg,#09111f 0%,#1b2a4e 34%,#f97316 68%,#22d3ee 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.4.0 <span style="opacity:.5;font-weight:400;">&mdash; April 14, 2026</span></div>
+        <h2 class="section-title">Runtime events + <code>nexo notify</code> / <code>health</code> / <code>logs</code> + calibration migration</h2>
+        <p class="section-subtitle">
+            External UIs stop polling and start reacting. NEXO Brain now exposes a stable runtime event stream, a subsystem health snapshot, structured log tailing, and a safe silent migration for older <code>calibration.json</code> files.
+        </p>
+        <ul style="list-style:none;padding:0;margin:24px 0 0;display:grid;gap:12px;">
+            <li><strong>Events bus</strong> — append-only NDJSON at <code>~/.nexo/runtime/events.ndjson</code>, monotonic <code>id</code>, stable envelope, 5 MB rotation, fcntl-locked writes. Event types: <code>attention_required</code>, <code>proactive_message</code>, <code>followup_alert</code>, <code>health_alert</code>, <code>info</code>.</li>
+            <li><code>nexo notify TYPE --text ... --reason ... --priority low|normal|high|urgent</code> — one-shot emitter for recovery scripts, followup runners, and health watchers.</li>
+            <li><code>nexo health --json</code> — rolled up <code>status: ok|degraded|error</code> across runtime, database, crons, MCP wiring, recent errors, and the event bus.</li>
+            <li><code>nexo logs --tail [--lines N] [--source all|events|operations|&lt;file&gt;] [--json]</code> — single entry point for Desktop to read logs without opening a terminal.</li>
+            <li><code>nexo doctor --migrate-calibration [--calibration-dry-run]</code> plus implicit migration inside <code>nexo update</code>: <code>calibration.json</code> moves from flat to nested with a pre-migrate backup. Reverts on failure. No-op if already nested.</li>
+        </ul>
+        <p style="margin-top:24px;">Pure additive surface. See the <a href="/blog/nexo-5-4-0-events-health-logs/" style="color:inherit;text-decoration:underline;">release post</a>.</p>
     </div>
 </section>
 
