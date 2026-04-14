@@ -1,5 +1,16 @@
 # Changelog
 
+## [5.4.4] - 2026-04-14
+
+### Fix: test isolation for tree_hygiene module + venv timeout in CI
+
+- Fixed 2 test failures from v5.4.2: `tree_hygiene.py` now copied into
+  isolated runtime directories used by `TestRuntimeUpdate`.
+- Fixed CI timeout in `test_update_uses_recorded_source_repo`: tests now
+  pre-create a fake `.venv/bin/python3` so `_ensure_runtime_venv` skips
+  the slow venv creation that exceeds the 10-second timeout on GitHub
+  Actions runners.
+
 ## [5.4.3] - 2026-04-14
 
 ### Fix: test isolation for tree_hygiene module
