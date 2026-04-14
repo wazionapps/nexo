@@ -430,7 +430,7 @@
         "cognitive.somatic_get_risk"
       ],
       "enforcement": {
-        "level": "must",
+        "level": "should",
         "rules": [
           {
             "type": "before_tool",
@@ -544,7 +544,7 @@
         "nexo_learning_apply_retroactively"
       ],
       "enforcement": {
-        "level": "must",
+        "level": "should",
         "rules": [
           {
             "type": "on_event",
