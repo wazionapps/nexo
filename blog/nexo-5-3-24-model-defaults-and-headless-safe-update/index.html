@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO Brain v5.3.24 — Single-Source Model Defaults + Headless-Safe Update | nexo-brain.com</title>
+<meta name="description" content="One JSON, one source of truth for model defaults across Python runtime and JS installer. Plus: headless-friendly client permissions, zombie-cron prevention, and one-time upgrade prompts.">
+<link rel="stylesheet" href="../../assets/blog.css">
+</head>
+<body>
+<article class="blog-post">
+<header>
+<h1>v5.3.24 — One JSON to Rule All Model Defaults</h1>
+<time datetime="2026-04-14">April 14, 2026</time>
+</header>
+
+<p>Three compounding bugs turned out to share a root cause: NEXO Brain had no single source of truth for model defaults. The Python runtime, the JS installer, and the client-config sync layer each kept their own copy, and they silently drifted apart.</p>
+
+<p>v5.3.24 consolidates everything into one file — <code>src/model_defaults.json</code> — read identically by Python and JS. Editing one line now updates new installs, offers a migration prompt to existing users, and keeps cron automation honest across updates.</p>
+
+<h2>The Bugs We Caught</h2>
+
+<h3>1. Codex inheriting Claude models</h3>
+
+<p>A stale alias (<code>DEFAULT_CODEX_MODEL = DEFAULT_CLAUDE_CODE_MODEL</code>) wrote <code>claude-opus-4-6[1m]</code> into <code>~/.codex/config.toml</code>. Codex with a ChatGPT account then rejected every session with <em>"model not supported"</em>. Fresh installs using Codex as the primary client were dead on arrival.</p>
+
+<h3>2. Headless crons stalling on permission prompts</h3>
+
+<p>The installer wrote the MCP server into <code>~/.claude/settings.json</code> but never populated <code>permissions.allow</code>. Interactive users had built up an allowlist click-by-click over months; fresh installs — and anyone running NEXO headlessly from cron — got a stall on every tool call because Claude Code was waiting for approval that would never come. Followup-runner, email-monitor, deep-sleep and the whole automation stack silently zombied.</p>
+
+<h3>3. <code>nexo update</code> crashing on heavy source repos</h3>
+
+<p>If the runtime was ever synced from a local development checkout, <code>git status --porcelain</code> ran against that directory on every update. On a 370MB repo with an unignored virtualenv, git hung past the 10-second timeout and the update crashed with <code>TimeoutExpired</code>.</p>
+
+<h2>The Architecture</h2>
+
+<p>A single JSON, read by both runtimes:</p>
+
+<pre><code>{
+  "schema_version": 1,
+  "claude_code": {
+    "model": "claude-opus-4-6[1m]",
+    "reasoning_effort": "",
+    "display_name": "Opus 4.6 with 1M context",
+    "recommendation_version": 1,
+    "previous_defaults": []
+  },
+  "codex": {
+    "model": "gpt-5.4",
+    "reasoning_effort": "xhigh",
+    "display_name": "GPT-5.4 with max reasoning",
+    "recommendation_version": 1,
+    "previous_defaults": []
+  }
+}
+</code></pre>
+
+<p>When a new model ships, a maintainer edits the JSON, bumps <code>recommendation_version</code>, and pushes a release. On the next interactive <code>nexo update</code>, existing users on the prior NEXO default see a one-time prompt:</p>
+
+<pre><code>[NEXO] ⭐ Nueva recomendación de modelo para claude_code:
+       claude-opus-6-0  (antes: claude-opus-4-6[1m])
+       Opus 6.0 — recomendado por NEXO.
+       ¿Migrar tu configuración? [y/N/later]:
+</code></pre>
+
+<p>Three branches:</p>
+
+<ul>
+  <li><strong>Customized models</strong> (not a prior NEXO default) are respected silently. No prompt, no nag. The user picked their model for a reason.</li>
+  <li><strong>Users already on the current recommendation</strong> are auto-acknowledged without any output. (Fresh installs never see a "migrate?" prompt for the model they just received seconds earlier.)</li>
+  <li><strong>Non-interactive updates</strong> (cron / headless <code>nexo update</code>) log a single hint to stderr telling the user to re-run interactively, and skip any write that would require a decision.</li>
+</ul>
+
+<h2>Self-Heal on Update</h2>
+
+<p>Users who installed on an older version have Claude-family models wedged into their Codex profile. <code>nexo update</code> now scans <code>client_runtime_profiles.codex.model</code>, detects any <code>claude-*</code> / <code>opus-*</code> / <code>sonnet-*</code> / <code>haiku-*</code> value, and resets it to the current Codex default before client configs are re-synced. The heal runs on both the legacy sync and the packaged npm update code paths, so it fires regardless of how the user installed.</p>
+
+<h2>Headless-Safe Defaults</h2>
+
+<p>The installer now writes a minimum <code>permissions.allow</code> list into <code>~/.claude/settings.json</code>: <code>Bash, Read, Edit, Write, Glob, Grep, Task, Skill, NotebookEdit, WebSearch, WebFetch, mcp__*</code>. The <code>mcp__*</code> wildcard covers every present and future MCP server without forcing a maintainer release every time a new one lands.</p>
+
+<p>Codex gets its own defense: <code>approval_policy = "never"</code> and <code>sandbox_mode = "danger-full-access"</code> are written on install when those keys are absent. Existing user values are preserved untouched.</p>
+
+<h2>Update</h2>
+
+<pre><code>npm update -g nexo-brain
+nexo update
+</code></pre>
+
+<p>Fresh installs get the new defaults. Existing installs self-heal Codex profiles on first update. Users on older NEXO defaults will see the migration prompt when a new recommendation ships; users who customized their models will never be bothered.</p>
+
+</article>
+</body>
+</html>

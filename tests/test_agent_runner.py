@@ -146,6 +146,7 @@ def test_run_automation_prompt_uses_claude_backend_command(monkeypatch, tmp_path
         "/tmp/fake-claude",
         "-p",
         "Do the thing",
+        "--dangerously-skip-permissions",
         "--model",
         "claude-opus-4-6[1m]",
         "--output-format",

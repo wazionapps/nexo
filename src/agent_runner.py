@@ -580,7 +580,15 @@ def run_automation_prompt(
             raise AutomationBackendUnavailableError(
                 "Claude Code automation backend selected but `claude` is not installed."
             )
-        cmd = [claude_bin, "-p", prompt]
+        # Headless claude -p does NOT reliably honour permissions.allow from
+        # settings.json for MCP tool calls — it can stall waiting for an
+        # approval that will never come in non-interactive mode. All NEXO
+        # headless automation (followup-runner, email-monitor, deep-sleep,
+        # etc.) therefore must pass --dangerously-skip-permissions explicitly
+        # so the process actually runs instead of zombying. Interactive
+        # sessions (`nexo chat`) never go through this code path and keep
+        # their normal approval prompts.
+        cmd = [claude_bin, "-p", prompt, "--dangerously-skip-permissions"]
         if resolved_model:
             cmd.extend(["--model", resolved_model])
         if resolved_effort:
