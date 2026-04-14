@@ -787,6 +787,54 @@ class TestRuntimeChecks:
         assert any("default terminal client `codex`" in item for item in check.evidence)
         assert any("automation backend `codex`" in item for item in check.evidence)
 
+    def test_client_backend_preferences_fix_installs_selected_claude(self, nexo_home, monkeypatch):
+        from doctor.providers import runtime
+        import client_sync
+
+        schedule_file = nexo_home / "config" / "schedule.json"
+        schedule_file.parent.mkdir(parents=True, exist_ok=True)
+        schedule_file.write_text(json.dumps({
+            "interactive_clients": {
+                "claude_code": True,
+                "codex": False,
+                "claude_desktop": False,
+            },
+            "default_terminal_client": "claude_code",
+            "automation_enabled": True,
+            "automation_backend": "claude_code",
+        }))
+
+        install_state = {"installed": False}
+        sync_kwargs = {}
+
+        monkeypatch.setattr(runtime, "SCHEDULE_FILE", schedule_file)
+        monkeypatch.setattr(runtime.Path, "home", lambda: nexo_home)
+
+        def fake_detect(user_home=None):
+            return {
+                "claude_code": {"installed": install_state["installed"]},
+                "codex": {"installed": False},
+                "claude_desktop": {"installed": False},
+            }
+
+        def fake_sync_all_clients(**kwargs):
+            sync_kwargs.update(kwargs)
+            install_state["installed"] = True
+            return {
+                "ok": True,
+                "install_results": {"claude_code": {"ok": True, "action": "installed"}},
+                "clients": {},
+            }
+
+        monkeypatch.setattr(runtime, "detect_installed_clients", fake_detect)
+        monkeypatch.setattr(client_sync, "sync_all_clients", fake_sync_all_clients)
+
+        check = runtime.check_client_backend_preferences(fix=True)
+
+        assert check.status == "healthy"
+        assert check.fixed is True
+        assert sync_kwargs["auto_install_missing_claude"] is True
+
     def test_client_bootstrap_parity_warns_when_codex_bootstrap_missing(self, nexo_home, monkeypatch):
         from doctor.providers import runtime
 

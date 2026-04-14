@@ -164,6 +164,7 @@ def test_run_runtime_post_sync_uses_reconcile_personal_scripts(tmp_path, monkeyp
     (runtime_home / "crons" / "sync.py").write_text("print('ok')\n")
 
     calls = []
+    captured = {}
 
     def fake_run(cmd, **kwargs):
         calls.append(cmd)
@@ -172,7 +173,11 @@ def test_run_runtime_post_sync_uses_reconcile_personal_scripts(tmp_path, monkeyp
     monkeypatch.setattr(auto_update, "NEXO_HOME", runtime_home)
     monkeypatch.setattr(auto_update, "_reinstall_runtime_pip_deps", lambda dest: True)
     monkeypatch.setattr(auto_update.subprocess, "run", fake_run)
-    monkeypatch.setattr(client_sync, "sync_all_clients", lambda **kwargs: {"ok": True, "clients": {}})
+    def fake_sync_all_clients(**kwargs):
+        captured.update(kwargs)
+        return {"ok": True, "clients": {}}
+
+    monkeypatch.setattr(client_sync, "sync_all_clients", fake_sync_all_clients)
 
     import runtime_power
 
@@ -187,6 +192,7 @@ def test_run_runtime_post_sync_uses_reconcile_personal_scripts(tmp_path, monkeyp
     assert "client-sync" in actions
     init_call = next(cmd for cmd in calls if isinstance(cmd, list) and len(cmd) >= 3 and cmd[1] == "-c")
     assert "reconcile_personal_scripts" in init_call[2]
+    assert captured["auto_install_missing_claude"] is True
 
 
 def test_run_runtime_post_sync_reports_personal_schedule_heal(tmp_path, monkeypatch):

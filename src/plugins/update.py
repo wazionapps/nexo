@@ -479,6 +479,7 @@ def _sync_packaged_clients() -> tuple[bool, str | None]:
             runtime_root=NEXO_HOME,
             operator_name=os.environ.get("NEXO_NAME", ""),
             preferences=preferences,
+            auto_install_missing_claude=True,
         )
     except Exception as e:
         return False, f"client sync failed: {e}"

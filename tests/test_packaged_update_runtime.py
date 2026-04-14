@@ -71,6 +71,7 @@ def test_sync_packaged_clients_normalizes_preferences_and_targets_runtime_home(t
     assert err is None
     assert captured["nexo_home"] == runtime_home
     assert captured["runtime_root"] == runtime_home
+    assert captured["auto_install_missing_claude"] is True
     updated_schedule = json.loads(schedule_path.read_text())
     assert "interactive_clients" in updated_schedule
     assert "automation_enabled" in updated_schedule

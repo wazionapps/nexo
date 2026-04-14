@@ -2115,6 +2115,7 @@ def _run_runtime_post_sync(dest: Path = NEXO_HOME, progress_fn=None) -> tuple[bo
             nexo_home=dest,
             runtime_root=dest,
             preferences=normalized_preferences,
+            auto_install_missing_claude=True,
         )
         if client_sync_result.get("ok"):
             actions.append("client-sync")
