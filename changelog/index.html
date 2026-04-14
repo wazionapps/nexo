@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.11 hardens protocol and Cortex contracts so malformed outcome, task_type, and impact_level payloads fail explicitly instead of silently mutating persisted state.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.29 hardens runtime hygiene, converges update paths on one core, makes startup fail closed on corrupt DB state, and preserves cron evidence when SQLite is unavailable.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.11 hardens protocol and Cortex contracts so malformed outcome, task_type, and impact_level payloads fail explicitly instead of silently mutating persisted state.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.29 hardens runtime hygiene, converges update paths on one core, makes startup fail closed on corrupt DB state, and preserves cron evidence when SQLite is unavailable.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.11 hardens protocol and Cortex contracts so malformed outcome, task_type, and impact_level payloads fail explicitly instead of silently mutating persisted state.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.29 hardens runtime hygiene, converges update paths on one core, makes startup fail closed on corrupt DB state, and preserves cron evidence when SQLite is unavailable.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.11 hardens protocol and Cortex contracts so malformed outcome, task_type, and impact_level payloads fail explicitly instead of silently mutating persisted state.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.29 hardens runtime hygiene, converges update paths on one core, makes startup fail closed on corrupt DB state, and preserves cron evidence when SQLite is unavailable.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,13 +87,13 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v5.3.11 live</span>
-                    <span class="page-chip">Protocol contracts</span>
-                    <span class="page-chip">Cortex contracts</span>
-                    <span class="page-chip">No silent coercion</span>
+                    <span class="page-chip">v5.3.29 live</span>
+                    <span class="page-chip">Runtime hygiene</span>
+                    <span class="page-chip">Fail-closed startup</span>
+                    <span class="page-chip">Honest cron tracing</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v5311" class="btn btn-primary">Start with v5.3.11</a>
+                    <a href="#v5329" class="btn btn-primary">Start with v5.3.29</a>
                     <a href="#v400" class="btn btn-secondary">See v4.0.0</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -101,12 +101,16 @@
             <div class="page-visual">
                 <div class="page-stack">
                     <div class="page-stack-card">
-                        <strong>v5.3.11</strong>
-                        <span>Malformed <code>outcome</code>, <code>task_type</code>, and <code>impact_level</code> payloads now fail explicitly instead of being silently rewritten into other valid states.</span>
+                        <strong>v5.3.29</strong>
+                        <span>Duplicate artifact hygiene now fails closed, packaged/runtime updates converge on one core, startup stops respawning an empty brain on corrupt DB state, and cron evidence survives transient SQLite failure.</span>
                     </div>
                     <div class="page-stack-card">
-                        <strong>v5.3.0</strong>
-                        <span><code>nexo uninstall</code> — stops all crons, removes runtime, preserves user data. Clean separation of runtime vs user data for safe reinstall.</span>
+                        <strong>v5.3.28</strong>
+                        <span><code>guard_check</code> is now enforced per-file instead of being satisfiable once per session, closing a loophole in protocol discipline.</span>
+                    </div>
+                    <div class="page-stack-card">
+                        <strong>v5.3.27</strong>
+                        <span><code>nexo_heartbeat</code> now emits authoritative <code>NOW_UTC</code>, stopping date drift in long sessions and delayed closeouts.</span>
                     </div>
                     <div class="page-stack-card">
                         <strong>v5.2.1</strong>
@@ -156,6 +160,172 @@
             <div>
                 <div id="changelog-page-meta" class="changelog-page-meta">Loading release pages…</div>
                 <div id="changelog-pager" class="changelog-pager" aria-label="Changelog pagination"></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v5.3.29 runtime hygiene + fail-closed startup -->
+<section id="v5329" class="section-compact" style="background:linear-gradient(135deg,#09111f 0%,#1f2a44 34%,#2563eb 68%,#f97316 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.3.29 <span style="opacity:.5;font-weight:400;">&mdash; April 14, 2026</span></div>
+        <h2 class="section-title">Runtime Hygiene + Fail-Closed Startup + Honest Cron Tracing</h2>
+        <p class="section-subtitle">
+            Block 1 of the technical audit closes as a real public release: duplicate artifacts stop hiding in local trees, packaged/runtime updates converge on one canonical core, corrupt DB state no longer respawns an empty brain by default, and cron evidence survives transient SQLite failure instead of vanishing quietly.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h3>Duplicate artifacts now fail hygiene gates</h3>
+                    <p><code>.gitignore</code> no longer hides <code>* 2</code> copies, loaders skip them explicitly, and both preflight and release-readiness fail if they reappear. Local contamination stops pretending to be harmless noise.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>One update core again</h3>
+                    <p><code>src/scripts/nexo-update.sh</code> now delegates to the canonical Python handler instead of carrying a parallel shell implementation. Packaged/runtime updates stop drifting depending on which entry point ran.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Startup fails closed on corrupt DB state</h3>
+                    <p>Server preflight now runs synchronously, and corrupt SQLite state no longer spawns a fresh empty brain by default. Recovery requires explicit operator intent via <code>NEXO_ALLOW_FRESH_DB_ON_CORRUPTION=1</code>.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Cron runs keep evidence even when SQLite is down</h3>
+                    <p>The cron wrapper now writes a complete row after command exit and spools JSON under <code>~/.nexo/operations/cron-spool</code> if SQLite is unavailable. Execution traces stop disappearing into null-ended rows.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Release audit now checks public repo surfaces too</h3>
+                    <p><code>verify_release_readiness.py</code> now verifies the repo-facing public copy as well: <code>README.md</code>, <code>llms.txt</code>, <code>index.html</code>, <code>blog/index.html</code>, <code>changelog/index.html</code>, and <code>sitemap.xml</code>. A tag is no longer “ready” if the outward-facing story still describes an older version.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v5.3.28 guard_check per-file -->
+<section id="v5328" class="section-compact" style="background:linear-gradient(135deg,#07111f 0%,#14233c 34%,#2563eb 68%,#8b5cf6 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.3.28 <span style="opacity:.5;font-weight:400;">&mdash; April 14, 2026</span></div>
+        <h2 class="section-title">Per-File Guard Enforcement</h2>
+        <p class="section-subtitle">
+            A subtle protocol loophole is gone: calling <code>nexo_guard_check</code> once early in the session no longer satisfies the contract for every later file edit.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h3>Guard now binds to the file actually being edited</h3>
+                    <p><code>process_pre_tool_event</code> verifies that the guarded file matches the edit target, so conditioned learnings stop being bypassable by one stale check earlier in the session.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Protocol debt opens when the file-level contract is violated</h3>
+                    <p>Instead of silently accepting the mismatch, the runtime now records explicit debt when a write happens without the corresponding per-file guard evidence.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v5.3.27 heartbeat now utc -->
+<section id="v5327" class="section-compact" style="background:linear-gradient(135deg,#07111f 0%,#17304a 34%,#0ea5e9 68%,#22c55e 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.3.27 <span style="opacity:.5;font-weight:400;">&mdash; April 14, 2026</span></div>
+        <h2 class="section-title">Heartbeat Emits Authoritative NOW_UTC</h2>
+        <p class="section-subtitle">
+            Long sessions and delayed closeouts stop guessing the calendar. Every heartbeat now begins with an authoritative UTC timestamp that clients can format locally.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h3>Clients stop inventing relative dates</h3>
+                    <p><code>nexo_heartbeat</code> now emits <code>NOW_UTC</code>, so “ayer”, “mañana”, and day-of-week phrasing stop drifting during long-running tasks and email work.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Timezone stays a client concern</h3>
+                    <p>The core remains neutral: UTC is authoritative, while formatting stays in the operator/runtime layer instead of hardcoding locale or timezone into product logic.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v5.3.26 sync model defaults json -->
+<section id="v5326" class="section-compact" style="background:linear-gradient(135deg,#07111f 0%,#1b2840 34%,#2563eb 68%,#14b8a6 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.3.26 <span style="opacity:.5;font-weight:400;">&mdash; April 14, 2026</span></div>
+        <h2 class="section-title">Packaged Runtime Now Receives <code>model_defaults.json</code></h2>
+        <p class="section-subtitle">
+            The single-source model-defaults architecture from v5.3.24 was correct in the repo but incomplete in the packaged runtime path until the JSON itself was copied into <code>~/.nexo</code>.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h3>Packaged installs now carry the JSON source of truth</h3>
+                    <p>The installer/runtime sync now copies <code>model_defaults.json</code> into <code>NEXO_HOME</code>, so future recommendation bumps propagate without depending on hardcoded Python fallbacks.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>New recommendations actually reach upgraded users</h3>
+                    <p>Without the JSON in the runtime, packaged users could stay on stale defaults even though the repo and npm package had already moved forward. That delivery gap is now closed.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v5.3.25 headless safe update -->
+<section id="v5325" class="section-compact" style="background:linear-gradient(135deg,#07111f 0%,#12223d 34%,#7c3aed 68%,#ec4899 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.3.25 <span style="opacity:.5;font-weight:400;">&mdash; April 14, 2026</span></div>
+        <h2 class="section-title">Headless Claude Automation Actually Runs</h2>
+        <p class="section-subtitle">
+            The permissions allowlist from v5.3.24 was necessary but not sufficient: headless <code>claude -p</code> still needed the explicit bypass flag or cron automation would wait forever for approvals nobody could grant.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h3>Headless Claude now gets the right execution flag</h3>
+                    <p><code>agent_runner.run_automation_prompt</code> now passes the permissions-bypass flag on every headless Claude invocation, so followup-runner, email-monitor, and Deep Sleep stop zombifying on approval prompts.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Interactive sessions remain unchanged</h3>
+                    <p>The fix applies only to non-interactive automation. Daily interactive work keeps the normal approval flow and operator control.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v5.3.24 single-source model defaults + headless-safe update -->
+<section id="v5324" class="section-compact" style="background:linear-gradient(135deg,#07111f 0%,#122a4d 34%,#2563eb 68%,#10b981 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.3.24 <span style="opacity:.5;font-weight:400;">&mdash; April 14, 2026</span></div>
+        <h2 class="section-title">Single-Source Model Defaults + Headless-Safe Update</h2>
+        <p class="section-subtitle">
+            Three compounding bugs shared one root cause: NEXO had no single source of truth for model defaults. Python runtime, JS installer, and client-config sync each kept their own copy and silently drifted. v5.3.24 consolidates everything into <code>src/model_defaults.json</code>, read identically by both runtimes, with a one-time upgrade prompt when a maintainer ships a new recommendation.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h3>One JSON to rule model defaults</h3>
+                    <p><code>src/model_defaults.json</code> defines Claude Code + Codex defaults (model, reasoning effort, display name, recommendation version, previous defaults). Both Python and the JS installer read the same file, so drift is impossible.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Codex no longer inherits Claude models</h3>
+                    <p>The historical <code>DEFAULT_CODEX_MODEL = DEFAULT_CLAUDE_CODE_MODEL</code> alias is gone. Codex default is <code>gpt-5.4</code> / <code>xhigh</code>. Client sync refuses to write Claude-family models into <code>~/.codex/config.toml</code>, and existing bad writes are healed on the next <code>nexo update</code>.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Headless crons no longer zombie</h3>
+                    <p>Fresh installs now write a minimum <code>permissions.allow</code> list into <code>~/.claude/settings.json</code> (<code>Bash, Read, Edit, Write, Glob, Grep, Task, Skill, NotebookEdit, WebSearch, WebFetch, mcp__*</code>) so headless automation stops stalling on approval prompts. Codex gets <code>approval_policy = "never"</code> and <code>sandbox_mode = "danger-full-access"</code> as defaults.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>One-time upgrade prompt when a new model ships</h3>
+                    <p>Bumping <code>recommendation_version</code> in the JSON triggers a single interactive prompt on the user's next <code>nexo update</code> — only if they are still on a prior NEXO default. Customized models are respected silently. Users already on the current recommendation are auto-acknowledged without any output.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3><code>nexo update</code> no longer crashes on slow repos</h3>
+                    <p>If the runtime was ever synced from a local checkout, <code>git status --porcelain</code> timing out now returns a graceful error instead of an unhandled <code>TimeoutExpired</code> that crashed every <code>nexo update</code>.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Heal applies on both update paths</h3>
+                    <p>Model-profile heal now runs on both the legacy sync flow (<code>auto_update.py::manual_sync_update</code>) and the packaged npm update flow (<code>plugins/update.py</code>) so stale <code>claude-*</code> values in <code>schedule.json</code> are cleaned regardless of install method.</p>
+                </div>
             </div>
         </div>
     </div>

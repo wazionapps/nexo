@@ -1,14 +1,15 @@
 # NEXO Brain
 
-> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v5.3.11).
+> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v5.3.29).
 
 NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It adds a local shared brain across supported clients, configurable terminal and automation backends, recovery-aware background jobs, startup preflight, runtime self-healing, smarter retrieval defaults, long-horizon overnight analysis, and 150+ MCP tools.
 
+v5.3.29: runtime hygiene + fail-closed startup + honest cron tracing — duplicate `* 2` artifacts now fail release gates instead of hiding in the tree, update paths converge on one canonical core, startup preflight runs synchronously, corrupt DB state no longer respawns an empty brain by default, and cron runs spool locally when SQLite is unavailable
 v5.3.11: protocol + cortex contract hardening — malformed `outcome`, `task_type`, and `impact_level` values now fail explicitly instead of being silently coerced into other valid states, so persisted task/debt/context/decision data stays trustworthy
 v5.3.10: packaged runtime truth + evolution telemetry + synthesis loop closure — installs and updates now keep `~/.nexo/package.json` aligned with the published npm package, deep doctor stays honest during fresh bootstrap, weekly Evolution asks for explicit dimension telemetry again, and daily synthesis only absorbs actionable startup/update summaries
-v5.3.9: packaged core-artifact manifest heal — packaged updates now rebuild the runtime core-artifact manifest from the canonical npm package source, so personal scripts stop being reclassified as core, portable exports include them again, and runtime doctor recovers personal LaunchAgents cleanly after a bad `5.3.8` update
+v5.3.9: packaged core-artifact manifest heal — packaged updates now rebuild the core runtime manifest from the canonical npm package source so personal scripts stop being reclassified as core, portable exports keep including them, and runtime doctor can recover personal LaunchAgents cleanly after a bad `5.3.8` update
 v5.3.8: packaged migration hotfix — the packaged installer now copies new top-level runtime Python modules into `~/.nexo` automatically, so newly shipped commands like `nexo export` / `nexo import` work immediately after update on real packaged installs
-v5.3.7: packaged update self-heal + portable user-data bundles — `nexo update` now refreshes packaged crons and reloads LaunchAgents after version bumps, new `nexo export` / `nexo import` commands move operator data safely, and doctor no longer treats tracked historical Codex drift as a broken install
+v5.3.7: packaged update self-heal + portable user-data bundles — `nexo update` now refreshes packaged crons and reloads LaunchAgents after version bumps, new `nexo export` / `nexo import` commands move operator data safely, and runtime doctor no longer treats tracked historical Codex drift as a broken install
 v5.3.6: Claude MCP bootstrap + runtime hygiene hardening — managed Claude Code sync now writes the NEXO MCP server to the user config Claude actually reads, schedule status treats open runs honestly, and retroactive learnings stop keyword-only false positives outside declared scope
 v5.3.5: version banner cache correction — `nexo` / `nexo chat` no longer show a stale older `Latest` value right after `nexo update`
 v5.3.4: runtime boundary cleanup + version visibility — legacy hook aliases stay out of the personal bucket, `nexo update` removes retired aliases, and `nexo` / `nexo chat` show latest vs installed version
