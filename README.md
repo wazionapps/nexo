@@ -18,7 +18,7 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `5.4.2` is the current packaged-runtime line: traceability truth + Sensory Register buffer close-loop — release warnings now distinguish repo `commit_ref` debt from local/server-side operational changes, the nocturnal postmortem drains pending `session_buffer.jsonl` events and rewrites the buffer atomically, and docs now state honestly that `nexo-reflection.py` is standalone rather than auto-triggered by the stop hook.
+Version `5.4.3` is the current packaged-runtime line: test isolation fix for tree_hygiene module — 2 tests that broke the v5.4.2 publish workflow now correctly copy `tree_hygiene.py` into their isolated runtime directories.
 
 Previously in `5.4.0`: runtime event bus at `~/.nexo/runtime/events.ndjson`, `nexo notify`, `nexo health --json`, `nexo logs --tail --json`, and a safe flat→nested migration for `calibration.json`.
 

@@ -1,5 +1,15 @@
 # Changelog
 
+## [5.4.3] - 2026-04-14
+
+### Fix: test isolation for tree_hygiene module
+
+- Fixed 2 test failures in `TestRuntimeUpdate` that broke the v5.4.2 publish
+  workflow. Both `test_installed_runtime_update_repairs_missing_public_contribution_module`
+  and `test_packaged_update_reads_runtime_version_from_version_json` set up
+  isolated runtime directories but did not copy `tree_hygiene.py`, causing
+  `ModuleNotFoundError` when `auto_update.py` and `plugins/update.py` imported it.
+
 ## [5.4.2] - 2026-04-14
 
 ### Fix: traceability truth + Sensory Register buffer close-loop
