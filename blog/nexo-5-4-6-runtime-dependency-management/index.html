@@ -132,7 +132,7 @@
         <p>When you run <code>nexo update</code>, Brain now checks each declared dependency against the npm registry, installs it if missing, and updates it if outdated. The dependency update is <strong>best-effort</strong> &mdash; if it fails, Brain still updates normally and reports a warning.</p>
 
         <h2>Daily auto-update cron</h2>
-        <p>A new core cron job (<code>auto-update</code>) runs at 03:45 daily via LaunchAgent. It executes <code>nexo update --json</code> automatically, keeping both Brain and its dependencies current without any manual intervention. Results are logged to <code>~/.nexo/logs/auto-update.log</code>.</p>
+        <p>A new core cron job (<code>auto-update</code>) runs at 02:00 daily via LaunchAgent. It executes <code>nexo update --json</code> automatically, keeping both Brain and its dependencies current without any manual intervention. Results are logged to <code>~/.nexo/logs/auto-update.log</code>.</p>
 
         <h2>Declarative and extensible</h2>
         <p>Adding a new dependency in the future is a single line in <code>package.json</code>. The update system reads the array at runtime, so no code changes are needed to manage additional tools.</p>
