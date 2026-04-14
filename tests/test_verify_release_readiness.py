@@ -66,6 +66,50 @@ def _seed_closeout_db(
     conn.close()
 
 
+def _seed_public_surfaces(root: Path, version: str, *, include_well_known: bool = False):
+    version_slug = version.replace(".", "-")
+    version_anchor = version.replace(".", "")
+    (root / "README.md").write_text(
+        f"Version `{version}` is the current packaged-runtime line\n",
+        encoding="utf-8",
+    )
+    (root / "llms.txt").write_text(
+        f"> Open-source cognitive runtime with a shared brain (v{version}).\n\n"
+        f"v{version}: latest release summary\n",
+        encoding="utf-8",
+    )
+    (root / "index.html").write_text(
+        f'<span id="version-badge">v{version}</span>\n'
+        f'"softwareVersion": "{version}"\n',
+        encoding="utf-8",
+    )
+    blog_dir = root / "blog"
+    blog_dir.mkdir(exist_ok=True)
+    (blog_dir / "index.html").write_text(
+        f'<a href="/blog/nexo-{version_slug}-release/">Read latest release</a>\n'
+        f"<h2>NEXO {version}: Release</h2>\n",
+        encoding="utf-8",
+    )
+    changelog_dir = root / "changelog"
+    changelog_dir.mkdir(exist_ok=True)
+    (changelog_dir / "index.html").write_text(
+        f'<section id="v{version_anchor}">New in v{version}</section>\n',
+        encoding="utf-8",
+    )
+    (root / "sitemap.xml").write_text(
+        f"https://nexo-brain.com/blog/nexo-{version_slug}-release/\n",
+        encoding="utf-8",
+    )
+    if include_well_known:
+        well_known = root / ".well-known"
+        well_known.mkdir(exist_ok=True)
+        (well_known / "llms.txt").write_text(
+            f"> Open-source cognitive runtime with a shared brain (v{version}).\n\n"
+            f"v{version}: latest release summary\n",
+            encoding="utf-8",
+        )
+
+
 def test_check_contract_accepts_valid_contract(tmp_path):
     module = _load_module()
     website_root = tmp_path / "site"
@@ -182,6 +226,34 @@ def test_check_duplicate_artifacts_rejects_duplicate_copy(tmp_path):
 
     with pytest.raises(SystemExit, match="duplicate artifacts found"):
         module._check_duplicate_artifacts(tmp_path)
+
+
+def test_check_repo_public_surfaces_accepts_aligned_files(tmp_path):
+    module = _load_module()
+    _seed_public_surfaces(tmp_path, "5.3.29")
+
+    module._check_repo_public_surfaces("5.3.29", repo_root=tmp_path)
+
+
+def test_check_repo_public_surfaces_rejects_drift(tmp_path):
+    module = _load_module()
+    _seed_public_surfaces(tmp_path, "5.3.29")
+    (tmp_path / "README.md").write_text("Version `5.3.28` is the current packaged-runtime line\n", encoding="utf-8")
+
+    with pytest.raises(SystemExit, match="repo public surfaces drift"):
+        module._check_repo_public_surfaces("5.3.29", repo_root=tmp_path)
+
+
+def test_check_website_rejects_missing_current_release_markers(tmp_path):
+    module = _load_module()
+    _seed_public_surfaces(tmp_path, "5.3.29", include_well_known=True)
+    (tmp_path / "blog" / "index.html").write_text(
+        '<a href="/blog/nexo-5-3-24-model-defaults-and-headless-safe-update/">Read latest release</a>\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SystemExit, match="website drift"):
+        module._check_website("5.3.29", tmp_path)
 
 
 def test_check_protocol_closeout_accepts_done_task_with_change_log(tmp_path):

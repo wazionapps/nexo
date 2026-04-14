@@ -1,0 +1,101 @@
+{
+  "release_line": "v5.3",
+  "target_version": "5.3.29",
+  "scope_owner": "NEXO",
+  "distribution": {
+    "git_updates_on": "merge_to_main",
+    "packaged_release_on": "tag_publish"
+  },
+  "required_repo_files": [
+    "package.json",
+    "CHANGELOG.md",
+    "README.md",
+    "llms.txt",
+    "sitemap.xml",
+    "index.html",
+    "blog/index.html",
+    "blog/nexo-5-3-29-runtime-hygiene-and-fail-closed-startup/index.html",
+    "changelog/index.html",
+    "scripts/sync_release_artifacts.py",
+    "scripts/verify_release_readiness.py",
+    "release-contracts/v5.3.29.json",
+    ".claude-plugin/plugin.json",
+    "clawhub-skill/SKILL.md",
+    "openclaw-plugin/package.json",
+    "openclaw-plugin/src/mcp-bridge.ts",
+    "src/auto_update.py",
+    "src/plugin_loader.py",
+    "src/plugins/update.py",
+    "src/scripts/nexo-cron-wrapper.sh",
+    "src/scripts/nexo-update.sh",
+    "src/server.py",
+    "src/tree_hygiene.py",
+    "tests/test_packaged_update_runtime.py",
+    "tests/test_plugin_loader_baseline.py",
+    "tests/test_verify_release_readiness.py",
+    "tests/test_server_startup_contract.py",
+    "tests/test_cron_wrapper_contract.py",
+    "tests/test_update_shell_contract.py"
+  ],
+  "required_website_files": [
+    "index.html",
+    "blog/index.html",
+    "blog/nexo-5-3-29-runtime-hygiene-and-fail-closed-startup/index.html",
+    "changelog/index.html",
+    "llms.txt",
+    ".well-known/llms.txt",
+    "sitemap.xml"
+  ],
+  "gates": [
+    {
+      "id": "duplicate_artifacts_fail_release",
+      "title": "Duplicate `* 2` artifacts fail runtime and release hygiene instead of hiding in the tree",
+      "status": "complete",
+      "evidence_required": [
+        "`.gitignore` no longer hides duplicate `* 2` artifacts",
+        "Runtime/plugin/update loaders skip duplicate artifacts explicitly",
+        "Preflight and release-readiness fail when duplicate artifacts are present"
+      ]
+    },
+    {
+      "id": "single_update_core",
+      "title": "Shell update entry point delegates to the canonical Python update core",
+      "status": "complete",
+      "evidence_required": [
+        "`src/scripts/nexo-update.sh` delegates into the Python update handler",
+        "Packaged/runtime update behavior no longer depends on a parallel shell implementation",
+        "Regression coverage keeps the delegation contract pinned"
+      ]
+    },
+    {
+      "id": "startup_fails_closed_on_corrupt_db",
+      "title": "Server startup no longer races preflight or respawns an empty brain on corrupt DB state",
+      "status": "complete",
+      "evidence_required": [
+        "Server startup runs preflight synchronously before serving",
+        "Corrupt DB state stops startup by default instead of creating a fresh empty DB",
+        "Fresh-DB recovery requires explicit operator override"
+      ]
+    },
+    {
+      "id": "cron_spool_preserves_evidence",
+      "title": "Cron execution evidence survives transient SQLite failure",
+      "status": "complete",
+      "evidence_required": [
+        "Cron wrapper writes a complete run row after command exit",
+        "When SQLite is unavailable the wrapper writes a spool JSON artifact",
+        "Regression coverage protects both the DB path and the spool fallback"
+      ]
+    },
+    {
+      "id": "public_release_surfaces_stay_aligned",
+      "title": "Repo copy, website copy, and packaged release line all reflect the same version before tag publish",
+      "status": "complete",
+      "evidence_required": [
+        "README, llms, homepage, blog index, changelog page, and sitemap reference v5.3.29",
+        "Website worktree contains the same v5.3.29 public surfaces including `.well-known/llms.txt`",
+        "`verify_release_readiness.py` checks both repo-facing and website-facing public surfaces before final closeout"
+      ]
+    }
+  ]
+}

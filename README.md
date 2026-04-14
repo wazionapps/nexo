@@ -18,7 +18,7 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `5.3.11` is the current packaged-runtime line: protocol and Cortex now reject malformed `outcome`, `task_type`, and `impact_level` values explicitly instead of silently coercing them into other valid states, so task history, debt, hot context, and decision telemetry stay trustworthy even when a caller passes a bad contract payload.
+Version `5.3.29` is the current packaged-runtime line: duplicate `* 2` artifacts now fail hygiene gates instead of hiding in the tree, packaged/runtime update paths converge on one canonical core, startup preflight runs synchronously, corrupt DB state no longer respawns an empty brain by default, and cron runs spool locally when SQLite is unavailable.
 
 Start here:
 - [5-minute quickstart](docs/quickstart-5-minutes.md)

@@ -146,20 +146,80 @@ def _check_duplicate_artifacts(repo_root: Path = ROOT) -> None:
     print(f"[release-readiness] duplicate artifact hygiene OK ({repo_root})")
 
 
+def _surface_version_markers(version: str) -> list[tuple[str, list[str]]]:
+    version_slug = version.replace(".", "-")
+    version_anchor = version.replace(".", "")
+    return [
+        ("README.md", [f"Version `{version}` is the current packaged-runtime line"]),
+        ("llms.txt", [f"(v{version}).", f"v{version}:"]),
+        (
+            "index.html",
+            [f'id="version-badge">v{version}<', f'"softwareVersion": "{version}"'],
+        ),
+        ("blog/index.html", [f"/blog/nexo-{version_slug}", f"NEXO {version}:"]),
+        ("changelog/index.html", [f'id="v{version_anchor}"', f"New in v{version}"]),
+        ("sitemap.xml", [f"/blog/nexo-{version_slug}"]),
+    ]
+
+
+def _check_public_surfaces(
+    version: str,
+    root: Path,
+    *,
+    label: str,
+    include_readme: bool,
+    include_well_known: bool,
+) -> None:
+    missing = []
+    for raw_path, markers in _surface_version_markers(version):
+        if raw_path == "README.md" and not include_readme:
+            continue
+        path = root / raw_path
+        if not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8")
+        for marker in markers:
+            if marker not in text:
+                missing.append(f"{path} missing {marker}")
+                break
+
+    if include_well_known:
+        well_known = root / ".well-known" / "llms.txt"
+        if not well_known.is_file():
+            missing.append(f"{well_known} missing file")
+        else:
+            text = well_known.read_text(encoding="utf-8")
+            for marker in (f"(v{version}).", f"v{version}:"):
+                if marker not in text:
+                    missing.append(f"{well_known} missing {marker}")
+                    break
+
+    if missing:
+        raise SystemExit(f"[release-readiness] {label} drift:\n- " + "\n- ".join(missing))
+    print(f"[release-readiness] {label} OK ({root})")
+
+
 def _check_website(version: str, website_root: Path) -> None:
     if not website_root.is_dir():
         print(f"[release-readiness] website skipped (missing {website_root})")
         return
-    changelog_page = website_root / "changelog" / "index.html"
-    home_page = website_root / "index.html"
-    missing = []
-    if changelog_page.is_file() and f"v{version}" not in changelog_page.read_text(encoding="utf-8"):
-        missing.append(f"{changelog_page} missing v{version}")
-    if home_page.is_file() and version not in home_page.read_text(encoding="utf-8"):
-        missing.append(f"{home_page} missing {version}")
-    if missing:
-        raise SystemExit("[release-readiness] website drift:\n- " + "\n- ".join(missing))
-    print(f"[release-readiness] website OK ({website_root})")
+    _check_public_surfaces(
+        version,
+        website_root,
+        label="website",
+        include_readme=False,
+        include_well_known=True,
+    )
+
+
+def _check_repo_public_surfaces(version: str, repo_root: Path = ROOT) -> None:
+    _check_public_surfaces(
+        version,
+        repo_root,
+        label="repo public surfaces",
+        include_readme=True,
+        include_well_known=False,
+    )
 
 
 def _check_github_release(version: str, repository_slug: str) -> None:
@@ -423,6 +483,7 @@ def main() -> int:
     nexo_home = _resolve_nexo_home(args.nexo_home)
     website_root = Path(args.website_root).expanduser()
     _check_changelog(version)
+    _check_repo_public_surfaces(version)
     _check_duplicate_artifacts()
     _run([sys.executable, "scripts/sync_release_artifacts.py", "--check"])
     _run([sys.executable, "scripts/verify_client_parity.py"])
