@@ -1,5 +1,13 @@
 # Changelog
 
+## [5.4.5] - 2026-04-14
+
+### Fix: increase CI test timeout for nexo update
+
+- Increased `test_update_uses_recorded_source_repo` subprocess timeout
+  from 10s to 30s. GitHub Actions runners are too slow for the full
+  `nexo update --json` flow within 10 seconds even with a fake venv.
+
 ## [5.4.4] - 2026-04-14
 
 ### Fix: test isolation for tree_hygiene module + venv timeout in CI

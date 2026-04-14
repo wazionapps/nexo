@@ -181,6 +181,17 @@
     </div>
 </section>
 
+<!-- v5.4.5 CI timeout increase -->
+<section id="v545" class="section-compact" style="background:linear-gradient(135deg,#09111f 0%,#14253a 50%,#1e3a5f 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.4.5 <span style="opacity:.5;font-weight:400;">&mdash; April 14, 2026</span></div>
+        <h2 class="section-title">CI test timeout increase</h2>
+        <p class="section-subtitle">
+            Increased <code>test_update_uses_recorded_source_repo</code> subprocess timeout from 10s to 30s. The full <code>nexo update --json</code> flow exceeds 10 seconds on GitHub Actions runners even with a fake venv.
+        </p>
+    </div>
+</section>
+
 <!-- v5.4.4 test isolation + venv timeout fix -->
 <section id="v544" class="section-compact" style="background:linear-gradient(135deg,#09111f 0%,#14253a 50%,#1e3a5f 100%);">
     <div class="container">
