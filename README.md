@@ -630,20 +630,21 @@ PreCompact hook saves full checkpoint if conversation is compressed
     ↓
 PostCompact hook re-injects Core Memory Block → session continues seamlessly
     ↓
-Stop hook triggers mandatory post-mortem:
-  - Self-critique: 5 questions about what could be better
-  - Session buffer: structured entry for the reflection engine
-  - Followups: anything promised gets scheduled
-  - Proactive seeds: what can the next session do without being asked?
+Stop hook refreshes the diary draft and approves immediately:
+  - Latest changes and decisions stay attached to the active session
+  - Session buffer keeps structured tool activity for downstream processing
+  - Followups and closing synthesis happen inline when the agent detects real closing intent
+  - No mid-conversation blocking from the hook itself
     ↓
-Reflection engine processes buffer (after 3+ sessions)
+Nocturnal post-mortem consolidator processes the buffer mechanically
     ↓
 Nocturnal processes: decay, consolidation, self-audit, dreaming
 ```
 
 ### Reflection Engine
 
-After 3+ sessions accumulate, the stop hook triggers `nexo-reflection.py`:
+NEXO still ships `nexo-reflection.py` as a standalone analyzer for `session_buffer.jsonl`.
+It is not currently auto-triggered by the stop hook:
 - Extracts recurring tasks, error patterns, mood trends
 - Updates `user_model.json` with observed behavior
 - No LLM required — runs as pure Python
