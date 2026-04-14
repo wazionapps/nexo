@@ -321,6 +321,213 @@ def _reinstall_pip_deps() -> str | None:
     return None
 
 
+def _read_runtime_dependencies() -> list[dict]:
+    """Read runtimeDependencies from package.json."""
+    for candidate in (PACKAGE_JSON, NEXO_HOME / "package.json"):
+        try:
+            if candidate.is_file():
+                data = json.loads(candidate.read_text())
+                deps = data.get("runtimeDependencies")
+                if isinstance(deps, list):
+                    return deps
+        except Exception:
+            continue
+    # Fallback: check the npm-installed package's package.json
+    npm_src = _find_npm_pkg_src()
+    if npm_src:
+        pkg = npm_src.parent / "package.json"
+        try:
+            if pkg.is_file():
+                data = json.loads(pkg.read_text())
+                deps = data.get("runtimeDependencies")
+                if isinstance(deps, list):
+                    return deps
+        except Exception:
+            pass
+    return []
+
+
+def _get_npm_global_version(package_name: str) -> str | None:
+    """Return the currently installed global npm package version, or None."""
+    try:
+        result = subprocess.run(
+            ["npm", "list", "-g", package_name, "--json", "--depth=0"],
+            capture_output=True, text=True, timeout=15,
+        )
+        if result.returncode == 0:
+            data = json.loads(result.stdout)
+            deps = data.get("dependencies", {})
+            info = deps.get(package_name)
+            if info and isinstance(info, dict):
+                return info.get("version")
+    except subprocess.TimeoutExpired:
+        pass
+    except Exception:
+        pass
+    return None
+
+
+def _get_npm_registry_version(package_name: str) -> str | None:
+    """Return the latest version of a package from the npm registry."""
+    try:
+        result = subprocess.run(
+            ["npm", "view", package_name, "version"],
+            capture_output=True, text=True, timeout=15,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    except subprocess.TimeoutExpired:
+        pass
+    except Exception:
+        pass
+    return None
+
+
+def _update_runtime_dependencies(progress_fn=None) -> list[dict]:
+    """Update all declared runtimeDependencies. Returns a list of result dicts.
+
+    Each result dict contains:
+        name: package name
+        old_version: version before update (or None if not installed)
+        new_version: version after update (or None on failure)
+        status: "updated" | "already_latest" | "installed" | "failed" | "skipped"
+        error: error message (only when status == "failed")
+    """
+    deps = _read_runtime_dependencies()
+    if not deps:
+        return []
+
+    results = []
+    for dep in deps:
+        name = dep.get("name", "")
+        dep_type = dep.get("type", "")
+        optional = dep.get("optional", True)
+
+        if not name or dep_type != "npm-global":
+            results.append({
+                "name": name or "(unknown)",
+                "old_version": None,
+                "new_version": None,
+                "status": "skipped",
+            })
+            continue
+
+        _emit_progress(progress_fn, f"Checking runtime dependency: {name}...")
+
+        old_version = _get_npm_global_version(name)
+        latest_version = _get_npm_registry_version(name)
+
+        if old_version is None:
+            # Not installed
+            if optional:
+                results.append({
+                    "name": name,
+                    "old_version": None,
+                    "new_version": None,
+                    "status": "skipped",
+                })
+                continue
+            # Install it
+            _emit_progress(progress_fn, f"Installing {name}...")
+            try:
+                r = subprocess.run(
+                    ["npm", "install", "-g", name],
+                    capture_output=True, text=True, timeout=120,
+                )
+                if r.returncode == 0:
+                    new_version = _get_npm_global_version(name)
+                    results.append({
+                        "name": name,
+                        "old_version": None,
+                        "new_version": new_version,
+                        "status": "installed",
+                    })
+                else:
+                    results.append({
+                        "name": name,
+                        "old_version": None,
+                        "new_version": None,
+                        "status": "failed",
+                        "error": r.stderr or r.stdout or "npm install failed",
+                    })
+            except subprocess.TimeoutExpired:
+                results.append({
+                    "name": name, "old_version": None, "new_version": None,
+                    "status": "failed", "error": "npm install timed out (120s)",
+                })
+            except Exception as e:
+                results.append({
+                    "name": name, "old_version": None, "new_version": None,
+                    "status": "failed", "error": str(e),
+                })
+            continue
+
+        # Already installed — check if update needed
+        if latest_version and old_version == latest_version:
+            results.append({
+                "name": name,
+                "old_version": old_version,
+                "new_version": old_version,
+                "status": "already_latest",
+            })
+            continue
+
+        # Update
+        _emit_progress(progress_fn, f"Updating {name} {old_version} -> {latest_version or 'latest'}...")
+        try:
+            r = subprocess.run(
+                ["npm", "update", "-g", name],
+                capture_output=True, text=True, timeout=120,
+            )
+            if r.returncode == 0:
+                new_version = _get_npm_global_version(name) or latest_version
+                results.append({
+                    "name": name,
+                    "old_version": old_version,
+                    "new_version": new_version,
+                    "status": "updated" if new_version != old_version else "already_latest",
+                })
+            else:
+                results.append({
+                    "name": name,
+                    "old_version": old_version,
+                    "new_version": old_version,
+                    "status": "failed",
+                    "error": r.stderr or r.stdout or "npm update failed",
+                })
+        except subprocess.TimeoutExpired:
+            results.append({
+                "name": name, "old_version": old_version, "new_version": old_version,
+                "status": "failed", "error": "npm update timed out (120s)",
+            })
+        except Exception as e:
+            results.append({
+                "name": name, "old_version": old_version, "new_version": old_version,
+                "status": "failed", "error": str(e),
+            })
+
+    return results
+
+
+def _format_dep_results(dep_results: list[dict]) -> list[str]:
+    """Format runtime dependency results as human-readable lines."""
+    lines = []
+    for dep in dep_results:
+        name = dep.get("name", "")
+        status = dep.get("status", "")
+        old_v = dep.get("old_version")
+        new_v = dep.get("new_version")
+        if status == "updated":
+            lines.append(f"  Dependencies: {name} {old_v} -> {new_v}")
+        elif status == "installed":
+            lines.append(f"  Dependencies: {name} installed ({new_v})")
+        elif status == "already_latest":
+            lines.append(f"  Dependencies: {name} {old_v} (latest)")
+        elif status == "failed":
+            lines.append(f"  WARNING: {name} update failed: {dep.get('error', 'unknown')}")
+    return lines
+
+
 def _run_migrations() -> str | None:
     """Run init_db() to apply pending migrations. Returns error or None."""
     # In packaged mode, db/ lives in NEXO_HOME; in dev mode, in SRC_DIR
@@ -709,6 +916,13 @@ def _handle_packaged_update(progress_fn=None) -> str:
     except Exception as e:
         hook_sync_warning = f"{e}"
 
+    # Update runtime dependencies (best-effort, never aborts)
+    dep_results: list[dict] = []
+    try:
+        dep_results = _update_runtime_dependencies(progress_fn=progress_fn)
+    except Exception:
+        pass  # Non-critical
+
     client_sync_warning = None
     _emit_progress(progress_fn, "Refreshing shared client configs...")
     clients_ok, client_sync_error = _sync_packaged_clients()
@@ -774,6 +988,7 @@ def _handle_packaged_update(progress_fn=None) -> str:
         lines.append(f"  WARNING: hook sync: {hook_sync_warning}")
     if retired_runtime_files:
         lines.append(f"  Cleanup: removed {len(retired_runtime_files)} retired runtime file(s)")
+    lines.extend(_format_dep_results(dep_results))
     if not client_sync_warning:
         lines.append("  Clients: configured client targets synced")
     else:
@@ -907,7 +1122,16 @@ def handle_update(remote: str = "origin", branch: str = "main", progress_fn=None
         except Exception as e:
             pass  # Non-critical, log in function
 
-        # Step 10: Sync shared client configs
+        # Step 10: Update runtime dependencies (best-effort, never aborts)
+        dep_results: list[dict] = []
+        try:
+            dep_results = _update_runtime_dependencies(progress_fn=progress_fn)
+            if dep_results:
+                steps_done.append("runtime-deps")
+        except Exception:
+            pass  # Non-critical
+
+        # Step 11: Sync shared client configs
         try:
             _emit_progress(progress_fn, "Refreshing shared client configs...")
             from client_sync import sync_all_clients
@@ -947,8 +1171,12 @@ def handle_update(remote: str = "origin", branch: str = "main", progress_fn=None
             pass  # Non-critical, configs can be re-synced later
 
         # Build result
+        dep_summary_lines = _format_dep_results(dep_results)
         if pull_out == "Already up to date.":
-            return f"Already up to date (v{old_version}). No changes pulled."
+            msg = f"Already up to date (v{old_version}). No changes pulled."
+            if dep_summary_lines:
+                msg += "\n" + "\n".join(dep_summary_lines)
+            return msg
 
         lines = ["UPDATE SUCCESSFUL"]
         if version_changed:
@@ -967,6 +1195,7 @@ def handle_update(remote: str = "origin", branch: str = "main", progress_fn=None
             lines.append("  Hooks: synced to NEXO_HOME")
         if retired_runtime_files:
             lines.append(f"  Cleanup: removed {len(retired_runtime_files)} retired runtime file(s)")
+        lines.extend(dep_summary_lines)
         if "client-sync" in steps_done:
             lines.append("  Clients: configured client targets synced")
         lines.append("")

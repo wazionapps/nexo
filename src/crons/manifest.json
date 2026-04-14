@@ -203,6 +203,18 @@
       "max_catchup_age": 0,
       "run_on_boot": true,
       "run_on_wake": true
+    },
+    {
+      "id": "auto-update",
+      "script": "scripts/nexo-auto-update.py",
+      "schedule": {"hour": 3, "minute": 45},
+      "description": "Daily auto-update — Brain + runtime dependencies",
+      "core": true,
+      "recovery_policy": "catchup",
+      "idempotent": true,
+      "max_catchup_age": 172800,
+      "run_on_boot": true,
+      "run_on_wake": true
     }
   ]
 }
