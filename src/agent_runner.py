@@ -56,7 +56,6 @@ class TerminalClientUnavailableError(AgentRunnerError):
 class AutomationBackendUnavailableError(AgentRunnerError):
     """Raised when the configured automation backend is unavailable."""
 
-
 def _canonical_pricing_model(model: str) -> str:
     lowered = str(model or "").strip().lower()
     lowered = lowered.split("[", 1)[0]
@@ -533,6 +532,63 @@ def _build_codex_prompt(
     return prompt
 
 
+def _build_enforcement_system_prompt() -> str:
+    """Build a system prompt fragment from tool-enforcement-map.json for headless sessions.
+
+    Reads the map and generates concise enforcement rules that the model must follow.
+    Only includes 'must' and 'should' level tools — 'none' tools are omitted.
+    """
+    map_path = NEXO_HOME / "tool-enforcement-map.json"
+    if not map_path.exists():
+        for candidate in [
+            Path(__file__).parent.parent / "tool-enforcement-map.json",
+        ]:
+            if candidate.exists():
+                map_path = candidate
+                break
+        else:
+            return ""
+    try:
+        data = json.loads(map_path.read_text())
+    except Exception:
+        return ""
+
+    lines = ["[PROTOCOL ENFORCEMENT — these rules are mandatory]"]
+    must_rules = []
+    should_rules = []
+
+    for tool_name, tool in data.get("tools", {}).items():
+        enf = tool.get("enforcement", {})
+        level = enf.get("level", "none")
+        if level == "none":
+            continue
+        rules = enf.get("rules", [])
+        rule_descs = [r.get("description", "") for r in rules if r.get("description")]
+        notes = enf.get("notes", "")
+        if rule_descs:
+            desc = f"{tool_name}: {'; '.join(rule_descs)}"
+        elif notes:
+            desc = f"{tool_name}: {notes[:120]}"
+        else:
+            rule_types = [r.get("type", "") for r in rules]
+            desc = f"{tool_name} ({', '.join(rule_types)})" if rule_types else tool_name
+        if level == "must":
+            must_rules.append(desc)
+        elif level == "should":
+            should_rules.append(desc)
+
+    if must_rules:
+        lines.append("MUST (violation creates protocol debt):")
+        for r in must_rules:
+            lines.append(f"  - {r}")
+    if should_rules:
+        lines.append("SHOULD (recommended, check if relevant):")
+        for r in should_rules:
+            lines.append(f"  - {r}")
+
+    return "\n".join(lines) if (must_rules or should_rules) else ""
+
+
 def run_automation_prompt(
     prompt: str,
     *,
@@ -561,6 +617,13 @@ def run_automation_prompt(
         if not reasoning_effort:
             reasoning_effort = profile["reasoning_effort"]
     selected_backend = _resolve_available_backend(selected_backend, preferences=prefs)
+
+    enforcement_fragment = _build_enforcement_system_prompt()
+    if enforcement_fragment:
+        if append_system_prompt:
+            append_system_prompt = append_system_prompt + "\n\n" + enforcement_fragment
+        else:
+            append_system_prompt = enforcement_fragment
 
     cwd_path = Path(cwd).expanduser().resolve() if cwd else Path.cwd()
     run_env = _headless_env(env)
