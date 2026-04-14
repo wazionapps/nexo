@@ -1,9 +1,10 @@
 # NEXO Brain
 
-> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v5.4.2).
+> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v5.4.3).
 
 NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It adds a local shared brain across supported clients, configurable terminal and automation backends, recovery-aware background jobs, startup preflight, runtime self-healing, smarter retrieval defaults, long-horizon overnight analysis, and 150+ MCP tools.
 
+v5.4.3: test isolation fix — copy tree_hygiene.py into isolated runtime dirs so the publish workflow passes
 v5.4.2: traceability truth + Sensory Register buffer close-loop — diary warnings now distinguish repo `commit_ref` debt from local/server-side operational changes, the nocturnal postmortem drains pending `session_buffer.jsonl` events instead of looking only at "today", rewrites the buffer atomically, and the docs now say honestly that `nexo-reflection.py` is a standalone analyzer rather than something auto-triggered by the stop hook
 v5.4.1: hook hygiene fix — the PostToolUse `capture-session.sh` hook had been reading a nonexistent env var since 2026-04-12, silently writing `"tool":"unknown"` to `~/.nexo/brain/session_buffer.jsonl` for 48 hours. v5.4.1 parses `tool_name` from stdin JSON, removes the filter that was hiding `Bash`, deletes the contaminating `capture-session 2.sh` duplicate, and purges pre-fix entries from the buffer on update with a `.pre-v5.4.1.bak` backup
 v5.4.0: runtime events + health + logs + calibration migration — append-only event bus at `~/.nexo/runtime/events.ndjson` with stable envelope, `nexo notify` for one-shot proactive events, `nexo health --json` for a rolled-up subsystem snapshot, `nexo logs --tail --json` for structured log access, and a safe flat→nested migration for `calibration.json` that runs silently inside `nexo update` with a pre-migrate backup
