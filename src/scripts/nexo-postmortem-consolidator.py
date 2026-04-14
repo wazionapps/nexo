@@ -87,6 +87,41 @@ def log(msg: str):
         f.write(line + "\n")
 
 
+def _render_sensory_event_content(event: dict) -> str:
+    source = event.get("source", "")
+    if source == "hook-fallback":
+        task_str = " ".join(event.get("tasks", []))
+        if len(task_str) < 50 or "," in task_str:
+            return ""
+
+    parts = []
+    tool_name = str(event.get("tool") or "").strip()
+    if source == "hook" and tool_name:
+        parts.append(f"Tool activity via hook: {tool_name}")
+
+    for key, label in [("tasks", "Tasks"), ("decisions", "Decisions"),
+                       ("errors_resolved", "Errors"), ("user_patterns", "the user")]:
+        val = event.get(key, [])
+        if val:
+            parts.append(f"{label}: {'; '.join(str(v) for v in val[:3])}")
+
+    critique = event.get("self_critique", "")
+    if critique and "hook-fallback" not in critique:
+        parts.append(f"Self-critique: {critique[:200]}")
+
+    return " | ".join(parts)
+
+
+def _rewrite_session_buffer(lines: list[str]) -> None:
+    payload = "\n".join(lines)
+    if payload:
+        payload += "\n"
+
+    tmp_path = SESSION_BUFFER.with_suffix(SESSION_BUFFER.suffix + ".tmp")
+    tmp_path.write_text(payload)
+    tmp_path.replace(SESSION_BUFFER)
+
+
 # ─── Stage 1: Data Collection (Pure Python) ─────────────────────────────────
 
 def collect_data() -> dict:
@@ -257,28 +292,29 @@ def process_sensory_register():
         log("  No session_buffer.jsonl found, skipping")
         return
 
-    today_events = []
+    pending_events = []
+    retained_lines = []
     try:
         with open(SESSION_BUFFER) as f:
             for line in f:
-                line = line.strip()
+                raw_line = line.rstrip("\n")
+                line = raw_line.strip()
                 if not line:
                     continue
                 try:
                     event = json.loads(line)
-                    if event.get("ts", "").startswith(TODAY_STR):
-                        today_events.append(event)
+                    pending_events.append((event, line))
                 except json.JSONDecodeError:
-                    continue
+                    retained_lines.append(raw_line)
     except Exception as e:
         log(f"  Error reading session_buffer: {e}")
         return
 
-    if not today_events:
-        log("  No events from today")
+    if not pending_events:
+        log("  No pending events")
         return
 
-    log(f"  Found {len(today_events)} events")
+    log(f"  Found {len(pending_events)} pending events")
 
     try:
         import cognitive
@@ -287,30 +323,16 @@ def process_sensory_register():
         return
 
     ingested = 0
-    for event in today_events:
-        source = event.get("source", "")
-        if source == "hook-fallback":
-            task_str = " ".join(event.get("tasks", []))
-            if len(task_str) < 50 or "," in task_str:
-                continue
-
-        parts = []
-        for key, label in [("tasks", "Tasks"), ("decisions", "Decisions"),
-                           ("errors_resolved", "Errors"), ("user_patterns", "the user")]:
-            val = event.get(key, [])
-            if val:
-                parts.append(f"{label}: {'; '.join(str(v) for v in val[:3])}")
-
-        critique = event.get("self_critique", "")
-        if critique and "hook-fallback" not in critique:
-            parts.append(f"Self-critique: {critique[:200]}")
-
-        content = " | ".join(parts)
+    processed_events = 0
+    kept_events = 0
+    for event, raw_line in pending_events:
+        content = _render_sensory_event_content(event)
         if not content or len(content) < 20:
+            retained_lines.append(raw_line)
+            kept_events += 1
             continue
 
         try:
-            vec = cognitive.embed(content)
             domain = ""
             lower = content.lower()
             # Add your project keywords for domain detection
@@ -324,10 +346,20 @@ def process_sensory_register():
                 domain=domain, created_at=event.get("ts", "")
             )
             ingested += 1
+            processed_events += 1
         except Exception as e:
             log(f"  Error embedding: {e}")
+            retained_lines.append(raw_line)
 
-    log(f"  Ingested {ingested} sensory events into STM")
+    try:
+        _rewrite_session_buffer(retained_lines)
+    except Exception as e:
+        log(f"  Error rewriting session_buffer: {e}")
+
+    log(
+        f"  Ingested {ingested} sensory events into STM "
+        f"(processed: {processed_events}, retained: {len(retained_lines)} incl kept={kept_events})"
+    )
 
 
 def analyze_force_events():

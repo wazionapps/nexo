@@ -18,7 +18,7 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `5.4.1` is the current packaged-runtime line: hook hygiene fix — the PostToolUse `capture-session.sh` hook had been reading a nonexistent env var since 2026-04-12, silently writing `"tool":"unknown"` to the Sensory Register for 48 hours. v5.4.1 parses the tool name from stdin JSON, removes the filter that was hiding `Bash`, and purges pre-fix entries from the buffer on update.
+Version `5.4.2` is the current packaged-runtime line: traceability truth + Sensory Register buffer close-loop — release warnings now distinguish repo `commit_ref` debt from local/server-side operational changes, the nocturnal postmortem drains pending `session_buffer.jsonl` events and rewrites the buffer atomically, and docs now state honestly that `nexo-reflection.py` is standalone rather than auto-triggered by the stop hook.
 
 Previously in `5.4.0`: runtime event bus at `~/.nexo/runtime/events.ndjson`, `nexo notify`, `nexo health --json`, `nexo logs --tail --json`, and a safe flat→nested migration for `calibration.json`.
 
@@ -630,20 +630,21 @@ PreCompact hook saves full checkpoint if conversation is compressed
     ↓
 PostCompact hook re-injects Core Memory Block → session continues seamlessly
     ↓
-Stop hook triggers mandatory post-mortem:
-  - Self-critique: 5 questions about what could be better
-  - Session buffer: structured entry for the reflection engine
-  - Followups: anything promised gets scheduled
-  - Proactive seeds: what can the next session do without being asked?
+Stop hook refreshes the diary draft and approves immediately:
+  - Latest changes and decisions stay attached to the active session
+  - Session buffer keeps structured tool activity for downstream processing
+  - Followups and closing synthesis happen inline when the agent detects real closing intent
+  - No mid-conversation blocking from the hook itself
     ↓
-Reflection engine processes buffer (after 3+ sessions)
+Nocturnal post-mortem consolidator processes the buffer mechanically
     ↓
 Nocturnal processes: decay, consolidation, self-audit, dreaming
 ```
 
 ### Reflection Engine
 
-After 3+ sessions accumulate, the stop hook triggers `nexo-reflection.py`:
+NEXO still ships `nexo-reflection.py` as a standalone analyzer for `session_buffer.jsonl`.
+It is not currently auto-triggered by the stop hook:
 - Extracts recurring tasks, error patterns, mood trends
 - Updates `user_model.json` with observed behavior
 - No LLM required — runs as pure Python

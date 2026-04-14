@@ -1,5 +1,35 @@
 # Changelog
 
+## [5.4.2] - 2026-04-14
+
+### Fix: traceability truth + Sensory Register buffer close-loop
+
+This release closes two low-level integrity gaps around the Sensory Register
+without changing the product boundary or removing any Claude/Opus/Codex-assisted
+path.
+
+- `src/plugins/episodic_memory.py` now distinguishes repo-tracked changes from
+  local/runtime/server-side operations when warning about missing
+  `commit_ref`. The diary warning no longer inflates every operational edit into
+  "repo debt", and `handle_change_log` now tells callers to use a real git hash
+  only for repo files while allowing markers such as `server-direct` or
+  `local-uncommitted` for local-side changes.
+- `src/scripts/nexo-postmortem-consolidator.py` now treats
+  `session_buffer.jsonl` as a real pending queue: it renders useful hook/tool
+  activity into the Sensory Register, processes all pending entries instead of
+  only "today", and prunes only the lines that were actually ingested.
+- The postmortem consumer now rewrites `session_buffer.jsonl` atomically, so a
+  partial write cannot leave the pending-event queue truncated.
+- Public and internal docs are aligned again: the README and
+  `nexo-reflection.py` no longer describe the stop hook as if it auto-triggered
+  the standalone reflection engine.
+- Added regression coverage for repo-vs-local `commit_ref` classification and
+  for pending-buffer ingestion/pruning in the postmortem consolidator.
+
+No feature removals. No model-path downgrade. Claude/Opus-assisted
+consolidation stays intact; this patch only hardens the mechanical loop around
+it.
+
 ## [5.4.1] - 2026-04-14
 
 ### Fix: PostToolUse capture-session hook was always writing "unknown"

@@ -3,12 +3,30 @@
 import datetime
 import json
 import time
+from pathlib import Path
 from db import (
     log_decision, update_decision_outcome, search_decisions,
     write_session_diary, read_session_diary,
     log_change, search_changes, update_change_commit,
     recall, get_db, set_linked_outcomes_met,
 )
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+_REPO_ABS_PREFIX = str(REPO_ROOT) + "/"
+_REPO_IGNORED_TOP_LEVEL = {
+    ".git",
+    ".venv",
+    ".pytest_cache",
+    ".ruff_cache",
+    "__pycache__",
+}
+try:
+    _REPO_TOP_LEVEL_ENTRIES = {
+        path.name for path in REPO_ROOT.iterdir()
+        if path.name not in _REPO_IGNORED_TOP_LEVEL
+    }
+except OSError:
+    _REPO_TOP_LEVEL_ENTRIES = set()
 
 
 def _cognitive_ingest_safe(content, source_type, source_id="", source_title="", domain=""):
@@ -18,6 +36,37 @@ def _cognitive_ingest_safe(content, source_type, source_id="", source_title="", 
         cognitive.ingest(content, source_type, source_id, source_title, domain)
     except Exception:
         pass  # Cognitive is optional — never block operational writes
+
+
+def _iter_change_paths(files: str) -> list[str]:
+    parts = []
+    for chunk in str(files or "").replace("\n", ",").split(","):
+        item = chunk.strip()
+        if item:
+            parts.append(item)
+    return parts
+
+
+def _change_requires_git_commit_ref(files: str) -> bool:
+    for item in _iter_change_paths(files):
+        normalized = item.replace("\\", "/").strip()
+        while normalized.startswith("./"):
+            normalized = normalized[2:]
+        if normalized.startswith(_REPO_ABS_PREFIX):
+            return True
+        top_level = normalized.split("/", 1)[0]
+        if top_level in _REPO_TOP_LEVEL_ENTRIES:
+            return True
+    return False
+
+
+def _format_change_count(count: int) -> str:
+    return f"{count} cambio" if count == 1 else f"{count} cambios"
+
+
+def _recent_change_phrase(count: int) -> str:
+    base = _format_change_count(count)
+    return f"{base} reciente" if count == 1 else f"{base} recientes"
 
 
 def handle_decision_log(domain: str, decision: str, alternatives: str = '',
@@ -226,23 +275,35 @@ def handle_session_diary_write(decisions: str, summary: str,
     # Episodic memory audit — warn about gaps
     warnings = []
     conn = __import__('db').get_db()
-    orphan_changes = conn.execute(
-        "SELECT COUNT(*) FROM change_log WHERE (commit_ref IS NULL OR commit_ref = '')"
-    ).fetchone()[0]
-    recent_orphan_changes = conn.execute(
-        """SELECT COUNT(*) FROM change_log
-           WHERE (commit_ref IS NULL OR commit_ref = '')
-             AND created_at >= datetime('now', '-7 days')"""
-    ).fetchone()[0]
-    if orphan_changes > 0:
-        if recent_orphan_changes > 0 and recent_orphan_changes != orphan_changes:
+    orphan_change_rows = conn.execute(
+        """SELECT files, created_at FROM change_log
+           WHERE (commit_ref IS NULL OR commit_ref = '')"""
+    ).fetchall()
+    repo_orphan_changes = 0
+    recent_repo_orphan_changes = 0
+    recent_cutoff = conn.execute("SELECT datetime('now', '-7 days')").fetchone()[0]
+    for row in orphan_change_rows:
+        files = row["files"] if hasattr(row, "keys") else row[0]
+        created_at = row["created_at"] if hasattr(row, "keys") else row[1]
+        if not _change_requires_git_commit_ref(files):
+            continue
+        repo_orphan_changes += 1
+        if created_at >= recent_cutoff:
+            recent_repo_orphan_changes += 1
+    if repo_orphan_changes > 0:
+        if recent_repo_orphan_changes > 0 and recent_repo_orphan_changes != repo_orphan_changes:
             warnings.append(
-                f"{recent_orphan_changes} changes recientes sin commit_ref ({orphan_changes} históricas total)"
+                f"{_recent_change_phrase(recent_repo_orphan_changes)} de repo sin commit_ref "
+                f"({_format_change_count(repo_orphan_changes)} de repo total)"
             )
-        elif recent_orphan_changes > 0:
-            warnings.append(f"{recent_orphan_changes} changes recientes sin commit_ref")
+        elif recent_repo_orphan_changes > 0:
+            warnings.append(
+                f"{_recent_change_phrase(recent_repo_orphan_changes)} de repo sin commit_ref"
+            )
         else:
-            warnings.append(f"{orphan_changes} changes históricas sin commit_ref")
+            warnings.append(
+                f"{_format_change_count(repo_orphan_changes)} históricos de repo sin commit_ref"
+            )
     orphan_decisions = conn.execute(
         "SELECT COUNT(*) FROM decisions WHERE (outcome IS NULL OR outcome = '') AND created_at < datetime('now', '-7 days')"
     ).fetchone()[0]
@@ -342,7 +403,16 @@ def handle_change_log(files: str, what_changed: str, why: str,
         pass
     msg = f"Change #{change_id} recorded: {files[:60]} — {what_changed[:60]}"
     if not commit_ref:
-        msg += f"\n⚠ NO COMMIT. Use nexo_change_commit({change_id}, 'hash') after push, or 'server-direct' if it was a direct server edit."
+        if _change_requires_git_commit_ref(files):
+            msg += (
+                f"\n⚠ NO COMMIT. Use nexo_change_commit({change_id}, 'hash') after push."
+            )
+        else:
+            msg += (
+                f"\n⚠ NO COMMIT GIT. If this was a local/server-side change, link a marker "
+                f"with nexo_change_commit({change_id}, 'server-direct') or "
+                f"'local-uncommitted'."
+            )
     return msg
 
 

@@ -2,8 +2,8 @@
 """
 NEXO Reflection Engine — Processes session_buffer.jsonl entries.
 
-Triggered by the stop hook when >=3 sessions have accumulated and
-the last reflection was >4 hours ago.
+The runtime still ships this as a standalone analyzer, but it is not
+currently auto-triggered by the stop hook.
 
 What it does:
 1. Reads all entries from session_buffer.jsonl
