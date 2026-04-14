@@ -1,5 +1,20 @@
 # Changelog
 
+## [5.4.8] - 2026-04-15
+
+### Feat: tool-enforcement-map v2.0 — multi-dimensional enforcement
+
+- Complete rewrite of `tool-enforcement-map.json` with multi-dimensional
+  enforcement rules based on actual source code analysis of all 247 tools.
+- New enforcement levels: `must` (inject), `should` (remind), `may` (track),
+  `none` (on-demand). Previous v1 only had binary enforce/null.
+- Each tool now declares: dependencies (`requires`), chain triggers
+  (`triggers_after`), internal sub-calls (`internally_calls`), internal
+  checks (`internally_checks`), and conditional rules.
+- 11 must + 10 should + 1 may + 225 none = 247 tools mapped.
+- Map structure designed for dynamic consumption by Desktop and
+  `run_automation_prompt()` headless enforcement.
+
 ## [5.4.7] - 2026-04-15
 
 ### Feat: tool-enforcement-map.json for Protocol Enforcer
