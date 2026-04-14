@@ -225,6 +225,23 @@ def _session_has_guard_check(conn, sid: str) -> bool:
     return bool(row)
 
 
+def _session_has_guard_for_file(conn, sid: str, filepath: str) -> bool:
+    """Check if guard_check was called for a specific file in this session."""
+    if not filepath:
+        return False
+    normalized = _normalize_file_path(filepath)
+    basename = os.path.basename(filepath)
+    # guard_checks.files is a comma-separated or JSON list of paths/areas
+    row = conn.execute(
+        """SELECT 1 FROM guard_checks
+           WHERE session_id = ?
+             AND (files LIKE ? OR files LIKE ? OR files LIKE ?)
+           LIMIT 1""",
+        (sid, f"%{normalized}%", f"%{basename}%", f"%{filepath}%"),
+    ).fetchone()
+    return bool(row)
+
+
 def _find_open_debt(conn, *, session_id: str, task_id: str, debt_type: str, file_token: str) -> dict | None:
     row = conn.execute(
         """SELECT *
@@ -548,6 +565,28 @@ def process_pre_tool_event(payload: dict) -> dict:
                     "reason_code": "guard_unacknowledged",
                 }
             )
+            continue
+
+        # Check if guard_check was called for this specific file
+        if not _session_has_guard_for_file(conn, sid, filepath):
+            debt = _ensure_protocol_debt(
+                conn,
+                session_id=sid,
+                task_id=task["task_id"],
+                debt_type="write_without_file_guard_check",
+                severity="warn",
+                evidence=f"{tool_name} attempted on {filepath} without a prior guard_check covering that file.",
+                file_token=filepath,
+            )
+            blocks.append(
+                {
+                    "file": filepath,
+                    "task_id": task["task_id"],
+                    "debt_id": debt.get("id"),
+                    "debt_type": "write_without_file_guard_check",
+                    "reason_code": "missing_file_guard",
+                }
+            )
 
     return {
         "ok": True,
@@ -727,6 +766,11 @@ def format_pretool_block_message(result: dict) -> str:
         elif item.get("reason_code") == "guard_unacknowledged":
             lines.append(
                 f"- {file_note}: task {item['task_id']} still has blocking guard debt. Acknowledge it with `nexo_task_acknowledge_guard` before retrying."
+            )
+        elif item.get("reason_code") == "missing_file_guard":
+            lines.append(
+                f"- {file_note}: `nexo_guard_check` obligatorio antes de editar. "
+                f"Run `nexo_guard_check(files='{file_note}')` first, then retry the edit."
             )
         elif strictness == "learning":
             lines.append(
