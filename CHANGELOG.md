@@ -1,5 +1,25 @@
 # Changelog
 
+## [5.3.24] - 2026-04-14
+
+### Fix false-positive recommendation prompt + heal on packaged update path
+
+- `detect_outdated_recommendations` now classifies each client into
+  `pending` (needs interactive prompt) vs `auto_ack` (silent
+  acknowledge). If the user's model already matches the current
+  recommendation (regardless of reasoning_effort), their preferences are
+  auto-acknowledged silently without prompting. Fixes spurious
+  "Model recommendation available" noise on fresh installs whose
+  defaults already match the recommendation (e.g. Nora on v5.3.23).
+- Customized models (not a previously recommended NEXO default) also
+  auto-acknowledge silently — respects the user's choice without
+  repeating the stderr hint on every `nexo update`.
+- Model-profile heal is now applied on the npm packaged-install update
+  path (`plugins/update.py`), not just the legacy sync flow. Fixes
+  stale `schedule.json` keeping `claude-opus-*` in the Codex profile
+  after v5.3.23 update, which caused `nexo chat` → Codex to pass the
+  Claude model via `--model` and fail with "model not supported".
+
 ## [5.3.23] - 2026-04-14
 
 ### Fix Codex broken with Claude model default + centralize model recommendations

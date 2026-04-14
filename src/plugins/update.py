@@ -442,9 +442,17 @@ def _restore_code_tree(backup_dir: str) -> str | None:
 
 def _normalize_preferences_for_client_sync() -> dict:
     from client_preferences import normalize_client_preferences
+    from model_defaults import heal_runtime_profiles
 
     schedule_path = NEXO_HOME / "config" / "schedule.json"
     schedule_payload = json.loads(schedule_path.read_text()) if schedule_path.exists() else {}
+    # Heal invalid models (e.g. Claude-family written into codex profile by
+    # earlier buggy versions). Must run BEFORE normalize so the healed values
+    # propagate into preferences and downstream client config files.
+    existing_profiles = schedule_payload.get("client_runtime_profiles") or {}
+    healed_profiles, _heal_messages = heal_runtime_profiles(existing_profiles)
+    if _heal_messages:
+        schedule_payload["client_runtime_profiles"] = healed_profiles
     normalized_preferences = normalize_client_preferences(schedule_payload)
     if normalized_preferences != {
         key: schedule_payload.get(key)
@@ -902,9 +910,20 @@ def handle_update(remote: str = "origin", branch: str = "main", progress_fn=None
             _emit_progress(progress_fn, "Refreshing shared client configs...")
             from client_sync import sync_all_clients
             from client_preferences import normalize_client_preferences
+            from model_defaults import heal_runtime_profiles
 
             schedule_path = NEXO_HOME / "config" / "schedule.json"
             schedule_payload = json.loads(schedule_path.read_text()) if schedule_path.exists() else {}
+            # Heal Claude-family models written into Codex profile by earlier
+            # buggy versions.  Must run BEFORE normalize so healed values
+            # propagate into the saved preferences.
+            existing_profiles = schedule_payload.get("client_runtime_profiles") or {}
+            healed_profiles, heal_messages = heal_runtime_profiles(existing_profiles)
+            if heal_messages:
+                schedule_payload["client_runtime_profiles"] = healed_profiles
+                for msg in heal_messages:
+                    _emit_progress(progress_fn, msg)
+                    steps_done.append("model-heal")
             normalized_preferences = normalize_client_preferences(schedule_payload)
             if normalized_preferences != {
                 key: schedule_payload.get(key)

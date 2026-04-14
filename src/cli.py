@@ -938,7 +938,21 @@ def _prompt_model_recommendations(*, interactive: bool) -> None:
     from model_defaults import detect_outdated_recommendations, client_default
 
     preferences = load_client_preferences()
-    pending = detect_outdated_recommendations(preferences)
+    result = detect_outdated_recommendations(preferences)
+    pending = result.get("pending") or []
+    auto_ack = result.get("auto_ack") or {}
+
+    # Apply silent acknowledgements first (user already on current model, or
+    # has customized their model — either way no prompt needed). This avoids
+    # repeated stderr hints in cron/headless updates.
+    if auto_ack:
+        try:
+            existing_ack = dict(preferences.get("acknowledged_model_recommendations") or {})
+            existing_ack.update({k: int(v) for k, v in auto_ack.items()})
+            save_client_preferences(acknowledged_model_recommendations=existing_ack)
+        except Exception:
+            pass
+
     if not pending:
         return
 
@@ -955,7 +969,8 @@ def _prompt_model_recommendations(*, interactive: bool) -> None:
 
     updated_profiles = dict(preferences.get("client_runtime_profiles") or {})
     updated_ack = dict(preferences.get("acknowledged_model_recommendations") or {})
-    changed = False
+    updated_ack.update({k: int(v) for k, v in auto_ack.items()})
+    changed = bool(auto_ack)
     for entry in pending:
         client = entry["client"]
         effort_str = f" / {entry['current_effort']}" if entry["current_effort"] else ""
