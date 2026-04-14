@@ -1944,6 +1944,21 @@ def main():
     dashboard_parser = sub.add_parser("dashboard", help="Web dashboard control")
     dashboard_parser.add_argument("action", choices=["on", "off", "status"], help="Start, stop, or check dashboard")
 
+    # -- desktop bridge (read-only, for NEXO Desktop and any external UI) --
+    schema_parser = sub.add_parser("schema", help="Editable-field schema for Preferences UI")
+    schema_parser.add_argument("--json", action="store_true", help="JSON output (default)")
+
+    identity_parser = sub.add_parser("identity", help="Canonical assistant identity")
+    identity_parser.add_argument("--json", action="store_true", help="JSON output (default)")
+
+    onboard_parser = sub.add_parser("onboard", help="Onboarding wizard steps")
+    onboard_parser.add_argument("--json", action="store_true", help="JSON output (default)")
+
+    scan_profile_parser = sub.add_parser("scan-profile", help="Build profile.json from CLAUDE.md + calibration")
+    scan_profile_parser.add_argument("--json", action="store_true", help="JSON output")
+    scan_profile_parser.add_argument("--apply", action="store_true", help="Write profile.json (default is preview)")
+    scan_profile_parser.add_argument("--force", action="store_true", help="Overwrite existing profile.json on --apply")
+
     args = parser.parse_args()
 
     if args.help or (not args.command and not args.version):
@@ -2037,6 +2052,14 @@ def main():
         return _uninstall(args)
     elif args.command == "dashboard":
         return _dashboard(args)
+    elif args.command in ("schema", "identity", "onboard", "scan-profile"):
+        from desktop_bridge import cmd_schema, cmd_identity, cmd_onboard, cmd_scan_profile
+        return {
+            "schema": cmd_schema,
+            "identity": cmd_identity,
+            "onboard": cmd_onboard,
+            "scan-profile": cmd_scan_profile,
+        }[args.command](args)
     else:
         _print_help()
         return 0

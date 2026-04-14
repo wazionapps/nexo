@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `5.3.29` is the current packaged-runtime line: duplicate `* 2` artifacts now fail hygiene gates instead of hiding in the tree, packaged/runtime update paths converge on one canonical core, startup preflight runs synchronously, corrupt DB state no longer respawns an empty brain by default, and cron runs spool locally when SQLite is unavailable.
+Version `5.3.30` is the current packaged-runtime line: four read-only CLI commands (`nexo schema`, `nexo identity`, `nexo onboard`, `nexo scan-profile`) let external UIs like NEXO Desktop auto-adapt to the editable schema, canonical identity, onboarding wizard, and profile heuristics without hardcoding fields.
+
+Previously in `5.3.29`: duplicate `* 2` artifacts now fail hygiene gates instead of hiding in the tree, packaged/runtime update paths converge on one canonical core, startup preflight runs synchronously, corrupt DB state no longer respawns an empty brain by default, and cron runs spool locally when SQLite is unavailable.
 
 Start here:
 - [5-minute quickstart](docs/quickstart-5-minutes.md)

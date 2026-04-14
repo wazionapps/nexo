@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO Brain v5.3.30 — Desktop Bridge: four read-only CLI commands that let any UI auto-adapt | nexo-brain.com</title>
+<meta name="description" content="v5.3.30 exposes NEXO Brain's editable schema, canonical identity, onboarding wizard, and profile builder as plain JSON over the CLI, so external UIs like NEXO Desktop stop hardcoding fields and release in lockstep.">
+<link rel="stylesheet" href="../../assets/blog.css">
+</head>
+<body>
+<article class="blog-post">
+<header>
+<h1>v5.3.30 — Desktop Bridge: four read-only CLI commands</h1>
+<time datetime="2026-04-14">April 14, 2026</time>
+</header>
+
+<p>External UIs that want to wrap NEXO Brain — NEXO Desktop being the first — have, until now, been forced to hardcode the list of editable preferences, the onboarding questions, the location of the assistant name, and the shape of the user profile. Each time the Brain added a new field, the downstream UI had to ship a release to catch up. That is the wrong coupling: the runtime already knows all of that, it just had no honest way to tell a client.</p>
+
+<p>v5.3.30 closes that gap with four small, strictly read-only commands. No existing surface changes. Nothing new is written unless the operator explicitly asks for it.</p>
+
+<h2>1. <code>nexo schema --json</code></h2>
+
+<p>Returns the editable-field schema: a <code>schema_version</code>, a list of <code>groups</code>, and a list of <code>fields</code>. Each field declares its dot-notation <code>path</code>, which <code>file</code> it lives in (<code>calibration.json</code> or <code>profile.json</code>), its <code>type</code>, its <code>label</code> in multiple languages, and — for selects — its <code>options</code> with multilang labels too.</p>
+
+<p>The rule a client should follow is simple: render the UI from this payload, do not hardcode field lists. When the Brain adds a new preference next month, the client renders it automatically. <code>schema_version</code> is the only field clients need to watch to know when a format change has happened.</p>
+
+<h2>2. <code>nexo identity --json</code></h2>
+
+<p>Historically the assistant's name (<code>NEXO</code>, <code>Nora</code>, etc.) lived in at least four possible locations across <code>calibration.json</code> and <code>profile.json</code>. That meant every client had to re-implement the probe order — and write back to the wrong place half the time.</p>
+
+<p>This command returns <code>{name, source, writable_source}</code>. <code>source</code> is the field the current value came from; <code>writable_source</code> is the canonical path a client should write to if the user renames the assistant. One probe, one canonical destination.</p>
+
+<h2>3. <code>nexo onboard --json</code></h2>
+
+<p>Exposes the onboarding wizard as data: a list of <code>steps</code> with <code>id</code>, <code>prompt</code> (multilang), <code>type</code>, the <code>writes</code> path, the target <code>file</code>, plus <code>optional</code>, <code>default</code>, and an optional <code>validate</code> regex. The last step is a <code>welcome</code> message clients can render at the end.</p>
+
+<p>A Desktop onboarding screen becomes a loop over <code>steps</code>, not a set of hardcoded React components. When the Brain wants to ask one more question during first-run, the wizard grows on its own.</p>
+
+<h2>4. <code>nexo scan-profile</code></h2>
+
+<p>The last command is the one with moving parts, so it is deliberately the most cautious. <code>scan-profile</code> builds a <code>profile.json</code> payload from <code>CLAUDE.md</code> and <code>calibration.json</code> heuristics — useful for older installations where <code>profile.json</code> was never generated. Default behavior is preview only: it prints the payload without touching disk. <code>--apply</code> writes the file, and <code>--force</code> is required to overwrite an existing profile. Clients that want to show the operator what would be written can request <code>--json</code> and render the diff locally.</p>
+
+<h2>Why read-only</h2>
+
+<p>None of the four commands mutate runtime state without explicit opt-in. They read, they describe, they predict. This matters because the Brain is where the truth lives; external UIs are renderers, not sources of truth. Exposing JSON describes the truth once, and lets any client — Desktop today, mobile or web later — pull from the same description.</p>
+
+<h2>Update</h2>
+
+<pre><code>npm update -g nexo-brain
+nexo update
+</code></pre>
+
+<p>If you are not building a UI on top of NEXO Brain, nothing changes for you. If you are, you now have a stable contract to build against.</p>
+
+</article>
+</body>
+</html>
