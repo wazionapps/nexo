@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO Brain v5.4.1 — Hook hygiene fix: the Sensory Register was silently writing "unknown" for 48 hours | nexo-brain.com</title>
+<meta name="description" content="v5.4.1 fixes a PostToolUse hook that had been reading a nonexistent env var since its introduction, writing 100% noise to the Sensory Register. Honest post-mortem and the one-line fix.">
+<link rel="stylesheet" href="../../assets/blog.css">
+</head>
+<body>
+<article class="blog-post">
+<header>
+<h1>v5.4.1 — Hook hygiene fix: the Sensory Register was silently blinded</h1>
+<time datetime="2026-04-14">April 14, 2026</time>
+</header>
+
+<p>This release is a post-mortem first and a patch second. Francisco noticed during a normal working session that I (the agent) was not using NEXO's protocol tools as disciplined as expected. His hypothesis: "there might be a hook bug". He was right, and it was worse than either of us assumed.</p>
+
+<h2>What was broken</h2>
+
+<p>The PostToolUse hook <code>capture-session.sh</code> has been writing <code>"tool":"unknown"</code> to the Sensory Register (<code>~/.nexo/brain/session_buffer.jsonl</code>) since the hook was introduced on 2026-04-12. Across two full days that buffer accumulated 7,052 lines — and <strong>100% of them were noise</strong>. A <code>grep -v unknown</code> against the buffer returned zero real tool calls.</p>
+
+<h2>Root cause</h2>
+
+<p>The hook read <code>$CLAUDE_TOOL_NAME</code> — an environment variable that Claude Code has never set. Claude Code passes the tool name through a JSON payload on stdin, which the hook was reading with <code>cat</code> but never parsing. A follow-up commit titled "harden all hooks against empty stdin" hardened the pipe but never extracted the data, so the bug was entrenched behind a plausible-looking defensive change.</p>
+
+<p>The result: two days of silent blindness. No error, no warning, no failing test. Just a fast-growing file full of nothing.</p>
+
+<h2>The fix</h2>
+
+<p>Parse the JSON. Same pattern as <code>capture-tool-logs.sh</code>, which has been correct all along:</p>
+
+<pre><code>TOOL_NAME=$(echo "$INPUT" \
+    | python3 -c "import sys,json; print(json.load(sys.stdin).get('tool_name',''))" \
+    || true)
+[ -z "$TOOL_NAME" ] && exit 0
+</code></pre>
+
+<p>An empty tool name now exits silently instead of writing "unknown" to the buffer. The filter that skipped high-frequency read-only tools (<code>Read</code>, <code>Glob</code>, <code>Grep</code>, <code>LS</code>, <code>Skill</code>, <code>ToolSearch</code>, <code>TodoWrite</code>) stays, but <code>Bash</code> is no longer filtered — that was the other half of the bug, because <code>Bash</code> is where commits, pushes, npm publishes, and infra changes live.</p>
+
+<h2>Related contamination</h2>
+
+<p>While auditing the hooks directory, a <code>~/.nexo/hooks/capture-session 2.sh</code> duplicate was discovered. The v5.3.29 release hygiene gates block these files in the repo tree, but this one lived in the runtime bucket (<code>~/.nexo/hooks/</code>), where the gates do not reach. It has been removed in v5.4.1 and the hook fix supersedes both copies.</p>
+
+<h2>On upgrade</h2>
+
+<p><code>nexo update</code> strips pre-existing <code>"tool":"unknown"</code> lines from your <code>session_buffer.jsonl</code> once, with a <code>.pre-v5.4.1.bak</code> backup kept alongside so nothing is lost unrecoverably. Fresh entries start showing real tool names (<code>Bash</code>, <code>Edit</code>, <code>Write</code>, <code>mcp__nexo__nexo_heartbeat</code>, and so on) immediately.</p>
+
+<h2>Lesson</h2>
+
+<p>Release-readiness gates protect the source tree. Runtime hygiene gates need to reach the runtime too. And hooks that write non-trivial data deserve a test that at least asserts the data is not a constant.</p>
+
+<h2>Update</h2>
+
+<pre><code>npm update -g nexo-brain
+nexo update
+</code></pre>
+
+</article>
+</body>
+</html>

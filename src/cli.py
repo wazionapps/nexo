@@ -935,6 +935,27 @@ def _update(args):
     except Exception:
         pass
 
+    # v5.4.1 one-time hygiene: purge pre-fix "tool":"unknown" entries from
+    # the sensory-register buffer. Keeps a .pre-v5.4.1.bak backup the first
+    # time it runs on a given host.
+    try:
+        buf = NEXO_HOME / "brain" / "session_buffer.jsonl"
+        marker = buf.with_suffix(".jsonl.pre-v5.4.1.bak")
+        if buf.is_file() and not marker.is_file():
+            raw = buf.read_text(errors="ignore").splitlines()
+            unknown = sum(1 for ln in raw if '"tool":"unknown"' in ln)
+            if unknown > 0:
+                buf.rename(marker)
+                cleaned = "\n".join(ln for ln in raw if '"tool":"unknown"' not in ln)
+                if cleaned:
+                    cleaned += "\n"
+                buf.write_text(cleaned)
+                if not args.json:
+                    print(f"[NEXO] session_buffer.jsonl: purged {unknown} legacy "
+                          f"\"tool\":\"unknown\" entries (backup: {marker.name})", flush=True)
+    except Exception:
+        pass
+
     return 0 if result.get("ok") else 1
 
 
