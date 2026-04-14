@@ -1,1614 +1,3497 @@
 {
-  "$schema": "https://nexo-brain.com/schemas/tool-enforcement-map.json",
-  "version": "1.0.0",
-  "description": "Canonical map of all NEXO Brain MCP tools with enforcement rules. Read by NEXO Desktop and nexo-session-guard to mechanically enforce protocol compliance.",
-  "enforcement_types": {
-    "on_session_start": "Must be called at the beginning of a session, within the first N tool calls",
-    "on_session_end": "Must be called before closing a session or chat",
-    "periodic_by_messages": "Must be called every N user messages if not called voluntarily",
-    "periodic_by_time": "Must be called every N minutes of active session if not called voluntarily",
-    "before_tool": "Must be called before any of the listed watch_tools are used",
-    "after_tool": "Must be called after any of the listed watch_tools are used",
-    "on_event": "Must be called when a specific event is detected"
-  },
+  "$schema": "https://nexo-brain.com/schemas/tool-enforcement-map-v2.json",
+  "version": "2.0.0",
+  "description": "Canonical map of all NEXO Brain MCP tools with enforcement rules, dependency chains, and behavioral hints. Source of truth for Protocol Enforcer (Desktop + headless).",
   "tools": {
     "nexo_startup": {
-      "description": "Register new session, clean stale ones, return active sessions + alerts",
+      "description": "Register new session, clean stale ones, return SID + active sessions + inbox",
       "category": "session",
       "source": "server",
+      "requires": [],
+      "provides": [
+        "sid"
+      ],
+      "internal_calls": [],
       "enforcement": {
-        "type": "on_session_start",
-        "threshold": 2,
-        "priority": "critical",
-        "phase": 1,
-        "inject_prompt": "Execute nexo_startup now. Do not produce any visible text, just run the tool."
-      }
-    },
-    "nexo_heartbeat": {
-      "description": "Update session task, check inbox and pending questions. Auto-detects trust events",
-      "category": "session",
-      "source": "server",
-      "enforcement": {
-        "type": "periodic_by_messages",
-        "threshold": 3,
-        "priority": "critical",
-        "phase": 1,
-        "inject_prompt": "Execute nexo_heartbeat with the current session SID and a brief description of what you are doing. Do not produce any visible text."
-      }
-    },
-    "nexo_stop": {
-      "description": "Cleanly close a session. Removes it from active sessions immediately",
-      "category": "session",
-      "source": "server",
-      "enforcement": {
-        "type": "on_session_end",
-        "priority": "critical",
-        "phase": 1,
-        "inject_prompt": "Execute nexo_stop with the current session SID. Do not produce any visible text."
-      }
-    },
-    "nexo_smart_startup": {
-      "description": "Pre-load relevant cognitive memories based on pending followups, due reminders, and last session topics",
-      "category": "session",
-      "source": "server",
-      "enforcement": {
-        "type": "after_tool",
-        "watch_tools": [
-          "nexo_startup"
+        "level": "must",
+        "rules": [
+          {
+            "type": "on_session_start",
+            "threshold": 2
+          }
         ],
-        "priority": "high",
-        "phase": 1,
-        "inject_prompt": "Execute nexo_smart_startup to pre-load relevant context. Do not produce any visible text."
-      }
-    },
-    "nexo_session_diary_read": {
-      "description": "Read recent session diaries for context continuity",
-      "category": "diary",
-      "source": "server",
-      "enforcement": {
-        "type": "after_tool",
-        "watch_tools": [
-          "nexo_startup"
-        ],
-        "priority": "high",
-        "phase": 1,
-        "inject_prompt": "Execute nexo_session_diary_read with last_day=true and brief=true to load context from previous sessions. Do not produce any visible text."
-      }
-    },
-    "nexo_session_diary_write": {
-      "description": "Write end-of-session diary with decisions, discards, and context for next session",
-      "category": "diary",
-      "source": "plugin:episodic_memory",
-      "enforcement": [
-        {
-          "type": "periodic_by_time",
-          "threshold": 15,
-          "priority": "critical",
-          "phase": 1,
-          "inject_prompt": "It has been 15 minutes of active session without writing a diary. Execute nexo_session_diary_write with a summary of what you have done so far. Do not produce any visible text."
-        },
-        {
-          "type": "on_session_end",
-          "priority": "critical",
-          "phase": 1,
-          "inject_prompt": "This session is ending. Execute nexo_session_diary_write with a complete summary of decisions, pending items, and context for the next session. Do not produce any visible text."
-        }
+        "inject_prompt": "You must start by calling nexo_startup to register this session. Execute it now with a brief task description. Do not produce visible text.",
+        "triggers_after": [
+          "nexo_smart_startup",
+          "nexo_session_diary_read",
+          "nexo_reminders"
+        ]
+      },
+      "triggers_after": [
+        "nexo_smart_startup",
+        "nexo_session_diary_read",
+        "nexo_reminders"
       ]
     },
+    "nexo_heartbeat": {
+      "description": "Update session task, check inbox, detect trust events. Internally checks: DIARY_OVERDUE (>10 HBs or >30min), GUARD_REMINDER (code edit without guard), LEARNING_REMINDER (user correction without learning), PROTOCOL_DEBT (open debts). Also fires adaptive_mode compute and diary draft accumulation.",
+      "category": "session",
+      "source": "server",
+      "requires": [
+        "nexo_startup"
+      ],
+      "provides": [
+        "now_utc",
+        "inbox",
+        "pending_questions",
+        "recent_context",
+        "diary_overdue_signal",
+        "guard_reminder_signal",
+        "learning_reminder_signal",
+        "protocol_debt_signal"
+      ],
+      "internal_calls": [
+        "adaptive_mode.compute_mode",
+        "cognitive._trust.detect_sentiment",
+        "build_pre_action_context",
+        "upsert_diary_draft",
+        "save_checkpoint",
+        "capture_context_event"
+      ],
+      "enforcement": {
+        "level": "must",
+        "rules": [
+          {
+            "type": "periodic_by_messages",
+            "threshold": 3
+          }
+        ],
+        "inject_prompt": "Execute nexo_heartbeat with the current session SID and a brief description of what you are doing. Do not produce visible text."
+      },
+      "triggers_after": []
+    },
+    "nexo_stop": {
+      "description": "Cleanly close a session. Removes from active sessions, stops keepalive thread",
+      "category": "session",
+      "source": "server",
+      "requires": [
+        "nexo_startup"
+      ],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "must",
+        "rules": [
+          {
+            "type": "on_session_end"
+          }
+        ],
+        "inject_prompt": "This session is ending. Execute nexo_stop with the current SID. Do not produce visible text.",
+        "session_end_inject_prompt": "This session is ending. Execute nexo_stop with the current SID. Do not produce visible text."
+      },
+      "triggers_after": []
+    },
+    "nexo_smart_startup": {
+      "description": "Pre-load cognitive memories relevant to pending followups, due reminders, and last session topics. Returns up to 10 memories.",
+      "category": "session",
+      "source": "server",
+      "requires": [
+        "nexo_startup"
+      ],
+      "provides": [
+        "preloaded_memories"
+      ],
+      "internal_calls": [
+        "cognitive.search"
+      ],
+      "enforcement": {
+        "level": "must",
+        "rules": [
+          {
+            "type": "after_tool",
+            "watch_tools": [
+              "nexo_startup"
+            ]
+          }
+        ],
+        "inject_prompt": "Execute nexo_smart_startup to pre-load relevant cognitive context. Do not produce visible text."
+      },
+      "triggers_after": []
+    },
+    "nexo_session_diary_read": {
+      "description": "Read recent session diaries for context continuity. Essential at startup to avoid starting cold.",
+      "category": "diary",
+      "source": "plugin:episodic_memory",
+      "requires": [],
+      "provides": [
+        "last_diary",
+        "mental_state",
+        "pending_items",
+        "context_next"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "must",
+        "rules": [
+          {
+            "type": "after_tool",
+            "watch_tools": [
+              "nexo_startup"
+            ]
+          }
+        ],
+        "inject_prompt": "Execute nexo_session_diary_read with last_day=true and brief=true to load context from previous sessions. Do not produce visible text."
+      },
+      "triggers_after": []
+    },
+    "nexo_session_diary_write": {
+      "description": "Write end-of-session diary. OBLIGATORIO. Ingests to cognitive STM. Cleans diary draft. Shows trust score summary.",
+      "category": "diary",
+      "source": "plugin:episodic_memory",
+      "requires": [
+        "nexo_startup"
+      ],
+      "provides": [
+        "diary_id",
+        "trust_summary"
+      ],
+      "internal_calls": [
+        "cognitive.ingest",
+        "delete_diary_draft"
+      ],
+      "enforcement": {
+        "level": "must",
+        "rules": [
+          {
+            "type": "periodic_by_time",
+            "threshold": 15
+          },
+          {
+            "type": "on_session_end"
+          }
+        ],
+        "inject_prompt": "It has been 15 minutes of active session without writing a diary. Execute nexo_session_diary_write with a summary of decisions and work done so far. Do not produce visible text.",
+        "session_end_inject_prompt": "This session is ending. Execute nexo_session_diary_write with a complete summary: decisions made, pending items, context for next session, mental state, and self-critique. Do not produce visible text."
+      },
+      "triggers_after": []
+    },
     "nexo_reminders": {
-      "description": "Check reminders and followups",
+      "description": "Check due reminders and active followups. Returns list of pending items requiring action.",
       "category": "reminders",
       "source": "server",
+      "requires": [],
+      "provides": [
+        "due_reminders",
+        "active_followups"
+      ],
+      "internal_calls": [],
       "enforcement": {
-        "type": "after_tool",
-        "watch_tools": [
-          "nexo_startup"
+        "level": "must",
+        "rules": [
+          {
+            "type": "after_tool",
+            "watch_tools": [
+              "nexo_startup"
+            ]
+          }
         ],
-        "priority": "high",
-        "phase": 1,
-        "inject_prompt": "Execute nexo_reminders with filter='due' and then with filter='followups'. Do not produce any visible text."
-      }
+        "inject_prompt": "Execute nexo_reminders with filter='due' to check pending reminders and followups. Do not produce visible text."
+      },
+      "triggers_after": []
+    },
+    "nexo_status": {
+      "description": "List active sessions, filter by keyword",
+      "category": "session",
+      "source": "server",
+      "requires": [],
+      "provides": [
+        "active_sessions"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_menu": {
+      "description": "Generate operations center menu with alerts and active sessions",
+      "category": "session",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_checkpoint_save": {
+      "description": "Save session checkpoint for compaction continuity. Stores task, goal, files, next step.",
+      "category": "session",
+      "source": "server",
+      "requires": [
+        "nexo_startup"
+      ],
+      "provides": [
+        "checkpoint"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "must",
+        "rules": [
+          {
+            "type": "on_event",
+            "event": "pre_compaction"
+          }
+        ],
+        "inject_prompt": "Context compaction is imminent. Execute nexo_checkpoint_save with current task, goal, and active files. Do not produce visible text."
+      },
+      "triggers_after": []
+    },
+    "nexo_checkpoint_read": {
+      "description": "Read latest session checkpoint. Used after compaction to restore context.",
+      "category": "session",
+      "source": "server",
+      "requires": [
+        "nexo_startup"
+      ],
+      "provides": [
+        "restored_checkpoint"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "must",
+        "rules": [
+          {
+            "type": "on_event",
+            "event": "post_compaction"
+          }
+        ],
+        "inject_prompt": "Context was just compacted. Execute nexo_checkpoint_read to restore session state. Do not produce visible text."
+      },
+      "triggers_after": []
     },
     "nexo_task_open": {
-      "description": "Open a non-trivial task with heartbeat, guard, rules, and Cortex captured as one protocol contract",
+      "description": "Open protocol task. INTERNALLY calls: heartbeat, guard_check (if action+files), cortex evaluation, response confidence, area context lookup, pre-action context. Establishes contracts: must_verify, must_change_log, must_learning_if_corrected, must_write_diary_on_close.",
       "category": "task",
       "source": "plugin:protocol",
+      "requires": [
+        "nexo_startup"
+      ],
+      "provides": [
+        "task_id",
+        "contracts",
+        "guard_summary",
+        "cortex_mode",
+        "response_mode",
+        "area_context"
+      ],
+      "internal_calls": [
+        "nexo_heartbeat",
+        "nexo_guard_check",
+        "evaluate_cortex_state",
+        "evaluate_response_confidence",
+        "build_pre_action_context",
+        "_build_area_context",
+        "_preview_prospective_triggers",
+        "_attention_snapshot"
+      ],
       "enforcement": {
-        "type": "periodic_by_messages",
-        "threshold": 10,
-        "priority": "high",
-        "phase": 2,
-        "inject_prompt": "You have made 10+ tool calls without opening a protocol task. Execute nexo_task_open for the current work. Do not produce any visible text."
-      }
+        "level": "should",
+        "rules": [
+          {
+            "type": "conditional",
+            "threshold": 10,
+            "condition": "more_than_10_tool_calls_without_task_open"
+          }
+        ],
+        "reminder_prompt": "You have made significant tool calls without opening a protocol task. Consider using nexo_task_open to formally track this work. This is a reminder, not an obligation — if the work is trivial, ignore this.",
+        "triggers_after": [
+          "nexo_task_close"
+        ]
+      },
+      "triggers_after": [
+        "nexo_task_close"
+      ]
     },
     "nexo_task_close": {
-      "description": "Close a protocol task with evidence",
+      "description": "Close protocol task with evidence. Validates: evidence (strict mode), change_log (if files changed), learning (if correction), followup. Creates protocol debt for missing artifacts.",
       "category": "task",
       "source": "plugin:protocol",
+      "requires": [
+        "nexo_task_open"
+      ],
+      "provides": [
+        "outcome",
+        "change_log_id",
+        "learning_id",
+        "followup_id",
+        "open_debts"
+      ],
+      "internal_calls": [
+        "log_change",
+        "handle_learning_add",
+        "create_followup",
+        "create_protocol_debt",
+        "set_linked_outcomes_met"
+      ],
       "enforcement": {
-        "type": "on_event",
-        "detection": "done_claimed",
-        "priority": "high",
-        "phase": 2,
-        "inject_prompt": "You claimed work is done but have not closed the protocol task. Execute nexo_task_close with evidence of completion. Do not produce any visible text."
-      }
+        "level": "must",
+        "rules": [
+          {
+            "type": "on_event",
+            "event": "done_claimed_with_open_task"
+          }
+        ],
+        "inject_prompt": "You claimed work is done but have an open protocol task. Execute nexo_task_close with evidence of completion before claiming done. Do not produce visible text."
+      },
+      "triggers_after": []
     },
     "nexo_task_acknowledge_guard": {
-      "description": "Acknowledge blocking guard rules on an open protocol task before proceeding",
+      "description": "Acknowledge blocking guard rules on open task. Resolves unacknowledged_guard_blocking debt.",
       "category": "task",
       "source": "plugin:protocol",
-      "enforcement": null
+      "requires": [
+        "nexo_task_open"
+      ],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_confidence_check": {
+      "description": "Metacognitive response mode: answer/verify/ask/defer. Evaluates stakes, evidence, unknowns.",
+      "category": "protocol",
+      "source": "plugin:protocol",
+      "requires": [],
+      "provides": [
+        "response_mode",
+        "confidence_score"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "should",
+        "rules": [
+          {
+            "type": "on_event",
+            "event": "factual_answer_with_high_stakes"
+          }
+        ],
+        "reminder_prompt": "You are about to give a factual answer on a high-stakes topic. Consider running nexo_confidence_check first to evaluate whether you should answer, verify, ask, or defer. This is a suggestion."
+      },
+      "triggers_after": []
+    },
+    "nexo_protocol_debt_list": {
+      "description": "List open protocol debt records (missing evidence, change_log, learning, etc.)",
+      "category": "protocol",
+      "source": "plugin:protocol",
+      "requires": [],
+      "provides": [
+        "open_debts"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_protocol_debt_resolve": {
+      "description": "Resolve protocol debt records after audit/fix",
+      "category": "protocol",
+      "source": "plugin:protocol",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
     },
     "nexo_guard_check": {
-      "description": "Check learnings relevant to files/area BEFORE editing code",
+      "description": "Check learnings relevant to files/area BEFORE editing code. Surfaces: conditioned learnings, blocking rules, universal rules, DB schemas, cognitive semantic matches, somatic risk scores. Trust modulates rigor (paranoid/fluent).",
       "category": "guard",
       "source": "plugin:guard",
+      "requires": [],
+      "provides": [
+        "learnings",
+        "blocking_rules",
+        "somatic_risk",
+        "schemas"
+      ],
+      "internal_calls": [
+        "cognitive.search",
+        "cognitive.somatic_get_risk"
+      ],
       "enforcement": {
-        "type": "before_tool",
-        "watch_tools": [
-          "Edit",
-          "Write"
+        "level": "must",
+        "rules": [
+          {
+            "type": "before_tool",
+            "watch_tools": [
+              "Edit",
+              "Write"
+            ],
+            "condition": "only_when_editing_code_files_not_already_guarded_by_task_open"
+          }
         ],
-        "priority": "high",
-        "phase": 2,
-        "inject_prompt": "You are about to edit files without running guard_check first. Execute nexo_guard_check for the files you are about to modify. Do not produce any visible text."
-      }
+        "inject_prompt": "You are about to edit files without running guard_check. Execute nexo_guard_check with the files you are about to modify. Do not produce visible text.",
+        "note": "task_open already calls guard_check internally for action tasks with files. This enforcement is for edits OUTSIDE of a protocol task."
+      },
+      "triggers_after": []
     },
     "nexo_guard_file_check": {
-      "description": "Pre-edit check: surfaces learnings and recent changes for files about to be modified",
+      "description": "Pre-edit check for specific files. Surfaces learnings + recent changes.",
       "category": "guard",
       "source": "plugin:guard",
-      "enforcement": null
+      "requires": [],
+      "provides": [
+        "file_learnings",
+        "recent_changes"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
     },
     "nexo_guard_cross_check": {
       "description": "Cross-check audit findings against known learnings to filter false positives",
       "category": "guard",
       "source": "plugin:guard",
-      "enforcement": null
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
     },
     "nexo_guard_log_repetition": {
-      "description": "Log a learning repetition (new learning matches existing one)",
+      "description": "Log when a learning is repeated (same error happens again)",
       "category": "guard",
       "source": "plugin:guard",
-      "enforcement": null
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
     },
     "nexo_guard_stats": {
-      "description": "Get guard system statistics: repetition rate, trends, top problem areas",
+      "description": "Guard system statistics: repetition rate, trends, top problem areas",
       "category": "guard",
       "source": "plugin:guard",
-      "enforcement": null
-    },
-    "nexo_track": {
-      "description": "Track files being edited. Detects conflicts with other sessions",
-      "category": "files",
-      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
       "enforcement": {
-        "type": "before_tool",
-        "watch_tools": [
-          "Edit",
-          "Write"
-        ],
-        "priority": "medium",
-        "phase": 2,
-        "inject_prompt": "You are editing shared files without tracking them. Execute nexo_track for the files you are modifying. Do not produce any visible text."
-      }
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
     },
-    "nexo_untrack": {
-      "description": "Stop tracking files. If no paths given, releases all",
-      "category": "files",
-      "source": "server",
-      "enforcement": null
+    "nexo_somatic_check": {
+      "description": "View somatic risk scores for files/areas — pain memory from past errors",
+      "category": "guard",
+      "source": "plugin:guard",
+      "requires": [],
+      "provides": [
+        "risk_scores"
+      ],
+      "internal_calls": [
+        "cognitive.somatic_get_risk"
+      ],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
     },
-    "nexo_files": {
-      "description": "Show all tracked files across all active sessions with conflict detection",
-      "category": "files",
-      "source": "server",
-      "enforcement": null
+    "nexo_somatic_stats": {
+      "description": "Top 10 riskiest targets + risk distribution",
+      "category": "guard",
+      "source": "plugin:guard",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
     },
     "nexo_learning_add": {
-      "description": "Add a new learning (resolved error, pattern, gotcha)",
+      "description": "Add a reusable learning (error pattern, gotcha, rule). Auto-applies retroactively to recent decisions. Ingests to cognitive STM.",
       "category": "learning",
       "source": "server",
+      "requires": [],
+      "provides": [
+        "learning_id"
+      ],
+      "internal_calls": [
+        "cognitive.ingest",
+        "nexo_learning_apply_retroactively"
+      ],
       "enforcement": {
-        "type": "on_event",
-        "detection": "user_correction_detected",
-        "grace_messages": 3,
-        "priority": "medium",
-        "phase": 2,
-        "inject_prompt": "The user just corrected you but no learning was captured. Execute nexo_learning_add to record this correction as a reusable learning. Do not produce any visible text."
-      }
+        "level": "must",
+        "rules": [
+          {
+            "type": "on_event",
+            "event": "user_correction_without_learning",
+            "grace_messages": 3
+          }
+        ],
+        "inject_prompt": "The user corrected you but no learning was captured. Execute nexo_learning_add to record this correction as a reusable learning. Do not produce visible text.",
+        "note": "heartbeat already includes LEARNING_REMINDER signal. This enforcement adds a hard injection if the model ignores the reminder for 3+ messages."
+      },
+      "triggers_after": []
     },
     "nexo_learning_search": {
-      "description": "Search learnings by keyword",
+      "description": "Search learnings by keyword in title and content",
       "category": "learning",
       "source": "server",
-      "enforcement": null
+      "requires": [],
+      "provides": [
+        "matching_learnings"
+      ],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "should",
+        "rules": [
+          {
+            "type": "periodic_by_messages",
+            "threshold": 20
+          }
+        ],
+        "reminder_prompt": "Reminder: you have not consulted learnings in a while. If your current work touches a known area, consider running nexo_learning_search to check for relevant patterns. This is a suggestion, not an obligation."
+      },
+      "triggers_after": []
     },
     "nexo_learning_list": {
-      "description": "List all learnings, grouped by category",
+      "description": "List all learnings grouped by category",
       "category": "learning",
       "source": "server",
-      "enforcement": null
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
     },
     "nexo_learning_update": {
-      "description": "Update a learning entry",
+      "description": "Update a learning entry (non-empty fields only)",
       "category": "learning",
       "source": "server",
-      "enforcement": null
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
     },
     "nexo_learning_delete": {
       "description": "Delete a learning entry",
       "category": "learning",
       "source": "server",
-      "enforcement": null
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
     },
     "nexo_learning_quality": {
-      "description": "Score learning quality so fragile rules can be strengthened",
+      "description": "Score learning quality (fragile rules, needs strengthening)",
       "category": "learning",
       "source": "server",
-      "enforcement": null
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
     },
     "nexo_learning_apply_retroactively": {
-      "description": "Scan recent decisions and surface those that conflict with a learning's prevention rule",
+      "description": "Scan recent decisions that conflict with a learning's prevention rule",
       "category": "learning",
       "source": "server",
-      "enforcement": null
-    },
-    "nexo_checkpoint_save": {
-      "description": "Save a session checkpoint for auto-compaction continuity",
-      "category": "session",
-      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
       "enforcement": {
-        "type": "on_event",
-        "detection": "pre_compaction",
-        "priority": "high",
-        "phase": 2,
-        "inject_prompt": "Context compaction is imminent. Execute nexo_checkpoint_save to preserve session state. Do not produce any visible text."
-      }
-    },
-    "nexo_checkpoint_read": {
-      "description": "Read the latest session checkpoint",
-      "category": "session",
-      "source": "server",
-      "enforcement": {
-        "type": "on_event",
-        "detection": "post_compaction",
-        "priority": "high",
-        "phase": 2,
-        "inject_prompt": "Context was just compacted. Execute nexo_checkpoint_read to restore session state. Do not produce any visible text."
-      }
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
     },
     "nexo_skill_match": {
-      "description": "Find skills matching a task description",
+      "description": "Find skills matching a task description. Returns matching reusable procedures.",
       "category": "skill",
       "source": "plugin:skills",
+      "requires": [],
+      "provides": [
+        "matching_skills"
+      ],
+      "internal_calls": [
+        "cognitive.search"
+      ],
       "enforcement": {
-        "type": "on_event",
-        "detection": "multi_step_task_detected",
-        "priority": "low",
-        "phase": 2,
-        "inject_prompt": "A multi-step task was detected. Execute nexo_skill_match to check for reusable procedures. Do not produce any visible text."
-      }
+        "level": "should",
+        "rules": [
+          {
+            "type": "on_event",
+            "event": "multi_step_task_detected"
+          }
+        ],
+        "reminder_prompt": "You are starting a multi-step task. Consider running nexo_skill_match to check for reusable procedures. This is a suggestion.",
+        "triggers_after": [
+          "nexo_skill_apply",
+          "nexo_skill_result"
+        ]
+      },
+      "triggers_after": [
+        "nexo_skill_apply",
+        "nexo_skill_result"
+      ]
     },
-    "nexo_confidence_check": {
-      "description": "Decide whether a non-trivial answer should be answered, verified, asked, or deferred",
-      "category": "cortex",
-      "source": "plugin:protocol",
+    "nexo_skill_result": {
+      "description": "Record the result of using a skill. Updates trust and promotions.",
+      "category": "skill",
+      "source": "plugin:skills",
+      "requires": [
+        "nexo_skill_match"
+      ],
+      "provides": [],
+      "internal_calls": [],
       "enforcement": {
-        "type": "on_event",
-        "detection": "factual_answer_important",
-        "priority": "low",
-        "phase": 2,
-        "inject_prompt": "You are about to give an important factual answer. Execute nexo_confidence_check first. Do not produce any visible text."
-      }
-    },
-    "nexo_status": {
-      "description": "List active sessions",
-      "category": "session",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_menu": {
-      "description": "Generate the NEXO operations center menu",
-      "category": "session",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_tool_explain": {
-      "description": "Explain a live NEXO tool/capability from the generated system catalog",
-      "category": "system",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_system_catalog": {
-      "description": "Read NEXO's live system catalog",
-      "category": "system",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_doctor": {
-      "description": "Unified diagnostic report for boot/runtime/deep health",
-      "category": "system",
-      "source": "plugin:doctor",
-      "enforcement": null
-    },
-    "nexo_update": {
-      "description": "Pull latest NEXO code, backup DBs, run migrations, verify",
-      "category": "system",
-      "source": "plugin:update",
-      "enforcement": null
-    },
-    "nexo_reindex": {
-      "description": "Force full rebuild of the FTS5 search index",
-      "category": "index",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_index_add_dir": {
-      "description": "Register a new directory for FTS5 search indexing",
-      "category": "index",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_index_remove_dir": {
-      "description": "Remove a directory from FTS5 indexing",
-      "category": "index",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_index_dirs": {
-      "description": "List all directories being indexed by FTS5",
-      "category": "index",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_context_packet": {
-      "description": "Build a context packet for subagent injection",
-      "category": "context",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_recent_context_capture": {
-      "description": "Capture/update a recent 24h context item",
-      "category": "context",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_recent_context": {
-      "description": "Read recent hot context and continuity events",
-      "category": "context",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_pre_action_context": {
-      "description": "Build the 24h recent-context bundle that should be reviewed before acting",
-      "category": "context",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_recent_context_resolve": {
-      "description": "Resolve a recent hot-context item",
-      "category": "context",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_hot_context_list": {
-      "description": "List hot-context items currently alive",
-      "category": "context",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_session_portable_context": {
-      "description": "Build a portable handoff packet for another client/runtime",
-      "category": "session",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_session_export_bundle": {
-      "description": "Export a machine-readable session bundle for cross-client handoff",
-      "category": "session",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_transcript_recent": {
-      "description": "List recent Claude Code / Codex transcripts visible to NEXO",
-      "category": "transcript",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_transcript_search": {
-      "description": "Search recent transcripts",
-      "category": "transcript",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_transcript_read": {
-      "description": "Read a full transcript by session id or path",
-      "category": "transcript",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_send": {
-      "description": "Send a fire-and-forget message to another session or broadcast",
-      "category": "inter_session",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_ask": {
-      "description": "Ask a question to another session",
-      "category": "inter_session",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_answer": {
-      "description": "Answer a pending question from another session",
-      "category": "inter_session",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_check_answer": {
-      "description": "Check if a question has been answered",
-      "category": "inter_session",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_reminder_create": {
-      "description": "Create a new reminder for the user",
-      "category": "reminders",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_reminder_get": {
-      "description": "Read a reminder with its history",
-      "category": "reminders",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_reminder_update": {
-      "description": "Update fields of an existing reminder",
-      "category": "reminders",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_reminder_complete": {
-      "description": "Mark a reminder as completed",
-      "category": "reminders",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_reminder_note": {
-      "description": "Append a note to reminder history",
-      "category": "reminders",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_reminder_restore": {
-      "description": "Restore a soft-deleted reminder",
-      "category": "reminders",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_reminder_delete": {
-      "description": "Soft-delete a reminder",
-      "category": "reminders",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_followup_create": {
-      "description": "Create a new NEXO followup (autonomous task)",
-      "category": "followups",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_followup_get": {
-      "description": "Read a followup with its history",
-      "category": "followups",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_followup_update": {
-      "description": "Update fields of an existing followup",
-      "category": "followups",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_followup_complete": {
-      "description": "Mark a followup as completed",
-      "category": "followups",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_followup_note": {
-      "description": "Append a note to followup history",
-      "category": "followups",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_followup_restore": {
-      "description": "Restore a soft-deleted followup",
-      "category": "followups",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_followup_delete": {
-      "description": "Soft-delete a followup",
-      "category": "followups",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_hook_runs": {
-      "description": "List recent hook lifecycle runs and per-hook health summary",
-      "category": "system",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_credential_get": {
-      "description": "Get credential value(s) for a service",
-      "category": "credentials",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_credential_create": {
-      "description": "Store a new credential",
-      "category": "credentials",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_credential_update": {
-      "description": "Update a credential's value and/or notes",
-      "category": "credentials",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_credential_delete": {
-      "description": "Delete credential(s)",
-      "category": "credentials",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_credential_list": {
-      "description": "List credentials (names and notes only, no values)",
-      "category": "credentials",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_task_log": {
-      "description": "Record that an operational task was executed",
-      "category": "task",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_task_list": {
-      "description": "Show execution history for operational tasks",
-      "category": "task",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_task_frequency": {
-      "description": "Check which operational tasks are overdue based on their frequency",
-      "category": "task",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_plugin_load": {
-      "description": "Load or reload a plugin",
-      "category": "plugin",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_plugin_list": {
-      "description": "List all loaded plugins and their tools",
-      "category": "plugin",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_plugin_remove": {
-      "description": "Unregister a plugin's tools from MCP",
-      "category": "plugin",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_drive_signals": {
-      "description": "List autonomous drive/curiosity signals",
-      "category": "drive",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_drive_reinforce": {
-      "description": "Reinforce a drive signal with a new observation",
-      "category": "drive",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_drive_act": {
-      "description": "Mark a drive signal as investigated with an outcome",
-      "category": "drive",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_drive_dismiss": {
-      "description": "Dismiss a drive signal",
-      "category": "drive",
-      "source": "server",
-      "enforcement": null
-    },
-    "nexo_cognitive_retrieve": {
-      "description": "RAG query over cognitive memory (STM+LTM)",
-      "category": "cognitive",
-      "source": "plugin:cognitive_memory",
-      "enforcement": null
-    },
-    "nexo_cognitive_stats": {
-      "description": "Cognitive memory system metrics",
-      "category": "cognitive",
-      "source": "plugin:cognitive_memory",
-      "enforcement": null
-    },
-    "nexo_cognitive_inspect": {
-      "description": "Inspect a specific memory by ID (debug)",
-      "category": "cognitive",
-      "source": "plugin:cognitive_memory",
-      "enforcement": null
-    },
-    "nexo_cognitive_metrics": {
-      "description": "Performance metrics: retrieval relevance, repeat error rate",
-      "category": "cognitive",
-      "source": "plugin:cognitive_memory",
-      "enforcement": null
-    },
-    "nexo_cognitive_dissonance": {
-      "description": "Detect conflicts between a new instruction and established LTM memories",
-      "category": "cognitive",
-      "source": "plugin:cognitive_memory",
-      "enforcement": null
-    },
-    "nexo_cognitive_resolve": {
-      "description": "Resolve a cognitive dissonance",
-      "category": "cognitive",
-      "source": "plugin:cognitive_memory",
-      "enforcement": null
-    },
-    "nexo_cognitive_sentiment": {
-      "description": "Detect user's sentiment and get tone guidance",
-      "category": "cognitive",
-      "source": "plugin:cognitive_memory",
-      "enforcement": null
-    },
-    "nexo_cognitive_trust": {
-      "description": "View or adjust trust score (0-100)",
-      "category": "cognitive",
-      "source": "plugin:cognitive_memory",
-      "enforcement": null
-    },
-    "nexo_cognitive_pin": {
-      "description": "Pin a memory — never decays, boosted in search results",
-      "category": "cognitive",
-      "source": "plugin:cognitive_memory",
-      "enforcement": null
-    },
-    "nexo_cognitive_snooze": {
-      "description": "Snooze a memory — hidden from searches until a date",
-      "category": "cognitive",
-      "source": "plugin:cognitive_memory",
-      "enforcement": null
-    },
-    "nexo_cognitive_archive": {
-      "description": "Archive a memory — excluded from searches, can be restored",
-      "category": "cognitive",
-      "source": "plugin:cognitive_memory",
-      "enforcement": null
-    },
-    "nexo_cognitive_restore": {
-      "description": "Restore a memory to active state",
-      "category": "cognitive",
-      "source": "plugin:cognitive_memory",
-      "enforcement": null
-    },
-    "nexo_cognitive_quarantine_list": {
-      "description": "List quarantine queue items awaiting promotion to STM",
-      "category": "cognitive",
-      "source": "plugin:cognitive_memory",
-      "enforcement": null
-    },
-    "nexo_cognitive_quarantine_promote": {
-      "description": "Manually promote a quarantine item to STM",
-      "category": "cognitive",
-      "source": "plugin:cognitive_memory",
-      "enforcement": null
-    },
-    "nexo_cognitive_quarantine_reject": {
-      "description": "Manually reject a quarantine item",
-      "category": "cognitive",
-      "source": "plugin:cognitive_memory",
-      "enforcement": null
-    },
-    "nexo_cognitive_quarantine_process": {
-      "description": "Run quarantine promotion cycle",
-      "category": "cognitive",
-      "source": "plugin:cognitive_memory",
-      "enforcement": null
-    },
-    "nexo_cognitive_trigger_create": {
-      "description": "Create a prospective memory trigger",
-      "category": "cognitive",
-      "source": "plugin:cognitive_memory",
-      "enforcement": null
-    },
-    "nexo_cognitive_trigger_list": {
-      "description": "List prospective triggers by status",
-      "category": "cognitive",
-      "source": "plugin:cognitive_memory",
-      "enforcement": null
-    },
-    "nexo_cognitive_trigger_preview": {
-      "description": "Preview anticipatory trigger matches without firing",
-      "category": "cognitive",
-      "source": "plugin:cognitive_memory",
-      "enforcement": null
-    },
-    "nexo_cognitive_trigger_check": {
-      "description": "Check text against armed triggers",
-      "category": "cognitive",
-      "source": "plugin:cognitive_memory",
-      "enforcement": null
-    },
-    "nexo_cognitive_trigger_delete": {
-      "description": "Delete a prospective trigger by ID",
-      "category": "cognitive",
-      "source": "plugin:cognitive_memory",
-      "enforcement": null
-    },
-    "nexo_cognitive_trigger_rearm": {
-      "description": "Re-arm a fired trigger so it can fire again",
-      "category": "cognitive",
-      "source": "plugin:cognitive_memory",
-      "enforcement": null
-    },
-    "nexo_cortex_check": {
-      "description": "Cognitive pre-action check",
-      "category": "cortex",
-      "source": "plugin:cortex",
-      "enforcement": null
-    },
-    "nexo_cortex_decide": {
-      "description": "Evaluate 2+ alternatives for a high-impact task",
-      "category": "cortex",
-      "source": "plugin:cortex",
-      "enforcement": null
-    },
-    "nexo_cortex_override": {
-      "description": "Override a stored Cortex recommendation",
-      "category": "cortex",
-      "source": "plugin:cortex",
-      "enforcement": null
-    },
-    "nexo_cortex_quality": {
-      "description": "Summarise recommendation accept rate, override rate",
-      "category": "cortex",
-      "source": "plugin:cortex",
-      "enforcement": null
-    },
-    "nexo_cortex_review": {
-      "description": "Review persisted Cortex alternative evaluations",
-      "category": "cortex",
-      "source": "plugin:cortex",
-      "enforcement": null
-    },
-    "nexo_cortex_stats": {
-      "description": "View Cortex activation statistics",
-      "category": "cortex",
-      "source": "plugin:cortex",
-      "enforcement": null
-    },
-    "nexo_decision_log": {
-      "description": "Log a non-trivial decision with reasoning, alternatives, and evidence",
-      "category": "decision",
-      "source": "plugin:cortex",
-      "enforcement": null
-    },
-    "nexo_decision_outcome": {
-      "description": "Record what actually happened after a past decision",
-      "category": "decision",
-      "source": "plugin:cortex",
-      "enforcement": null
-    },
-    "nexo_decision_search": {
-      "description": "Search past decisions",
-      "category": "decision",
-      "source": "plugin:cortex",
-      "enforcement": null
-    },
-    "nexo_recall": {
-      "description": "Search across ALL NEXO memory",
-      "category": "memory",
-      "source": "plugin:simple_api",
-      "enforcement": null
-    },
-    "nexo_remember": {
-      "description": "High-level memory write: store one durable memory item",
-      "category": "memory",
-      "source": "plugin:simple_api",
-      "enforcement": null
-    },
-    "nexo_memory_recall": {
-      "description": "High-level memory lookup wrapper around nexo_recall",
-      "category": "memory",
-      "source": "plugin:memory_export",
-      "enforcement": null
-    },
-    "nexo_memory_export": {
-      "description": "Export a readable markdown snapshot of key NEXO memory layers",
-      "category": "memory",
-      "source": "plugin:memory_export",
-      "enforcement": null
-    },
-    "nexo_memory_backend_status": {
-      "description": "Show the active memory backend contract and registered backend list",
-      "category": "memory",
-      "source": "plugin:memory_export",
-      "enforcement": null
-    },
-    "nexo_memory_review_queue": {
-      "description": "Show decisions and learnings that are due for review",
-      "category": "memory",
-      "source": "plugin:memory_export",
-      "enforcement": null
-    },
-    "nexo_consolidate": {
-      "description": "Run NEXO memory consolidation explicitly",
-      "category": "memory",
-      "source": "plugin:episodic_memory",
-      "enforcement": null
-    },
-    "nexo_diary_archive_read": {
-      "description": "Read a single archived diary entry in full detail",
-      "category": "diary",
-      "source": "plugin:episodic_memory",
-      "enforcement": null
-    },
-    "nexo_diary_archive_search": {
-      "description": "Search the permanent diary archive (subconscious memory)",
-      "category": "diary",
-      "source": "plugin:episodic_memory",
-      "enforcement": null
-    },
-    "nexo_entity_create": {
-      "description": "Create a new entity (person, service, URL)",
-      "category": "entity",
-      "source": "plugin:entities",
-      "enforcement": null
-    },
-    "nexo_entity_delete": {
-      "description": "Delete an entity",
-      "category": "entity",
-      "source": "plugin:entities",
-      "enforcement": null
-    },
-    "nexo_entity_list": {
-      "description": "List all entities grouped by type",
-      "category": "entity",
-      "source": "plugin:entities",
-      "enforcement": null
-    },
-    "nexo_entity_search": {
-      "description": "Search entities by name, value, or type",
-      "category": "entity",
-      "source": "plugin:entities",
-      "enforcement": null
-    },
-    "nexo_entity_update": {
-      "description": "Update an entity's fields",
-      "category": "entity",
-      "source": "plugin:entities",
-      "enforcement": null
-    },
-    "nexo_claim_add": {
-      "description": "Add a structured claim with provenance, evidence, and freshness",
-      "category": "claims",
-      "source": "plugin:claims_tools",
-      "enforcement": null
-    },
-    "nexo_claim_get": {
-      "description": "Get a single claim with its links and freshness metadata",
-      "category": "claims",
-      "source": "plugin:claims_tools",
-      "enforcement": null
-    },
-    "nexo_claim_link": {
-      "description": "Link two claims",
-      "category": "claims",
-      "source": "plugin:claims_tools",
-      "enforcement": null
-    },
-    "nexo_claim_lint": {
-      "description": "Audit stale, weak, contradictory, or evidence-poor claims",
-      "category": "claims",
-      "source": "plugin:claims_tools",
-      "enforcement": null
-    },
-    "nexo_claim_search": {
-      "description": "Search claims by meaning or filters",
-      "category": "claims",
-      "source": "plugin:claims_tools",
-      "enforcement": null
-    },
-    "nexo_claim_stats": {
-      "description": "Claim graph statistics and attention counts",
-      "category": "claims",
-      "source": "plugin:claims_tools",
-      "enforcement": null
-    },
-    "nexo_claim_verify": {
-      "description": "Verify or reclassify a claim state",
-      "category": "claims",
-      "source": "plugin:claims_tools",
-      "enforcement": null
-    },
-    "nexo_kg_query": {
-      "description": "Query knowledge graph — traverse from a node",
-      "category": "knowledge_graph",
-      "source": "plugin:knowledge_graph_tools",
-      "enforcement": null
-    },
-    "nexo_kg_neighbors": {
-      "description": "Get direct neighbors of a node",
-      "category": "knowledge_graph",
-      "source": "plugin:knowledge_graph_tools",
-      "enforcement": null
-    },
-    "nexo_kg_path": {
-      "description": "Find shortest path between two nodes",
-      "category": "knowledge_graph",
-      "source": "plugin:knowledge_graph_tools",
-      "enforcement": null
-    },
-    "nexo_kg_stats": {
-      "description": "Knowledge graph statistics",
-      "category": "knowledge_graph",
-      "source": "plugin:knowledge_graph_tools",
-      "enforcement": null
-    },
-    "nexo_kg_export": {
-      "description": "Export the bitemporal KG to JSON-LD or GraphML",
-      "category": "knowledge_graph",
-      "source": "plugin:knowledge_graph_tools",
-      "enforcement": null
-    },
-    "nexo_media_memory_add": {
-      "description": "Store a non-text artifact as first-class media memory metadata",
-      "category": "media",
-      "source": "plugin:media_memory_tools",
-      "enforcement": null
-    },
-    "nexo_media_memory_get": {
-      "description": "Inspect one stored media memory",
-      "category": "media",
-      "source": "plugin:media_memory_tools",
-      "enforcement": null
-    },
-    "nexo_media_memory_search": {
-      "description": "Search media memories by text, type, tag, or domain",
-      "category": "media",
-      "source": "plugin:media_memory_tools",
-      "enforcement": null
-    },
-    "nexo_media_memory_stats": {
-      "description": "Stats for the multimodal/media memory layer",
-      "category": "media",
-      "source": "plugin:media_memory_tools",
-      "enforcement": null
+        "level": "should",
+        "rules": [
+          {
+            "type": "after_tool",
+            "watch_tools": [
+              "nexo_skill_apply"
+            ]
+          }
+        ],
+        "reminder_prompt": "You used a skill but haven't recorded the result. Consider running nexo_skill_result to record success/failure for skill improvement tracking."
+      },
+      "triggers_after": []
     },
     "nexo_skill_apply": {
-      "description": "Apply a skill in guide, execute, or hybrid mode",
+      "description": "Apply a skill in guide/execute/hybrid mode",
       "category": "skill",
       "source": "plugin:skills",
-      "enforcement": null
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
     },
     "nexo_skill_approve": {
-      "description": "Approve a local/remote executable skill so it can run",
+      "description": "Approve an executable skill so it can run",
       "category": "skill",
       "source": "plugin:skills",
-      "enforcement": null
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
     },
     "nexo_skill_compose": {
-      "description": "Compose multiple existing skills into one higher-level reusable skill",
+      "description": "Compose multiple skills into one higher-level skill",
       "category": "skill",
       "source": "plugin:skills",
-      "enforcement": null
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
     },
     "nexo_skill_compose_candidates": {
-      "description": "Voyager-style detection: list skill pairs that fired together frequently",
+      "description": "Detect skill pairs that fire together frequently",
       "category": "skill",
       "source": "plugin:skills",
-      "enforcement": null
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
     },
     "nexo_skill_create": {
-      "description": "Create a new skill with guide/execute/hybrid metadata",
+      "description": "Create a new skill with metadata and triggers",
       "category": "skill",
       "source": "plugin:skills",
-      "enforcement": null
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
     },
     "nexo_skill_evolution_candidates": {
-      "description": "Return candidates for skill improvement or text-to-script evolution",
+      "description": "Return candidates for skill improvement",
       "category": "skill",
       "source": "plugin:skills",
-      "enforcement": null
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
     },
     "nexo_skill_featured": {
-      "description": "Return featured published/stable skills for startup discovery",
+      "description": "Return featured published/stable skills",
       "category": "skill",
       "source": "plugin:skills",
-      "enforcement": null
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
     },
     "nexo_skill_get": {
       "description": "Get a skill's full details",
       "category": "skill",
       "source": "plugin:skills",
-      "enforcement": null
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
     },
     "nexo_skill_list": {
-      "description": "List skills, optionally filtered by level, tag, or source",
+      "description": "List skills filtered by level/tag/source",
       "category": "skill",
       "source": "plugin:skills",
-      "enforcement": null
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
     },
     "nexo_skill_merge": {
       "description": "Merge two similar skills into one",
       "category": "skill",
       "source": "plugin:skills",
-      "enforcement": null
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
     },
     "nexo_skill_outcome_review": {
-      "description": "Review whether a skill should be promoted, deprioritized, or retired",
+      "description": "Review skill promotion/retirement based on outcomes",
       "category": "skill",
       "source": "plugin:skills",
-      "enforcement": null
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
     },
     "nexo_skill_promote": {
-      "description": "Promote a skill to a stronger published/stable lifecycle stage",
+      "description": "Promote a skill to stronger lifecycle stage",
       "category": "skill",
       "source": "plugin:skills",
-      "enforcement": null
-    },
-    "nexo_skill_result": {
-      "description": "Record the result of using a skill",
-      "category": "skill",
-      "source": "plugin:skills",
-      "enforcement": null
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
     },
     "nexo_skill_retire": {
-      "description": "Retire a skill cleanly so it leaves the active lifecycle",
+      "description": "Retire a skill cleanly",
       "category": "skill",
       "source": "plugin:skills",
-      "enforcement": null
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
     },
     "nexo_skill_seed_from_outcome_pattern": {
-      "description": "Materialize a draft skill candidate from a repeated successful outcome pattern",
+      "description": "Create draft skill from repeated outcome pattern",
       "category": "skill",
       "source": "plugin:skills",
-      "enforcement": null
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
     },
     "nexo_skill_stats": {
-      "description": "Show aggregate skill statistics",
+      "description": "Aggregate skill statistics",
       "category": "skill",
       "source": "plugin:skills",
-      "enforcement": null
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
     },
     "nexo_skill_sync": {
       "description": "Sync filesystem skill definitions into SQLite",
       "category": "skill",
       "source": "plugin:skills",
-      "enforcement": null
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
     },
     "nexo_skill_test": {
-      "description": "Test a skill through the canonical runtime in dry-run mode",
+      "description": "Test a skill in dry-run mode",
       "category": "skill",
       "source": "plugin:skills",
-      "enforcement": null
-    },
-    "nexo_adaptive_mode": {
-      "description": "Get or compute adaptive personality mode (FLOW/NORMAL/TENSION)",
-      "category": "adaptive",
-      "source": "plugin:adaptive_mode",
-      "enforcement": null
-    },
-    "nexo_adaptive_decay": {
-      "description": "Trigger inter-session tension decay",
-      "category": "adaptive",
-      "source": "plugin:adaptive_mode",
-      "enforcement": null
-    },
-    "nexo_adaptive_history": {
-      "description": "View recent adaptive mode transitions and signal history",
-      "category": "adaptive",
-      "source": "plugin:adaptive_mode",
-      "enforcement": null
-    },
-    "nexo_adaptive_override": {
-      "description": "Manual override: force FLOW/NORMAL/TENSION",
-      "category": "adaptive",
-      "source": "plugin:adaptive_mode",
-      "enforcement": null
-    },
-    "nexo_adaptive_reset": {
-      "description": "Reset adaptive state for new session",
-      "category": "adaptive",
-      "source": "plugin:adaptive_mode",
-      "enforcement": null
-    },
-    "nexo_adaptive_weights": {
-      "description": "View adaptive weights — static vs learned, training stats",
-      "category": "adaptive",
-      "source": "plugin:adaptive_mode",
-      "enforcement": null
-    },
-    "nexo_agent_create": {
-      "description": "Register a new agent",
-      "category": "agent",
-      "source": "plugin:agents",
-      "enforcement": null
-    },
-    "nexo_agent_delete": {
-      "description": "Remove an agent from registry",
-      "category": "agent",
-      "source": "plugin:agents",
-      "enforcement": null
-    },
-    "nexo_agent_get": {
-      "description": "Get an agent's full profile",
-      "category": "agent",
-      "source": "plugin:agents",
-      "enforcement": null
-    },
-    "nexo_agent_list": {
-      "description": "List all registered agents",
-      "category": "agent",
-      "source": "plugin:agents",
-      "enforcement": null
-    },
-    "nexo_agent_update": {
-      "description": "Update agent fields",
-      "category": "agent",
-      "source": "plugin:agents",
-      "enforcement": null
-    },
-    "nexo_artifact_create": {
-      "description": "Register a new artifact (service, dashboard, script, API, etc)",
-      "category": "artifact",
-      "source": "plugin:artifact_registry",
-      "enforcement": null
-    },
-    "nexo_artifact_delete": {
-      "description": "Delete an artifact from the registry",
-      "category": "artifact",
-      "source": "plugin:artifact_registry",
-      "enforcement": null
-    },
-    "nexo_artifact_find": {
-      "description": "Find artifacts using the retrieval ladder",
-      "category": "artifact",
-      "source": "plugin:artifact_registry",
-      "enforcement": null
-    },
-    "nexo_artifact_learn_alias": {
-      "description": "Learn a new alias from user language",
-      "category": "artifact",
-      "source": "plugin:artifact_registry",
-      "enforcement": null
-    },
-    "nexo_artifact_list": {
-      "description": "List all registered artifacts",
-      "category": "artifact",
-      "source": "plugin:artifact_registry",
-      "enforcement": null
-    },
-    "nexo_artifact_update": {
-      "description": "Update an existing artifact",
-      "category": "artifact",
-      "source": "plugin:artifact_registry",
-      "enforcement": null
-    },
-    "nexo_auto_flush_recent": {
-      "description": "Show recent structured auto-flush records written before compaction",
-      "category": "system",
-      "source": "plugin:backup",
-      "enforcement": null
-    },
-    "nexo_auto_flush_stats": {
-      "description": "Stats for pre-compaction auto-flush activity",
-      "category": "system",
-      "source": "plugin:backup",
-      "enforcement": null
-    },
-    "nexo_backup_list": {
-      "description": "List available backups with dates and sizes",
-      "category": "backup",
-      "source": "plugin:backup",
-      "enforcement": null
-    },
-    "nexo_backup_now": {
-      "description": "Create an immediate backup of the NEXO database",
-      "category": "backup",
-      "source": "plugin:backup",
-      "enforcement": null
-    },
-    "nexo_backup_restore": {
-      "description": "Restore database from a backup (DESTRUCTIVE)",
-      "category": "backup",
-      "source": "plugin:backup",
-      "enforcement": null
-    },
-    "nexo_change_commit": {
-      "description": "Link a change log entry to its git commit hash",
-      "category": "change_log",
-      "source": "plugin:core_rules",
-      "enforcement": null
-    },
-    "nexo_change_log": {
-      "description": "Log a code/config change with full context",
-      "category": "change_log",
-      "source": "plugin:core_rules",
-      "enforcement": null
-    },
-    "nexo_change_search": {
-      "description": "Search past code changes",
-      "category": "change_log",
-      "source": "plugin:core_rules",
-      "enforcement": null
-    },
-    "nexo_rules_check": {
-      "description": "Get applicable core rules for an area before acting",
-      "category": "rules",
-      "source": "plugin:core_rules",
-      "enforcement": null
-    },
-    "nexo_rules_list": {
-      "description": "List all core rules with status, grouped by category",
-      "category": "rules",
-      "source": "plugin:core_rules",
-      "enforcement": null
-    },
-    "nexo_rules_migrate": {
-      "description": "Sync rules from JSON definition to database",
-      "category": "rules",
-      "source": "plugin:core_rules",
-      "enforcement": null
-    },
-    "nexo_evolution_approve": {
-      "description": "Approve a pending Evolution proposal (user only)",
-      "category": "evolution",
-      "source": "plugin:evolution",
-      "enforcement": null
-    },
-    "nexo_evolution_history": {
-      "description": "Show past evolution cycles, proposals, and their outcomes",
-      "category": "evolution",
-      "source": "plugin:evolution",
-      "enforcement": null
-    },
-    "nexo_evolution_propose": {
-      "description": "Manually trigger an evolution analysis outside weekly schedule",
-      "category": "evolution",
-      "source": "plugin:evolution",
-      "enforcement": null
-    },
-    "nexo_evolution_reject": {
-      "description": "Reject a pending Evolution proposal with reason",
-      "category": "evolution",
-      "source": "plugin:evolution",
-      "enforcement": null
-    },
-    "nexo_evolution_status": {
-      "description": "Show current NEXO dimension scores",
-      "category": "evolution",
-      "source": "plugin:evolution",
-      "enforcement": null
-    },
-    "nexo_goal_open": {
-      "description": "Open a durable goal so multi-session objectives stay explicit",
-      "category": "goal",
-      "source": "plugin:goal_engine",
-      "enforcement": null
-    },
-    "nexo_goal_get": {
-      "description": "Read a durable goal and optionally include linked workflow runs",
-      "category": "goal",
-      "source": "plugin:goal_engine",
-      "enforcement": null
-    },
-    "nexo_goal_list": {
-      "description": "List durable goals",
-      "category": "goal",
-      "source": "plugin:goal_engine",
-      "enforcement": null
-    },
-    "nexo_goal_update": {
-      "description": "Update a durable goal with state and next action",
-      "category": "goal",
-      "source": "plugin:goal_engine",
-      "enforcement": null
-    },
-    "nexo_goal_engine_status": {
-      "description": "Report Goal Engine telemetry readiness",
-      "category": "goal",
-      "source": "plugin:goal_engine",
-      "enforcement": null
-    },
-    "nexo_goal_profile_get": {
-      "description": "Get or resolve the active Goal Engine profile for a context",
-      "category": "goal",
-      "source": "plugin:goal_engine",
-      "enforcement": null
-    },
-    "nexo_goal_profile_list": {
-      "description": "List Goal Engine profiles currently available",
-      "category": "goal",
-      "source": "plugin:goal_engine",
-      "enforcement": null
-    },
-    "nexo_goal_profile_set": {
-      "description": "Create or update a Goal Engine profile",
-      "category": "goal",
-      "source": "plugin:goal_engine",
-      "enforcement": null
-    },
-    "nexo_impact_score": {
-      "description": "Compute and persist Impact Scoring for a followup",
-      "category": "impact",
-      "source": "plugin:impact",
-      "enforcement": null
-    },
-    "nexo_outcome_register": {
-      "description": "Register an expected action outcome with metric source and deadline",
-      "category": "outcome",
-      "source": "plugin:outcomes",
-      "enforcement": null
-    },
-    "nexo_outcome_check": {
-      "description": "Check a tracked outcome now using linked state or supplied evidence",
-      "category": "outcome",
-      "source": "plugin:outcomes",
-      "enforcement": null
-    },
-    "nexo_outcome_list": {
-      "description": "List tracked outcomes filtered by status and/or action type",
-      "category": "outcome",
-      "source": "plugin:outcomes",
-      "enforcement": null
-    },
-    "nexo_outcome_cancel": {
-      "description": "Cancel an outcome so it stops blocking reviews",
-      "category": "outcome",
-      "source": "plugin:outcomes",
-      "enforcement": null
-    },
-    "nexo_outcome_pattern_candidates": {
-      "description": "List repeated resolved outcome patterns consistent enough to become reusable knowledge",
-      "category": "outcome",
-      "source": "plugin:outcomes",
-      "enforcement": null
-    },
-    "nexo_outcome_pattern_capture": {
-      "description": "Capture one repeated outcome pattern as a reusable artifact",
-      "category": "outcome",
-      "source": "plugin:outcomes",
-      "enforcement": null
-    },
-    "nexo_personal_plugin_create": {
-      "description": "Create a persistent personal MCP plugin scaffold",
-      "category": "personal",
-      "source": "plugin:personal_plugins",
-      "enforcement": null
-    },
-    "nexo_personal_script_create": {
-      "description": "Create a new personal script, register it, and optionally schedule it",
-      "category": "personal",
-      "source": "plugin:personal_scripts",
-      "enforcement": null
-    },
-    "nexo_personal_script_remove": {
-      "description": "Remove a personal script from the registry",
-      "category": "personal",
-      "source": "plugin:personal_scripts",
-      "enforcement": null
-    },
-    "nexo_personal_script_schedules": {
-      "description": "List registered personal script schedules",
-      "category": "personal",
-      "source": "plugin:personal_scripts",
-      "enforcement": null
-    },
-    "nexo_personal_script_unschedule": {
-      "description": "Remove all personal schedules attached to a script",
-      "category": "personal",
-      "source": "plugin:personal_scripts",
-      "enforcement": null
-    },
-    "nexo_personal_scripts_classify": {
-      "description": "Classify files in NEXO_HOME/scripts into personal, core, ignored",
-      "category": "personal",
-      "source": "plugin:personal_scripts",
-      "enforcement": null
-    },
-    "nexo_personal_scripts_ensure_schedules": {
-      "description": "Create or repair personal script schedules declared in inline metadata",
-      "category": "personal",
-      "source": "plugin:personal_scripts",
-      "enforcement": null
-    },
-    "nexo_personal_scripts_list": {
-      "description": "List personal scripts known to NEXO",
-      "category": "personal",
-      "source": "plugin:personal_scripts",
-      "enforcement": null
-    },
-    "nexo_personal_scripts_reconcile": {
-      "description": "Classify, sync, and ensure declared personal schedules",
-      "category": "personal",
-      "source": "plugin:personal_scripts",
-      "enforcement": null
-    },
-    "nexo_personal_scripts_sync": {
-      "description": "Sync personal scripts and personal cron schedules from filesystem",
-      "category": "personal",
-      "source": "plugin:personal_scripts",
-      "enforcement": null
-    },
-    "nexo_preference_get": {
-      "description": "Get a specific preference value",
-      "category": "preferences",
-      "source": "plugin:preferences",
-      "enforcement": null
-    },
-    "nexo_preference_set": {
-      "description": "Set a preference (creates or updates)",
-      "category": "preferences",
-      "source": "plugin:preferences",
-      "enforcement": null
-    },
-    "nexo_preference_list": {
-      "description": "List all preferences grouped by category",
-      "category": "preferences",
-      "source": "plugin:preferences",
-      "enforcement": null
-    },
-    "nexo_preference_delete": {
-      "description": "Delete a preference",
-      "category": "preferences",
-      "source": "plugin:preferences",
-      "enforcement": null
-    },
-    "nexo_protocol_debt_list": {
-      "description": "List protocol debt records",
-      "category": "protocol",
-      "source": "plugin:protocol",
-      "enforcement": null
-    },
-    "nexo_protocol_debt_resolve": {
-      "description": "Resolve protocol debt records",
-      "category": "protocol",
-      "source": "plugin:protocol",
-      "enforcement": null
-    },
-    "nexo_schedule_add": {
-      "description": "Add a new personal cron job",
-      "category": "schedule",
-      "source": "plugin:schedule",
-      "enforcement": null
-    },
-    "nexo_schedule_status": {
-      "description": "Show cron execution status: what ran overnight, what failed",
-      "category": "schedule",
-      "source": "plugin:schedule",
-      "enforcement": null
-    },
-    "nexo_somatic_check": {
-      "description": "View somatic risk scores for files/areas — pain memory",
-      "category": "somatic",
-      "source": "plugin:guard",
-      "enforcement": null
-    },
-    "nexo_somatic_stats": {
-      "description": "Top 10 riskiest targets + risk distribution",
-      "category": "somatic",
-      "source": "plugin:guard",
-      "enforcement": null
-    },
-    "nexo_state_watcher_create": {
-      "description": "Create a persistent state watcher for drift detection",
-      "category": "watcher",
-      "source": "plugin:state_watchers",
-      "enforcement": null
-    },
-    "nexo_state_watcher_list": {
-      "description": "List persistent state watchers",
-      "category": "watcher",
-      "source": "plugin:state_watchers",
-      "enforcement": null
-    },
-    "nexo_state_watcher_run": {
-      "description": "Run persistent state watchers and return health summary",
-      "category": "watcher",
-      "source": "plugin:state_watchers",
-      "enforcement": null
-    },
-    "nexo_state_watcher_update": {
-      "description": "Update an existing persistent state watcher",
-      "category": "watcher",
-      "source": "plugin:state_watchers",
-      "enforcement": null
-    },
-    "nexo_user_state": {
-      "description": "Compute user-state snapshot from trust, corrections, sentiment",
-      "category": "user_state",
-      "source": "plugin:user_state_tools",
-      "enforcement": null
-    },
-    "nexo_user_state_history": {
-      "description": "List recent user-state snapshots",
-      "category": "user_state",
-      "source": "plugin:user_state_tools",
-      "enforcement": null
-    },
-    "nexo_user_state_stats": {
-      "description": "Aggregate user-state snapshots by label",
-      "category": "user_state",
-      "source": "plugin:user_state_tools",
-      "enforcement": null
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
     },
     "nexo_workflow_open": {
-      "description": "Open a durable workflow run for long multi-step or cross-session work",
+      "description": "Open durable workflow for multi-step/cross-session work",
       "category": "workflow",
       "source": "plugin:workflow",
-      "enforcement": null
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
     },
     "nexo_workflow_update": {
-      "description": "Update a workflow run with replayable checkpoints",
+      "description": "Update workflow with checkpoints and shared state",
       "category": "workflow",
       "source": "plugin:workflow",
-      "enforcement": null
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
     },
     "nexo_workflow_get": {
-      "description": "Read the full durable workflow state",
+      "description": "Read full durable workflow state",
       "category": "workflow",
       "source": "plugin:workflow",
-      "enforcement": null
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
     },
     "nexo_workflow_list": {
       "description": "List durable workflow runs",
       "category": "workflow",
       "source": "plugin:workflow",
-      "enforcement": null
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
     },
     "nexo_workflow_resume": {
-      "description": "Summarize the next actionable step for a workflow run",
+      "description": "Summarize next actionable step for a workflow",
       "category": "workflow",
       "source": "plugin:workflow",
-      "enforcement": null
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
     },
     "nexo_workflow_replay": {
-      "description": "Replay the latest checkpoints of a workflow run",
+      "description": "Replay latest checkpoints of a workflow",
       "category": "workflow",
       "source": "plugin:workflow",
-      "enforcement": null
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
     },
     "nexo_workflow_handoff": {
-      "description": "Record a durable handoff so another agent or client can resume",
+      "description": "Record durable handoff for another agent/client",
       "category": "workflow",
       "source": "plugin:workflow",
-      "enforcement": null
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
     },
     "nexo_workflow_compensation": {
-      "description": "Show the rollback / compensation plan for a partially completed workflow",
+      "description": "Show rollback plan for partially completed workflow",
       "category": "workflow",
       "source": "plugin:workflow",
-      "enforcement": null
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
     },
     "nexo_run_workflow": {
-      "description": "High-level durable workflow entry point for the public API surface",
+      "description": "High-level workflow entry point for public API",
       "category": "workflow",
       "source": "plugin:workflow",
-      "enforcement": null
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_cognitive_retrieve": {
+      "description": "RAG query over cognitive memory (STM+LTM)",
+      "category": "cognitive",
+      "source": "plugin:cognitive_memory",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_cognitive_stats": {
+      "description": "Cognitive memory system metrics",
+      "category": "cognitive",
+      "source": "plugin:cognitive_memory",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_cognitive_inspect": {
+      "description": "Inspect specific memory by ID (debug)",
+      "category": "cognitive",
+      "source": "plugin:cognitive_memory",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_cognitive_metrics": {
+      "description": "Performance metrics: retrieval relevance, repeat error rate",
+      "category": "cognitive",
+      "source": "plugin:cognitive_memory",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_cognitive_dissonance": {
+      "description": "Detect conflicts between new instruction and LTM",
+      "category": "cognitive",
+      "source": "plugin:cognitive_memory",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_cognitive_resolve": {
+      "description": "Resolve cognitive dissonance",
+      "category": "cognitive",
+      "source": "plugin:cognitive_memory",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_cognitive_sentiment": {
+      "description": "Detect user sentiment and get tone guidance",
+      "category": "cognitive",
+      "source": "plugin:cognitive_memory",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_cognitive_trust": {
+      "description": "View or adjust trust score (0-100)",
+      "category": "cognitive",
+      "source": "plugin:cognitive_memory",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_cognitive_pin": {
+      "description": "Pin a memory — never decays",
+      "category": "cognitive",
+      "source": "plugin:cognitive_memory",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_cognitive_snooze": {
+      "description": "Snooze a memory until a date",
+      "category": "cognitive",
+      "source": "plugin:cognitive_memory",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_cognitive_archive": {
+      "description": "Archive a memory (excluded from searches)",
+      "category": "cognitive",
+      "source": "plugin:cognitive_memory",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_cognitive_restore": {
+      "description": "Restore memory from pinned/snoozed/archived",
+      "category": "cognitive",
+      "source": "plugin:cognitive_memory",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_cognitive_quarantine_list": {
+      "description": "List quarantine queue items",
+      "category": "cognitive",
+      "source": "plugin:cognitive_memory",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_cognitive_quarantine_promote": {
+      "description": "Promote quarantine item to STM",
+      "category": "cognitive",
+      "source": "plugin:cognitive_memory",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_cognitive_quarantine_reject": {
+      "description": "Reject quarantine item",
+      "category": "cognitive",
+      "source": "plugin:cognitive_memory",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_cognitive_quarantine_process": {
+      "description": "Run quarantine promotion cycle",
+      "category": "cognitive",
+      "source": "plugin:cognitive_memory",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_cognitive_trigger_create": {
+      "description": "Create prospective memory trigger",
+      "category": "cognitive",
+      "source": "plugin:cognitive_memory",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_cognitive_trigger_list": {
+      "description": "List prospective triggers",
+      "category": "cognitive",
+      "source": "plugin:cognitive_memory",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_cognitive_trigger_preview": {
+      "description": "Preview trigger matches without firing",
+      "category": "cognitive",
+      "source": "plugin:cognitive_memory",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_cognitive_trigger_check": {
+      "description": "Check text against armed triggers",
+      "category": "cognitive",
+      "source": "plugin:cognitive_memory",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_cognitive_trigger_delete": {
+      "description": "Delete a prospective trigger",
+      "category": "cognitive",
+      "source": "plugin:cognitive_memory",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_cognitive_trigger_rearm": {
+      "description": "Re-arm a fired trigger",
+      "category": "cognitive",
+      "source": "plugin:cognitive_memory",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_cortex_check": {
+      "description": "Cognitive pre-action check",
+      "category": "cortex",
+      "source": "plugin:cortex",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_cortex_decide": {
+      "description": "Evaluate 2+ alternatives for high-impact task",
+      "category": "cortex",
+      "source": "plugin:cortex",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_cortex_override": {
+      "description": "Override a stored Cortex recommendation",
+      "category": "cortex",
+      "source": "plugin:cortex",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_cortex_quality": {
+      "description": "Recommendation accept/override rate stats",
+      "category": "cortex",
+      "source": "plugin:cortex",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_cortex_review": {
+      "description": "Review persisted Cortex evaluations",
+      "category": "cortex",
+      "source": "plugin:cortex",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_cortex_stats": {
+      "description": "Cortex activation statistics",
+      "category": "cortex",
+      "source": "plugin:cortex",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_decision_log": {
+      "description": "Log non-trivial decision with reasoning",
+      "category": "decision",
+      "source": "plugin:episodic_memory",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_decision_outcome": {
+      "description": "Record what happened after a decision",
+      "category": "decision",
+      "source": "plugin:episodic_memory",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_decision_search": {
+      "description": "Search past decisions",
+      "category": "decision",
+      "source": "plugin:episodic_memory",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_recall": {
+      "description": "Search across ALL NEXO memory",
+      "category": "memory",
+      "source": "plugin:simple_api",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_remember": {
+      "description": "Store one durable memory item",
+      "category": "memory",
+      "source": "plugin:simple_api",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_memory_recall": {
+      "description": "High-level memory lookup wrapper",
+      "category": "memory",
+      "source": "plugin:memory_export",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_memory_export": {
+      "description": "Export markdown snapshot of memory layers",
+      "category": "memory",
+      "source": "plugin:memory_export",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_memory_backend_status": {
+      "description": "Show active memory backend contract",
+      "category": "memory",
+      "source": "plugin:memory_export",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_memory_review_queue": {
+      "description": "Show decisions/learnings due for review",
+      "category": "memory",
+      "source": "plugin:episodic_memory",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_consolidate": {
+      "description": "Run memory consolidation explicitly",
+      "category": "memory",
+      "source": "plugin:episodic_memory",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_diary_archive_read": {
+      "description": "Read archived diary entry",
+      "category": "diary",
+      "source": "plugin:episodic_memory",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_diary_archive_search": {
+      "description": "Search permanent diary archive",
+      "category": "diary",
+      "source": "plugin:episodic_memory",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_context_packet": {
+      "description": "Build context packet for subagent injection",
+      "category": "context",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_recent_context_capture": {
+      "description": "Capture/update a recent 24h context item",
+      "category": "context",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_recent_context": {
+      "description": "Read recent hot context events",
+      "category": "context",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_pre_action_context": {
+      "description": "Build 24h context bundle for pre-action review",
+      "category": "context",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_recent_context_resolve": {
+      "description": "Resolve a hot-context item",
+      "category": "context",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_hot_context_list": {
+      "description": "List hot-context items currently alive",
+      "category": "context",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_session_portable_context": {
+      "description": "Build portable handoff packet",
+      "category": "session",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_session_export_bundle": {
+      "description": "Export machine-readable session bundle",
+      "category": "session",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_transcript_recent": {
+      "description": "List recent transcripts",
+      "category": "transcript",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_transcript_search": {
+      "description": "Search recent transcripts",
+      "category": "transcript",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_transcript_read": {
+      "description": "Read full transcript by session id",
+      "category": "transcript",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_send": {
+      "description": "Send message to another session",
+      "category": "inter_session",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_ask": {
+      "description": "Ask question to another session",
+      "category": "inter_session",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_answer": {
+      "description": "Answer pending question",
+      "category": "inter_session",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_check_answer": {
+      "description": "Check if question was answered",
+      "category": "inter_session",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_reminder_create": {
+      "description": "Create a new reminder",
+      "category": "reminders",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_reminder_get": {
+      "description": "Read a reminder with history",
+      "category": "reminders",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_reminder_update": {
+      "description": "Update reminder fields",
+      "category": "reminders",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_reminder_complete": {
+      "description": "Mark reminder as completed",
+      "category": "reminders",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_reminder_note": {
+      "description": "Append note to reminder",
+      "category": "reminders",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_reminder_restore": {
+      "description": "Restore soft-deleted reminder",
+      "category": "reminders",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_reminder_delete": {
+      "description": "Soft-delete a reminder",
+      "category": "reminders",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_followup_create": {
+      "description": "Create autonomous followup task",
+      "category": "followups",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_followup_get": {
+      "description": "Read followup with history",
+      "category": "followups",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_followup_update": {
+      "description": "Update followup fields",
+      "category": "followups",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_followup_complete": {
+      "description": "Mark followup as completed",
+      "category": "followups",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_followup_note": {
+      "description": "Append note to followup",
+      "category": "followups",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_followup_restore": {
+      "description": "Restore soft-deleted followup",
+      "category": "followups",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_followup_delete": {
+      "description": "Soft-delete a followup",
+      "category": "followups",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_credential_get": {
+      "description": "Get credential value(s) for a service",
+      "category": "credentials",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_credential_create": {
+      "description": "Store a new credential",
+      "category": "credentials",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_credential_update": {
+      "description": "Update credential value/notes",
+      "category": "credentials",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_credential_delete": {
+      "description": "Delete credential(s)",
+      "category": "credentials",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_credential_list": {
+      "description": "List credentials (no values)",
+      "category": "credentials",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_track": {
+      "description": "Track files being edited (conflict detection)",
+      "category": "files",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_untrack": {
+      "description": "Stop tracking files",
+      "category": "files",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_files": {
+      "description": "Show all tracked files across sessions",
+      "category": "files",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_task_log": {
+      "description": "Record operational task execution",
+      "category": "task_history",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_task_list": {
+      "description": "Show execution history",
+      "category": "task_history",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_task_frequency": {
+      "description": "Check overdue operational tasks",
+      "category": "task_history",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_plugin_load": {
+      "description": "Load/reload a plugin",
+      "category": "plugin",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_plugin_list": {
+      "description": "List loaded plugins and tools",
+      "category": "plugin",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_plugin_remove": {
+      "description": "Unregister plugin tools from MCP",
+      "category": "plugin",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_drive_signals": {
+      "description": "List autonomous curiosity signals",
+      "category": "drive",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_drive_reinforce": {
+      "description": "Reinforce a drive signal",
+      "category": "drive",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_drive_act": {
+      "description": "Mark drive signal as investigated",
+      "category": "drive",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_drive_dismiss": {
+      "description": "Dismiss a drive signal",
+      "category": "drive",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_tool_explain": {
+      "description": "Explain a live NEXO tool",
+      "category": "system",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_system_catalog": {
+      "description": "Read live system catalog",
+      "category": "system",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_doctor": {
+      "description": "Unified diagnostic report",
+      "category": "system",
+      "source": "plugin:doctor",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_update": {
+      "description": "Pull latest code, backup, migrate, verify",
+      "category": "system",
+      "source": "plugin:update",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_reindex": {
+      "description": "Force FTS5 search index rebuild",
+      "category": "index",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_index_add_dir": {
+      "description": "Register directory for FTS5 indexing",
+      "category": "index",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_index_remove_dir": {
+      "description": "Remove directory from FTS5",
+      "category": "index",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_index_dirs": {
+      "description": "List indexed directories",
+      "category": "index",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_hook_runs": {
+      "description": "List recent hook lifecycle runs",
+      "category": "system",
+      "source": "server",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_entity_create": {
+      "description": "Create entity (person, service, URL)",
+      "category": "entity",
+      "source": "plugin:entities",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_entity_delete": {
+      "description": "Delete entity",
+      "category": "entity",
+      "source": "plugin:entities",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_entity_list": {
+      "description": "List entities by type",
+      "category": "entity",
+      "source": "plugin:entities",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_entity_search": {
+      "description": "Search entities",
+      "category": "entity",
+      "source": "plugin:entities",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_entity_update": {
+      "description": "Update entity fields",
+      "category": "entity",
+      "source": "plugin:entities",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_claim_add": {
+      "description": "Add structured claim with provenance",
+      "category": "claims",
+      "source": "plugin:claims_tools",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_claim_get": {
+      "description": "Get claim with links and freshness",
+      "category": "claims",
+      "source": "plugin:claims_tools",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_claim_link": {
+      "description": "Link two claims",
+      "category": "claims",
+      "source": "plugin:claims_tools",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_claim_lint": {
+      "description": "Audit stale/weak/contradictory claims",
+      "category": "claims",
+      "source": "plugin:claims_tools",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_claim_search": {
+      "description": "Search claims by meaning",
+      "category": "claims",
+      "source": "plugin:claims_tools",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_claim_stats": {
+      "description": "Claim graph statistics",
+      "category": "claims",
+      "source": "plugin:claims_tools",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_claim_verify": {
+      "description": "Verify/reclassify claim state",
+      "category": "claims",
+      "source": "plugin:claims_tools",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_kg_query": {
+      "description": "Query knowledge graph",
+      "category": "knowledge_graph",
+      "source": "plugin:knowledge_graph_tools",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_kg_neighbors": {
+      "description": "Get direct neighbors of a node",
+      "category": "knowledge_graph",
+      "source": "plugin:knowledge_graph_tools",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_kg_path": {
+      "description": "Find shortest path between nodes",
+      "category": "knowledge_graph",
+      "source": "plugin:knowledge_graph_tools",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_kg_stats": {
+      "description": "Knowledge graph statistics",
+      "category": "knowledge_graph",
+      "source": "plugin:knowledge_graph_tools",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_kg_export": {
+      "description": "Export KG to JSON-LD/GraphML",
+      "category": "knowledge_graph",
+      "source": "plugin:knowledge_graph_tools",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_media_memory_add": {
+      "description": "Store non-text artifact metadata",
+      "category": "media",
+      "source": "plugin:media_memory_tools",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_media_memory_get": {
+      "description": "Inspect stored media memory",
+      "category": "media",
+      "source": "plugin:media_memory_tools",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_media_memory_search": {
+      "description": "Search media memories",
+      "category": "media",
+      "source": "plugin:media_memory_tools",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_media_memory_stats": {
+      "description": "Media memory stats",
+      "category": "media",
+      "source": "plugin:media_memory_tools",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_adaptive_mode": {
+      "description": "Get/compute adaptive personality mode (FLOW/NORMAL/TENSION)",
+      "category": "adaptive",
+      "source": "plugin:adaptive_mode",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_adaptive_decay": {
+      "description": "Trigger inter-session tension decay",
+      "category": "adaptive",
+      "source": "plugin:adaptive_mode",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_adaptive_history": {
+      "description": "View adaptive mode transitions",
+      "category": "adaptive",
+      "source": "plugin:adaptive_mode",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_adaptive_override": {
+      "description": "Manual override: force mode",
+      "category": "adaptive",
+      "source": "plugin:adaptive_mode",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_adaptive_reset": {
+      "description": "Reset adaptive state",
+      "category": "adaptive",
+      "source": "plugin:adaptive_mode",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_adaptive_weights": {
+      "description": "View adaptive weights and training stats",
+      "category": "adaptive",
+      "source": "plugin:adaptive_mode",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_agent_create": {
+      "description": "Register a new agent",
+      "category": "agent",
+      "source": "plugin:agents",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_agent_delete": {
+      "description": "Remove agent from registry",
+      "category": "agent",
+      "source": "plugin:agents",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_agent_get": {
+      "description": "Get agent's full profile",
+      "category": "agent",
+      "source": "plugin:agents",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_agent_list": {
+      "description": "List registered agents",
+      "category": "agent",
+      "source": "plugin:agents",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_agent_update": {
+      "description": "Update agent fields",
+      "category": "agent",
+      "source": "plugin:agents",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_artifact_create": {
+      "description": "Register artifact (service, dashboard, script)",
+      "category": "artifact",
+      "source": "plugin:artifact_registry",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_artifact_delete": {
+      "description": "Delete artifact from registry",
+      "category": "artifact",
+      "source": "plugin:artifact_registry",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_artifact_find": {
+      "description": "Find artifacts via retrieval ladder",
+      "category": "artifact",
+      "source": "plugin:artifact_registry",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_artifact_learn_alias": {
+      "description": "Learn new alias from user language",
+      "category": "artifact",
+      "source": "plugin:artifact_registry",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_artifact_list": {
+      "description": "List registered artifacts",
+      "category": "artifact",
+      "source": "plugin:artifact_registry",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_artifact_update": {
+      "description": "Update existing artifact",
+      "category": "artifact",
+      "source": "plugin:artifact_registry",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_auto_flush_recent": {
+      "description": "Show auto-flush records before compaction",
+      "category": "system",
+      "source": "plugin:backup",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_auto_flush_stats": {
+      "description": "Pre-compaction auto-flush stats",
+      "category": "system",
+      "source": "plugin:backup",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_backup_list": {
+      "description": "List available backups",
+      "category": "backup",
+      "source": "plugin:backup",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_backup_now": {
+      "description": "Create immediate database backup",
+      "category": "backup",
+      "source": "plugin:backup",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_backup_restore": {
+      "description": "Restore from backup (DESTRUCTIVE)",
+      "category": "backup",
+      "source": "plugin:backup",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_change_commit": {
+      "description": "Link change log entry to git commit",
+      "category": "change_log",
+      "source": "plugin:core_rules",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_change_log": {
+      "description": "Log code/config change with context",
+      "category": "change_log",
+      "source": "plugin:core_rules",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_change_search": {
+      "description": "Search past code changes",
+      "category": "change_log",
+      "source": "plugin:core_rules",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_rules_check": {
+      "description": "Get applicable rules for an area",
+      "category": "rules",
+      "source": "plugin:core_rules",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_rules_list": {
+      "description": "List all core rules",
+      "category": "rules",
+      "source": "plugin:core_rules",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_rules_migrate": {
+      "description": "Sync rules from JSON to database",
+      "category": "rules",
+      "source": "plugin:core_rules",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_evolution_approve": {
+      "description": "Approve evolution proposal",
+      "category": "evolution",
+      "source": "plugin:evolution",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_evolution_history": {
+      "description": "Show past evolution cycles",
+      "category": "evolution",
+      "source": "plugin:evolution",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_evolution_propose": {
+      "description": "Trigger evolution analysis",
+      "category": "evolution",
+      "source": "plugin:evolution",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_evolution_reject": {
+      "description": "Reject evolution proposal",
+      "category": "evolution",
+      "source": "plugin:evolution",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_evolution_status": {
+      "description": "Show NEXO dimension scores",
+      "category": "evolution",
+      "source": "plugin:evolution",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_goal_open": {
+      "description": "Open durable goal for multi-session objectives",
+      "category": "goal",
+      "source": "plugin:goal_engine",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_goal_get": {
+      "description": "Read durable goal with workflow runs",
+      "category": "goal",
+      "source": "plugin:goal_engine",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_goal_list": {
+      "description": "List durable goals",
+      "category": "goal",
+      "source": "plugin:goal_engine",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_goal_update": {
+      "description": "Update goal state and next action",
+      "category": "goal",
+      "source": "plugin:goal_engine",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_goal_engine_status": {
+      "description": "Goal Engine telemetry readiness",
+      "category": "goal",
+      "source": "plugin:goal_engine",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_goal_profile_get": {
+      "description": "Get active Goal Engine profile",
+      "category": "goal",
+      "source": "plugin:goal_engine",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_goal_profile_list": {
+      "description": "List Goal Engine profiles",
+      "category": "goal",
+      "source": "plugin:goal_engine",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_goal_profile_set": {
+      "description": "Create/update Goal Engine profile",
+      "category": "goal",
+      "source": "plugin:goal_engine",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_impact_score": {
+      "description": "Compute Impact Scoring for a followup",
+      "category": "impact",
+      "source": "plugin:impact",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_outcome_register": {
+      "description": "Register expected action outcome",
+      "category": "outcome",
+      "source": "plugin:outcomes",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_outcome_check": {
+      "description": "Check tracked outcome with evidence",
+      "category": "outcome",
+      "source": "plugin:outcomes",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_outcome_list": {
+      "description": "List tracked outcomes",
+      "category": "outcome",
+      "source": "plugin:outcomes",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_outcome_cancel": {
+      "description": "Cancel an outcome",
+      "category": "outcome",
+      "source": "plugin:outcomes",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_outcome_pattern_candidates": {
+      "description": "List repeated outcome patterns",
+      "category": "outcome",
+      "source": "plugin:outcomes",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_outcome_pattern_capture": {
+      "description": "Capture outcome pattern as artifact",
+      "category": "outcome",
+      "source": "plugin:outcomes",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_personal_plugin_create": {
+      "description": "Create personal MCP plugin scaffold",
+      "category": "personal",
+      "source": "plugin:personal_plugins",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_personal_script_create": {
+      "description": "Create personal script with optional schedule",
+      "category": "personal",
+      "source": "plugin:personal_scripts",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_personal_script_remove": {
+      "description": "Remove personal script",
+      "category": "personal",
+      "source": "plugin:personal_scripts",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_personal_script_schedules": {
+      "description": "List personal script schedules",
+      "category": "personal",
+      "source": "plugin:personal_scripts",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_personal_script_unschedule": {
+      "description": "Remove personal schedules",
+      "category": "personal",
+      "source": "plugin:personal_scripts",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_personal_scripts_classify": {
+      "description": "Classify scripts into buckets",
+      "category": "personal",
+      "source": "plugin:personal_scripts",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_personal_scripts_ensure_schedules": {
+      "description": "Create/repair script schedules",
+      "category": "personal",
+      "source": "plugin:personal_scripts",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_personal_scripts_list": {
+      "description": "List personal scripts",
+      "category": "personal",
+      "source": "plugin:personal_scripts",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_personal_scripts_reconcile": {
+      "description": "Full script+schedule reconciliation",
+      "category": "personal",
+      "source": "plugin:personal_scripts",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_personal_scripts_sync": {
+      "description": "Sync scripts from filesystem",
+      "category": "personal",
+      "source": "plugin:personal_scripts",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_preference_get": {
+      "description": "Get preference value",
+      "category": "preferences",
+      "source": "plugin:preferences",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_preference_set": {
+      "description": "Set preference",
+      "category": "preferences",
+      "source": "plugin:preferences",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_preference_list": {
+      "description": "List all preferences",
+      "category": "preferences",
+      "source": "plugin:preferences",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_preference_delete": {
+      "description": "Delete preference",
+      "category": "preferences",
+      "source": "plugin:preferences",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_schedule_add": {
+      "description": "Add personal cron job",
+      "category": "schedule",
+      "source": "plugin:schedule",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_schedule_status": {
+      "description": "Show cron execution status",
+      "category": "schedule",
+      "source": "plugin:schedule",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_state_watcher_create": {
+      "description": "Create persistent state watcher",
+      "category": "watcher",
+      "source": "plugin:state_watchers",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_state_watcher_list": {
+      "description": "List state watchers",
+      "category": "watcher",
+      "source": "plugin:state_watchers",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_state_watcher_run": {
+      "description": "Run watchers and return health",
+      "category": "watcher",
+      "source": "plugin:state_watchers",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_state_watcher_update": {
+      "description": "Update state watcher",
+      "category": "watcher",
+      "source": "plugin:state_watchers",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_user_state": {
+      "description": "Compute user-state snapshot",
+      "category": "user_state",
+      "source": "plugin:user_state_tools",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_user_state_history": {
+      "description": "List recent user-state snapshots",
+      "category": "user_state",
+      "source": "plugin:user_state_tools",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
+    },
+    "nexo_user_state_stats": {
+      "description": "Aggregate user-state by label",
+      "category": "user_state",
+      "source": "plugin:user_state_tools",
+      "requires": [],
+      "provides": [],
+      "internal_calls": [],
+      "enforcement": {
+        "level": "none",
+        "rules": []
+      },
+      "triggers_after": []
     }
+  },
+  "enforcement_levels": {
+    "must": "OBLIGACIÓN — el enforcer FUERZA la llamada inyectando un prompt invisible",
+    "should": "AVISO — el enforcer inyecta un recordatorio suave, el modelo puede ignorarlo",
+    "none": "Sin enforcement — tool bajo demanda del modelo/usuario"
+  },
+  "rule_types": {
+    "on_session_start": "Al inicio de sesión (primeros N tool calls)",
+    "on_session_end": "Al cerrar sesión/chat/app",
+    "periodic_by_messages": "Cada N mensajes del usuario sin que se haya llamado",
+    "periodic_by_time": "Cada N minutos de sesión activa sin que se haya llamado",
+    "after_tool": "Inmediatamente después de que se llame a una tool en watch_tools",
+    "before_tool": "Antes de que se use una tool en watch_tools",
+    "on_event": "Cuando se detecta un evento específico",
+    "conditional": "Solo si se cumple una condición evaluada dinámicamente"
   }
 }
