@@ -181,6 +181,17 @@
     </div>
 </section>
 
+<!-- v5.4.6 runtime dependency management -->
+<section id="v546" class="section-compact" style="background:linear-gradient(135deg,#09111f 0%,#14253a 50%,#1e3a5f 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.4.6 <span style="opacity:.5;font-weight:400;">&mdash; April 14, 2026</span></div>
+        <h2 class="section-title">Runtime dependency management + daily auto-update</h2>
+        <p class="section-subtitle">
+            <code>nexo update</code> now manages external runtime dependencies declared in <code>package.json</code> <code>runtimeDependencies</code>. First dependency: <code>@anthropic-ai/claude-code</code> &mdash; checks version, installs if missing, updates if outdated. New daily auto-update cron at 03:45 runs the full update flow automatically. The system is declarative: adding future dependencies is a single line in package.json.
+        </p>
+    </div>
+</section>
+
 <!-- v5.4.5 CI timeout increase -->
 <section id="v545" class="section-compact" style="background:linear-gradient(135deg,#09111f 0%,#14253a 50%,#1e3a5f 100%);">
     <div class="container">

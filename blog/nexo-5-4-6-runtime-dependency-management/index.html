@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXO 5.4.6: Runtime Dependency Management</title>
+    <meta name="description" content="NEXO 5.4.6 adds runtime dependency management to nexo update. External dependencies like Claude Code are now updated automatically alongside Brain itself.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-5-4-6-runtime-dependency-management/">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/blog/nexo-5-4-6-runtime-dependency-management/">
+    <meta property="og:title" content="NEXO 5.4.6: Runtime Dependency Management">
+    <meta property="og:description" content="nexo update now manages external runtime dependencies like Claude Code. Plus a daily auto-update cron.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+    <meta property="article:published_time" content="2026-04-14">
+    <meta property="article:author" content="Francisco Cerda Puigserver">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO 5.4.6: Runtime Dependency Management">
+    <meta name="twitter:description" content="nexo update now manages external runtime dependencies like Claude Code. Plus a daily auto-update cron.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "NEXO 5.4.6: Runtime Dependency Management",
+        "description": "NEXO 5.4.6 adds runtime dependency management to nexo update. External dependencies like Claude Code are now updated automatically alongside Brain itself.",
+        "datePublished": "2026-04-14",
+        "dateModified": "2026-04-14",
+        "author": {
+            "@type": "Person",
+            "name": "Francisco Cerda Puigserver"
+        },
+        "publisher": {
+            "@type": "Organization",
+            "name": "WAzion",
+            "url": "https://www.wazion.com"
+        },
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https://nexo-brain.com/blog/nexo-5-4-6-runtime-dependency-management/"
+        },
+        "url": "https://nexo-brain.com/blog/nexo-5-4-6-runtime-dependency-management/",
+        "image": "https://nexo-brain.com/assets/og/og-blog.png",
+        "keywords": ["NEXO 5.4.6", "runtime dependencies", "auto-update", "Claude Code", "nexo update"]
+    }
+    </script>
+
+    <style>
+        .article-header { padding-top: 128px; padding-bottom: 40px; text-align: center; }
+        .article-meta { font-size: 14px; color: var(--text-muted); margin-bottom: 16px; }
+        .article-body {
+            max-width: 720px; margin: 0 auto; padding: 0 24px 80px;
+            font-size: 17px; line-height: 1.8; color: var(--text);
+        }
+        .article-body h2 { font-size: 28px; font-weight: 700; margin: 48px 0 16px; letter-spacing: -0.01em; }
+        .article-body p { margin-bottom: 20px; color: var(--text-muted); }
+        .article-body strong { color: var(--text); }
+        .article-body a { color: var(--purple-light); }
+        .article-body a:hover { color: var(--pink); }
+        .article-body code {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 14px; color: var(--pink);
+            background: rgba(236, 72, 153, 0.1);
+            padding: 2px 8px; border-radius: 4px;
+        }
+        .article-back {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 14px; font-weight: 600; color: var(--text-muted);
+            margin-bottom: 24px;
+        }
+        .article-back:hover { color: var(--purple-light); }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-64.png" alt="NEXO Brain" class="logo-image">
+            <span class="logo-text">NEXO Brain</span>
+        </a>
+        <button class="mobile-menu-toggle" aria-label="Toggle navigation" onclick="toggleMobileMenu()">
+            <span></span><span></span><span></span>
+        </button>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/features/">Features</a>
+            <a href="/evolution/">Evolution</a>
+            <a href="/compare/">Compare</a>
+            <a href="/blog/">Blog</a>
+            <a href="/changelog/">Changelog</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta">GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<section class="article-header">
+    <div class="container">
+        <a href="/blog/" class="article-back">&larr; Back to blog</a>
+        <div class="article-meta">April 14, 2026 &middot; Feature &middot; Update system</div>
+        <h1 class="section-title" style="font-size:clamp(28px,4.5vw,48px);max-width:920px;margin:0 auto 16px;">NEXO 5.4.6: Runtime Dependency Management</h1>
+        <p class="section-subtitle" style="max-width:760px;margin:0 auto;"><code>nexo update</code> now keeps Brain and its external dependencies up to date in a single command. A daily cron handles it automatically.</p>
+    </div>
+</section>
+
+<section>
+    <div class="article-body">
+
+        <h2>The problem</h2>
+        <p>NEXO Brain depends on external tools to function &mdash; most critically, <strong>Claude Code</strong> (<code>@anthropic-ai/claude-code</code>). Until now, updating these was a separate manual step. With NEXO Desktop no longer managing Claude Code installations, Brain needed to take ownership of its own dependency chain.</p>
+
+        <h2>The solution</h2>
+        <p>A new <code>runtimeDependencies</code> field in <code>package.json</code> declares what Brain needs:</p>
+        <p><code>"runtimeDependencies": [{"name": "@anthropic-ai/claude-code", "type": "npm-global", "optional": false}]</code></p>
+        <p>When you run <code>nexo update</code>, Brain now checks each declared dependency against the npm registry, installs it if missing, and updates it if outdated. The dependency update is <strong>best-effort</strong> &mdash; if it fails, Brain still updates normally and reports a warning.</p>
+
+        <h2>Daily auto-update cron</h2>
+        <p>A new core cron job (<code>auto-update</code>) runs at 03:45 daily via LaunchAgent. It executes <code>nexo update --json</code> automatically, keeping both Brain and its dependencies current without any manual intervention. Results are logged to <code>~/.nexo/logs/auto-update.log</code>.</p>
+
+        <h2>Declarative and extensible</h2>
+        <p>Adding a new dependency in the future is a single line in <code>package.json</code>. The update system reads the array at runtime, so no code changes are needed to manage additional tools.</p>
+
+    </div>
+</section>
+
+<footer>
+    <div class="container" style="text-align:center; padding: 48px 24px 32px; color: var(--text-muted); font-size: 14px;">
+        <p>&copy; 2024&ndash;2026 WAzion &middot; <a href="https://github.com/wazionapps/nexo" style="color:var(--purple-light);">GitHub</a> &middot; AGPL-3.0</p>
+    </div>
+</footer>
+
+<script>
+function toggleMobileMenu() {
+    document.querySelector('.nav-links').classList.toggle('active');
+    document.querySelector('.mobile-menu-toggle').classList.toggle('active');
+}
+</script>
+
+</body>
+</html>

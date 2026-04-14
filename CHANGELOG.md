@@ -1,5 +1,18 @@
 # Changelog
 
+## [5.4.6] - 2026-04-14
+
+### Feat: runtime dependency management in nexo update + daily auto-update cron
+
+- `nexo update` now manages external runtime dependencies declared in
+  `package.json` `runtimeDependencies` array. First dependency:
+  `@anthropic-ai/claude-code` — checks version, installs if missing,
+  updates if outdated. Best-effort: never aborts the update on failure.
+- New daily auto-update cron (`auto-update`, 03:45) runs the full
+  `nexo update --json` flow automatically via LaunchAgent.
+- Declarative system: adding future dependencies is a single line in
+  package.json `runtimeDependencies`.
+
 ## [5.4.5] - 2026-04-14
 
 ### Fix: increase CI test timeout for nexo update
