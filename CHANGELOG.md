@@ -1,5 +1,16 @@
 # Changelog
 
+## [5.4.7] - 2026-04-15
+
+### Feat: tool-enforcement-map.json for Protocol Enforcer
+
+- Canonical map of all 247 NEXO Brain MCP tools with enforcement metadata.
+- 16 tools have enforcement rules (periodic, event-based, session lifecycle).
+- NEXO Desktop and headless session-guard read this map to mechanically
+  enforce protocol compliance without depending on model self-discipline.
+- New `scripts/verify_tool_map.py` catches drift between code and map.
+- Learning #335 guards future tool additions/removals.
+
 ## [5.4.6] - 2026-04-14
 
 ### Feat: runtime dependency management in nexo update + daily auto-update cron
