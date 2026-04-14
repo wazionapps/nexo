@@ -80,6 +80,7 @@ def test_build_interactive_client_command_preserves_claude_flags(tmp_path, monke
     import agent_runner
 
     monkeypatch.setattr(agent_runner, "_resolve_claude_cli", lambda: "/tmp/fake-claude")
+    monkeypatch.setattr(agent_runner, "_build_enforcement_system_prompt", lambda: "")
     monkeypatch.setattr(agent_runner, "_interactive_startup_prompt", lambda client: "Start NEXO now.")
 
     client, cmd = agent_runner.build_interactive_client_command(
@@ -111,7 +112,9 @@ def test_run_automation_prompt_uses_claude_backend_command(monkeypatch, tmp_path
 
     captured = {}
     monkeypatch.setattr(agent_runner, "_resolve_claude_cli", lambda: "/tmp/fake-claude")
+    monkeypatch.setattr(agent_runner, "_build_enforcement_system_prompt", lambda: "")
     monkeypatch.setattr(agent_runner, "_record_automation_run", lambda **kwargs: (True, ""))
+    monkeypatch.setattr(agent_runner, "_build_enforcement_system_prompt", lambda: "")
     monkeypatch.setattr(agent_runner, "load_client_preferences", lambda: {
         "interactive_clients": {"claude_code": True, "codex": False, "claude_desktop": False},
         "default_terminal_client": "claude_code",
@@ -234,6 +237,7 @@ def test_run_automation_prompt_marks_public_contribution_env(monkeypatch, tmp_pa
     import agent_runner
 
     monkeypatch.setattr(agent_runner, "_resolve_claude_cli", lambda: "/tmp/fake-claude")
+    monkeypatch.setattr(agent_runner, "_build_enforcement_system_prompt", lambda: "")
     monkeypatch.setattr(agent_runner, "_record_automation_run", lambda **kwargs: (True, ""))
     monkeypatch.setattr(agent_runner, "load_client_preferences", lambda: {
         "interactive_clients": {"claude_code": True, "codex": False, "claude_desktop": False},
@@ -270,6 +274,7 @@ def test_run_automation_prompt_uses_fast_task_profile_for_backend_and_reasoning(
     import agent_runner
 
     monkeypatch.setattr(agent_runner, "_resolve_claude_cli", lambda: "/tmp/fake-claude")
+    monkeypatch.setattr(agent_runner, "_build_enforcement_system_prompt", lambda: "")
     monkeypatch.setattr(agent_runner, "_resolve_codex_cli", lambda: "/tmp/fake-codex")
     monkeypatch.setattr(agent_runner, "_load_client_bootstrap_prompt", lambda client: "You are NEXO.")
     monkeypatch.setattr(agent_runner, "_codex_managed_initial_messages_enabled", lambda: False)
