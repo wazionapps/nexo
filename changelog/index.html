@@ -87,19 +87,23 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v5.4.1 live</span>
-                    <span class="page-chip">Hook hygiene</span>
-                    <span class="page-chip">Sensory Register fix</span>
-                    <span class="page-chip">Honest post-mortem</span>
+                    <span class="page-chip">v5.4.2 live</span>
+                    <span class="page-chip">Traceability truth</span>
+                    <span class="page-chip">Sensory Register close-loop</span>
+                    <span class="page-chip">Doc alignment</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v541" class="btn btn-primary">Start with v5.4.1</a>
+                    <a href="#v542" class="btn btn-primary">Start with v5.4.2</a>
                     <a href="#v400" class="btn btn-secondary">See v4.0.0</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
             </div>
             <div class="page-visual">
                 <div class="page-stack">
+                    <div class="page-stack-card">
+                        <strong>v5.4.2</strong>
+                        <span>Traceability truth + Sensory Register close-loop. Repo commit-ref warnings stop inflating local/runtime ops into fake git debt, the nocturnal postmortem drains pending <code>session_buffer.jsonl</code> events as a real queue, and docs now match the real stop-hook / reflection boundary.</span>
+                    </div>
                     <div class="page-stack-card">
                         <strong>v5.4.1</strong>
                         <span>Hook hygiene fix. The PostToolUse <code>capture-session.sh</code> hook had been reading a nonexistent env var since 2026-04-12, silently writing <code>"tool":"unknown"</code> to the Sensory Register for 48 hours. v5.4.1 parses <code>tool_name</code> from stdin JSON, stops filtering <code>Bash</code>, removes a runtime-only duplicate, and purges pre-fix entries on update.</span>
@@ -174,6 +178,25 @@
                 <div id="changelog-pager" class="changelog-pager" aria-label="Changelog pagination"></div>
             </div>
         </div>
+    </div>
+</section>
+
+<!-- v5.4.2 traceability truth + buffer close-loop -->
+<section id="v542" class="section-compact" style="background:linear-gradient(135deg,#09111f 0%,#12324a 34%,#0f766e 68%,#22d3ee 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.4.2 <span style="opacity:.5;font-weight:400;">&mdash; April 14, 2026</span></div>
+        <h2 class="section-title">Traceability truth + Sensory Register buffer close-loop</h2>
+        <p class="section-subtitle">
+            A low-level integrity patch: release warnings now distinguish repo git debt from local/runtime operations, the nocturnal postmortem drains pending <code>session_buffer.jsonl</code> events instead of looking only at "today", and docs now describe the real stop-hook / reflection boundary honestly.
+        </p>
+        <ul style="list-style:none;padding:0;margin:24px 0 0;display:grid;gap:12px;">
+            <li><strong>Traceability warning fixed.</strong> Missing <code>commit_ref</code> warnings now count repo-tracked changes only. Local/runtime/server-side operations can be linked explicitly without pretending they should have a repo hash.</li>
+            <li><strong>Queue lifecycle closed.</strong> The nocturnal postmortem now treats <code>session_buffer.jsonl</code> as a real pending queue, ingests useful hook/tool events, and prunes only the lines that were actually consumed.</li>
+            <li><strong>No stranded leftovers.</strong> Older pending events are processed too; they no longer get stuck forever because the consumer only looked at the current day.</li>
+            <li><strong>Atomic rewrite.</strong> The buffer is rewritten through a temp file + replace step so partial writes cannot silently truncate the queue.</li>
+            <li><strong>No product downgrade.</strong> Claude/Opus/Codex-assisted consolidation stays. This patch hardens the mechanical edge around it; it does not replace the assisted path with a weaker local-only substitute.</li>
+        </ul>
+        <p style="margin-top:24px;">See the <a href="/blog/nexo-5-4-2-traceability-and-buffer-close-loop/" style="color:inherit;text-decoration:underline;">full release post</a>.</p>
     </div>
 </section>
 

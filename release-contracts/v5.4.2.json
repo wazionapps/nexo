@@ -1,0 +1,83 @@
+{
+  "release_line": "v5.4",
+  "target_version": "5.4.2",
+  "scope_owner": "NEXO",
+  "distribution": {
+    "git_updates_on": "merge_to_main",
+    "packaged_release_on": "tag_publish"
+  },
+  "required_repo_files": [
+    "package.json",
+    "CHANGELOG.md",
+    "README.md",
+    "llms.txt",
+    "sitemap.xml",
+    "index.html",
+    "blog/index.html",
+    "blog/nexo-5-4-2-traceability-and-buffer-close-loop/index.html",
+    "changelog/index.html",
+    "release-contracts/v5.4.2.json",
+    "scripts/sync_release_artifacts.py",
+    "scripts/verify_release_readiness.py",
+    ".claude-plugin/plugin.json",
+    "clawhub-skill/SKILL.md",
+    "openclaw-plugin/package.json",
+    "openclaw-plugin/src/mcp-bridge.ts",
+    "src/plugins/episodic_memory.py",
+    "src/scripts/nexo-postmortem-consolidator.py",
+    "src/scripts/nexo-reflection.py",
+    "tests/test_episodic_memory.py",
+    "tests/test_postmortem_consolidator.py"
+  ],
+  "required_website_files": [
+    "index.html",
+    "blog/index.html",
+    "blog/nexo-5-4-2-traceability-and-buffer-close-loop/index.html",
+    "changelog/index.html",
+    "llms.txt",
+    ".well-known/llms.txt",
+    "sitemap.xml"
+  ],
+  "gates": [
+    {
+      "id": "commit_ref_warning_counts_repo_only",
+      "title": "Release traceability warnings distinguish repo git debt from local/runtime operations",
+      "status": "complete",
+      "evidence_required": [
+        "Episodic-memory diary warnings count only repo-tracked missing commit_ref rows",
+        "Change-log guidance allows server-direct/local-uncommitted markers for non-repo edits",
+        "Regression coverage locks repo-vs-local classification"
+      ]
+    },
+    {
+      "id": "session_buffer_drains_as_pending_queue",
+      "title": "Nocturnal postmortem consumes pending Sensory Register events and prunes only what it ingests",
+      "status": "complete",
+      "evidence_required": [
+        "Postmortem consolidator processes pending session_buffer.jsonl entries instead of only current-day rows",
+        "Processed events are removed while malformed or unrenderable lines are retained",
+        "Buffer rewrite is atomic so partial writes cannot truncate the queue"
+      ]
+    },
+    {
+      "id": "reflection_boundary_docs_match_runtime",
+      "title": "Public/docs copy now matches the real stop-hook and reflection-engine boundary",
+      "status": "complete",
+      "evidence_required": [
+        "README no longer describes the stop hook as auto-triggering nexo-reflection.py",
+        "nexo-reflection.py self-description says it is standalone today",
+        "Release post and changelog state that Claude/Opus-assisted consolidation remains intact"
+      ]
+    },
+    {
+      "id": "public_release_surfaces_stay_aligned",
+      "title": "Repo copy, website copy, and packaged release line all reflect v5.4.2 before tag publish",
+      "status": "complete",
+      "evidence_required": [
+        "README, llms, homepage, blog index, blog post, changelog page, and sitemap reference v5.4.2",
+        "Website worktree contains the same v5.4.2 public surfaces including .well-known/llms.txt",
+        "sync_release_artifacts.py and verify_release_readiness.py pass for the v5.4.2 contract"
+      ]
+    }
+  ]
+}

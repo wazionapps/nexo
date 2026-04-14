@@ -134,7 +134,7 @@
                     <span class="page-chip">Competitive analysis</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="/blog/nexo-5-4-1-hook-hygiene-fix/" class="btn btn-primary">Read latest release</a>
+                    <a href="/blog/nexo-5-4-2-traceability-and-buffer-close-loop/" class="btn btn-primary">Read latest release</a>
                     <a href="/changelog/" class="btn btn-secondary">Latest release notes</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -143,24 +143,24 @@
                 <div class="section-label">Latest release</div>
                 <div class="blog-featured-meta">
                     <span class="compare-chip">April 14, 2026</span>
-                    <span class="compare-chip">Hook hygiene</span>
+                    <span class="compare-chip">Traceability truth</span>
                     <span class="compare-chip">Sensory Register</span>
-                    <span class="compare-chip">Honest post-mortem</span>
+                    <span class="compare-chip">Close-loop</span>
                 </div>
-                <h2>NEXO 5.4.1: Hook hygiene fix — the Sensory Register was silently writing "unknown" for 48 hours</h2>
-                <p>NEXO 5.4.1: the PostToolUse <code>capture-session.sh</code> hook had been reading a nonexistent env var since its introduction on 2026-04-12, polluting <code>~/.nexo/brain/session_buffer.jsonl</code> with 100% noise. v5.4.1 parses <code>tool_name</code> from stdin JSON (same pattern <code>capture-tool-logs.sh</code> already used), keeps <code>Bash</code> in the stream instead of filtering it, removes a contaminating runtime-only duplicate, and purges pre-fix entries on update.</p>
+                <h2>NEXO 5.4.2: Traceability truth + Sensory Register buffer close-loop</h2>
+                <p>NEXO 5.4.2 stops inflating local/runtime operations into fake repo <code>commit_ref</code> debt, drains pending <code>session_buffer.jsonl</code> events through the nocturnal postmortem instead of looking only at "today", rewrites the buffer atomically, and aligns docs with the real stop-hook / reflection boundary. No Claude/Opus-assisted path was removed.</p>
                 <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
-                    <a href="/blog/nexo-5-4-1-hook-hygiene-fix/" class="btn btn-primary">Open article</a>
-                    <a href="/changelog/#v541" class="btn btn-secondary">Open changelog</a>
+                    <a href="/blog/nexo-5-4-2-traceability-and-buffer-close-loop/" class="btn btn-primary">Open article</a>
+                    <a href="/changelog/#v542" class="btn btn-secondary">Open changelog</a>
                 </div>
                 <div class="blog-mini-stack">
                     <div class="blog-mini-card">
                         <strong>Companion view</strong>
-                        <span><a href="/changelog/#v541">The 5.4.1 changelog section</a></span>
+                        <span><a href="/changelog/#v542">The 5.4.2 changelog section</a></span>
                     </div>
                     <div class="blog-mini-card">
                         <strong>Previous release</strong>
-                        <span><a href="/blog/nexo-5-4-0-events-health-logs/">NEXO 5.4.0: Runtime events + notify / health / logs + calibration migration</a>.</span>
+                        <span><a href="/blog/nexo-5-4-1-hook-hygiene-fix/">NEXO 5.4.1: Hook hygiene fix — Sensory Register writing "unknown" for 48h</a>.</span>
                     </div>
                 </div>
             </div>
@@ -172,6 +172,13 @@
 <section class="section-flush-top">
     <div class="container">
         <div class="blog-grid">
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 14, 2026</div>
+                <h2><a href="/blog/nexo-5-4-2-traceability-and-buffer-close-loop/">NEXO 5.4.2: Traceability truth + Sensory Register buffer close-loop</a></h2>
+                <p>NEXO 5.4.2 stops treating every local/runtime operation as fake repo <code>commit_ref</code> debt, lets the nocturnal postmortem drain pending <code>session_buffer.jsonl</code> events as a real queue, rewrites the buffer atomically, and aligns the docs with the real stop-hook / reflection boundary. No downgrade of the Claude/Opus-assisted layer.</p>
+                <a href="/blog/nexo-5-4-2-traceability-and-buffer-close-loop/" class="read-more">Read article <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></a>
+            </div>
 
             <div class="blog-card">
                 <div class="blog-card-date">April 14, 2026</div>
