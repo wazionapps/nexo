@@ -207,7 +207,7 @@
     {
       "id": "auto-update",
       "script": "scripts/nexo-auto-update.py",
-      "schedule": {"hour": 3, "minute": 45},
+      "schedule": {"hour": 4, "minute": 45},
       "description": "Daily auto-update — Brain + runtime dependencies",
       "core": true,
       "recovery_policy": "catchup",

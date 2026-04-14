@@ -2,6 +2,7 @@ from __future__ import annotations
 """Update plugin — pull latest code, backup DBs, run migrations, verify."""
 import json
 import os
+import re
 import shutil
 import sqlite3
 import subprocess
@@ -347,6 +348,14 @@ def _read_runtime_dependencies() -> list[dict]:
     return []
 
 
+_VALID_NPM_NAME = re.compile(r'^(@[a-z0-9\-_.]+/)?[a-z0-9\-_.]+$')
+
+
+def _validate_npm_name(name: str) -> bool:
+    """Validate that a package name follows npm naming conventions."""
+    return bool(name) and bool(_VALID_NPM_NAME.match(name)) and ".." not in name
+
+
 def _get_npm_global_version(package_name: str) -> str | None:
     """Return the currently installed global npm package version, or None."""
     try:
@@ -354,7 +363,9 @@ def _get_npm_global_version(package_name: str) -> str | None:
             ["npm", "list", "-g", package_name, "--json", "--depth=0"],
             capture_output=True, text=True, timeout=15,
         )
-        if result.returncode == 0:
+        # npm list returns exit 1 with valid JSON for peer dep issues;
+        # always try to parse the output regardless of returncode.
+        if result.stdout.strip():
             data = json.loads(result.stdout)
             deps = data.get("dependencies", {})
             info = deps.get(package_name)
@@ -362,6 +373,8 @@ def _get_npm_global_version(package_name: str) -> str | None:
                 return info.get("version")
     except subprocess.TimeoutExpired:
         pass
+    except FileNotFoundError:
+        pass  # npm not installed
     except Exception:
         pass
     return None
@@ -378,6 +391,8 @@ def _get_npm_registry_version(package_name: str) -> str | None:
             return result.stdout.strip()
     except subprocess.TimeoutExpired:
         pass
+    except FileNotFoundError:
+        pass  # npm not installed
     except Exception:
         pass
     return None
@@ -401,7 +416,7 @@ def _update_runtime_dependencies(progress_fn=None) -> list[dict]:
     for dep in deps:
         name = dep.get("name", "")
         dep_type = dep.get("type", "")
-        optional = dep.get("optional", True)
+        optional = dep.get("optional", False)
 
         if not name or dep_type != "npm-global":
             results.append({
@@ -409,6 +424,16 @@ def _update_runtime_dependencies(progress_fn=None) -> list[dict]:
                 "old_version": None,
                 "new_version": None,
                 "status": "skipped",
+            })
+            continue
+
+        if not _validate_npm_name(name):
+            results.append({
+                "name": name,
+                "old_version": None,
+                "new_version": None,
+                "status": "failed",
+                "error": f"invalid npm package name: {name!r}",
             })
             continue
 
