@@ -333,6 +333,7 @@ def test_sync_all_clients_auto_installs_selected_claude_code_when_missing(tmp_pa
 
     monkeypatch.setattr(client_sync, "detect_installed_clients", fake_detect)
     monkeypatch.setattr(client_sync.subprocess, "run", fake_run)
+    monkeypatch.setattr(client_sync.sys, "platform", "darwin")
 
     result = client_sync.sync_all_clients(
         nexo_home=runtime,
