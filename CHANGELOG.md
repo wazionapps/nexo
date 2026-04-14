@@ -1,5 +1,32 @@
 # Changelog
 
+## [5.3.23] - 2026-04-14
+
+### Fix Codex broken with Claude model default + centralize model recommendations
+
+- `DEFAULT_CODEX_MODEL` was aliased to the Claude default, causing Codex to
+  write `model = "claude-opus-4-6[1m]"` into `~/.codex/config.toml` and fail
+  with "model not supported when using Codex with a ChatGPT account" on first
+  run. Codex default is now `gpt-5.4` / `xhigh` (matching the onboarding
+  installer).
+- **Single source of truth for model defaults:** new `src/model_defaults.json`
+  read by both the Python runtime (`src/model_defaults.py`) and the JS
+  installer (`bin/nexo-brain.js`). Editing the JSON updates install defaults
+  for new users and — when `recommendation_version` is bumped — triggers a
+  one-time upgrade prompt for existing users on their next interactive
+  `nexo update`.
+- **Recommendation prompt:** during interactive `nexo update`, if the JSON
+  recommends a newer model than the user's current profile AND the user's
+  model is a prior NEXO default (not a customization), they are offered to
+  migrate with `[y/N/later]`. Customized models are respected silently.
+  Non-TTY (cron/headless) updates only log a hint and apply nothing.
+- **Self-heal on update:** Claude-family models written into the Codex
+  runtime profile by previous buggy versions are automatically reset to the
+  current Codex default before client sync, so `~/.codex/config.toml` is
+  regenerated clean.
+- Client sync refuses to write Claude-family models into Codex config
+  (defense in depth against future regressions).
+
 ## [5.3.22] - 2026-04-14
 
 ### Fix headless crons stalling on permission approval

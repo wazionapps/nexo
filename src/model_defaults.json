@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "claude_code": {
+    "model": "claude-opus-4-6[1m]",
+    "reasoning_effort": "",
+    "display_name": "Opus 4.6 with 1M context",
+    "recommendation_version": 1,
+    "previous_defaults": []
+  },
+  "codex": {
+    "model": "gpt-5.4",
+    "reasoning_effort": "xhigh",
+    "display_name": "GPT-5.4 with max reasoning",
+    "recommendation_version": 1,
+    "previous_defaults": []
+  }
+}

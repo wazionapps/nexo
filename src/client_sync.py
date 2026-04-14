@@ -263,8 +263,25 @@ def _sync_codex_managed_config(
     runtime_profile = dict(runtime_profile or {})
     server_config = dict(server_config or {})
 
-    if runtime_profile.get("model"):
-        payload["model"] = runtime_profile["model"]
+    def _looks_like_claude_model(value: str) -> bool:
+        return value.strip().lower().startswith(
+            ("claude", "opus", "sonnet", "haiku")
+        )
+
+    # Heal any pre-existing Claude model written by earlier NEXO versions.
+    existing_model = str(payload.get("model") or "").strip()
+    if existing_model and _looks_like_claude_model(existing_model):
+        payload["model"] = "gpt-5.4"
+
+    # Only write a model from the runtime profile into Codex config if it
+    # looks like a Codex/OpenAI model. Claude models are invalid for Codex
+    # and cause "model not supported" errors on first run.
+    profile_model = (runtime_profile.get("model") or "").strip()
+    if profile_model and not _looks_like_claude_model(profile_model):
+        payload["model"] = profile_model
+    elif profile_model:
+        # Fall back to a known-good Codex default to self-heal.
+        payload["model"] = "gpt-5.4"
     if "reasoning_effort" in runtime_profile:
         payload["model_reasoning_effort"] = runtime_profile.get("reasoning_effort") or ""
 
@@ -281,7 +298,8 @@ def _sync_codex_managed_config(
     codex_table["mcp_managed"] = True
     codex_table["bootstrap_bytes"] = len(bootstrap_prompt.encode("utf-8")) if bootstrap_prompt else 0
     if runtime_profile.get("model"):
-        codex_table["managed_model"] = runtime_profile["model"]
+        # Record the healed/actual model in use, not the raw (possibly Claude) profile.
+        codex_table["managed_model"] = payload.get("model") or runtime_profile["model"]
     codex_table["managed_reasoning_effort"] = runtime_profile.get("reasoning_effort", "") or ""
     if server_config:
         mcp_servers = payload.setdefault("mcp_servers", {})

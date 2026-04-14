@@ -2068,9 +2068,19 @@ def _run_runtime_post_sync(dest: Path = NEXO_HOME, progress_fn=None) -> tuple[bo
     try:
         from client_sync import sync_all_clients
         from client_preferences import normalize_client_preferences
+        from model_defaults import heal_runtime_profiles
 
         schedule_path = dest / "config" / "schedule.json"
         schedule_payload = json.loads(schedule_path.read_text()) if schedule_path.exists() else {}
+        # Heal Claude-family models written into Codex runtime profile by
+        # earlier buggy versions (DEFAULT_CODEX_MODEL was aliased to Claude).
+        existing_profiles = schedule_payload.get("client_runtime_profiles") or {}
+        healed_profiles, heal_messages = heal_runtime_profiles(existing_profiles)
+        if heal_messages:
+            schedule_payload["client_runtime_profiles"] = healed_profiles
+            for msg in heal_messages:
+                _emit_progress(progress_fn, msg)
+                actions.append("model-heal")
         normalized_preferences = normalize_client_preferences(schedule_payload)
         if normalized_preferences != {
             key: schedule_payload.get(key)
