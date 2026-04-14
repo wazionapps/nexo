@@ -1,5 +1,24 @@
 # Changelog
 
+## [5.3.25] - 2026-04-14
+
+### Fix headless Claude Code automation actually running (add --dangerously-skip-permissions)
+
+- `agent_runner.run_automation_prompt` now passes
+  `--dangerously-skip-permissions` to every headless `claude -p`
+  invocation. Without it, Claude Code ignored `permissions.allow` from
+  `settings.json` for MCP tool calls in non-interactive mode and
+  stalled waiting for approval that never arrived. This killed
+  followup-runner, email-monitor, deep-sleep, and every other NEXO
+  cron after v5.3.22 added the allowlist. (Codex already used the
+  equivalent `--dangerously-bypass-approvals-and-sandbox` so Codex
+  automation was never affected.)
+- Interactive sessions (`nexo chat`) never route through this path and
+  keep their normal approval prompts unchanged.
+- Documentation: public blog + changelog page + site navigation updated
+  to feature v5.3.24 (single-source model defaults + headless-safe
+  update) as the latest release.
+
 ## [5.3.24] - 2026-04-14
 
 ### Fix false-positive recommendation prompt + heal on packaged update path

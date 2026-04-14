@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Blog — NEXO Brain</title>
+    <meta name="description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.24 single-source model defaults and headless-safe update release.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/blog/">
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://nexo-brain.com/blog/">
+    <meta property="og:title" content="Blog — NEXO Brain">
+    <meta property="og:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.24 single-source model defaults and headless-safe update release.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Blog — NEXO Brain">
+    <meta name="twitter:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.24 single-source model defaults and headless-safe update release.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "CollectionPage",
+        "name": "Blog — NEXO Brain",
+        "description": "Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.24 single-source model defaults and headless-safe update release.",
+        "url": "https://nexo-brain.com/blog/",
+        "isPartOf": {
+            "@type": "WebSite",
+            "name": "NEXO Brain",
+            "url": "https://nexo-brain.com"
+        }
+    }
+    </script>
+
+    <!-- Google Analytics (GA4) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+
+    <link rel="stylesheet" href="/assets/style.css">
+    <style>
+        .blog-card-date {
+            font-size: 14px;
+            color: var(--purple-light);
+            margin-bottom: 14px;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+        }
+        .blog-card h2 {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 12px;
+            line-height: 1.3;
+        }
+        .blog-card h2 a {
+            color: var(--text);
+            transition: color 0.2s;
+        }
+        .blog-card h2 a:hover {
+            color: var(--purple-light);
+        }
+        .blog-card p {
+            font-size: 15px;
+            color: var(--text-muted);
+            line-height: 1.6;
+            flex: 1;
+        }
+        .blog-card .read-more {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--purple-light);
+        }
+        .blog-card .read-more:hover {
+            color: var(--pink);
+        }
+    </style>
+</head>
+<body class="features-page">
+
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-64.png" alt="NEXO Brain" width="32" height="32">
+            NEXO Brain
+        </a>
+        <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/features/">Features</a>
+            <a href="/evolution/">Evolution</a>
+            <a href="/compare/">Compare</a>
+            <a href="/blog/">Blog</a>
+            <a href="/changelog/">Changelog</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<!-- Header -->
+<section class="pt-nav page-hero">
+    <div class="container">
+        <div class="blog-hero-grid">
+            <div class="page-hero-copy">
+                <div class="section-label">Insights</div>
+                <h1 class="section-title" style="font-size:clamp(34px,5vw,58px);">The <span class="gradient">NEXO</span> blog</h1>
+                <p class="section-subtitle">
+                    Product updates, cognitive architecture notes, field reports, and comparison guides from building an AI runtime that actually remembers, self-heals, and compounds over time.
+                </p>
+                <div class="page-chip-row">
+                    <span class="page-chip">Release notes</span>
+                    <span class="page-chip">Memory architecture</span>
+                    <span class="page-chip">Competitive analysis</span>
+                </div>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/nexo-5-3-24-model-defaults-and-headless-safe-update/" class="btn btn-primary">Read latest release</a>
+                    <a href="/changelog/" class="btn btn-secondary">Latest release notes</a>
+                    <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
+                </div>
+            </div>
+            <div class="blog-featured-card">
+                <div class="section-label">Latest release</div>
+                <div class="blog-featured-meta">
+                    <span class="compare-chip">April 13, 2026</span>
+                    <span class="compare-chip">Protocol contracts</span>
+                    <span class="compare-chip">Cortex contracts</span>
+                    <span class="compare-chip">No silent coercion</span>
+                </div>
+                <h2>NEXO 5.3.11: Protocol and Cortex Contract Hardening</h2>
+                <p>NEXO 5.3.11 hardens the runtime's trust layer: malformed <code>outcome</code>, <code>task_type</code>, and <code>impact_level</code> payloads now fail explicitly instead of being silently coerced into other valid states.</p>
+                <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
+                    <a href="/blog/nexo-5-3-24-model-defaults-and-headless-safe-update/" class="btn btn-primary">Open article</a>
+                    <a href="/changelog/#v5311" class="btn btn-secondary">Open changelog</a>
+                </div>
+                <div class="blog-mini-stack">
+                    <div class="blog-mini-card">
+                        <strong>Companion view</strong>
+                        <span><a href="/changelog/#v5311">The 5.3.11 changelog section</a></span>
+                    </div>
+                    <div class="blog-mini-card">
+                        <strong>Previous release</strong>
+                        <span><a href="/blog/nexo-5-3-10-runtime-metadata-and-deep-doctor-hardening/">NEXO 5.3.10: Packaged Runtime Truth, Evolution Telemetry, and Synthesis Loop Closure</a>.</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Blog Cards -->
+<section class="section-flush-top">
+    <div class="container">
+        <div class="blog-grid">
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 14, 2026</div>
+                <h2><a href="/blog/nexo-5-3-24-model-defaults-and-headless-safe-update/">NEXO 5.3.24: Single-Source Model Defaults + Headless-Safe Update</a></h2>
+                <p>One JSON shared by the Python runtime and JS installer for all model defaults. Codex profiles self-heal on update, fresh installs get headless-safe <code>permissions.allow</code> so cron automation stops zombie-waiting for approvals, and a one-time upgrade prompt ships when a new model recommendation is published.</p>
+                <a href="/blog/nexo-5-3-24-model-defaults-and-headless-safe-update/" class="read-more">Read article <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></a>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 14, 2026</div>
+                <h2><a href="/blog/nexo-5-3-24-model-defaults-and-headless-safe-update/">NEXO 5.3.24: Single-Source Model Defaults + Headless-Safe Update</a></h2>
+                <p>One JSON shared by the Python runtime and JS installer for all model defaults. Codex profiles self-heal on update, fresh installs get headless-safe <code>permissions.allow</code> so cron automation stops zombie-waiting for approvals, and a one-time upgrade prompt ships when a new model recommendation is published.</p>
+                <a href="/blog/nexo-5-3-24-model-defaults-and-headless-safe-update/" class="read-more">Read article <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></a>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 13, 2026</div>
+                <h2><a href="/blog/nexo-5-3-11-protocol-and-cortex-contract-hardening/">NEXO 5.3.11: Protocol and Cortex Contract Hardening</a></h2>
+                <p>A trust-layer patch for the shared brain: malformed <code>outcome</code>, <code>task_type</code>, and <code>impact_level</code> payloads now fail explicitly instead of being silently rewritten into other valid states.</p>
+                <a href="/blog/nexo-5-3-11-protocol-and-cortex-contract-hardening/" class="read-more">Read article <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></a>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 13, 2026</div>
+                <h2><a href="/blog/nexo-5-3-10-runtime-metadata-and-deep-doctor-hardening/">NEXO 5.3.10: Packaged Runtime Truth, Evolution Telemetry, and Synthesis Loop Closure</a></h2>
+                <p>A small but important truthfulness patch for packaged users and the shared-brain loop: successful installs now keep runtime metadata aligned, deep doctor stays honest during fresh bootstrap, Evolution asks for explicit scores again, and synthesis absorbs only actionable startup/update signals.</p>
+                <a href="/blog/nexo-5-3-10-runtime-metadata-and-deep-doctor-hardening/" class="read-more">Read article <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></a>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 13, 2026</div>
+                <h2><a href="/blog/nexo-5-3-9-packaged-core-manifest-heal/">NEXO 5.3.9: Packaged Core-Artifact Manifest Heal for Personal-Script Recovery</a></h2>
+                <p>A real-machine recovery hotfix for packaged users: updates now rebuild the core-artifact manifest from the canonical npm source, so personal scripts stop being mistaken for core and runtime doctor/export recover cleanly after a bad 5.3.8 install.</p>
+                <a href="/blog/nexo-5-3-9-packaged-core-manifest-heal/" class="read-more">Read article <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></a>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 12, 2026</div>
+                <h2><a href="/blog/nexo-5-3-8-packaged-migration-hotfix/">NEXO 5.3.8: Packaged Migration Hotfix for New Root Runtime Modules</a></h2>
+                <p>A fast follow-up to 5.3.7: packaged migration now carries newly added top-level runtime Python modules into <code>~/.nexo</code>, so portability commands work immediately on real upgraded installs.</p>
+                <a href="/blog/nexo-5-3-8-packaged-migration-hotfix/" class="read-more">Read article <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></a>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 12, 2026</div>
+                <h2><a href="/blog/nexo-5-3-7-packaged-update-self-heal-and-portable-user-data/">NEXO 5.3.7: Packaged Update Self-Heal and Portable User-Data Bundles</a></h2>
+                <p>A daily-work release for packaged users: <code>nexo update</code> now re-syncs runtime crons and reloads LaunchAgents after version bumps, new <code>nexo export</code> / <code>nexo import</code> commands finally make operator continuity explicit, and doctor stops overstating tracked Codex drift.</p>
+                <a href="/blog/nexo-5-3-7-packaged-update-self-heal-and-portable-user-data/" class="read-more">Read article <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></a>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 12, 2026</div>
+                <h2><a href="/blog/nexo-5-3-6-claude-mcp-bootstrap-hardening/">NEXO 5.3.6: Claude MCP Bootstrap Hardening for Real Daily Work</a></h2>
+                <p>A practical daily-work patch: Claude Code now picks up the managed NEXO MCP server from the user config it actually reads, schedule status treats open runs honestly, and runtime hygiene gets tighter around script inventory and release checks.</p>
+                <a href="/blog/nexo-5-3-6-claude-mcp-bootstrap-hardening/" class="read-more">Read article <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></a>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 12, 2026</div>
+                <h2><a href="/blog/nexo-5-3-3-doctor-inventory-alignment/">NEXO 5.3.3: Doctor Inventory Alignment for Clean Packaged Installs</a></h2>
+                <p>A small packaging honesty patch: the installer already shipped the built-in backup LaunchAgent as core, and now <code>nexo doctor</code> recognizes that same inventory instead of flagging a clean runtime as unknown.</p>
+                <a href="/blog/nexo-5-3-3-doctor-inventory-alignment/" class="read-more">Read article <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></a>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 12, 2026</div>
+                <h2><a href="/blog/nexo-5-3-2-runtime-boundary-hardening/">NEXO 5.3.2: Runtime Boundary Hardening for Real Shared-Brain Installs</a></h2>
+                <p>A trust-boundary patch for packaged users: NEXO now tracks which runtime scripts and hooks are product artifacts, `nexo scripts` stops mixing them into the personal bucket, and `nexo update` migrates the last legacy Claude Code heartbeat wrappers into managed core hooks.</p>
+                <a href="/blog/nexo-5-3-2-runtime-boundary-hardening/" class="read-more">Read article <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></a>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 12, 2026</div>
+                <h2><a href="/blog/nexo-5-3-1-packaged-runtime-normalization/">NEXO 5.3.1: Packaged Runtime Normalization for Real npm Users</a></h2>
+                <p>A packaging patch that makes <code>nexo update</code> behave like a normal user expects: the installed runtime stays anchored to <code>~/.nexo</code>, packaged artifacts refresh after upgrade, repo-only drift stays out of user installs, and personal scripts keep resolving against the canonical packaged home.</p>
+                <a href="/blog/nexo-5-3-1-packaged-runtime-normalization/" class="read-more">Read article <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></a>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 12, 2026</div>
+                <h2><a href="/blog/nexo-5-2-0-bilingual-response-discipline/">NEXO 5.2.0: Bilingual Response Discipline &amp; Closed Cortex-Quality Loop</a></h2>
+                <p>Two focused gaps close in the Cortex layer: Spanish/English high-stakes detection with bilingual negation suppression, positive signals on the confidence score, a numeric safeguard over the decision tree, and a cortex-quality cache reader that finally consumes the v5.1.0 cron's write-only snapshot.</p>
+                <a href="/blog/nexo-5-2-0-bilingual-response-discipline/" class="read-more">Read article <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></a>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 11, 2026</div>
+                <h2><a href="/blog/nexo-5-1-0-closed-loops/">NEXO 5.1.0: Every Open Loop Closes Under Itself</a></h2>
+                <p>The full NEXO-AUDIT-2026-04-11 roadmap lands as one minor bump. Evolution/adaptive/cognitive/skills loops close under themselves, bitemporal KG export, OpenTelemetry spans, and lint/security/coverage/release gates on every PR.</p>
+                <a href="/blog/nexo-5-1-0-closed-loops/" class="read-more">Read article <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></a>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 10, 2026</div>
+                <h2><a href="/blog/nexo-5-0-0-goal-driven-runtime-close-loops/">NEXO 5.0.0: Goals, Decisions, Outcomes, and Public Proof Finally Match</a></h2>
+                <p>NEXO 5.0.0 connects goal profiles, Decision Cortex v2, measured outcomes, reusable skill evolution, and a stronger benchmark/release surface, turning a powerful runtime into a much more closed-loop one.</p>
+                <a href="/blog/nexo-5-0-0-goal-driven-runtime-close-loops/" class="read-more">Read article <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></a>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 9, 2026</div>
+                <h2><a href="/blog/nexo-4-0-1-release-alignment-heartbeat-reminder/">NEXO 4.0.1: Release Alignment and a Correction-Aware Learning Reminder</a></h2>
+                <p>NEXO 4.0.1 packages the post-4.0.0 mainline fix as a real public patch release, aligning git, npm, GitHub Releases, and the website while adding a heartbeat reminder after visible user corrections without nearby learning capture.</p>
+                <a href="/blog/nexo-4-0-1-release-alignment-heartbeat-reminder/" class="read-more">Read article <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></a>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 9, 2026</div>
+                <h2><a href="/blog/nexo-4-0-0-memory-surface-release/">NEXO 4.0.0: Multimodal Memory, Pre-Compaction Auto-Flush, and a Real Memory Surface</a></h2>
+                <p>NEXO 4.0.0 turns memory into a broader product surface: multimodal artifact refs, structured auto-flush before compaction, a public claim wiki with evidence/freshness, readable exports, richer user-state adaptation, and public retrieval/backend controls.</p>
+                <a href="/blog/nexo-4-0-0-memory-surface-release/" class="read-more">Read article <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></a>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 8, 2026</div>
+                <h2><a href="/blog/nexo-3-2-0-recent-memory-transcript-fallback-system-catalog/">NEXO 3.2.0: Recent Memory That Survives the Day, Transcript Fallback, and a Live Runtime Map</a></h2>
+                <p>NEXO now makes the last 24 hours operationally explicit, adds MCP access to recent Claude Code and Codex transcripts when memory capture is thin, and exposes a live system catalog built from the runtime's canonical sources.</p>
+                <a href="/blog/nexo-3-2-0-recent-memory-transcript-fallback-system-catalog/" class="read-more">Read article <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></a>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 6, 2026</div>
+                <h2><a href="/blog/mcp-memory-tools-compared-2026/">MCP Memory Tools Compared: A 2026 Guide for AI Agent Builders</a></h2>
+                <p>An honest field guide to the five MCP memory tools we keep seeing in the wild — mem0, Letta, Zep, mcp-memory and NEXO Brain. Storage shape, extraction philosophy, forgetting and operational footprint, with guidance on which to pick for which agent.</p>
+                <a href="/blog/mcp-memory-tools-compared-2026/" class="read-more">Read article <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></a>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 6, 2026</div>
+                <h2><a href="/blog/nexo-2-7-0-engineering-loop-trust-release/">NEXO 2.7.0: Engineering Loop Metrics, Release Discipline, and a More Honest Operational Brain</a></h2>
+                <p>NEXO now measures protocol compliance, project pressure, and engineering output across weekly/monthly Deep Sleep summaries, surfaces that signal in the dashboard, and enforces release readiness inside the repo before publish.</p>
+                <a href="/blog/nexo-2-7-0-engineering-loop-trust-release/" class="read-more">Read article <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></a>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 5, 2026</div>
+                <h2><a href="/blog/nexo-2-6-21-deep-sleep-engineering-loop/">NEXO 2.6.21: Deep Sleep Stops Repeating Itself and Starts Engineering Fixes</a></h2>
+                <p>Deep Sleep now deduplicates followups by meaning, consolidates overlapping learnings into canonical records, flags contradictions for review, and backfills concrete engineering followups when recurring patterns imply a real fix.</p>
+                <a href="/blog/nexo-2-6-21-deep-sleep-engineering-loop/" class="read-more">Read article <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></a>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 5, 2026</div>
+                <h2><a href="/blog/nexo-2-6-18-codex-session-audits-deep-sleep-summaries/">NEXO 2.6.18: Codex Session Audits, Weekly Deep Sleep Memory, and Cleaner Retrieval</a></h2>
+                <p>NEXO now persists a managed Codex MCP contract in config, audits real recent Codex sessions and Claude Desktop metadata, writes weekly/monthly Deep Sleep summaries, and makes retrieval explanations more honest.</p>
+                <a href="/blog/nexo-2-6-18-codex-session-audits-deep-sleep-summaries/" class="read-more">Read article <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></a>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 5, 2026</div>
+                <h2><a href="/blog/nexo-2-6-17-installed-codex-bootstrap-hotfix/">NEXO 2.6.17: The Codex Bootstrap Hotfix Existing Installs Actually Needed</a></h2>
+                <p>NEXO now backfills pre-existing Codex integrations during update, fixes blank bootstrap identities when operator metadata is missing, and persists that repaired client state so later syncs stay aligned.</p>
+                <a href="/blog/nexo-2-6-17-installed-codex-bootstrap-hotfix/" class="read-more">Read article <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></a>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 5, 2026</div>
+                <h2><a href="/blog/nexo-2-6-16-smarter-retrieval-codex-runtime/">NEXO 2.6.16: Smarter Retrieval Defaults, Stronger Codex Runtime Parity, and 60-Day Deep Sleep</a></h2>
+                <p>NEXO now manages Codex global bootstrap and model sync, auto-enables HyDE and shallow spreading for the right queries, tracks per-memory stability and difficulty, and gives Deep Sleep a 60-day blended horizon.</p>
+                <a href="/blog/nexo-2-6-16-smarter-retrieval-codex-runtime/" class="read-more">Read article <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></a>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 5, 2026</div>
+                <h2><a href="/blog/nexo-2-6-14-bootstrap-parity-codex-deep-sleep/">NEXO 2.6.14: Bootstrap Parity, Codex-Aware Deep Sleep, and a More Real Shared Brain</a></h2>
+                <p>NEXO now manages Claude and Codex bootstraps with a protected CORE/USER contract, explicitly starts Codex sessions as NEXO, and feeds Codex session transcripts into Deep Sleep overnight analysis.</p>
+                <a href="/blog/nexo-2-6-14-bootstrap-parity-codex-deep-sleep/" class="read-more">Read article <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></a>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 4, 2026</div>
+                <h2><a href="/blog/nexo-2-6-12-shared-brain-clients-and-self-healing/">NEXO 2.6.12 + 2.6.13: Shared Brain Across Clients, Selectable Automation, and Better Self-Healing</a></h2>
+                <p>NEXO now gives Claude Code, Codex, and Claude Desktop the same brain, lets users choose their terminal client and automation backend, and removes a frustrating false-critical runtime edge case with managed KeepAlive recovery.</p>
+                <a href="/blog/nexo-2-6-12-shared-brain-clients-and-self-healing/" class="read-more">Read article <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></a>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 4, 2026</div>
+                <h2><a href="/blog/nexo-2-6-9-integrations-release/">NEXO 2.6.9: Every Integration Channel Now Verified and Synchronized</a></h2>
+                <p>Version drift across npm, OpenClaw, and ClawHub is now impossible. NEXO 2.6.9 introduces automated artifact synchronization, a full CI/CD pipeline, and hardened packaging for every distribution channel.</p>
+                <a href="/blog/nexo-2-6-9-integrations-release/" class="read-more">Read article <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></a>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 4, 2026</div>
+                <h2><a href="/blog/nexo-2-6-7-contributor-evolution-personal-plugins/">NEXO 2.6.7: Your Agent Can Now Contribute Back — and Build Its Own Tools</a></h2>
+                <p>NEXO Brain 2.6.7 introduces opt-in contributor evolution that lets any installation propose improvements to the core, personal MCP plugins that survive updates, and smoother memory continuity for daily use.</p>
+                <a href="/blog/nexo-2-6-7-contributor-evolution-personal-plugins/" class="read-more">Read article <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></a>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 4, 2026</div>
+                <h2><a href="/blog/how-to-give-ai-persistent-memory/">How to Give Your AI Agent Persistent Memory</a></h2>
+                <p>Every AI agent starts each conversation from zero. Here is how persistent memory works, why context windows are not enough, and how NEXO Brain solves the problem with a cognitive architecture inspired by human psychology.</p>
+                <a href="/blog/how-to-give-ai-persistent-memory/" class="read-more">Read article <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></a>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 4, 2026</div>
+                <h2><a href="/blog/atkinson-shiffrin-model-for-ai-agents/">The Atkinson-Shiffrin Model: Why We Built AI Memory Like Human Memory</a></h2>
+                <p>In 1968 Atkinson and Shiffrin described how human memory flows through three stores. We applied their model to AI agents. Here is why cognitive psychology holds the key to building agents that learn over time.</p>
+                <a href="/blog/atkinson-shiffrin-model-for-ai-agents/" class="read-more">Read article <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></a>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 4, 2026</div>
+                <h2><a href="/blog/why-ai-agents-need-to-forget/">Why Your AI Agent Needs to Forget: The Case for Memory Decay</a></h2>
+                <p>Storing everything forever sounds smart until your agent drowns in irrelevant context. Memory decay is not a bug. Here is how Ebbinghaus forgetting curves keep AI memory clean, fast, and relevant.</p>
+                <a href="/blog/why-ai-agents-need-to-forget/" class="read-more">Read article <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg></a>
+            </div>
+
+        </div>
+    </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section">
+    <div class="container">
+        <h2 class="section-title">Give your agent a mind</h2>
+        <p class="section-subtitle" style="margin: 16px auto 48px;">
+            Open source, AGPL-3.0 licensed, and built for builders who want their AI to actually remember.
+        </p>
+        <div class="hero-actions">
+            <a href="https://github.com/wazionapps/nexo" class="btn btn-primary">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+                Star on GitHub
+            </a>
+            <a href="https://github.com/sponsors/wazionapps" class="btn btn-secondary" style="border-color: var(--pink); color: var(--pink);">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+                Sponsor
+            </a>
+            <a href="https://www.npmjs.com/package/nexo-brain" class="btn btn-secondary">
+                View on npm
+            </a>
+        </div>
+    </div>
+</section>
+
+<footer>
+    <div class="container">
+        <div class="footer-content">
+            <div class="footer-left">
+                Created by <strong>Francisco Cerd&agrave; Puigserver</strong> &amp; <strong>NEXO</strong> (Claude Opus) &bull; Built by <a href="https://www.wazion.com">WAzion</a> &bull; AGPL-3.0 License &bull; &copy; 2026
+            </div>
+            <div class="footer-links">
+                <a href="https://github.com/wazionapps/nexo">GitHub</a>
+                <a href="https://x.com/NEXOBRAIN">X / Twitter</a>
+                <a href="https://github.com/sponsors/wazionapps">Sponsor</a>
+                <a href="/docs/">Docs</a>
+                <a href="/compare/">Compare</a>
+                <a href="/blog/">Blog</a>
+                <a href="https://www.npmjs.com/package/nexo-brain">npm</a>
+                <a href="https://github.com/wazionapps/nexo/releases">Releases</a>
+            </div>
+            <div style="text-align:center;margin-top:12px;color:#6b7280;font-size:12px;">Last updated: April 2026</div>
+        </div>
+    </div>
+</footer>
+
+<!-- Cookie Consent (minimal, GDPR) -->
+<div id="cookie-consent" style="display:none;position:fixed;bottom:0;left:0;right:0;background:rgba(10,10,15,0.95);border-top:1px solid #1E1E2E;padding:12px 24px;z-index:200;font-size:13px;color:#94A3B8;text-align:center;">
+    This site uses analytics cookies to improve the experience. <a href="https://www.wazion.com/en/privacy" style="color:#A78BFA;">Privacy Policy</a>
+    <button onclick="document.getElementById('cookie-consent').style.display='none';localStorage.setItem('cc','1')" style="margin-left:16px;background:#7C3AED;color:#fff;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Accept</button>
+    <button onclick="document.getElementById('cookie-consent').style.display='none';localStorage.setItem('cc','0');window['ga-disable-G-1LNEMCJMS7']=true" style="margin-left:8px;background:transparent;color:#94A3B8;border:1px solid #333;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Decline</button>
+</div>
+<script>
+if(!localStorage.getItem('cc')){document.getElementById('cookie-consent').style.display='block';}
+else if(localStorage.getItem('cc')==='0'){window['ga-disable-G-1LNEMCJMS7']=true;}
+</script>
+
+<script>
+(function() {
+    var navLinks = document.querySelector('.nav-links');
+    var navToggle = document.querySelector('.nav-toggle');
+    navLinks.querySelectorAll('a').forEach(function(link) {
+        link.addEventListener('click', function() { navLinks.classList.remove('open'); });
+    });
+    document.addEventListener('click', function(e) {
+        if (navLinks.classList.contains('open') && !navLinks.contains(e.target) && !navToggle.contains(e.target)) {
+            navLinks.classList.remove('open');
+        }
+    });
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,1993 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Changelog — NEXO Brain</title>
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.24 centralizes model defaults in a single JSON shared by the Python runtime and JS installer, heals Claude-family models written into Codex profiles, and ships headless-safe client permissions so automation stops zombie-waiting for approvals.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/changelog/">
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://nexo-brain.com/changelog/">
+    <meta property="og:title" content="Changelog — NEXO Brain">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.24 centralizes model defaults in a single JSON shared by the Python runtime and JS installer, heals Claude-family models written into Codex profiles, and ships headless-safe client permissions so automation stops zombie-waiting for approvals.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Changelog — NEXO Brain">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.24 centralizes model defaults in a single JSON shared by the Python runtime and JS installer, heals Claude-family models written into Codex profiles, and ships headless-safe client permissions so automation stops zombie-waiting for approvals.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "CollectionPage",
+        "name": "Changelog — NEXO Brain",
+        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.24 centralizes model defaults in a single JSON shared by the Python runtime and JS installer, heals Claude-family models written into Codex profiles, and ships headless-safe client permissions so automation stops zombie-waiting for approvals.",
+        "url": "https://nexo-brain.com/changelog/",
+        "isPartOf": {
+            "@type": "WebSite",
+            "name": "NEXO Brain",
+            "url": "https://nexo-brain.com"
+        }
+    }
+    </script>
+
+    <!-- Google Analytics (GA4) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+
+    <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body class="features-page">
+
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-64.png" alt="NEXO Brain" width="32" height="32">
+            NEXO Brain
+        </a>
+        <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/features/">Features</a>
+            <a href="/evolution/">Evolution</a>
+            <a href="/compare/">Compare</a>
+            <a href="/blog/">Blog</a>
+            <a href="/changelog/">Changelog</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<!-- Header -->
+<section class="pt-nav page-hero">
+    <div class="container">
+        <div class="page-hero-grid">
+            <div class="page-hero-copy">
+                <div class="section-label">Version history</div>
+                <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
+                <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
+                <div class="page-chip-row">
+                    <span class="page-chip">v5.3.24 live</span>
+                    <span class="page-chip">Single-source model defaults</span>
+                    <span class="page-chip">Codex self-heal</span>
+                    <span class="page-chip">Headless-safe permissions</span>
+                </div>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="#v5324" class="btn btn-primary">Start with v5.3.24</a>
+                    <a href="#v400" class="btn btn-secondary">See v4.0.0</a>
+                    <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
+                </div>
+            </div>
+            <div class="page-visual">
+                <div class="page-stack">
+                    <div class="page-stack-card">
+                        <strong>v5.3.24</strong>
+                        <span>Single JSON source of truth for model defaults shared by Python runtime and JS installer. Self-heal for Claude-family models in Codex profiles. Headless-safe <code>permissions.allow</code> and Codex <code>approval_policy</code> defaults so cron automation stops stalling on approval prompts.</span>
+                    </div>
+                    <div class="page-stack-card">
+                        <strong>v5.3.11</strong>
+                        <span>Malformed <code>outcome</code>, <code>task_type</code>, and <code>impact_level</code> payloads now fail explicitly instead of being silently rewritten into other valid states.</span>
+                    </div>
+                    <div class="page-stack-card">
+                        <strong>v5.3.0</strong>
+                        <span><code>nexo uninstall</code> — stops all crons, removes runtime, preserves user data. Clean separation of runtime vs user data for safe reinstall.</span>
+                    </div>
+                    <div class="page-stack-card">
+                        <strong>v5.2.1</strong>
+                        <span>Deep-sleep datetime crash fix (7/8 Phase 4 failures) and cortex auto-outcome creation that closes the decision→verification feedback loop.</span>
+                    </div>
+                    <div class="page-stack-card">
+                        <strong>v5.2.0</strong>
+                        <span>Bilingual response discipline (Spanish + English high-stakes detection with negation suppression), numeric confidence safeguard with positive context signals, and a cortex-quality cache reader that closes the v5.1.0 cron's write-only snapshot loop.</span>
+                    </div>
+                    <div class="page-stack-card">
+                        <strong>v5.1.1</strong>
+                        <span>Release trace hygiene patch. New doctor check surfaces stale audit-phase workflows; self-audit auto-retires stale WG-AUDIT-* placeholder goals; diary warnings split recent vs historical commit_ref gaps.</span>
+                    </div>
+                    <div class="page-stack-card">
+                        <strong>v5.1.0</strong>
+                        <span>Every open evolution, adaptive, cognitive, and skills loop closes under itself. Bitemporal KG export, OpenTelemetry spans, and lint/security/release gates on every PR.</span>
+                    </div>
+                    <div class="page-stack-card">
+                        <strong>v5.0.4</strong>
+                        <span>Personal-script runtime bridges are more robust, doctor false positives are quieter, and simple artifact reads answer sooner instead of looking hung.</span>
+                    </div>
+                    <div class="page-stack-card">
+                        <strong>v5.0.1</strong>
+                        <span>Legacy managed Claude Code hooks are purged safely on upgrade, so real installs stop carrying warning drift from older releases.</span>
+                    </div>
+                    <div class="page-stack-card">
+                        <strong>v4.1.0</strong>
+                        <span>Drive/Curiosity: tension-based signals that accumulate during work and mature into autonomous investigations.</span>
+                    </div>
+                    <div class="page-stack-card">
+                        <strong>What changed most</strong>
+                        <span>NEXO stopped being “just memory” and became a cognitive runtime that can prioritize, evaluate, measure, and reuse what actually works.</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section-tight section-flush-top">
+    <div class="container">
+        <div class="changelog-toolbar">
+            <div class="changelog-toolbar-copy">
+                <strong>Browse the changelog in pages</strong>
+                <span>The latest releases stay upfront; older eras are still here, just easier to navigate.</span>
+            </div>
+            <div>
+                <div id="changelog-page-meta" class="changelog-page-meta">Loading release pages…</div>
+                <div id="changelog-pager" class="changelog-pager" aria-label="Changelog pagination"></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v5.3.24 single-source model defaults + headless-safe update -->
+<section id="v5324" class="section-compact" style="background:linear-gradient(135deg,#07111f 0%,#122a4d 34%,#2563eb 68%,#10b981 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.3.24 <span style="opacity:.5;font-weight:400;">&mdash; April 14, 2026</span></div>
+        <h2 class="section-title">Single-Source Model Defaults + Headless-Safe Update</h2>
+        <p class="section-subtitle">
+            Three compounding bugs shared one root cause: NEXO had no single source of truth for model defaults. Python runtime, JS installer, and client-config sync each kept their own copy and silently drifted. v5.3.24 consolidates everything into <code>src/model_defaults.json</code>, read identically by both runtimes, with a one-time upgrade prompt when a maintainer ships a new recommendation.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h3>One JSON to rule model defaults</h3>
+                    <p><code>src/model_defaults.json</code> defines Claude Code + Codex defaults (model, reasoning effort, display name, recommendation version, previous defaults). Both Python and the JS installer read the same file, so drift is impossible.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Codex no longer inherits Claude models</h3>
+                    <p>The historical <code>DEFAULT_CODEX_MODEL = DEFAULT_CLAUDE_CODE_MODEL</code> alias is gone. Codex default is <code>gpt-5.4</code> / <code>xhigh</code>. Client sync refuses to write Claude-family models into <code>~/.codex/config.toml</code>, and existing bad writes are healed on the next <code>nexo update</code>.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Headless crons no longer zombie</h3>
+                    <p>Fresh installs now write a minimum <code>permissions.allow</code> list into <code>~/.claude/settings.json</code> (<code>Bash, Read, Edit, Write, Glob, Grep, Task, Skill, NotebookEdit, WebSearch, WebFetch, mcp__*</code>) so headless automation stops stalling on approval prompts. Codex gets <code>approval_policy = "never"</code> and <code>sandbox_mode = "danger-full-access"</code> as defaults.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>One-time upgrade prompt when a new model ships</h3>
+                    <p>Bumping <code>recommendation_version</code> in the JSON triggers a single interactive prompt on the user's next <code>nexo update</code> — only if they are still on a prior NEXO default. Customized models are respected silently. Users already on the current recommendation are auto-acknowledged without any output.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3><code>nexo update</code> no longer crashes on slow repos</h3>
+                    <p>If the runtime was ever synced from a local checkout, <code>git status --porcelain</code> timing out now returns a graceful error instead of an unhandled <code>TimeoutExpired</code> that crashed every <code>nexo update</code>.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Heal applies on both update paths</h3>
+                    <p>Model-profile heal now runs on both the legacy sync flow (<code>auto_update.py::manual_sync_update</code>) and the packaged npm update flow (<code>plugins/update.py</code>) so stale <code>claude-*</code> values in <code>schedule.json</code> are cleaned regardless of install method.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v5.3.24 single-source model defaults + headless-safe update -->
+<section id="v5324" class="section-compact" style="background:linear-gradient(135deg,#07111f 0%,#122a4d 34%,#2563eb 68%,#10b981 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.3.24 <span style="opacity:.5;font-weight:400;">&mdash; April 14, 2026</span></div>
+        <h2 class="section-title">Single-Source Model Defaults + Headless-Safe Update</h2>
+        <p class="section-subtitle">
+            Three compounding bugs shared one root cause: NEXO had no single source of truth for model defaults. Python runtime, JS installer, and client-config sync each kept their own copy and silently drifted. v5.3.24 consolidates everything into <code>src/model_defaults.json</code>, read identically by both runtimes, with a one-time upgrade prompt when a maintainer ships a new recommendation.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h3>One JSON to rule model defaults</h3>
+                    <p><code>src/model_defaults.json</code> defines Claude Code + Codex defaults (model, reasoning effort, display name, recommendation version, previous defaults). Both Python and the JS installer read the same file, so drift is impossible.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Codex no longer inherits Claude models</h3>
+                    <p>The historical <code>DEFAULT_CODEX_MODEL = DEFAULT_CLAUDE_CODE_MODEL</code> alias is gone. Codex default is <code>gpt-5.4</code> / <code>xhigh</code>. Client sync refuses to write Claude-family models into <code>~/.codex/config.toml</code>, and existing bad writes are healed on the next <code>nexo update</code>.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Headless crons no longer zombie</h3>
+                    <p>Fresh installs now write a minimum <code>permissions.allow</code> list into <code>~/.claude/settings.json</code> (<code>Bash, Read, Edit, Write, Glob, Grep, Task, Skill, NotebookEdit, WebSearch, WebFetch, mcp__*</code>) so headless automation stops stalling on approval prompts. Codex gets <code>approval_policy = "never"</code> and <code>sandbox_mode = "danger-full-access"</code> as defaults.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>One-time upgrade prompt when a new model ships</h3>
+                    <p>Bumping <code>recommendation_version</code> in the JSON triggers a single interactive prompt on the user's next <code>nexo update</code> — only if they are still on a prior NEXO default. Customized models are respected silently. Users already on the current recommendation are auto-acknowledged without any output.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3><code>nexo update</code> no longer crashes on slow repos</h3>
+                    <p>If the runtime was ever synced from a local checkout, <code>git status --porcelain</code> timing out now returns a graceful error instead of an unhandled <code>TimeoutExpired</code> that crashed every <code>nexo update</code>.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Heal applies on both update paths</h3>
+                    <p>Model-profile heal now runs on both the legacy sync flow (<code>auto_update.py::manual_sync_update</code>) and the packaged npm update flow (<code>plugins/update.py</code>) so stale <code>claude-*</code> values in <code>schedule.json</code> are cleaned regardless of install method.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v5.3.11 protocol and cortex contract hardening -->
+<section id="v5311" class="section-compact" style="background:linear-gradient(135deg,#07111f 0%,#18253f 34%,#2563eb 68%,#8b5cf6 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.3.11 <span style="opacity:.5;font-weight:400;">&mdash; April 13, 2026</span></div>
+        <h2 class="section-title">Protocol + Cortex Contract Hardening</h2>
+        <p class="section-subtitle">
+            5.3.10 closed quiet truth gaps in packaged runtime metadata, deep doctor, Evolution telemetry, and synthesis. The next issue that surfaced was more subtle: several protocol/Cortex surfaces still accepted malformed structured parameters and silently rewrote them into different valid states. 5.3.11 closes that trust leak directly.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h3>Malformed close outcomes stop creating false failures</h3>
+                    <p><code>nexo_task_close</code> now rejects invalid <code>outcome</code> values explicitly instead of silently coercing them to <code>failed</code>. Bad payloads no longer poison protocol history, debt, or hot-context summaries with failures that never really happened.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Protocol tools no longer invent a different task type</h3>
+                    <p><code>nexo_task_open</code> and <code>nexo_confidence_check</code> now reject invalid <code>task_type</code> values instead of quietly degrading them to another valid type. The runtime now says the contract is wrong instead of guessing what the caller meant.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Cortex checks and decisions enforce the same contract</h3>
+                    <p><code>nexo_cortex_check</code> and <code>nexo_cortex_decide</code> now reject malformed <code>task_type</code>, and Cortex decisions also reject malformed <code>impact_level</code> instead of silently promoting it to <code>high</code>. Decision weighting stays faithful to the actual request.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Internal DB writes cannot bypass the hardening</h3>
+                    <p>The DB helpers behind protocol and Cortex now validate the same canonical values before writing rows. Malformed internal calls can no longer sneak bad semantics into persisted task, debt, context, or evaluation data.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v5.3.10 packaged runtime truth -->
+<section id="v5310" class="section-compact" style="background:linear-gradient(135deg,#07111f 0%,#12223d 34%,#2563eb 68%,#22c55e 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.3.10 <span style="opacity:.5;font-weight:400;">&mdash; April 13, 2026</span></div>
+        <h2 class="section-title">Packaged Runtime Truth + Evolution Telemetry + Synthesis Loop Closure</h2>
+        <p class="section-subtitle">
+            The 5.3.7 through 5.3.9 release line fixed real packaged-runtime breakages on real machines, but some quieter trust gaps remained: runtime metadata could still drift, deep doctor could look degraded before the first self-audit artifact existed, weekly Evolution could finish without persisting any score telemetry, and startup/update summaries were still being written without re-entering the shared-brain loop. 5.3.10 closes those gaps together.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h3>Packaged installs now keep runtime metadata aligned</h3>
+                    <p>Fresh installs, migrations, and same-version refreshes now copy the published root <code>package.json</code> into <code>~/.nexo</code>. Version metadata inside the live runtime stops drifting behind the actual npm package that just finished installing.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Deep doctor no longer implies breakage too early</h3>
+                    <p>If the daily self-audit is configured but the runtime was just installed or updated, deep doctor now reports that the summary is still pending instead of degrading the whole check because <code>self-audit-summary.json</code> does not exist yet.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Evolution status stops going silent</h3>
+                    <p>The weekly Evolution prompt now explicitly requires canonical <code>dimension_scores</code> and <code>score_evidence</code>. That restores the intended telemetry path into <code>evolution_metrics</code>, and the status surface falls back to the objective file if rows are still missing.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Update signals no longer die in a log file</h3>
+                    <p><code>update-last-summary.json</code> now feeds daily synthesis only when it contains something operationally important such as deferred syncs, bootstrap changes, schedule healing, notices, or errors. Routine cooldown/no-op summaries stay silent instead of polluting the briefing.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v5.3.9 packaged core-artifact manifest heal -->
+<section id="v539" class="section-compact" style="background:linear-gradient(135deg,#07111f 0%,#13233f 32%,#2563eb 68%,#14b8a6 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.3.9 <span style="opacity:.5;font-weight:400;">&mdash; April 13, 2026</span></div>
+        <h2 class="section-title">Packaged Core-Artifact Manifest Heal for Personal-Script Recovery</h2>
+        <p class="section-subtitle">
+            Real-machine validation of 5.3.8 exposed a more serious packaged regression: the update path could rebuild the runtime core-artifact manifest from the live <code>~/.nexo/scripts</code> directory instead of the canonical npm package source. That reclassified personal scripts as core, hid them from portable export, and made runtime doctor treat personal LaunchAgents like unexplained drift. 5.3.9 heals that boundary directly.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h3>Packaged updates now rebuild the manifest from the canonical package source</h3>
+                    <p>Instead of scanning the live runtime tree during packaged updates, NEXO now resolves the canonical npm package <code>src/</code> directory and rebuilds <code>runtime-core-artifacts.json</code> from that authoritative source. Personal files under <code>~/.nexo/scripts</code> stop leaking into the core manifest.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Bad 5.3.8 installs now self-heal instead of staying poisoned</h3>
+                    <p>The script registry now prefers the canonical packaged source when it is available, even if the runtime manifest was already poisoned by an older update. That means existing installs recover their personal-script classification instead of requiring manual cleanup or trusting a broken manifest forever.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Doctor re-syncs personal scripts before LaunchAgent inventory</h3>
+                    <p>Runtime doctor now restores personal script ownership before auditing unknown <code>com.nexo.*</code> LaunchAgents. Personal automations stop looking like unexplained core drift, and LaunchAgent inventory starts matching the real runtime again.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Why this hotfix matters</h3>
+                    <p>5.3.8 made the portability commands real on upgraded installs. 5.3.9 makes sure the same packaged update path does not silently erase the boundary between core runtime files and the operator's own automations. That boundary is what keeps daily work, export/import, and diagnostics trustworthy.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v5.3.8 packaged migration hotfix -->
+<section id="v538" class="section-compact" style="background:linear-gradient(135deg,#07111f 0%,#0f172a 32%,#2563eb 70%,#22c55e 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.3.8 <span style="opacity:.5;font-weight:400;">&mdash; April 12, 2026</span></div>
+        <h2 class="section-title">Packaged Migration Hotfix for New Root Runtime Modules</h2>
+        <p class="section-subtitle">
+            Real-machine validation of 5.3.7 exposed one last packaged gap: the npm package shipped <code>nexo export</code> / <code>nexo import</code>, but upgraded installs could still miss <code>user_data_portability.py</code> inside <code>~/.nexo</code> because the runtime migrator only copied a manual allowlist of root modules. 5.3.8 closes that gap directly.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h3>The packaged migrator now discovers root modules dynamically</h3>
+                    <p>Instead of relying only on a static list, the packaged installer now scans <code>src/</code> for top-level Python modules and carries them into the live runtime. New product surfaces stop getting stranded in the npm tarball while the existing install keeps running an older incomplete file set.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>The portability commands now work on real upgraded installs</h3>
+                    <p>The user-facing effect is simple: when 5.3.8 ships a new root runtime module, upgraded packaged installs actually receive it. That is what makes commands such as <code>nexo export</code> and <code>nexo import</code> reliable after <code>nexo update</code> instead of only looking correct in docs and package contents.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Regression coverage now protects the migration boundary</h3>
+                    <p>A dedicated packaged-update regression test now asserts that the installer keeps discovering newly added root modules. Future releases have to preserve that behavior instead of silently omitting new files again.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Why this hotfix matters</h3>
+                    <p>5.3.7 fixed the packaged happy path and exposed portable continuity. 5.3.8 makes that work real on existing installs. Without this hotfix, the release story was coherent in GitHub, npm, docs, and website, but incomplete in the actual runtime the operator uses every day.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v5.3.7 packaged update self-heal -->
+<section id="v537" class="section-compact" style="background:linear-gradient(135deg,#081225 0%,#0f172a 35%,#2563eb 72%,#06b6d4 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.3.7 <span style="opacity:.5;font-weight:400;">&mdash; April 12, 2026</span></div>
+        <h2 class="section-title">Packaged Update Self-Heal &amp; Portable User-Data Bundles</h2>
+        <p class="section-subtitle">
+            After fixing the Claude bootstrap path, the next real packaged-user gap showed up immediately on a real Mac: <code>nexo update</code> could still leave cron or LaunchAgent state needing a follow-up repair, and <code>nexo doctor</code> could stay red on tracked Codex drift even after the runtime itself was clean. 5.3.7 closes that happy-path gap and finally exposes explicit operator export/import commands for continuity.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h3>Packaged updates now self-heal more of the runtime</h3>
+                    <p>After a successful npm bump, packaged installs now re-sync runtime cron definitions, skip same-file hook-copy noise when the runtime already points at its canonical source, and reload managed macOS LaunchAgents so the updated code is actually the code the machine runs.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Operator continuity is now a first-class CLI path</h3>
+                    <p><code>nexo export</code> writes a portable user-data bundle with the active DB, brain state, coordination artifacts, selected config, and personal scripts. <code>nexo import</code> restores that bundle into a clean runtime and creates a safety backup first instead of making continuity an implicit manual ritual.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Doctor severity now matches runtime reality</h3>
+                    <p>Tracked historical Codex drift with zero open conditioned protocol debt now degrades instead of going critical, so cleaned packaged runtimes stop looking broken just because transcript history still exists.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Why this release exists</h3>
+                    <p>5.3.6 fixed the Claude MCP bootstrap path. 5.3.7 is the release that makes that fix hold up in the normal packaged lifecycle too, so a real operator can update, restart, and keep working without having to know which extra repair command to run next or wonder whether doctor is describing the runtime honestly.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v5.3.6 Claude bootstrap hardening -->
+<section id="v536" class="section-compact" style="background:linear-gradient(135deg,#081225 0%,#2563eb 42%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.3.6 <span style="opacity:.5;font-weight:400;">&mdash; April 12, 2026</span></div>
+        <h2 class="section-title">Claude MCP Bootstrap Hardening &amp; Runtime Hygiene for Daily Work</h2>
+        <p class="section-subtitle">
+            A practical patch release aimed at the real packaged path users actually live in. Claude Code now sees the managed NEXO MCP server from the user config it really reads, schedule status stops mislabeling open runs as broken, and runtime/release hygiene tightens around the edges that cause noisy drift.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h3>Claude Code picks up the managed MCP server reliably</h3>
+                    <p>Managed client sync now writes the NEXO MCP server to <code>~/.claude.json</code> as well as Claude's managed settings file. That keeps <code>nexo chat</code>, <code>claude mcp</code>, and interactive sessions aligned on current Claude Code builds instead of leaving the runtime healthy but invisible.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Open runs look like open runs, not broken jobs</h3>
+                    <p><code>nexo schedule status</code> now treats in-flight jobs honestly, showing age and active/open-run state instead of collapsing every missing exit code into a failure. That makes long-running or keep-alive automation easier to trust at a glance.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Less noise around the runtime boundary</h3>
+                    <p>Core-vs-personal script classification now reads more of the actual packaged/runtime surface, retroactive learnings stop opening keyword-only false positives outside their declared <code>applies_to</code> scope, and the final release-audit skill resolves repo roots more robustly across real operator layouts.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v5.3.3 doctor inventory alignment -->
+<section id="v533" class="section-compact" style="background:linear-gradient(135deg,#0b1120 0%,#2563eb 45%,#06b6d4 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.3.3 <span style="opacity:.5;font-weight:400;">&mdash; April 12, 2026</span></div>
+        <h2 class="section-title">Doctor Inventory Alignment for Clean Packaged Installs</h2>
+        <p class="section-subtitle">
+            A small but important packaging honesty patch. NEXO already shipped an hourly built-in backup helper as part of the packaged runtime. Now <code>nexo doctor</code> inventories that helper as core too, so clean npm installs stop surfacing a false “unknown LaunchAgent” warning.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h3>Installer and doctor now agree</h3>
+                    <p>The packaged installer has treated <code>com.nexo.backup</code> as a core auxiliary LaunchAgent. Runtime doctor now uses that same inventory, instead of acting as if the built-in hourly DB backup helper appeared from nowhere.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>No more false dirty-runtime signal</h3>
+                    <p>This removes the last misleading warning from the packaged cleanup sequence. Users can install from npm, keep their data in <code>~/.nexo</code>, and run <code>nexo doctor</code> without seeing a fake “unknown LaunchAgent” on an otherwise healthy runtime.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v5.3.2 runtime boundary hardening -->
+<section id="v532" class="section-compact" style="background:linear-gradient(135deg,#0b1120 0%,#7c3aed 55%,#ec4899 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.3.2 <span style="opacity:.5;font-weight:400;">&mdash; April 12, 2026</span></div>
+        <h2 class="section-title">Runtime Boundary Hardening &amp; Honest Core vs Personal Separation</h2>
+        <p class="section-subtitle">
+            A trust-boundary patch for packaged users. NEXO now persists which scripts and hooks belong to the packaged core runtime, stops mixing them into the personal-script bucket, migrates the legacy Claude Code heartbeat wrappers into managed core hooks, and removes a stale public LaunchAgent template that was not backed by packaged core code.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h3>Personal means personal again</h3>
+                    <p>Packaged installs now write a runtime core-artifacts manifest and the personal script registry reads it. If a file was shipped by the product, it is classified as core instead of being mixed into the operator's own script bucket just because it happens to live under <code>~/.nexo/scripts</code>.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Heartbeat hooks are now real core hooks</h3>
+                    <p>The remaining Claude Code heartbeat wrappers are shipped under the managed hooks surface. <code>nexo update</code> rewrites managed client configs to those hook paths and removes the retired legacy wrappers from <code>NEXO_HOME/scripts</code>.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v5.3.1 packaged runtime normalization -->
+<section id="v531" class="section-compact" style="background:linear-gradient(135deg,#0b1120 0%,#7c3aed 55%,#ec4899 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.3.1 <span style="opacity:.5;font-weight:400;">&mdash; April 12, 2026</span></div>
+        <h2 class="section-title">Packaged Runtime Normalization &amp; Clean <code>nexo update</code> Path</h2>
+        <p class="section-subtitle">
+            A patch release for real npm users. Installed runtimes now stay anchored to <code>~/.nexo</code>, packaged bootstrap and client artifacts are refreshed after upgrade, repo-only release-artifact drift is skipped inside user installs, and personal-script/runtime path resolution stays on the canonical packaged home.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h3>No more legacy path fallback</h3>
+                    <p>Packaged wrappers, helpers, hooks, and migrations now resolve the runtime from <code>~/.nexo</code> instead of drifting back to legacy <code>~/claude</code> assumptions or a local source checkout. A normal user install behaves like a normal user install again.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Update keeps packaged installs coherent</h3>
+                    <p><code>nexo update</code> now refreshes packaged client/bootstrap artifacts after upgrade and keeps personal scripts, startup preflight, and doctor behavior aligned with the packaged runtime. Your data stays in <code>~/.nexo</code>; the runtime stays replaceable.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v5.3.0 nexo uninstall -->
+<section id="v530" class="section-compact" style="background:linear-gradient(135deg,#0b1120 0%,#7c3aed 55%,#ec4899 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.3.0 <span style="opacity:.5;font-weight:400;">&mdash; April 12, 2026</span></div>
+        <h2 class="section-title"><code>nexo uninstall</code> &mdash; Clean Runtime Separation</h2>
+        <p class="section-subtitle">
+            A new CLI command that cleanly separates runtime from user data. Stops all crons (LaunchAgents on macOS, systemd timers on Linux), removes the MCP server and hooks from Claude Code settings, deletes runtime files, and preserves all user data. Supports <code>--dry-run</code> to preview and <code>--delete-data</code> for full wipe.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h3>Safe by default</h3>
+                    <p>Databases, learnings, brain calibration, personal scripts, operations logs &mdash; all preserved. Only core runtime files are removed. A <code>.uninstalled</code> marker tells the next <code>npm install</code> that existing data is waiting.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Dynamic runtime detection</h3>
+                    <p>Instead of a hardcoded file list, <code>nexo uninstall</code> removes any <code>.py</code>/<code>.txt</code> at the NEXO_HOME root and known runtime directories. New core files added in future releases are automatically covered.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v5.2.1 Bug fixes & cortex outcome feedback loop -->
+<section id="v521" class="section-compact" style="background:linear-gradient(135deg,#0b1120 0%,#7c3aed 55%,#ec4899 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.2.1 <span style="opacity:.5;font-weight:400;">&mdash; April 12, 2026</span></div>
+        <h2 class="section-title">Deep-Sleep Crash Fix &amp; Cortex Outcome Feedback Loop</h2>
+        <p class="section-subtitle">
+            A patch release that fixes a datetime crash causing 7/8 Deep Sleep Phase 4 failures and closes the cortex decision&rarr;verification feedback loop by auto-creating outcomes when none exist.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h3>Deep-Sleep datetime fix</h3>
+                    <p><code>_parse_any_datetime</code> in <code>apply_findings.py</code> now explicitly strips timezone info with <code>dt.replace(tzinfo=None)</code>, fixing a <code>TypeError</code> when comparing offset-naive and offset-aware datetimes during Phase 4. This bug caused 7 out of 8 Deep Sleep runs to fail on a single night.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Cortex outcome auto-creation</h3>
+                    <p><code>cortex_decide()</code> now auto-creates a <code>decision_outcome</code> when no existing outcome is linked to the task. The daily <code>outcome-checker</code> cron verifies these automatically, closing the decision&rarr;verification feedback loop that was previously open (<code>linked_outcomes_total</code> was always 0).</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v5.2.0 Response contract i18n + cortex-quality cache reader -->
+<section id="v520" class="section-compact" style="background:linear-gradient(135deg,#0b1120 0%,#7c3aed 55%,#ec4899 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.2.0 <span style="opacity:.5;font-weight:400;">&mdash; April 12, 2026</span></div>
+        <h2 class="section-title">Bilingual Response Discipline &amp; Closed Cortex-Quality Loop</h2>
+        <p class="section-subtitle">
+            A focused minor release that closes two real gaps in the Cortex layer: the high-stakes detector was English-only with no way to reward well-prepared tasks, and the <code>nexo-cortex-cycle</code> cron was writing a quality snapshot that no reader ever consumed. Both loops close in this release. No breaking changes; no bootstrap, startup, Deep Sleep, or client-parity surfaces were touched.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h3>Spanish keyword parity</h3>
+                    <p><code>HIGH_STAKES_KEYWORDS_ES</code> adds ~45 Spanish keywords (<code>crítico</code>, <code>producción</code>, <code>facturación</code>, <code>clientes</code>, <code>despliegue</code>, <code>credencial</code>, <code>privacidad</code>, <code>reembolso</code>, and both accented and unaccented variants). A goal written in Spanish now trips the same high-stakes gate as its English twin &mdash; something like <em>"migrar la base de datos de producción"</em> used to silently skip the penalty.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Negation-aware detection</h3>
+                    <p><code>NEGATION_PATTERNS</code> suppresses the high-stakes flag when the text explicitly disclaims touching the sensitive area (<em>"sin afectar producción"</em>, <em>"no tocar prod"</em>, <em>"without touching production"</em>, <em>"don't modify"</em>). Before this release these boundary statements caused false positives because the raw keyword was physically present.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Positive signals on the confidence score</h3>
+                    <p><code>evaluate_response_confidence</code> now accepts <code>pre_action_context_hits</code> (+up to 10) and <code>area_has_atlas_entry</code> (+5). The score was a pure penalty accumulator before this release &mdash; there was no way to reward a task that <em>did</em> load the right context. Both signals are capped so they can never override a real risk penalty.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Numeric safeguard over the decision tree</h3>
+                    <p>After the boolean <code>high_stakes/unknowns/evidence/verification</code> rules pick a mode, a monotonic safeguard downgrades <code>answer</code> to <code>verify</code> when <code>final_score &lt; 50</code> and <code>verify</code> to <code>defer</code> when <code>high_stakes</code> and <code>final_score &lt; 30</code>. The safeguard can only make response discipline <em>stricter</em>, never looser &mdash; catching edge cases where soft penalties stacked below the threshold of any single rule.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Cortex-quality cache reader</h3>
+                    <p>The <code>nexo-cortex-cycle</code> cron has been writing <code>$NEXO_HOME/operations/cortex-quality-latest.json</code> every 6h since v5.1.0, with an explicit promise in its own docstring that <em>"dashboards / morning briefings can read fresh metrics without re-running the SQL"</em>. That reader never existed. In v5.2.0, <code>nexo_cortex_quality</code> finally serves the cached snapshot for the 7d / 1d windows when the file is fresh (&lt; 6h 30m), the schema matches, and the window is cached &mdash; otherwise it falls back silently to the live <code>cortex_evaluation_summary</code> computation.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Observable cache path</h3>
+                    <p>The handler's response now includes <code>"source": "cache" | "live"</code> so callers (dashboards, morning briefings, agents) can see which path was taken without extra instrumentation. The cache is a performance optimisation, never a correctness dependency &mdash; any failure (missing file, corrupt JSON, stale timestamp, unknown schema, non-cached window) routes to live.</p>
+                </div>
+            </div>
+        </div>
+        <p class="section-subtitle" style="margin-top:24px;">
+            9 new tests in <code>tests/test_protocol.py</code> lock in Spanish detection, bilingual negation suppression, positive signal boosting, numeric safeguard transitions, and score bounds. 7 new tests in <code>tests/test_cortex_quality_cache.py</code> cover fresh cache hits, stale cache, corrupt schema, invalid JSON, missing file, and non-cached windows. Lint, security, coverage, release-readiness, and client-parity gates all green.
+        </p>
+    </div>
+</section>
+
+<!-- v5.1.1 Release trace hygiene patch -->
+<section id="v511" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.1.1 <span style="opacity:.5;font-weight:400;">&mdash; April 12, 2026</span></div>
+        <h2 class="section-title">Release Trace Hygiene</h2>
+        <p class="section-subtitle">
+            A focused patch that closes the gap where audit-phase workflow traces and self-audit placeholder goals silently accumulated in the runtime. No breaking changes; no bootstrap, startup, Deep Sleep, or client-parity surfaces were touched.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h3>Doctor check: release_trace_hygiene</h3>
+                    <p>New runtime check flags stale <code>audit-phase</code> <code>workflow_runs</code> (over 6h open) and stale active <code>WG-AUDIT-*</code> / <code>NEXO-AUDIT-*</code> goals with no open runs, so drifted release traces become a visible degraded check instead of quietly piling up.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Self-audit auto-retire</h3>
+                    <p>The daily self-audit now abandons <code>WG-AUDIT-*</code> placeholder goals after 36h via <code>_retire_stale_audit_goals_inline()</code>, marking them with an explicit <code>blocker_reason</code>. They are recreated only if the underlying pattern reappears.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Diary warning split</h3>
+                    <p><code>episodic_memory.handle_session_diary_write</code> now separates commit_ref gap warnings into recent (last 7 days) and historical buckets, so live drift stands out from dormant debt instead of being lumped together.</p>
+                </div>
+            </div>
+        </div>
+        <p class="section-subtitle" style="margin-top:24px;">
+            All three changes ship with dedicated tests and cleared Lint, Security, Release readiness, and Verify integrations / client-parity gates on PR #127.
+        </p>
+    </div>
+</section>
+
+<!-- v5.1.0 NEXO-AUDIT Phases 2-5 -->
+<section id="v510" class="section-compact" style="background:linear-gradient(135deg,#111827 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.1.0 <span style="opacity:.5;font-weight:400;">&mdash; April 11, 2026</span></div>
+        <h2 class="section-title">Every Open Loop Closes Under Itself</h2>
+        <p class="section-subtitle">
+            v5.1.0 lands the full NEXO-AUDIT-2026-04-11 roadmap as a single coordinated minor bump. Evolution, adaptive, cognitive, and skills subsystems now close their own loops instead of leaving half-delivered signals inside the database. The knowledge graph exports cleanly, OpenTelemetry spans hook in when you want them, and every PR now has to clear lint, security, coverage, and release-readiness gates before it can merge.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h3>Evolution + Adaptive + Skills Loops Close</h3>
+                    <p>Approved evolution proposals now auto-apply on the next cycle, adaptive rollbacks open visible followups instead of hiding inside <code>adaptive_log</code>, outcome patterns auto-promote to draft skills, and a Voyager-style detector surfaces co-occurring skill pairs as composite-skill candidates.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Cognitive Subsystems Get Loud</h3>
+                    <p>Search reranking now honours <code>dream_weight</code> and somatic markers as first-class signals. State watchers open deterministic <code>NF-WATCHER-{id}</code> followups and auto-resolve them, and correction fatigue surfaces as a visible followup instead of silently decaying memory.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Cortex Keeps Watching Itself</h3>
+                    <p>A new Cortex quality cron runs every 6 hours, watches accept rate, linked-success rate, and override gap, and opens <code>NF-CORTEX-QUALITY-DROP</code> idempotently when the decision engine starts drifting between cycles.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Retroactive Learnings</h3>
+                    <p>Adding a new learning now walks recent decisions, scores them against the rule, and opens deterministic <code>NF-RETRO-L&lt;id&gt;-D&lt;id&gt;</code> followups for every decision the learning would have changed &mdash; exposed via <code>nexo_learning_apply_retroactively</code>.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Bitemporal Knowledge Graph Export</h3>
+                    <p>The KG already tracked <code>valid_from</code> / <code>valid_until</code> on every edge. v5.1.0 adds <code>nexo_kg_export</code> with JSON-LD (using an <code>nexo:*</code> vocabulary) and GraphML output, and the <code>as_of</code> parameter replays historical snapshots for igraph, Gephi, NetworkX, and Cytoscape.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>OpenTelemetry, Opt-In</h3>
+                    <p>A new soft-import observability layer activates only when <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> or <code>OTEL_SERVICE_NAME</code> is set. When enabled, every tool call becomes a real span with <code>ai.tool.*</code> semantic attributes. When disabled, the wrapper stays a no-op so runtime cost is zero.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Hook Lifecycle Observability</h3>
+                    <p>A new <code>hook_runs</code> table and <code>nexo_hook_runs</code> tool surface recent hook runs, failure streaks, and latency. Hook drops are no longer invisible.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>CI Gates On Every PR</h3>
+                    <p>New GitHub Actions workflows enforce ruff (E9/F63/F7/F82/F821), bandit at high severity/high confidence, coverage baselines for decay/trust/plugin loader, and <code>verify_release_readiness.py --ci</code>. A PR that breaks the release contract now fails loudly instead of waiting until tag push.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Safer v5.0.x &rarr; v5.1.0 Update Path</h3>
+                    <p>On a version bump, macOS installs now <code>launchctl unload</code> and reload every <code>com.nexo.*.plist</code> so long-lived crons pick up the new codebase immediately. <code>auto_update</code> is guarded by a POSIX <code>flock</code> with stale-steal at 10 minutes so two concurrent <code>nexo update</code> runs cannot stomp each other.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Honest Feature Matrix vs Peers</h3>
+                    <p>The new <code>benchmarks/results/comparison-vs-competition-2026-04.md</code> lays out where NEXO wins, where it is on par, and where peers lead &mdash; across Letta, Mem0, Zep, Graphiti, Cognee, and DSPy. No cherry-picking.</p>
+                </div>
+            </div>
+        </div>
+        <div style="margin-top:24px;font-size:14px;opacity:.6;">
+            Closed loops across evolution / adaptive / cognitive / skills &bull; bitemporal KG export &bull; OpenTelemetry spans &bull; lint/security/coverage/release gates on every PR &bull; safer update path
+        </div>
+    </div>
+</section>
+
+<!-- v5.0.4 Runtime bridge + doctor cleanup -->
+<section id="v504" class="section-compact" style="background:linear-gradient(135deg,#111827 0%,#6d28d9 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.0.4 <span style="opacity:.5;font-weight:400;">&mdash; April 11, 2026</span></div>
+        <h2 class="section-title">The 5.0 Runtime Bridge And Doctor Signal Story Tighten Up</h2>
+        <p class="section-subtitle">
+            v5.0.4 closes the next small post-5.0 runtime gap. The vendorable helper path used by personal scripts is now more robust, the doctor stops degrading on one-off advisory telemetry noise, and simple read/respond flows are pushed harder to answer after the first relevant artifact instead of feeling hung.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h3>Helper Bridges Stop Depending On PATH Luck</h3>
+                    <p><code>templates/nexo_helper.py</code> now resolves <code>NEXO_HOME</code> and the <code>nexo</code> CLI robustly, so personal scripts and subprocess flows stop failing because one runtime happened to be launched from a different environment.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Doctor Becomes Quieter Without Lying</h3>
+                    <p>Advisory self-audit warnings stay advisory, and a single missing usage-telemetry row no longer degrades the full runtime. Real drift still shows up; one-off noise no longer poisons the top-line health signal.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Single-Artifact Asks Answer Sooner</h3>
+                    <p>The managed Claude/Codex bootstraps now tell NEXO to answer visibly after a single email, diary, reminder, or followup read before chaining extra lookups, which removes a chunk of the “looks hung” feeling on basic retrieval tasks.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>JSON Helper Paths Are First-Class</h3>
+                    <p>The vendorable bridge now includes a canonical JSON-returning automation helper, so personal scripts no longer need brittle ad-hoc parsing when they depend on structured backend output.</p>
+                </div>
+            </div>
+        </div>
+        <div style="margin-top:24px;font-size:14px;opacity:.6;">
+            Runtime bridge hardening &bull; quieter doctor signals &bull; visible-first response pacing &bull; structured helper JSON
+        </div>
+    </div>
+</section>
+
+<!-- v5.0.2 Deep-doctor schema-drift hotfix -->
+<section id="v502" class="section-compact" style="background:linear-gradient(135deg,#111827 0%,#4338ca 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.0.2 <span style="opacity:.5;font-weight:400;">&mdash; April 10, 2026</span></div>
+        <h2 class="section-title">The 5.0 Runtime Now Doctors Itself Honestly</h2>
+        <p class="section-subtitle">
+            v5.0.2 is a focused hotfix release for the post-upgrade deep-doctor path. Healthy installs using the current <code>learnings</code> schema could still show a misleading skipped check because the doctor was reading the old <code>archived</code> column. This patch restores schema-aware auditing and revalidates the corrected path on a real upgraded runtime.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h3>Current And Legacy Schemas Both Pass</h3>
+                    <p>The deep doctor now reads both the modern <code>status</code>-based <code>learnings</code> schema and the older <code>archived</code> flag instead of assuming one historical shape forever.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Real Runtime Revalidated</h3>
+                    <p>The patched path was re-tested on a live upgraded install with <code>nexo update</code>, <code>nexo doctor --tier deep</code>, and <code>nexo doctor --tier all</code>.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Startup Smoke Still Clean</h3>
+                    <p>A fresh Claude Code startup smoke returned <code>OK STARTUP</code> after the sync, so the hotfix ships with runtime evidence instead of only a unit-test story.</p>
+                </div>
+            </div>
+        </div>
+        <div style="margin-top:24px;font-size:14px;opacity:.6;">
+            Schema-aware doctoring restored &bull; upgraded runtime revalidated &bull; Claude Code startup smoke clean
+        </div>
+    </div>
+</section>
+
+<!-- v5.0.1 Upgrade-path hardening -->
+<section id="v501" class="section-compact" style="background:linear-gradient(135deg,#111827 0%,#1d4ed8 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.0.1 <span style="opacity:.5;font-weight:400;">&mdash; April 10, 2026</span></div>
+        <h2 class="section-title">The 5.0 Runtime Now Upgrades Cleanly</h2>
+        <p class="section-subtitle">
+            v5.0.1 is a hotfix release focused on the live upgrade path. Older installs could preserve obsolete managed Claude Code hooks and show warning storms that looked like a hung runtime even when the core system was healthy. This patch removes only that stale managed drift and revalidates the path on a real install.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h3>Legacy Managed Hooks Are Purged</h3>
+                    <p><code>client_sync</code> now removes obsolete managed Claude Code hook identities, such as the old <code>heartbeat-guard.sh</code> path, when they no longer belong to the published core hook set.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Custom Hooks Stay Intact</h3>
+                    <p>The cleanup is narrow on purpose: custom local hooks remain untouched while stale core-managed entries are removed, so operators do not lose their own local behavior.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Real Runtime Revalidation</h3>
+                    <p>The corrected path was re-tested on a live install with client sync, Codex and Claude Code headless runtime access, email-monitor recovery, lifecycle health checks, and a full <code>nexo update</code>.</p>
+                </div>
+            </div>
+        </div>
+        <div style="margin-top:24px;font-size:14px;opacity:.6;">
+            Legacy hook drift removed &bull; custom hooks preserved &bull; live install path revalidated end to end
+        </div>
+    </div>
+</section>
+
+<!-- v5.0.0 Goal-driven runtime -->
+<section id="v500" class="section-compact" style="background:linear-gradient(135deg,#111827 0%,#0f766e 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.0.0 <span style="opacity:.5;font-weight:400;">&mdash; April 10, 2026</span></div>
+        <h2 class="section-title">NEXO Closes the Loop</h2>
+        <p class="section-subtitle">
+            v5.0.0 connects the pieces that used to live too far apart: goal profiles influence decisions, decisions link to measured outcomes, repeated winning patterns can seed reusable skills, and the public benchmark/story now reflects that broader runtime truth instead of a memory-only snapshot.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h3>Goal Engine + Decision Cortex v2</h3>
+                    <p>Decision evaluation now carries explicit goal profiles, ranks alternatives with stronger rationale, and keeps the recommendation trace tied to the operator's active objective instead of pretending every decision has the same goal.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Outcome Learning That Reuses Winners</h3>
+                    <p>Outcomes are no longer only logs. Repeated successful strategies can now seed reusable skills, while weak evidence can demote or retire bad patterns before they calcify into cargo cult procedures.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Broader Public Proof</h3>
+                    <p>The operator runtime pack now scores <strong>96.2%</strong> for the NEXO full stack across 13 checked-in scenarios, while LoCoMo remains the memory-specific benchmark. Public proof now has the right scope instead of stretching one metric too far.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Release + Runtime Integrity</h3>
+                    <p>The release contract, runtime doctor, update path, protocol debt maintenance, and public website are aligned as one audited package. The point is not only more capability, but less drift between what ships, what runs, and what is claimed.</p>
+                </div>
+            </div>
+        </div>
+        <div style="margin-top:24px;font-size:14px;opacity:.6;">
+            Goal profiles shipped &bull; Decision/outcome loop strengthened &bull; Runtime pack refreshed to 96.2% &bull; release surfaces aligned
+        </div>
+    </div>
+</section>
+
+<!-- v4.1.0 Drive/Curiosity -->
+<section id="v410" class="section-compact" style="background:linear-gradient(135deg,#111827 0%,#4c1d95 100%);">
+    <div class="container">
+        <div class="section-label">New in v4.1.0 <span style="opacity:.5;font-weight:400;">&mdash; April 9, 2026</span></div>
+        <h2 class="section-title">NEXO Gets Curious</h2>
+        <p class="section-subtitle">
+            A new Drive/Curiosity layer gives NEXO internal motivation. During normal work, it passively detects anomalies, recurring patterns, knowledge gaps, and opportunities. These observations accumulate as tension-based signals that mature over time and trigger autonomous investigation &mdash; without blocking the operator or adding latency.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h3>Tension-Based Signals</h3>
+                    <p>Five signal types &mdash; anomaly, pattern, connection, gap, opportunity &mdash; follow a lifecycle: latent &rarr; rising &rarr; ready &rarr; acted/dismissed. Signals decay daily unless reinforced, and ready signals are investigated silently.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>4 New MCP Tools</h3>
+                    <p><code>nexo_drive_signals</code>, <code>nexo_drive_reinforce</code>, <code>nexo_drive_act</code>, and <code>nexo_drive_dismiss</code> expose the drive surface publicly while internal detection runs passively from heartbeat and task close.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Deep Sleep Integration</h3>
+                    <p>Overnight synthesis now includes a Drive phase: investigating ready signals, promoting cross-area connections, and dismissing stale signals. Findings are applied automatically.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h3>Zero-Latency Detection</h3>
+                    <p>Detection now starts from LLM classification with controlled semantic/regex fallback, so the Drive surface is less fragile across languages and paraphrases than the first launch version.</p>
+                </div>
+            </div>
+        </div>
+        <div style="margin-top:24px;font-size:14px;opacity:.6;">
+            Drive surface retained in v5.0.0 &bull; stronger classification path &bull; broader runtime proof above it
+        </div>
+    </div>
+</section>
+
+<!-- v4.0.1 Release alignment -->
+<section id="v401" class="section-compact" style="background:linear-gradient(135deg,#111827 0%,#7c2d12 100%);">
+    <div class="container">
+        <div class="section-label">New in v4.0.1 <span style="opacity:.5;font-weight:400;">&mdash; April 9, 2026</span></div>
+        <h2 class="section-title">The 4.0 Release Stops Drifting Across Channels</h2>
+        <p class="section-subtitle">
+            v4.0.1 is the patch that makes the public truth catch up with <code>main</code>. The full 4.0 memory-surface release now ships coherently across git installs, npm, GitHub Releases, and the public website, and it adds a correction-aware reminder so learning capture stops depending only on model discipline.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Release Channels Re-Aligned</h4><p>The post-<code>v4.0.0</code> fix that landed on <code>main</code> is now packaged as a real patch release instead of leaving git installs ahead of the published tag and site copy.</p></div>
+                <div class="cognitive-card"><h4>Correction-Aware Learning Reminder</h4><p><code>tools_sessions</code> now emits a <code>LEARNING REMINDER</code> when an operator correction is visible and no recent learning capture appears nearby, making the protocol more self-enforcing.</p></div>
+                <div class="cognitive-card"><h4>4.0 Memory Surface Preserved</h4><p>This patch does not shrink the broader 4.0 package. Multimodal refs, pre-compaction auto-flush, the public claim wiki, readable export, user-state inspection, and retrieval/backend controls all remain the current public story.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v4.0.0 Memory surfaces -->
+<section id="v400" class="section-compact" style="background:linear-gradient(135deg,#111827 0%,#6d28d9 100%);">
+    <div class="container">
+        <div class="section-label">New in v4.0.0 <span style="opacity:.5;font-weight:400;">&mdash; April 9, 2026</span></div>
+        <h2 class="section-title">Memory Stops Hiding Behind Internals</h2>
+        <p class="section-subtitle">
+            v4.0.0 turns more of NEXO memory into explicit product surfaces instead of hidden implementation detail: multimodal artifact references, structured continuity before compaction, a public claim wiki, readable memory export, richer user-state adaptation, and clearer retrieval/backend controls.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Multimodal Memory Refs</h4><p>New tools <code>nexo_media_memory_add</code>, <code>search</code>, <code>get</code>, and <code>stats</code> give screenshots, PDFs, audio, video, and other non-text artifacts a first-class home in the memory model.</p></div>
+                <div class="cognitive-card"><h4>Auto-Flush Before Compaction</h4><p>The pre-compact hook now writes structured continuity records and feeds recent context through <code>nexo_auto_flush_recent</code> and <code>nexo_auto_flush_stats</code>, so important session state is less likely to vanish during compression.</p></div>
+                <div class="cognitive-card"><h4>Claim Wiki + Readable Export</h4><p>The claim graph is now a public provenance/freshness surface through <code>nexo_claim_*</code>, and <code>nexo_memory_export</code> can emit an auditable markdown bundle instead of forcing operators to trust only hidden DB state.</p></div>
+                <div class="cognitive-card"><h4>Stronger User-State Model</h4><p><code>nexo_user_state</code> combines trust, correction fatigue, sentiment, diary signals, and hot-context pressure into an inspectable adaptive surface, not just keyword mood detection.</p></div>
+                <div class="cognitive-card"><h4>Public Retrieval Controls</h4><p><code>nexo_cognitive_retrieve</code> now exposes more public control over hybrid weighting, decomposition, dream exclusion, and dormant-memory handling instead of keeping those decisions buried internally.</p></div>
+                <div class="cognitive-card"><h4>Release Also Includes Pending Fixes</h4><p>v4.0.0 also folds in the unreleased post-3.2.0 work: safer live-repo automation boundaries, richer tool explanations, the Deep Sleep import-path repair, and stronger core-vs-personal ownership around updater/doctor LaunchAgent handling.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v3.2.0 Recent memory fallback + live system map -->
+<section id="v320" class="section-compact" style="background:linear-gradient(135deg,#111827 0%,#4c1d95 100%);">
+    <div class="container">
+        <div class="section-label">New in v3.2.0 <span style="opacity:.5;font-weight:400;">&mdash; April 8, 2026</span></div>
+        <h2 class="section-title">Recent Memory Gets Honest Fallbacks And NEXO Gets A Live Self-Map</h2>
+        <p class="section-subtitle">
+            v3.2.0 closes the gap between "we definitely discussed this today" and "the runtime can actually recover it". Hot context remains the first recent-memory layer, but recent transcripts are now accessible through MCP when that layer is too thin, and NEXO can inspect its own runtime surface through a live generated catalog.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Transcript Fallback Tools</h4><p>New MCP tools <code>nexo_transcript_recent</code>, <code>nexo_transcript_search</code>, and <code>nexo_transcript_read</code> make recent Claude Code / Codex transcripts reachable when hot context and durable recall are not enough.</p></div>
+                <div class="cognitive-card"><h4>Shared Parser With Deep Sleep</h4><p>The public transcript fallback and overnight Deep Sleep now use the same transcript parser, which keeps operator-visible recovery and overnight analysis on the same raw session truth.</p></div>
+                <div class="cognitive-card"><h4>Live System Catalog</h4><p>New tools <code>nexo_system_catalog</code> and <code>nexo_tool_explain</code> generate a runtime map from canonical sources: core tools, plugins, skills, scripts, crons, projects, and artifacts.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v3.1.9 Update bootstrap fix -->
+<section id="v319" class="section-compact" style="background:linear-gradient(135deg,#111827 0%,#1d4ed8 100%);">
+    <div class="container">
+        <div class="section-label">New in v3.1.9 <span style="opacity:.5;font-weight:400;">&mdash; April 8, 2026</span></div>
+        <h2 class="section-title">Installed Runtimes Can Finally Receive New Root Modules</h2>
+        <p class="section-subtitle">
+            v3.1.9 closes the last gap in the hot-context rollout: `nexo update` now discovers root runtime modules dynamically, so adding a new top-level tool no longer breaks upgrade verification on already installed runtimes.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Dynamic Root Module Sync</h4><p>The updater no longer relies on a frozen allowlist for root `.py` modules. New runtime modules now ship automatically with normal updates.</p></div>
+                <div class="cognitive-card"><h4>Hot Context Reaches Live Installs</h4><p>This specifically fixes the bootstrap hole where `server.py` expected `tools_hot_context.py` but older installed updaters did not know how to copy it into the runtime.</p></div>
+                <div class="cognitive-card"><h4>Protected By Update Tests</h4><p>Runtime-update coverage now asserts that `tools_hot_context.py` is copied into installed runtimes, so future releases cannot silently regress the same delivery path.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v3.1.8 Hot context stabilization -->
+<section id="v318" class="section-compact" style="background:linear-gradient(135deg,#111827 0%,#14532d 100%);">
+    <div class="container">
+        <div class="section-label">New in v3.1.8 <span style="opacity:.5;font-weight:400;">&mdash; April 8, 2026</span></div>
+        <h2 class="section-title">Hot Context Stabilizes As The Public Release</h2>
+        <p class="section-subtitle">
+            The first hot-context tag exposed CI-only regressions before publication. v3.1.8 is the stable public release: the same 24-hour recent-memory model, now backed by a green full suite, reload-safe DB state, and additive fallback behavior when partial schemas exist.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Release Truth Matches Runtime Truth</h4><p>The public release now reflects the fully validated hot-context stack instead of an orphan pre-release tag that failed CI after the tag was already pushed.</p></div>
+                <div class="cognitive-card"><h4>Reload-Safe Modular DB</h4><p>The modular `db` package now refreshes submodules correctly and resolves live core access dynamically, so DB switches in tests and runtime repairs do not leak stale module state.</p></div>
+                <div class="cognitive-card"><h4>Safe Partial-Schema Fallback</h4><p>Hot-context capture degrades cleanly when minimal tables exist, which keeps self-audit and reminder/followup flows working even before the recent-memory tables are present.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v3.1.7 Hot context memory -->
+<section id="v317" class="section-compact" style="background:linear-gradient(135deg,#111827 0%,#17614f 100%);">
+    <div class="container">
+        <div class="section-label">New in v3.1.7 <span style="opacity:.5;font-weight:400;">&mdash; April 8, 2026</span></div>
+        <h2 class="section-title">Hot Context Makes Recent Memory Explicit</h2>
+        <p class="section-subtitle">
+            v3.1.7 adds a first-class recent-memory layer to NEXO. Instead of hoping the runtime can reconstruct the last few hours from diaries and durable recall alone, active topics now live in a shared hot-context substrate with recent events, pre-action loading, and dashboard visibility.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>24h Shared Operational Memory</h4><p>Core now persists hot contexts and recent events so the runtime can rehydrate what was actively happening in the last day across sessions, channels, and clients.</p></div>
+                <div class="cognitive-card"><h4>Pre-Action Context Bundle</h4><p>New MCP tools let agents load recent continuity before acting, capture active topics when work starts or blocks, and resolve them when the situation is actually closed.</p></div>
+                <div class="cognitive-card"><h4>Visible in the Dashboard</h4><p>The memory page now exposes `Hot Context 24h`, and the dashboard reminder/followup APIs no longer bypass history discipline because update/delete/move paths require a fresh `READ_TOKEN`.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v3.1.6 Deep Sleep abandoned followups hotfix -->
+<section id="v316" class="section-compact" style="background:linear-gradient(135deg,#111827 0%,#17506b 100%);">
+    <div class="container">
+        <div class="section-label">New in v3.1.6 <span style="opacity:.5;font-weight:400;">&mdash; April 8, 2026</span></div>
+        <h2 class="section-title">Deep Sleep Abandoned Followups Stay Historical</h2>
+        <p class="section-subtitle">
+            v3.1.6 closes a subtle but public operational gap: abandoned-project discoveries are no longer created as live pending followups. They now land as archived historical context with an explicit note, so NEXO keeps the memory without polluting active queues.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>No More Zombie Abandonments</h4><p>Deep Sleep stops creating abandoned-project findings as active `PENDING` work, which removes another source of noisy resurfacing in followup-driven flows.</p></div>
+                <div class="cognitive-card"><h4>History Still Visible</h4><p>The item is still preserved as a followup row, but it starts archived and includes a history note explaining that Deep Sleep intentionally stored it as historical context.</p></div>
+                <div class="cognitive-card"><h4>Regression Coverage Added</h4><p>A dedicated regression test now asserts that abandoned followups stay archived and non-actionable across future releases.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v3.1.5 Dashboard and proactive history hygiene -->
+<section id="v315" class="section-compact" style="background:linear-gradient(135deg,#111827 0%,#1c4d67 100%);">
+    <div class="container">
+        <div class="section-label">New in v3.1.5 <span style="opacity:.5;font-weight:400;">&mdash; April 8, 2026</span></div>
+        <h2 class="section-title">Dashboard + Proactive History Hygiene</h2>
+        <p class="section-subtitle">
+            v3.1.5 finishes the history-aware reminder/followup rollout on the visible operational surfaces: dashboard filters now expose open, completed, deleted, and full-history views cleanly, and proactive scans stop reviving work that is already inactive.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Explicit History Filters</h4><p>The operations dashboard now distinguishes default open work from completed, deleted, and full-history views instead of collapsing everything into a vague catch-all status.</p></div>
+                <div class="cognitive-card"><h4>Normalized Status Families</h4><p>Reminder and followup API filters now treat status families consistently, which keeps dashboard screens and backend list endpoints aligned on what counts as open, completed, deleted, or historical work.</p></div>
+                <div class="cognitive-card"><h4>Proactive Scans Ignore Inactive Work</h4><p>The proactive dashboard stops flagging deleted, waiting, cancelled, archived, blocked, or completed items as overdue, removing another source of operational zombie state.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v3.1.4 History integrity hotfix -->
+<section id="v314" class="section-compact" style="background:linear-gradient(135deg,#111827 0%,#1c4d67 100%);">
+    <div class="container">
+        <div class="section-label">New in v3.1.4 <span style="opacity:.5;font-weight:400;">&mdash; April 8, 2026</span></div>
+        <h2 class="section-title">History Integrity Across Core Automation</h2>
+        <p class="section-subtitle">
+            v3.1.4 closes the last blind spots after the history-aware reminder/followup release: core automation jobs now preserve operational history too, followup priority is handled at creation time, and self-audit learning auto-capture no longer depends on a fragile reread path.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Internal Jobs Stop Bypassing History</h4><p>Daily self-audit, Deep Sleep apply, and weekly followup hygiene now leave proper reminder/followup history behind instead of mutating rows silently inside core automation.</p></div>
+                <div class="cognitive-card"><h4>Priority at Creation Time</h4><p>Followup priority is now part of the creation path itself, which removes the last raw post-insert server patch and keeps creation semantics consistent with the history-aware CRUD model.</p></div>
+                <div class="cognitive-card"><h4>Harder Inline Learning Capture</h4><p>Self-audit repair learning capture no longer depends on a brittle refresh-after-update pattern, so inline repair learnings are safer in long-lived runtimes and multi-step maintenance flows.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v3.1.3 History-aware reminders + followups -->
+<section id="v313" class="section-compact" style="background:linear-gradient(135deg,#111827 0%,#20556d 100%);">
+    <div class="container">
+        <div class="section-label">New in v3.1.3 <span style="opacity:.5;font-weight:400;">&mdash; April 8, 2026</span></div>
+        <h2 class="section-title">Operational History for Reminders + Followups</h2>
+        <p class="section-subtitle">
+            v3.1.3 turns reminders and followups into history-aware operational records instead of disposable rows: mutations are logged, delete becomes soft delete, and the public MCP surface now forces a read-before-mutate flow for risky changes.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Append-Only History</h4><p>Each reminder and followup now records created, updated, completed, deleted, restored, note, and recurring archive/spawn events so agents can see the operational timeline instead of overwriting context.</p></div>
+                <div class="cognitive-card"><h4>Soft Delete + Queryable Past</h4><p>Delete no longer destroys reminders or followups. Completed and deleted items remain available for later lookup, which lets NEXO reason over what happened before instead of forgetting it permanently.</p></div>
+                <div class="cognitive-card"><h4>Read Before Mutate</h4><p>New get/note/restore tools expose history and a short-lived read token. Update/delete/restore/note flows now require that token, so agents have to read the item history before changing it through MCP.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v3.1.2 Weekly evolution stagger + runtime sync fixes -->
+<section id="v312" class="section-compact" style="background:linear-gradient(135deg,#111827 0%,#1d4f63 100%);">
+    <div class="container">
+        <div class="section-label">New in v3.1.2 <span style="opacity:.5;font-weight:400;">&mdash; April 8, 2026</span></div>
+        <h2 class="section-title">Weekly Evolution Load Balancing + Runtime Sync Fixes</h2>
+        <p class="section-subtitle">
+            v3.1.2 is a focused patch release that spreads managed Evolution runs across the week, closes a runtime-update gap around top-level protocol modules, and verifies that new learnings actually persist after insert.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Machine-Staggered Evolution</h4><p>Managed installs no longer schedule public Evolution on the same Sunday slot. Each machine now derives a stable weekly position, which spreads PR creation and review load across the week.</p></div>
+                <div class="cognitive-card"><h4>Update Ships Guard Modules</h4><p><code>nexo update</code> now carries top-level runtime modules like <code>hook_guardrails.py</code> and <code>protocol_settings.py</code>, so protocol-discipline behavior does not drift just because the source repo moved but the runtime root did not.</p></div>
+                <div class="cognitive-card"><h4>Learning Writes Prove They Landed</h4><p>Creating a learning now reads it back immediately from storage and returns an explicit persistence failure if the new active row cannot be verified.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v3.1.1 Runtime update hotfix -->
+<section id="v311" class="section-compact" style="background:linear-gradient(135deg,#111827 0%,#22506d 100%);">
+    <div class="container">
+        <div class="section-label">New in v3.1.1 <span style="opacity:.5;font-weight:400;">&mdash; April 8, 2026</span></div>
+        <h2 class="section-title">Runtime Update Reliability Hotfix</h2>
+        <p class="section-subtitle">
+            v3.1.1 is a targeted patch release that restores safe runtime updates on installations with multiple personal scripts sharing the same logical name, such as paired Python and shell implementations of the same workflow.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>No More Personal Script ID Collisions</h4><p>The personal script registry now derives stable IDs from the script path first, so two different files can share the same logical `name` without breaking `nexo update` or runtime reconciliation.</p></div>
+                <div class="cognitive-card"><h4>Update Path Restored</h4><p>This specifically fixes the case where installations keep both `.py` and `.sh` variants of the same automation and the runtime update flow previously aborted while reconciling personal scripts.</p></div>
+                <div class="cognitive-card"><h4>3.1.0 Improvements Stay Intact</h4><p>The self-audit corrective runtime, public-port queue, stricter onboarding, Docker setup, workflow docs, and benchmark surfaces from v3.1.0 remain the main feature release underneath this patch.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v3.1.0 Self-audit corrective runtime + client onboarding -->
+<section id="v310" class="section-compact" style="background:linear-gradient(135deg,#111827 0%,#1f5f7a 100%);">
+    <div class="container">
+        <div class="section-label">New in v3.1.0 <span style="opacity:.5;font-weight:400;">&mdash; April 8, 2026</span></div>
+        <h2 class="section-title">Self-Audit Goes Corrective + Public Evolution Keeps the Signal</h2>
+        <p class="section-subtitle">
+            v3.1.0 turns self-audit from a ticket generator into a corrective runtime surface, adds stricter onboarding paths for new users, and broadens the public product surface with clearer client docs, container setup, workflow examples, and benchmark artifacts.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Inline Self-Audit Fixes</h4><p>Contradictions, formalizations, and prevention gaps now resolve during the audit itself, while mechanical cleanup handles managed bootstraps, watchdog registry drift, golden snapshots, and syntactically broken personal plugins.</p></div>
+                <div class="cognitive-card"><h4>Public-Core Changes Still Reach Evolution</h4><p>When self-audit fixes a public-core path inline, NEXO queues a durable public-port candidate so the weekly public Evolution cycle can still carry that improvement into the open product instead of losing it inside private maintenance.</p></div>
+                <div class="cognitive-card"><h4>Broader Client Onboarding</h4><p>New `protocol_strictness` modes, Gemini/Cursor/Windsurf setup guides, Docker Compose with persistent state, workflow quickstart examples, and a starter benchmark package make NEXO easier to adopt and easier to evaluate.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v3.0.2 Public Evolution hardening + reliability sweep -->
+<section id="v302" class="section-compact" style="background:linear-gradient(135deg,#0d1120 0%,#1f4b66 100%);">
+    <div class="container">
+        <div class="section-label">New in v3.0.2 <span style="opacity:.5;font-weight:400;">&mdash; April 7, 2026</span></div>
+        <h2 class="section-title">Public Evolution Hardening + Reliability Sweep</h2>
+        <p class="section-subtitle">
+            v3.0.2 is a concentrated patch release focused on making opt-in public contribution safer and on removing a whole class of reliability issues across cron, catchup, doctor, migrations, and other SQLite-heavy runtime surfaces.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Public Evolution Recovers Cleanly</h4><p>Machines now resume contribution immediately after maintainers resolve a Draft PR, preserve active PR metadata correctly, and avoid false-positive diff sanitization on valid Linux-facing paths.</p></div>
+                <div class="cognitive-card"><h4>Cron + Catchup Reliability</h4><p>Linux weekday mapping now respects the launchd-style manifest convention, and catchup keeps its lock until the full run completes while still releasing that lock correctly on early crashes.</p></div>
+                <div class="cognitive-card"><h4>SQLite Lifecycle Cleanup</h4><p>Backup/restore, doctor providers, state watchers, evolution-cycle data gathering, KG backfill, embedding migration, and other runtime paths now close SQLite connections reliably even when intermediate steps throw.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v3.0.1 Python 3.10 Hotfix -->
+<section id="v301" class="section-compact" style="background:linear-gradient(135deg,#0d1120 0%,#15325a 100%);">
+    <div class="container">
+        <div class="section-label">New in v3.0.1 <span style="opacity:.5;font-weight:400;">&mdash; April 6, 2026</span></div>
+        <h2 class="section-title">Python 3.10 Compatibility + Boot Validation Hotfix</h2>
+        <p class="section-subtitle">
+            v3.0.1 is a surgical patch release: it restores Python 3.10 compatibility for repo-based runtime surfaces and strengthens boot-tier validation so broken config artifacts stop failing silently.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>UTC Compatibility Fixed</h4><p>Python 3.11-only <code>datetime.UTC</code> usage in live runtime paths now falls back to Python 3.10-safe timezone handling, so repo-based <code>nexo chat</code> and startup flows stop dying at import time.</p></div>
+                <div class="cognitive-card"><h4><code>tomllib</code> Fallback</h4><p>Runtime modules that parse TOML now use <code>tomllib</code> on 3.11+ and <code>tomli</code> on 3.10, with the fallback dependency declared for fresh installs.</p></div>
+                <div class="cognitive-card"><h4>Boot Doctor Gets Stricter</h4><p>Boot checks now validate <code>schedule.json</code>, <code>optionals.json</code>, and <code>crons/manifest.json</code>, catching silent config corruption before it degrades cron behavior later.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v3.0.0 Runtime Discipline + Durable Execution -->
+<section id="v300" class="section-compact" style="background:linear-gradient(135deg,#100918 0%,#261042 100%);">
+    <div class="container">
+        <div class="section-label">New in v3.0.0 <span style="opacity:.5;font-weight:400;">&mdash; April 6, 2026</span></div>
+        <h2 class="section-title">Protocol Discipline, Durable Execution, and Public Proof</h2>
+        <p class="section-subtitle">
+            v3.0.0 turns NEXO from a strong memory layer into a stricter cognitive runtime. Protocol discipline is now enforced by runtime tools, durable workflows and goals can survive interruption, conditioned learnings behave like real guardrails, and public scorecards finally show measured cost/recovery data instead of only architecture claims.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Enforceable Protocol</h4><p><code>nexo_task_open</code>, <code>nexo_task_close</code>, persistent <code>protocol_debt</code>, simplified bootstraps, and enforceable Cortex gates make verification and discipline part of the runtime contract.</p></div>
+                <div class="cognitive-card"><h4>Durable Workflows + Goals</h4><p>NEXO now ships resumable workflows, checkpoints, replay, retry bookkeeping, idempotent open keys, human approval gates, compensation metadata, and durable goals for long multi-step work.</p></div>
+                <div class="cognitive-card"><h4>Conditioned Learnings Become Guardrails</h4><p>Critical file learnings now gate read/edit/delete paths across Claude hooks, Codex transcript audits, and headless automation prompts, while contradictory active rules are superseded instead of piling up.</p></div>
+                <div class="cognitive-card"><h4>Stricter Operational Truth</h4><p>Deep Sleep schema drift is hardened, warning storms degrade health even on exit <code>0</code>, keep-alive jobs report alive/degraded/duplicated honestly, and release-readiness now validates against the active runtime home.</p></div>
+                <div class="cognitive-card"><h4>Measured Public Surface</h4><p>The compare scorecard now includes external baselines, NEXO ablations, runtime telemetry coverage, and <code>cost_per_solved_task</code> when the collected data is representative.</p></div>
+                <div class="cognitive-card"><h4>Evolution Reuses Idle Cycles</h4><p>If a machine already has its own Draft PR open, public-core Evolution now reuses the cycle to peer-review other opt-in PRs safely instead of doing nothing.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v2.7.0 Engineering Loop + Trust -->
+<section id="v270" class="section-compact" style="background:linear-gradient(135deg,#0F0A1A 0%,#1d1033 100%);">
+    <div class="container">
+        <div class="section-label">New in v2.7.0 <span style="opacity:.5;font-weight:400;">&mdash; April 6, 2026</span></div>
+        <h2 class="section-title">Engineering Loop, Release Discipline, and Operational Truth</h2>
+        <p class="section-subtitle">
+            NEXO now measures the Deep Sleep engineering loop instead of treating it like a black box. Periodic summaries expose protocol compliance, engineering output, project pressure, and trend-vs-previous data, while runtime doctor and release tooling enforce that operational truth before publish.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Measured Deep Sleep</h4><p>Weekly and monthly summaries now include protocol compliance, engineering followup counts, project pulse, and period-over-period trend data.</p></div>
+                <div class="cognitive-card"><h4>Dashboard Narrative</h4><p>The dashboard now surfaces <code>What Matters Now</code>, <code>What Is Drifting</code>, and <code>What Is Improving</code> directly from the latest periodic summaries.</p></div>
+                <div class="cognitive-card"><h4>Doctor Checks the Loop</h4><p>Runtime doctor now audits heartbeat, <code>guard_check</code>, and <code>change_log</code> compliance from the latest weekly summary instead of leaving protocol drift implicit.</p></div>
+                <div class="cognitive-card"><h4>Release Discipline in Repo</h4><p><code>scripts/verify_release_readiness.py</code> now enforces changelog/version alignment, synced release artifacts, parity checks, and website drift before release.</p></div>
+                <div class="cognitive-card"><h4>Pending Codex Fixes Included</h4><p>The unreleased Codex launcher fixes after <code>v2.6.21</code> are now shipped too: better client selection, corrected launch mode handling, last terminal choice tracking, and aligned interactive flags.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v2.6.21 Deep Sleep turns into engineering work -->
+<section id="v2621" class="section-compact" style="background:linear-gradient(135deg,#0F0A1A 0%,#24123d 100%);">
+    <div class="container">
+        <div class="section-label">New in v2.6.21 <span style="opacity:.5;font-weight:400;">&mdash; April 5, 2026</span></div>
+        <h2 class="section-title">Deep Sleep Starts Engineering the Fix</h2>
+        <p class="section-subtitle">
+            Deep Sleep now does more than diagnose recurring problems. It semantically deduplicates followups, consolidates learnings into stronger canonical records, flags contradictions for review, and backfills explicit engineering followups when a recurring pattern implies a concrete script, hook, checklist, or guardrail.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Followup Dedup by Meaning</h4><p>Nightly followups are now checked against existing open followups semantically, not just by generated ID, and a matched followup can be upgraded in place when the new proposal is more concrete.</p></div>
+                <div class="cognitive-card"><h4>Learning Consolidation Outcomes</h4><p>New learnings are classified as duplicate, reinforcement, contradiction review, or genuinely new instead of always creating another row.</p></div>
+                <div class="cognitive-card"><h4>Concrete Engineering Backfill</h4><p>Recurring medium/high-severity patterns can now backfill concrete engineering followups automatically even when the raw synthesis would otherwise stop at diagnosis.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v2.6.20 Explicit Claude 1M default -->
+<section id="v2620" class="section-compact" style="background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
+    <div class="container">
+        <div class="section-label">New in v2.6.20 <span style="opacity:.5;font-weight:400;">&mdash; April 5, 2026</span></div>
+        <h2 class="section-title">Explicit Claude Opus 4.6 1M Defaults</h2>
+        <p class="section-subtitle">
+            NEXO now treats Claude's recommended profile as an explicit runtime contract instead of a loose alias: fresh installs default to Opus 4.6 with 1M context, existing runtimes can be normalized to that profile safely during update, and the same Claude profile now applies consistently to interactive sessions and headless automation.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Deterministic Claude Default</h4><p>The installer and normalized runtime defaults now use <code>claude-opus-4-6[1m]</code> instead of the generic <code>opus</code> alias.</p></div>
+                <div class="cognitive-card"><h4>Installer Recommendation</h4><p>The Claude model picker now recommends <strong>Opus 4.6 with 1M context</strong> directly, instead of the vaguer “Opus latest” wording.</p></div>
+                <div class="cognitive-card"><h4>One Claude Profile End-to-End</h4><p>Claude automation runs now resolve legacy task hints like <code>model=&quot;opus&quot;</code> and <code>model=&quot;sonnet&quot;</code> through the configured Claude runtime profile, so the selected model actually governs both chat and background work.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v2.6.18 Codex session parity, Deep Sleep summaries, retrieval honesty -->
+<section id="v2618" class="section-compact" style="background:linear-gradient(135deg,#221238 0%,#0F0A1A 100%);">
+    <div class="container">
+        <div class="section-label">New in v2.6.18 <span style="opacity:.5;font-weight:400;">&mdash; April 5, 2026</span></div>
+        <h2 class="section-title">Real Codex Session Audits, Weighted Deep Sleep, Cleaner Retrieval</h2>
+        <p class="section-subtitle">
+            2.6.18 closes the practical roadmap items after bootstrap parity: Codex now keeps a managed MCP contract in config, runtime doctor audits real recent sessions, Deep Sleep writes higher-horizon summaries, and retrieval explains itself more honestly while staying cleaner on exact lookups.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Managed <code>mcp_servers.nexo</code></h4><p>Codex sync now persists a managed shared-brain MCP entry in <code>~/.codex/config.toml</code>, instead of depending only on ad-hoc CLI MCP state.</p></div>
+                <div class="cognitive-card"><h4>Doctor Audits Real Sessions</h4><p>Runtime doctor now checks recent Codex sessions for startup discipline and verifies Claude Desktop shared-brain metadata explicitly.</p></div>
+                <div class="cognitive-card"><h4>Weekly / Monthly Deep Sleep Memory</h4><p>Deep Sleep now writes reusable weekly and monthly summary artifacts and weighs projects by activity, learnings, followups, and decisions.</p></div>
+                <div class="cognitive-card"><h4>Confidence-Aware Retrieval</h4><p>Retrieval responses now expose confidence and the auto-strategy that fired, while associative expansion trims low-signal neighbors back to <code>top_k</code>.</p></div>
+                <div class="cognitive-card"><h4>Nested Synthesis Output Hotfix</h4><p>Deep Sleep now accepts the nested synthesis output path produced by the current headless model flow, removing a false overnight failure mode.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v2.6.17 Installed-runtime Codex bootstrap sync hotfix -->
+<section id="v2617" class="section-compact" style="background:linear-gradient(135deg,#1c102b 0%,#0F0A1A 100%);">
+    <div class="container">
+        <div class="section-label">New in v2.6.17 <span style="opacity:.5;font-weight:400;">&mdash; April 5, 2026</span></div>
+        <h2 class="section-title">Installed Codex Bootstrap Sync, Actually Landed</h2>
+        <p class="section-subtitle">
+            2.6.16 made Codex startup state much stronger. 2.6.17 fixes the last migration edge cases for real existing installs: Codex-linked runtimes now backfill correctly during update, blank operator names no longer break managed bootstrap docs, and the repaired client state gets persisted for later updates.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Existing Codex Artifacts Are Respected</h4><p>Older installs that already had NEXO wired into Codex now infer that state during normalization so shared-client sync does not quietly skip Codex anymore.</p></div>
+                <div class="cognitive-card"><h4>Bootstrap Identity Fallback Fixed</h4><p>Managed <code>CLAUDE.md</code> and <code>AGENTS.md</code> now fall back to the operator name <code>NEXO</code> when local metadata is blank or missing.</p></div>
+                <div class="cognitive-card"><h4>Repair Persists Across Updates</h4><p>Runtime update flows now write the normalized client preference back to disk before syncing clients, so the fix survives future updates instead of only helping one command.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v2.6.16 Smarter retrieval defaults, Codex runtime sync, long-horizon Deep Sleep -->
+<section id="v2616" class="section-compact" style="background:linear-gradient(135deg,#1a0f2e 0%,#0F0A1A 100%);">
+    <div class="container">
+        <div class="section-label">New in v2.6.16 <span style="opacity:.5;font-weight:400;">&mdash; April 5, 2026</span></div>
+        <h2 class="section-title">Smarter Retrieval Defaults, Stronger Codex Runtime Parity</h2>
+        <p class="section-subtitle">
+            2.6.16 improves both cognition and multi-client realism: Codex gets managed global bootstrap/model sync, retrieval becomes smarter by default, and Deep Sleep now reasons across a blended 60-day horizon instead of focusing only on the recent past.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Managed Codex Global Startup State</h4><p>NEXO now syncs the live bootstrap, model, and reasoning profile into <code>~/.codex/config.toml</code>, not just <code>~/.codex/AGENTS.md</code>.</p></div>
+                <div class="cognitive-card"><h4>Generic Session Tokens</h4><p>Startup/session coordination and dashboard followups are now client-aware instead of assuming every interactive session is Claude-shaped.</p></div>
+                <div class="cognitive-card"><h4>HyDE + Spreading Auto Mode</h4><p>Conceptual queries now auto-enable HyDE and shallow spreading activation, while exact lookups stay conservative.</p></div>
+                <div class="cognitive-card"><h4>Per-Memory Personalization</h4><p>STM/LTM memories now track their own <code>stability</code> and <code>difficulty</code> on top of the Ebbinghaus base curve.</p></div>
+                <div class="cognitive-card"><h4>60-Day Deep Sleep Blend</h4><p>Overnight synthesis now mixes recent and older context across diaries, learnings, transcript metadata, and stale followups to surface multi-week patterns.</p></div>
+                <div class="cognitive-card"><h4>Parity Regression Audits</h4><p>New tests now guard key shared-runner, transcript-source, bootstrap, and followup paths against drifting back into Claude-only assumptions.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v2.6.15 Runtime Bootstrap Hotfix -->
+<section id="v2615" class="section-compact" style="background:linear-gradient(135deg,#1a0f2e 0%,#0F0A1A 100%);">
+    <div class="container">
+        <div class="section-label">New in v2.6.15 <span style="opacity:.5;font-weight:400;">&mdash; April 5, 2026</span></div>
+        <h2 class="section-title">Installed-Runtime Bootstrap Hotfix</h2>
+        <p class="section-subtitle">
+            2.6.14 shipped the parity model. 2.6.15 hardens it for real installations by fixing bootstrap template resolution in packaged/runtime layouts, so existing users actually receive the managed Claude/Codex bootstrap updates.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Runtime Template Resolution Fixed</h4><p><code>bootstrap_docs.py</code> now resolves <code>templates/</code> correctly in both source-tree and installed-runtime layouts.</p></div>
+                <div class="cognitive-card"><h4>Existing Users Receive Bootstrap Sync</h4><p>Managed updates to <code>~/.claude/CLAUDE.md</code> and <code>~/.codex/AGENTS.md</code> now land correctly in real installations instead of failing silently.</p></div>
+                <div class="cognitive-card"><h4>Regression Coverage Added</h4><p>New tests cover runtime-layout template resolution and isolate startup-preflight HOME usage so local test runs do not contaminate real user bootstrap files.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v2.6.14 Bootstrap Parity and Codex Transcript-Aware Deep Sleep -->
+<section id="v2614" class="section-compact" style="background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
+    <div class="container">
+        <div class="section-label">New in v2.6.14 <span style="opacity:.5;font-weight:400;">&mdash; April 5, 2026</span></div>
+        <h2 class="section-title">Bootstrap Parity, Codex Transcript-Aware Deep Sleep</h2>
+        <p class="section-subtitle">
+            Shared brain now reaches startup identity and overnight analysis, not just MCP wiring. Claude and Codex both get managed bootstrap docs, Codex starts explicitly as NEXO, and Deep Sleep reads both transcript stores.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Managed Claude + Codex Bootstrap</h4><p>NEXO now manages both <code>~/.claude/CLAUDE.md</code> and <code>~/.codex/AGENTS.md</code> as first-class bootstrap files.</p></div>
+                <div class="cognitive-card"><h4><code>CORE</code> / <code>USER</code> Contract</h4><p>Bootstrap docs now preserve operator instructions in a protected <code>USER</code> section while allowing NEXO updates to refresh product rules in <code>CORE</code>.</p></div>
+                <div class="cognitive-card"><h4>Codex Starts as NEXO</h4><p><code>nexo chat</code> and Codex headless automation inject the live bootstrap explicitly, so Codex no longer behaves like plain Codex with an MCP attached.</p></div>
+                <div class="cognitive-card"><h4>Deep Sleep Transcript Parity</h4><p>Overnight analysis now reads Codex durable sessions alongside Claude transcripts, with client/source metadata and stable per-session mapping.</p></div>
+                <div class="cognitive-card"><h4>Doctor Audits Real Parity</h4><p>Runtime doctor now checks bootstrap parity and transcript-source parity instead of assuming a Claude-only world.</p></div>
+                <div class="cognitive-card"><h4>Protected Bootstrap Files</h4><p>Evolution, watchdog, and self-audit now treat <code>AGENTS.md</code> as protected alongside <code>CLAUDE.md</code>.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v2.6.13 Managed KeepAlive Personal Schedules -->
+<section id="v2613" class="section-compact" style="background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
+    <div class="container">
+        <div class="section-label">New in v2.6.13 <span style="opacity:.5;font-weight:400;">&mdash; April 4, 2026</span></div>
+        <h2 class="section-title">Managed KeepAlive Personal Schedules</h2>
+        <p class="section-subtitle">
+            NEXO now supports personal helper daemons as official managed schedules. Legacy wake-recovery installs are adopted automatically, which removes false criticals and improves runtime self-healing.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Official <code>keep_alive</code> Support</h4><p>Personal scripts can now be declared as official KeepAlive daemons instead of being limited to interval or calendar schedules.</p></div>
+                <div class="cognitive-card"><h4><code>restart_daemon</code> Recovery Policy</h4><p>New recovery contract for personal helpers that should stay alive continuously and restart automatically after sleep, wake, or process loss.</p></div>
+                <div class="cognitive-card"><h4>Legacy Wake Recovery Adopted</h4><p><code>nexo-wake-recovery</code> is backfilled with inline metadata automatically, then reconciled as a managed personal schedule instead of being treated as a strange orphan.</p></div>
+                <div class="cognitive-card"><h4>Doctor Output Matches Reality</h4><p><code>nexo doctor --tier runtime --fix</code> can now leave the runtime genuinely healthy in this scenario instead of stopping on a misleading personal-script critical.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v2.6.12 Shared Brain, Selectable Clients, Configurable Automation -->
+<section id="v2612" class="section-compact" style="background:linear-gradient(135deg,#1a0f2e 0%,#0F0A1A 100%);">
+    <div class="container">
+        <div class="section-label">New in v2.6.12 <span style="opacity:.5;font-weight:400;">&mdash; April 4, 2026</span></div>
+        <h2 class="section-title">Shared Brain Across Claude Code, Codex, and Claude Desktop</h2>
+        <p class="section-subtitle">
+            NEXO now separates shared brain, interactive client, and automation backend. Claude Code remains the recommended path, but Codex is now supported as both terminal client and background backend, and Claude Desktop can share the same brain.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4><code>nexo chat</code> No Longer Hardwired</h4><p>The runtime can open the configured terminal client instead of always launching Claude Code. Manual override also supported.</p></div>
+                <div class="cognitive-card"><h4>Client + Backend Preferences</h4><p>NEXO now persists interactive clients, default terminal client, automation backend, install preferences, and runtime model profiles.</p></div>
+                <div class="cognitive-card"><h4>Automation Runner</h4><p>Background jobs now go through a shared runner, so core agentic processes can execute under Claude Code or Codex without every script hardcoding provider-specific calls.</p></div>
+                <div class="cognitive-card"><h4>Recommended Profiles</h4><p>Current defaults: Claude Code on Opus 4.6 with 1M context, Codex with GPT-5.4 xhigh. Claude Code is still the most mature and hook-rich integration.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v2.6.0 Personal Scripts Registry, Plugin Marketplace, Managed Evolution -->
+<section id="v260" class="section-compact" style="background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
+    <div class="container">
+        <div class="section-label">New in v2.6.0 <span style="opacity:.5;font-weight:400;">&mdash; April 3, 2026</span></div>
+        <h2 class="section-title">Personal Scripts Registry, Plugin Marketplace &amp; Managed Evolution</h2>
+        <p class="section-subtitle">
+            Your scripts become first-class citizens with 9 MCP tools for lifecycle management. NEXO Brain is now structured as a Claude Code plugin. The Day Orchestrator has been decoupled from core to reduce complexity.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Personal Scripts Registry</h4><p>Scripts in NEXO_HOME/scripts/ are tracked in SQLite with metadata, categories, and schedule associations. 9 MCP tools: list, create, remove, reconcile, sync, classify, schedule, unschedule, ensure_schedules. Full lifecycle management.</p></div>
+                <div class="cognitive-card"><h4>Claude Code Plugin</h4><p>Added <code>plugin.json</code>, entry point, and packaging structure for the Anthropic Claude Code plugin marketplace. NEXO Brain can now be discovered and installed as a first-class Claude Code extension.</p></div>
+                <div class="cognitive-card"><h4>Managed Evolution</h4><p>Evolution can now modify core behavior modules (not just config) when running in managed mode. Automatic rollback followups ensure safe self-improvement. Fixed false-positive watchdog tamper detection.</p></div>
+                <div class="cognitive-card"><h4><code>nexo chat</code></h4><p>Official CLI command to launch Claude Code with NEXO as operator. Supports directory arguments. Runtime version now correctly surfaces in installed environments.</p></div>
+                <div class="cognitive-card"><h4>Orchestrator Decoupled</h4><p>The Day Orchestrator (autonomous headless cycles every 15 min) has been removed from the core product. Reduces complexity for standard installs. Power users can keep it as a personal script.</p></div>
+                <div class="cognitive-card"><h4>Cron Reliability</h4><p>Hardened cron runtime recovery with TCC diagnostics. Keepalive sync alignment. Disabled optional crons correctly respected. Personal schedules handled during boot recovery. Duplicate learning prevention.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v2.6.9 Integration Sync, CI/CD Pipeline, OpenClaw & ClawHub Hardened -->
+<section id="v269" class="section-compact" style="background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
+    <div class="container">
+        <div class="section-label">New in v2.6.9 <span style="opacity:.5;font-weight:400;">&mdash; April 4, 2026</span></div>
+        <h2 class="section-title">Integration Sync, CI/CD Pipeline &amp; Channel Hardening</h2>
+        <p class="section-subtitle">
+            Automated version synchronization across Claude Code plugin, OpenClaw package, and ClawHub skill. Full GitHub Actions CI/CD pipeline for verified multi-channel publishing.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Integration Artifact Sync</h4><p>Automated version synchronization across Claude Code plugin, OpenClaw package, and ClawHub skill before every publish. No more version drift between distribution channels.</p></div>
+                <div class="cognitive-card"><h4>CI/CD Pipeline</h4><p>Full GitHub Actions workflow: sync &rarr; verify Claude packaging &rarr; verify ClawHub &rarr; build/test OpenClaw &rarr; publish npm + OpenClaw + ClawHub &rarr; post-publish verification.</p></div>
+                <div class="cognitive-card"><h4>OpenClaw Plugin Hardened</h4><p>Contract tests, correct runtime path (<code>~/.nexo/server.py</code>), explicit exports and files list. Published as <code>@wazionapps/openclaw-memory-nexo-brain@2.6.9</code>.</p></div>
+                <div class="cognitive-card"><h4>ClawHub Skill Hardened</h4><p>Version-synchronized metadata, correct server path, post-publish smoke verification. Install resolves to 2.6.9.</p></div>
+                <div class="cognitive-card"><h4>Claude Code Plugin Packaging</h4><p>Verified <code>plugin.json</code>, <code>.mcp.json</code>, hooks, <code>server.py</code> included in npm tarball. Marketplace-ready.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v2.6.7 Contributor Evolution, Personal Plugins, Memory Continuity -->
+<section id="v267" class="section-compact" style="background:linear-gradient(135deg,#1a0f2e 0%,#0F0A1A 100%);">
+    <div class="container">
+        <div class="section-label">New in v2.6.7 <span style="opacity:.5;font-weight:400;">&mdash; April 4, 2026</span></div>
+        <h2 class="section-title">Contributor Evolution, Personal Plugins &amp; Memory Continuity</h2>
+        <p class="section-subtitle">
+            Opt-in public contribution mode, personal MCP plugin scaffolding, clearer install/update progress, and wider diary continuity windows.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Public Contributor Evolution</h4><p>Added opt-in public contribution mode for install/update on GitHub-authenticated machines. Uses isolated checkout, dedicated <code>public_core</code> evolution policy, opens single Draft PR before pausing. Contributor lifecycle via <code>nexo contributor status|on|off</code> with guardrails blocking personal data, prompts, logs, secrets from proposals.</p></div>
+                <div class="cognitive-card"><h4>Personal MCP Scaffolding</h4><p>Added <code>nexo_personal_plugin_create</code> tool for scaffolding persistent personal MCP plugins in <code>NEXO_HOME/plugins</code> with optional companion script. Reusable template survives updates without becoming core.</p></div>
+                <div class="cognitive-card"><h4>Operator Experience &amp; Memory Continuity</h4><p>Clearer install/update progress (file copy, migrations, schedule reconciliation, verification). <code>nexo_session_diary_read(last_day=true)</code> returns ~36h continuity window instead of truncating to calendar day. Auto-close diary promotion preserves more goal/next-step/reasoning context.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v2.6.5 Personal Scripts, Runtime CLI, Recovery Contracts & Power Policy -->
+<section id="v265" class="section-compact" style="background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
+    <div class="container">
+        <div class="section-label">New in v2.6.5 <span style="opacity:.5;font-weight:400;">&mdash; April 4, 2026</span></div>
+        <h2 class="section-title">Personal Scripts, Runtime CLI, Recovery Contracts &amp; Power Policy</h2>
+        <p class="section-subtitle">
+            The <code>nexo</code> binary becomes a real runtime CLI. Background jobs declare explicit recovery contracts. Platform-aware power policy prevents missed schedules.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Runtime CLI</h4><p><code>nexo chat</code> launches Claude Code with NEXO as operator. <code>nexo update</code> syncs the cognitive engine. <code>nexo doctor</code> runs unified diagnostics. One binary for full control.</p></div>
+                <div class="cognitive-card"><h4>Recovery Contracts</h4><p>Every background job declares its recovery behavior: skip, catch-up, or re-run. Boot and wake scripts honor these contracts — no silent failures after sleep or restart.</p></div>
+                <div class="cognitive-card"><h4>Startup Preflight</h4><p>Health checks and safe migrations before every interactive session. Dependency verification, environment validation, and stale lock cleanup ensure a clean start.</p></div>
+                <div class="cognitive-card"><h4>Platform-Aware Power Policy</h4><p>macOS power assertions, Linux sleep inhibit, and intelligent scheduling that adapts to battery state. Background processes respect platform power constraints.</p></div>
+                <div class="cognitive-card"><h4>Managed Evolution Hardening</h4><p>Evolution can modify core behavior modules with automatic rollback followups. Fixed false-positive watchdog tamper detection. Safer self-improvement cycles.</p></div>
+                <div class="cognitive-card"><h4>150+ MCP Tools</h4><p>Tool count grows from 144 to 150+ with new personal script lifecycle tools, doctor diagnostics, and recovery management. All exposed via the standard MCP protocol.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v2.6.3 Personal Scripts Registry & Lifecycle -->
+<section id="v263" class="section-compact" style="background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
+    <div class="container">
+        <div class="section-label">New in v2.6.3 <span style="opacity:.5;font-weight:400;">&mdash; April 4, 2026</span></div>
+        <h2 class="section-title">Personal Scripts Registry &amp; Lifecycle Management</h2>
+        <p class="section-subtitle">
+            Scripts in NEXO_HOME/scripts/ become first-class managed entities with full lifecycle tracking, schedule associations, and classification.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Personal Scripts Registry</h4><p>9 MCP tools for script lifecycle: list, create, remove, reconcile, sync, classify, schedule, unschedule, ensure_schedules. SQLite-backed metadata with categories.</p></div>
+                <div class="cognitive-card"><h4>Script Classification</h4><p>Automatic categorization of scripts by purpose: core, monitoring, maintenance, reporting, integration. Used for recovery priority and schedule grouping.</p></div>
+                <div class="cognitive-card"><h4>Schedule Association</h4><p>Scripts linked to cron schedules with proper lifecycle. Unscheduling a script cleans up the cron entry. Ensure_schedules validates all associations on boot.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v2.6.2 nexo chat & Plugin Structure -->
+<section id="v262" class="section-compact" style="background:linear-gradient(135deg,#1a0f2e 0%,#0F0A1A 100%);">
+    <div class="container">
+        <div class="section-label">New in v2.6.2 <span style="opacity:.5;font-weight:400;">&mdash; April 4, 2026</span></div>
+        <h2 class="section-title"><code>nexo chat</code> &amp; Claude Code Plugin Structure</h2>
+        <p class="section-subtitle">
+            The official CLI command to launch Claude Code with NEXO as operator. Plugin packaging for the Anthropic marketplace.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4><code>nexo chat</code></h4><p>Official CLI command to launch Claude Code with NEXO as operator. Supports directory arguments. Runtime version correctly surfaces in installed environments.</p></div>
+                <div class="cognitive-card"><h4>Claude Code Plugin</h4><p>Added <code>plugin.json</code>, entry point, and packaging structure for the Anthropic Claude Code plugin marketplace. NEXO Brain discoverable as a first-class extension.</p></div>
+                <div class="cognitive-card"><h4>Orchestrator Decoupled</h4><p>The Day Orchestrator removed from core to reduce complexity. Available as a personal script for power users. Standard installs are leaner.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v2.4.0 Skills, Cron Scheduler, Security -->
+<section id="v240" class="section-compact" style="background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
+    <div class="container">
+        <div class="section-label">New in v2.4.0 <span style="opacity:.5;font-weight:400;">&mdash; April 3, 2026</span></div>
+        <h2 class="section-title">Skills, Cron Scheduler &amp; Security</h2>
+        <p class="section-subtitle">
+            Deep Sleep now creates reusable skills automatically, every cron execution is tracked, and the system passed a 5-phase automated audit covering product, failure handling, security, packaging, and UX.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Skill Auto-Creation</h4><p>Deep Sleep extracts multi-step procedures from sessions and stores them as skills with full content (steps, gotchas, markdown). Trust pipeline: trace&rarr;draft&rarr;published&rarr;archived. 7 MCP tools for skill management.</p></div>
+                <div class="cognitive-card"><h4>Cron Scheduler</h4><p>Every cron execution tracked in <code>cron_runs</code> table. <code>nexo_schedule_status</code> shows what ran overnight. <code>nexo_schedule_add</code> creates new crons from conversation. Universal wrapper for all processes.</p></div>
+                <div class="cognitive-card"><h4>Deep Sleep v2.4</h4><p>Watermark-based collection (late-night sessions never missed). Per-session checkpointing (crash-safe resume). Retry x3 on failure. Auto-calibration of personality settings from emotional analysis.</p></div>
+                <div class="cognitive-card"><h4>Security Fixes</h4><p>Credential redaction in tool logs. Transcript sanitization in Deep Sleep. Command injection fix in dashboard. Path traversal protection in plugin loader. 5-phase audit passed.</p></div>
+                <div class="cognitive-card"><h4>Diary Filter</h4><p>Startup only shows human-interactive sessions. Automated cron diaries filtered out. Email sessions preserved as real interactions. Auto-closed sessions with heartbeats kept.</p></div>
+                <div class="cognitive-card"><h4>Python 3.9 + Linux</h4><p><code>from __future__ import annotations</code> across 18 files for Python 3.9 compat. Full systemd timer support. Bash alias written to <code>.bashrc</code> for Linux users.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v2.1.0 Deep Sleep v2 & Emotional Intelligence -->
+<section id="v210" class="section-compact" style="background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
+    <div class="container">
+        <div class="section-label">New in v2.1.0</div>
+        <h2 class="section-title">Deep Sleep v2 &amp; Emotional Intelligence</h2>
+        <p class="section-subtitle">
+            A 4-phase overnight pipeline with emotional analysis, abandoned project detection, and declarative cron management. The agent now adapts its personality based on yesterday's emotional signals.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Deep Sleep v2: 4-Phase Pipeline</h4><p>Complete rewrite of the overnight analysis system. Collect splits transcripts into individual session files. Extract runs Claude per session to find uncaptured findings. Synthesize merges cross-session patterns. Brief generates a structured morning briefing with priorities.</p></div>
+                <div class="cognitive-card"><h4>Session Tone (Emotional Intelligence)</h4><p>Each session's emotional profile (frustration, flow, urgency, satisfaction) is analyzed and stored in <code>session-tone.json</code>. On startup, <code>smart_startup</code> reads tone data and adapts the agent's next-day behavior automatically.</p></div>
+                <div class="cognitive-card"><h4>8 Finding Types</h4><p>Deep Sleep extracts: uncaptured corrections, protocol violations, missed commitments, user preferences, recurring patterns, emotional signals, abandoned projects, and productivity insights. Each with severity scoring and recommended actions.</p></div>
+                <div class="cognitive-card"><h4>Cron Manifest</h4><p>All autonomous processes declared in <code>cron-manifest.json</code> with schedules, descriptions, and platform configs. <code>nexo_update</code> automatically syncs LaunchAgents/systemd timers after code updates. No manual plist editing.</p></div>
+                <div class="cognitive-card"><h4>Abandoned Project Detection</h4><p>Deep Sleep identifies projects mentioned in sessions that have gone silent &mdash; no commits, no mentions, no followups. Surfaces them in the morning briefing with context.</p></div>
+                <div class="cognitive-card"><h4>Unified CLI Timeouts</h4><p>All Claude CLI calls unified to 6h (21600s) safety net. Fixes premature termination of long-running processes like deep-sleep, immune, and synthesis. Added <code>NEXO_HEADLESS=1</code> to all background scripts.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v2.0.0 Unified Architecture -->
+<section id="v200" class="section-compact" style="background:linear-gradient(135deg,#1a0f2e 0%,#0F0A1A 100%);">
+    <div class="container">
+        <div class="section-label">v2.0.0 <span style="opacity:.5;font-weight:400;">&mdash; March 31, 2026</span></div>
+        <h2 class="section-title">Unified Architecture</h2>
+        <p class="section-subtitle">
+            Code and data fully separated. 13 core recovery-aware jobs auto-installed. Auto-update on startup. Auto-diary captures everything. 150+ MCP tools. 12 rounds of external audit with ~60 findings resolved.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Unified Architecture</h4><p>Code lives in the repo, personal data in NEXO_HOME (~/.nexo/). Clean separation means updates never touch your data and multiple agents can share the same codebase.</p></div>
+                <div class="cognitive-card"><h4>14 Autonomous Processes</h4><p>All processes auto-installed: watchdog, immune, synthesis, backup, catchup, cognitive-decay, postmortem, self-audit, sleep, deep-sleep, evolution, followup-hygiene, prevent-sleep, tcc-approve, auto-close-sessions. Plus 7 hooks.</p></div>
+                <div class="cognitive-card"><h4>Auto-Update on Startup</h4><p>Non-blocking update check (5s max) on every server start. Resilient to network failures. Opt-out via schedule.json. No more manual npm updates.</p></div>
+                <div class="cognitive-card"><h4>Auto-Diary</h4><p>3-layer diary system: PostToolUse writes every 10 calls, PreCompact catches emergencies before context eviction, heartbeat triggers on DIARY_OVERDUE. Never lose session context again.</p></div>
+                <div class="cognitive-card"><h4>schedule.json</h4><p>Customizable process schedules with timezone support. Control when each autonomous process runs. Override defaults without editing plist/timer files.</p></div>
+                <div class="cognitive-card"><h4>Lambda Decay Fix</h4><p>Memory decay was 24x too aggressive. STM half-life corrected from 7 hours to 7 days, LTM from 2.4 days to 60 days. Memories now persist as intended.</p></div>
+                <div class="cognitive-card"><h4>CLAUDE.md Version Tracker</h4><p>Section markers for safe core updates without losing user customizations. The installer updates its own sections and preserves everything else.</p></div>
+                <div class="cognitive-card"><h4>External Audit</h4><p>12 rounds of audit by GPT-5.4, Gemini 2.5, and Claude Opus. ~60 findings resolved: guard noise, MCP truncation, decay values, import errors, legacy paths, and more.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v1.7.0 Full Internationalization + Linux Support -->
+<section id="v170" class="section-compact" style="background:linear-gradient(135deg,#1a0f2e 0%,#0F0A1A 100%);">
+    <div class="container">
+        <div class="section-label">v1.7.0 <span style="opacity:.5;font-weight:400;">&mdash; March 31, 2026</span></div>
+        <h2 class="section-title">Full Internationalization + Linux Support</h2>
+
+        <p class="section-subtitle">
+            NEXO Brain is now fully English, fully cross-platform, and ready for any user. All UI strings, DB status values, and paths are internationalized. Linux gets first-class automated processes via systemd or crontab.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Full Internationalization</h4><p>All 39 source files translated to English. DB status values: PENDING, COMPLETED, DELETED. Zero Spanish in user-facing output. Onboarding still supports 7 languages.</p></div>
+                <div class="cognitive-card"><h4>Linux Support</h4><p>systemd user timers (preferred) or crontab fallback. Same 4 automated processes as macOS: cognitive decay, postmortem, sleep, self-audit. Platform auto-detected during install.</p></div>
+                <div class="cognitive-card"><h4>Auto-Resolve Followups</h4><p>Change log entries automatically cross-reference open followups by file overlap, keyword similarity, and ID reference. Matching followups are completed automatically.</p></div>
+                <div class="cognitive-card"><h4>Free-Form Categories</h4><p>Learning categories are no longer hardcoded. Use any category name that makes sense for your project: backend, frontend, devops, or anything else.</p></div>
+                <div class="cognitive-card"><h4>CLAUDE.md Template Rewrite</h4><p>494 to 127 lines. Same capabilities, compact procedural format. Heartbeat signal reactions, Cortex modes, and Adaptive personality all documented.</p></div>
+                <div class="cognitive-card"><h4>Complete Sanitization</h4><p>All hardcoded paths replaced with NEXO_HOME env var. Zero personal data in the codebase. 48 macOS Finder duplicate files deleted.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v1.6.0 Nervous System + Dashboard v2 + LaunchAgent Templates -->
+<section id="v160" class="section-compact" style="background:linear-gradient(135deg,#1a0f2e 0%,#0F0A1A 100%);">
+    <div class="container">
+        <div class="section-label">v1.6.0 <span style="opacity:.5;font-weight:400;">&mdash; March 30, 2026</span></div>
+        <h2 class="section-title">Nervous System + Dashboard v2 + LaunchAgent Templates</h2>
+        <p class="section-subtitle">
+            NEXO Brain now ships with a complete autonomous nervous system of 11 background scripts, a redesigned visual dashboard, 13 LaunchAgent templates for zero-config setup, and a full migration script from v1.5.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Nervous System (11 scripts)</h4><p>Immune system, daily synthesis, self-audit, postmortem consolidator, proactive dashboard, followup hygiene, GitHub monitor, catch-up. Updated: watchdog, evolution, cognitive decay, deep sleep.</p></div>
+                <div class="cognitive-card"><h4>Dashboard v2</h4><p>FastAPI-powered visual interface with 6 pages: dashboard overview, operations, calendar, inbox. CRUD UI for managing memories. Sidebar navigation, trust widget, static assets.</p></div>
+                <div class="cognitive-card"><h4>13 LaunchAgent Templates</h4><p>Ready-to-install macOS plists: watchdog, immune, synthesis, self-audit, cognitive decay, evolution, deep sleep, followup hygiene, auto-close, dashboard, catch-up, postmortem, GitHub monitor. Includes README install guide.</p></div>
+                <div class="cognitive-card"><h4>5 Hooks Updated</h4><p>Session-stop v7 (post-mortem), session-start (semantic context), inter-terminal inbox hook, capture-tool-logs (JSONL), daily-briefing-check.</p></div>
+                <div class="cognitive-card"><h4>Migration Script</h4><p>Automated v1.5 to v1.6 migration: 13 nexo.db schema migrations, cognitive.db tables, full i18n (Spanish to English), logo optimized 1.4MB to 28KB.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v1.5.2 Deep Sleep + Watchdog Auto-Repair -->
+<section id="v152" class="section-compact" style="background:linear-gradient(135deg,#1a0f2e 0%,#0F0A1A 100%);">
+    <div class="container">
+        <div class="section-label">v1.5.2</div>
+        <h2 class="section-title">Deep Sleep + Watchdog Auto-Repair</h2>
+        <p class="section-subtitle">
+            NEXO Brain now reads your complete session transcripts overnight, finding what the agent missed during the day. Plus: the watchdog can re-execute missed crons and verify its own repairs.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Deep Sleep Analyzer</h4><p>Reads every message, tool call, and correction from the day's sessions. Finds uncaptured corrections, protocol violations, missed commitments, and quality issues. Applies findings as learnings, feedback memories, followups, and trust adjustments.</p></div>
+                <div class="cognitive-card"><h4>Transcript Analysis</h4><p>Uses Claude CLI in bare mode to analyze each session independently. No hooks, no CLAUDE.md interference. Processes 10+ sessions per night with catch-up for missed days.</p></div>
+                <div class="cognitive-card"><h4>Watchdog Level 3</h4><p>When a scheduled cron misses its run (Mac was asleep), the watchdog extracts ProgramArguments from the plist and re-executes it directly. No more lost nightly jobs.</p></div>
+                <div class="cognitive-card"><h4>Post-Repair Verification</h4><p>After Level 2 Claude CLI repair, the watchdog waits and verifies the fix actually worked — checks loaded state, process running, and log freshness. No more silent failures.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v1.5.0 Modular Architecture + KG Search + HNSW + Claim Graph + D+ Inbox -->
+<section id="v150" class="section-compact" style="background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
+    <div class="container">
+        <div class="section-label">New in v1.5.0</div>
+        <h2 class="section-title">Modular Architecture + KG Search + HNSW</h2>
+        <p class="section-subtitle">
+            The two largest files are now modular packages. Search is smarter with Knowledge Graph boosting. Vector indexing scales to 10K+ memories. Claims decompose blobs into verifiable atomic facts. Terminals talk to each other automatically.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Modular Packages</h4><p>db.py (2,900 lines) &rarr; db/ package with 11 modules. cognitive.py (3,900 lines) &rarr; cognitive/ package with 6 modules. All imports unchanged &mdash; zero breaking changes.</p></div>
+                <div class="cognitive-card"><h4>KG-Boosted Search</h4><p>Memories connected to more Knowledge Graph nodes rank higher. Logarithmic boost based on structural importance bridges semantic and graph retrieval.</p></div>
+                <div class="cognitive-card"><h4>HNSW Vector Indexing</h4><p>Optional hnswlib integration for approximate nearest neighbor search. Auto-activates when memory count exceeds 10,000. Hooks into ingest, search, and GC.</p></div>
+                <div class="cognitive-card"><h4>Claim Graph</h4><p>Decompose blob memories into atomic verifiable claims with provenance, contradiction detection, and verification status. Each fact tracked individually.</p></div>
+                <div class="cognitive-card"><h4>Inter-Terminal Auto-Inbox</h4><p>PostToolUse hook checks inbox automatically via sqlite3. 2-second debounce, skips read-only tools. Zero tokens consumed when no messages waiting.</p></div>
+                <div class="cognitive-card"><h4>Test Suite</h4><p>24 pytest tests covering migrations, CRUD, cosine similarity, KG boost, knowledge graph traversal, and temporal boost. Isolated temp databases per test.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v1.4.1 The Brain Dreams + Multi-AI Review -->
+<section id="v141" class="section-compact" style="background:linear-gradient(135deg,#1a0f2e 0%,#0F0A1A 100%);">
+    <div class="container">
+        <div class="section-label">New in v1.4.1</div>
+        <h2 class="section-title">The Brain Dreams + Multi-AI Code Review</h2>
+        <p class="section-subtitle">
+            All 9 nightly processes now use Claude CLI (opus) for intelligent decisions instead of Python word-matching. Plus: 3 bugs found by giving GPT-5.4 and Gemini 2.5 full access to the codebase.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>CLI Wrapper Pattern</h4><p>Pure Python collects data, then Claude CLI opus makes intelligent decisions. The brain uses its own intelligence to dream &mdash; not a calculator.</p></div>
+                <div class="cognitive-card"><h4>Multi-AI Code Review</h4><p>GPT-5.4 (Codex CLI) + Gemini 2.5 (Gemini CLI) + Claude Opus reviewed the full codebase simultaneously. Found 3 real bugs with exact file:line references.</p></div>
+                <div class="cognitive-card"><h4>Memory Sanitization</h4><p>Retrieved memories are now sanitized to prevent prompt injection. Stored content is treated as quoted evidence, not executable instructions.</p></div>
+                <div class="cognitive-card"><h4>Quarantine Fix</h4><p>The quarantine system now distinguishes confirmation from contradiction. Similar memories that reinforce each other are no longer rejected as conflicts.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v1.3.0 Evolution System -->
+<section id="v130" class="section-compact" style="background:linear-gradient(135deg,#1a0f2e 0%,#0F0A1A 100%);">
+    <div class="container">
+        <div class="section-label">New in v1.3.0</div>
+        <h2 class="section-title">Evolution System</h2>
+        <p class="section-subtitle">
+            NEXO can now evolve its own configuration autonomously through a structured proposal &rarr; review &rarr; implement cycle. Dual-mode operation ensures safety: auto mode for low-risk changes, review mode requiring explicit approval.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Dual-Mode Evolution</h4><p>Auto mode applies low-risk improvements (nightly job tuning, threshold adjustments) without intervention. Review mode stages proposals for human approval before execution.</p></div>
+                <div class="cognitive-card"><h4>Proposal Pipeline</h4><p>Evolution proposals are generated from session patterns, guard stats, and cognitive metrics. Each proposal includes rationale, risk assessment, and rollback plan.</p></div>
+                <div class="cognitive-card"><h4>Claude CLI Integration</h4><p>Proposals are executed via Claude CLI for safe, auditable implementation. Every change is logged and reversible.</p></div>
+                <div class="cognitive-card"><h4>Nightly Auto-Dedup</h4><p>Nightly jobs now detect and merge duplicate learnings automatically. Test/debug STM memories are purged during cognitive decay.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v1.2.3 AGPL-3.0 License -->
+<section id="v123" class="section-compact" style="background:linear-gradient(135deg,#1a0f2e 0%,#0F0A1A 100%);">
+    <div class="container">
+        <div class="section-label">New in v1.2.3</div>
+        <h2 class="section-title">License: AGPL-3.0</h2>
+        <p class="section-subtitle">
+            NEXO Brain is now licensed under AGPL-3.0. This ensures that any modifications to the cognitive memory system remain open-source when deployed as a service.
+        </p>
+    </div>
+</section>
+
+<!-- v1.2.2 Phantom Farewell Fix -->
+<section id="v122" class="section-compact" style="background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
+    <div class="container">
+        <div class="section-label">New in v1.2.2</div>
+        <h2 class="section-title">Phantom Farewell Fix</h2>
+        <p class="section-subtitle">
+            The Stop hook no longer says goodbye when a session ends. Farewell messages were a side-effect of the post-mortem enforcement hook, creating confusing output on every session close.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Fix: Phantom Farewell Messages</h4><p>Stop hook no longer says goodbye when session ends. The farewell was an unintended side-effect of the post-mortem enforcement block — removed cleanly without affecting diary write behavior.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v1.2.1 Hotfix / v1.2.0 Stop Hook Post-Mortem -->
+<section id="v120" class="section-compact" style="background:linear-gradient(135deg,#1a0f2e 0%,#0F0A1A 100%);">
+    <div class="container">
+        <div class="section-label">New in v1.2.0 &mdash; Hotfix v1.2.1</div>
+        <h2 class="section-title">Stop Hook Post-Mortem Enforcement</h2>
+        <p class="section-subtitle">
+            The Stop hook now uses <code>decision:block</code> instead of <code>approve</code> to enforce post-mortem execution. This ensures the session diary is always written before Claude exits &mdash; no more lost context on abrupt stops.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>Fix: decision:block</h4><p>Stop hook changed from <code>approve</code> to <code>decision:block</code> so post-mortem writing is enforced architecturally, not just suggested.</p></div>
+                <div class="cognitive-card"><h4>v1.2.1 Hotfix</h4><p>Fixed infinite block loop triggered when the Stop hook blocked its own post-mortem execution. Added trivial session detection to skip diary write on empty or no-op sessions.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v1.1.0 Context Continuity -->
+<section id="v110" class="section-compact" style="background:linear-gradient(135deg,#1a0f2e 0%,#0F0A1A 100%);">
+    <div class="container">
+        <div class="section-label">New in v1.1.0</div>
+        <h2 class="section-title">Context Continuity</h2>
+        <p class="section-subtitle">
+            Long sessions no longer lose their thread. NEXO preserves session context across Claude Code compaction events using PreCompact checkpoints and PostCompact re-injection. 8-hour sessions feel like one continuous conversation.
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>PreCompact Checkpoint</h4><p>Before compaction, NEXO saves a complete snapshot to SQLite: current task, active files, decisions, errors, reasoning thread, and next step.</p></div>
+                <div class="cognitive-card"><h4>Core Memory Block</h4><p>After compaction, a structured block is re-injected into context with everything needed to continue seamlessly. Zero "where were we?" moments.</p></div>
+                <div class="cognitive-card"><h4>Heartbeat Tracking</h4><p>The checkpoint updates automatically every interaction via the heartbeat. No manual action required &mdash; continuity is always maintained.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v1.0.0 Cognitive Cortex -->
+<section id="v100" class="section-compact" style="background:linear-gradient(135deg,#1a0f2e 0%,#0F0A1A 100%);">
+    <div class="container">
+        <div class="section-label">New in v1.0.0</div>
+        <h2 class="section-title">Cognitive Cortex</h2>
+        <p class="section-subtitle">
+            The agent thinks before acting. Architectural inhibitory control validates reasoning quality and physically restricts tools until the plan is sound. Designed via 3-way AI debate (Claude Opus + GPT-5.4 + Gemini 3.1 Pro).
+        </p>
+        <div class="cognitive-group">
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card"><h4>ASK Mode</h4><p>Unknowns detected. Tools restricted to read and search. Agent must gather information before proceeding.</p></div>
+                <div class="cognitive-card"><h4>PROPOSE Mode</h4><p>No plan or verification step. Agent can propose but not execute. User reviews before action.</p></div>
+                <div class="cognitive-card"><h4>ACT Mode</h4><p>Plan, evidence, and verification present. Full tool access granted. Agent executes with confidence.</p></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v0.10.0-beta Features -->
+<section id="v0100" class="section-compact" style="background:linear-gradient(135deg,#1a0f2e 0%,#0F0A1A 100%);">
+    <div class="container">
+        <div class="section-label">New in v0.10.0</div>
+        <h2 class="section-title">Cognitive Cortex + 30 Core Rules + Stable Release</h2>
+        <p class="section-subtitle">
+            v0.10.0 tackles the "stores but forgets" problem. Three new features ensure the right memories surface at the right time &mdash; at session boot, during conversation, and when delegating to subagents.
+        </p>
+
+        <div class="cognitive-group">
+            <div class="cognitive-group-label">New Tools</div>
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h4>Smart Startup</h4>
+                    <p>Pre-loads relevant memories at session boot by composing a query from pending followups, due reminders, and last session's topics. No more cold starts.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h4>Context Packets</h4>
+                    <p>Bundles all area knowledge (learnings, changes, followups, preferences, cognitive memories) into a single injectable packet for subagent delegation.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h4>Auto-Prime by Topic</h4>
+                    <p>Heartbeat detects project keywords in conversation and automatically surfaces relevant learnings. Context arrives proactively &mdash; no manual query needed.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="cognitive-group">
+            <div class="cognitive-group-label">Pipeline Improvements</div>
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h4>Automated Quarantine</h4>
+                    <p>Quarantine queue now processes automatically during the nightly cycle. Items are promoted, rejected, or expired based on policy &mdash; no manual intervention needed.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h4>Zero-Decay Pinning</h4>
+                    <p>Corrections and critical learnings are auto-pinned at ingest. Pinned memories never decay and get a +0.2 boost in search results. User corrections stick permanently.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h4>Dream Noise Reduction</h4>
+                    <p>Dream insights (cross-memory connections) are excluded from default search, reducing noise by 21%. Capped at 50 active insights; excess is archived automatically.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v0.9.0 Features -->
+<section id="v090" class="section-compact" style="background:linear-gradient(135deg,#0F0A1A 0%,#1a0f2e 100%);">
+    <div class="container">
+        <div class="section-label">New in v0.9.0</div>
+        <h2 class="section-title">Diary Archive &amp; Fuzzy Credentials</h2>
+        <p class="section-subtitle">
+            v0.9.0 introduces permanent subconscious memory. Session diaries are now archived forever before cleanup &mdash; nothing is ever truly lost. Plus fuzzy credential search for when you can't remember the exact service name.
+        </p>
+
+        <div class="cognitive-group">
+            <div class="cognitive-group-label">Major Features</div>
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h4>Diary Archive</h4>
+                    <p>Session diaries older than 180 days are moved to a permanent diary_archive table instead of being deleted. Search by text, domain, year, or month. nexo_recall automatically falls back to the archive when recent memory has few results.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h4>Fuzzy Credential Search</h4>
+                    <p>When exact credential match fails, NEXO searches across service, key, and notes fields. Results are tagged as fuzzy matches so you know they're suggestions, not exact hits.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h4>Subconscious Recall</h4>
+                    <p>nexo_recall now has a two-tier search: recent memory first, then diary archive fallback. Your agent never truly forgets &mdash; old context surfaces when needed.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- v0.8.10 Features -->
+<section id="v0810" class="section-compact" style="background:linear-gradient(135deg,#1a0f2e 0%,#0F0A1A 100%);">
+    <div class="container">
+        <div class="section-label">v0.8.10</div>
+        <h2 class="section-title">Knowledge Graph, Dashboard &amp; Cross-Platform</h2>
+        <p class="section-subtitle">
+            v0.8.10 gives your AI agent a relationship graph, a visual brain dashboard, and runs everywhere. 988 bi-temporal nodes with D3 visualization, 6 dashboard pages, and full Linux + Windows support.
+        </p>
+
+        <div class="cognitive-group">
+            <div class="cognitive-group-label">Major Features</div>
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <h4>Knowledge Graph</h4>
+                    <p>Bi-temporal entity-relationship graph with 988 nodes and 896 edges. BFS traversal discovers multi-hop connections. Event-sourced edges with smart dedup (ADD/UPDATE/NOOP). Temporal queries. Interactive D3.js visualization.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h4>Web Dashboard</h4>
+                    <p>Visual interface at localhost:6174 with 6 pages: Overview, Graph, Memory, Somatic, Adaptive, Sessions. FastAPI + D3.js. See your AI brain in real time.</p>
+                </div>
+                <div class="cognitive-card">
+                    <h4>Cross-Platform</h4>
+                    <p>Full Linux and Windows support. Platform-appropriate process managers. Opportunistic maintenance when resources are available.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="cognitive-group">
+            <div class="cognitive-group-label">5 Automated Hooks</div>
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <div class="cognitive-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
+                    <h4>SessionStart Briefing</h4>
+                    <p>Generates a full briefing from SQLite: overdue reminders, today's tasks, pending followups, active sessions. Cached for 1 hour.</p>
+                </div>
+                <div class="cognitive-card">
+                    <div class="cognitive-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
+                    <h4>Stop Post-Mortem</h4>
+                    <p>Mandatory self-critique with 5 questions, session buffer, followup creation, proactive seeds for next session, and reflection trigger.</p>
+                </div>
+                <div class="cognitive-card">
+                    <div class="cognitive-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+                    <h4>PreCompact Checkpoint</h4>
+                    <p>Saves context before conversation compression. Prevents losing the thread — compaction without a diary means starting from zero.</p>
+                </div>
+                <div class="cognitive-card">
+                    <div class="cognitive-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></div>
+                    <h4>PostToolUse Capture</h4>
+                    <p>Captures meaningful tool usage to the Sensory Register. Feeds the Atkinson-Shiffrin memory pipeline silently.</p>
+                </div>
+                <div class="cognitive-card">
+                    <div class="cognitive-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></div>
+                    <h4>Reflection Engine</h4>
+                    <p>After 3+ sessions, processes the buffer: extracts recurring tasks, error patterns, mood trends. Updates user model. No LLM needed.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="cognitive-group" style="margin-top:40px;">
+            <div class="cognitive-group-label">Operational Codex</div>
+            <div class="cognitive-grid" style="grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px;">
+                <div class="cognitive-card">
+                    <div class="cognitive-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+                    <h4>23 Non-Negotiable Principles</h4>
+                    <p>Hardwired behavioral foundation: never promise without scheduling, verify before claiming done, audit before delivering, proactive not reactive.</p>
+                </div>
+                <div class="cognitive-card">
+                    <div class="cognitive-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/></svg></div>
+                    <h4>Personality Calibration</h4>
+                    <p>5 configurable axes: autonomy, communication style, honesty level, proactivity, error handling. Set during install, adjustable anytime.</p>
+                </div>
+                <div class="cognitive-card">
+                    <div class="cognitive-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg></div>
+                    <h4>Auto-Migration</h4>
+                    <p>Seamless upgrade from previous versions. Updates hooks, core files, plugins, scripts — never touches your data or customized CLAUDE.md.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="cta-section">
+    <div class="container">
+        <h2 class="section-title">Give your agent a mind</h2>
+        <p class="section-subtitle" style="margin: 16px auto 48px;">
+            Open source, AGPL-3.0 licensed, and built for builders who want their AI to actually remember.
+        </p>
+        <div class="hero-actions">
+            <a href="https://github.com/wazionapps/nexo" class="btn btn-primary">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+                Star on GitHub
+            </a>
+            <a href="https://github.com/sponsors/wazionapps" class="btn btn-secondary" style="border-color: var(--pink); color: var(--pink);">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+                Sponsor
+            </a>
+            <a href="https://www.npmjs.com/package/nexo-brain" class="btn btn-secondary">
+                View on npm
+            </a>
+        </div>
+    </div>
+</section>
+
+<footer>
+    <div class="container">
+        <div class="footer-content">
+            <div class="footer-left">
+                Created by <strong>Francisco Cerd&agrave; Puigserver</strong> &amp; <strong>NEXO</strong> (Claude Opus) &bull; Built by <a href="https://www.wazion.com">WAzion</a> &bull; AGPL-3.0 License &bull; &copy; 2026
+            </div>
+            <div class="footer-links">
+                <a href="https://github.com/wazionapps/nexo">GitHub</a>
+                <a href="https://x.com/NEXOBRAIN">X / Twitter</a>
+                <a href="https://github.com/sponsors/wazionapps">Sponsor</a>
+                <a href="/docs/">Docs</a>
+                <a href="/compare/">Compare</a>
+                <a href="/blog/">Blog</a>
+                <a href="https://www.npmjs.com/package/nexo-brain">npm</a>
+                <a href="https://github.com/wazionapps/nexo/releases">Releases</a>
+            </div>
+            <div style="text-align:center;margin-top:12px;color:#6b7280;font-size:12px;">Last updated: April 2026</div>
+        </div>
+    </div>
+</footer>
+
+<script>
+(function() {
+    const releases = Array.from(document.querySelectorAll('section[id^="v"]'));
+    const pager = document.getElementById('changelog-pager');
+    const meta = document.getElementById('changelog-page-meta');
+    if (!releases.length || !pager || !meta) return;
+
+    const pageSize = 6;
+    const pages = Math.ceil(releases.length / pageSize);
+    document.body.classList.add('changelog-hydrated');
+
+    releases.forEach((section, index) => {
+        section.dataset.releasePage = String(Math.floor(index / pageSize) + 1);
+    });
+
+    const hashTarget = window.location.hash.slice(1);
+    const hashSection = hashTarget ? releases.find(section => section.id === hashTarget) : null;
+    let currentPage = hashSection ? Number(hashSection.dataset.releasePage) : 1;
+
+    function render(page, shouldScroll) {
+        currentPage = page;
+        releases.forEach(section => {
+            section.classList.toggle('is-visible', Number(section.dataset.releasePage) === page);
+        });
+        meta.textContent = `Page ${page} of ${pages} · ${releases.filter(section => Number(section.dataset.releasePage) === page).length} releases visible`;
+        Array.from(pager.querySelectorAll('button')).forEach((button, index) => {
+            button.setAttribute('aria-current', index + 1 === page ? 'page' : 'false');
+        });
+        if (shouldScroll) {
+            window.scrollTo({ top: document.querySelector('.changelog-toolbar').offsetTop - 100, behavior: 'smooth' });
+        }
+    }
+
+    for (let page = 1; page <= pages; page += 1) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = page === 1 ? 'Latest' : `Page ${page}`;
+        button.addEventListener('click', () => render(page, true));
+        pager.appendChild(button);
+    }
+
+    render(currentPage, false);
+})();
+
+// Intersection Observer for scroll animations
+const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+        if (entry.isIntersecting) {
+            entry.target.style.opacity = '1';
+            entry.target.style.transform = 'translateY(0)';
+        }
+    });
+}, { threshold: 0.1 });
+
+document.querySelectorAll('.cognitive-card').forEach(el => {
+    el.style.opacity = '0';
+    el.style.transform = 'translateY(20px)';
+    el.style.transition = 'all 0.5s ease';
+    observer.observe(el);
+});
+</script>
+
+<!-- Cookie Consent (minimal, GDPR) -->
+<div id="cookie-consent" style="display:none;position:fixed;bottom:0;left:0;right:0;background:rgba(10,10,15,0.95);border-top:1px solid #1E1E2E;padding:12px 24px;z-index:200;font-size:13px;color:#94A3B8;text-align:center;">
+    This site uses analytics cookies to improve the experience. <a href="https://www.wazion.com/en/privacy" style="color:#A78BFA;">Privacy Policy</a>
+    <button onclick="document.getElementById('cookie-consent').style.display='none';localStorage.setItem('cc','1')" style="margin-left:16px;background:#7C3AED;color:#fff;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Accept</button>
+    <button onclick="document.getElementById('cookie-consent').style.display='none';localStorage.setItem('cc','0');window['ga-disable-G-1LNEMCJMS7']=true" style="margin-left:8px;background:transparent;color:#94A3B8;border:1px solid #333;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Decline</button>
+</div>
+<script>
+if(!localStorage.getItem('cc')){document.getElementById('cookie-consent').style.display='block';}
+else if(localStorage.getItem('cc')==='0'){window['ga-disable-G-1LNEMCJMS7']=true;}
+</script>
+
+<script>
+(function() {
+    var navLinks = document.querySelector('.nav-links');
+    var navToggle = document.querySelector('.nav-toggle');
+    // Close menu when clicking a link
+    navLinks.querySelectorAll('a').forEach(function(link) {
+        link.addEventListener('click', function() { navLinks.classList.remove('open'); });
+    });
+    // Close menu when clicking outside
+    document.addEventListener('click', function(e) {
+        if (navLinks.classList.contains('open') && !navLinks.contains(e.target) && !navToggle.contains(e.target)) {
+            navLinks.classList.remove('open');
+        }
+    });
+})();
+</script>
+
+</body>
+</html>
