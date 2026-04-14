@@ -87,19 +87,23 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v5.3.29 live</span>
-                    <span class="page-chip">Runtime hygiene</span>
-                    <span class="page-chip">Fail-closed startup</span>
-                    <span class="page-chip">Honest cron tracing</span>
+                    <span class="page-chip">v5.3.30 live</span>
+                    <span class="page-chip">Desktop bridge</span>
+                    <span class="page-chip">Read-only CLI</span>
+                    <span class="page-chip">Auto-adaptive UI</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v5329" class="btn btn-primary">Start with v5.3.29</a>
+                    <a href="#v5330" class="btn btn-primary">Start with v5.3.30</a>
                     <a href="#v400" class="btn btn-secondary">See v4.0.0</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
             </div>
             <div class="page-visual">
                 <div class="page-stack">
+                    <div class="page-stack-card">
+                        <strong>v5.3.30</strong>
+                        <span>Desktop bridge: four read-only CLI commands (<code>nexo schema</code>, <code>nexo identity</code>, <code>nexo onboard</code>, <code>nexo scan-profile</code>) expose editable schema, identity, onboarding wizard, and profile heuristics as JSON so external UIs auto-adapt.</span>
+                    </div>
                     <div class="page-stack-card">
                         <strong>v5.3.29</strong>
                         <span>Duplicate artifact hygiene now fails closed, packaged/runtime updates converge on one core, startup stops respawning an empty brain on corrupt DB state, and cron evidence survives transient SQLite failure.</span>
@@ -162,6 +166,24 @@
                 <div id="changelog-pager" class="changelog-pager" aria-label="Changelog pagination"></div>
             </div>
         </div>
+    </div>
+</section>
+
+<!-- v5.3.30 desktop bridge -->
+<section id="v5330" class="section-compact" style="background:linear-gradient(135deg,#09111f 0%,#1f2a44 34%,#7c3aed 68%,#22d3ee 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.3.30 <span style="opacity:.5;font-weight:400;">&mdash; April 14, 2026</span></div>
+        <h2 class="section-title">Desktop Bridge — four read-only CLI commands for external UIs</h2>
+        <p class="section-subtitle">
+            External UIs like NEXO Desktop can now render preferences, identity, onboarding, and profile heuristics from live JSON instead of hardcoding fields and releasing in lockstep with the runtime.
+        </p>
+        <ul style="list-style:none;padding:0;margin:24px 0 0;display:grid;gap:12px;">
+            <li><code>nexo schema --json</code> — editable-field schema with <code>schema_version</code>, groups, multilang labels, and select options. Desktop renders Preferences tabs from this payload.</li>
+            <li><code>nexo identity --json</code> — canonical <code>{name, source, writable_source}</code>. One probe, one canonical write path.</li>
+            <li><code>nexo onboard --json</code> — stepwise wizard with <code>prompt</code>, <code>type</code>, <code>writes</code>, <code>file</code>, <code>default</code>, <code>optional</code>, <code>validate</code>.</li>
+            <li><code>nexo scan-profile</code> — idempotent profile builder from <code>CLAUDE.md</code> + <code>calibration.json</code>. Preview by default; <code>--apply</code> writes, <code>--force</code> overwrites.</li>
+        </ul>
+        <p style="margin-top:24px;">Pure additive surface. No existing commands touched. See the <a href="/blog/nexo-5-3-30-desktop-bridge/" style="color:inherit;text-decoration:underline;">release post</a>.</p>
     </div>
 </section>
 
