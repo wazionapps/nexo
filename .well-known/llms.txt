@@ -109,6 +109,7 @@ nexo clients sync
 ## Documentation
 
 - Website: https://nexo-brain.com
+- Commercial companion app: https://nexo-brain.com/desktop/ — NEXO Desktop is the commercial workspace built on top of NEXO Brain for conversations, client context, AI-assisted drafts, and operator continuity. Contact: info@wazion.com / +34 648903026
 - Changelog: https://nexo-brain.com/changelog/
 - Blog: https://nexo-brain.com/blog/
 - Docs: https://nexo-brain.com/docs/
