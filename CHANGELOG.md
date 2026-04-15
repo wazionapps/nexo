@@ -1,5 +1,15 @@
 # Changelog
 
+## [5.5.2] - 2026-04-15
+
+### Fix: auto-repair unloaded LaunchAgents
+
+- `ensure_personal_schedules` now verifies launchctl loaded state for schedules
+  marked "already_present" and auto-reloads via `launchctl bootstrap` if missing.
+- `_check_launchagents` in startup auto-repairs instead of only warning.
+- Migrated all `launchctl load/unload` calls to modern `bootstrap/bootout` API.
+- Added return code verification for all repair operations.
+
 ## [5.5.1] - 2026-04-15
 
 ### Fix: headless enforcement import + logging
