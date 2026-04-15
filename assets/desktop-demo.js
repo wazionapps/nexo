@@ -1,9 +1,9 @@
 const desktopDemoScenes = [
   {
     id: "live-thread",
-    railLabel: "Live thread",
-    windowLabel: "Active conversation",
-    windowNote: "Message stream + tool cards",
+    railLabel: "Executive reply",
+    windowLabel: "Director conversation",
+    windowNote: "Executive response with supporting context",
     chatTitle: "director hotel bahía",
     sidebar: {
       active: [
@@ -19,18 +19,18 @@ const desktopDemoScenes = [
     messages: [
       {
         role: "assistant",
-        html: "<p>Ya está revisado el parte del turno de noche y la incidencia de reservas duplicadas ha quedado contenida.</p><p>No hay huéspedes pendientes de recolocación y recepción tiene el resumen listo para dirección.</p>"
+        html: "<p>Ya está consolidado el resumen operativo de la mañana para dirección.</p><p>La incidencia de reservas duplicadas ha quedado contenida y no compromete la experiencia de llegada de hoy.</p>"
       },
       { role: "tool", title: "NEXO · heartbeat", meta: "detalles ›" },
-      { role: "user", html: "<p>¿Qué debería responder al director del hotel sobre las reseñas negativas de esta semana?</p>" },
+      { role: "user", html: "<p>¿Qué debería responder al director sobre el repunte de reseñas negativas esta semana?</p>" },
       {
         role: "assistant",
-        html: "<p>Voy a resumir las causas repetidas y te preparo una respuesta breve para dirección con medidas concretas.</p>"
+        html: "<p>Te preparo una respuesta clara para dirección con causas agrupadas, prioridad operativa y propuesta inmediata de mejora.</p>"
       },
       { role: "tool", title: "📖 Leer archivo x3", meta: "detalles ›" },
       {
         role: "assistant",
-        html: "<p>Las quejas se concentran en espera de check-in y ruido en la tercera planta.</p><p>Le respondería al director con dos acciones: refuerzo puntual en recepción y revisión del protocolo nocturno para las habitaciones cercanas al ascensor.</p>"
+        html: "<p>Las quejas se concentran en espera de check-in y ruido en la tercera planta.</p><p>Para dirección, la síntesis sería: refuerzo puntual en recepción en picos de llegada y revisión del protocolo nocturno en habitaciones cercanas al ascensor.</p>"
       }
     ],
     composer: {
@@ -44,9 +44,9 @@ const desktopDemoScenes = [
   },
   {
     id: "archived",
-    railLabel: "Archived",
+    railLabel: "Board memory",
     windowLabel: "Archived threads",
-    windowNote: "Search and reopen past conversations",
+    windowNote: "Recover past decisions without cluttering the live queue",
     chatTitle: "director hotel bahía",
     sidebar: {
       active: [
@@ -61,12 +61,12 @@ const desktopDemoScenes = [
     messages: [
       {
         role: "assistant",
-        html: "<p>La conversación principal sigue arriba y los hilos cerrados quedan en archivadas para no mezclar operativa activa con contexto histórico.</p><p>Puedes buscar una reunión anterior y restaurarla solo cuando vuelva a hacer falta.</p>"
+        html: "<p>La conversación principal sigue arriba y los hilos cerrados quedan en archivadas para separar gestión en curso de contexto histórico.</p><p>Cuando dirección necesita recuperar una decisión anterior, basta con buscar y restaurar el hilo relevante.</p>"
       },
       { role: "tool", title: "✅ Tareas", meta: "detalles ›" },
       {
         role: "assistant",
-        html: "<p>En Hotel Bahía esto sirve para recuperar acuerdos de revenue, cambios de proveedores o briefings de eventos sin saturar la bandeja principal.</p>"
+        html: "<p>En Hotel Bahía esto permite volver a acuerdos de revenue, cambios de proveedores o briefings de eventos sin saturar la bandeja principal de dirección.</p>"
       }
     ],
     composer: {
@@ -80,9 +80,9 @@ const desktopDemoScenes = [
   },
   {
     id: "thread-search",
-    railLabel: "Search",
+    railLabel: "Thread search",
     windowLabel: "In-thread search",
-    windowNote: "Search inside the active conversation",
+    windowNote: "Locate the exact issue before answering",
     chatTitle: "director hotel bahía",
     sidebar: {
       active: [
@@ -101,12 +101,12 @@ const desktopDemoScenes = [
     messages: [
       {
         role: "assistant",
-        html: "<p>He revisado las peticiones especiales del fin de semana y ya hay una lista separada para recepción.</p>"
+        html: "<p>He revisado las peticiones especiales del fin de semana y ya están separadas por prioridad operativa.</p>"
       },
       { role: "tool", title: "📖 Leer archivo x2", meta: "detalles ›" },
       {
         role: "assistant",
-        html: "<p>El comentario de <mark>booking</mark> sobre el check-in lento ya está localizado y coincide con el pico de llegadas del viernes.</p><p>Podemos responder con una explicación breve y dejar la mejora operativa en el checklist de recepción.</p>"
+        html: "<p>El comentario de <mark>booking</mark> sobre el check-in lento ya está localizado y coincide con el pico de llegadas del viernes.</p><p>Eso permite responder a dirección con un dato concreto y dejar la mejora operativa registrada para el equipo de recepción.</p>"
       }
     ],
     composer: {
@@ -120,9 +120,9 @@ const desktopDemoScenes = [
   },
   {
     id: "reply-flow",
-    railLabel: "Reply flow",
+    railLabel: "Executive brief",
     windowLabel: "Reply preview and attachments",
-    windowNote: "Composer state inside the active thread",
+    windowNote: "Prepared summary before sending",
     chatTitle: "hotel bahía · evento corporativo octubre",
     sidebar: {
       active: [
@@ -138,28 +138,28 @@ const desktopDemoScenes = [
     messages: [
       {
         role: "assistant",
-        html: "<p>He dejado preparado el borrador para el director de Hotel Bahía y una nota para restauración con las preferencias del grupo corporativo.</p>"
+        html: "<p>He dejado preparado un borrador ejecutivo para el director de Hotel Bahía y una nota operativa para restauración con las preferencias del grupo corporativo.</p>"
       },
       { role: "tool", title: "✏️ Editar archivo", meta: "detalles ›" },
       {
         role: "assistant",
-        html: "<p>Si quieres, puedo enviar ahora el resumen final con salas, coffee break y horarios de llegada.</p>"
+        html: "<p>Si quieres, el siguiente paso es enviar el resumen final con salas, coffee break y horarios de llegada listo para comité.</p>"
       }
     ],
     composer: {
       status: "Listo",
       attachments: ["hotel-bahia-briefing-evento.pdf"],
-      pending: "1 mensaje pendiente de enviar",
+      pending: "1 resumen pendiente de enviar",
       reply: { author: "Director Hotel Bahía", text: "¿Puedes dejarme un resumen para el comité antes de las 18:00?" },
-      input: "Te dejo el resumen en formato breve para que lo reenvíes al comité."
+      input: "Te dejo el resumen ejecutivo en formato breve para que lo reenvíes al comité."
     },
     overlay: null
   },
   {
     id: "preferences",
-    railLabel: "Preferences",
+    railLabel: "Workspace control",
     windowLabel: "NEXO Desktop preferences",
-    windowNote: "The actual app surface includes its own settings",
+    windowNote: "Control how the workspace behaves for the operator",
     chatTitle: "director hotel bahía",
     sidebar: {
       active: [
@@ -173,7 +173,7 @@ const desktopDemoScenes = [
     messages: [
       {
         role: "assistant",
-        html: "<p>Además del hilo activo, la app permite ajustar tema, visibilidad de herramientas, sonido y modo no molestar sin salir del escritorio de trabajo de Hotel Bahía.</p>"
+        html: "<p>Además del hilo activo, la app permite ajustar tema, visibilidad de herramientas, sonido y modo no molestar sin salir del escritorio de trabajo de Hotel Bahía.</p><p>Eso hace que la experiencia se adapte mejor a dirección, operaciones o seguimiento diario sin cambiar de herramienta.</p>"
       }
     ],
     composer: {
