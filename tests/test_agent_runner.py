@@ -4,7 +4,22 @@ import shlex
 import subprocess
 import sys
 
+import pytest
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
+
+@pytest.fixture(autouse=True)
+def _mock_enforcement_engine(monkeypatch):
+    """Bypass enforcement engine so tests use subprocess.run directly."""
+    try:
+        import enforcement_engine
+        def _passthrough(cmd, prompt="", cwd="", env=None, timeout=300):
+            return subprocess.run(cmd, cwd=cwd or None, capture_output=True,
+                                  text=True, timeout=timeout, env=env)
+        monkeypatch.setattr(enforcement_engine, "run_with_enforcement", _passthrough)
+    except ImportError:
+        pass
+
 
 
 def _claude_json_result(result: str = "ok", *, cost: float = 0.01) -> str:
@@ -128,11 +143,17 @@ def test_run_automation_prompt_uses_claude_backend_command(monkeypatch, tmp_path
 
     def fake_run(cmd, **kwargs):
         captured["cmd"] = cmd
-        captured["env"] = kwargs["env"]
-        captured["cwd"] = kwargs["cwd"]
+        captured["env"] = kwargs.get("env")
+        captured["cwd"] = kwargs.get("cwd")
         return subprocess.CompletedProcess(cmd, 0, _claude_json_result("ok"), "")
 
     monkeypatch.setattr(agent_runner.subprocess, "run", fake_run)
+    try:
+        import enforcement_engine
+        monkeypatch.setattr(enforcement_engine, "run_with_enforcement",
+            lambda cmd, prompt="", cwd="", env=None, timeout=300: fake_run(cmd, cwd=cwd, env=env))
+    except ImportError:
+        pass
 
     result = agent_runner.run_automation_prompt(
         "Do the thing",
