@@ -18,7 +18,7 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `5.5.2` is the current packaged-runtime line: auto-repair unloaded LaunchAgents on startup and ensure_schedules.
+Version `5.5.2` is the current packaged-runtime line: auto-repair unloaded LaunchAgents on startup and ensure_schedules, plus headless model fallback cleanup so automation scripts defer to the configured runtime profile.
 
 Previously in `5.4.6`: runtime dependency management in `nexo update` + daily auto-update cron.
 

@@ -3,6 +3,7 @@ import json
 import os
 import stat
 import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -619,6 +620,112 @@ class TestRegistrySync:
         result = ensure_personal_schedules(dry_run=False)
         assert result["repaired"][0]["cron_id"] == "wake-recovery"
         assert "keep_alive=True" in result["repaired"][0]["result"]
+
+    def test_ensure_personal_schedules_reloads_unloaded_launchagent(self, scripts_dir, monkeypatch):
+        import script_registry
+
+        init_db()
+        script = scripts_dir / "email-monitor.py"
+        script.write_text(
+            "# nexo: name=email-monitor\n"
+            "# nexo: runtime=python\n"
+            "# nexo: cron_id=email-monitor\n"
+            "# nexo: interval_seconds=300\n"
+            "# nexo: schedule_required=true\n"
+            "print('ok')\n"
+        )
+
+        plist_path = scripts_dir / "com.nexo.email-monitor.plist"
+        plist_path.write_text("plist")
+
+        monkeypatch.setattr(
+            script_registry,
+            "audit_personal_schedules",
+            lambda: {
+                "schedules": [{
+                    "cron_id": "email-monitor",
+                    "script_path": str(script),
+                    "schedule_type": "interval",
+                    "schedule_value": "300",
+                    "schedule_label": "every 300s",
+                    "launchd_label": "com.nexo.email-monitor",
+                    "plist_path": str(plist_path),
+                    "enabled": True,
+                    "schedule_managed": True,
+                    "run_at_load": False,
+                }],
+                "summary": {},
+            },
+        )
+        monkeypatch.setattr(script_registry.platform, "system", lambda: "Darwin")
+        monkeypatch.setattr(script_registry, "_launchctl_service_state", lambda label: {"loaded": False})
+        monkeypatch.setattr(script_registry.os, "getuid", lambda: 501)
+
+        calls = []
+
+        def fake_run(args, **kwargs):
+            calls.append(args)
+            return SimpleNamespace(returncode=0, stderr=b"", stdout=b"")
+
+        monkeypatch.setattr(script_registry.subprocess, "run", fake_run)
+
+        result = ensure_personal_schedules(dry_run=False)
+        entry = result["already_present"][0]
+        assert entry["cron_id"] == "email-monitor"
+        assert entry["reloaded"] is True
+        assert entry["reason"] == "plist on disk but not loaded in launchd"
+        assert any(args[1] == "bootstrap" for args in calls)
+
+    def test_ensure_personal_schedules_reports_reload_failure(self, scripts_dir, monkeypatch):
+        import script_registry
+
+        init_db()
+        script = scripts_dir / "email-monitor.py"
+        script.write_text(
+            "# nexo: name=email-monitor\n"
+            "# nexo: runtime=python\n"
+            "# nexo: cron_id=email-monitor\n"
+            "# nexo: interval_seconds=300\n"
+            "# nexo: schedule_required=true\n"
+            "print('ok')\n"
+        )
+
+        plist_path = scripts_dir / "com.nexo.email-monitor.plist"
+        plist_path.write_text("plist")
+
+        monkeypatch.setattr(
+            script_registry,
+            "audit_personal_schedules",
+            lambda: {
+                "schedules": [{
+                    "cron_id": "email-monitor",
+                    "script_path": str(script),
+                    "schedule_type": "interval",
+                    "schedule_value": "300",
+                    "schedule_label": "every 300s",
+                    "launchd_label": "com.nexo.email-monitor",
+                    "plist_path": str(plist_path),
+                    "enabled": True,
+                    "schedule_managed": True,
+                    "run_at_load": False,
+                }],
+                "summary": {},
+            },
+        )
+        monkeypatch.setattr(script_registry.platform, "system", lambda: "Darwin")
+        monkeypatch.setattr(script_registry, "_launchctl_service_state", lambda label: {"loaded": False})
+        monkeypatch.setattr(script_registry.os, "getuid", lambda: 501)
+        monkeypatch.setattr(
+            script_registry.subprocess,
+            "run",
+            lambda *args, **kwargs: SimpleNamespace(returncode=1, stderr=b"bootstrap failed", stdout=b""),
+        )
+
+        result = ensure_personal_schedules(dry_run=False)
+        entry = result["already_present"][0]
+        assert entry["cron_id"] == "email-monitor"
+        assert entry["reload_failed"] is True
+        assert entry["reason"] == "bootstrap failed"
 
     def test_unschedule_personal_script_prunes_schedule(self, scripts_dir, monkeypatch):
         import script_registry

@@ -350,6 +350,12 @@ def _check_launchagents() -> list[str]:
     plist_dir = os.path.expanduser("~/Library/LaunchAgents")
     warnings = []
 
+    def _stderr_text(result, fallback: str) -> str:
+        stderr = getattr(result, "stderr", "")
+        if isinstance(stderr, bytes):
+            stderr = stderr.decode(errors="replace")
+        return stderr.strip() or fallback
+
     for plist_path in glob.glob(os.path.join(plist_dir, "com.nexo.*.plist")):
         label = os.path.basename(plist_path).replace(".plist", "")
         try:
@@ -364,12 +370,15 @@ def _check_launchagents() -> list[str]:
             if result.returncode != 0:
                 repair = subprocess.run(
                     ["launchctl", "bootstrap", f"gui/{os.getuid()}", plist_path],
-                    capture_output=True, timeout=5,
+                    capture_output=True, text=True, timeout=5,
                 )
                 if repair.returncode == 0:
                     warnings.append(f"{label}: AUTO-REPAIRED (was not loaded, reloaded from disk)")
                 else:
-                    warnings.append(f"{label}: REPAIR FAILED — not loaded (plist exists on disk)")
+                    warnings.append(
+                        f"{label}: REPAIR FAILED — "
+                        f"{_stderr_text(repair, 'not loaded (plist exists on disk)')}"
+                    )
                 continue
 
             # Parse loaded ProgramArguments from launchctl output
@@ -390,9 +399,31 @@ def _check_launchagents() -> list[str]:
                 # Check if loaded path points to /tmp or nonexistent path
                 stale = any("/tmp/" in a or not os.path.exists(a) for a in loaded_args if "/" in a)
                 if stale:
-                    subprocess.run(["launchctl", "bootout", f"gui/{os.getuid()}/{label}"], capture_output=True, timeout=5)
-                    subprocess.run(["launchctl", "bootstrap", f"gui/{os.getuid()}", plist_path], capture_output=True, timeout=5)
-                    warnings.append(f"{label}: AUTO-REPAIRED (was pointing to stale/tmp path, reloaded from disk)")
+                    bootout = subprocess.run(
+                        ["launchctl", "bootout", f"gui/{os.getuid()}/{label}"],
+                        capture_output=True,
+                        text=True,
+                        timeout=5,
+                    )
+                    if bootout.returncode != 0:
+                        warnings.append(
+                            f"{label}: REPAIR FAILED — "
+                            f"{_stderr_text(bootout, 'could not unload stale launchd entry')}"
+                        )
+                        continue
+                    repair = subprocess.run(
+                        ["launchctl", "bootstrap", f"gui/{os.getuid()}", plist_path],
+                        capture_output=True,
+                        text=True,
+                        timeout=5,
+                    )
+                    if repair.returncode == 0:
+                        warnings.append(f"{label}: AUTO-REPAIRED (was pointing to stale/tmp path, reloaded from disk)")
+                    else:
+                        warnings.append(
+                            f"{label}: REPAIR FAILED — "
+                            f"{_stderr_text(repair, 'could not reload stale plist from disk')}"
+                        )
                 else:
                     warnings.append(f"{label}: loaded args differ from disk plist")
         except Exception:
