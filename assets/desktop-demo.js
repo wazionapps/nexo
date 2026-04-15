@@ -94,8 +94,9 @@ const desktopDemoScenes = [
       archivedItems: ["Aquí estoy", "he recibido tu email \"Franc...\"", "asd"]
     },
     threadSearch: {
-      query: "campañas",
-      count: "1 / 2"
+      value: "",
+      placeholder: "Buscar en conversación...",
+      count: ""
     },
     messages: [
       {
@@ -224,7 +225,7 @@ function buildDesktopDemo(root) {
       <div class="ndemo-layout">
         <aside class="ndemo-sidebar">
           <div class="ndemo-sidebar-head">
-            <div class="ndemo-brand-mark">N</div>
+            <img class="ndemo-brand-logo" src="/assets/logo-64.png" alt="NEXO">
             <div class="ndemo-brand-copy">
               <strong>NEXO</strong>
               <span>Desktop</span>
@@ -334,10 +335,11 @@ function buildDesktopDemo(root) {
     }
     threadSearchEl.classList.remove("is-hidden");
     threadSearchEl.innerHTML = `
-      <span class="ndemo-search-placeholder">Buscar en conversación...</span>
-      <span class="ndemo-search-query">${escapeHtml(threadSearch.query)}</span>
-      <span class="ndemo-search-count">${escapeHtml(threadSearch.count)}</span>
-      <span class="ndemo-search-actions">▲ ▼ ✕</span>
+      <span class="ndemo-search-input">${threadSearch.value ? escapeHtml(threadSearch.value) : `<span class="ndemo-search-placeholder">${escapeHtml(threadSearch.placeholder || "Buscar en conversación...")}</span>`}</span>
+      <span class="ndemo-search-count${threadSearch.count ? "" : " is-empty"}">${escapeHtml(threadSearch.count || "")}</span>
+      <span class="ndemo-search-btn">▲</span>
+      <span class="ndemo-search-btn">▼</span>
+      <span class="ndemo-search-btn">✕</span>
     `;
   }
 
@@ -345,7 +347,7 @@ function buildDesktopDemo(root) {
     if (!messages.length) {
       streamEl.innerHTML = `
         <div class="ndemo-empty">
-          <div class="ndemo-empty-logo">N</div>
+          <img class="ndemo-empty-logo" src="/assets/logo-64.png" alt="NEXO">
           <h3>Hola.</h3>
           <p>Abre una conversación o usa la búsqueda rápida para recuperar un hilo anterior.</p>
         </div>

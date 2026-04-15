@@ -2487,18 +2487,12 @@
             border-bottom: 1px solid rgba(167, 139, 250, 0.08);
         }
 
-        .ndemo-brand-mark {
-            width: 38px;
-            height: 38px;
-            border-radius: 12px;
-            background: linear-gradient(135deg, rgba(167, 139, 250, 0.28), rgba(236, 72, 153, 0.14));
-            border: 1px solid rgba(167, 139, 250, 0.2);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #c4b5fd;
-            font-weight: 700;
-            letter-spacing: -0.04em;
+        .ndemo-brand-logo {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            object-fit: contain;
+            flex-shrink: 0;
         }
 
         .ndemo-brand-copy {
@@ -2698,32 +2692,53 @@
             border: 1px solid rgba(167, 139, 250, 0.12);
             background: rgba(255, 255, 255, 0.03);
             color: #c3c3d6;
-            border-radius: 10px;
-            padding: 9px 12px;
-            font-size: 12px;
+            border-radius: 8px;
+            padding: 6px 12px;
+            font-size: 13px;
             line-height: 1;
         }
 
         .ndemo-conv-search {
             display: inline-flex;
             align-items: center;
-            gap: 10px;
+            gap: 4px;
             min-width: 0;
+            padding: 3px 8px;
+        }
+
+        .ndemo-search-input {
+            min-width: 180px;
+            font-size: 13px;
+            line-height: 1.2;
+            color: #f0efff;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .ndemo-search-placeholder {
             color: #85859b;
         }
 
-        .ndemo-search-query {
-            color: #f0efff;
-            font-weight: 600;
-        }
-
-        .ndemo-search-count,
-        .ndemo-search-actions {
+        .ndemo-search-count {
             color: #9898ab;
             white-space: nowrap;
+            min-width: 70px;
+            text-align: center;
+            font-size: 11px;
+        }
+
+        .ndemo-search-count.is-empty {
+            min-width: 12px;
+        }
+
+        .ndemo-search-btn {
+            border-radius: 6px;
+            padding: 2px 6px;
+            background: rgba(255, 255, 255, 0.02);
+            color: #9898ab;
+            font-size: 11px;
+            line-height: 1;
         }
 
         .ndemo-stream {
@@ -2821,15 +2836,8 @@
             width: 56px;
             height: 56px;
             border-radius: 18px;
-            background: linear-gradient(135deg, rgba(167, 139, 250, 0.22), rgba(236, 72, 153, 0.16));
-            border: 1px solid rgba(167, 139, 250, 0.2);
-            display: flex;
-            align-items: center;
-            justify-content: center;
             margin: 0 auto 18px;
-            color: #d7cfff;
-            font-size: 22px;
-            font-weight: 700;
+            object-fit: contain;
         }
 
         .ndemo-empty h3 {
