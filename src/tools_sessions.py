@@ -332,10 +332,9 @@ def handle_startup(
     la_warnings = _check_launchagents()
     if la_warnings:
         lines.append("")
-        lines.append("⚠ LAUNCHAGENT MISMATCH (plist on disk ≠ loaded in memory):")
+        lines.append("⚠ LAUNCHAGENT HEALTH:")
         for w in la_warnings:
             lines.append(f"  {w}")
-        lines.append("  Fix: launchctl unload + load the affected plists, or restart.")
 
     return "\n".join(lines)
 
@@ -363,7 +362,14 @@ def _check_launchagents() -> list[str]:
                 capture_output=True, text=True, timeout=5
             )
             if result.returncode != 0:
-                warnings.append(f"{label}: not loaded (plist exists on disk)")
+                repair = subprocess.run(
+                    ["launchctl", "bootstrap", f"gui/{os.getuid()}", plist_path],
+                    capture_output=True, timeout=5,
+                )
+                if repair.returncode == 0:
+                    warnings.append(f"{label}: AUTO-REPAIRED (was not loaded, reloaded from disk)")
+                else:
+                    warnings.append(f"{label}: REPAIR FAILED — not loaded (plist exists on disk)")
                 continue
 
             # Parse loaded ProgramArguments from launchctl output
@@ -384,9 +390,8 @@ def _check_launchagents() -> list[str]:
                 # Check if loaded path points to /tmp or nonexistent path
                 stale = any("/tmp/" in a or not os.path.exists(a) for a in loaded_args if "/" in a)
                 if stale:
-                    # Auto-repair: reload the plist
-                    subprocess.run(["launchctl", "unload", plist_path], capture_output=True, timeout=5)
-                    subprocess.run(["launchctl", "load", plist_path], capture_output=True, timeout=5)
+                    subprocess.run(["launchctl", "bootout", f"gui/{os.getuid()}/{label}"], capture_output=True, timeout=5)
+                    subprocess.run(["launchctl", "bootstrap", f"gui/{os.getuid()}", plist_path], capture_output=True, timeout=5)
                     warnings.append(f"{label}: AUTO-REPAIRED (was pointing to stale/tmp path, reloaded from disk)")
                 else:
                     warnings.append(f"{label}: loaded args differ from disk plist")

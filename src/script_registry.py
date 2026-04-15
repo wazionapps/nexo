@@ -1206,11 +1206,31 @@ def ensure_personal_schedules(*, dry_run: bool = False) -> dict:
         existing = schedules_by_path.get(script["path"], [])
         matching = next((item for item in existing if item.get("schedule_managed") and _schedule_matches(item, declared)), None)
         if matching:
-            report["already_present"].append({
+            entry = {
                 "name": script["name"],
                 "cron_id": matching["cron_id"],
                 "schedule_label": matching.get("schedule_label", ""),
-            })
+            }
+            plist_path = matching.get("plist_path", "")
+            if plist_path and platform.system() == "Darwin" and Path(plist_path).exists():
+                label = matching.get("launchd_label") or f"com.nexo.{matching['cron_id']}"
+                svc = _launchctl_service_state(label)
+                if not svc.get("loaded"):
+                    if not dry_run:
+                        result = subprocess.run(
+                            ["launchctl", "bootstrap", f"gui/{os.getuid()}", plist_path],
+                            capture_output=True, timeout=5,
+                        )
+                        if result.returncode == 0:
+                            entry["reloaded"] = True
+                            entry["reason"] = "plist on disk but not loaded in launchd"
+                        else:
+                            entry["reload_failed"] = True
+                            entry["reason"] = result.stderr.decode(errors="replace").strip() or "bootstrap failed"
+                    else:
+                        entry["reloaded"] = True
+                        entry["reason"] = "plist on disk but not loaded in launchd (dry_run)"
+            report["already_present"].append(entry)
             continue
 
         repair_reasons = [item.get("schedule_state", item.get("schedule_origin", "unknown")) for item in existing]
