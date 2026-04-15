@@ -226,7 +226,7 @@ def call_claude_cli(prompt: str) -> str:
     """Call the configured automation backend for the managed evolution prompt."""
     result = run_automation_prompt(
         prompt,
-        model=_USER_MODEL or "opus",
+        model=_USER_MODEL,
         timeout=CLI_TIMEOUT,
         output_format="text",
         allowed_tools="Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__*",
@@ -242,7 +242,7 @@ def call_public_claude_cli(prompt: str, *, cwd: Path) -> str:
         prompt,
         cwd=cwd,
         env={"NEXO_PUBLIC_CONTRIBUTION": "1"},
-        model=_USER_MODEL or "opus",
+        model=_USER_MODEL,
         timeout=CLI_TIMEOUT,
         output_format="text",
         allowed_tools="Read,Write,Edit,Glob,Grep,Bash",

@@ -915,7 +915,7 @@ Write the report. Be concise — max 40 lines."""
     try:
         result = run_automation_prompt(
             prompt,
-            model=_USER_MODEL or "opus",
+            model=_USER_MODEL,
             timeout=21600,
             output_format="text",
             allowed_tools="Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__*",
