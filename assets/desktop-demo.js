@@ -8,12 +8,12 @@ const desktopDemoScenes = [
     sidebar: {
       active: [
         { title: "director hotel bahía", dot: "violet", active: true, closable: true },
-        { title: "ocupación agosto", dot: "green", closable: true },
-        { title: "reseñas booking", dot: "amber", closable: true }
+        { title: "hotel bahía · ocupación agosto", dot: "green", closable: true },
+        { title: "hotel bahía · reseñas booking", dot: "amber", closable: true }
       ],
       archivedExpanded: false,
       archivedSearch: "",
-      archivedItems: ["reunión revenue mayo", "plantilla grupos septiembre", "proveedor lavandería"]
+      archivedItems: ["hotel bahía · revenue mayo", "hotel bahía · grupos septiembre", "hotel bahía · lavandería"]
     },
     threadSearch: null,
     messages: [
@@ -51,11 +51,11 @@ const desktopDemoScenes = [
     sidebar: {
       active: [
         { title: "director hotel bahía", dot: "violet", active: true, closable: true },
-        { title: "ocupación agosto", dot: "green", closable: true }
+        { title: "hotel bahía · ocupación agosto", dot: "green", closable: true }
       ],
       archivedExpanded: true,
       archivedSearch: "revenue",
-      archivedItems: ["reunión revenue mayo", "propuesta desayuno premium", "proveedor lavandería"]
+      archivedItems: ["hotel bahía · revenue mayo", "hotel bahía · desayuno premium", "hotel bahía · lavandería"]
     },
     threadSearch: null,
     messages: [
@@ -66,7 +66,7 @@ const desktopDemoScenes = [
       { role: "tool", title: "✅ Tareas", meta: "detalles ›" },
       {
         role: "assistant",
-        html: "<p>En un hotel esto sirve para recuperar acuerdos de revenue, cambios de proveedores o briefings de eventos sin saturar la bandeja principal.</p>"
+        html: "<p>En Hotel Bahía esto sirve para recuperar acuerdos de revenue, cambios de proveedores o briefings de eventos sin saturar la bandeja principal.</p>"
       }
     ],
     composer: {
@@ -87,11 +87,11 @@ const desktopDemoScenes = [
     sidebar: {
       active: [
         { title: "director hotel bahía", dot: "violet", active: true, closable: true },
-        { title: "evento corporativo", dot: "green", closable: true }
+        { title: "hotel bahía · evento corporativo", dot: "green", closable: true }
       ],
       archivedExpanded: false,
       archivedSearch: "",
-      archivedItems: ["reunión revenue mayo", "plantilla grupos septiembre", "proveedor lavandería"]
+      archivedItems: ["hotel bahía · revenue mayo", "hotel bahía · grupos septiembre", "hotel bahía · lavandería"]
     },
     threadSearch: {
       value: "booking",
@@ -123,22 +123,22 @@ const desktopDemoScenes = [
     railLabel: "Reply flow",
     windowLabel: "Reply preview and attachments",
     windowNote: "Composer state inside the active thread",
-    chatTitle: "evento corporativo octubre",
+    chatTitle: "hotel bahía · evento corporativo octubre",
     sidebar: {
       active: [
         { title: "director hotel bahía", dot: "violet", closable: true },
-        { title: "evento corporativo octubre", dot: "amber", active: true, closable: true },
-        { title: "ocupación agosto", dot: "green", closable: true }
+        { title: "hotel bahía · evento corporativo octubre", dot: "amber", active: true, closable: true },
+        { title: "hotel bahía · ocupación agosto", dot: "green", closable: true }
       ],
       archivedExpanded: false,
       archivedSearch: "",
-      archivedItems: ["reunión revenue mayo", "plantilla grupos septiembre", "proveedor lavandería"]
+      archivedItems: ["hotel bahía · revenue mayo", "hotel bahía · grupos septiembre", "hotel bahía · lavandería"]
     },
     threadSearch: null,
     messages: [
       {
         role: "assistant",
-        html: "<p>He dejado preparado el borrador para el director del evento y una nota para restauración con las preferencias del grupo.</p>"
+        html: "<p>He dejado preparado el borrador para el director de Hotel Bahía y una nota para restauración con las preferencias del grupo corporativo.</p>"
       },
       { role: "tool", title: "✏️ Editar archivo", meta: "detalles ›" },
       {
@@ -148,7 +148,7 @@ const desktopDemoScenes = [
     ],
     composer: {
       status: "Listo",
-      attachments: ["briefing-evento.pdf"],
+      attachments: ["hotel-bahia-briefing-evento.pdf"],
       pending: "1 mensaje pendiente de enviar",
       reply: { author: "Director Hotel Bahía", text: "¿Puedes dejarme un resumen para el comité antes de las 18:00?" },
       input: "Te dejo el resumen en formato breve para que lo reenvíes al comité."
@@ -167,13 +167,13 @@ const desktopDemoScenes = [
       ],
       archivedExpanded: false,
       archivedSearch: "",
-      archivedItems: ["reunión revenue mayo", "plantilla grupos septiembre", "proveedor lavandería"]
+      archivedItems: ["hotel bahía · revenue mayo", "hotel bahía · grupos septiembre", "hotel bahía · lavandería"]
     },
     threadSearch: null,
     messages: [
       {
         role: "assistant",
-        html: "<p>Además del hilo activo, la app permite ajustar tema, visibilidad de herramientas, sonido y modo no molestar sin salir del escritorio de trabajo.</p>"
+        html: "<p>Además del hilo activo, la app permite ajustar tema, visibilidad de herramientas, sonido y modo no molestar sin salir del escritorio de trabajo de Hotel Bahía.</p>"
       }
     ],
     composer: {
