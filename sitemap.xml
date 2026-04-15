@@ -61,24 +61,6 @@
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://nexo-brain.com/desktop/</loc>
-    <lastmod>2026-04-15</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.85</priority>
-  </url>
-  <url>
-    <loc>https://nexo-brain.com/desktop/demo/</loc>
-    <lastmod>2026-04-15</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://nexo-brain.com/desktop/use-cases/</loc>
-    <lastmod>2026-04-15</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.78</priority>
-  </url>
-  <url>
     <loc>https://nexo-brain.com/watch/</loc>
     <lastmod>2026-04-11</lastmod>
     <changefreq>weekly</changefreq>
@@ -161,6 +143,24 @@
     <lastmod>2026-04-14</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://nexo-brain.com/blog/nexo-5-5-2/</loc>
+    <lastmod>2026-04-15</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.75</priority>
+  </url>
+  <url>
+    <loc>https://nexo-brain.com/blog/nexo-5-5-1-enforcer-fix-logging/</loc>
+    <lastmod>2026-04-15</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://nexo-brain.com/blog/nexo-5-5-0-headless-enforcer-realtime/</loc>
+    <lastmod>2026-04-15</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.95</priority>
   </url>
   <url>
     <loc>https://nexo-brain.com/blog/nexo-5-4-9-headless-enforcer/</loc>
