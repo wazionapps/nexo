@@ -4,33 +4,33 @@ const desktopDemoScenes = [
     railLabel: "Live thread",
     windowLabel: "Active conversation",
     windowNote: "Message stream + tool cards",
-    chatTitle: "algo pend. para mi?",
+    chatTitle: "director hotel bahía",
     sidebar: {
       active: [
-        { title: "algo pend. para mi?", dot: "violet", active: true, closable: true },
-        { title: "watchdog reconexiones", dot: "green", closable: true },
-        { title: "review release desktop", dot: "amber", closable: true }
+        { title: "director hotel bahía", dot: "violet", active: true, closable: true },
+        { title: "ocupación agosto", dot: "green", closable: true },
+        { title: "reseñas booking", dot: "amber", closable: true }
       ],
       archivedExpanded: false,
       archivedSearch: "",
-      archivedItems: ["Aquí estoy", "he recibido tu email \"Franc...\"", "asd"]
+      archivedItems: ["reunión revenue mayo", "plantilla grupos septiembre", "proveedor lavandería"]
     },
     threadSearch: null,
     messages: [
       {
         role: "assistant",
-        html: "<p>sesiones conectadas sin errores.</p><p>Las notificaciones en el móvil de los clientes deberían desaparecer en las próximas horas, ya que el watchdog ya no forzará reconexiones innecesarias.</p>"
+        html: "<p>Ya está revisado el parte del turno de noche y la incidencia de reservas duplicadas ha quedado contenida.</p><p>No hay huéspedes pendientes de recolocación y recepción tiene el resumen listo para dirección.</p>"
       },
       { role: "tool", title: "NEXO · heartbeat", meta: "detalles ›" },
-      { role: "user", html: "<p>vale y el tema de las campañas de marketing funcionan?</p>" },
+      { role: "user", html: "<p>¿Qué debería responder al director del hotel sobre las reseñas negativas de esta semana?</p>" },
       {
         role: "assistant",
-        html: "<p>Buena pregunta — verifiquémoslo. El campaign-runner se revirtió al código del 1 de abril que funcionaba con el envío inline. Voy a comprobar que el endpoint responde y que no hay errores.</p>"
+        html: "<p>Voy a resumir las causas repetidas y te preparo una respuesta breve para dirección con medidas concretas.</p>"
       },
-      { role: "tool", title: "⚡ Bash x10", meta: "detalles ›" },
+      { role: "tool", title: "📖 Leer archivo x3", meta: "detalles ›" },
       {
         role: "assistant",
-        html: "<p>El endpoint de campañas responde correctamente. El servidor arrancó sin errores y no hay ningún log de fallo en campaign.</p><p>Sí, las campañas de marketing funcionan: están usando el código estable del 1 de abril con el envío inline por setTimeout.</p>"
+        html: "<p>Las quejas se concentran en espera de check-in y ruido en la tercera planta.</p><p>Le respondería al director con dos acciones: refuerzo puntual en recepción y revisión del protocolo nocturno para las habitaciones cercanas al ascensor.</p>"
       }
     ],
     composer: {
@@ -47,26 +47,26 @@ const desktopDemoScenes = [
     railLabel: "Archived",
     windowLabel: "Archived threads",
     windowNote: "Search and reopen past conversations",
-    chatTitle: "algo pend. para mi?",
+    chatTitle: "director hotel bahía",
     sidebar: {
       active: [
-        { title: "algo pend. para mi?", dot: "violet", active: true, closable: true },
-        { title: "campañas marketing", dot: "green", closable: true }
+        { title: "director hotel bahía", dot: "violet", active: true, closable: true },
+        { title: "ocupación agosto", dot: "green", closable: true }
       ],
       archivedExpanded: true,
-      archivedSearch: "email",
-      archivedItems: ["Aquí estoy", "he recibido tu email \"Franc...\"", "asd"]
+      archivedSearch: "revenue",
+      archivedItems: ["reunión revenue mayo", "propuesta desayuno premium", "proveedor lavandería"]
     },
     threadSearch: null,
     messages: [
       {
         role: "assistant",
-        html: "<p>La conversación activa sigue arriba y las archivadas viven separadas para no ensuciar la lista principal.</p><p>Puedes buscar dentro de archivadas y restaurar solo la que te interese.</p>"
+        html: "<p>La conversación principal sigue arriba y los hilos cerrados quedan en archivadas para no mezclar operativa activa con contexto histórico.</p><p>Puedes buscar una reunión anterior y restaurarla solo cuando vuelva a hacer falta.</p>"
       },
       { role: "tool", title: "✅ Tareas", meta: "detalles ›" },
       {
         role: "assistant",
-        html: "<p>Esto es útil cuando hay hilos largos o muchas comprobaciones técnicas que quieres conservar sin tenerlas siempre visibles.</p>"
+        html: "<p>En un hotel esto sirve para recuperar acuerdos de revenue, cambios de proveedores o briefings de eventos sin saturar la bandeja principal.</p>"
       }
     ],
     composer: {
@@ -83,30 +83,30 @@ const desktopDemoScenes = [
     railLabel: "Search",
     windowLabel: "In-thread search",
     windowNote: "Search inside the active conversation",
-    chatTitle: "algo pend. para mi?",
+    chatTitle: "director hotel bahía",
     sidebar: {
       active: [
-        { title: "algo pend. para mi?", dot: "violet", active: true, closable: true },
-        { title: "watchdog reconexiones", dot: "green", closable: true }
+        { title: "director hotel bahía", dot: "violet", active: true, closable: true },
+        { title: "evento corporativo", dot: "green", closable: true }
       ],
       archivedExpanded: false,
       archivedSearch: "",
-      archivedItems: ["Aquí estoy", "he recibido tu email \"Franc...\"", "asd"]
+      archivedItems: ["reunión revenue mayo", "plantilla grupos septiembre", "proveedor lavandería"]
     },
     threadSearch: {
-      value: "",
+      value: "booking",
       placeholder: "Buscar en conversación...",
-      count: ""
+      count: "1 / 1"
     },
     messages: [
       {
         role: "assistant",
-        html: "<p>Buena pregunta — verifiquémoslo. Voy a comprobar que el endpoint responde y que no hay errores.</p>"
+        html: "<p>He revisado las peticiones especiales del fin de semana y ya hay una lista separada para recepción.</p>"
       },
-      { role: "tool", title: "⚡ Bash x10", meta: "detalles ›" },
+      { role: "tool", title: "📖 Leer archivo x2", meta: "detalles ›" },
       {
         role: "assistant",
-        html: "<p>El endpoint de <mark>campañas</mark> responde correctamente.</p><p>Sí, las <mark>campañas</mark> de marketing funcionan y no hay ningún log de fallo en campaign.</p>"
+        html: "<p>El comentario de <mark>booking</mark> sobre el check-in lento ya está localizado y coincide con el pico de llegadas del viernes.</p><p>Podemos responder con una explicación breve y dejar la mejora operativa en el checklist de recepción.</p>"
       }
     ],
     composer: {
@@ -119,59 +119,61 @@ const desktopDemoScenes = [
     overlay: null
   },
   {
-    id: "quick-search",
-    railLabel: "Quick search",
-    windowLabel: "Global conversation search",
-    windowNote: "Open the right thread fast",
-    chatTitle: "Nueva conversación",
+    id: "reply-flow",
+    railLabel: "Reply flow",
+    windowLabel: "Reply preview and attachments",
+    windowNote: "Composer state inside the active thread",
+    chatTitle: "evento corporativo octubre",
     sidebar: {
       active: [
-        { title: "watchdog reconexiones", dot: "green", closable: true },
-        { title: "review release desktop", dot: "amber", closable: true }
+        { title: "director hotel bahía", dot: "violet", closable: true },
+        { title: "evento corporativo octubre", dot: "amber", active: true, closable: true },
+        { title: "ocupación agosto", dot: "green", closable: true }
       ],
       archivedExpanded: false,
       archivedSearch: "",
-      archivedItems: ["Aquí estoy", "he recibido tu email \"Franc...\"", "asd"]
+      archivedItems: ["reunión revenue mayo", "plantilla grupos septiembre", "proveedor lavandería"]
     },
     threadSearch: null,
-    messages: [],
+    messages: [
+      {
+        role: "assistant",
+        html: "<p>He dejado preparado el borrador para el director del evento y una nota para restauración con las preferencias del grupo.</p>"
+      },
+      { role: "tool", title: "✏️ Editar archivo", meta: "detalles ›" },
+      {
+        role: "assistant",
+        html: "<p>Si quieres, puedo enviar ahora el resumen final con salas, coffee break y horarios de llegada.</p>"
+      }
+    ],
     composer: {
       status: "Listo",
-      attachments: [],
-      pending: "",
-      reply: null,
-      input: "Escribe a NEXO…"
+      attachments: ["briefing-evento.pdf"],
+      pending: "1 mensaje pendiente de enviar",
+      reply: { author: "Director Hotel Bahía", text: "¿Puedes dejarme un resumen para el comité antes de las 18:00?" },
+      input: "Te dejo el resumen en formato breve para que lo reenvíes al comité."
     },
-    overlay: {
-      type: "quick-search",
-      query: "email fran",
-      hint: "↑↓ navegar · Enter abrir · Esc cerrar",
-      results: [
-        { title: "he recibido tu email \"Franc...\"", snippet: "Archivada · vuelve a abrir esta conversación para retomar el contexto exacto." },
-        { title: "algo pend. para mi?", snippet: "Incluye la comprobación de campañas y el hilo del watchdog." },
-        { title: "review release desktop", snippet: "Checklist de publicación, páginas públicas y validación local." }
-      ]
-    }
+    overlay: null
   },
   {
     id: "preferences",
     railLabel: "Preferences",
     windowLabel: "NEXO Desktop preferences",
     windowNote: "The actual app surface includes its own settings",
-    chatTitle: "algo pend. para mi?",
+    chatTitle: "director hotel bahía",
     sidebar: {
       active: [
-        { title: "algo pend. para mi?", dot: "violet", active: true, closable: true }
+        { title: "director hotel bahía", dot: "violet", active: true, closable: true }
       ],
       archivedExpanded: false,
       archivedSearch: "",
-      archivedItems: ["Aquí estoy", "he recibido tu email \"Franc...\"", "asd"]
+      archivedItems: ["reunión revenue mayo", "plantilla grupos septiembre", "proveedor lavandería"]
     },
     threadSearch: null,
     messages: [
       {
         role: "assistant",
-        html: "<p>Además del hilo activo, la app tiene onboarding y un panel de preferencias con pestañas para perfil, personalidad, NEXO Desktop, estado del sistema y avanzado.</p>"
+        html: "<p>Además del hilo activo, la app permite ajustar tema, visibilidad de herramientas, sonido y modo no molestar sin salir del escritorio de trabajo.</p>"
       }
     ],
     composer: {
