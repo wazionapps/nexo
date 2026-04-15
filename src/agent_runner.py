@@ -663,6 +663,9 @@ def run_automation_prompt(
             cmd.extend(["--allowedTools", allowed_tools])
         cmd.extend(extra_args)
         try:
+            import sys as _sys
+            if str(NEXO_HOME) not in _sys.path:
+                _sys.path.insert(0, str(NEXO_HOME))
             from enforcement_engine import run_with_enforcement
             result = run_with_enforcement(
                 cmd,

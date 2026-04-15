@@ -18,7 +18,7 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `5.5.0` is the current packaged-runtime line: headless Protocol Enforcer — all crons get enforcement rules automatically.
+Version `5.5.1` is the current packaged-runtime line: headless Protocol Enforcer — all crons get enforcement rules automatically.
 
 Previously in `5.4.6`: runtime dependency management in `nexo update` + daily auto-update cron.
 

@@ -1,5 +1,15 @@
 # Changelog
 
+## [5.5.1] - 2026-04-15
+
+### Fix: headless enforcement import + logging
+
+- Fixed sys.path resolution for enforcement_engine import in agent_runner.py.
+  Previously failed silently when cwd != NEXO_HOME (email monitor, orchestrator).
+- Added comprehensive logging to enforcement_engine.py (enforcer-headless.log).
+- Added dedup logic: skips injection if tool was called < 60s ago.
+- Added session summary with tool counts and injection stats.
+
 ## [5.5.0] - 2026-04-15
 
 ### Feat: real-time headless Protocol Enforcer

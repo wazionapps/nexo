@@ -8,6 +8,7 @@ are violated. Python equivalent of Desktop's enforcement-engine.js.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import subprocess
 import threading
@@ -16,6 +17,15 @@ from pathlib import Path
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 MAP_FILENAME = "tool-enforcement-map.json"
+LOG_DIR = NEXO_HOME / "logs"
+
+_logger = logging.getLogger("nexo.enforcer")
+if not _logger.handlers:
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    _fh = logging.FileHandler(LOG_DIR / "enforcer-headless.log")
+    _fh.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+    _logger.addHandler(_fh)
+    _logger.setLevel(logging.INFO)
 
 
 def _load_map() -> dict | None:
@@ -48,8 +58,8 @@ class HeadlessEnforcer:
         self.msg_since_tool: dict[str, int] = {}
         self.injection_queue: list[dict] = []
         self._started_at = time.time()
+        self._injections_done = 0
 
-        # Build indexes from map
         self._on_start: list[dict] = []
         self._on_end: list[dict] = []
         self._periodic_msg: list[dict] = []
@@ -58,6 +68,11 @@ class HeadlessEnforcer:
 
         if self.map:
             self._build_indexes()
+            _logger.info("Map v%s loaded: %d on_start, %d on_end, %d periodic_msg, %d periodic_time, %d after_tool",
+                         self.map.get("version", "?"), len(self._on_start), len(self._on_end),
+                         len(self._periodic_msg), len(self._periodic_time), len(self._after_tool))
+        else:
+            _logger.warning("No enforcement map found")
 
     def _build_indexes(self):
         for tool_name, tool_def in self.map.get("tools", {}).items():
@@ -79,7 +94,6 @@ class HeadlessEnforcer:
                     for wt in rule.get("watch_tools", []):
                         self._after_tool.setdefault(wt, []).append(entry)
 
-            # triggers_after chains
             for triggered in enf.get("triggers_after", []):
                 self._after_tool.setdefault(tool_name, []).append({
                     "tool": triggered,
@@ -93,8 +107,8 @@ class HeadlessEnforcer:
         self.tools_called.add(name)
         self.tool_timestamps[name] = time.time()
         self.msg_since_tool[name] = 0
+        _logger.info("TOOL_CALL #%d: %s", self.tool_call_count, name)
 
-        # Check after_tool rules
         for entry in self._after_tool.get(name, []):
             target = entry["tool"]
             if target not in self.tools_called:
@@ -103,8 +117,6 @@ class HeadlessEnforcer:
                     self._enqueue(prompt, f"after:{name}->{target}")
 
     def check_periodic(self):
-        """Called periodically to check time-based and message-based rules."""
-        # on_session_start
         for entry in self._on_start:
             tool = entry["tool"]
             threshold = entry["rule"].get("threshold", 2)
@@ -113,7 +125,6 @@ class HeadlessEnforcer:
                 if prompt:
                     self._enqueue(prompt, f"start:{tool}")
 
-        # periodic_by_messages
         for entry in self._periodic_msg:
             tool = entry["tool"]
             threshold = entry["rule"].get("threshold", 3)
@@ -123,7 +134,6 @@ class HeadlessEnforcer:
                 if prompt:
                     self._enqueue(prompt, f"periodic_msg:{tool}")
 
-        # periodic_by_time
         for entry in self._periodic_time:
             tool = entry["tool"]
             threshold_min = entry["rule"].get("threshold", 15)
@@ -141,6 +151,7 @@ class HeadlessEnforcer:
                 p = entry["enf"].get("session_end_inject_prompt") or entry["enf"].get("inject_prompt", "")
                 if p:
                     prompts.append(p)
+        _logger.info("END_PROMPTS: %d prompts to inject", len(prompts))
         return prompts
 
     def flush(self) -> dict | None:
@@ -152,9 +163,20 @@ class HeadlessEnforcer:
         if any(q["tag"] == tag for q in self.injection_queue):
             return
         tool = tag.split(":")[-1].split("->")[-1]
+        last_called = self.tool_timestamps.get(tool)
+        if last_called and tool in self.tools_called:
+            if time.time() - last_called < 60:
+                _logger.info("DEDUP_SKIP: %s — %s called %ds ago", tag, tool, int(time.time() - last_called))
+                return
         if tool in self.tools_called and not tag.startswith("periodic_"):
+            _logger.info("SKIP: %s — already called", tag)
             return
         self.injection_queue.append({"prompt": prompt, "tag": tag, "at": time.time()})
+        _logger.info("ENQUEUED: %s (queue size: %d)", tag, len(self.injection_queue))
+
+    def summary(self) -> str:
+        return (f"tools_called={len(self.tools_called)} tool_calls={self.tool_call_count} "
+                f"injections={self._injections_done} tools={sorted(self.tools_called)}")
 
 
 def run_with_enforcement(
@@ -165,18 +187,14 @@ def run_with_enforcement(
     env: dict | None = None,
     timeout: int = 300,
 ) -> subprocess.CompletedProcess:
-    """Run a Claude Code process with real-time enforcement monitoring.
-
-    Uses stream-json mode instead of -p mode. Monitors stdout for tool calls,
-    injects enforcement prompts via stdin when rules are violated.
-    """
     enforcer = HeadlessEnforcer()
+    _logger.info("=== SESSION START === prompt=%s timeout=%d", prompt[:80], timeout)
+
     if not enforcer.map:
-        # No map available — fall back to simple subprocess.run
+        _logger.warning("No map — falling back to plain subprocess.run")
         return subprocess.run(cmd, cwd=cwd or None, capture_output=True, text=True,
                               timeout=timeout, env=env)
 
-    # Replace -p with stream-json mode
     stream_cmd = []
     skip_next = False
     for i, arg in enumerate(cmd):
@@ -184,10 +202,10 @@ def run_with_enforcement(
             skip_next = False
             continue
         if arg == "-p":
-            skip_next = True  # Skip the prompt argument
+            skip_next = True
             continue
         if arg == "--output-format":
-            skip_next = True  # Skip output format
+            skip_next = True
             continue
         stream_cmd.append(arg)
 
@@ -208,7 +226,6 @@ def run_with_enforcement(
         text=True,
     )
 
-    # Send initial user message
     initial_msg = json.dumps({
         "type": "user",
         "message": {"role": "user", "content": [{"type": "text", "text": prompt}]}
@@ -231,8 +248,10 @@ def run_with_enforcement(
             proc.stdin.write(msg + "\n")
             proc.stdin.flush()
             waiting_for_injection_response = True
-        except Exception:
-            pass
+            enforcer._injections_done += 1
+            _logger.info("INJECTED: %s", text[:100])
+        except Exception as e:
+            _logger.error("INJECT_FAILED: %s", e)
 
     def _read_stderr():
         try:
@@ -244,7 +263,6 @@ def run_with_enforcement(
     stderr_thread = threading.Thread(target=_read_stderr, daemon=True)
     stderr_thread.start()
 
-    # Periodic check timer
     last_periodic_check = time.time()
 
     try:
@@ -253,8 +271,8 @@ def run_with_enforcement(
             if not line:
                 continue
 
-            # Check timeout
             if time.time() - start_time > timeout:
+                _logger.warning("TIMEOUT after %ds", timeout)
                 proc.kill()
                 break
 
@@ -265,7 +283,6 @@ def run_with_enforcement(
 
             event_type = event.get("type", "")
 
-            # Detect tool use
             if event_type == "assistant" and event.get("message", {}).get("content"):
                 for block in event["message"]["content"]:
                     if block.get("type") == "tool_use":
@@ -275,48 +292,44 @@ def run_with_enforcement(
                 if cb.get("type") == "tool_use":
                     enforcer.on_tool_call(cb.get("name", ""))
 
-            # Collect assistant text
             if event_type == "assistant" and not waiting_for_injection_response:
                 msg = event.get("message", {})
                 for block in msg.get("content", []):
                     if block.get("type") == "text":
                         collected_text.append(block["text"])
 
-            # Detect turn end (result event with stop_reason)
             if event_type == "result":
                 if waiting_for_injection_response:
                     waiting_for_injection_response = False
-                    # After injection response, check for more injections
+                    _logger.info("INJECTION_RESPONSE received")
                     item = enforcer.flush()
                     if item:
                         _inject(item["prompt"])
                     continue
 
-                # Normal turn end — check for pending enforcements
                 enforcer.check_periodic()
                 item = enforcer.flush()
                 if item:
                     _inject(item["prompt"])
                 else:
-                    break  # No more injections, we're done
+                    _logger.info("TURN_END — no pending enforcements, done")
+                    break
 
-            # Periodic check every 30 seconds
             if time.time() - last_periodic_check > 30:
                 enforcer.check_periodic()
                 last_periodic_check = time.time()
 
-    except Exception:
-        pass
+    except Exception as e:
+        _logger.error("EXCEPTION: %s", e)
     finally:
-        # End-of-session enforcement: inject diary + stop
         end_prompts = enforcer.get_end_prompts()
         for ep in end_prompts:
             try:
                 _inject(ep)
-                # Wait briefly for response
                 deadline = time.time() + 15
                 for raw_line in proc.stdout:
                     if time.time() > deadline:
+                        _logger.warning("END_PROMPT timeout")
                         break
                     line = raw_line.strip()
                     if not line:
@@ -324,11 +337,15 @@ def run_with_enforcement(
                     try:
                         event = json.loads(line)
                         if event.get("type") == "result":
+                            _logger.info("END_PROMPT response received")
                             break
                     except json.JSONDecodeError:
                         continue
             except Exception:
                 break
+
+        elapsed = time.time() - start_time
+        _logger.info("=== SESSION END === duration=%.1fs %s", elapsed, enforcer.summary())
 
         try:
             proc.stdin.close()
