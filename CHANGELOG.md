@@ -1,5 +1,16 @@
 # Changelog
 
+## [5.5.0] - 2026-04-15
+
+### Feat: real-time headless Protocol Enforcer
+
+- New enforcement_engine.py: Python equivalent of Desktop enforcement-engine.js.
+- run_automation_prompt now uses stream-json mode with Popen instead of one-shot -p.
+- Real-time monitoring of tool calls in headless sessions (Deep Sleep, email, etc.).
+- Injects enforcement prompts via stdin when protocol rules are violated.
+- End-of-session enforcement: forces diary_write + stop before process exits.
+- Falls back to simple subprocess.run if enforcement_engine is unavailable.
+
 ## [5.4.9] - 2026-04-15
 
 ### Feat: headless Protocol Enforcer in run_automation_prompt

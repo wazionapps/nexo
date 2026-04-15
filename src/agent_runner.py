@@ -662,14 +662,24 @@ def run_automation_prompt(
         if allowed_tools:
             cmd.extend(["--allowedTools", allowed_tools])
         cmd.extend(extra_args)
-        result = subprocess.run(
-            cmd,
-            cwd=str(cwd_path),
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            env=run_env,
-        )
+        try:
+            from enforcement_engine import run_with_enforcement
+            result = run_with_enforcement(
+                cmd,
+                prompt=prompt,
+                cwd=str(cwd_path),
+                env=run_env,
+                timeout=timeout,
+            )
+        except ImportError:
+            result = subprocess.run(
+                cmd,
+                cwd=str(cwd_path),
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                env=run_env,
+            )
         final_stdout, telemetry = _extract_claude_telemetry(
             result.stdout or "",
             requested_output_format=requested_output_format,
