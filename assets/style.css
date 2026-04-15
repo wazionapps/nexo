@@ -2393,6 +2393,778 @@
             color: var(--text);
         }
 
+        .desktop-fidelity-stage {
+            margin-top: 12px;
+        }
+
+        .ndemo-shell {
+            border-radius: 28px;
+            border: 1px solid rgba(167, 139, 250, 0.14);
+            background:
+                radial-gradient(circle at top left, rgba(167, 139, 250, 0.12), transparent 28%),
+                radial-gradient(circle at bottom right, rgba(96, 165, 250, 0.08), transparent 26%),
+                #090911;
+            box-shadow: 0 32px 80px rgba(0, 0, 0, 0.38);
+            overflow: hidden;
+        }
+
+        .ndemo-windowbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 18px;
+            padding: 18px 24px;
+            border-bottom: 1px solid rgba(167, 139, 250, 0.1);
+            background: rgba(14, 14, 22, 0.92);
+        }
+
+        .ndemo-windowbar-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            min-width: 0;
+        }
+
+        .ndemo-window-dots {
+            display: flex;
+            gap: 7px;
+            flex-shrink: 0;
+        }
+
+        .ndemo-window-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 999px;
+            display: block;
+        }
+
+        .ndemo-window-dot.red { background: #ff6b5f; }
+        .ndemo-window-dot.amber { background: #f4bf4f; }
+        .ndemo-window-dot.green { background: #55c454; }
+
+        .ndemo-window-title {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            min-width: 0;
+        }
+
+        .ndemo-window-title strong {
+            color: var(--text);
+            font-size: 15px;
+            letter-spacing: -0.02em;
+        }
+
+        .ndemo-window-title span,
+        .ndemo-window-note {
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+
+        .ndemo-window-note {
+            text-align: right;
+        }
+
+        .ndemo-layout {
+            display: grid;
+            grid-template-columns: 244px minmax(0, 1fr);
+            min-height: 720px;
+        }
+
+        .ndemo-sidebar {
+            background: #0d0d14;
+            border-right: 1px solid rgba(167, 139, 250, 0.1);
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        .ndemo-sidebar-head {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 18px 18px 16px;
+            border-bottom: 1px solid rgba(167, 139, 250, 0.08);
+        }
+
+        .ndemo-brand-mark {
+            width: 38px;
+            height: 38px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, rgba(167, 139, 250, 0.28), rgba(236, 72, 153, 0.14));
+            border: 1px solid rgba(167, 139, 250, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #c4b5fd;
+            font-weight: 700;
+            letter-spacing: -0.04em;
+        }
+
+        .ndemo-brand-copy {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .ndemo-brand-copy strong {
+            color: #f3f2ff;
+            font-size: 15px;
+            letter-spacing: -0.02em;
+        }
+
+        .ndemo-brand-copy span {
+            color: #7d7d92;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+        }
+
+        .ndemo-new-chat {
+            margin: 16px 12px 10px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #a78bfa, #8b5cf6);
+            color: white;
+            font-weight: 600;
+            font-size: 14px;
+            text-align: center;
+            padding: 12px 14px;
+            box-shadow: 0 10px 24px rgba(124, 58, 237, 0.28);
+        }
+
+        .ndemo-chat-list {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            padding: 0 8px;
+        }
+
+        .ndemo-chat-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 0;
+            padding: 10px 12px;
+            border-radius: 10px;
+            color: #a4a4bc;
+            font-size: 13px;
+            border: 1px solid transparent;
+            transition: background 0.2s ease, border-color 0.2s ease;
+        }
+
+        .ndemo-chat-item.is-active {
+            background: rgba(167, 139, 250, 0.12);
+            border-color: rgba(167, 139, 250, 0.16);
+            color: #f3f2ff;
+        }
+
+        .ndemo-chat-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 999px;
+            flex-shrink: 0;
+            background: #6b7280;
+        }
+
+        .ndemo-chat-dot.tone-violet { background: #a78bfa; box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.14); }
+        .ndemo-chat-dot.tone-green { background: #4ade80; box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.14); }
+        .ndemo-chat-dot.tone-amber { background: #f59e0b; box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.14); }
+
+        .ndemo-chat-text {
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .ndemo-chat-close {
+            color: #6f6f84;
+            font-size: 16px;
+            line-height: 1;
+            flex-shrink: 0;
+        }
+
+        .ndemo-archived {
+            padding: 12px 8px 0;
+            margin-top: 6px;
+            border-top: 1px solid rgba(167, 139, 250, 0.08);
+        }
+
+        .ndemo-archived-box {
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .ndemo-archived-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            padding: 8px 10px;
+            color: #86869d;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .ndemo-archived-count {
+            background: rgba(167, 139, 250, 0.12);
+            color: #d3c8ff;
+            padding: 2px 7px;
+            border-radius: 999px;
+            font-size: 10px;
+            letter-spacing: 0;
+        }
+
+        .ndemo-archived-search,
+        .ndemo-archived-list {
+            padding: 0 10px 10px;
+        }
+
+        .ndemo-archived-search-input {
+            border: 1px solid rgba(167, 139, 250, 0.12);
+            background: rgba(13, 13, 20, 0.84);
+            color: #b9b9ca;
+            border-radius: 8px;
+            padding: 8px 10px;
+            font-size: 12px;
+        }
+
+        .ndemo-archived-item {
+            color: #8d8da4;
+            font-size: 12px;
+            padding: 6px 2px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .ndemo-sidebar-foot {
+            margin-top: auto;
+            border-top: 1px solid rgba(167, 139, 250, 0.08);
+            padding: 12px 16px 16px;
+            color: #6f6f84;
+            font-size: 11px;
+            line-height: 1.8;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        }
+
+        .ndemo-session {
+            color: #8b8ba1;
+        }
+
+        .ndemo-main {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            position: relative;
+            background:
+                linear-gradient(180deg, rgba(16, 16, 26, 0.9), rgba(11, 11, 18, 0.96)),
+                #0b0b12;
+        }
+
+        .ndemo-topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 18px;
+            padding: 16px 18px;
+            border-bottom: 1px solid rgba(167, 139, 250, 0.08);
+        }
+
+        .ndemo-chat-title {
+            color: #f2f1ff;
+            font-size: 15px;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .ndemo-topbar-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .ndemo-top-btn,
+        .ndemo-conv-search {
+            border: 1px solid rgba(167, 139, 250, 0.12);
+            background: rgba(255, 255, 255, 0.03);
+            color: #c3c3d6;
+            border-radius: 10px;
+            padding: 9px 12px;
+            font-size: 12px;
+            line-height: 1;
+        }
+
+        .ndemo-conv-search {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 0;
+        }
+
+        .ndemo-search-placeholder {
+            color: #85859b;
+        }
+
+        .ndemo-search-query {
+            color: #f0efff;
+            font-weight: 600;
+        }
+
+        .ndemo-search-count,
+        .ndemo-search-actions {
+            color: #9898ab;
+            white-space: nowrap;
+        }
+
+        .ndemo-stream {
+            flex: 1;
+            min-height: 0;
+            padding: 26px 20px 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+            overflow: hidden;
+        }
+
+        .ndemo-message {
+            display: flex;
+            max-width: 78%;
+        }
+
+        .ndemo-message.is-user {
+            align-self: flex-end;
+            justify-content: flex-end;
+        }
+
+        .ndemo-bubble {
+            border-radius: 24px;
+            padding: 18px 20px;
+            line-height: 1.65;
+            font-size: 14px;
+            color: #e7e7f2;
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+            animation: desktopMessageIn 0.35s ease;
+        }
+
+        .ndemo-message.is-assistant .ndemo-bubble {
+            background: #1d1d2a;
+        }
+
+        .ndemo-message.is-user .ndemo-bubble {
+            background: #2d2d3f;
+        }
+
+        .ndemo-bubble p + p {
+            margin-top: 10px;
+        }
+
+        .ndemo-bubble mark {
+            background: rgba(167, 139, 250, 0.24);
+            color: #f3efff;
+            padding: 0 5px;
+            border-radius: 6px;
+        }
+
+        .ndemo-toolcard {
+            border-radius: 18px;
+            background: rgba(20, 20, 30, 0.92);
+            border: 1px solid rgba(167, 139, 250, 0.12);
+            padding: 12px 16px;
+            animation: desktopMessageIn 0.35s ease;
+        }
+
+        .ndemo-toolcard-head {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #b6b6c8;
+            font-size: 13px;
+        }
+
+        .ndemo-toolcard-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 999px;
+            background: #4ade80;
+            box-shadow: 0 0 0 4px rgba(74, 222, 128, 0.08);
+        }
+
+        .ndemo-toolcard-title {
+            color: #d6d6e4;
+            font-weight: 600;
+        }
+
+        .ndemo-toolcard-meta {
+            margin-left: auto;
+            color: #7e7e91;
+            font-size: 12px;
+        }
+
+        .ndemo-empty {
+            margin: auto;
+            text-align: center;
+            max-width: 420px;
+            color: #9a9ab1;
+        }
+
+        .ndemo-empty-logo {
+            width: 56px;
+            height: 56px;
+            border-radius: 18px;
+            background: linear-gradient(135deg, rgba(167, 139, 250, 0.22), rgba(236, 72, 153, 0.16));
+            border: 1px solid rgba(167, 139, 250, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 18px;
+            color: #d7cfff;
+            font-size: 22px;
+            font-weight: 700;
+        }
+
+        .ndemo-empty h3 {
+            color: #f0efff;
+            font-size: 22px;
+            margin-bottom: 8px;
+        }
+
+        .ndemo-composer {
+            border-top: 1px solid rgba(167, 139, 250, 0.08);
+            padding: 12px 18px 18px;
+            background: rgba(12, 12, 20, 0.92);
+        }
+
+        .ndemo-status-row {
+            margin-bottom: 10px;
+        }
+
+        .ndemo-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: #99a0af;
+            font-size: 13px;
+        }
+
+        .ndemo-status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 999px;
+            background: #4ade80;
+            box-shadow: 0 0 0 4px rgba(74, 222, 128, 0.08);
+        }
+
+        .ndemo-attachments,
+        .ndemo-pending,
+        .ndemo-reply {
+            margin-bottom: 10px;
+        }
+
+        .ndemo-attachment-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 7px 10px;
+            border-radius: 999px;
+            background: rgba(167, 139, 250, 0.1);
+            color: #d7d0ff;
+            font-size: 12px;
+            margin-right: 8px;
+        }
+
+        .ndemo-pending {
+            color: #cdbfff;
+            font-size: 12px;
+            padding: 8px 10px;
+            border-radius: 10px;
+            background: rgba(167, 139, 250, 0.08);
+        }
+
+        .ndemo-reply {
+            display: flex;
+            align-items: stretch;
+            gap: 10px;
+            padding: 10px 12px;
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(167, 139, 250, 0.08);
+        }
+
+        .ndemo-reply-bar {
+            width: 4px;
+            border-radius: 999px;
+            background: linear-gradient(180deg, #a78bfa, #ec4899);
+        }
+
+        .ndemo-reply-copy {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            color: #a6a6bb;
+            font-size: 12px;
+        }
+
+        .ndemo-reply-copy strong {
+            color: #f2f1ff;
+        }
+
+        .ndemo-input-wrap {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border-radius: 18px;
+            border: 1px solid rgba(167, 139, 250, 0.18);
+            background: #191924;
+            padding: 10px 12px;
+        }
+
+        .ndemo-attach {
+            border: none;
+            background: transparent;
+            color: #b1b1c5;
+            font-size: 18px;
+        }
+
+        .ndemo-input {
+            flex: 1;
+            min-height: 22px;
+            color: #87879f;
+            font-size: 14px;
+        }
+
+        .ndemo-send {
+            border: none;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #a78bfa, #8b5cf6);
+            color: white;
+            font-weight: 600;
+            font-size: 14px;
+            padding: 12px 18px;
+            box-shadow: 0 10px 24px rgba(124, 58, 237, 0.24);
+        }
+
+        .ndemo-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(6, 6, 10, 0.62);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            backdrop-filter: blur(6px);
+        }
+
+        .ndemo-quicksearch,
+        .ndemo-settings {
+            width: min(100%, 700px);
+            border-radius: 22px;
+            border: 1px solid rgba(167, 139, 250, 0.16);
+            background: #12121b;
+            box-shadow: 0 28px 70px rgba(0, 0, 0, 0.48);
+            overflow: hidden;
+        }
+
+        .ndemo-quicksearch {
+            padding: 18px;
+        }
+
+        .ndemo-quicksearch-input {
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(167, 139, 250, 0.14);
+            padding: 14px 16px;
+            color: #f0efff;
+            font-size: 15px;
+            margin-bottom: 14px;
+        }
+
+        .ndemo-quicksearch-results {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .ndemo-quicksearch-item {
+            border-radius: 14px;
+            border: 1px solid rgba(167, 139, 250, 0.08);
+            background: rgba(255, 255, 255, 0.02);
+            padding: 14px 16px;
+        }
+
+        .ndemo-quicksearch-item.is-active {
+            background: rgba(167, 139, 250, 0.1);
+            border-color: rgba(167, 139, 250, 0.14);
+        }
+
+        .ndemo-quicksearch-title {
+            color: #f4f3ff;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .ndemo-quicksearch-snippet,
+        .ndemo-quicksearch-hint {
+            color: #9b9bb0;
+            font-size: 12px;
+            line-height: 1.6;
+        }
+
+        .ndemo-quicksearch-hint {
+            margin-top: 14px;
+            text-align: center;
+        }
+
+        .ndemo-settings-head,
+        .ndemo-settings-foot {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 16px 18px;
+            border-bottom: 1px solid rgba(167, 139, 250, 0.08);
+        }
+
+        .ndemo-settings-head strong {
+            color: #f4f3ff;
+            font-size: 16px;
+        }
+
+        .ndemo-settings-head span {
+            color: #8f8fa4;
+            font-size: 24px;
+            line-height: 1;
+        }
+
+        .ndemo-settings-tabs {
+            display: flex;
+            gap: 10px;
+            padding: 14px 18px 0;
+            flex-wrap: wrap;
+        }
+
+        .ndemo-settings-tab {
+            border-radius: 999px;
+            padding: 8px 12px;
+            background: rgba(255, 255, 255, 0.03);
+            color: #9c9cb0;
+            font-size: 12px;
+        }
+
+        .ndemo-settings-tab.is-active {
+            background: rgba(167, 139, 250, 0.12);
+            color: #ece8ff;
+        }
+
+        .ndemo-settings-body {
+            padding: 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .ndemo-setting-row {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 14px 16px;
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(167, 139, 250, 0.08);
+        }
+
+        .ndemo-setting-label {
+            color: #f2f1ff;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .ndemo-setting-value {
+            max-width: 320px;
+            color: #9f9fb4;
+            font-size: 12px;
+            line-height: 1.6;
+            text-align: right;
+        }
+
+        .ndemo-settings-foot {
+            border-top: 1px solid rgba(167, 139, 250, 0.08);
+            border-bottom: none;
+        }
+
+        .ndemo-settings-btn {
+            border-radius: 10px;
+            padding: 10px 14px;
+            background: rgba(255, 255, 255, 0.04);
+            color: #c1c1d6;
+            font-size: 13px;
+        }
+
+        .ndemo-settings-btn.is-primary {
+            background: linear-gradient(135deg, #a78bfa, #8b5cf6);
+            color: white;
+        }
+
+        .ndemo-rail {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 10px;
+            padding: 18px 18px 22px;
+            border-top: 1px solid rgba(167, 139, 250, 0.08);
+            background: rgba(9, 9, 15, 0.94);
+        }
+
+        .ndemo-rail-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border-radius: 14px;
+            padding: 12px 14px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid transparent;
+            color: #8f8fa5;
+            font-size: 12px;
+        }
+
+        .ndemo-rail-item.is-active {
+            border-color: rgba(167, 139, 250, 0.16);
+            background: rgba(167, 139, 250, 0.08);
+            color: #ebe7ff;
+        }
+
+        .ndemo-rail-dot {
+            width: 9px;
+            height: 9px;
+            border-radius: 999px;
+            background: rgba(167, 139, 250, 0.4);
+            flex-shrink: 0;
+        }
+
+        .ndemo-rail-item.is-active .ndemo-rail-dot {
+            background: #a78bfa;
+        }
+
+        .ndemo-rail-label {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .is-hidden {
+            display: none !important;
+        }
+
         @keyframes desktopMessageIn {
             from {
                 opacity: 0;
@@ -2427,6 +3199,19 @@
                 grid-template-columns: 1fr;
             }
 
+            .ndemo-layout {
+                grid-template-columns: 1fr;
+            }
+
+            .ndemo-sidebar {
+                border-right: none;
+                border-bottom: 1px solid rgba(167, 139, 250, 0.08);
+            }
+
+            .ndemo-rail {
+                grid-template-columns: 1fr;
+            }
+
             .desktop-theater-body {
                 grid-template-columns: 1fr;
             }
@@ -2455,6 +3240,56 @@
             .desktop-scene-header {
                 flex-direction: column;
                 align-items: flex-start;
+            }
+
+            .ndemo-windowbar,
+            .ndemo-topbar,
+            .ndemo-settings-head,
+            .ndemo-settings-foot {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .ndemo-topbar-actions {
+                width: 100%;
+                justify-content: flex-start;
+            }
+
+            .ndemo-conv-search {
+                width: 100%;
+                justify-content: space-between;
+            }
+
+            .ndemo-stream {
+                padding: 18px 14px;
+            }
+
+            .ndemo-message {
+                max-width: 100%;
+            }
+
+            .ndemo-composer,
+            .ndemo-sidebar-head,
+            .ndemo-sidebar-foot {
+                padding-left: 14px;
+                padding-right: 14px;
+            }
+
+            .ndemo-input-wrap {
+                align-items: flex-start;
+            }
+
+            .ndemo-send {
+                width: 100%;
+            }
+
+            .ndemo-setting-row {
+                flex-direction: column;
+            }
+
+            .ndemo-setting-value {
+                max-width: none;
+                text-align: left;
             }
 
             .desktop-main-actions {
