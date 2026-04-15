@@ -134,7 +134,7 @@ def analyze_session(
 
         result = run_automation_prompt(
             prompt,
-            model=_USER_MODEL or "opus",
+            model=_USER_MODEL,
             timeout=CLAUDE_TIMEOUT,
             output_format="text",
             append_system_prompt=JSON_SYSTEM_PROMPT,
@@ -164,7 +164,7 @@ def analyze_session(
             )
             convert_result = run_automation_prompt(
                 convert_prompt,
-                model=_USER_MODEL or "sonnet",
+                model=_USER_MODEL,
                 timeout=120,
                 output_format="text",
                 append_system_prompt=JSON_SYSTEM_PROMPT,

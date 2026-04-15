@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXO 5.5.2: Auto-Repair LaunchAgents + Model Fallback Cleanup</title>
+    <meta name="description" content="NEXO 5.5.2 auto-repairs unloaded or stale macOS LaunchAgents with verified launchctl calls and removes legacy model fallbacks from core headless automation scripts.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-5-5-2/">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/blog/nexo-5-5-2/">
+    <meta property="og:title" content="NEXO 5.5.2: Auto-Repair LaunchAgents + Model Fallback Cleanup">
+    <meta property="og:description" content="LaunchAgent repair now verifies launchctl state and core automation scripts stop hardcoding legacy opus/sonnet fallbacks.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+    <meta property="article:published_time" content="2026-04-15">
+    <meta property="article:author" content="Francisco Cerda Puigserver">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO 5.5.2: Auto-Repair LaunchAgents + Model Fallback Cleanup">
+    <meta name="twitter:description" content="Verified launchctl repair for stale LaunchAgents plus runtime-aligned headless model selection.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "NEXO 5.5.2: Auto-Repair LaunchAgents + Model Fallback Cleanup",
+        "description": "NEXO 5.5.2 auto-repairs unloaded or stale macOS LaunchAgents with verified launchctl calls and removes legacy model fallbacks from core headless automation scripts.",
+        "datePublished": "2026-04-15",
+        "dateModified": "2026-04-15",
+        "author": {
+            "@type": "Person",
+            "name": "Francisco Cerda Puigserver"
+        },
+        "publisher": {
+            "@type": "Organization",
+            "name": "WAzion",
+            "url": "https://www.wazion.com"
+        },
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https://nexo-brain.com/blog/nexo-5-5-2/"
+        },
+        "url": "https://nexo-brain.com/blog/nexo-5-5-2/",
+        "image": "https://nexo-brain.com/assets/og/og-blog.png",
+        "keywords": ["NEXO 5.5.2", "LaunchAgents", "launchctl", "Codex", "headless automation"]
+    }
+    </script>
+
+    <style>
+        .article-header { padding-top: 128px; padding-bottom: 40px; text-align: center; }
+        .article-meta { font-size: 14px; color: var(--text-muted); margin-bottom: 16px; }
+        .article-body {
+            max-width: 720px; margin: 0 auto; padding: 0 24px 80px;
+            font-size: 17px; line-height: 1.8; color: var(--text);
+        }
+        .article-body h2 { font-size: 28px; font-weight: 700; margin: 48px 0 16px; letter-spacing: -0.01em; }
+        .article-body p { margin-bottom: 20px; color: var(--text-muted); }
+        .article-body strong { color: var(--text); }
+        .article-body a { color: var(--purple-light); }
+        .article-body a:hover { color: var(--pink); }
+        .article-body code {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 14px; color: var(--pink);
+            background: rgba(236, 72, 153, 0.1);
+            padding: 2px 8px; border-radius: 4px;
+        }
+        .article-back {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 14px; font-weight: 600; color: var(--text-muted);
+            margin-bottom: 24px;
+        }
+        .article-back:hover { color: var(--purple-light); }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-64.png" alt="NEXO Brain" class="logo-image">
+            <span class="logo-text">NEXO Brain</span>
+        </a>
+        <button class="mobile-menu-toggle" aria-label="Toggle navigation" onclick="toggleMobileMenu()">
+            <span></span><span></span><span></span>
+        </button>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/features/">Features</a>
+            <a href="/evolution/">Evolution</a>
+            <a href="/compare/">Compare</a>
+            <a href="/blog/">Blog</a>
+            <a href="/changelog/">Changelog</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta">GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<section class="article-header">
+    <div class="container">
+        <a href="/blog/" class="article-back">&larr; Back to blog</a>
+        <div class="article-meta">April 15, 2026 &middot; Fix &middot; Runtime</div>
+        <h1 class="section-title" style="font-size:clamp(28px,4.5vw,48px);max-width:920px;margin:0 auto 16px;">NEXO 5.5.2: Auto-Repair LaunchAgents + Model Fallback Cleanup</h1>
+        <p class="section-subtitle" style="max-width:760px;margin:0 auto;">LaunchAgent recovery now verifies what launchd actually loaded before claiming success, and headless automation stops hardcoding legacy model names when the runtime already knows which backend profile to use.</p>
+    </div>
+</section>
+
+<section>
+    <div class="article-body">
+
+        <h2>LaunchAgents now repair from observed state</h2>
+        <p><code>ensure_personal_schedules</code> already knew when a declared schedule existed on disk. In 5.5.2 it also checks whether launchd actually has the matching service loaded. If the plist is present but the service is missing, NEXO runs <code>launchctl bootstrap</code> and records whether that reload really succeeded.</p>
+
+        <h2>No more false green on stale launchd entries</h2>
+        <p>Startup also inspects managed <code>com.nexo.*</code> plists and compares the on-disk <code>ProgramArguments</code> to what <code>launchctl</code> reports as loaded. When launchd is still pointing at a stale or temporary path, NEXO now uses the modern <code>bootout</code> plus <code>bootstrap</code> flow and only reports <strong>AUTO-REPAIRED</strong> after both commands succeed.</p>
+        <p>If either step fails, startup keeps the warning explicit instead of pretending the machine is healthy. That makes the self-heal path honest enough to trust during real bootstraps, updates, and packaged-runtime repairs.</p>
+
+        <h2>Headless model selection now defers to the runtime profile</h2>
+        <p>The other half of 5.5.2 removes legacy <code>&quot;opus&quot;</code> and <code>&quot;sonnet&quot;</code> fallback strings from core automation scripts. Passing an empty <code>model</code> now lets <code>run_automation_prompt()</code> resolve the active backend profile, so Codex and Claude headless runs stay aligned with the configured runtime instead of inheriting a stale default from an old script.</p>
+
+        <h2>Why these two fixes ship together</h2>
+        <p>Both fixes remove a class of hidden drift. One was launchd drift between the plist on disk and the service actually loaded by macOS. The other was runtime drift between the configured automation backend and the hardcoded model name a script might pass. 5.5.2 closes both gaps so packaged jobs behave like the runtime says they should.</p>
+
+    </div>
+</section>
+
+<footer>
+    <div class="container" style="text-align:center; padding: 48px 24px 32px; color: var(--text-muted); font-size: 14px;">
+        <p>&copy; 2024&ndash;2026 WAzion &middot; <a href="https://github.com/wazionapps/nexo" style="color:var(--purple-light);">GitHub</a> &middot; AGPL-3.0</p>
+    </div>
+</footer>
+
+<script>
+function toggleMobileMenu() {
+    document.querySelector('.nav-links').classList.toggle('active');
+    document.querySelector('.mobile-menu-toggle').classList.toggle('active');
+}
+</script>
+
+</body>
+</html>

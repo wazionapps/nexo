@@ -10,6 +10,16 @@
 - Migrated all `launchctl load/unload` calls to modern `bootstrap/bootout` API.
 - Added return code verification for all repair operations.
 
+### Fix: headless automation scripts defer model resolution to the configured runtime
+
+- Core automation scripts no longer hardcode legacy `"opus"` / `"sonnet"`
+  fallback strings when `_USER_MODEL` is empty.
+- Passing an empty `model` now lets `run_automation_prompt()` resolve the
+  active backend profile, so Codex and Claude headless runs stay aligned with
+  the configured runtime defaults.
+- Added regression coverage for empty-model Codex resolution in
+  `tests/test_agent_runner.py`.
+
 ## [5.5.1] - 2026-04-15
 
 ### Fix: headless enforcement import + logging
