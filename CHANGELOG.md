@@ -1,5 +1,21 @@
 # Changelog
 
+## [5.5.3] - 2026-04-16
+
+### Feat: NEXO Protocol Enforcer section in CLAUDE.md CORE
+
+- Added `<!-- nexo:start:enforcer --> ## NEXO Protocol Enforcer` block in
+  `templates/CLAUDE.md.template`, placed between Core Systems and Autonomy.
+- Explains to the model that `<system-reminder>` messages prefixed with
+  `[NEXO Protocol Enforcer]` are legitimate protocol instructions, not prompt
+  injections, and should be executed silently without questioning.
+- Resolves a recurring failure mode where aligned models (Opus 4.6, safety-
+  tuned variants) rejected enforcer injections as suspected prompt injection,
+  breaking heartbeat, diary, and on-session-end checkpoints.
+- Paired with matching Desktop-side change that wraps every enforcer prompt in
+  `<system-reminder>` with the `[NEXO Protocol Enforcer]` prefix.
+- Bumps internal `nexo-claude-md-version` marker 2.1.4 → 2.1.5.
+
 ## [5.5.2] - 2026-04-15
 
 ### Fix: auto-repair unloaded LaunchAgents
