@@ -836,10 +836,53 @@ def _self_heal_if_wiped() -> dict | None:
     }
 
 
+def _purge_zero_byte_db_files() -> list[Path]:
+    """Delete 0-byte .db files in NEXO_HOME and its ``data/`` subdir.
+
+    These are orphans from interrupted installs / aborted ``sqlite3.connect``
+    calls. They break backup validation by (a) masking the real DB during
+    :func:`_find_primary_db_path` selection when two ``nexo.db`` paths
+    coexist, and (b) being copied into the backup as empty shells that later
+    confuse :func:`_restore_dbs` on rollback.
+
+    Never touches SRC_DIR (the repo checkout) or the ``backups/`` tree.
+    Returns the list of removed paths for logging; failures are swallowed
+    so backup never aborts because of orphan cleanup.
+    """
+    removed: list[Path] = []
+    scan_dirs: list[Path] = []
+    if NEXO_HOME.is_dir():
+        scan_dirs.append(NEXO_HOME)
+    if DATA_DIR.is_dir() and DATA_DIR != NEXO_HOME:
+        scan_dirs.append(DATA_DIR)
+    for scan_dir in scan_dirs:
+        try:
+            candidates = [f for f in scan_dir.glob("*.db") if f.is_file()]
+        except Exception:
+            continue
+        for path in candidates:
+            try:
+                if path.stat().st_size != 0:
+                    continue
+            except Exception:
+                continue
+            try:
+                path.unlink()
+                removed.append(path)
+                _log(f"Purged zero-byte DB orphan: {path}")
+            except Exception as e:
+                _log(f"Failed to purge zero-byte DB {path}: {e}")
+    return removed
+
+
 def _backup_dbs() -> str | None:
     """Snapshot all .db files before migration. Returns backup dir or None."""
     import sqlite3
     import time as _time
+    # Drop 0-byte .db orphans first — they mask the real DB during primary
+    # path selection and turn into empty shells in the backup, breaking both
+    # validation and rollback paths. Safe no-op when there are none.
+    _purge_zero_byte_db_files()
     timestamp = _time.strftime("%Y-%m-%d-%H%M%S")
     backup_dir = NEXO_HOME / "backups" / f"pre-autoupdate-{timestamp}"
 
@@ -2271,6 +2314,32 @@ def _run_runtime_post_sync(dest: Path = NEXO_HOME, progress_fn=None) -> tuple[bo
             for msg in heal_messages:
                 _emit_progress(progress_fn, msg)
                 actions.append("model-heal")
+            # Claude Code reads the default model from ~/.claude/settings.json,
+            # not from client_runtime_profiles. If the heal migrated the
+            # claude_code model (e.g. Opus 4.6 → 4.7) the internal profile is
+            # now correct but Claude Code keeps booting on the old model until
+            # settings.json is also updated. Propagate conservatively: only
+            # touch settings.json when it already has a "model" field.
+            existing_cc = existing_profiles.get("claude_code") if isinstance(existing_profiles.get("claude_code"), dict) else None
+            healed_cc = healed_profiles.get("claude_code") if isinstance(healed_profiles.get("claude_code"), dict) else None
+            old_cc_model = str((existing_cc or {}).get("model") or "")
+            new_cc_model = str((healed_cc or {}).get("model") or "")
+            if new_cc_model and new_cc_model != old_cc_model:
+                try:
+                    from client_sync import sync_claude_code_model
+                    sync_result = sync_claude_code_model(new_cc_model)
+                    if sync_result.get("action") == "updated":
+                        _emit_progress(
+                            progress_fn,
+                            f"Synced Claude Code settings.json model → '{new_cc_model}'.",
+                        )
+                        actions.append("claude-settings-model")
+                    elif not sync_result.get("ok"):
+                        actions.append(
+                            f"claude-settings-model-warning:{sync_result.get('reason', 'unknown')}"
+                        )
+                except Exception as e:
+                    actions.append(f"claude-settings-model-warning:{e}")
         normalized_preferences = normalize_client_preferences(schedule_payload)
         if normalized_preferences != {
             key: schedule_payload.get(key)

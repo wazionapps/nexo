@@ -802,6 +802,70 @@ def _sync_claude_code_settings(path: Path, server_config: dict) -> dict:
     }
 
 
+def sync_claude_code_model(
+    model: str,
+    *,
+    user_home: str | os.PathLike[str] | None = None,
+) -> dict:
+    """Propagate the NEXO-recommended ``model`` into ``~/.claude/settings.json``.
+
+    Claude Code actually reads the default model from ``settings.json``, not
+    from NEXO's internal ``client_runtime_profiles``. When a NEXO update
+    migrates a user's recommended default (e.g. Opus 4.6 → 4.7) the internal
+    profile changes but Claude Code keeps booting on the old model until this
+    file is rewritten.
+
+    Intentionally conservative — do NOT seed a field the user never had:
+      - ``settings.json`` missing              → skip.
+      - ``settings.json`` exists but has no
+        top-level ``"model"`` key              → skip.
+      - Current value already equals ``model`` → skip (no write).
+      - JSON read/write error                  → ``ok=False``, skip.
+      - Otherwise replace the value.
+
+    Returns a small result dict: ``{ok, action, path, reason?, previous_model?, new_model?}``.
+    ``action`` is ``"updated"`` only when the file was actually rewritten.
+    """
+    result: dict = {"ok": True, "action": "skipped", "path": ""}
+    if not model:
+        result["reason"] = "empty model"
+        return result
+    home_path = Path(user_home).expanduser() if user_home else None
+    path = _claude_code_settings_path(home_path)
+    result["path"] = str(path)
+    if not path.is_file():
+        result["reason"] = "settings.json missing"
+        return result
+    try:
+        raw = path.read_text()
+        payload = json.loads(raw) if raw.strip() else {}
+    except Exception as e:
+        result["ok"] = False
+        result["reason"] = f"read failed: {e}"
+        return result
+    if not isinstance(payload, dict):
+        result["reason"] = "settings.json is not a JSON object"
+        return result
+    if "model" not in payload:
+        result["reason"] = "no model field in settings.json"
+        return result
+    current = payload.get("model")
+    if current == model:
+        result["reason"] = "already matches"
+        return result
+    payload["model"] = model
+    try:
+        _write_json_object(path, payload)
+    except Exception as e:
+        result["ok"] = False
+        result["reason"] = f"write failed: {e}"
+        return result
+    result["action"] = "updated"
+    result["previous_model"] = current
+    result["new_model"] = model
+    return result
+
+
 def sync_claude_code(
     *,
     nexo_home: str | os.PathLike[str] | None = None,
