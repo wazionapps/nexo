@@ -181,6 +181,28 @@
     </div>
 </section>
 
+<!-- v5.6.0 Default model upgrade Opus 4.6 → 4.7 -->
+<section id="v560" class="section-compact" style="background:linear-gradient(135deg,#09111f 0%,#14253a 50%,#1e3a5f 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.6.0 <span style="opacity:.5;font-weight:400;">&mdash; April 16, 2026</span></div>
+        <h2 class="section-title">Default Model Upgrade: Opus 4.6 &rarr; 4.7</h2>
+        <p class="section-subtitle">
+            NEXO Brain now ships with <strong>Claude Opus 4.7</strong> and <code>reasoning_effort: "max"</code> &mdash; the highest reasoning tier available. Auto-migration on <code>nexo update</code> silently upgrades existing users from <code>claude-opus-4-6*</code> to <code>claude-opus-4-7</code>, preserving the 1M context suffix. Codex profiles (GPT-5.4 / xhigh) are untouched.
+        </p>
+    </div>
+</section>
+
+<!-- v5.5.6 Rate-limit backup/restore/export -->
+<section id="v556" class="section-compact" style="background:linear-gradient(135deg,#0a120f 0%,#152a1f 50%,#1e3f2f 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.5.6 <span style="opacity:.5;font-weight:400;">&mdash; April 16, 2026</span></div>
+        <h2 class="section-title">Rate-Limiting the Backup/Restore/Export Tools</h2>
+        <p class="section-subtitle">
+            Same-day follow-up to v5.5.5. <code>nexo_backup_now</code>, <code>nexo_backup_restore</code>, and <code>export_user_bundle</code> now refuse reentrant calls inside 30 s / 60 s / 120 s windows. A runaway MCP client stuck in a tool-use loop can no longer hammer <code>sqlite3.Connection.backup()</code>. v5.5.5 neutralised the consequences of the 2026-04-16 incident; v5.5.6 closes the cause.
+        </p>
+    </div>
+</section>
+
 <!-- v5.5.5 Data-loss guardrails + self-heal -->
 <section id="v555" class="section-compact" style="background:linear-gradient(135deg,#0a120f 0%,#152a1f 50%,#1e3f2f 100%);">
     <div class="container">

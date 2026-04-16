@@ -1,22 +1,9 @@
 # NEXO Brain
 
-> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v5.5.5).
+> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v5.6.0).
 
 NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It adds a local shared brain across supported clients, configurable terminal and automation backends, recovery-aware background jobs, startup preflight, runtime self-healing, smarter retrieval defaults, long-horizon overnight analysis, and 150+ MCP tools.
 
-v5.5.5: data-loss guardrails + automatic self-heal. The updater now refuses to capture an already-wiped nexo.db into a pre-update snapshot (validated sqlite3.backup + pre-flight wipe guard + post-migration row-count gate), and an auto-heal restores ~/.nexo/data/nexo.db from the newest hourly backup on the next server boot when a wipe is detected. New `nexo recover` CLI + `nexo_recover` MCP tool with mandatory kill-MCP, pre-recover snapshot, and post-restore row-count validation.
-v5.5.4: Deep Sleep no longer blocks on unparseable sessions — retries reduced from 3 to 2, added a JSON escape hatch so the model always returns parseable output, and unified the automation subprocess timeout to 3h (10800s) across 10 scripts via a new shared constant AUTOMATION_SUBPROCESS_TIMEOUT in src/constants.py.
-v5.5.3: CLAUDE.md CORE now explains the Protocol Enforcer — aligned models (Opus 4.6, safety-tuned variants) stop rejecting heartbeat, diary, and checkpoint injections as suspected prompt injection. Paired with NEXO Desktop v0.9.25 which wraps enforcer prompts in <system-reminder> tags.
-v5.5.2: auto-repair unloaded LaunchAgents + headless model fallback cleanup — verifies launchctl loaded state, migrated to modern bootstrap/bootout API, and removes legacy opus/sonnet fallbacks from core automation scripts
-v5.5.1: real-time headless Protocol Enforcer — enforcement_engine.py monitors tool calls and injects prompts in all headless sessions via stream-json Popen
-v5.4.9: headless Protocol Enforcer — all crons/scripts get enforcement rules via append_system_prompt automatically
-v5.4.8: tool-enforcement-map v2.0 — multi-dimensional enforcement with must/should/may levels, dependency chains, internal calls tracking. 11 must + 10 should + 225 none
-v5.4.7: tool-enforcement-map.json — canonical map of all 247 tools with enforcement metadata for Protocol Enforcer. Includes verify_tool_map.py for drift detection
-v5.4.6: runtime dependency management — `nexo update` now manages external dependencies declared in `runtimeDependencies` (starting with Claude Code) + daily auto-update cron at 02:00
-v5.4.5: CI timeout increase — subprocess timeout 10→30s for nexo update test on slow CI runners
-v5.4.4: test isolation + venv timeout fix — tree_hygiene.py copy + fake venv to prevent CI timeout, completing the publish workflow fix
-v5.4.3: test isolation fix — copy tree_hygiene.py into isolated runtime dirs so the publish workflow passes
-v5.4.2: traceability truth + Sensory Register buffer close-loop — diary warnings now distinguish repo `commit_ref` debt from local/server-side operational changes, the nocturnal postmortem drains pending `session_buffer.jsonl` events instead of looking only at "today", rewrites the buffer atomically, and the docs now say honestly that `nexo-reflection.py` is a standalone analyzer rather than something auto-triggered by the stop hook
 v5.4.1: hook hygiene fix — the PostToolUse `capture-session.sh` hook had been reading a nonexistent env var since 2026-04-12, silently writing `"tool":"unknown"` to `~/.nexo/brain/session_buffer.jsonl` for 48 hours. v5.4.1 parses `tool_name` from stdin JSON, removes the filter that was hiding `Bash`, deletes the contaminating `capture-session 2.sh` duplicate, and purges pre-fix entries from the buffer on update with a `.pre-v5.4.1.bak` backup
 v5.4.0: runtime events + health + logs + calibration migration — append-only event bus at `~/.nexo/runtime/events.ndjson` with stable envelope, `nexo notify` for one-shot proactive events, `nexo health --json` for a rolled-up subsystem snapshot, `nexo logs --tail --json` for structured log access, and a safe flat→nested migration for `calibration.json` that runs silently inside `nexo update` with a pre-migrate backup
 v5.3.30: desktop bridge — four read-only CLI commands (`nexo schema`, `nexo identity`, `nexo onboard`, `nexo scan-profile`) let external UIs like NEXO Desktop render preferences, onboarding, identity, and profile heuristics from live JSON instead of hardcoding field lists and releasing in lockstep
@@ -83,7 +70,7 @@ v5.2.0: bilingual response-discipline scoring + cortex quality cache reader
 ## Recommended Defaults
 
 - Claude Code: recommended primary client
-- Claude Code model profile: Opus 4.6 with 1M context
+- Claude Code model profile: Opus 4.7 with 1M context
 - Codex model profile: GPT-5.4 xhigh
 
 ## Installation
