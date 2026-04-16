@@ -1,5 +1,34 @@
 # Changelog
 
+## [5.6.1] - 2026-04-17
+
+### Fix: `nexo update` hardening — 0-byte DB orphans + Claude Code `settings.json` model sync
+
+Two small-but-sharp fixes in the update path. Both follow up on v5.6.0 (the
+Opus 4.6 → 4.7 default model upgrade) and unblock users who hit interrupted
+installs or noticed their Claude Code boot model was not actually changing.
+
+- **`src/auto_update.py`**: new `_purge_zero_byte_db_files()` scans
+  `NEXO_HOME` and `NEXO_HOME/data/` for 0-byte `.db` files and deletes
+  them before the pre-update backup runs. These are leftover shells from
+  interrupted installs or aborted `sqlite3.connect` calls. They were
+  breaking backup validation by masking the real DB during
+  `_find_primary_db_path` selection and by being copied into the backup
+  as empty DBs that later confused `_restore_dbs` on rollback. The
+  helper is called at the top of `_backup_dbs()`, never touches
+  `SRC_DIR` or `backups/`, and swallows errors so backup never aborts
+  on orphan cleanup.
+- **`src/client_sync.py` + `src/auto_update.py`**: new
+  `sync_claude_code_model()` helper keeps `~/.claude/settings.json` in
+  sync with the NEXO-recommended model. Claude Code reads its default
+  model from that file, **not** from `client_runtime_profiles`, so a
+  v5.6.0 heal was updating NEXO's internal profile while Claude Code
+  kept booting on the old model. The helper is called right after
+  `heal_runtime_profiles()` migrates the `claude_code` profile, and is
+  deliberately conservative: if `settings.json` is missing or has no
+  top-level `"model"` field it is a no-op (never seeds a field the user
+  never opted in to). Supersedes learning #391.
+
 ## [5.6.0] - 2026-04-16
 
 ### Feature: Default model upgrade — Opus 4.6 → 4.7
