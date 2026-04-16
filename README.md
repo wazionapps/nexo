@@ -18,6 +18,16 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
+Version `5.6.1` is the current packaged-runtime line: two small-but-sharp fixes in the `nexo update` path. 0-byte `.db` orphans from interrupted installs are now purged from `~/.nexo/` and `~/.nexo/data/` before the pre-update backup runs, so backup validation no longer trips over empty shells. And when `heal_runtime_profiles()` migrates the `claude_code` default (e.g. Opus 4.6 → 4.7), the new `sync_claude_code_model()` helper also updates the `model` field in `~/.claude/settings.json` — the file Claude Code actually reads — so the boot model matches NEXO's recommendation on the next launch.
+
+Previously in `5.6.0`: default model upgrade from Opus 4.6 to **Opus 4.7** with `reasoning_effort: "max"` (the new highest tier). Auto-migration on `nexo update` silently upgrades existing users from `claude-opus-4-6*` to `claude-opus-4-7` preserving the 1M context suffix. Codex profiles are untouched.
+
+Previously in `5.5.5`: data-loss guardrails + automatic self-heal. The updater now refuses to capture an already-wiped `nexo.db` into a `pre-update-*` snapshot (validated `sqlite3.backup` + pre-flight wipe guard + post-migration row-count gate), and an auto-heal restores `data/nexo.db` from the newest hourly backup on the next server boot when a wipe is detected. New `nexo recover` CLI + `nexo_recover` MCP tool.
+
+Previously in `5.5.4`: Deep Sleep no longer blocks on unparseable sessions — reduced retries, added a JSON escape hatch, and unified the automation subprocess timeout to 3h across all scripts via a single shared constant.
+
+Previously in `5.5.3`: CLAUDE.md CORE teaches the model to trust the Protocol Enforcer, so aligned backends stop rejecting heartbeat, diary, and checkpoint injections as suspected prompt injection.
+
 Start here:
 - [5-minute quickstart](docs/quickstart-5-minutes.md)
 - [Workflow quickstart](docs/workflows-quickstart.md)
@@ -86,6 +96,8 @@ Versions `3.1.7` through `3.2.0` close the recent-memory gap:
 - the runtime can build a reusable pre-action bundle instead of reconstructing the last few hours from diaries and durable recall only
 - when even that misses, NEXO now exposes raw transcript fallback tools for Claude Code and Codex session stores
 - NEXO can now inspect itself through a live system catalog derived from canonical sources instead of relying only on stale docs or operator memory
+
+Version `5.3.11` hardens protocol and Cortex contracts: malformed `outcome`, `task_type`, and `impact_level` values now fail explicitly instead of being coerced into other valid states, so persisted task history, debt, hot context, and decision telemetry stay faithful to what the caller actually asked for. Version `5.3.10` tightened the packaged-runtime truth layer again: installs and updates now keep `~/.nexo/package.json` aligned with the published npm package so runtime metadata and doctor evidence no longer drift to an old version, `nexo doctor --tier deep` treats a missing `self-audit-summary.json` as a pending bootstrap artifact when the runtime was just installed or updated instead of reporting a false degradation, weekly Evolution now asks for explicit `dimension_scores` / `score_evidence` so telemetry can persist instead of staying blank, and daily synthesis only ingests `update-last-summary.json` when it carries actionable runtime signals. Version `5.3.9` is the packaged core-artifact manifest heal for `5.3.8`: packaged updates now rebuild `runtime-core-artifacts.json` from the canonical npm package `src/` tree instead of scanning the live `~/.nexo/scripts` directory, script classification prefers that canonical packaged source when available, and runtime doctor syncs personal scripts before LaunchAgent inventory so personal automations recover cleanly instead of being mistaken for unknown core drift. Version `5.3.8` was the immediate packaged-migration hotfix for `5.3.7`: the installer/runtime migrator now discovers all top-level runtime Python modules from `src/` dynamically instead of relying on a manual allowlist, so new product surfaces like `nexo export` / `nexo import` actually arrive in `~/.nexo` after update instead of being present only in the published npm tarball. Version `5.3.7` closed the remaining packaged-runtime happy-path gap and finally exposed portable user-data migration commands: packaged `nexo update` now self-heals cron definitions and LaunchAgents after a successful npm bump, new `nexo export` / `nexo import` commands move operator data as a safe bundle instead of leaving that flow implicit, and runtime doctor now distinguishes tracked historical Codex drift from an actually broken runtime so cleaned installs stop staying red for stale transcript debt alone. Version `5.3.6` hardened the Claude Code bootstrap path and related runtime hygiene: managed client sync now writes the NEXO MCP server where current Claude Code actually reads it (`~/.claude.json`), script classification is stricter about core-vs-personal runtime artifacts, schedule status distinguishes genuinely running jobs from broken ones, and retroactive learnings stop opening keyword-only false positives outside their declared `applies_to` scope. Version `5.3.5` already keeps CLI version visibility honest right after `nexo update`: if the cached npm version lags behind the runtime you just installed, `nexo` / `nexo chat` now clamp `Latest` to the installed version and refresh the cache instead of showing a stale older release. Version `5.3.4` already cleaned up legacy core alias leakage and added the version-status banner. Version `5.3.3` closed the remaining packaged-runtime doctor mismatch: the built-in hourly backup helper is now inventoried as a core LaunchAgent, so clean installs no longer get a false unknown-LaunchAgent warning. Version `5.3.2` already hardened the runtime boundary by persisting which runtime scripts/hooks are core product artifacts, keeping `nexo scripts` from mixing those into the personal bucket, and migrating the legacy Claude Code heartbeat wrappers into managed core hooks.
 
 Version `5.3.1` normalizes packaged npm installs so they behave like packaged npm installs: `nexo update` now keeps the runtime anchored to `~/.nexo`, refreshes packaged bootstrap/client artifacts after upgrade, avoids repo-only release-artifact drift in installed runtimes, and keeps personal scripts on the canonical packaged path.
 
@@ -484,7 +496,9 @@ NEXO Brain doesn't just respond — it runs 13 core recovery-aware background jo
 | **followup-hygiene** | Weekly (Sun) | Normalizes statuses, flags stale followups, cleans orphans |
 | **learning-housekeep** | 03:15 daily | Dedup learnings, adjust weights by usage, process overdue reviews, reconcile decision outcomes |
 | **immune** | Every 30 min | Quarantine processing, memory promotion/rejection, synaptic pruning |
+| **impact-scorer** | 05:45 daily | Scores active followups so queues can prioritize by expected impact |
 | **synthesis** | 06:00 daily | Memory synthesis — discovers cross-memory patterns |
+| **outcome-checker** | 08:00 daily | Verifies tracked outcomes and marks them met, pending, or missed |
 | **watchdog** | Every 30 min | Monitors services, LaunchAgents, and infrastructure health |
 | **auto-close-sessions** | Every 5 min | Cleans stale sessions |
 
@@ -622,20 +636,21 @@ PreCompact hook saves full checkpoint if conversation is compressed
     ↓
 PostCompact hook re-injects Core Memory Block → session continues seamlessly
     ↓
-Stop hook triggers mandatory post-mortem:
-  - Self-critique: 5 questions about what could be better
-  - Session buffer: structured entry for the reflection engine
-  - Followups: anything promised gets scheduled
-  - Proactive seeds: what can the next session do without being asked?
+Stop hook refreshes the diary draft and approves immediately:
+  - Latest changes and decisions stay attached to the active session
+  - Session buffer keeps structured tool activity for downstream processing
+  - Followups and closing synthesis happen inline when the agent detects real closing intent
+  - No mid-conversation blocking from the hook itself
     ↓
-Reflection engine processes buffer (after 3+ sessions)
+Nocturnal post-mortem consolidator processes the buffer mechanically
     ↓
 Nocturnal processes: decay, consolidation, self-audit, dreaming
 ```
 
 ### Reflection Engine
 
-After 3+ sessions accumulate, the stop hook triggers `nexo-reflection.py`:
+NEXO still ships `nexo-reflection.py` as a standalone analyzer for `session_buffer.jsonl`.
+It is not currently auto-triggered by the stop hook:
 - Extracts recurring tasks, error patterns, mood trends
 - Updates `user_model.json` with observed behavior
 - No LLM required — runs as pure Python
@@ -817,9 +832,7 @@ If you want the shell or Python wrappers instead of raw MCP tools:
 - [docs/reference-verticals.md](docs/reference-verticals.md)
 - [compare/README.md](compare/README.md)
 
-Recommended defaults:
-- Claude Code: `Opus 4.6 with 1M context`
-- Codex: `gpt-5.4` with `xhigh` reasoning
+The model you pick during install is used everywhere — interactive sessions, automation scripts, and all task profiles.  Change it once in your preferences and every part of the system follows.  Default: `Opus 4.7 with 1M context`.
 
 Or use the shell alias created during install (e.g. `atlas`), which now runs `nexo chat .` so it opens the terminal client you pick for that session, with the last-used option shown first.
 
@@ -900,7 +913,7 @@ The Doctor system reads existing health artifacts (immune, watchdog, self-audit)
 - **macOS or Linux** (Windows via [WSL](https://learn.microsoft.com/en-us/windows/wsl/install))
 - **Node.js 18+** (for the installer)
 - **Claude Code is the primary recommended client.** It remains the most mature NEXO path: native hooks, the most battle-tested automation contract, and the clearest parity with historical production behavior.
-- **Recommended profiles:** Claude Code + `Opus 4.6 with 1M context`; Codex + `gpt-5.4` with `xhigh` reasoning if you prefer Codex as your terminal or automation backend.
+- **Model:** You pick your model during install and every component uses it.  Default is `Opus 4.7 with 1M context`.  Scripts and automation profiles read from a single preference — no hardcoded model strings.
 - Python 3, Homebrew, and the selected required client/backend can be installed automatically when NEXO has a supported installer path for that dependency.
 
 ## Architecture
@@ -1009,7 +1022,7 @@ NEXO Brain is designed as an MCP server. Claude Code remains the primary recomme
 npx nexo-brain
 ```
 
-All 150+ tools are available immediately after installation. The installer configures Claude Code's `~/.claude/settings.json` automatically. The recommended Claude profile is `Opus 4.6 with 1M context`.
+All 150+ tools are available immediately after installation. The installer configures Claude Code's `~/.claude/settings.json` automatically. The recommended Claude profile is `Opus 4.7 with 1M context`.
 
 ### Claude Desktop
 
@@ -1017,7 +1030,7 @@ When Claude Desktop is installed, `nexo-brain`, `nexo update`, and `nexo clients
 
 ### Codex
 
-When Codex CLI is available, `nexo-brain`, `nexo update`, and `nexo clients sync` register the same `nexo` MCP server via `codex mcp add`, so Codex uses the same local memory store as Claude Code and Claude Desktop. If selected during install, `nexo chat` can open Codex directly and background automation can also run through Codex. Interactive `nexo chat` launches use Codex's aggressive no-confirmation mode so the session does not stall on repetitive approval prompts. The current recommended Codex profile is `gpt-5.4` with `xhigh` reasoning. Runtime Doctor also audits recent Codex sessions for NEXO startup markers and conditioned-file protocol discipline so parity drift does not hide behind the lack of native Claude-style hooks.
+When Codex CLI is available, `nexo-brain`, `nexo update`, and `nexo clients sync` register the same `nexo` MCP server via `codex mcp add`, so Codex uses the same local memory store as Claude Code and Claude Desktop. If selected during install, `nexo chat` can open Codex directly and background automation can also run through Codex. Interactive `nexo chat` launches use Codex's aggressive no-confirmation mode so the session does not stall on repetitive approval prompts. Codex uses the same model you configured during install — no separate model override is needed. Runtime Doctor also audits recent Codex sessions for NEXO startup markers and conditioned-file protocol discipline so parity drift does not hide behind the lack of native Claude-style hooks.
 
 ### Cursor
 

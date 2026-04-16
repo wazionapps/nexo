@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXO 5.6.1: Update path hardening — 0-byte DB orphans + Claude Code model sync</title>
+    <meta name="description" content="NEXO Brain 5.6.1 hardens the update path: 0-byte DB orphans from interrupted installs are purged before backup, and the Claude Code settings.json model is kept in sync when NEXO migrates its recommended default.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-5-6-1/">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/blog/nexo-5-6-1/">
+    <meta property="og:title" content="NEXO 5.6.1: Update path hardening — 0-byte DB orphans + Claude Code model sync">
+    <meta property="og:description" content="Two small-but-sharp fixes in the update path: purge 0-byte DB orphans before backup, and keep ~/.claude/settings.json model in sync with NEXO's recommended default.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+    <meta property="article:published_time" content="2026-04-17">
+    <meta property="article:author" content="Francisco Cerda Puigserver">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO 5.6.1: Update path hardening — 0-byte DB orphans + Claude Code model sync">
+    <meta name="twitter:description" content="Purge 0-byte DB orphans before backup; keep Claude Code settings.json model in sync after a NEXO default-model migration.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "NEXO 5.6.1: Update path hardening — 0-byte DB orphans + Claude Code model sync",
+        "description": "NEXO Brain 5.6.1 purges 0-byte DB orphans before the pre-update backup and propagates the NEXO-recommended model into ~/.claude/settings.json so Claude Code actually boots on the migrated model.",
+        "datePublished": "2026-04-17",
+        "dateModified": "2026-04-17",
+        "author": {
+            "@type": "Person",
+            "name": "Francisco Cerda Puigserver"
+        },
+        "publisher": {
+            "@type": "Organization",
+            "name": "WAzion",
+            "url": "https://www.wazion.com"
+        },
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https://nexo-brain.com/blog/nexo-5-6-1/"
+        },
+        "url": "https://nexo-brain.com/blog/nexo-5-6-1/",
+        "image": "https://nexo-brain.com/assets/og/og-blog.png",
+        "keywords": ["NEXO 5.6.1", "auto_update", "backup validation", "settings.json", "Claude Code", "model sync"]
+    }
+    </script>
+
+    <style>
+        .article-header { padding-top: 128px; padding-bottom: 40px; text-align: center; }
+        .article-meta { font-size: 14px; color: var(--text-muted); margin-bottom: 16px; }
+        .article-body {
+            max-width: 720px; margin: 0 auto; padding: 0 24px 80px;
+            font-size: 17px; line-height: 1.8; color: var(--text);
+        }
+        .article-body h2 { font-size: 28px; font-weight: 700; margin: 48px 0 16px; letter-spacing: -0.01em; }
+        .article-body p { margin-bottom: 20px; color: var(--text-muted); }
+        .article-body strong { color: var(--text); }
+        .article-body a { color: var(--purple-light); }
+        .article-body a:hover { color: var(--pink); }
+        .article-body code {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 14px; color: var(--pink);
+            background: rgba(236, 72, 153, 0.1);
+            padding: 2px 8px; border-radius: 4px;
+        }
+        .article-back {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 14px; font-weight: 600; color: var(--text-muted);
+            margin-bottom: 24px;
+        }
+        .article-back:hover { color: var(--purple-light); }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-64.png" alt="NEXO Brain" class="logo-image">
+            <span class="logo-text">NEXO Brain</span>
+        </a>
+        <button class="mobile-menu-toggle" aria-label="Toggle navigation" onclick="toggleMobileMenu()">
+            <span></span><span></span><span></span>
+        </button>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/features/">Features</a>
+            <a href="/evolution/">Evolution</a>
+            <a href="/compare/">Compare</a>
+            <a href="/blog/">Blog</a>
+            <a href="/changelog/">Changelog</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta">GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<section class="article-header">
+    <div class="container">
+        <a href="/blog/" class="article-back">&larr; Back to blog</a>
+        <div class="article-meta">April 17, 2026 &middot; Fix &middot; Update path hardening</div>
+        <h1 class="section-title" style="font-size:clamp(28px,4.5vw,48px);max-width:920px;margin:0 auto 16px;">NEXO 5.6.1: Update path hardening &mdash; 0-byte DB orphans + Claude Code model sync</h1>
+        <p class="section-subtitle" style="max-width:760px;margin:0 auto;">Two small-but-sharp fixes in <code>nexo update</code>. Both follow up on v5.6.0 (the Opus 4.6 &rarr; 4.7 default-model upgrade) and unblock users who hit interrupted installs or noticed Claude Code was still booting on the old model.</p>
+    </div>
+</section>
+
+<section>
+    <div class="article-body">
+
+        <h2>Fix 1: purge 0-byte <code>.db</code> orphans before backup</h2>
+        <p>Interrupted installs and aborted <code>sqlite3.connect</code> calls sometimes leave a <strong>0-byte <code>nexo.db</code></strong> file behind in <code>~/.nexo/</code> or <code>~/.nexo/data/</code>. Those empty shells broke the pre-update backup two different ways: they masked the real DB during <code>_find_primary_db_path</code> selection (whichever path was scanned first won), and they got copied into the backup as empty DBs that later confused <code>_restore_dbs</code> on rollback.</p>
+        <p>The new <code>_purge_zero_byte_db_files()</code> helper runs at the top of <code>_backup_dbs()</code>. It scans <code>NEXO_HOME</code> and its <code>data/</code> subdir, removes any <code>.db</code> file whose <code>st_size</code> is zero, never touches <code>SRC_DIR</code> (the repo checkout) or the <code>backups/</code> tree, and swallows errors so backup never aborts on orphan cleanup.</p>
+
+        <h2>Fix 2: keep <code>~/.claude/settings.json</code> in sync with the NEXO default</h2>
+        <p>Claude Code reads its default model from <code>~/.claude/settings.json</code>, <strong>not</strong> from NEXO&rsquo;s internal <code>client_runtime_profiles</code>. After v5.6.0 shipped, the 4.6 &rarr; 4.7 heal was correctly updating NEXO&rsquo;s profile while Claude Code happily kept booting on the old model until someone noticed and edited <code>settings.json</code> by hand.</p>
+        <p>The new <code>sync_claude_code_model()</code> helper in <code>client_sync.py</code> is called right after <code>heal_runtime_profiles()</code> migrates the <code>claude_code</code> profile. It is deliberately conservative:</p>
+        <p>&bull; If <code>settings.json</code> is missing, it is a no-op.<br>
+           &bull; If <code>settings.json</code> exists but has no top-level <code>&quot;model&quot;</code> field, it is a no-op (never seeds a field the user did not opt in to).<br>
+           &bull; If the value already matches, no rewrite happens.<br>
+           &bull; Otherwise the <code>model</code> field is updated and everything else in the file is preserved.</p>
+
+        <h2>How to upgrade</h2>
+        <p>Run <code>nexo update</code>. The two fixes land on your next update. Nothing else to do.</p>
+
+    </div>
+</section>
+
+<footer style="padding:48px 24px;text-align:center;font-size:13px;color:var(--text-muted);">
+    &copy; 2026 <a href="https://www.wazion.com" style="color:var(--purple-light);">WAzion</a>. NEXO Brain is open-source under <a href="https://github.com/wazionapps/nexo/blob/main/LICENSE" style="color:var(--purple-light);">AGPL-3.0</a>.
+</footer>
+
+<script src="/assets/main.js"></script>
+</body>
+</html>
