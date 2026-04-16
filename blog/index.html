@@ -173,6 +173,27 @@
         <div class="blog-grid">
 
             <div class="blog-card">
+                <div class="blog-card-date">April 16, 2026</div>
+                <h2><a href="/blog/nexo-5-5-5/">NEXO 5.5.5: Data-Loss Guardrails and Automatic Self-Heal</a></h2>
+                <p>A hotfix for the 2026-04-16 incident where one user's <code>~/.nexo/data/nexo.db</code> was reset to a 4 KB empty-schema file while three consecutive <code>nexo update</code> attempts each captured the already-empty DB into a new <code>pre-update-*</code> snapshot, masking the wipe. v5.5.5 adds a pre-flight wipe guard, validated <code>sqlite3.backup</code> copies, a post-migration row-count gate, a startup self-heal that auto-restores from the newest hourly backup, and a new <code>nexo recover</code> CLI + <code>nexo_recover</code> MCP tool.</p>
+                <a href="/blog/nexo-5-5-5/" class="read-more">Read more &rarr;</a>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 16, 2026</div>
+                <h2><a href="/blog/nexo-5-5-4/">NEXO 5.5.4: Deep Sleep Stops Blocking on Unparseable Sessions</a></h2>
+                <p>Phase 2 extraction was retrying the same session three times with identical prompt and context, hiding a 6h per-attempt safety net that silently drifted out of alignment with its own <code>3h</code> comment. Retries dropped from 3 to 2, the JSON system prompt gained an escape hatch so the model always returns parseable output, and all 10 automation subprocess timeouts now live in a single <code>AUTOMATION_SUBPROCESS_TIMEOUT</code> constant.</p>
+                <a href="/blog/nexo-5-5-4/" class="read-more">Read more &rarr;</a>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 16, 2026</div>
+                <h2><a href="/blog/nexo-5-5-3/">NEXO 5.5.3: Protocol Enforcer Explained in CLAUDE.md CORE</a></h2>
+                <p>Aligned models were rejecting enforcer injections as suspected prompt injection, breaking heartbeat, diary, and checkpoints. A new CORE section teaches the model that <code>&lt;system-reminder&gt;</code> messages prefixed with <code>[NEXO Protocol Enforcer]</code> are legitimate protocol instructions. Paired with NEXO Desktop v0.9.25 that wraps every injection accordingly.</p>
+                <a href="/blog/nexo-5-5-3/" class="read-more">Read more &rarr;</a>
+            </div>
+
+            <div class="blog-card">
                 <div class="blog-card-date">April 15, 2026</div>
                 <h2><a href="/blog/nexo-5-5-2/">NEXO 5.5.2: Auto-Repair LaunchAgents + Model Fallback Cleanup</a></h2>
                 <p>Startup and ensure_schedules now verify launchctl loaded state, repair stale launchd entries with checked bootstrap/bootout calls, and core automation scripts defer empty model selection to the configured runtime profile.</p>
