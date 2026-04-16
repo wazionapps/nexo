@@ -1,5 +1,35 @@
 # Changelog
 
+## [5.6.0] - 2026-04-16
+
+### Feature: Default model upgrade — Opus 4.6 → 4.7
+
+NEXO Brain now ships with **Claude Opus 4.7** as the recommended model for
+Claude Code users. The 1M context window remains active (same beta header).
+
+- **`src/model_defaults.json`**: `claude_code.model` updated to
+  `claude-opus-4-7[1m]` with `reasoning_effort: "max"`. The new `max` tier
+  is the highest reasoning level available on Opus 4.7 (verified empirically
+  against `/v1/messages`). `recommendation_version` bumped to 2.
+- **Auto-migration on `nexo update`**: `heal_runtime_profiles()` now
+  detects users whose model starts with `claude-opus-4-6` and silently
+  migrates to `claude-opus-4-7` preserving any suffix (e.g. `[1m]`).
+  Reasoning effort is bumped to `max` if the user had an empty value,
+  `xhigh`, or the legacy `enabled` format.
+- **Codex untouched**: GPT-5.4 / xhigh remains the Codex default. No
+  migration applies to Codex profiles.
+- **Interactive prompt preserved**: users on an older NEXO default who have
+  not yet run `nexo update` will also be offered the upgrade interactively
+  via `detect_outdated_recommendations`.
+
+### Breaking API change in Opus 4.7 (informational)
+
+Opus 4.7 changed the thinking/reasoning API from `thinking.enabled` +
+`thinking.budget_tokens` to `thinking.type: "adaptive"` + `output_config.effort`.
+NEXO Brain does not call the Anthropic API directly (Claude Code handles it),
+but this is documented here for operators building custom integrations.
+Valid effort values: `low`, `medium`, `high`, `xhigh`, `max`.
+
 ## [5.5.6] - 2026-04-16
 
 ### Hotfix: rate-limit the backup/restore/export tools

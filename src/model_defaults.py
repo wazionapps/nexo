@@ -20,11 +20,11 @@ from typing import Any
 _FALLBACK: dict[str, Any] = {
     "schema_version": 1,
     "claude_code": {
-        "model": "claude-opus-4-6[1m]",
-        "reasoning_effort": "",
-        "display_name": "Opus 4.6 with 1M context",
-        "recommendation_version": 1,
-        "previous_defaults": [],
+        "model": "claude-opus-4-7[1m]",
+        "reasoning_effort": "max",
+        "display_name": "Opus 4.7 with 1M context",
+        "recommendation_version": 2,
+        "previous_defaults": ["claude-opus-4-6[1m]"],
     },
     "codex": {
         "model": "gpt-5.4",
@@ -99,15 +99,20 @@ def looks_like_claude_model(model: str) -> bool:
     return str(model or "").strip().lower().startswith(_CLAUDE_MODEL_PREFIXES)
 
 
+_OPUS_46_PREFIX = "claude-opus-4-6"
+
+
 def heal_runtime_profiles(profiles: dict) -> tuple[dict, list[str]]:
     """Detect and repair invalid models in client_runtime_profiles. Returns
-    (healed_profiles_dict, list_of_heal_messages). A Claude-family model in
-    the codex profile is the main historical corruption; we reset such a
-    profile to the current Codex default."""
+    (healed_profiles_dict, list_of_heal_messages). Handles two cases:
+    1. Claude-family model in the codex profile (historical bug).
+    2. Opus 4.6 → 4.7 auto-migration for claude_code users on a NEXO default."""
     if not isinstance(profiles, dict):
         return profiles, []
     healed = dict(profiles)
     messages: list[str] = []
+
+    # --- Codex heal (historical bug: Claude model in codex slot) ---
     codex_profile = healed.get("codex") if isinstance(healed.get("codex"), dict) else None
     if codex_profile is not None:
         current = str(codex_profile.get("model") or "").strip()
@@ -121,6 +126,26 @@ def heal_runtime_profiles(profiles: dict) -> tuple[dict, list[str]]:
                 f"Healed Codex profile: model '{current}' → '{default['model']}' "
                 f"(Claude models are invalid for Codex)."
             )
+
+    # --- Opus 4.6 → 4.7 auto-migration for claude_code ---
+    cc_profile = healed.get("claude_code") if isinstance(healed.get("claude_code"), dict) else None
+    if cc_profile is not None:
+        cc_model = str(cc_profile.get("model") or "").strip()
+        if cc_model.startswith(_OPUS_46_PREFIX):
+            default = client_default("claude_code")
+            suffix = cc_model[len(_OPUS_46_PREFIX):]
+            new_model = f"claude-opus-4-7{suffix}"
+            old_effort = str(cc_profile.get("reasoning_effort") or "").strip()
+            new_effort = default["reasoning_effort"]
+            healed["claude_code"] = dict(cc_profile)
+            healed["claude_code"]["model"] = new_model
+            if old_effort in ("", "xhigh", "enabled"):
+                healed["claude_code"]["reasoning_effort"] = new_effort
+            messages.append(
+                f"Auto-migrated Claude Code: '{cc_model}' → '{new_model}', "
+                f"effort '{old_effort or '(empty)'}' → '{healed['claude_code']['reasoning_effort']}'."
+            )
+
     return healed, messages
 
 

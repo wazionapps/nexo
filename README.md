@@ -18,7 +18,7 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `5.5.6` is the current packaged-runtime line: same-day follow-up to v5.5.5 that adds in-process rate-limits to `nexo_backup_now` (30 s), `nexo_backup_restore` (60 s), and `export_user_bundle` (120 s) so a runaway MCP client can no longer hammer `sqlite3.Connection.backup()` from a tool-use loop — closing the cause of the 2026-04-16 incident the same day v5.5.5 closed its consequences.
+Version `5.6.0` is the current packaged-runtime line: default model upgrade from Opus 4.6 to **Opus 4.7** with `reasoning_effort: "max"` (the new highest tier). Auto-migration on `nexo update` silently upgrades existing users from `claude-opus-4-6*` to `claude-opus-4-7` preserving the 1M context suffix. Codex profiles are untouched.
 
 Previously in `5.5.5`: data-loss guardrails + automatic self-heal. The updater now refuses to capture an already-wiped `nexo.db` into a `pre-update-*` snapshot (validated `sqlite3.backup` + pre-flight wipe guard + post-migration row-count gate), and an auto-heal restores `data/nexo.db` from the newest hourly backup on the next server boot when a wipe is detected. New `nexo recover` CLI + `nexo_recover` MCP tool.
 
@@ -830,7 +830,7 @@ If you want the shell or Python wrappers instead of raw MCP tools:
 - [docs/reference-verticals.md](docs/reference-verticals.md)
 - [compare/README.md](compare/README.md)
 
-The model you pick during install is used everywhere — interactive sessions, automation scripts, and all task profiles.  Change it once in your preferences and every part of the system follows.  Default: `Opus 4.6 with 1M context`.
+The model you pick during install is used everywhere — interactive sessions, automation scripts, and all task profiles.  Change it once in your preferences and every part of the system follows.  Default: `Opus 4.7 with 1M context`.
 
 Or use the shell alias created during install (e.g. `atlas`), which now runs `nexo chat .` so it opens the terminal client you pick for that session, with the last-used option shown first.
 
@@ -911,7 +911,7 @@ The Doctor system reads existing health artifacts (immune, watchdog, self-audit)
 - **macOS or Linux** (Windows via [WSL](https://learn.microsoft.com/en-us/windows/wsl/install))
 - **Node.js 18+** (for the installer)
 - **Claude Code is the primary recommended client.** It remains the most mature NEXO path: native hooks, the most battle-tested automation contract, and the clearest parity with historical production behavior.
-- **Model:** You pick your model during install and every component uses it.  Default is `Opus 4.6 with 1M context`.  Scripts and automation profiles read from a single preference — no hardcoded model strings.
+- **Model:** You pick your model during install and every component uses it.  Default is `Opus 4.7 with 1M context`.  Scripts and automation profiles read from a single preference — no hardcoded model strings.
 - Python 3, Homebrew, and the selected required client/backend can be installed automatically when NEXO has a supported installer path for that dependency.
 
 ## Architecture
@@ -1020,7 +1020,7 @@ NEXO Brain is designed as an MCP server. Claude Code remains the primary recomme
 npx nexo-brain
 ```
 
-All 150+ tools are available immediately after installation. The installer configures Claude Code's `~/.claude/settings.json` automatically. The recommended Claude profile is `Opus 4.6 with 1M context`.
+All 150+ tools are available immediately after installation. The installer configures Claude Code's `~/.claude/settings.json` automatically. The recommended Claude profile is `Opus 4.7 with 1M context`.
 
 ### Claude Desktop
 
