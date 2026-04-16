@@ -185,6 +185,7 @@ function getCoreRuntimeFlatFiles(srcDir = path.join(__dirname, "..", "src")) {
     "agent_runner.py",
     "bootstrap_docs.py",
     "auto_update.py",
+    "db_guard.py",
     "tools_sessions.py",
     "tools_coordination.py",
     "tools_reminders.py",
