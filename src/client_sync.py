@@ -62,7 +62,7 @@ except Exception:
         }
 
     def resolve_client_runtime_profile(client: str, preferences: dict | None = None) -> dict:
-        _default_model = "claude-opus-4-6[1m]"
+        _default_model = "claude-opus-4-7[1m]"
         defaults = {
             "claude_code": {"model": _default_model, "reasoning_effort": ""},
             "codex": {"model": _default_model, "reasoning_effort": ""},

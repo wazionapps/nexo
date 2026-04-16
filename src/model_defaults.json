@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "claude_code": {
-    "model": "claude-opus-4-6[1m]",
-    "reasoning_effort": "",
-    "display_name": "Opus 4.6 with 1M context",
-    "recommendation_version": 1,
-    "previous_defaults": []
+    "model": "claude-opus-4-7[1m]",
+    "reasoning_effort": "max",
+    "display_name": "Opus 4.7 with 1M context",
+    "recommendation_version": 2,
+    "previous_defaults": ["claude-opus-4-6[1m]"]
   },
   "codex": {
     "model": "gpt-5.4",

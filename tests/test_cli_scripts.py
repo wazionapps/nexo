@@ -672,7 +672,7 @@ class TestChatCommand:
         assert result.returncode == 0
         assert "[NEXO] NEXO " in result.stderr
         payload = json.loads(out_file.read_text())
-        assert payload["argv"][:3] == ["--model", "claude-opus-4-6[1m]", "--dangerously-skip-permissions"]
+        assert payload["argv"][:5] == ["--model", "claude-opus-4-7[1m]", "--effort", "max", "--dangerously-skip-permissions"]
         assert "nexo_startup" in payload["argv"][-1]
         assert "nexo_heartbeat" in payload["argv"][-1]
         assert payload["cwd"] == str(workspace.resolve())
@@ -768,8 +768,8 @@ class TestChatCommand:
             "automation_backend": "claude_code",
             "client_runtime_profiles": {
                 "claude_code": {
-                    "model": "claude-opus-4-6[1m]",
-                    "reasoning_effort": "",
+                    "model": "claude-opus-4-7[1m]",
+                    "reasoning_effort": "max",
                 },
                 "codex": {
                     "model": "gpt-5.4",
@@ -836,8 +836,8 @@ class TestChatCommand:
             "automation_backend": "claude_code",
             "client_runtime_profiles": {
                 "claude_code": {
-                    "model": "claude-opus-4-6[1m]",
-                    "reasoning_effort": "",
+                    "model": "claude-opus-4-7[1m]",
+                    "reasoning_effort": "max",
                 },
                 "codex": {
                     "model": "gpt-5.4",

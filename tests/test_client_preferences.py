@@ -15,7 +15,7 @@ def test_normalize_client_preferences_preserves_old_defaults(tmp_path):
     assert prefs["last_terminal_client"] == ""
     assert prefs["automation_enabled"] is True
     assert prefs["automation_backend"] == "claude_code"
-    assert prefs["client_runtime_profiles"]["claude_code"]["model"] == "claude-opus-4-6[1m]"
+    assert prefs["client_runtime_profiles"]["claude_code"]["model"] == "claude-opus-4-7[1m]"
     assert prefs["client_runtime_profiles"]["codex"]["model"] == "gpt-5.4"
     assert prefs["client_runtime_profiles"]["codex"]["reasoning_effort"] == "xhigh"
     assert prefs["automation_task_profiles"]["fast"]["backend"] == ""
@@ -69,7 +69,7 @@ def test_client_runtime_profiles_normalize_and_default():
         }
     )
 
-    assert prefs["client_runtime_profiles"]["claude_code"]["model"] == "claude-opus-4-6[1m]"
+    assert prefs["client_runtime_profiles"]["claude_code"]["model"] == "claude-opus-4-7[1m]"
     assert prefs["client_runtime_profiles"]["codex"]["model"] == "gpt-5.4-mini"
     assert prefs["client_runtime_profiles"]["codex"]["reasoning_effort"] == "high"
 
@@ -97,8 +97,8 @@ def test_resolve_automation_task_profile_uses_profile_override_and_runtime_defau
     assert deep == {
         "name": "deep",
         "backend": "claude_code",
-        "model": "claude-opus-4-6[1m]",
-        "reasoning_effort": "medium",
+        "model": "claude-opus-4-7[1m]",
+        "reasoning_effort": "max",
     }
     assert fast == {
         "name": "fast",

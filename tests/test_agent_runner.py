@@ -70,7 +70,7 @@ def test_build_interactive_client_command_uses_codex_when_selected(tmp_path, mon
             "automation_enabled": True,
             "automation_backend": "claude_code",
             "client_runtime_profiles": {
-                "claude_code": {"model": "claude-opus-4-6[1m]", "reasoning_effort": ""},
+                "claude_code": {"model": "claude-opus-4-7[1m]", "reasoning_effort": "max"},
                 "codex": {"model": "gpt-5.4", "reasoning_effort": "xhigh"},
             },
         },
@@ -106,7 +106,7 @@ def test_build_interactive_client_command_preserves_claude_flags(tmp_path, monke
             "automation_enabled": True,
             "automation_backend": "claude_code",
             "client_runtime_profiles": {
-                "claude_code": {"model": "claude-opus-4-6[1m]", "reasoning_effort": ""},
+                "claude_code": {"model": "claude-opus-4-7[1m]", "reasoning_effort": "max"},
                 "codex": {"model": "gpt-5.4", "reasoning_effort": "xhigh"},
             },
         },
@@ -116,7 +116,9 @@ def test_build_interactive_client_command_preserves_claude_flags(tmp_path, monke
     assert cmd == [
         "/tmp/fake-claude",
         "--model",
-        "claude-opus-4-6[1m]",
+        "claude-opus-4-7[1m]",
+        "--effort",
+        "max",
         "--dangerously-skip-permissions",
         "Start NEXO now.",
     ]
@@ -136,7 +138,7 @@ def test_run_automation_prompt_uses_claude_backend_command(monkeypatch, tmp_path
         "automation_enabled": True,
         "automation_backend": "claude_code",
         "client_runtime_profiles": {
-            "claude_code": {"model": "claude-opus-4-6[1m]", "reasoning_effort": ""},
+            "claude_code": {"model": "claude-opus-4-7[1m]", "reasoning_effort": "max"},
             "codex": {"model": "gpt-5.4", "reasoning_effort": "xhigh"},
         },
     })
@@ -172,7 +174,9 @@ def test_run_automation_prompt_uses_claude_backend_command(monkeypatch, tmp_path
         "Do the thing",
         "--dangerously-skip-permissions",
         "--model",
-        "claude-opus-4-6[1m]",
+        "claude-opus-4-7[1m]",
+        "--effort",
+        "max",
         "--output-format",
         "json",
         "--append-system-prompt",
@@ -198,7 +202,7 @@ def test_run_automation_prompt_uses_codex_exec_output_file(monkeypatch, tmp_path
         "automation_enabled": True,
         "automation_backend": "codex",
         "client_runtime_profiles": {
-            "claude_code": {"model": "claude-opus-4-6[1m]", "reasoning_effort": ""},
+            "claude_code": {"model": "claude-opus-4-7[1m]", "reasoning_effort": "max"},
             "codex": {"model": "gpt-5.4", "reasoning_effort": "xhigh"},
         },
     })
@@ -266,7 +270,7 @@ def test_run_automation_prompt_marks_public_contribution_env(monkeypatch, tmp_pa
         "automation_enabled": True,
         "automation_backend": "claude_code",
         "client_runtime_profiles": {
-            "claude_code": {"model": "claude-opus-4-6[1m]", "reasoning_effort": ""},
+            "claude_code": {"model": "claude-opus-4-7[1m]", "reasoning_effort": "max"},
             "codex": {"model": "gpt-5.4", "reasoning_effort": "xhigh"},
         },
     })
@@ -306,14 +310,14 @@ def test_run_automation_prompt_uses_fast_task_profile_for_backend_and_reasoning(
         "automation_enabled": True,
         "automation_backend": "claude_code",
         "client_runtime_profiles": {
-            "claude_code": {"model": "claude-opus-4-6[1m]", "reasoning_effort": ""},
+            "claude_code": {"model": "claude-opus-4-7[1m]", "reasoning_effort": "max"},
             "codex": {"model": "gpt-5.4", "reasoning_effort": "high"},
         },
         "automation_task_profiles": {
             "default": {"backend": "", "model": "", "reasoning_effort": ""},
             "fast": {"backend": "codex", "model": "gpt-5.4-mini", "reasoning_effort": "medium"},
             "balanced": {"backend": "", "model": "", "reasoning_effort": ""},
-            "deep": {"backend": "claude_code", "model": "claude-opus-4-6[1m]", "reasoning_effort": ""},
+            "deep": {"backend": "claude_code", "model": "claude-opus-4-7[1m]", "reasoning_effort": "max"},
         },
     })
 
@@ -356,14 +360,14 @@ def test_run_automation_prompt_falls_back_when_configured_backend_is_unavailable
         "automation_enabled": True,
         "automation_backend": "claude_code",
         "client_runtime_profiles": {
-            "claude_code": {"model": "claude-opus-4-6[1m]", "reasoning_effort": ""},
+            "claude_code": {"model": "claude-opus-4-7[1m]", "reasoning_effort": "max"},
             "codex": {"model": "gpt-5.4", "reasoning_effort": "high"},
         },
         "automation_task_profiles": {
             "default": {"backend": "", "model": "", "reasoning_effort": ""},
             "fast": {"backend": "codex", "model": "gpt-5.4-mini", "reasoning_effort": "medium"},
             "balanced": {"backend": "", "model": "", "reasoning_effort": ""},
-            "deep": {"backend": "claude_code", "model": "claude-opus-4-6[1m]", "reasoning_effort": ""},
+            "deep": {"backend": "claude_code", "model": "claude-opus-4-7[1m]", "reasoning_effort": "max"},
         },
     })
 
@@ -415,7 +419,7 @@ def test_codex_backend_maps_legacy_opus_hint_to_configured_profile(monkeypatch, 
         "automation_enabled": True,
         "automation_backend": "codex",
         "client_runtime_profiles": {
-            "claude_code": {"model": "claude-opus-4-6[1m]", "reasoning_effort": ""},
+            "claude_code": {"model": "claude-opus-4-7[1m]", "reasoning_effort": "max"},
             "codex": {"model": "gpt-5.4-mini", "reasoning_effort": "high"},
         },
     })
@@ -457,7 +461,7 @@ def test_codex_backend_uses_configured_profile_when_model_is_empty(monkeypatch, 
         "automation_enabled": True,
         "automation_backend": "codex",
         "client_runtime_profiles": {
-            "claude_code": {"model": "claude-opus-4-6[1m]", "reasoning_effort": ""},
+            "claude_code": {"model": "claude-opus-4-7[1m]", "reasoning_effort": "max"},
             "codex": {"model": "gpt-5.4-mini", "reasoning_effort": "high"},
         },
     })
@@ -502,7 +506,7 @@ def test_codex_runner_skips_inline_bootstrap_when_global_bootstrap_is_managed(mo
             "automation_enabled": True,
             "automation_backend": "codex",
             "client_runtime_profiles": {
-                "claude_code": {"model": "claude-opus-4-6[1m]", "reasoning_effort": ""},
+                "claude_code": {"model": "claude-opus-4-7[1m]", "reasoning_effort": "max"},
                 "codex": {"model": "gpt-5.4", "reasoning_effort": "xhigh"},
             },
         },
@@ -565,7 +569,7 @@ def test_build_followup_terminal_shell_command_uses_codex_interactive_flags(monk
             "automation_enabled": True,
             "automation_backend": "codex",
             "client_runtime_profiles": {
-                "claude_code": {"model": "claude-opus-4-6[1m]", "reasoning_effort": ""},
+                "claude_code": {"model": "claude-opus-4-7[1m]", "reasoning_effort": "max"},
                 "codex": {"model": "gpt-5.4", "reasoning_effort": "xhigh"},
             },
         },
