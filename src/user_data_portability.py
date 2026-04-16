@@ -8,6 +8,8 @@ import shutil
 import sqlite3
 import tarfile
 import tempfile
+import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -22,6 +24,36 @@ USER_CONFIG_FILES = ("schedule.json",)
 IGNORED_FILENAMES = {".DS_Store"}
 IGNORED_DIRS = {"__pycache__"}
 IGNORED_SUFFIXES = {".pyc", ".pyo"}
+
+# v5.5.6: rate-limit the whole-bundle export so a runaway MCP client cannot
+# loop this tool. Each export snapshots the entire NEXO state through
+# sqlite3.Connection.backup() plus a tree copy — in the v5.5.4 incident a
+# similar loop wrote 8.5 GB in 37 minutes. Overridable for tests / deliberate
+# batch exports via NEXO_EXPORT_MIN_INTERVAL_SECS.
+EXPORT_MIN_INTERVAL_SECS = int(os.environ.get("NEXO_EXPORT_MIN_INTERVAL_SECS", "120"))
+_export_rate_lock = threading.Lock()
+_export_last_call_ts = [0.0]
+
+
+def _check_export_rate_limit() -> str | None:
+    now = time.time()
+    with _export_rate_lock:
+        last = _export_last_call_ts[0]
+        elapsed = now - last
+        if last > 0 and elapsed < EXPORT_MIN_INTERVAL_SECS:
+            remaining = int(EXPORT_MIN_INTERVAL_SECS - elapsed)
+            return (
+                f"Rate-limited: export_user_bundle called {int(elapsed)}s ago "
+                f"(min {EXPORT_MIN_INTERVAL_SECS}s between calls). Wait {remaining}s. "
+                "If you see this repeatedly, a client may be stuck in a tool-use loop."
+            )
+        _export_last_call_ts[0] = now
+    return None
+
+
+def _reset_export_rate_limit_state_for_tests() -> None:
+    with _export_rate_lock:
+        _export_last_call_ts[0] = 0.0
 
 
 def _now_stamp() -> str:
@@ -137,6 +169,9 @@ def _load_personal_scripts() -> tuple[list[dict], list[dict]]:
 
 
 def export_user_bundle(output_path: str = "") -> dict:
+    err = _check_export_rate_limit()
+    if err is not None:
+        return {"ok": False, "error": err, "rate_limited": True}
     output = Path(output_path).expanduser() if output_path.strip() else (EXPORTS_DIR / f"nexo-user-data-{_now_stamp()}.tar.gz")
     output.parent.mkdir(parents=True, exist_ok=True)
     STAGING_DIR.mkdir(parents=True, exist_ok=True)

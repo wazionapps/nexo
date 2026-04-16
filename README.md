@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `5.5.5` is the current packaged-runtime line: data-loss guardrails + automatic self-heal. The updater now refuses to capture an already-wiped `nexo.db` into a `pre-update-*` snapshot (validated `sqlite3.backup` + pre-flight wipe guard + post-migration row-count gate), and an auto-heal restores `data/nexo.db` from the newest hourly backup on the next server boot when a wipe is detected. New `nexo recover` CLI + `nexo_recover` MCP tool.
+Version `5.5.6` is the current packaged-runtime line: same-day follow-up to v5.5.5 that adds in-process rate-limits to `nexo_backup_now` (30 s), `nexo_backup_restore` (60 s), and `export_user_bundle` (120 s) so a runaway MCP client can no longer hammer `sqlite3.Connection.backup()` from a tool-use loop — closing the cause of the 2026-04-16 incident the same day v5.5.5 closed its consequences.
+
+Previously in `5.5.5`: data-loss guardrails + automatic self-heal. The updater now refuses to capture an already-wiped `nexo.db` into a `pre-update-*` snapshot (validated `sqlite3.backup` + pre-flight wipe guard + post-migration row-count gate), and an auto-heal restores `data/nexo.db` from the newest hourly backup on the next server boot when a wipe is detected. New `nexo recover` CLI + `nexo_recover` MCP tool.
 
 Previously in `5.5.4`: Deep Sleep no longer blocks on unparseable sessions — reduced retries, added a JSON escape hatch, and unified the automation subprocess timeout to 3h across all scripts via a single shared constant.
 

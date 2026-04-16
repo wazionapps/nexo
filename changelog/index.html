@@ -181,6 +181,17 @@
     </div>
 </section>
 
+<!-- v5.5.6 Rate-limit backup/restore/export -->
+<section id="v556" class="section-compact" style="background:linear-gradient(135deg,#0a120f 0%,#152a1f 50%,#1e3f2f 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.5.6 <span style="opacity:.5;font-weight:400;">&mdash; April 16, 2026</span></div>
+        <h2 class="section-title">Rate-Limiting the Backup/Restore/Export Tools</h2>
+        <p class="section-subtitle">
+            Same-day follow-up to v5.5.5. <code>nexo_backup_now</code>, <code>nexo_backup_restore</code>, and <code>export_user_bundle</code> now refuse reentrant calls inside 30 s / 60 s / 120 s windows. A runaway MCP client stuck in a tool-use loop can no longer hammer <code>sqlite3.Connection.backup()</code>. v5.5.5 neutralised the consequences of the 2026-04-16 incident; v5.5.6 closes the cause.
+        </p>
+    </div>
+</section>
+
 <!-- v5.5.5 Data-loss guardrails + self-heal -->
 <section id="v555" class="section-compact" style="background:linear-gradient(135deg,#0a120f 0%,#152a1f 50%,#1e3f2f 100%);">
     <div class="container">

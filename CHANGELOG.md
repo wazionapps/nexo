@@ -1,5 +1,35 @@
 # Changelog
 
+## [5.5.6] - 2026-04-16
+
+### Hotfix: rate-limit the backup/restore/export tools
+
+Same-day follow-up to v5.5.5. The v5.5.5 release neutralised the *consequences*
+of the 2026-04-16 incident (validated backups, pre-flight guard, post-migration
+gate, startup self-heal, `nexo recover`). v5.5.6 closes the *cause*: a runaway
+MCP client (Claude Code tool-use loop, a buggy Desktop handler, etc.) can no
+longer hammer `sqlite3.Connection.backup()` from the tool boundary.
+
+- **`plugins/backup.py`**: `handle_backup_now` rate-limited to one call every
+  `NEXO_BACKUP_MIN_INTERVAL_SECS` (default 30 s). `handle_backup_restore`
+  rate-limited to one call every `NEXO_BACKUP_RESTORE_MIN_INTERVAL_SECS`
+  (default 60 s). `handle_backup_list` is read-only and never rate-limited.
+- **`user_data_portability.export_user_bundle`**: rate-limited to one call
+  every `NEXO_EXPORT_MIN_INTERVAL_SECS` (default 120 s). Returns
+  `{"ok": False, "rate_limited": True, "error": "..."}` so callers can react.
+- Each rate-limit message is explicit about loop detection ("If you see this
+  repeatedly, a client may be stuck in a tool-use loop…") so transcript
+  evidence surfaces the next time a client misbehaves.
+- **Test coverage**: 10 new tests in `tests/test_backup_rate_limit.py`. Full
+  suite remains 880/880 green.
+
+### Why not in v5.5.5
+
+v5.5.5 was the minimal-surface data-loss hotfix. Rate-limits at the tool
+boundary change tool semantics (well-behaved callers occasionally hit the
+"try again in N s" response) and deserved a dedicated release so operators
+read the limit numbers, not just the recovery flow.
+
 ## [5.5.5] - 2026-04-16
 
 ### Hotfix: Data-loss guardrails and automatic self-heal
