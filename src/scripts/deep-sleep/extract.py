@@ -26,6 +26,7 @@ if str(NEXO_CODE) not in sys.path:
     sys.path.insert(0, str(NEXO_CODE))
 
 from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
+from constants import AUTOMATION_SUBPROCESS_TIMEOUT
 try:
     from client_preferences import resolve_user_model as _resolve_user_model
     _USER_MODEL = _resolve_user_model()
@@ -33,8 +34,9 @@ except Exception:
     _USER_MODEL = ""
 
 
-# No timeout -- headless automation can take as long as needed
-CLAUDE_TIMEOUT = 21600  # 3h safety net (prevents zombie processes)
+# 3h safety net for the Claude CLI subprocess. Prevents zombie processes while
+# still leaving enough headroom for legitimate long per-session extractions.
+CLAUDE_TIMEOUT = AUTOMATION_SUBPROCESS_TIMEOUT
 
 
 def extract_json_from_response(text: str) -> dict | None:
@@ -129,7 +131,11 @@ def analyze_session(
         JSON_SYSTEM_PROMPT = (
             "You are a JSON-only analyst. Your ENTIRE response must be a single valid JSON object. "
             "No text before it. No text after it. No markdown fences. No explanations. "
-            "If you want to summarize, put it inside the JSON fields. Start with { and end with }."
+            "If you want to summarize, put it inside the JSON fields. Start with { and end with }. "
+            "If for ANY reason you cannot comply with the requested schema (context too large, "
+            "file unreadable, ambiguous, uncertain), you MUST still return a JSON object shaped as "
+            '{"session_id":"<the id>","findings":[],"error":"cannot_comply","reason":"<short reason>"}. '
+            "NEVER return plain text, apology, markdown, or empty output."
         )
 
         result = run_automation_prompt(
@@ -249,7 +255,10 @@ def main():
     all_extractions = []
     total_findings = 0
     skipped = 0
-    MAX_RETRIES = 3
+    # Two attempts is enough: if a session's extraction fails twice, the cause is
+    # almost always deterministic (JSON parse, schema violation) rather than transient,
+    # so further retries just burn time. Skip and continue instead.
+    MAX_RETRIES = 2
 
     for i, session_id in enumerate(session_files):
         sid_safe = _safe_session_slug(session_id)[:40]

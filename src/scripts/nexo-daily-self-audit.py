@@ -37,6 +37,7 @@ if str(NEXO_CODE) not in sys.path:
     sys.path.insert(0, str(NEXO_CODE))
 
 from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
+from constants import AUTOMATION_SUBPROCESS_TIMEOUT
 import db as nexo_db
 from public_evolution_queue import queue_public_port_candidate
 
@@ -2050,7 +2051,7 @@ Also write the machine-readable summary to {LOG_DIR}/self-audit-summary.json.
         result = run_automation_prompt(
             prompt,
             model=_USER_MODEL,
-            timeout=21600,
+            timeout=AUTOMATION_SUBPROCESS_TIMEOUT,
             output_format="text",
             allowed_tools="Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__*",
         )

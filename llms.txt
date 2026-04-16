@@ -1,9 +1,10 @@
 # NEXO Brain
 
-> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v5.5.3).
+> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v5.5.4).
 
 NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It adds a local shared brain across supported clients, configurable terminal and automation backends, recovery-aware background jobs, startup preflight, runtime self-healing, smarter retrieval defaults, long-horizon overnight analysis, and 150+ MCP tools.
 
+v5.5.4: Deep Sleep no longer blocks on unparseable sessions — retries reduced from 3 to 2, added a JSON escape hatch so the model always returns parseable output, and unified the automation subprocess timeout to 3h (10800s) across 10 scripts via a new shared constant AUTOMATION_SUBPROCESS_TIMEOUT in src/constants.py.
 v5.5.3: CLAUDE.md CORE now explains the Protocol Enforcer — aligned models (Opus 4.6, safety-tuned variants) stop rejecting heartbeat, diary, and checkpoint injections as suspected prompt injection. Paired with NEXO Desktop v0.9.25 which wraps enforcer prompts in <system-reminder> tags.
 v5.5.2: auto-repair unloaded LaunchAgents + headless model fallback cleanup — verifies launchctl loaded state, migrated to modern bootstrap/bootout API, and removes legacy opus/sonnet fallbacks from core automation scripts
 v5.5.1: real-time headless Protocol Enforcer — enforcement_engine.py monitors tool calls and injects prompts in all headless sessions via stream-json Popen

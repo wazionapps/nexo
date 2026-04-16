@@ -18,9 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `5.5.3` is the current packaged-runtime line: CLAUDE.md CORE now teaches the model to trust the Protocol Enforcer, so aligned backends stop rejecting heartbeat, diary, and checkpoint injections as suspected prompt injection.
+Version `5.5.4` is the current packaged-runtime line: Deep Sleep no longer blocks on unparseable sessions — reduced retries, added a JSON escape hatch, and unified the automation subprocess timeout to 3h across all scripts via a single shared constant.
 
-Previously in `5.4.6`: runtime dependency management in `nexo update` + daily auto-update cron.
+Previously in `5.5.3`: CLAUDE.md CORE teaches the model to trust the Protocol Enforcer, so aligned backends stop rejecting heartbeat, diary, and checkpoint injections as suspected prompt injection.
 
 Start here:
 - [5-minute quickstart](docs/quickstart-5-minutes.md)

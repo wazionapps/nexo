@@ -34,6 +34,7 @@ if str(NEXO_CODE) not in sys.path:
     sys.path.insert(0, str(NEXO_CODE))
 
 from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
+from constants import AUTOMATION_SUBPROCESS_TIMEOUT
 
 CLAUDE_DIR = NEXO_HOME
 COORD_DIR = CLAUDE_DIR / "coordination"
@@ -348,7 +349,7 @@ Execute without asking."""
         result = run_automation_prompt(
             prompt,
             model=_USER_MODEL,
-            timeout=21600,
+            timeout=AUTOMATION_SUBPROCESS_TIMEOUT,
             output_format="text",
             allowed_tools="Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__*",
         )

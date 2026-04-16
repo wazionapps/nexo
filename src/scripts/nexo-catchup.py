@@ -27,6 +27,7 @@ if str(_runtime_root) not in sys.path:
     sys.path.insert(0, str(_runtime_root))
 
 from agent_runner import AutomationBackendUnavailableError, probe_automation_backend, run_automation_prompt
+from constants import AUTOMATION_SUBPROCESS_TIMEOUT
 from cron_recovery import catchup_candidates
 
 HOME = Path.home()
@@ -175,7 +176,7 @@ def run_task(candidate: dict, state: dict) -> bool:
     try:
         result = subprocess.run(
             command,
-            capture_output=True, text=True, timeout=21600,
+            capture_output=True, text=True, timeout=AUTOMATION_SUBPROCESS_TIMEOUT,
             env={**os.environ, "HOME": str(HOME), "NEXO_CATCHUP": "1"}
         )
         if result.returncode == 0:
@@ -189,7 +190,7 @@ def run_task(candidate: dict, state: dict) -> bool:
                 log(f"    stderr: {result.stderr[:300]}")
             return False
     except subprocess.TimeoutExpired:
-        log(f"  TIMEOUT {name} (21600s)")
+        log(f"  TIMEOUT {name} ({AUTOMATION_SUBPROCESS_TIMEOUT}s)")
         return False
     except Exception as e:
         log(f"  ERROR {name}: {e}")
@@ -280,7 +281,7 @@ Format:
         result = run_automation_prompt(
             prompt,
             model=_USER_MODEL,
-            timeout=21600,
+            timeout=AUTOMATION_SUBPROCESS_TIMEOUT,
             output_format="text",
             allowed_tools="Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__*",
         )

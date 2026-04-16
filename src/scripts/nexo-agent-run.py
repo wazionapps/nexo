@@ -16,6 +16,7 @@ if str(NEXO_CODE) not in sys.path:
     sys.path.insert(0, str(NEXO_CODE))
 
 from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
+from constants import AUTOMATION_SUBPROCESS_TIMEOUT
 
 
 def _read_text(path: str | None) -> str:
@@ -32,7 +33,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--task-profile", default="", help="Automation task profile: default|fast|balanced|deep")
     parser.add_argument("--model", default="", help="Backend model hint")
     parser.add_argument("--reasoning-effort", default="", help="Backend reasoning effort/profile")
-    parser.add_argument("--timeout", type=int, default=21600, help="Timeout in seconds")
+    parser.add_argument("--timeout", type=int, default=AUTOMATION_SUBPROCESS_TIMEOUT, help="Timeout in seconds")
     parser.add_argument("--output-format", default="text", help="Requested output format")
     parser.add_argument("--allowed-tools", default="", help="Claude-style allowed tools contract")
     parser.add_argument("--append-system-prompt", default="", help="Extra system prompt text")
