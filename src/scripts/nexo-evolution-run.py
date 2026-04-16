@@ -179,6 +179,7 @@ def log(msg: str):
 # ── Import from evolution_cycle.py (lives in NEXO_CODE, i.e. src/) ──────
 sys.path.insert(0, str(NEXO_CODE))
 from agent_runner import probe_automation_backend, run_automation_prompt
+from constants import AUTOMATION_SUBPROCESS_TIMEOUT
 from evolution_cycle import (
     load_objective, save_objective, get_week_data, build_evolution_prompt,
     dry_run_restore_test, max_auto_changes, create_snapshot,
@@ -214,7 +215,7 @@ def set_consecutive_failures(count: int):
 
 
 # ── Automation backend call ──────────────────────────────────────────────
-CLI_TIMEOUT = 21600  # 3h safety net (prevents zombie processes)
+CLI_TIMEOUT = AUTOMATION_SUBPROCESS_TIMEOUT
 
 
 def verify_claude_cli() -> bool:

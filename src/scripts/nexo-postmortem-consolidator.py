@@ -37,6 +37,7 @@ NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(_repo_src) if (_repo_src / "ser
 sys.path.insert(0, str(NEXO_CODE))
 
 from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
+from constants import AUTOMATION_SUBPROCESS_TIMEOUT
 
 try:
     from client_preferences import resolve_user_model as _resolve_user_model
@@ -255,7 +256,7 @@ Execute without asking."""
         result = run_automation_prompt(
             prompt,
             model=_USER_MODEL,
-            timeout=21600,
+            timeout=AUTOMATION_SUBPROCESS_TIMEOUT,
             output_format="text",
             allowed_tools="Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__*",
         )

@@ -1,5 +1,47 @@
 # Changelog
 
+## [5.5.4] - 2026-04-16
+
+### Fix: Deep Sleep no longer blocks on unparseable sessions
+
+- Root cause: Phase 2 (`extract.py`) retried the same session 3 times with
+  identical prompt and context when Claude returned non-JSON output, so a
+  single semantic parse failure could stall the entire night's run behind a
+  6-hour per-attempt safety net. In the worst observed case, one session
+  could block the pipeline for up to ~18h before the skip logic kicked in.
+- Reduced `MAX_RETRIES` in `src/scripts/deep-sleep/extract.py` from 3 to 2:
+  two attempts is enough to cover transient failures; a second failure is
+  almost always deterministic (parse, schema, prompt mismatch) and further
+  retries just burn time. Failed sessions are still checkpointed with
+  `error: "cannot_comply"` and the run continues.
+- Added a JSON escape hatch to the `JSON_SYSTEM_PROMPT`: if the model cannot
+  comply with the extraction schema for any reason, it is now instructed to
+  return a structured `{session_id, findings:[], error:"cannot_comply",
+  reason:"..."}` object instead of plain text. Guarantees parseable output
+  even on degenerate inputs and removes the most common cause of retry
+  loops.
+
+### Fix: Unified automation subprocess timeout to 3h across core
+
+- Discovered historical inconsistency: 10 scripts (`extract.py`,
+  `synthesize.py`, `nexo-evolution-run.py`, `nexo-agent-run.py`,
+  `nexo-synthesis.py`, `nexo-sleep.py`, `nexo-catchup.py`, `nexo-immune.py`,
+  `nexo-daily-self-audit.py`, `nexo-postmortem-consolidator.py`) all carried
+  the comment `# 3h safety net` while the actual value was `21600` seconds
+  (6h). The CHANGELOG entry that introduced the unification claimed 6h,
+  but the per-file comments had drifted toward 3h, leaving the repo in a
+  "comment says 3h, code says 6h" state that masked the real ceiling.
+- Added `src/constants.py` with `AUTOMATION_SUBPROCESS_TIMEOUT = 10800`
+  (3 hours) as single source of truth.
+- Rewired all 10 scripts to import and use the shared constant, so future
+  tuning is one-file-one-edit instead of ten.
+
+### Verification
+
+- Compiles: `py_compile` green across all edited files.
+- Runtime parity: `~/.nexo/scripts/*.py` re-synced from `src/` and validated
+  importing `constants.AUTOMATION_SUBPROCESS_TIMEOUT`.
+
 ## [5.5.3] - 2026-04-16
 
 ### Feat: NEXO Protocol Enforcer section in CLAUDE.md CORE

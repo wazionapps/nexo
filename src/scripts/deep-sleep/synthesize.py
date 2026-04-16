@@ -34,8 +34,9 @@ if str(NEXO_CODE) not in sys.path:
     sys.path.insert(0, str(NEXO_CODE))
 
 from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
+from constants import AUTOMATION_SUBPROCESS_TIMEOUT
 
-CLAUDE_TIMEOUT = 21600  # 3h safety net (prevents zombie processes)
+CLAUDE_TIMEOUT = AUTOMATION_SUBPROCESS_TIMEOUT
 ACTION_VERBS = {"add", "implement", "create", "write", "build", "enforce", "automate", "validate", "guard", "fix", "review"}
 
 
