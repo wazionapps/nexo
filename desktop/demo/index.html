@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXO Desktop Demo — Simulation Based on the Real Interface</title>
+    <meta name="description" content="Watch a read-only simulation of the NEXO Desktop interface: active thread, archived conversations, in-thread search, quick search, preferences, tool cards, and composer.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/desktop/demo/">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://nexo-brain.com/desktop/demo/">
+    <meta property="og:title" content="NEXO Desktop Demo — Simulation Based on the Real Interface">
+    <meta property="og:description" content="A scripted, read-only simulation based on the actual NEXO Desktop interface and product surface.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/og/og-demos.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO Desktop Demo — Simulation Based on the Real Interface">
+    <meta name="twitter:description" content="A guided product theater built from the current NEXO Desktop layout and controls.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-demos.png">
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "WebPage",
+        "name": "NEXO Desktop Demo",
+        "description": "Read-only simulation of the NEXO Desktop interface.",
+        "url": "https://nexo-brain.com/desktop/demo/"
+    }
+    </script>
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+    <script src="/assets/desktop-demo.js" defer></script>
+    <script src="/assets/site-shell.js" defer></script>
+</head>
+<body class="features-page">
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-64.png" alt="NEXO Brain" width="32" height="32">
+            NEXO Brain
+        </a>
+        <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/features/">Features</a>
+            <a href="/desktop/">Desktop</a>
+            <a href="/solutions/">Solutions</a>
+            <a href="/demos/">Demos</a>
+            <a href="/blog/">Blog</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta">GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<section class="pt-nav page-hero">
+    <div class="container">
+        <div class="page-hero-grid">
+            <div class="page-hero-copy desktop-hero-copy">
+                <div class="section-label">Desktop demo</div>
+                <h1 class="section-title" style="font-size:clamp(38px,5vw,62px);">A JavaScript simulation based on the current product</h1>
+                <p class="section-subtitle">
+                    This page behaves like a short product film, but every scene is anchored to the current NEXO Desktop layout: active thread, archived conversations, in-thread search, quick search, preferences, tool cards, and the message composer.
+                </p>
+                <div class="page-chip-row">
+                    <span class="page-chip">Read-only simulation</span>
+                    <span class="page-chip">Autoplaying interface states</span>
+                    <span class="page-chip">Grounded in the current product</span>
+                </div>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="mailto:info@wazion.com?subject=NEXO%20Desktop%20private%20walkthrough" class="btn btn-primary">Request private walkthrough</a>
+                    <a href="/desktop/" class="btn btn-secondary">Back to overview</a>
+                </div>
+            </div>
+            <div class="page-visual">
+                <div class="page-stack">
+                    <div class="page-stack-card">
+                        <strong>What is simulated</strong>
+                        <span>Real interface states, not fictional business modules: sidebar, archived, search, quick search, preferences, and tool output.</span>
+                    </div>
+                    <div class="page-stack-card">
+                        <strong>What is not simulated</strong>
+                        <span>No live account, no writable sandbox, and no fake CRM or “client snapshot” surface that the current app does not expose.</span>
+                    </div>
+                    <div class="page-stack-card">
+                        <strong>Why this format</strong>
+                        <span>It lets visitors see how the app feels without exposing a real environment or reducing the product to static screenshots.</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section>
+    <div class="container">
+        <div class="desktop-fidelity-stage" data-desktop-demo data-scene-delay="6200"></div>
+    </div>
+</section>
+
+<section>
+    <div class="container">
+        <div class="section-label">States in the loop</div>
+        <div class="desktop-page-grid">
+            <div class="desktop-page-card">
+                <h3>Live thread</h3>
+                <p>An active conversation with streaming-style replies, readable tool cards, status row, composer, export, and stop controls.</p>
+            </div>
+            <div class="desktop-page-card">
+                <h3>Archived conversations</h3>
+                <p>The archived section opens with its own search field and restore flow, mirroring the actual structure in the sidebar.</p>
+            </div>
+            <div class="desktop-page-card">
+                <h3>Conversation search</h3>
+                <p>The top bar shows the in-thread search mode with result count and next/previous navigation controls.</p>
+            </div>
+            <div class="desktop-page-card">
+                <h3>Quick search</h3>
+                <p>A global conversation search overlay appears as its own state instead of pretending every workflow lives in one thread.</p>
+            </div>
+            <div class="desktop-page-card">
+                <h3>Preferences</h3>
+                <p>The modal uses the real tab structure and NEXO Desktop preference fields, including theme, tool detail visibility, notification sound, and do-not-disturb.</p>
+            </div>
+            <div class="desktop-page-card">
+                <h3>Product honesty</h3>
+                <p>The theater stays close to the existing product so the marketing page sells the real application rather than a future wishlist.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="cta-section">
+    <div class="container">
+        <h2 class="section-title">Want a private walkthrough instead of a public sandbox?</h2>
+        <p class="section-subtitle" style="margin:16px auto 48px;">NEXO Desktop is a private commercial product. The next step is direct contact and a fit conversation.</p>
+        <div class="desktop-wide-note" style="margin-bottom:28px;text-align:center;">
+            <strong>Contact:</strong> <a href="mailto:info@wazion.com">info@wazion.com</a> &bull; <a href="tel:+34648903026">+34 648903026</a>
+        </div>
+        <div class="hero-actions">
+            <a href="mailto:info@wazion.com?subject=NEXO%20Desktop%20private%20walkthrough" class="btn btn-primary">Request private walkthrough</a>
+            <a href="/desktop/use-cases/" class="btn btn-secondary">See grounded use cases</a>
+        </div>
+    </div>
+</section>
+
+<footer>
+    <div class="container">
+        <div class="footer-content">
+            <div class="footer-left">
+                Created by <strong>Francisco Cerd&agrave; Puigserver</strong> &amp; <strong>NEXO</strong> (Claude Opus) &bull; Built by <a href="https://www.wazion.com">WAzion</a> &bull; NEXO Brain core under AGPL-3.0 &bull; &copy; 2026
+            </div>
+            <div class="footer-links">
+                <a href="/desktop/">Desktop</a>
+                <a href="/desktop/use-cases/">Use cases</a>
+                <a href="/demos/">Demos</a>
+                <a href="/docs/">Docs</a>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<div id="cookie-consent" style="display:none;position:fixed;bottom:0;left:0;right:0;background:rgba(10,10,15,0.95);border-top:1px solid #1E1E2E;padding:12px 24px;z-index:200;font-size:13px;color:#94A3B8;text-align:center;">
+    This site uses analytics cookies. <a href="https://www.wazion.com/en/privacy" style="color:#A78BFA;">Privacy Policy</a>
+    <button onclick="document.getElementById('cookie-consent').style.display='none';localStorage.setItem('cc','1')" style="margin-left:16px;background:#7C3AED;color:#fff;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Accept</button>
+    <button onclick="document.getElementById('cookie-consent').style.display='none';localStorage.setItem('cc','0');window['ga-disable-G-1LNEMCJMS7']=true" style="margin-left:8px;background:transparent;color:#94A3B8;border:1px solid #333;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Decline</button>
+</div>
+<script>
+if(!localStorage.getItem('cc')){document.getElementById('cookie-consent').style.display='block';}
+else if(localStorage.getItem('cc')==='0'){window['ga-disable-G-1LNEMCJMS7']=true;}
+(function() {
+    var navLinks = document.querySelector('.nav-links');
+    var navToggle = document.querySelector('.nav-toggle');
+    navLinks.querySelectorAll('a').forEach(function(link) {
+        link.addEventListener('click', function() { navLinks.classList.remove('open'); });
+    });
+    document.addEventListener('click', function(e) {
+        if (navLinks.classList.contains('open') && !navLinks.contains(e.target) && !navToggle.contains(e.target)) {
+            navLinks.classList.remove('open');
+        }
+    });
+})();
+</script>
+</body>
+</html>
