@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXO 5.6.0: Default Model Upgrade — Opus 4.6 → 4.7</title>
+    <meta name="description" content="NEXO Brain 5.6.0 upgrades the default model to Claude Opus 4.7 with reasoning_effort max. Auto-migration on nexo update silently upgrades existing users from 4.6 to 4.7.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-5-6-0/">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/blog/nexo-5-6-0/">
+    <meta property="og:title" content="NEXO 5.6.0: Default Model Upgrade — Opus 4.6 → 4.7">
+    <meta property="og:description" content="NEXO Brain now ships with Claude Opus 4.7 and reasoning_effort max. Existing users on 4.6 are silently migrated on nexo update.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+    <meta property="article:published_time" content="2026-04-16">
+    <meta property="article:author" content="Francisco Cerda Puigserver">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO 5.6.0: Default Model Upgrade — Opus 4.6 → 4.7">
+    <meta name="twitter:description" content="Claude Opus 4.7 with reasoning_effort max is now the default. Auto-migration on nexo update handles existing installations.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "NEXO 5.6.0: Default Model Upgrade — Opus 4.6 → 4.7",
+        "description": "NEXO Brain 5.6.0 upgrades the default model to Claude Opus 4.7 with reasoning_effort max. Auto-migration on nexo update silently upgrades existing users.",
+        "datePublished": "2026-04-16",
+        "dateModified": "2026-04-16",
+        "author": {
+            "@type": "Person",
+            "name": "Francisco Cerda Puigserver"
+        },
+        "publisher": {
+            "@type": "Organization",
+            "name": "WAzion",
+            "url": "https://www.wazion.com"
+        },
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https://nexo-brain.com/blog/nexo-5-6-0/"
+        },
+        "url": "https://nexo-brain.com/blog/nexo-5-6-0/",
+        "image": "https://nexo-brain.com/assets/og/og-blog.png",
+        "keywords": ["NEXO 5.6.0", "Opus 4.7", "model upgrade", "auto-migration", "reasoning effort"]
+    }
+    </script>
+
+    <style>
+        .article-header { padding-top: 128px; padding-bottom: 40px; text-align: center; }
+        .article-meta { font-size: 14px; color: var(--text-muted); margin-bottom: 16px; }
+        .article-body {
+            max-width: 720px; margin: 0 auto; padding: 0 24px 80px;
+            font-size: 17px; line-height: 1.8; color: var(--text);
+        }
+        .article-body h2 { font-size: 28px; font-weight: 700; margin: 48px 0 16px; letter-spacing: -0.01em; }
+        .article-body p { margin-bottom: 20px; color: var(--text-muted); }
+        .article-body strong { color: var(--text); }
+        .article-body a { color: var(--purple-light); }
+        .article-body a:hover { color: var(--pink); }
+        .article-body code {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 14px; color: var(--pink);
+            background: rgba(236, 72, 153, 0.1);
+            padding: 2px 8px; border-radius: 4px;
+        }
+        .article-back {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 14px; font-weight: 600; color: var(--text-muted);
+            margin-bottom: 24px;
+        }
+        .article-back:hover { color: var(--purple-light); }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-64.png" alt="NEXO Brain" class="logo-image">
+            <span class="logo-text">NEXO Brain</span>
+        </a>
+        <button class="mobile-menu-toggle" aria-label="Toggle navigation" onclick="toggleMobileMenu()">
+            <span></span><span></span><span></span>
+        </button>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/features/">Features</a>
+            <a href="/evolution/">Evolution</a>
+            <a href="/compare/">Compare</a>
+            <a href="/blog/">Blog</a>
+            <a href="/changelog/">Changelog</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta">GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<section class="article-header">
+    <div class="container">
+        <a href="/blog/" class="article-back">&larr; Back to blog</a>
+        <div class="article-meta">April 16, 2026 &middot; Feature &middot; Model Upgrade</div>
+        <h1 class="section-title" style="font-size:clamp(28px,4.5vw,48px);max-width:920px;margin:0 auto 16px;">NEXO 5.6.0: Default Model Upgrade &mdash; Opus 4.6 &rarr; 4.7</h1>
+        <p class="section-subtitle" style="max-width:760px;margin:0 auto;">NEXO Brain now ships with <strong>Claude Opus 4.7</strong> as the recommended model for Claude Code users. The 1M context window stays active. Existing installations on 4.6 are silently migrated when they run <code>nexo update</code>.</p>
+    </div>
+</section>
+
+<section>
+    <div class="article-body">
+
+        <h2>What changed</h2>
+        <p><strong>New default model: <code>claude-opus-4-7[1m]</code>.</strong> The <code>[1m]</code> suffix is NEXO&rsquo;s internal notation that translates to the <code>anthropic-beta: context-1m-2025-08-07</code> header at call time. The header is accepted by Opus 4.7, so the 1M context window continues to work exactly as before.</p>
+        <p><strong>Reasoning effort set to <code>max</code>.</strong> Opus 4.7 introduced a new effort tier above <code>xhigh</code>. The valid values are <code>low</code>, <code>medium</code>, <code>high</code>, <code>xhigh</code>, and <code>max</code> &mdash; all verified empirically against <code>/v1/messages</code>. NEXO now defaults to the highest tier.</p>
+        <p><strong>Auto-migration on <code>nexo update</code>.</strong> The <code>heal_runtime_profiles()</code> function detects users whose model starts with <code>claude-opus-4-6</code> and silently migrates to <code>claude-opus-4-7</code>, preserving any suffix (e.g. <code>[1m]</code>). If the user had an empty reasoning effort, <code>xhigh</code>, or the legacy <code>enabled</code> format, it bumps to <code>max</code>.</p>
+        <p><strong>Codex untouched.</strong> GPT-5.4 with <code>xhigh</code> reasoning remains the Codex default. No migration applies to Codex profiles.</p>
+
+        <h2>Breaking API change in Opus 4.7</h2>
+        <p>Opus 4.7 changed the thinking/reasoning API from <code>thinking.enabled</code> + <code>thinking.budget_tokens</code> to <code>thinking.type: &quot;adaptive&quot;</code> + <code>output_config.effort</code>. NEXO Brain does not call the Anthropic API directly (Claude Code handles it), but this is documented here for operators building custom integrations.</p>
+
+        <h2>How to upgrade</h2>
+        <p>Run <code>nexo update</code> in your terminal. If you were on Opus 4.6, the migration happens automatically. No manual configuration needed.</p>
+
+    </div>
+</section>
+
+<footer style="padding:48px 24px;text-align:center;font-size:13px;color:var(--text-muted);">
+    &copy; 2026 <a href="https://www.wazion.com" style="color:var(--purple-light);">WAzion</a>. NEXO Brain is open-source under <a href="https://github.com/wazionapps/nexo/blob/main/LICENSE" style="color:var(--purple-light);">AGPL-3.0</a>.
+</footer>
+
+<script src="/assets/main.js"></script>
+</body>
+</html>
