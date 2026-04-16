@@ -784,6 +784,25 @@ def _scripts_call(args):
         return 1
 
 
+def _recover(args):
+    """Delegate to plugins.recover.cli_main so the logic lives in one place."""
+    from plugins.recover import cli_main as _recover_cli_main
+    argv: list[str] = []
+    if getattr(args, "source", None):
+        argv.extend(["--from", args.source])
+    if getattr(args, "list", False):
+        argv.append("--list")
+    if getattr(args, "dry_run", False):
+        argv.append("--dry-run")
+    if getattr(args, "force", False):
+        argv.append("--force")
+    if getattr(args, "yes", False):
+        argv.append("--yes")
+    if getattr(args, "json", False):
+        argv.append("--json")
+    return _recover_cli_main(argv)
+
+
 def _update(args):
     """Update the installed runtime.
 
@@ -1997,6 +2016,23 @@ def main():
     update_parser = sub.add_parser("update", help="Update installed runtime")
     update_parser.add_argument("--json", action="store_true", help="JSON output")
 
+    # -- recover --
+    recover_parser = sub.add_parser(
+        "recover",
+        help="Restore ~/.nexo/data/nexo.db from a hourly backup (data-loss recovery)",
+    )
+    recover_parser.add_argument("--from", dest="source", default=None,
+                                help="Explicit backup path (file or snapshot directory)")
+    recover_parser.add_argument("--list", action="store_true",
+                                help="List available backups and exit")
+    recover_parser.add_argument("--dry-run", action="store_true",
+                                help="Report the plan but do not touch the DB")
+    recover_parser.add_argument("--force", action="store_true",
+                                help="Overwrite the current DB even if it does not look wiped")
+    recover_parser.add_argument("--yes", action="store_true",
+                                help="Skip the interactive confirmation prompt")
+    recover_parser.add_argument("--json", action="store_true", help="JSON output")
+
     # -- clients --
     clients_parser = sub.add_parser("clients", help="Shared client config management")
     clients_sub = clients_parser.add_subparsers(dest="clients_command")
@@ -2190,6 +2226,8 @@ def main():
         return _import_bundle(args)
     elif args.command == "update":
         return _update(args)
+    elif args.command == "recover":
+        return _recover(args)
     elif args.command == "clients":
         if args.clients_command == "sync":
             return _clients_sync(args)

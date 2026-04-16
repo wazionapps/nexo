@@ -13,6 +13,58 @@ from pathlib import Path
 from runtime_home import export_resolved_nexo_home
 from tree_hygiene import is_duplicate_artifact_name
 
+# db_guard landed in v5.5.5. When plugins/update.py is imported from a runtime
+# that still ships the v5.5.4 tree (e.g. mid-upgrade), the import will fail —
+# we fall back to no-op guards so the update can still complete and bring in
+# the fixed module on its own.
+try:
+    from db_guard import (
+        CRITICAL_TABLES,
+        HOURLY_BACKUP_MAX_AGE,
+        MIN_REFERENCE_ROWS,
+        WIPE_THRESHOLD_PCT,
+        db_looks_wiped,
+        db_row_counts,
+        diff_row_counts,
+        find_latest_hourly_backup,
+        safe_sqlite_backup,
+        validate_backup_matches_source,
+    )
+    _DB_GUARD_AVAILABLE = True
+except Exception:  # pragma: no cover - exercised only during mid-upgrade installs
+    _DB_GUARD_AVAILABLE = False
+    CRITICAL_TABLES = ()
+    HOURLY_BACKUP_MAX_AGE = 48 * 3600
+    MIN_REFERENCE_ROWS = 50
+    WIPE_THRESHOLD_PCT = 80
+
+    def db_looks_wiped(*_args, **_kwargs):  # type: ignore[misc]
+        return False
+
+    def db_row_counts(*_args, **_kwargs):  # type: ignore[misc]
+        return {}
+
+    def diff_row_counts(*_args, **_kwargs):  # type: ignore[misc]
+        return None
+
+    def find_latest_hourly_backup(*_args, **_kwargs):  # type: ignore[misc]
+        return None
+
+    def safe_sqlite_backup(source, dest):  # type: ignore[misc]
+        src_conn = sqlite3.connect(str(source))
+        dst_conn = sqlite3.connect(str(dest))
+        try:
+            src_conn.backup(dst_conn)
+            return True, None
+        except Exception as e:  # pragma: no cover
+            return False, str(e)
+        finally:
+            src_conn.close()
+            dst_conn.close()
+
+    def validate_backup_matches_source(*_args, **_kwargs):  # type: ignore[misc]
+        return True, None
+
 # Code root is the parent of plugins/:
 # - source checkout: <repo>/src
 # - packaged runtime: <NEXO_HOME>
@@ -214,8 +266,77 @@ def _check_dirty() -> str | None:
     return None
 
 
+def _preflight_wipe_check() -> str | None:
+    """Abort the update early if the primary DB already looks wiped.
+
+    This is the guard that would have caught the v5.5.4 incident: between
+    the 15:02 hourly backup (38 MB, 643 rows in protocol_tasks) and the first
+    manual ``nexo update`` at 15:09, something external had already reset the
+    DB to 4 KB. The previous updater happily copied the empty file into the
+    ``pre-update-*`` snapshot and reported "backup successful", masking the
+    wipe and making subsequent retries destroy the last good snapshots.
+
+    Returns an error message when the update MUST abort, or None when it is
+    safe to proceed. Respects ``NEXO_SKIP_WIPE_GUARD=1`` for tests and
+    deliberate recovery scenarios.
+    """
+    if os.environ.get("NEXO_SKIP_WIPE_GUARD") == "1":
+        return None
+    primary_db = DATA_DIR / "nexo.db"
+    if not primary_db.is_file():
+        return None  # Nothing to protect; fresh install path.
+    if not db_looks_wiped(primary_db):
+        return None  # Populated DB — proceed.
+    reference = find_latest_hourly_backup(BACKUP_BASE)
+    if reference is None:
+        return None  # No reference to compare against; cannot distinguish wipe from fresh install.
+    reference_counts = db_row_counts(reference)
+    reference_total = sum(v for v in reference_counts.values() if isinstance(v, int))
+    if reference_total < MIN_REFERENCE_ROWS:
+        return None  # Reference itself is near-empty; likely fresh install.
+    return (
+        "Primary DB appears wiped while a recent hourly backup still has real data.\n"
+        f"  nexo.db: {primary_db} (empty)\n"
+        f"  hourly backup: {reference} ({reference_total} critical rows)\n"
+        "Run `nexo recover` to restore from backup, then retry the update.\n"
+        "Set NEXO_SKIP_WIPE_GUARD=1 to override (only recommended during a deliberate reinstall)."
+    )
+
+
+def _row_count_regression(pre: dict[str, int | None], post: dict[str, int | None]) -> str | None:
+    """Return a human description of any critical-table regression, or None.
+
+    A table regresses when pre had >= MIN_REFERENCE_ROWS rows and post dropped
+    by >= WIPE_THRESHOLD_PCT. Two or more table regressions, or an overall
+    drop >= WIPE_THRESHOLD_PCT across CRITICAL_TABLES, is treated as a wipe.
+    """
+    regressions: list[str] = []
+    pre_total = sum(v for v in pre.values() if isinstance(v, int))
+    post_total = sum(v for v in post.values() if isinstance(v, int))
+    for table in CRITICAL_TABLES:
+        pre_v = pre.get(table)
+        post_v = post.get(table)
+        if pre_v is None or pre_v < 10:
+            continue
+        if post_v is None:
+            regressions.append(f"{table} {pre_v}->missing")
+            continue
+        if post_v == 0 or (pre_v - post_v) / pre_v * 100 >= WIPE_THRESHOLD_PCT:
+            regressions.append(f"{table} {pre_v}->{post_v}")
+    if pre_total >= MIN_REFERENCE_ROWS and post_total <= pre_total * (1 - WIPE_THRESHOLD_PCT / 100):
+        return f"overall {pre_total}->{post_total} (>={WIPE_THRESHOLD_PCT}% loss); tables: {', '.join(regressions)}"
+    if len(regressions) >= 2:
+        return f"multiple critical tables regressed: {', '.join(regressions)}"
+    return None
+
+
 def _backup_databases() -> tuple[str, str | None]:
-    """Backup all .db files from NEXO_HOME/data/. Returns (backup_dir, error)."""
+    """Backup all .db files from NEXO_HOME/data/. Returns (backup_dir, error).
+
+    Post-v5.5.5: every copy is validated against the source via row counts, so
+    a backup that silently loses data returns an error instead of a green
+    "backup_dir" string that the rollback logic would then restore from.
+    """
     timestamp = time.strftime("%Y-%m-%d-%H%M")
     backup_dir = BACKUP_BASE / f"pre-update-{timestamp}"
 
@@ -234,21 +355,17 @@ def _backup_databases() -> tuple[str, str | None]:
 
     for db_file in db_files:
         dest = backup_dir / db_file.name
-        src_conn = None
-        dst_conn = None
-        try:
-            src_conn = sqlite3.connect(str(db_file))
-            dst_conn = sqlite3.connect(str(dest))
-            src_conn.backup(dst_conn)
-        except Exception as e:
-            return str(backup_dir), f"Failed to backup {db_file.name}: {e}"
-        finally:
-            for conn in (dst_conn, src_conn):
-                if conn is not None:
-                    try:
-                        conn.close()
-                    except Exception:
-                        pass
+        ok, err = safe_sqlite_backup(db_file, dest)
+        if not ok:
+            return str(backup_dir), f"Failed to backup {db_file.name}: {err}"
+        # Only validate row counts for the primary DB — the other sidecar DBs
+        # (cognitive.db, cron-runs.db) do not share CRITICAL_TABLES.
+        if db_file.name == "nexo.db":
+            valid, valid_err = validate_backup_matches_source(db_file, dest, CRITICAL_TABLES)
+            if not valid:
+                return str(backup_dir), (
+                    f"Backup of {db_file.name} did not preserve critical tables: {valid_err}"
+                )
 
     return str(backup_dir), None
 
@@ -848,11 +965,18 @@ def _handle_packaged_update(progress_fn=None) -> str:
     """Update a packaged (npm) install — no git repo available."""
     old_version = _read_version()
 
+    # 0. Pre-flight wipe guard (v5.5.5+)
+    _emit_progress(progress_fn, "Checking DB integrity before update...")
+    wipe_err = _preflight_wipe_check()
+    if wipe_err:
+        return f"ABORTED (wipe guard): {wipe_err}"
+
     # 1. Backup databases BEFORE any changes
     _emit_progress(progress_fn, "Backing up runtime databases...")
     backup_dir, backup_err = _backup_databases()
     if backup_err:
         return f"ABORTED at backup: {backup_err}"
+    pre_counts = db_row_counts(DATA_DIR / "nexo.db")
 
     # 2. Backup NEXO_HOME code tree BEFORE npm update
     #    postinstall copies hooks/core/plugins/scripts into NEXO_HOME,
@@ -918,6 +1042,12 @@ def _handle_packaged_update(progress_fn=None) -> str:
     mig_err = _run_migrations()
     if mig_err:
         errors.append(f"migrations: {mig_err}")
+    else:
+        # Post-migration wipe gate (v5.5.5+)
+        post_counts = db_row_counts(DATA_DIR / "nexo.db")
+        regression = _row_count_regression(pre_counts, post_counts)
+        if regression:
+            errors.append(f"post-migration wipe: {regression}")
 
     # Verify server can still import
     _emit_progress(progress_fn, "Verifying runtime import health...")
@@ -1059,6 +1189,12 @@ def handle_update(remote: str = "origin", branch: str = "main", progress_fn=None
     backup_dir = None
 
     try:
+        # Step 0: Pre-flight wipe guard (v5.5.5+)
+        _emit_progress(progress_fn, "Checking DB integrity before update...")
+        wipe_err = _preflight_wipe_check()
+        if wipe_err:
+            return f"ABORTED (wipe guard): {wipe_err}"
+
         # Step 1: Check dirty (full worktree)
         _emit_progress(progress_fn, "Checking repository state...")
         dirty_err = _check_dirty()
@@ -1079,6 +1215,7 @@ def handle_update(remote: str = "origin", branch: str = "main", progress_fn=None
         if backup_err:
             return f"ABORTED at backup: {backup_err}"
         steps_done.append("backup")
+        pre_counts = db_row_counts(DATA_DIR / "nexo.db")
 
         # Step 3: git pull
         _emit_progress(progress_fn, "Pulling latest source changes...")
@@ -1108,6 +1245,15 @@ def handle_update(remote: str = "origin", branch: str = "main", progress_fn=None
             if mig_err:
                 raise RuntimeError(f"Migration failed: {mig_err}")
             steps_done.append("migrations")
+
+            # Post-migration wipe gate (v5.5.5+): abort the update if the
+            # migration step caused a massive drop in critical-table rows.
+            post_counts = db_row_counts(DATA_DIR / "nexo.db")
+            regression = _row_count_regression(pre_counts, post_counts)
+            if regression:
+                raise RuntimeError(
+                    f"Post-migration wipe detected: {regression}. Rolling back."
+                )
 
         # Step 7: Verify import
         _emit_progress(progress_fn, "Verifying runtime import health...")

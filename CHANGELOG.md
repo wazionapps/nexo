@@ -1,5 +1,71 @@
 # Changelog
 
+## [5.5.5] - 2026-04-16
+
+### Hotfix: Data-loss guardrails and automatic self-heal
+
+**Incident** (2026-04-16, Europe/Madrid): one user's `~/.nexo/data/nexo.db`
+was reset to a 4 KB empty-schema file between the 15:02 hourly backup
+(38 MB, 643 `protocol_tasks`, 442 `followups`, 381 `learnings`) and the
+first manual `nexo update` at 15:09. Three consecutive update attempts
+over the next 11 minutes each captured the already-empty DB into a new
+`pre-update-*` snapshot, masking the wipe and destroying the window to
+inspect what had caused it externally.
+
+Root cause for the data loss itself remained inconclusive (the update
+flow did not write zeros; the existing hourly backup taken at 15:02 was
+intact). v5.5.5 therefore focuses on preventing the update flow from
+ever masking an external wipe again, plus delivering an unattended
+recovery path so the same incident cannot silently persist on another
+install.
+
+- **New `db_guard` module** (`src/db_guard.py`): single source of truth
+  for critical-table row counts, wipe detection, hourly-backup discovery,
+  and validated `sqlite3.backup` copies. Zero-dependency (stdlib only)
+  so it is safe to import from installer, auto-update, and CLI paths.
+- **Pre-flight wipe guard** in `plugins.update.handle_update` and the
+  packaged-install path: if `data/nexo.db` already looks wiped AND a
+  hourly backup within 48 h still contains real data, the update now
+  ABORTS with a message pointing at `nexo recover`. Overridable with
+  `NEXO_SKIP_WIPE_GUARD=1` for deliberate reinstalls.
+- **Validated backups**: `plugins.update._backup_databases` now rejects
+  a `pre-update-*` snapshot whose critical-table row counts do not
+  match the source. The v5.5.4 rollback could have restored an empty
+  backup on top of a partially recovered DB; this closes that path.
+- **Post-migration wipe gate**: after migrations run, the updater
+  compares pre- and post-migration row counts across `CRITICAL_TABLES`
+  and rolls back if two or more tables regressed by ≥80 % or the
+  overall row count dropped by ≥80 %.
+- **Self-heal at server startup** (`auto_update._self_heal_if_wiped`):
+  when NEXO starts and detects a wiped primary DB while a recent
+  hourly backup (≥50 critical rows) is available, it kills any live
+  MCP servers, snapshots the current state to `backups/pre-heal-*`,
+  restores the backup via `sqlite3.backup`, and validates row counts.
+  Capped by a 6 h cooldown and gated by `NEXO_DISABLE_AUTO_HEAL=1`
+  so it cannot loop. This is the mechanism that will automatically
+  repair any user who experienced the same wipe before upgrading.
+- **New `nexo recover` CLI + `nexo_recover` MCP tool**
+  (`src/plugins/recover.py`): list available backups, restore from the
+  newest usable one (or an explicit `--from` path), with mandatory kill-
+  MCP, pre-recover snapshot, and post-restore validation. Refuses to
+  overwrite a healthy DB unless `--force` is passed.
+- **Installer update**: `bin/nexo-brain.js` now copies `db_guard.py`
+  to `NEXO_HOME` alongside `auto_update.py`. `plugins/update.py` keeps
+  a defensive fallback so an in-flight upgrade from v5.5.4 still
+  completes even before `db_guard.py` lands on disk.
+- **Test coverage**: 36 new tests across `test_db_guard.py`,
+  `test_update_wipe_guard.py`, `test_recover.py`, and
+  `test_auto_update_selfheal.py`. Full suite remains 870/870 green.
+
+### Recovery instructions for affected users
+
+If a user is on v5.5.4 or earlier with the symptoms from the incident
+(`~/.nexo/data/nexo.db` ≈4 KB, `protocol_tasks` / `followups` /
+`learnings` at 0 rows) the v5.5.5 auto-update will self-heal from the
+hourly backup on the next server start — no action required. Manual
+recovery is also available: `nexo recover --list` to inspect backups,
+`nexo recover --dry-run` to preview, `nexo recover --yes` to apply.
+
 ## [5.5.4] - 2026-04-16
 
 ### Fix: Deep Sleep no longer blocks on unparseable sessions

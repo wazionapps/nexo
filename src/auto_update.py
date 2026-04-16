@@ -679,6 +679,163 @@ def _rotate_auto_update_backups(prefix: str, keep: int = AUTO_UPDATE_BACKUP_KEEP
     return removed
 
 
+SELF_HEAL_STATE_FILE = NEXO_HOME / "operations" / ".self-heal-state.json"
+SELF_HEAL_COOLDOWN_SECONDS = 6 * 3600  # Never auto-heal twice within 6 h.
+
+
+def _self_heal_if_wiped() -> dict | None:
+    """Detect a wiped nexo.db at server startup and restore from the newest
+    hourly backup without any user action required.
+
+    Guard conditions (ALL must be true to fire):
+        - ``NEXO_DISABLE_AUTO_HEAL`` env var is unset.
+        - ``data/nexo.db`` exists but looks wiped (empty critical tables, size
+          below the empty-schema threshold, or both).
+        - A hourly backup newer than 48 h exists AND contains >= 50 rows
+          across CRITICAL_TABLES.
+        - The self-heal cooldown has elapsed since the last successful heal.
+
+    On success, writes a marker to ``~/.nexo/operations/.self-heal-state.json``
+    and returns a report dict. Returns None when no heal happened (caller
+    treats that as "normal boot").
+    """
+    if os.environ.get("NEXO_DISABLE_AUTO_HEAL") == "1":
+        return None
+    try:
+        from db_guard import (
+            CRITICAL_TABLES,
+            HOURLY_BACKUP_MAX_AGE,
+            MIN_REFERENCE_ROWS,
+            db_looks_wiped,
+            db_row_counts,
+            find_latest_hourly_backup,
+            kill_nexo_mcp_servers,
+            safe_sqlite_backup,
+            validate_backup_matches_source,
+        )
+    except Exception as e:
+        _log(f"self-heal: db_guard import failed: {e}")
+        return None
+
+    primary = DATA_DIR / "nexo.db"
+    if not primary.is_file():
+        return None
+    if not db_looks_wiped(primary, CRITICAL_TABLES):
+        return None
+    reference = find_latest_hourly_backup(
+        NEXO_HOME / "backups",
+        max_age_seconds=HOURLY_BACKUP_MAX_AGE,
+    )
+    if reference is None:
+        _log("self-heal: nexo.db looks wiped but no usable hourly backup found — skipping.")
+        return {
+            "action": "skipped",
+            "reason": "no_usable_hourly_backup",
+            "primary_db": str(primary),
+        }
+    ref_counts = db_row_counts(reference, CRITICAL_TABLES)
+    ref_total = sum(v for v in ref_counts.values() if isinstance(v, int))
+    if ref_total < MIN_REFERENCE_ROWS:
+        _log(f"self-heal: reference backup {reference.name} has {ref_total} rows, below floor {MIN_REFERENCE_ROWS}")
+        return {
+            "action": "skipped",
+            "reason": "reference_below_floor",
+            "reference": str(reference),
+            "reference_rows": ref_total,
+        }
+
+    # Cooldown: don't loop-heal.
+    try:
+        if SELF_HEAL_STATE_FILE.is_file():
+            last = json.loads(SELF_HEAL_STATE_FILE.read_text())
+            last_ts = float(last.get("last_heal_ts", 0))
+            if time.time() - last_ts < SELF_HEAL_COOLDOWN_SECONDS:
+                _log(
+                    f"self-heal: cooldown active "
+                    f"({(time.time() - last_ts) / 60:.0f} min ago < "
+                    f"{SELF_HEAL_COOLDOWN_SECONDS // 60} min) — skipping."
+                )
+                return {"action": "skipped", "reason": "cooldown"}
+    except Exception:
+        pass
+
+    _log(
+        "self-heal: detected wiped nexo.db "
+        f"(reference={reference.name}, {ref_total} critical rows). Restoring..."
+    )
+
+    # Kill any live MCP servers so they cannot overwrite the restored DB.
+    kill_report = kill_nexo_mcp_servers(dry_run=False)
+    if kill_report.get("terminated"):
+        _log(f"self-heal: terminated {kill_report['terminated']} live MCP server(s).")
+        time.sleep(0.5)
+
+    # Snapshot the current (wiped) state so the heal is reversible.
+    pre_heal_dir = NEXO_HOME / "backups" / f"pre-heal-{time.strftime('%Y-%m-%d-%H%M%S')}"
+    try:
+        import shutil as _shutil
+        pre_heal_dir.mkdir(parents=True, exist_ok=True)
+        for suffix in ("", "-wal", "-shm"):
+            sidecar = primary.parent / f"{primary.name}{suffix}"
+            if sidecar.exists():
+                _shutil.copy2(str(sidecar), str(pre_heal_dir / sidecar.name))
+    except Exception as e:
+        _log(f"self-heal: pre-heal snapshot warning: {e}")
+
+    # Clear stale WAL/SHM before the restore so the new DB starts clean.
+    for suffix in ("-wal", "-shm"):
+        sidecar = primary.parent / f"{primary.name}{suffix}"
+        if sidecar.exists():
+            try:
+                sidecar.unlink()
+            except Exception as e:
+                _log(f"self-heal: could not remove {sidecar.name}: {e}")
+
+    ok, err = safe_sqlite_backup(reference, primary)
+    if not ok:
+        _log(f"self-heal: restore copy failed: {err}")
+        return {
+            "action": "failed",
+            "reason": "restore_copy_failed",
+            "error": err,
+            "reference": str(reference),
+            "pre_heal_dir": str(pre_heal_dir),
+        }
+    valid, valid_err = validate_backup_matches_source(reference, primary, CRITICAL_TABLES)
+    if not valid:
+        _log(f"self-heal: post-restore validation failed: {valid_err}")
+        return {
+            "action": "failed",
+            "reason": "validation_failed",
+            "error": valid_err,
+            "reference": str(reference),
+            "pre_heal_dir": str(pre_heal_dir),
+        }
+
+    final_counts = db_row_counts(primary, CRITICAL_TABLES)
+    final_total = sum(v for v in final_counts.values() if isinstance(v, int))
+    _log(f"self-heal: restored {final_total} critical rows from {reference.name}.")
+    try:
+        SELF_HEAL_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        SELF_HEAL_STATE_FILE.write_text(json.dumps({
+            "last_heal_ts": time.time(),
+            "reference": str(reference),
+            "critical_rows_restored": final_total,
+            "pre_heal_dir": str(pre_heal_dir),
+        }))
+    except Exception as e:
+        _log(f"self-heal: state write warning: {e}")
+
+    return {
+        "action": "restored",
+        "reference": str(reference),
+        "reference_rows": ref_total,
+        "restored_rows": final_total,
+        "pre_heal_dir": str(pre_heal_dir),
+        "terminated_servers": kill_report.get("terminated", 0),
+    }
+
+
 def _backup_dbs() -> str | None:
     """Snapshot all .db files before migration. Returns backup dir or None."""
     import sqlite3
@@ -1384,6 +1541,7 @@ def _auto_update_check_locked() -> dict:
         "client_bootstrap_updates": [],
         "migrations": [],
         "db_migrations": 0,
+        "self_heal": None,
         "skipped_reason": None,
         "error": None,
     }
@@ -1397,6 +1555,17 @@ def _auto_update_check_locked() -> dict:
             auto_update_enabled = schedule_data.get("auto_update", True)
     except Exception:
         pass  # Default to enabled on any read error
+
+    # ── Phase 0: Data-loss self-heal (v5.5.5+) ─────────────────────
+    # Runs BEFORE any migration/backfill so a wiped DB is restored from the
+    # hourly backup stream instead of being schema-migrated in place. Caps
+    # itself via a state file so we never loop-heal on a legitimate reset.
+    try:
+        heal_report = _self_heal_if_wiped()
+        if heal_report is not None:
+            result["self_heal"] = heal_report
+    except Exception as e:
+        _log(f"self-heal check error (continuing): {e}")
 
     # ── Phase 1: Local migrations (safe, no network) ────────────────
     # These ALWAYS run, regardless of cooldown, network state, or auto_update flag.
