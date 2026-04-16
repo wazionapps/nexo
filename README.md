@@ -18,7 +18,7 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `5.5.2` is the current packaged-runtime line: auto-repair unloaded LaunchAgents on startup and ensure_schedules, plus headless model fallback cleanup so automation scripts defer to the configured runtime profile.
+Version `5.5.3` is the current packaged-runtime line: CLAUDE.md CORE now teaches the model to trust the Protocol Enforcer, so aligned backends stop rejecting heartbeat, diary, and checkpoint injections as suspected prompt injection.
 
 Previously in `5.4.6`: runtime dependency management in `nexo update` + daily auto-update cron.
 
