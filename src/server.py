@@ -680,7 +680,14 @@ def nexo_menu() -> str:
 # ── Reminders CRUD (7 tools) ──────────────────────────────────────
 
 @mcp.tool
-def nexo_reminder_create(id: str, description: str, date: str = "", category: str = "general") -> str:
+def nexo_reminder_create(
+    id: str,
+    description: str,
+    date: str = "",
+    category: str = "general",
+    internal: str = "",
+    owner: str = "",
+) -> str:
     """Create a new reminder for the user.
 
     Args:
@@ -688,8 +695,12 @@ def nexo_reminder_create(id: str, description: str, date: str = "", category: st
         description: What needs to be done.
         date: Target date YYYY-MM-DD (optional).
         category: One of: decisions, tasks, waiting, ideas, general.
+        internal: '1'/'true' to mark as agent bookkeeping (hidden from
+                  default user views). Leave empty to auto-classify.
+        owner: 'user' | 'waiting' | 'agent' | 'shared'. Leave empty to
+               auto-classify by description heuristic.
     """
-    return handle_reminder_create(id, description, date, category)
+    return handle_reminder_create(id, description, date, category, internal, owner)
 
 
 @mcp.tool
@@ -708,6 +719,8 @@ def nexo_reminder_update(
     date: str = "",
     status: str = "",
     category: str = "",
+    internal: str = "",
+    owner: str = "",
     read_token: str = "",
 ) -> str:
     """Update fields of an existing reminder. Only non-empty fields are changed.
@@ -720,9 +733,11 @@ def nexo_reminder_update(
         date: New date YYYY-MM-DD (optional).
         status: New status (optional).
         category: New category (optional).
+        internal: '1'/'0' to re-classify visibility (optional).
+        owner: New 'user'|'waiting'|'agent'|'shared' (optional).
         read_token: Token returned by `nexo_reminder_get`.
     """
-    return handle_reminder_update(id, description, date, status, category, read_token)
+    return handle_reminder_update(id, description, date, status, category, internal, owner, read_token)
 
 
 @mcp.tool
@@ -779,8 +794,18 @@ def nexo_reminder_delete(id: str, read_token: str = "") -> str:
 # ── Followups CRUD (7 tools) ──────────────────────────────────────
 
 @mcp.tool
-def nexo_followup_create(id: str, description: str, date: str = "", verification: str = "", reasoning: str = "", recurrence: str = "", priority: str = "medium") -> str:
-    """Create a new NEXO followup (autonomous task).
+def nexo_followup_create(
+    id: str,
+    description: str,
+    date: str = "",
+    verification: str = "",
+    reasoning: str = "",
+    recurrence: str = "",
+    priority: str = "medium",
+    internal: str = "",
+    owner: str = "",
+) -> str:
+    """Create a new agent followup (autonomous task).
 
     Args:
         id: Unique ID starting with 'NF' (e.g., NF-MCP2).
@@ -791,8 +816,16 @@ def nexo_followup_create(id: str, description: str, date: str = "", verification
         recurrence: Auto-regenerate pattern (optional). Formats: 'weekly:monday', 'monthly:1', 'monthly:15', 'quarterly'.
                     When completed, a new followup is auto-created with the next date. The completed one is archived with date suffix.
         priority: critical, high, medium, low (default: medium).
+        internal: '1'/'true' hides from default user views (agent
+                  bookkeeping, protocol, audit). Leave empty to
+                  auto-classify by ID prefix.
+        owner: 'user' | 'waiting' | 'agent' | 'shared'. Leave empty
+               for auto-classification.
     """
-    return handle_followup_create(id, description, date, verification, reasoning, recurrence, priority)
+    return handle_followup_create(
+        id, description, date, verification, reasoning, recurrence, priority,
+        internal, owner,
+    )
 
 
 @mcp.tool
@@ -812,6 +845,8 @@ def nexo_followup_update(
     verification: str = "",
     status: str = "",
     priority: str = "",
+    internal: str = "",
+    owner: str = "",
     read_token: str = "",
 ) -> str:
     """Update fields of an existing followup. Only non-empty fields are changed.
@@ -825,9 +860,14 @@ def nexo_followup_update(
         verification: New verification text (optional).
         status: New status (optional).
         priority: critical, high, medium, low (optional).
+        internal: '1'/'0' to re-classify visibility (optional).
+        owner: New 'user'|'waiting'|'agent'|'shared' (optional).
         read_token: Token returned by `nexo_followup_get`.
     """
-    return handle_followup_update(id, description, date, verification, status, priority, read_token)
+    return handle_followup_update(
+        id, description, date, verification, status, priority,
+        internal, owner, read_token,
+    )
 
 
 @mcp.tool

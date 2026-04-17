@@ -40,6 +40,8 @@ def _format_reminder_payload(reminder: dict) -> str:
         f"Date: {reminder.get('date') or '—'}",
         f"Status: {reminder.get('status') or '—'}",
         f"Category: {reminder.get('category') or 'general'}",
+        f"Owner: {reminder.get('owner') or '—'}",
+        f"Internal: {1 if reminder.get('internal') else 0}",
     ]
     history_rules = reminder.get("history_rules") or []
     if history_rules:
@@ -62,6 +64,8 @@ def _format_followup_payload(followup: dict) -> str:
         f"Reasoning: {followup.get('reasoning') or '—'}",
         f"Recurrence: {followup.get('recurrence') or '—'}",
         f"Priority: {followup.get('priority') or 'medium'}",
+        f"Owner: {followup.get('owner') or '—'}",
+        f"Internal: {1 if followup.get('internal') else 0}",
     ]
     history_rules = followup.get("history_rules") or []
     if history_rules:
@@ -76,18 +80,37 @@ def _format_followup_payload(followup: dict) -> str:
 
 # ── Reminders ──────────────────────────────────────────────────────────────────
 
-def handle_reminder_create(id: str, description: str, date: str = '', category: str = 'general') -> str:
+def handle_reminder_create(
+    id: str,
+    description: str,
+    date: str = '',
+    category: str = 'general',
+    internal: str = '',
+    owner: str = '',
+) -> str:
     """Create a new reminder. id must start with 'R'."""
     if not id.startswith('R'):
         return f"ERROR: Reminder ID must start with 'R' (received: '{id}')."
 
-    result = create_reminder(id=id, description=description, date=date or None, category=category)
+    result = create_reminder(
+        id=id,
+        description=description,
+        date=date or None,
+        category=category,
+        internal=internal if internal != '' else None,
+        owner=owner if owner != '' else None,
+    )
     if not result or "error" in result:
         error_msg = result.get("error", "unknown") if isinstance(result, dict) else "unknown"
         return f"ERROR: {error_msg}"
 
     date_str = date if date else 'no date'
-    return f"Reminder created. Date: {date_str}. Category: {category}."
+    owner_final = result.get('owner') or '—'
+    internal_final = 1 if result.get('internal') else 0
+    return (
+        f"Reminder created. Date: {date_str}. Category: {category}. "
+        f"Owner: {owner_final}. Internal: {internal_final}."
+    )
 
 
 def handle_reminder_get(id: str) -> str:
@@ -104,6 +127,8 @@ def handle_reminder_update(
     date: str = '',
     status: str = '',
     category: str = '',
+    internal: str = '',
+    owner: str = '',
     read_token: str = '',
 ) -> str:
     """Update one or more fields of an existing reminder."""
@@ -120,6 +145,10 @@ def handle_reminder_update(
         fields['status'] = status
     if category:
         fields['category'] = category
+    if internal != '':
+        fields['internal'] = internal
+    if owner != '':
+        fields['owner'] = owner
 
     if not fields:
         return f"ERROR: No fields specified to update for {id}."
@@ -190,6 +219,8 @@ def handle_followup_create(
     reasoning: str = '',
     recurrence: str = '',
     priority: str = 'medium',
+    internal: str = '',
+    owner: str = '',
 ) -> str:
     """Create a new NEXO followup. id must start with 'NF'.
 
@@ -201,6 +232,11 @@ def handle_followup_create(
         reasoning: WHY this followup exists — what decision/context led to it
         recurrence: Recurrence pattern (optional). Formats: 'weekly:monday', 'monthly:1', 'quarterly'.
                     When completed, auto-creates the next occurrence.
+        internal: '1' / 'true' hides this task from default user views
+                  (agent bookkeeping, protocol enforcement, audits).
+                  Omit to let Brain classify by ID prefix heuristic.
+        owner: 'user' | 'waiting' | 'agent' | 'shared'. Omit to let
+               Brain classify by description verbs.
     """
     if not id.startswith('NF'):
         return f"ERROR: Followup ID must start with 'NF' (received: '{id}')."
@@ -213,6 +249,8 @@ def handle_followup_create(
         reasoning=reasoning,
         recurrence=recurrence or None,
         priority=priority or "medium",
+        internal=internal if internal != '' else None,
+        owner=owner if owner != '' else None,
     )
     if not result or "error" in result:
         error_msg = result.get("error", "unknown") if isinstance(result, dict) else "unknown"
@@ -221,9 +259,12 @@ def handle_followup_create(
     date_str = date if date else 'no date'
     rec_str = f" Recurrence: {recurrence}." if recurrence else ""
     priority_str = f" Priority: {priority or 'medium'}."
+    owner_final = result.get('owner') or '—'
+    internal_final = 1 if result.get('internal') else 0
+    class_str = f" Owner: {owner_final}. Internal: {internal_final}."
     warning = result.get("warning", "")
     warn_str = f"\n{warning}" if warning else ""
-    return f"Followup created. Date: {date_str}.{priority_str}{rec_str}{warn_str}"
+    return f"Followup created. Date: {date_str}.{priority_str}{rec_str}{class_str}{warn_str}"
 
 
 def handle_followup_get(id: str) -> str:
@@ -241,6 +282,8 @@ def handle_followup_update(
     verification: str = '',
     status: str = '',
     priority: str = '',
+    internal: str = '',
+    owner: str = '',
     read_token: str = '',
 ) -> str:
     """Update one or more fields of an existing followup."""
@@ -259,6 +302,10 @@ def handle_followup_update(
         fields['status'] = status
     if priority:
         fields['priority'] = priority
+    if internal != '':
+        fields['internal'] = internal
+    if owner != '':
+        fields['owner'] = owner
 
     if not fields:
         return f"ERROR: No fields specified to update for {id}."
