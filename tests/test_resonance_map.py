@@ -127,13 +127,15 @@ def test_default_resonance_is_alto():
 
 
 def test_user_facing_registry_is_small():
-    """Only three entry points should ever honour the user default:
-    terminal chat, Desktop new session, and the interactive updater.
+    """Only these entry points should ever honour the user default:
+    terminal chat, Desktop new session, the interactive updater, and the
+    dashboard's "Open followup in Terminal" launcher (v6.0.4+).
     Any additions to this list are a design change that needs review."""
     assert set(rmap.USER_FACING_CALLERS.keys()) == {
         "nexo_chat",
         "desktop_new_session",
         "nexo_update_interactive",
+        "nexo_followup_terminal",
     }
 
 

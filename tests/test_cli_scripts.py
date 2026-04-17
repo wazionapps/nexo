@@ -672,7 +672,12 @@ class TestChatCommand:
         assert result.returncode == 0
         assert "[NEXO] NEXO " in result.stderr
         payload = json.loads(out_file.read_text())
-        assert payload["argv"][:5] == ["--model", "claude-opus-4-7[1m]", "--effort", "max", "--dangerously-skip-permissions"]
+        # v6.0.4 — nexo chat now honours preferences.default_resonance via
+        # resonance_map. The default tier (DEFAULT_RESONANCE="alto") resolves
+        # to effort=xhigh for claude_code. The previous "max" value came from
+        # reading client_runtime_profiles directly; that path is only the
+        # fallback now.
+        assert payload["argv"][:5] == ["--model", "claude-opus-4-7[1m]", "--effort", "xhigh", "--dangerously-skip-permissions"]
         assert "nexo_startup" in payload["argv"][-1]
         assert "nexo_heartbeat" in payload["argv"][-1]
         assert payload["cwd"] == str(workspace.resolve())
@@ -796,7 +801,10 @@ class TestChatCommand:
         assert argv[:5] == ["--sandbox", "danger-full-access", "--ask-for-approval", "never", "-c"]
         assert argv[5].startswith('initial_messages=[{role="system",content=')
         assert ["-m", "gpt-5.4"] == argv[6:8]
-        assert ["-c", 'model_reasoning_effort="xhigh"'] == argv[8:10]
+        # v6.0.4 — codex effort resolves via resonance_map (default tier "alto"
+        # -> codex="high"). Previous assertion tested the legacy flow that
+        # read reasoning_effort=xhigh straight from client_runtime_profiles.
+        assert ["-c", 'model_reasoning_effort="high"'] == argv[8:10]
         assert argv[-3:-1] == ["-C", str(workspace)]
         assert "nexo_startup" in argv[-1]
         assert "nexo_heartbeat" in argv[-1]

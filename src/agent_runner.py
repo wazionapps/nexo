@@ -457,16 +457,75 @@ def _interactive_target_cwd(target: str | os.PathLike[str]) -> str:
     return str(Path.cwd())
 
 
+def _resolve_interactive_model_and_effort(
+    caller: str,
+    backend: str,
+    *,
+    preferences: dict | None = None,
+    tier: str | None = None,
+) -> tuple[str, str]:
+    """Return ``(model, effort)`` for an interactive launch.
+
+    v6.0.4 — interactive launchers (nexo chat, dashboard followup) were
+    picking the command flags straight from ``client_runtime_profiles``
+    (config/schedule.json), ignoring the user's ``default_resonance``
+    preference in calibration.json. That meant Preferences → "Alto"
+    never reached ``nexo chat`` even though the same preference was
+    applied correctly in headless runs (run_automation_prompt) and in
+    NEXO Desktop (lib/claude-runtime.js).
+
+    Resolution order (mirrors run_automation_prompt):
+      1. resonance_map → (model, effort) for the registered caller,
+         honouring user_default and the explicit tier override.
+      2. If the resonance_map is unavailable or returns blanks, fall
+         back to ``client_runtime_profiles`` so we stay backward
+         compatible with pre-6.0.0 installs missing resonance_tiers.json.
+    """
+    profile = resolve_client_runtime_profile(backend, preferences=preferences)
+    model = ""
+    effort = ""
+    try:
+        from resonance_map import resolve_model_and_effort
+
+        user_default = ""
+        if isinstance(preferences, dict):
+            user_default = str(preferences.get("default_resonance") or "").strip()
+        explicit_tier = (tier or "").strip() or None
+        mapped_model, mapped_effort = resolve_model_and_effort(
+            caller,
+            backend,
+            user_default=user_default or None,
+            explicit_tier=explicit_tier,
+        )
+        if mapped_model:
+            model = mapped_model
+        if mapped_effort:
+            effort = mapped_effort
+    except Exception:
+        # resonance_map missing or caller not registered — fall back to the
+        # legacy client_runtime_profiles path so nothing explodes.
+        pass
+    if not model:
+        model = profile.get("model", "")
+    if not effort:
+        effort = profile.get("reasoning_effort", "")
+    return model, effort
+
+
 def build_interactive_client_command(
     *,
     target: str | os.PathLike[str],
     client: str | None = None,
     preferences: dict | None = None,
+    caller: str = "nexo_chat",
+    tier: str | None = None,
 ) -> tuple[str, list[str]]:
     prefs = preferences or load_client_preferences()
     selected = resolve_terminal_client(client, preferences=prefs)
     target_path = str(Path(target).expanduser())
-    profile = resolve_client_runtime_profile(selected, preferences=prefs)
+    resolved_model, resolved_effort = _resolve_interactive_model_and_effort(
+        caller, selected, preferences=prefs, tier=tier
+    )
     startup_prompt = _interactive_startup_prompt(selected)
 
     if selected == CLIENT_CLAUDE_CODE:
@@ -476,10 +535,10 @@ def build_interactive_client_command(
                 "Claude Code launcher not found in PATH. Install `claude` first."
             )
         cmd = [claude_bin]
-        if profile["model"]:
-            cmd.extend(["--model", profile["model"]])
-        if profile["reasoning_effort"]:
-            cmd.extend(["--effort", profile["reasoning_effort"]])
+        if resolved_model:
+            cmd.extend(["--model", resolved_model])
+        if resolved_effort:
+            cmd.extend(["--effort", resolved_effort])
         cmd.append("--dangerously-skip-permissions")
         if startup_prompt:
             cmd.append(startup_prompt)
@@ -495,10 +554,10 @@ def build_interactive_client_command(
         bootstrap_prompt = _load_client_bootstrap_prompt(CLIENT_CODEX)
         if bootstrap_prompt and not _codex_managed_initial_messages_enabled():
             cmd.extend(["-c", _codex_initial_messages_config(bootstrap_prompt)])
-        if profile["model"]:
-            cmd.extend(["-m", profile["model"]])
-        if profile["reasoning_effort"]:
-            cmd.extend(["-c", f'model_reasoning_effort="{profile["reasoning_effort"]}"'])
+        if resolved_model:
+            cmd.extend(["-m", resolved_model])
+        if resolved_effort:
+            cmd.extend(["-c", f'model_reasoning_effort="{resolved_effort}"'])
         cmd.extend(["-C", target_path])
         if startup_prompt:
             cmd.append(startup_prompt)
@@ -548,8 +607,14 @@ def run_automation_interactive(
     the interactive surface honours whatever the user selected.
     """
     prefs = preferences or load_client_preferences()
+    # v6.0.4 — caller+tier propagate into the builder so interactive launches
+    # honour default_resonance (previously ignored for nexo chat).
     resolved_client, cmd = build_interactive_client_command(
-        target=target, client=client, preferences=prefs
+        target=target,
+        client=client,
+        preferences=prefs,
+        caller=caller,
+        tier=(tier or "").strip() or None,
     )
     launch_env = os.environ.copy()
     if env:
@@ -616,10 +681,14 @@ def build_followup_terminal_shell_command(
     client: str | None = None,
     preferences: dict | None = None,
     cwd: str | os.PathLike[str] | None = None,
+    caller: str = "nexo_followup_terminal",
+    tier: str | None = None,
 ) -> tuple[str, str]:
     prefs = preferences or load_client_preferences()
     selected = resolve_terminal_client(client, preferences=prefs)
-    profile = resolve_client_runtime_profile(selected, preferences=prefs)
+    resolved_model, resolved_effort = _resolve_interactive_model_and_effort(
+        caller, selected, preferences=prefs, tier=tier
+    )
     prompt = f"NEXO: execute followup from file $(cat {followup_reference})"
 
     if selected == CLIENT_CLAUDE_CODE:
@@ -629,10 +698,10 @@ def build_followup_terminal_shell_command(
                 "Claude Code launcher not found in PATH. Install `claude` first."
             )
         cmd = [claude_bin]
-        if profile["model"]:
-            cmd.extend(["--model", profile["model"]])
-        if profile["reasoning_effort"]:
-            cmd.extend(["--effort", profile["reasoning_effort"]])
+        if resolved_model:
+            cmd.extend(["--model", resolved_model])
+        if resolved_effort:
+            cmd.extend(["--effort", resolved_effort])
         cmd.extend(["--dangerously-skip-permissions", prompt])
         return selected, shlex.join(cmd)
 
@@ -647,10 +716,10 @@ def build_followup_terminal_shell_command(
         bootstrap_prompt = _load_client_bootstrap_prompt(CLIENT_CODEX)
         if bootstrap_prompt and not _codex_managed_initial_messages_enabled():
             cmd.extend(["-c", _codex_initial_messages_config(bootstrap_prompt)])
-        if profile["model"]:
-            cmd.extend(["-m", profile["model"]])
-        if profile["reasoning_effort"]:
-            cmd.extend(["-c", f'model_reasoning_effort="{profile["reasoning_effort"]}"'])
+        if resolved_model:
+            cmd.extend(["-m", resolved_model])
+        if resolved_effort:
+            cmd.extend(["-c", f'model_reasoning_effort="{resolved_effort}"'])
         cmd.extend(["-C", target_cwd, prompt])
         return selected, shlex.join(cmd)
 
