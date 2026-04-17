@@ -1,9 +1,10 @@
 # NEXO Brain
 
-> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v5.6.1).
+> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v5.7.0).
 
 NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It adds a local shared brain across supported clients, configurable terminal and automation backends, recovery-aware background jobs, startup preflight, runtime self-healing, smarter retrieval defaults, long-horizon overnight analysis, and 150+ MCP tools.
 
+v5.7.0: `nexo update` auto-updates Claude Code and Codex CLIs. New `_update_external_clis()` detects the global version of `@anthropic-ai/claude-code` and `@openai/codex`, queries the npm registry, and runs `npm install -g <pkg>@latest` when a bump is available. Packages that were never installed globally are skipped silently. Timeouts and missing npm are handled explicitly. New `--no-clis` flag on `nexo update` (and `include_clis=False` on the MCP `nexo_update` tool) pins the terminal CLIs when operators prefer manual control. Motivation: close the gap where `~/.claude/settings.json` already pointed at Opus 4.7 but the locally-installed Claude Code was too old to recognise the new model id.
 v5.6.1: update-path hardening. Purge 0-byte .db orphans (interrupted installs) from ~/.nexo/ and ~/.nexo/data/ before the pre-update backup — they were masking the real DB and breaking validation. New sync_claude_code_model() helper propagates the NEXO-recommended model into ~/.claude/settings.json (which Claude Code actually reads) when heal_runtime_profiles() migrates the claude_code default. No-op when settings.json is missing or has no top-level "model" field.
 v5.6.0: default model upgrade Opus 4.6 → 4.7 with reasoning_effort "max". Auto-migration on `nexo update` silently upgrades users from claude-opus-4-6* to claude-opus-4-7, preserving 1M suffix. Codex untouched.
 v5.5.6: rate-limit the backup/restore/export tools in the MCP boundary. `nexo_backup_now` capped at 1/30s, `nexo_backup_restore` at 1/60s, `export_user_bundle` at 1/120s. A runaway MCP client (tool-use loop) can no longer hammer sqlite3.Connection.backup() the way the 2026-04-16 incident did. Same-day follow-up to v5.5.5.

@@ -961,7 +961,7 @@ def _reload_launch_agents_after_bump() -> dict:
     return result
 
 
-def _handle_packaged_update(progress_fn=None) -> str:
+def _handle_packaged_update(progress_fn=None, *, include_clis: bool = True) -> str:
     """Update a packaged (npm) install — no git repo available."""
     old_version = _read_version()
 
@@ -1078,6 +1078,19 @@ def _handle_packaged_update(progress_fn=None) -> str:
     except Exception:
         pass  # Non-critical
 
+    # Auto-update external terminal CLIs (Claude Code, Codex). Best-effort;
+    # a third-party install failure here never rolls the update back.
+    external_cli_lines: list[str] = []
+    if include_clis:
+        try:
+            from auto_update import _update_external_clis, _format_external_clis_results
+            _emit_progress(progress_fn, "Checking external CLI updates...")
+            external_cli_lines = _format_external_clis_results(
+                _update_external_clis(progress_fn=progress_fn)
+            )
+        except Exception:
+            pass  # Non-critical
+
     client_sync_warning = None
     _emit_progress(progress_fn, "Refreshing shared client configs...")
     clients_ok, client_sync_error = _sync_packaged_clients()
@@ -1144,6 +1157,7 @@ def _handle_packaged_update(progress_fn=None) -> str:
     if retired_runtime_files:
         lines.append(f"  Cleanup: removed {len(retired_runtime_files)} retired runtime file(s)")
     lines.extend(_format_dep_results(dep_results))
+    lines.extend(external_cli_lines)
     if not client_sync_warning:
         lines.append("  Clients: configured client targets synced")
     else:
@@ -1162,7 +1176,13 @@ def _handle_packaged_update(progress_fn=None) -> str:
     return "\n".join(lines)
 
 
-def handle_update(remote: str = "origin", branch: str = "main", progress_fn=None) -> str:
+def handle_update(
+    remote: str = "origin",
+    branch: str = "main",
+    progress_fn=None,
+    *,
+    include_clis: bool = True,
+) -> str:
     """Pull latest NEXO code, backup databases, run migrations, and verify.
 
     Supports both git checkouts and packaged (npm) installs.
@@ -1179,10 +1199,13 @@ def handle_update(remote: str = "origin", branch: str = "main", progress_fn=None
     Args:
         remote: Git remote name (default: origin)
         branch: Git branch to pull (default: main)
+        include_clis: When True (default), auto-update external terminal CLIs
+            (Claude Code, Codex). Pass False (``nexo update --no-clis``) to
+            keep the third-party CLIs at their current version.
     """
     # Packaged install — no git repo
     if not _is_git_repo():
-        return _handle_packaged_update(progress_fn=progress_fn)
+        return _handle_packaged_update(progress_fn=progress_fn, include_clis=include_clis)
 
     steps_done = []
     old_commit = None
@@ -1302,6 +1325,23 @@ def handle_update(remote: str = "origin", branch: str = "main", progress_fn=None
         except Exception:
             pass  # Non-critical
 
+        # Step 10b: Update external terminal CLIs (Claude Code, Codex). Runs
+        # after migrations and before the verify-style post-steps so a stale
+        # CLI never hides bug fixes shipped with the new NEXO release. Failures
+        # here never abort the git update — the rollback only covers NEXO itself.
+        external_cli_lines: list[str] = []
+        if include_clis:
+            try:
+                from auto_update import _update_external_clis, _format_external_clis_results
+                _emit_progress(progress_fn, "Checking external CLI updates...")
+                external_cli_lines = _format_external_clis_results(
+                    _update_external_clis(progress_fn=progress_fn)
+                )
+                if external_cli_lines:
+                    steps_done.append("external-clis")
+            except Exception:
+                pass  # Non-critical
+
         # Step 11: Sync shared client configs
         try:
             _emit_progress(progress_fn, "Refreshing shared client configs...")
@@ -1345,8 +1385,9 @@ def handle_update(remote: str = "origin", branch: str = "main", progress_fn=None
         dep_summary_lines = _format_dep_results(dep_results)
         if pull_out == "Already up to date.":
             msg = f"Already up to date (v{old_version}). No changes pulled."
-            if dep_summary_lines:
-                msg += "\n" + "\n".join(dep_summary_lines)
+            trailing = [*dep_summary_lines, *external_cli_lines]
+            if trailing:
+                msg += "\n" + "\n".join(trailing)
             return msg
 
         lines = ["UPDATE SUCCESSFUL"]
@@ -1367,6 +1408,7 @@ def handle_update(remote: str = "origin", branch: str = "main", progress_fn=None
         if retired_runtime_files:
             lines.append(f"  Cleanup: removed {len(retired_runtime_files)} retired runtime file(s)")
         lines.extend(dep_summary_lines)
+        lines.extend(external_cli_lines)
         if "client-sync" in steps_done:
             lines.append("  Clients: configured client targets synced")
         lines.append("")

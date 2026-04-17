@@ -823,6 +823,7 @@ def _update(args):
 
     dest = NEXO_HOME
     src_dir, repo_dir = _resolve_sync_source()
+    include_clis = not getattr(args, "no_clis", False)
 
     if src_dir is None or repo_dir is None:
         try:
@@ -835,7 +836,7 @@ def _update(args):
             )
             return 1
 
-        result = handle_update(progress_fn=progress)
+        result = handle_update(progress_fn=progress, include_clis=include_clis)
         runtime_power = _load_runtime_power_support()
         public_contribution = _load_public_contribution_support()
         choice = runtime_power["ensure_power_policy_choice"](interactive=interactive, reason="update")
@@ -873,7 +874,12 @@ def _update(args):
                 print(f"Contributor mode: {contrib_choice.get('message')}")
         return 0 if "UPDATE SUCCESSFUL" in result or "Already up to date" in result else 1
 
-    result = manual_sync_update(interactive=interactive, allow_source_pull=True, progress_fn=progress)
+    result = manual_sync_update(
+        interactive=interactive,
+        allow_source_pull=True,
+        progress_fn=progress,
+        include_clis=include_clis,
+    )
     runtime_power = _load_runtime_power_support()
     public_contribution = _load_public_contribution_support()
     choice = runtime_power["ensure_power_policy_choice"](interactive=interactive, reason="update")
@@ -2015,6 +2021,12 @@ def main():
     # -- update --
     update_parser = sub.add_parser("update", help="Update installed runtime")
     update_parser.add_argument("--json", action="store_true", help="JSON output")
+    update_parser.add_argument(
+        "--no-clis",
+        dest="no_clis",
+        action="store_true",
+        help="Skip auto-updating external terminal CLIs (Claude Code, Codex)",
+    )
 
     # -- recover --
     recover_parser = sub.add_parser(

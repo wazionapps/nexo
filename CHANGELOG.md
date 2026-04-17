@@ -1,5 +1,45 @@
 # Changelog
 
+## [5.7.0] - 2026-04-17
+
+### Feature: `nexo update` auto-updates Claude Code + Codex CLIs
+
+`nexo update` now keeps your terminal CLIs in lockstep with NEXO Brain itself.
+When the global `@anthropic-ai/claude-code` or `@openai/codex` packages are
+installed, the updater checks the npm registry for a newer version and runs
+`npm install -g <pkg>@latest` in-line before the post-update verify step.
+
+Motivation: we kept seeing installs where the `model` setting in
+`~/.claude/settings.json` was already on Opus 4.7 but the terminal still
+booted on Opus 4 because the locally-installed Claude Code was too old to
+recognise the new model id. Bundling the CLI bump into `nexo update` closes
+that gap in one command.
+
+- **`src/auto_update.py`**: new `_update_external_clis()` detects the
+  installed global version, looks up the latest from the npm registry, and
+  runs `npm install -g <pkg>@latest` only when a bump is available.
+  Packages that are not installed globally are skipped silently — NEXO
+  does not push third-party CLIs onto operators who never opted in.
+  `TimeoutExpired` and `FileNotFoundError` (no `npm` on `PATH`) are handled
+  explicitly per learning #294. A companion `_format_external_clis_results()`
+  emits a visible warning per bumped CLI ("`reinicia terminal para activar`"),
+  a warning per failure, and a single informational line when everything
+  was already on the latest version.
+- **`src/plugins/update.py`**: `handle_update()` and `_handle_packaged_update()`
+  gained an `include_clis: bool = True` keyword. The CLI bump runs after
+  migrations and runtime-dependency sync but before the shared client-config
+  sync, so the post-`nexo update` client sync benefits from the freshest CLI.
+  Failures of the third-party install never trigger the NEXO rollback path —
+  the git/npm package rollback only covers NEXO itself.
+- **`src/cli.py`**: new `nexo update --no-clis` short-circuits the external
+  CLI bump for operators who want to pin their terminal CLIs manually. The
+  flag is wired through both `manual_sync_update` (dev-linked runtimes) and
+  `handle_update` (packaged installs).
+- **`tests/test_external_clis_update.py`**: 11 new unit tests covering
+  not-installed, already-latest, successful bump, npm failure, timeout,
+  missing `npm` binary, each formatter branch, and the
+  `include_clis=False` short-circuit.
+
 ## [5.6.1] - 2026-04-17
 
 ### Fix: `nexo update` hardening — 0-byte DB orphans + Claude Code `settings.json` model sync
