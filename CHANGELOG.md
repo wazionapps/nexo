@@ -1,5 +1,33 @@
 # Changelog
 
+## [5.10.1] - 2026-04-17
+
+### Fix: silent migration of legacy `reasoning_effort=max` to the resonance map
+
+v5.9.0 introduced `preferences.default_resonance` (`maximo` / `alto` / `medio` / `bajo`) and v5.10.0 made that map prevail over the legacy `client_runtime_profiles.claude_code.reasoning_effort` hint. That removed a subtle double-writer bug, but it also meant any operator whose only recorded preference was the legacy `reasoning_effort="max"` silently fell back to `DEFAULT_RESONANCE="alto"` — effectively a one-tier downgrade on the first interactive call after the v5.10.0 update. The NEXO Desktop header on a fresh conversation would show `POTENCIA: ALTO` even when the operator had configured `max` long before.
+
+v5.10.1 adds a one-shot, conservative, non-destructive migration inside `_run_runtime_post_sync()`:
+
+- `_migrate_effort_to_resonance(dest)` runs exactly once per `nexo update`.
+- It reads `<NEXO_HOME>/config/schedule.json → client_runtime_profiles.claude_code.reasoning_effort` and, if `<NEXO_HOME>/brain/calibration.json → preferences.default_resonance` is not already set, writes the equivalent tier:
+  - `max → maximo`
+  - `xhigh → alto`
+  - `high → medio`
+  - `medium → bajo`
+- If either calibration or schedule already declares an explicit `default_resonance`, the migration is a no-op. Unknown/unsupported effort values are skipped. Corrupt `calibration.json` is rewritten safely.
+- All errors are swallowed into an `actions.append("resonance-migration-warning:...")` line; the update path never raises.
+- Idempotent by construction: a second run detects the already-present preference and does nothing.
+
+**Tests**
+
+`tests/test_auto_update_migrate_effort.py` — 10 cases covering each mapping, the two no-op paths (calibration pref set / schedule pref set), the "no hint" and "unknown hint" paths, idempotency on a second run, and the corrupt-JSON recovery.
+
+**Test harness fix (unblocks CI)**
+
+`tests/test_cron_recovery.py::test_catchup_script_runs_directly_from_runtime_root` (and two sibling tests) was copying a minimal `src/` subset into the simulated runtime root but missed modules introduced by v5.9.x / v5.10.0 (`model_defaults.py`, `model_defaults.json`, `resonance_map.py`, `db.py`, `enforcement_engine.py`, `bootstrap_docs.py`, `constants.py`). Consolidated the copy step into `_prime_catchup_runtime_root(repo_src, runtime_root)` and added the missing files. Pre-existing failure against `main`; now passes without touching production code.
+
+Full suite: 1011 passed, 1 skipped.
+
 ## [5.10.0] - 2026-04-17
 
 ### Feature: extract-path bloat fix + `caller=` enforced + personal scripts on the map

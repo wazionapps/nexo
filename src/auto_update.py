@@ -875,6 +875,104 @@ def _purge_zero_byte_db_files() -> list[Path]:
     return removed
 
 
+def _migrate_effort_to_resonance(dest: Path = NEXO_HOME) -> list[str]:
+    """Auto-migrate legacy ``reasoning_effort`` preference into the new
+    ``preferences.default_resonance`` knob.
+
+    Context: before v5.9.0 the user's power-level preference lived in
+    ``config/schedule.json`` under
+    ``client_runtime_profiles.claude_code.reasoning_effort`` — one of
+    ``max`` / ``xhigh`` / ``high`` / ``medium``. v5.9.0 introduced the
+    resonance map, with ``preferences.default_resonance`` (one of
+    ``maximo`` / ``alto`` / ``medio`` / ``bajo``) written to
+    ``brain/calibration.json``. When the new code path kicks in, a user
+    whose only recorded preference is the legacy effort silently falls
+    back to ``DEFAULT_RESONANCE`` (``alto``), losing their prior
+    preference. v5.10.0 shipped without a migration for this; v5.10.1
+    adds it here.
+
+    The migration is idempotent and conservative: it only runs when the
+    user has NOT set ``default_resonance`` explicitly anywhere (neither
+    in ``calibration.json`` nor in ``schedule.json``). That means users
+    who already adjusted their preference through the Desktop UI or the
+    ``nexo preferences --resonance`` CLI keep whatever they chose; this
+    migration only recovers the legacy preference for users who never
+    touched either.
+
+    Mapping (mirrors ``_RESONANCE_TABLE`` in ``src/resonance_map.py``):
+        max    → maximo
+        xhigh  → alto
+        high   → medio
+        medium → bajo
+
+    Returns the list of actions taken for logging. Failures are
+    swallowed: migration must never block an update.
+    """
+    import json as _json
+
+    actions: list[str] = []
+
+    cal_path = dest / "brain" / "calibration.json"
+    sched_path = dest / "config" / "schedule.json"
+
+    try:
+        cal = _json.loads(cal_path.read_text()) if cal_path.exists() else {}
+        if not isinstance(cal, dict):
+            cal = {}
+    except Exception:
+        cal = {}
+
+    try:
+        sched = _json.loads(sched_path.read_text()) if sched_path.exists() else {}
+        if not isinstance(sched, dict):
+            sched = {}
+    except Exception:
+        sched = {}
+
+    existing_cal_pref = ""
+    if isinstance(cal.get("preferences"), dict):
+        existing_cal_pref = str(cal["preferences"].get("default_resonance") or "").strip().lower()
+    existing_sched_pref = str(sched.get("default_resonance") or "").strip().lower()
+
+    valid_tiers = {"maximo", "alto", "medio", "bajo"}
+    if existing_cal_pref in valid_tiers or existing_sched_pref in valid_tiers:
+        return actions  # user already has an explicit resonance preference
+
+    # Look up the legacy effort hint.
+    effort = ""
+    profiles = sched.get("client_runtime_profiles")
+    if isinstance(profiles, dict):
+        cc = profiles.get("claude_code") if isinstance(profiles.get("claude_code"), dict) else {}
+        effort = str(cc.get("reasoning_effort") or "").strip().lower()
+
+    legacy_map = {
+        "max": "maximo",
+        "xhigh": "alto",
+        "high": "medio",
+        "medium": "bajo",
+    }
+    target_tier = legacy_map.get(effort)
+    if not target_tier:
+        return actions  # nothing usable to migrate from
+
+    # Write into calibration.json (canonical location for v5.9.1+).
+    try:
+        cal_path.parent.mkdir(parents=True, exist_ok=True)
+        prefs = cal.get("preferences")
+        if not isinstance(prefs, dict):
+            prefs = {}
+        prefs["default_resonance"] = target_tier
+        cal["preferences"] = prefs
+        cal_path.write_text(_json.dumps(cal, indent=2, ensure_ascii=False) + "\n")
+        actions.append(
+            f"resonance-migration:{effort}->{target_tier}"
+        )
+    except Exception as exc:
+        actions.append(f"resonance-migration-warning:{exc.__class__.__name__}")
+
+    return actions
+
+
 def _heal_deep_sleep_runtime(dest: Path = NEXO_HOME) -> list[str]:
     """Repair deep-sleep state that older runtimes left in a bad shape.
 
@@ -2696,6 +2794,19 @@ def _run_runtime_post_sync(dest: Path = NEXO_HOME, progress_fn=None) -> tuple[bo
             actions.append(f"deep-sleep-heal:{action}")
     except Exception as exc:
         actions.append(f"deep-sleep-heal-warning:{exc.__class__.__name__}")
+
+    # Recover the user's legacy reasoning_effort preference into the new
+    # default_resonance knob. v5.10.0 left this gap — users who had
+    # `reasoning_effort="max"` in schedule.json silently degraded to
+    # DEFAULT_RESONANCE=alto when the resonance map took over. This
+    # migration restores their choice exactly once.
+    try:
+        _emit_progress(progress_fn, "Migrating legacy effort preference to resonance...")
+        mig_actions = _migrate_effort_to_resonance(dest)
+        for action in mig_actions:
+            actions.append(action)
+    except Exception as exc:
+        actions.append(f"resonance-migration-warning:{exc.__class__.__name__}")
 
     _emit_progress(progress_fn, "Verifying runtime imports...")
     verify = subprocess.run(

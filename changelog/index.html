@@ -181,6 +181,17 @@
     </div>
 </section>
 
+<!-- v5.10.1 Silent migration of legacy reasoning_effort=max to preferences.default_resonance -->
+<section id="v5101" class="section-compact" style="background:linear-gradient(135deg,#09111f 0%,#14253a 50%,#1e3a5f 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.10.1 <span style="opacity:.5;font-weight:400;">&mdash; April 17, 2026</span></div>
+        <h2 class="section-title">Silent Migration: Legacy <code>reasoning_effort=max</code> → <code>preferences.default_resonance</code></h2>
+        <p class="section-subtitle">
+            v5.9.0 introduced the resonance map (<code>maximo</code>/<code>alto</code>/<code>medio</code>/<code>bajo</code>) and v5.10.0 made it prevail over the legacy <code>client_runtime_profiles.claude_code.reasoning_effort</code> hint. That removed a subtle double-writer bug, but it also meant any operator whose only recorded preference was the legacy <code>reasoning_effort="max"</code> silently fell back to <code>DEFAULT_RESONANCE="alto"</code> on the first interactive call after the update &mdash; effectively a one-tier downgrade. NEXO Desktop's header on a fresh conversation would show <code>POTENCIA: ALTO</code> even when the operator had configured <code>max</code> long before. v5.10.1 adds a one-shot, conservative, non-destructive migration inside <code>_run_runtime_post_sync()</code>: reads <code>config/schedule.json</code>, if <code>brain/calibration.json</code> does not already declare <code>preferences.default_resonance</code>, writes the equivalent tier (<code>max→maximo</code>, <code>xhigh→alto</code>, <code>high→medio</code>, <code>medium→bajo</code>). No-op when either location already has an explicit <code>default_resonance</code>; unknown/unsupported efforts skipped; corrupt <code>calibration.json</code> rewritten safely; errors swallowed into <code>resonance-migration-warning:*</code> action lines. Idempotent by construction. 10 new tests (<code>test_auto_update_migrate_effort.py</code>) plus a test-harness fix that unblocks <code>test_cron_recovery.py</code> against main (missing <code>model_defaults</code>, <code>resonance_map</code>, <code>db</code>, etc. in the copied runtime tree since v5.9.x). Full suite: 1011 passed, 1 skipped.
+        </p>
+    </div>
+</section>
+
 <!-- v5.10.0 Extract-path bloat fix + caller= enforced + personal scripts on the map -->
 <section id="v5100" class="section-compact" style="background:linear-gradient(135deg,#09111f 0%,#14253a 50%,#1e3a5f 100%);">
     <div class="container">

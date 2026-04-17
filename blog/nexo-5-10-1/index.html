@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXO 5.10.1: silent migration of legacy reasoning_effort=max to the resonance map</title>
+    <meta name="description" content="v5.10.0 made the resonance map prevail over the legacy reasoning_effort hint. Anyone whose only recorded preference was reasoning_effort=max silently fell back to alto. v5.10.1 adds a one-shot, conservative, non-destructive migration that recovers the original choice.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-5-10-1/">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/blog/nexo-5-10-1/">
+    <meta property="og:title" content="NEXO 5.10.1: silent migration recovers legacy max effort">
+    <meta property="og:description" content="A one-shot migration that promotes reasoning_effort=max/xhigh/high/medium into preferences.default_resonance. Idempotent. Never raises.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+    <meta property="article:published_time" content="2026-04-17">
+    <meta property="article:author" content="Francisco Cerda Puigserver">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO 5.10.1: silent migration recovers legacy max effort">
+    <meta name="twitter:description" content="max→maximo, xhigh→alto, high→medio, medium→bajo. No-op when default_resonance is already set. Idempotent. 10 new tests.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "NEXO 5.10.1: silent migration of legacy reasoning_effort=max to the resonance map",
+        "description": "v5.10.0 made the resonance map prevail over reasoning_effort, causing a silent one-tier downgrade for anyone whose only recorded preference was reasoning_effort=max. v5.10.1 adds a one-shot, idempotent migration that recovers the original choice without touching any explicit default_resonance.",
+        "datePublished": "2026-04-17",
+        "dateModified": "2026-04-17",
+        "author": {"@type": "Person", "name": "Francisco Cerda Puigserver"},
+        "publisher": {"@type": "Organization", "name": "WAzion", "url": "https://www.wazion.com"},
+        "mainEntityOfPage": {"@type": "WebPage", "@id": "https://nexo-brain.com/blog/nexo-5-10-1/"},
+        "url": "https://nexo-brain.com/blog/nexo-5-10-1/",
+        "image": "https://nexo-brain.com/assets/og/og-blog.png",
+        "keywords": ["NEXO 5.10.1", "resonance map", "reasoning_effort", "default_resonance", "migration", "auto_update"]
+    }
+    </script>
+
+    <style>
+        .article-header { padding-top: 128px; padding-bottom: 40px; text-align: center; }
+        .article-meta { font-size: 14px; color: var(--text-muted); margin-bottom: 16px; }
+        .article-body {
+            max-width: 720px; margin: 0 auto; padding: 0 24px 80px;
+            font-size: 17px; line-height: 1.8; color: var(--text);
+        }
+        .article-body h2 { font-size: 28px; font-weight: 700; margin: 48px 0 16px; letter-spacing: -0.01em; }
+        .article-body p { margin-bottom: 20px; color: var(--text-muted); }
+        .article-body strong { color: var(--text); }
+        .article-body a { color: var(--purple-light); }
+        .article-body a:hover { color: var(--pink); }
+        .article-body code {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 14px; color: var(--pink);
+            background: rgba(236, 72, 153, 0.1);
+            padding: 2px 8px; border-radius: 4px;
+        }
+        .article-back {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 14px; font-weight: 600; color: var(--text-muted);
+            margin-bottom: 24px;
+        }
+        .article-back:hover { color: var(--purple-light); }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-64.png" alt="NEXO Brain" class="logo-image">
+            <span class="logo-text">NEXO Brain</span>
+        </a>
+        <button class="mobile-menu-toggle" aria-label="Toggle navigation" onclick="toggleMobileMenu()">
+            <span></span><span></span><span></span>
+        </button>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/features/">Features</a>
+            <a href="/evolution/">Evolution</a>
+            <a href="/compare/">Compare</a>
+            <a href="/blog/">Blog</a>
+            <a href="/changelog/">Changelog</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta">GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<section class="article-header">
+    <div class="container">
+        <a href="/blog/" class="article-back">&larr; Back to blog</a>
+        <div class="article-meta">April 17, 2026 &middot; Migration &middot; Preferences &middot; Cleanup</div>
+        <h1 class="section-title" style="font-size:clamp(28px,4.5vw,48px);max-width:920px;margin:0 auto 16px;">NEXO 5.10.1: Silent migration of legacy <code>reasoning_effort=max</code> to the resonance map</h1>
+        <p class="section-subtitle" style="max-width:760px;margin:0 auto;">A one-shot, non-destructive migration that recovers the operator's original effort choice when the v5.9.0 resonance map rollout left it orphaned in <code>schedule.json</code>.</p>
+    </div>
+</section>
+
+<section>
+    <div class="article-body">
+
+        <h2>What broke, exactly</h2>
+        <p>v5.9.0 introduced four resonance tiers (<code>maximo</code>, <code>alto</code>, <code>medio</code>, <code>bajo</code>) and wrote the user's preference into <code>brain/calibration.json → preferences.default_resonance</code>. v5.10.0 then made that value <em>prevail</em> over the legacy <code>client_runtime_profiles.claude_code.reasoning_effort</code> hint in <code>config/schedule.json</code>.</p>
+        <p>That was the right call — the legacy setting was a double-writer source of subtle bugs — but it had an edge: operators whose <em>only</em> recorded preference was the legacy <code>reasoning_effort="max"</code> (set via <code>nexo preferences --reasoning-effort max</code> before v5.9.0 shipped) now had no <code>default_resonance</code>. The resolver silently fell back to the module-level <code>DEFAULT_RESONANCE="alto"</code>, effectively downgrading them one tier on every interactive call. The most visible symptom: NEXO Desktop's conversation header said <code>POTENCIA: ALTO</code> when the operator had configured <code>max</code> months earlier.</p>
+
+        <h2>The fix</h2>
+        <p>v5.10.1 adds a one-shot migration inside <code>_run_runtime_post_sync()</code> that runs every time the updater lays down new code into <code>NEXO_HOME</code>:</p>
+        <p>&bull; Read <code>schedule.json → client_runtime_profiles.claude_code.reasoning_effort</code>.<br>
+           &bull; If <code>calibration.json → preferences.default_resonance</code> is <em>not</em> already set, write the equivalent tier:</p>
+        <p>&nbsp;&nbsp;<code>max → maximo</code><br>
+           &nbsp;&nbsp;<code>xhigh → alto</code><br>
+           &nbsp;&nbsp;<code>high → medio</code><br>
+           &nbsp;&nbsp;<code>medium → bajo</code></p>
+        <p>If either <code>calibration.json</code> or <code>schedule.json</code> already declares an explicit <code>default_resonance</code>, the migration is a no-op. Unknown or unsupported effort values are skipped. A corrupt <code>calibration.json</code> gets rewritten safely. All errors are swallowed into a single <code>resonance-migration-warning:*</code> line in the update actions log; the update path never raises on this code.</p>
+        <p>Idempotent by construction: a second run sees the preference already set and does nothing.</p>
+
+        <h2>What it does NOT do</h2>
+        <p>&bull; Does not touch <code>schedule.json</code>. The legacy hint stays where it was; it just no longer drives anything.<br>
+           &bull; Does not overwrite an explicit <code>default_resonance</code>. If you chose <code>bajo</code> in the Desktop Preferences UI, you keep <code>bajo</code>, full stop.<br>
+           &bull; Does not affect system-owned callers. Every cron and background script keeps its fixed tier in <code>SYSTEM_OWNED_CALLERS</code>. Only interactive user-facing callers (<code>nexo chat</code>, Desktop new conversation, interactive <code>nexo update</code>) honour the user's default.<br>
+           &bull; Does not run inside MCP tools or inside a running session. It runs inside the updater, once per <code>nexo update</code>.</p>
+
+        <h2>Tests</h2>
+        <p>10 new cases in <code>tests/test_auto_update_migrate_effort.py</code> covering each mapping, the two no-op paths (calibration pref set / schedule pref set), the "no hint" and "unknown hint" paths, idempotency on a second run, and the corrupt-JSON recovery.</p>
+        <p>The release also fixes a latent test-harness bug: <code>test_cron_recovery.py::test_catchup_script_runs_directly_from_runtime_root</code> (and two sibling tests) copied a minimal <code>src/</code> subset into a tmp runtime root but missed modules introduced in v5.9.x / v5.10.0 (<code>model_defaults</code>, <code>resonance_map</code>, <code>db</code>, <code>enforcement_engine</code>, <code>bootstrap_docs</code>, <code>constants</code>). Consolidated the copy step into a shared helper and added the missing files. Pre-existing failure against <code>main</code>; now passes without touching production code.</p>
+        <p>Full suite: 1011 passed, 1 skipped.</p>
+
+        <h2>Upgrading</h2>
+        <p>Run <code>nexo update</code>. If your previous install had <code>reasoning_effort="max"</code> in <code>schedule.json</code> and nothing in <code>calibration.json</code>, the very next update will silently restore <code>default_resonance="maximo"</code>, and your next Desktop conversation will show <code>POTENCIA: MÁXIMO</code> in the header again. No manual step required.</p>
+
+    </div>
+</section>
+
+<footer style="padding:48px 24px;text-align:center;font-size:13px;color:var(--text-muted);">
+    &copy; 2026 <a href="https://www.wazion.com" style="color:var(--purple-light);">WAzion</a>. NEXO Brain is open-source under <a href="https://github.com/wazionapps/nexo/blob/main/LICENSE" style="color:var(--purple-light);">AGPL-3.0</a>.
+</footer>
+
+<script src="/assets/main.js"></script>
+</body>
+</html>
