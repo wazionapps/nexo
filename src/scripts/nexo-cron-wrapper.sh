@@ -5,6 +5,16 @@
 #
 # Wraps any cron command to automatically record start/end/exit_code/summary.
 # Used by sync.py when generating LaunchAgents from manifest.json.
+#
+# Two-phase recording (start → end):
+# 1. INSERT cron_runs row at start with ended_at=NULL so the watchdog can
+#    distinguish "currently running" from "missed / stuck". Without this,
+#    any job that exceeds the next watchdog tick (interval_seconds=1800 by
+#    default) looks stale and the watchdog may kickstart -k over it — which
+#    is exactly the loop that broke deep-sleep between 2026-04-14 and 2026-04-17.
+# 2. UPDATE the row at end with ended_at + exit_code + summary.
+# 3. Trap SIGTERM / SIGINT so wrappers killed mid-flight still close their
+#    row (exit_code=143 or 130) instead of leaving it NULL forever.
 
 set -uo pipefail
 
@@ -33,84 +43,159 @@ print(datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"))
 PY
 )
 
-# Run the actual command, capture output
+# Phase 1: INSERT row at start (ended_at NULL = "running").
+# ROW_ID empty on DB failure; spool-fallback at the end handles that.
+ROW_ID=""
+ROW_ID=$(python3 - "$DB" "$CRON_ID" "$STARTED_AT" <<'PY' 2>/dev/null
+from __future__ import annotations
+import sqlite3
+import sys
+db_path, cron_id, started_at = sys.argv[1:]
+conn = sqlite3.connect(db_path)
+try:
+    cur = conn.execute(
+        "INSERT INTO cron_runs (cron_id, started_at, ended_at) VALUES (?, ?, NULL)",
+        (cron_id, started_at),
+    )
+    conn.commit()
+    print(cur.lastrowid)
+finally:
+    conn.close()
+PY
+)
+
 OUTPUT_FILE=$(mktemp)
-trap 'rm -f "$OUTPUT_FILE"' EXIT
-"$@" > "$OUTPUT_FILE" 2>&1
-EXIT_CODE=$?
-ENDED_AT=$(python3 - <<'PY'
+EXIT_CODE=0
+SIGNAL_NAME=""
+
+# finalize_row DB writer — also used by signal traps.
+# Reads $EXIT_CODE / $SIGNAL_NAME / $OUTPUT_FILE from the outer scope.
+finalize_row() {
+    local ended_at duration summary error
+    ended_at=$(python3 - <<'PY'
 from datetime import datetime, timezone
 print(datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"))
 PY
 )
-DURATION_SECS=$(python3 - <<PY
+    duration=$(python3 - <<PY
 start = float("$START_EPOCH")
 import time
 print(round(time.time() - start, 1))
 PY
 )
+    summary=$(tail -5 "$OUTPUT_FILE" 2>/dev/null | grep -v "^$" | tail -1 | head -c 500)
+    error=""
+    if [ "$EXIT_CODE" -ne 0 ]; then
+        if [ -n "$SIGNAL_NAME" ]; then
+            error="Killed by $SIGNAL_NAME (exit $EXIT_CODE)"
+        else
+            error=$(grep -i "error\|exception\|fail\|traceback" "$OUTPUT_FILE" 2>/dev/null | tail -1 | head -c 500)
+        fi
+    fi
 
-# Extract summary (last meaningful line, max 500 chars)
-SUMMARY=$(tail -5 "$OUTPUT_FILE" | grep -v "^$" | tail -1 | head -c 500)
-
-# Extract error if failed
-ERROR=""
-if [ $EXIT_CODE -ne 0 ]; then
-    ERROR=$(grep -i "error\|exception\|fail\|traceback" "$OUTPUT_FILE" | tail -1 | head -c 500)
-fi
-
-if ! python3 - "$DB" "$CRON_ID" "$STARTED_AT" "$ENDED_AT" "$EXIT_CODE" "$SUMMARY" "$ERROR" "$DURATION_SECS" <<'PY'
+    # Update the row we inserted at start — or INSERT fresh if the start write failed.
+    if ! python3 - "$DB" "$ROW_ID" "$CRON_ID" "$STARTED_AT" "$ended_at" "$EXIT_CODE" "$summary" "$error" "$duration" <<'PY' 2>/dev/null
 from __future__ import annotations
-
 import sqlite3
 import sys
-
-db_path, cron_id, started_at, ended_at, exit_code, summary, error, duration_secs = sys.argv[1:]
+db_path, row_id, cron_id, started_at, ended_at, exit_code, summary, error, duration_secs = sys.argv[1:]
 conn = sqlite3.connect(db_path)
 try:
-    conn.execute(
-        """
-        INSERT INTO cron_runs (
-            cron_id, started_at, ended_at, exit_code, summary, error, duration_secs
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            cron_id,
-            started_at,
-            ended_at,
-            int(exit_code),
-            summary,
-            error,
-            float(duration_secs),
-        ),
-    )
+    if row_id:
+        conn.execute(
+            """
+            UPDATE cron_runs
+               SET ended_at=?, exit_code=?, summary=?, error=?, duration_secs=?
+             WHERE id=?
+            """,
+            (ended_at, int(exit_code), summary, error, float(duration_secs), int(row_id)),
+        )
+    else:
+        conn.execute(
+            """
+            INSERT INTO cron_runs (cron_id, started_at, ended_at, exit_code, summary, error, duration_secs)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (cron_id, started_at, ended_at, int(exit_code), summary, error, float(duration_secs)),
+        )
     conn.commit()
 finally:
     conn.close()
 PY
-then
-    mkdir -p "$SPOOL_DIR"
-    SPOOL_FILE="$SPOOL_DIR/${CRON_ID}-$(date +%Y%m%d-%H%M%S)-$$.json"
-    python3 - "$SPOOL_FILE" "$CRON_ID" "$STARTED_AT" "$ENDED_AT" "$EXIT_CODE" "$SUMMARY" "$ERROR" "$DURATION_SECS" <<'PY'
+    then
+        mkdir -p "$SPOOL_DIR"
+        local spool_file="$SPOOL_DIR/${CRON_ID}-$(date +%Y%m%d-%H%M%S)-$$.json"
+        python3 - "$spool_file" "$CRON_ID" "$STARTED_AT" "$ended_at" "$EXIT_CODE" "$summary" "$error" "$duration" <<'PY'
 from __future__ import annotations
-
 import json
 import sys
 from pathlib import Path
-
 spool_file, cron_id, started_at, ended_at, exit_code, summary, error, duration_secs = sys.argv[1:]
-payload = {
-    "cron_id": cron_id,
-    "started_at": started_at,
-    "ended_at": ended_at,
-    "exit_code": int(exit_code),
-    "summary": summary,
-    "error": error,
-    "duration_secs": float(duration_secs),
-}
-Path(spool_file).write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+Path(spool_file).write_text(
+    json.dumps({
+        "cron_id": cron_id,
+        "started_at": started_at,
+        "ended_at": ended_at,
+        "exit_code": int(exit_code),
+        "summary": summary,
+        "error": error,
+        "duration_secs": float(duration_secs),
+    }, indent=2, ensure_ascii=False) + "\n",
+    encoding="utf-8",
+)
 PY
-    echo "[nexo-cron-wrapper] DB write failed; spooled run to $SPOOL_FILE" >&2
-fi
+        echo "[nexo-cron-wrapper] DB write failed; spooled run to $spool_file" >&2
+    fi
+}
 
-exit $EXIT_CODE
+cleanup() {
+    rm -f "$OUTPUT_FILE"
+}
+
+CHILD_PID=""
+
+on_signal() {
+    local sig="$1"
+    local code="$2"
+    SIGNAL_NAME="$sig"
+    EXIT_CODE="$code"
+    # Forward the signal to the child. Bash traps run AFTER the foreground
+    # command completes, which is why we launch the command in background
+    # and wait on its PID — otherwise a SIGTERM to the wrapper would be
+    # delivered only when the child finishes naturally, defeating the
+    # purpose of closing the cron_runs row on kill.
+    if [ -n "$CHILD_PID" ] && kill -0 "$CHILD_PID" 2>/dev/null; then
+        kill -TERM "$CHILD_PID" 2>/dev/null
+        # Brief grace period before escalating to SIGKILL so the child gets
+        # a chance to clean up on its own.
+        local waited=0
+        while [ $waited -lt 5 ] && kill -0 "$CHILD_PID" 2>/dev/null; do
+            sleep 1
+            waited=$((waited + 1))
+        done
+        kill -KILL "$CHILD_PID" 2>/dev/null
+    fi
+    finalize_row
+    cleanup
+    exit "$code"
+}
+
+trap cleanup EXIT
+trap 'on_signal SIGTERM 143' TERM
+trap 'on_signal SIGINT 130' INT
+trap 'on_signal SIGHUP 129' HUP
+
+"$@" > "$OUTPUT_FILE" 2>&1 &
+CHILD_PID=$!
+
+# `wait` is interruptible by signals — when the trap fires, wait returns
+# immediately and on_signal() takes over. When the child finishes
+# normally, wait yields its exit code and we fall through to finalize_row
+# for the happy path.
+wait "$CHILD_PID"
+EXIT_CODE=$?
+CHILD_PID=""
+
+finalize_row
+
+exit "$EXIT_CODE"

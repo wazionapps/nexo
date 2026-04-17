@@ -181,6 +181,17 @@
     </div>
 </section>
 
+<!-- v5.8.1 Watchdog no longer kickstarts its own workers -->
+<section id="v581" class="section-compact" style="background:linear-gradient(135deg,#09111f 0%,#14253a 50%,#1e3a5f 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.8.1 <span style="opacity:.5;font-weight:400;">&mdash; April 17, 2026</span></div>
+        <h2 class="section-title">Watchdog No Longer Kickstarts Its Own Workers</h2>
+        <p class="section-subtitle">
+            Between 2026-04-14 and 2026-04-17 the nightly deep-sleep on the reference install stopped producing artifacts. Root cause was a feedback loop: the wrapper only wrote <code>cron_runs</code> at end, the watchdog used <code>cron_runs</code> as its source of truth for &ldquo;stuck&rdquo;, and <code>launchctl kickstart -k</code> killed the running worker every 30&nbsp;min. 5.8.1 fixes it at the source &mdash; two-phase <code>cron_runs</code> recording (INSERT at start with <code>ended_at=NULL</code>, UPDATE at end) with SIGTERM/INT/HUP trap that still closes the row; watchdog in-flight detection that never <code>kickstart -k</code>s a running worker; extractor failure classification that separates transient (<code>overloaded_error</code>, rate-limit, timeout, signal &mdash; retried next run) from deterministic (skipped after <code>MAX_POISON_ATTEMPTS</code>); slim shared-context (200 head lines + metadata instead of 400+&nbsp;KB full dump); and an idempotent <code>auto_update._heal_deep_sleep_runtime()</code> that repairs existing installs silently on the next <code>nexo update</code>.
+        </p>
+    </div>
+</section>
+
 <!-- v5.8.0 First-class classification columns on followups + reminders -->
 <section id="v580" class="section-compact" style="background:linear-gradient(135deg,#09111f 0%,#14253a 50%,#1e3a5f 100%);">
     <div class="container">

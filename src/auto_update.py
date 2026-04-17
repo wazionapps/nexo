@@ -875,6 +875,135 @@ def _purge_zero_byte_db_files() -> list[Path]:
     return removed
 
 
+def _heal_deep_sleep_runtime(dest: Path = NEXO_HOME) -> list[str]:
+    """Repair deep-sleep state that older runtimes left in a bad shape.
+
+    Runs on every ``auto_update`` post-sync. The bug it fixes: between
+    Brain 5.6.1 and 5.8.0 the cron wrapper only wrote to ``cron_runs`` at
+    end, so any wrapper killed by signal produced no row. The watchdog then
+    saw the cron as "missing cron_runs entry" and kickstart-‍k'd the live
+    worker — an infinite loop that wedged deep-sleep Phase 2 on the first
+    session of every batch. 5.8.1 fixes the loop at the source (wrapper
+    start-row + watchdog in-flight detection) but older runtimes that have
+    already been running the buggy loop need their residue cleaned up.
+
+    Returns the list of actions performed, for logging. Failures are
+    swallowed: this is best-effort healing, it must never block an update.
+    """
+    import sqlite3
+    import time as _time
+
+    actions: list[str] = []
+
+    deep_sleep_dir = dest / "operations" / "deep-sleep"
+    coord_dir = dest / "coordination"
+    data_db = dest / "data" / "nexo.db"
+    now = _time.time()
+
+    # (1) Drop poisoned checkpoints: the first retry that hit Anthropic's
+    #     overloaded_error got cached as a permanent failure. Older
+    #     extract.py re-used that checkpoint forever. New extract.py treats
+    #     transient errors as retryable, but old poisoned checkpoints still
+    #     claim 0 findings — purge them so the next deep-sleep retries cleanly.
+    if deep_sleep_dir.is_dir():
+        poisoned = 0
+        for checkpoint_dir in deep_sleep_dir.glob("*/checkpoints"):
+            if not checkpoint_dir.is_dir():
+                continue
+            for entry in checkpoint_dir.glob("*.json"):
+                try:
+                    content = entry.read_text()
+                except OSError:
+                    continue
+                if "overloaded_error" in content or '"error":{"type":"' in content:
+                    try:
+                        entry.unlink()
+                        poisoned += 1
+                    except OSError:
+                        pass
+        if poisoned:
+            actions.append(f"checkpoints-purged:{poisoned}")
+
+        # Drop debug-extract-*.txt scratch files older than 7 days.
+        stale_debug = 0
+        for entry in deep_sleep_dir.glob("debug-extract-*.txt"):
+            try:
+                if now - entry.stat().st_mtime > 7 * 86400:
+                    entry.unlink()
+                    stale_debug += 1
+            except OSError:
+                continue
+        if stale_debug:
+            actions.append(f"debug-scratch-purged:{stale_debug}")
+
+    # (2) Release stale deep-sleep locks so the next 04:30 run can acquire
+    #     them. Locks older than 6h are always stale — a real run finishes
+    #     in well under an hour.
+    lock_names = ("sleep.lock", "sleep-process.lock", "synthesis.lock")
+    released = 0
+    if coord_dir.is_dir():
+        for name in lock_names:
+            lock_path = coord_dir / name
+            if not lock_path.exists():
+                continue
+            try:
+                age = now - lock_path.stat().st_mtime
+            except OSError:
+                continue
+            if age > 6 * 3600:
+                try:
+                    lock_path.unlink()
+                    released += 1
+                except OSError:
+                    pass
+    if released:
+        actions.append(f"stale-locks-released:{released}")
+
+    # (3) Close dangling cron_runs rows. Any row with ended_at IS NULL older
+    #     than 6h is either a process killed by the old watchdog loop or a
+    #     zombie left behind by a previous bad install. Close them with
+    #     exit_code=143 + summary so the NEW watchdog treats the cron as
+    #     "finished with error" rather than "in-flight forever".
+    if data_db.is_file():
+        try:
+            conn = sqlite3.connect(str(data_db), timeout=5)
+            try:
+                cur = conn.execute(
+                    """
+                    UPDATE cron_runs
+                       SET ended_at = datetime('now'),
+                           exit_code = 143,
+                           error = 'healed by auto_update (pre-5.8.1 wrapper left row open)',
+                           duration_secs = CAST(
+                               strftime('%s','now') - strftime('%s', started_at) AS REAL
+                           )
+                     WHERE ended_at IS NULL
+                       AND strftime('%s','now') - strftime('%s', started_at) > 6 * 3600
+                    """
+                )
+                closed = cur.rowcount or 0
+                conn.commit()
+                if closed:
+                    actions.append(f"cron_runs-closed-dangling:{closed}")
+            finally:
+                conn.close()
+        except Exception as exc:
+            actions.append(f"cron_runs-heal-warning:{exc.__class__.__name__}")
+
+    # (4) Remove .watchdog-fails registry entries older than 24h — the new
+    #     in-flight detection makes stale counters obsolete.
+    fails_file = dest / "scripts" / ".watchdog-fails"
+    if fails_file.exists():
+        try:
+            if now - fails_file.stat().st_mtime > 24 * 3600:
+                fails_file.unlink()
+                actions.append("watchdog-fails-reset")
+        except OSError:
+            pass
+
+    return actions
+
+
 def _backup_dbs() -> str | None:
     """Snapshot all .db files before migration. Returns backup dir or None."""
     import sqlite3
@@ -2557,6 +2686,16 @@ def _run_runtime_post_sync(dest: Path = NEXO_HOME, progress_fn=None) -> tuple[bo
             actions.append("client-sync-warning")
     except Exception as e:
         actions.append(f"client-sync-warning:{e}")
+
+    # Heal deep-sleep residue from older buggy runtimes. Idempotent + safe:
+    # no-op if the runtime is already clean.
+    try:
+        _emit_progress(progress_fn, "Healing deep-sleep runtime state...")
+        heal_actions = _heal_deep_sleep_runtime(dest)
+        for action in heal_actions:
+            actions.append(f"deep-sleep-heal:{action}")
+    except Exception as exc:
+        actions.append(f"deep-sleep-heal-warning:{exc.__class__.__name__}")
 
     _emit_progress(progress_fn, "Verifying runtime imports...")
     verify = subprocess.run(
