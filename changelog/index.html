@@ -181,6 +181,39 @@
     </div>
 </section>
 
+<!-- v5.8.1 Watchdog no longer kickstarts its own workers -->
+<section id="v581" class="section-compact" style="background:linear-gradient(135deg,#09111f 0%,#14253a 50%,#1e3a5f 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.8.1 <span style="opacity:.5;font-weight:400;">&mdash; April 17, 2026</span></div>
+        <h2 class="section-title">Watchdog No Longer Kickstarts Its Own Workers</h2>
+        <p class="section-subtitle">
+            Between 2026-04-14 and 2026-04-17 the nightly deep-sleep on the reference install stopped producing artifacts. Root cause was a feedback loop: the wrapper only wrote <code>cron_runs</code> at end, the watchdog used <code>cron_runs</code> as its source of truth for &ldquo;stuck&rdquo;, and <code>launchctl kickstart -k</code> killed the running worker every 30&nbsp;min. 5.8.1 fixes it at the source &mdash; two-phase <code>cron_runs</code> recording (INSERT at start with <code>ended_at=NULL</code>, UPDATE at end) with SIGTERM/INT/HUP trap that still closes the row; watchdog in-flight detection that never <code>kickstart -k</code>s a running worker; extractor failure classification that separates transient (<code>overloaded_error</code>, rate-limit, timeout, signal &mdash; retried next run) from deterministic (skipped after <code>MAX_POISON_ATTEMPTS</code>); slim shared-context (200 head lines + metadata instead of 400+&nbsp;KB full dump); and an idempotent <code>auto_update._heal_deep_sleep_runtime()</code> that repairs existing installs silently on the next <code>nexo update</code>.
+        </p>
+    </div>
+</section>
+
+<!-- v5.8.0 First-class classification columns on followups + reminders -->
+<section id="v580" class="section-compact" style="background:linear-gradient(135deg,#09111f 0%,#14253a 50%,#1e3a5f 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.8.0 <span style="opacity:.5;font-weight:400;">&mdash; April 17, 2026</span></div>
+        <h2 class="section-title">Classification Columns on Followups and Reminders</h2>
+        <p class="section-subtitle">
+            Task classification moves from client-side regex into persistent storage every MCP client shares. Migration #40 adds <code>internal</code> and <code>owner</code> columns on <code>followups</code> and <code>reminders</code>, with an idempotent one-shot backfill. Taxonomy is <code>owner in {user, waiting, agent, shared}</code> &mdash; <code>agent</code> is deliberately generic so third-party deployments render their own assistant label instead of hardcoding &ldquo;NEXO&rdquo;. <code>nexo_reminder_create</code>, <code>nexo_reminder_update</code>, <code>nexo_followup_create</code>, and <code>nexo_followup_update</code> gain optional <code>internal</code> and <code>owner</code> parameters. Closes a UX paradox where tasks labelled &ldquo;Para ti&rdquo; could be hidden by the &ldquo;Tareas internas&rdquo; filter in NEXO Desktop.
+        </p>
+    </div>
+</section>
+
+<!-- v5.7.0 Auto-update Claude Code + Codex CLIs inside `nexo update` -->
+<section id="v570" class="section-compact" style="background:linear-gradient(135deg,#09111f 0%,#14253a 50%,#1e3a5f 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.7.0 <span style="opacity:.5;font-weight:400;">&mdash; April 17, 2026</span></div>
+        <h2 class="section-title">`nexo update` Auto-Updates Claude Code and Codex CLIs</h2>
+        <p class="section-subtitle">
+            <code>nexo update</code> now keeps your terminal CLIs in lockstep with NEXO Brain itself. When the global <code>@anthropic-ai/claude-code</code> or <code>@openai/codex</code> packages are installed, the updater checks the npm registry and runs <code>npm install -g &lt;pkg&gt;@latest</code> in-line before the post-update verify step. Packages that were never installed globally are skipped silently. Pass <code>nexo update --no-clis</code> (or <code>include_clis=False</code> on the MCP tool) to pin them manually.
+        </p>
+    </div>
+</section>
+
 <!-- v5.6.1 Update path hardening — 0-byte DB purge + Claude Code model sync -->
 <section id="v561" class="section-compact" style="background:linear-gradient(135deg,#09111f 0%,#14253a 50%,#1e3a5f 100%);">
     <div class="container">

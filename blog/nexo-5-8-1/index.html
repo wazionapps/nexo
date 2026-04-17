@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXO 5.8.1: watchdog no longer kickstarts its own workers</title>
+    <meta name="description" content="NEXO Brain 5.8.1 closes a self-reinforcing kickstart loop in the watchdog that wedged deep-sleep Phase 2 between 2026-04-14 and 2026-04-17. Two-phase cron_runs recording, in-flight detection, and a silent heal that repairs existing installs on the next update.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-5-8-1/">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/blog/nexo-5-8-1/">
+    <meta property="og:title" content="NEXO 5.8.1: watchdog no longer kickstarts its own workers">
+    <meta property="og:description" content="A kickstart -k loop was killing deep-sleep workers mid-flight. 5.8.1 adds in-flight detection, SIGTERM-safe cron_runs recording, and a silent heal for existing installs.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+    <meta property="article:published_time" content="2026-04-17">
+    <meta property="article:author" content="Francisco Cerda Puigserver">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO 5.8.1: watchdog no longer kickstarts its own workers">
+    <meta name="twitter:description" content="Deep-sleep Phase 2 was stuck in a self-reinforcing kickstart loop. 5.8.1 fixes it at the source and heals existing installs on the next update.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "NEXO 5.8.1: watchdog no longer kickstarts its own workers",
+        "description": "NEXO Brain 5.8.1 closes a self-reinforcing kickstart loop in the watchdog that wedged deep-sleep Phase 2 between 2026-04-14 and 2026-04-17. Two-phase cron_runs recording, in-flight detection, and a silent heal that repairs existing installs on the next update.",
+        "datePublished": "2026-04-17",
+        "dateModified": "2026-04-17",
+        "author": {
+            "@type": "Person",
+            "name": "Francisco Cerda Puigserver"
+        },
+        "publisher": {
+            "@type": "Organization",
+            "name": "WAzion",
+            "url": "https://www.wazion.com"
+        },
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https://nexo-brain.com/blog/nexo-5-8-1/"
+        },
+        "url": "https://nexo-brain.com/blog/nexo-5-8-1/",
+        "image": "https://nexo-brain.com/assets/og/og-blog.png",
+        "keywords": ["NEXO 5.8.1", "deep-sleep", "watchdog", "cron_runs", "SIGTERM", "auto-heal", "reliability"]
+    }
+    </script>
+
+    <style>
+        .article-header { padding-top: 128px; padding-bottom: 40px; text-align: center; }
+        .article-meta { font-size: 14px; color: var(--text-muted); margin-bottom: 16px; }
+        .article-body {
+            max-width: 720px; margin: 0 auto; padding: 0 24px 80px;
+            font-size: 17px; line-height: 1.8; color: var(--text);
+        }
+        .article-body h2 { font-size: 28px; font-weight: 700; margin: 48px 0 16px; letter-spacing: -0.01em; }
+        .article-body p { margin-bottom: 20px; color: var(--text-muted); }
+        .article-body strong { color: var(--text); }
+        .article-body a { color: var(--purple-light); }
+        .article-body a:hover { color: var(--pink); }
+        .article-body code {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 14px; color: var(--pink);
+            background: rgba(236, 72, 153, 0.1);
+            padding: 2px 8px; border-radius: 4px;
+        }
+        .article-back {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 14px; font-weight: 600; color: var(--text-muted);
+            margin-bottom: 24px;
+        }
+        .article-back:hover { color: var(--purple-light); }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-64.png" alt="NEXO Brain" class="logo-image">
+            <span class="logo-text">NEXO Brain</span>
+        </a>
+        <button class="mobile-menu-toggle" aria-label="Toggle navigation" onclick="toggleMobileMenu()">
+            <span></span><span></span><span></span>
+        </button>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/features/">Features</a>
+            <a href="/evolution/">Evolution</a>
+            <a href="/compare/">Compare</a>
+            <a href="/blog/">Blog</a>
+            <a href="/changelog/">Changelog</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta">GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<section class="article-header">
+    <div class="container">
+        <a href="/blog/" class="article-back">&larr; Back to blog</a>
+        <div class="article-meta">April 17, 2026 &middot; Fix &middot; Reliability &middot; Deep Sleep</div>
+        <h1 class="section-title" style="font-size:clamp(28px,4.5vw,48px);max-width:920px;margin:0 auto 16px;">NEXO 5.8.1: watchdog no longer kickstarts its own workers</h1>
+        <p class="section-subtitle" style="max-width:760px;margin:0 auto;">A self-reinforcing <code>launchctl kickstart -k</code> loop had wedged deep-sleep Phase 2 on the first session of every batch. 5.8.1 fixes it at the source and heals existing installs on the next update.</p>
+    </div>
+</section>
+
+<section>
+    <div class="article-body">
+
+        <h2>The bug this closes</h2>
+        <p>Between 2026-04-14 and 2026-04-17 the nightly deep-sleep on the reference install stopped producing extractions, synthesis, or applied artifacts. The Phase 2 worker would start, begin processing Session 1 of 20, and die with <code>Automation backend error (exit 143)</code>. Thirty minutes later a new worker started. Same failure. Same session. Indefinitely.</p>
+        <p>Extraction checkpoints caching a transient <code>overloaded_error</code> as a permanent &ldquo;0 findings&rdquo; result made the symptom look like a model problem. The real culprit was a feedback loop between three components that each worked in isolation.</p>
+
+        <h2>The feedback loop</h2>
+        <p>&bull; <code>scripts/nexo-cron-wrapper.sh</code> only wrote to <code>cron_runs</code> at the <em>end</em> of the job. Any wrapper killed mid-flight produced zero database records.<br>
+           &bull; <code>scripts/nexo-watchdog.sh</code>, running every 1800&nbsp;s, used <code>cron_runs</code> as its source of truth for &ldquo;has this cron run recently?&rdquo;. With no row for deep-sleep it decided the cron was stuck and called <code>launchctl kickstart -k "gui/&lt;uid&gt;/com.nexo.deep-sleep"</code>. The <code>-k</code> flag kills the running instance first &mdash; so the watchdog was actively terminating its own worker.<br>
+           &bull; <code>scripts/deep-sleep/extract.py</code> cached the first failure (Anthropic&rsquo;s <code>overloaded_error</code>) in a per-session checkpoint and reused it forever. Even if the kickstart loop got broken, the same session would keep reporting 0 findings.</p>
+
+        <h2>Two-phase cron_runs recording</h2>
+        <p>The cron wrapper now INSERTs a row with <code>ended_at = NULL</code> at start and UPDATEs it at end. The foreground command runs as a background job so <code>trap TERM/INT/HUP</code> fires immediately, forwards SIGTERM to the child, and closes the row with <code>exit_code=143</code> plus an explicit <code>Killed by SIGTERM</code> error string. A wrapper killed mid-flight &mdash; by the watchdog, by a shutdown, by a manual <code>launchctl stop</code> &mdash; now shows up as a failed run instead of silently disappearing from the audit trail.</p>
+
+        <h2>In-flight detection in the watchdog</h2>
+        <p>With the new wrapper, any cron that is currently running produces a row where <code>started_at</code> is set and <code>ended_at</code> is NULL. The watchdog treats that as a first-class state: never <code>kickstart -k</code> an in-flight row. If the row is older than 3&times;<code>max_stale</code> <em>and</em> the worker process is provably dead (the configured <code>proc_grep</code> pattern no longer matches any PID), only then does the watchdog escalate to re-execution. No process check &rArr; no intervention. The kickstart loop is gone.</p>
+
+        <h2>Transient vs deterministic failures</h2>
+        <p>The extractor now classifies CLI failures into transient (<code>overloaded_error</code>, <code>rate_limit_error</code>, <code>api_error</code>, <code>timeout</code>, <code>signal</code>) and deterministic (<code>json_parse</code>, <code>unknown</code>). Transient failures do not persist a poisoned checkpoint &mdash; the next deep-sleep run gets a clean retry. Deterministic failures increment <code>error_count</code> and are skipped once the counter reaches <code>MAX_POISON_ATTEMPTS</code> (3). A session that trips on a bad transcript no longer stalls every subsequent run behind it.</p>
+        <p>The extractor also writes a slim version of <code>shared-context.txt</code> (first 200 lines plus metadata) and points the per-session prompt at that file instead of streaming the full 400+&nbsp;KB DB dump into the Claude CLI subprocess on every single extraction.</p>
+
+        <h2>Silent heal for existing installs</h2>
+        <p>A fix at the source only helps future runs. Installs that have already been running the buggy loop have accumulated junk: poisoned checkpoints, stale locks, dangling <code>cron_runs</code> rows with NULL <code>ended_at</code>, bloated <code>.watchdog-fails</code> counters. The new <code>auto_update._heal_deep_sleep_runtime()</code> runs on every post-sync pass and is an idempotent no-op on clean runtimes. It purges checkpoints containing <code>overloaded_error</code>, releases lock files older than 6&nbsp;h, closes <code>cron_runs</code> rows older than 6&nbsp;h with an explicit <code>healed by auto_update (pre-5.8.1 wrapper left row open)</code> marker, and resets stale fails counters older than 24&nbsp;h.</p>
+
+        <h2>Upgrading</h2>
+        <p>Run <code>nexo update</code>. The heal runs automatically during post-sync, the new wrapper and watchdog take over immediately, and the next 04:30 deep-sleep produces real artifacts again. Anyone whose install was silently stuck in the kickstart loop &mdash; even on dates they did not notice &mdash; gets the residue cleaned up transparently.</p>
+
+    </div>
+</section>
+
+<footer style="padding:48px 24px;text-align:center;font-size:13px;color:var(--text-muted);">
+    &copy; 2026 <a href="https://www.wazion.com" style="color:var(--purple-light);">WAzion</a>. NEXO Brain is open-source under <a href="https://github.com/wazionapps/nexo/blob/main/LICENSE" style="color:var(--purple-light);">AGPL-3.0</a>.
+</footer>
+
+<script src="/assets/main.js"></script>
+</body>
+</html>
