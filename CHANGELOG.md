@@ -1,5 +1,70 @@
 # Changelog
 
+## [5.10.0] - 2026-04-17
+
+### Feature: extract-path bloat fix + `caller=` enforced + personal scripts on the map
+
+v5.9.x introduced the resonance map and the `nexo preferences --resonance` selector but left three pieces of deuda tempered: deep-sleep extract still took ~57 minutes because each Claude CLI child reloaded an 11 KB `CLAUDE.md` bootstrap, callers without a `caller=` kept going via the legacy task-profile path, and the operators' personal scripts (email-monitor, followup-runner, github-monitor, post-x, orchestrator-v2) were not in the resonance map at all. v5.10.0 closes all three.
+
+**Extract bootstrap bloat fix — `bare_mode` in run_automation_prompt**
+
+Claude CLI 2.1.x auto-loads `~/.claude/CLAUDE.md`, runs hook/plugin/LSP sync, and probes the macOS keychain on every invocation. For a JSON-only extractor that only needs `Read,Grep,Bash`, that adds ~7 seconds per call — the reason Session 1 of deep-sleep took nearly an hour on some installs. The new `--bare` flag on Claude CLI opts out of all of it, but it also disables keychain auth, so callers must have an `ANTHROPIC_API_KEY` available.
+
+v5.10.0 wires this up cleanly:
+
+- New `bare_mode` kwarg on `run_automation_prompt` (default `None` = auto).
+- New `BARE_MODE_SAFE_CALLERS` frozenset — `deep-sleep/extract` and `deep-sleep/synthesize` for now. Any caller here auto-enables `--bare` when an API key is resolvable.
+- New `_resolve_anthropic_api_key()` helper looks at `ANTHROPIC_API_KEY` env, then `~/.claude/anthropic-api-key.txt`, then `~/.nexo/config/anthropic-api-key.txt`. Returns empty string instead of raising when nothing is available.
+- If bare mode is requested but no key is available, the call falls back silently to the normal path. No hard failure.
+- The `ANTHROPIC_API_KEY` gets injected into the child env only for the bare call; it does not leak into other subprocesses.
+
+Measured impact on the reference install: a single `claude -p` call dropped from ~9.5s to ~2.2s — roughly 4.3× faster. Session 1 that used to take 57 min should now take under 5 min. The heavier per-session bottleneck for synthesize (which processes every session at once) is the model reasoning itself, which is why synthesize is pinned at `MAXIMO`.
+
+**`caller=` is now mandatory**
+
+`run_automation_prompt` raises `UnregisteredCallerError` when called without a `caller` argument or with a caller that is not registered in `src/resonance_map.py`. No silent fallback to `task_profile` or global defaults. Every automation subprocess is traceable to a named tier, by construction.
+
+This is a breaking change for any script that was still calling without `caller=`. As part of this release the 13 callers updated in v5.9.0 were verified and the 5 personal scripts (`personal/email-monitor`, `personal/github-monitor`, `personal/post-x`, `personal/followup-runner`, `personal/orchestrator-v2`) were added to the map and patched to pass their `caller=`. Anyone else who ships an external script that calls into `run_automation_prompt` needs to register a new entry.
+
+**Personal scripts on the map (operators' own LaunchAgents)**
+
+Five new entries under `SYSTEM_OWNED_CALLERS`:
+
+- `personal/email-monitor` → `alto` (answering real user emails, quality matters)
+- `personal/github-monitor` → `alto` (reasoning about issues/PRs, not mechanical)
+- `personal/post-x` → `alto` (public-facing copy)
+- `personal/followup-runner` → `alto` (executes due followups, output is user-visible)
+- `personal/orchestrator-v2` → `maximo` (autonomous orchestration, critical reasoning)
+
+All five use `mcp__nexo__*` tools, so none of them are bare-mode-safe. The `mcp__*` allow-list wiring in those scripts is otherwise unchanged.
+
+**Resonance map tier bumps based on a per-caller read**
+
+A pass through the map re-evaluated the gbp/* callers ("short marketing copy — could be `medio`") against the quality-first rule: output is public, a mediocre post embarrasses the brand. All five gbp callers are now `alto`. No other tiers moved in this release — deep-sleep, evolution, reflection, catchup, followup_runner, synthesis, self_audit, postmortem and the validator/checker callers stayed where they were, verified to match what each script actually does.
+
+**Migration-friendly resonance_map lookup**
+
+`_load_user_default_resonance()` (added in v5.9.1) still reads `brain/calibration.json` first and falls back to `config/schedule.json`. `resolve_tier_for_caller` now consults it automatically when `user_default` is not passed — which means interactive entry points like `nexo chat` and `launch_interactive_client` pick up whatever the Desktop preferences dialog wrote, without any CLI argument.
+
+**Protocol debt bulk-resolve**
+
+65 legacy protocol debts accumulated across 2026-04-13 → 2026-04-17 (missing_cortex_evaluation, unacknowledged_guard_blocking, release_channel_alignment_incomplete, codex_session_missing_startup, claimed_done_without_evidence) were resolved with a shared reference to the v5.10.0 audit. The patterns that generated them are now structurally closed by mandatory `caller=` + unified session log + bare_mode — keeping historical records open no longer drives behaviour.
+
+**Tests**
+
+10 new cases in `tests/test_agent_runner_bare_mode.py`:
+
+- `BARE_MODE_SAFE_CALLERS` includes deep-sleep/extract + synthesize and excludes MCP-using callers (catchup, evolution, daily_self_audit).
+- `_resolve_anthropic_api_key` picks env > `~/.claude/anthropic-api-key.txt` > `~/.nexo/config/anthropic-api-key.txt`, returns empty on no match.
+- Explicit `bare_mode=True` plus a key adds `--bare` to the cmd, drops `--dangerously-skip-permissions`, and injects `ANTHROPIC_API_KEY` in the child env.
+- `bare_mode=None` auto-enables for safe callers, stays off for unsafe ones.
+- Missing key → silent fallback to the normal path (no raise).
+- `bare_mode=False` overrides the safe-caller default.
+
+Plus the `caller=` enforcement: `test_agent_runner.py` now declares `caller="test/harness"` (registered at MAXIMO for the duration of each test via an autouse fixture) and existing assertions were updated to reflect that the resonance map drives (model, effort) rather than `client_runtime_profiles` (unless the caller passes legacy model hints like `opus`, which still trigger the profile swap).
+
+Full suite: 964 passed, 1 skipped (bandit not installed in the tmp env used by CI).
+
 ## [5.9.1] - 2026-04-17
 
 ### Feature: `default_resonance` reachable from NEXO Desktop's Preferences UI

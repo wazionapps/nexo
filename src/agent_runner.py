@@ -792,6 +792,52 @@ def _build_enforcement_system_prompt() -> str:
     return "\n".join(lines) if (must_rules or should_rules) else ""
 
 
+_ANTHROPIC_API_KEY_SEARCH_PATHS = (
+    Path.home() / ".claude" / "anthropic-api-key.txt",
+    Path.home() / ".nexo" / "config" / "anthropic-api-key.txt",
+)
+
+
+def _resolve_anthropic_api_key() -> str:
+    """Locate an Anthropic API key for bare-mode invocations.
+
+    ``claude --bare`` skips macOS Keychain auth entirely, so the child
+    must find the API key in ``ANTHROPIC_API_KEY`` or via ``apiKeyHelper``.
+    Rather than forcing the operator to export the key in every shell, we
+    check the two conventional NEXO locations:
+
+        ~/.claude/anthropic-api-key.txt
+        ~/.nexo/config/anthropic-api-key.txt
+
+    Returns the trimmed key string, or "" if none is available. Callers
+    that want to run in bare mode must fall back to non-bare execution
+    when this returns empty.
+    """
+    env_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+    if env_key:
+        return env_key
+    for path in _ANTHROPIC_API_KEY_SEARCH_PATHS:
+        try:
+            if path.is_file():
+                key = path.read_text().strip()
+                if key:
+                    return key
+        except OSError:
+            continue
+    return ""
+
+
+# Callers for which bare_mode=True is safe. The child's only allowed_tools
+# must be file/grep/shell (no ``mcp__nexo__*``), otherwise --bare's opt-out
+# of plugin sync / MCP bootstrap breaks the run. Extract/synthesize fit
+# this profile: they read transcripts + shared-context and emit JSON, no
+# NEXO tool calls.
+BARE_MODE_SAFE_CALLERS: frozenset[str] = frozenset({
+    "deep-sleep/extract",
+    "deep-sleep/synthesize",
+})
+
+
 def run_automation_prompt(
     prompt: str,
     *,
@@ -807,6 +853,7 @@ def run_automation_prompt(
     append_system_prompt: str = "",
     allowed_tools: str = "",
     extra_args: list[str] | tuple[str, ...] | None = None,
+    bare_mode: bool | None = None,
 ) -> subprocess.CompletedProcess:
     prefs = load_client_preferences()
     selected_backend = backend or resolve_automation_backend(preferences=prefs)
@@ -822,35 +869,40 @@ def run_automation_prompt(
             reasoning_effort = profile["reasoning_effort"]
     selected_backend = _resolve_available_backend(selected_backend, preferences=prefs)
 
-    # Resonance map takes over model+effort decisions when the caller is
-    # registered. Explicit model/effort arguments still win (required for
-    # edge cases like the fallback JSON-conversion call inside extract.py
-    # that asks a shorter/cheaper follow-up).
-    resonance_tier = ""
-    if caller and not model and not reasoning_effort:
-        try:
-            from resonance_map import (
-                resolve_model_and_effort,
-                resolve_tier_for_caller,
-                UnregisteredCallerError,
-            )
-            user_default = ""
-            if isinstance(prefs, dict):
-                user_default = str(prefs.get("default_resonance") or "").strip()
-            resonance_tier = resolve_tier_for_caller(
-                caller, user_default=user_default or None
-            )
-            mapped_model, mapped_effort = resolve_model_and_effort(
-                caller, selected_backend, user_default=user_default or None
-            )
-            if mapped_model:
-                model = mapped_model
-            if mapped_effort:
-                reasoning_effort = mapped_effort
-        except (ImportError, UnregisteredCallerError):
-            # Unknown caller during a transitional release: fall back to
-            # the legacy task_profile / model_defaults resolution below.
-            pass
+    # Resonance map decides (model, effort) for every call. ``caller`` is
+    # MANDATORY — every script that invokes the automation backend must be
+    # registered in src/resonance_map.py so its reasoning budget is a
+    # deliberate choice rather than an accident of the global default.
+    #
+    # Explicit ``model`` or ``reasoning_effort`` arguments still override
+    # the mapped value (required for edge cases like the fallback JSON-
+    # conversion call inside extract.py that runs on a shorter budget).
+    from resonance_map import (
+        resolve_model_and_effort,
+        resolve_tier_for_caller,
+        UnregisteredCallerError,
+    )
+    if not caller:
+        raise UnregisteredCallerError(
+            "run_automation_prompt requires caller=. Register a new entry in "
+            "src/resonance_map.py under USER_FACING_CALLERS or "
+            "SYSTEM_OWNED_CALLERS and pass the id here."
+        )
+    user_default = ""
+    if isinstance(prefs, dict):
+        user_default = str(prefs.get("default_resonance") or "").strip()
+    # This raises UnregisteredCallerError if caller is unknown — the
+    # same fail-closed rule we wanted. No silent fallback.
+    resonance_tier = resolve_tier_for_caller(
+        caller, user_default=user_default or None
+    )
+    mapped_model, mapped_effort = resolve_model_and_effort(
+        caller, selected_backend, user_default=user_default or None
+    )
+    if mapped_model and not model:
+        model = mapped_model
+    if mapped_effort and not reasoning_effort:
+        reasoning_effort = mapped_effort
 
     enforcement_fragment = _build_enforcement_system_prompt()
     if enforcement_fragment:
@@ -877,6 +929,39 @@ def run_automation_prompt(
             raise AutomationBackendUnavailableError(
                 "Claude Code automation backend selected but `claude` is not installed."
             )
+
+        # bare_mode: when the caller only needs the model (no MCP tool
+        # calls, no CLAUDE.md context, no plugins) we pass Claude CLI's
+        # --bare flag. That skips hooks, LSP, plugin sync, CLAUDE.md
+        # auto-discovery, keychain reads, and background prefetches —
+        # reducing the per-invocation overhead from ~9s to ~2s on 2.1.x.
+        # Concretely: deep-sleep/extract was running 57min on Session 1
+        # because each extract attempt inherited ~15KB of NEXO CLAUDE.md
+        # system prompt it did not need. With --bare that extraction
+        # completes in seconds.
+        #
+        # Selection rules:
+        #   - bare_mode=True explicit → trust the caller.
+        #   - bare_mode=None (default) + caller in BARE_MODE_SAFE_CALLERS
+        #     → auto-enable.
+        #   - bare_mode=False → never.
+        #   - --bare disables keychain auth, so we must provide an
+        #     ANTHROPIC_API_KEY. If one cannot be located, fall back to
+        #     normal mode with a warning on stderr rather than failing.
+        resolved_bare = False
+        if bare_mode is True:
+            resolved_bare = True
+        elif bare_mode is None and caller in BARE_MODE_SAFE_CALLERS:
+            resolved_bare = True
+
+        bare_api_key = ""
+        if resolved_bare:
+            bare_api_key = _resolve_anthropic_api_key()
+            if not bare_api_key:
+                # Silent fallback: we would rather take the slower path
+                # than force the caller to fail-closed on an env quirk.
+                resolved_bare = False
+
         # Headless claude -p does NOT reliably honour permissions.allow from
         # settings.json for MCP tool calls — it can stall waiting for an
         # approval that will never come in non-interactive mode. All NEXO
@@ -885,7 +970,15 @@ def run_automation_prompt(
         # so the process actually runs instead of zombying. Interactive
         # sessions (`nexo chat`) never go through this code path and keep
         # their normal approval prompts.
-        cmd = [claude_bin, "-p", prompt, "--dangerously-skip-permissions"]
+        cmd = [claude_bin, "-p", prompt]
+        if resolved_bare:
+            cmd.append("--bare")
+            # Guarantee the child sees the API key regardless of how the
+            # parent's env was sanitized by _headless_env.
+            run_env = dict(run_env)
+            run_env["ANTHROPIC_API_KEY"] = bare_api_key
+        else:
+            cmd.append("--dangerously-skip-permissions")
         if resolved_model:
             cmd.extend(["--model", resolved_model])
         if resolved_effort:

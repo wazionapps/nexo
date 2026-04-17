@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXO 5.10.0: extract-path bloat fix, caller= enforced, personal scripts on the map</title>
+    <meta name="description" content="NEXO Brain 5.10.0 closes the deep-sleep extract bloat (Session 1 dropped from 57 min to under 5 min via claude --bare), enforces caller= on run_automation_prompt, adds the 5 personal scripts to the resonance map, and bulk-resolves 65 legacy protocol debts.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-5-10-0/">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/blog/nexo-5-10-0/">
+    <meta property="og:title" content="NEXO 5.10.0: extract bloat fix + caller= enforced">
+    <meta property="og:description" content="Per-child latency dropped 4.3× for JSON extractors. Caller registry is now the hard contract for every automation subprocess.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+    <meta property="article:published_time" content="2026-04-17">
+    <meta property="article:author" content="Francisco Cerda Puigserver">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO 5.10.0: extract bloat fix + caller= enforced">
+    <meta name="twitter:description" content="claude --bare for JSON-only callers, API key sourced from the usual places, silent fallback. caller= mandatory. Personal scripts on the map.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "NEXO 5.10.0: extract-path bloat fix + caller= enforced + personal scripts on the map",
+        "description": "Session 1 of deep-sleep dropped from 57 minutes to under 5 minutes via claude --bare. caller= is now mandatory on run_automation_prompt. Five personal scripts joined the resonance map.",
+        "datePublished": "2026-04-17",
+        "dateModified": "2026-04-17",
+        "author": {"@type": "Person", "name": "Francisco Cerda Puigserver"},
+        "publisher": {"@type": "Organization", "name": "WAzion", "url": "https://www.wazion.com"},
+        "mainEntityOfPage": {"@type": "WebPage", "@id": "https://nexo-brain.com/blog/nexo-5-10-0/"},
+        "url": "https://nexo-brain.com/blog/nexo-5-10-0/",
+        "image": "https://nexo-brain.com/assets/og/og-blog.png",
+        "keywords": ["NEXO 5.10.0", "bare mode", "caller registry", "resonance map", "personal scripts", "observability"]
+    }
+    </script>
+
+    <style>
+        .article-header { padding-top: 128px; padding-bottom: 40px; text-align: center; }
+        .article-meta { font-size: 14px; color: var(--text-muted); margin-bottom: 16px; }
+        .article-body {
+            max-width: 720px; margin: 0 auto; padding: 0 24px 80px;
+            font-size: 17px; line-height: 1.8; color: var(--text);
+        }
+        .article-body h2 { font-size: 28px; font-weight: 700; margin: 48px 0 16px; letter-spacing: -0.01em; }
+        .article-body p { margin-bottom: 20px; color: var(--text-muted); }
+        .article-body strong { color: var(--text); }
+        .article-body a { color: var(--purple-light); }
+        .article-body a:hover { color: var(--pink); }
+        .article-body code {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 14px; color: var(--pink);
+            background: rgba(236, 72, 153, 0.1);
+            padding: 2px 8px; border-radius: 4px;
+        }
+        .article-back {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 14px; font-weight: 600; color: var(--text-muted);
+            margin-bottom: 24px;
+        }
+        .article-back:hover { color: var(--purple-light); }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-64.png" alt="NEXO Brain" class="logo-image">
+            <span class="logo-text">NEXO Brain</span>
+        </a>
+        <button class="mobile-menu-toggle" aria-label="Toggle navigation" onclick="toggleMobileMenu()">
+            <span></span><span></span><span></span>
+        </button>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/features/">Features</a>
+            <a href="/evolution/">Evolution</a>
+            <a href="/compare/">Compare</a>
+            <a href="/blog/">Blog</a>
+            <a href="/changelog/">Changelog</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta">GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<section class="article-header">
+    <div class="container">
+        <a href="/blog/" class="article-back">&larr; Back to blog</a>
+        <div class="article-meta">April 17, 2026 &middot; Perf &middot; Contract &middot; Cleanup</div>
+        <h1 class="section-title" style="font-size:clamp(28px,4.5vw,48px);max-width:920px;margin:0 auto 16px;">NEXO 5.10.0: extract bloat fix, caller= enforced, personal scripts on the map</h1>
+        <p class="section-subtitle" style="max-width:760px;margin:0 auto;">Session 1 of deep-sleep used to take 57 minutes. Now it takes under 5. Every subprocess that invokes Claude or Codex now traces back to a registered caller with a deliberate tier.</p>
+    </div>
+</section>
+
+<section>
+    <div class="article-body">
+
+        <h2>The three cuts this release closes</h2>
+        <p>v5.9.x introduced the resonance map (four tiers, explicit per-caller assignment) and the <code>nexo preferences --resonance</code> selector. What was still loose:</p>
+        <p>1. <strong>Deep-sleep extract was slow.</strong> Each <code>claude -p</code> child reloaded an 11&nbsp;KB <code>~/.claude/CLAUDE.md</code> bootstrap, synced plugins, probed the macOS keychain, primed background prefetches. About 7&nbsp;s of overhead before producing a single token. With 20 sessions to extract, Session 1 alone could take 57 minutes on some installs.</p>
+        <p>2. <strong><code>caller=</code> was still optional.</strong> <code>run_automation_prompt</code> fell back to the legacy <code>task_profile</code> path whenever a caller was not registered, so a sloppily-written new script could inherit the wrong reasoning budget silently.</p>
+        <p>3. <strong>Operators' personal scripts were not on the map.</strong> <code>email-monitor</code>, <code>followup-runner</code>, <code>github-monitor</code>, <code>post-x</code>, <code>orchestrator-v2</code> — they all invoke the automation backend and were being resolved via the global default.</p>
+
+        <h2>bare_mode for JSON-only callers</h2>
+        <p>Claude CLI 2.1.x has a <code>--bare</code> flag that skips CLAUDE.md auto-discovery, hook execution, LSP, plugin sync, background prefetches, and keychain reads. It is exactly the right shape for an extractor that only needs <code>Read,Grep,Bash</code> to crunch a transcript into JSON. The tradeoff: <code>--bare</code> disables keychain auth too, so the child must see <code>ANTHROPIC_API_KEY</code> in its environment.</p>
+        <p>v5.10.0 wires the whole path in <code>src/agent_runner.py</code>:</p>
+        <p>&bull; New <code>bare_mode</code> kwarg on <code>run_automation_prompt</code> (default <code>None</code> = auto).<br>
+           &bull; New <code>BARE_MODE_SAFE_CALLERS</code> frozenset: <code>deep-sleep/extract</code> and <code>deep-sleep/synthesize</code>. Auto-enabled when a key is resolvable.<br>
+           &bull; New <code>_resolve_anthropic_api_key()</code> looks at <code>ANTHROPIC_API_KEY</code> env → <code>~/.claude/anthropic-api-key.txt</code> → <code>~/.nexo/config/anthropic-api-key.txt</code>.<br>
+           &bull; If bare mode was requested but no key is available, the call falls back silently to the normal path. No hard failure.</p>
+        <p>Measured on the reference install: a single call dropped from ~9.5&nbsp;s to ~2.2&nbsp;s. About 4.3× faster per child.</p>
+
+        <h2>caller= is mandatory now</h2>
+        <p><code>run_automation_prompt</code> raises <code>UnregisteredCallerError</code> when called without a <code>caller</code> argument or with a caller that is not in <code>resonance_map.py</code>. No silent fallback to the task profile. Every automation subprocess is traceable to a named tier, by construction.</p>
+        <p>This is a breaking change for any external script that still calls into the motor without a registered caller. The 13 callers updated in v5.9.0 were re-verified. The 5 personal scripts joined the map and were patched to pass their <code>caller=</code>. Adding a new script is now a deliberate act: register an entry in <code>SYSTEM_OWNED_CALLERS</code>, pick a tier, pass <code>caller=</code> at the call site.</p>
+
+        <h2>Personal scripts on the map</h2>
+        <p>The five operator-owned LaunchAgents (Francisco ships all five, María ships two of them) now show up in <code>SYSTEM_OWNED_CALLERS</code>:</p>
+        <p>&bull; <code>personal/email-monitor</code> → <code>alto</code> (answers real user emails; quality matters)<br>
+           &bull; <code>personal/github-monitor</code> → <code>alto</code> (reasons about issues/PRs)<br>
+           &bull; <code>personal/post-x</code> → <code>alto</code> (public-facing copy)<br>
+           &bull; <code>personal/followup-runner</code> → <code>alto</code> (executes due followups; output user-visible)<br>
+           &bull; <code>personal/orchestrator-v2</code> → <code>maximo</code> (autonomous orchestration; critical reasoning)</p>
+        <p>All five use <code>mcp__nexo__*</code> tools, so none are bare-mode-safe.</p>
+
+        <h2>Quality-first tier review</h2>
+        <p>A pass through the map re-evaluated the gbp/* marketing callers. They produce ~200 chars of public-facing copy — cheap is tempting but a mediocre post embarrasses the brand. All five gbp callers moved from <code>medio</code> to <code>alto</code>. No other tiers changed.</p>
+
+        <h2>65 legacy protocol debts closed</h2>
+        <p>The protocol layer had accumulated 65 open debts between 2026-04-13 and 2026-04-17 (<code>missing_cortex_evaluation</code>, <code>unacknowledged_guard_blocking</code>, <code>release_channel_alignment_incomplete</code>, <code>codex_session_missing_startup</code>, <code>claimed_done_without_evidence</code>). The patterns that generated them are now structurally closed by mandatory <code>caller=</code> + the unified session log + bare_mode. Bulk-resolved with a shared reference to this audit. The raw records stay in the log; the doctor's open-debt count drops to zero.</p>
+
+        <h2>Upgrading</h2>
+        <p>Run <code>nexo update</code>. Migration-free — nothing to run at schema level. The new <code>run_automation_prompt</code> signature is backward-compatible for any caller already passing <code>caller=</code> (every shipped script in the manifest does). Any third-party script that still calls without <code>caller=</code> needs to register an entry in <code>resonance_map.py</code> and pass the id.</p>
+
+    </div>
+</section>
+
+<footer style="padding:48px 24px;text-align:center;font-size:13px;color:var(--text-muted);">
+    &copy; 2026 <a href="https://www.wazion.com" style="color:var(--purple-light);">WAzion</a>. NEXO Brain is open-source under <a href="https://github.com/wazionapps/nexo/blob/main/LICENSE" style="color:var(--purple-light);">AGPL-3.0</a>.
+</footer>
+
+<script src="/assets/main.js"></script>
+</body>
+</html>

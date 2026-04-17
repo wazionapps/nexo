@@ -143,14 +143,25 @@ SYSTEM_OWNED_CALLERS: dict[str, str] = {
     "tools/drive_search":               "medio",
 
     # ---- Marketing automation ---------------------------------------------
-    # These produce short copy; we could run them at BAJO for speed, but the
-    # output is user-visible on a public surface, so we lean MEDIO for safety
-    # against embarrassing outputs.
-    "gbp/daily_post":                   "medio",
-    "gbp/post_wazion":                  "medio",
-    "gbp/post_psicologa":               "medio",
-    "gbp/monthly_audit":                "medio",
-    "gbp/reviews_watch":                "medio",
+    # These post to Google Business Profile on behalf of Francisco's
+    # businesses. Short copy, but user-visible on a public surface; a
+    # mediocre post embarrasses the brand. Running them ALTO even though
+    # it's ~200 chars keeps the output quality tight.
+    "gbp/daily_post":                   "alto",
+    "gbp/post_wazion":                  "alto",
+    "gbp/post_psicologa":               "alto",
+    "gbp/monthly_audit":                "alto",
+    "gbp/reviews_watch":                "alto",
+
+    # ---- Personal scripts (operators' own LaunchAgents) -------------------
+    # Francisco + Maria ship the same set of personal scripts via
+    # ~/.nexo/scripts (installed per-user, not through the core manifest).
+    # They all call into mcp__nexo__* so they cannot run under --bare.
+    "personal/email-monitor":           "alto",   # answer real user emails, quality matters
+    "personal/github-monitor":          "alto",   # reason about issues/PRs, not mechanical
+    "personal/post-x":                  "alto",   # public-facing copy
+    "personal/followup-runner":         "alto",   # executes due followups, output is user-visible
+    "personal/orchestrator-v2":         "maximo", # autonomous orchestration, critical reasoning
 }
 
 ALL_REGISTERED_CALLERS: frozenset[str] = frozenset(
