@@ -45,42 +45,86 @@ future scripts from silently inheriting the wrong tier.
 """
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Tuple
 
 
 # ---------------------------------------------------------------------------
 # Tier → (claude_model, claude_effort, codex_model, codex_effort)
 # ---------------------------------------------------------------------------
-# Keep this table in ONE place. When we promote a new Claude or Codex model,
-# update only this dict — every caller rebalances automatically.
+# Single source of truth lives in ``src/resonance_tiers.json``. That file is
+# the contract shared with NEXO Desktop and any other consumer — this module
+# only reads it and exposes it as Python data. Editing the JSON is the one
+# way to change tier assignments; this file no longer carries the table.
 #
 # If a future backend offers fewer tiers (e.g. only max + low), collapse
-# adjacent tiers onto the closest available effort. MAXIMO + ALTO → highest,
-# MEDIO + BAJO → lowest. If a backend has no effort setting at all, leave
-# the effort string empty.
+# adjacent tiers onto the closest available effort directly in the JSON
+# (MAXIMO + ALTO → highest, MEDIO + BAJO → lowest). If a backend has no
+# effort setting at all, leave the effort string empty.
 
 TIERS = ("maximo", "alto", "medio", "bajo")
 
-_RESONANCE_TABLE: dict[str, dict[str, tuple[str, str]]] = {
-    "maximo": {
-        "claude_code": ("claude-opus-4-7[1m]", "max"),
-        "codex":       ("gpt-5.4", "xhigh"),
-    },
-    "alto": {
-        "claude_code": ("claude-opus-4-7[1m]", "xhigh"),
-        "codex":       ("gpt-5.4", "high"),
-    },
-    "medio": {
-        "claude_code": ("claude-opus-4-7[1m]", "high"),
-        "codex":       ("gpt-5.4", "medium"),
-    },
-    "bajo": {
-        "claude_code": ("claude-opus-4-7[1m]", "medium"),
-        "codex":       ("gpt-5.4", "low"),
-    },
-}
+_RESONANCE_JSON_PATH = Path(__file__).resolve().parent / "resonance_tiers.json"
 
-DEFAULT_RESONANCE = "alto"
+
+def _normalize_tier_entry(entry: dict) -> dict[str, tuple[str, str]]:
+    """Coerce ``{"claude_code": {"model": ..., "effort": ...}, ...}`` into
+    the internal ``{backend: (model, effort)}`` shape used by the rest of
+    this module. Missing fields collapse to empty strings so the loader is
+    forgiving about hand-edited JSON."""
+    out: dict[str, tuple[str, str]] = {}
+    if not isinstance(entry, dict):
+        return out
+    for backend, spec in entry.items():
+        if not isinstance(backend, str):
+            continue
+        if isinstance(spec, dict):
+            model = str(spec.get("model", "")).strip()
+            effort = str(spec.get("effort", "")).strip()
+            out[backend] = (model, effort)
+    return out
+
+
+def load_resonance_table(
+    path: Path | None = None,
+) -> tuple[dict[str, dict[str, tuple[str, str]]], str]:
+    """Public loader used by tests and the runtime alike.
+
+    Returns ``(table, default_tier)`` where ``table`` is keyed by tier name
+    (``maximo``/``alto``/``medio``/``bajo``) and each value is a
+    ``{backend: (model, effort)}`` dict.
+
+    Raises ``FileNotFoundError`` if the JSON is missing — we never
+    silently fall back to a hardcoded table because that is exactly what
+    the pre-v6.0.0 code did, and the whole point of v6.0.0 is that the
+    JSON is the only source of truth.
+    """
+    target = Path(path) if path else _RESONANCE_JSON_PATH
+    data = json.loads(target.read_text())
+    raw_tiers = data.get("tiers") or {}
+    if not isinstance(raw_tiers, dict) or not raw_tiers:
+        raise ValueError(f"resonance_tiers.json missing 'tiers' mapping: {target}")
+
+    table: dict[str, dict[str, tuple[str, str]]] = {}
+    for tier_name, entry in raw_tiers.items():
+        normalized = _normalize_tier_entry(entry)
+        if normalized:
+            table[tier_name] = normalized
+
+    # Must contain the four canonical tiers so callers can rely on them
+    # without guarding every lookup.
+    missing = [t for t in TIERS if t not in table]
+    if missing:
+        raise ValueError(f"resonance_tiers.json missing tiers: {missing} in {target}")
+
+    default_tier = str(data.get("default_tier") or "alto").strip().lower()
+    if default_tier not in table:
+        default_tier = "alto"
+    return table, default_tier
+
+
+_RESONANCE_TABLE, DEFAULT_RESONANCE = load_resonance_table()
 
 
 # ---------------------------------------------------------------------------

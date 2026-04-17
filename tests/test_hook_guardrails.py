@@ -226,12 +226,13 @@ def test_process_tool_event_warns_when_multi_step_action_task_lacks_workflow(gua
     assert any("nexo_change_log" in message for message in messages)
 
 
-def test_process_pre_tool_event_blocks_write_without_open_task_in_strict_mode(guardrail_env):
+def test_process_pre_tool_event_blocks_write_without_open_task_in_strict_mode(guardrail_env, monkeypatch):
     db, hook_guardrails = _reload_guardrail_stack()
     db.init_db()
-    (guardrail_env / "brain" / "calibration.json").write_text(
-        json.dumps({"preferences": {"protocol_strictness": "strict"}})
-    )
+    # v6.0.0 — strictness is no longer a configured preference; mock the
+    # live helper the guardrail uses so the test still exercises the
+    # "strict" code path deterministically.
+    monkeypatch.setattr(hook_guardrails, "get_protocol_strictness", lambda: "strict")
     db.register_session(
         "nexo-2004-3004",
         "strict edit",
@@ -254,12 +255,11 @@ def test_process_pre_tool_event_blocks_write_without_open_task_in_strict_mode(gu
     assert "open `nexo_task_open" in message
 
 
-def test_process_pre_tool_event_learning_mode_explains_guard_ack_requirement(guardrail_env):
+def test_process_pre_tool_event_learning_mode_explains_guard_ack_requirement(guardrail_env, monkeypatch):
     db, hook_guardrails = _reload_guardrail_stack()
     db.init_db()
-    (guardrail_env / "brain" / "calibration.json").write_text(
-        json.dumps({"preferences": {"protocol_strictness": "learning"}})
-    )
+    # v6.0.0 — force "learning" strictness directly on the guardrail.
+    monkeypatch.setattr(hook_guardrails, "get_protocol_strictness", lambda: "learning")
     sid = "nexo-2005-3005"
     db.register_session(
         sid,
