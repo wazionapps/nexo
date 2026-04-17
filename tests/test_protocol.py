@@ -371,10 +371,6 @@ def test_task_close_creates_change_log_and_stays_clean():
     assert row["change_log_id"] == closed["change_log_id"]
 
 
-@pytest.mark.xfail(
-    reason="API refactor pending — handle_task_close no longer returns 'status' key; tracked in followup NF-TEST-PROTOCOL-API-REFACTOR",
-    strict=False,
-)
 def test_task_close_opens_protocol_debt_when_done_without_evidence():
     from db import get_db
     from plugins.protocol import handle_task_open, handle_task_close
@@ -687,10 +683,6 @@ def test_task_open_surfaces_attention_management_when_focus_is_split():
     assert "split across multiple active goals" in payload["attention"]["warnings"][0]
 
 
-@pytest.mark.xfail(
-    reason="cognitive trigger anticipation no longer fires from handle_task_open goal-matching; tracked in followup NF-TEST-PROTOCOL-API-REFACTOR",
-    strict=False,
-)
 def test_task_open_previews_anticipatory_warnings_without_firing_trigger():
     import cognitive
     from plugins.protocol import handle_task_open
