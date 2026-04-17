@@ -174,6 +174,20 @@
 
             <div class="blog-card">
                 <div class="blog-card-date">April 17, 2026</div>
+                <h2><a href="/blog/nexo-5-8-1/">NEXO 5.8.1: Watchdog No Longer Kickstarts Its Own Workers</a></h2>
+                <p>Between 2026-04-14 and 2026-04-17 the nightly deep-sleep stopped producing artifacts because three components fell into a feedback loop: the wrapper only wrote <code>cron_runs</code> at end, the watchdog used <code>cron_runs</code> as source of truth for &ldquo;stuck&rdquo;, and <code>launchctl kickstart -k</code> killed the running worker every 30&nbsp;min. 5.8.1 adds two-phase cron_runs recording, in-flight detection, transient vs deterministic failure classification in the extractor, and a silent heal for installs already stuck in the loop.</p>
+                <a href="/blog/nexo-5-8-1/" class="read-more">Read more &rarr;</a>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 17, 2026</div>
+                <h2><a href="/blog/nexo-5-8-0/">NEXO 5.8.0: Classification Columns on Followups and Reminders</a></h2>
+                <p>Task classification moves from client-side regex into persistent storage every MCP client shares. Migration #40 adds <code>internal</code> and <code>owner</code> columns on <code>followups</code> and <code>reminders</code>, with an idempotent one-shot backfill. Taxonomy is <code>owner in {user, waiting, agent, shared}</code> &mdash; <code>agent</code> is deliberately generic so third-party deployments render their own assistant label instead of hardcoding &ldquo;NEXO&rdquo;. Closes a UX paradox where tasks labelled &ldquo;Para ti&rdquo; could be hidden by the &ldquo;Tareas internas&rdquo; filter.</p>
+                <a href="/blog/nexo-5-8-0/" class="read-more">Read more &rarr;</a>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 17, 2026</div>
                 <h2><a href="/blog/nexo-5-7-0/">NEXO 5.7.0: `nexo update` Auto-Updates Claude Code and Codex CLIs</a></h2>
                 <p><code>nexo update</code> now keeps your terminal CLIs in lockstep with NEXO Brain itself. When the global <code>@anthropic-ai/claude-code</code> or <code>@openai/codex</code> packages are installed, the updater checks the npm registry and runs <code>npm install -g &lt;pkg&gt;@latest</code> in-line before the post-update verify step &mdash; so the boot model stays aligned with the settings NEXO already wrote to <code>~/.claude/settings.json</code>. Pass <code>nexo update --no-clis</code> to pin them manually.</p>
                 <a href="/blog/nexo-5-7-0/" class="read-more">Read more &rarr;</a>
