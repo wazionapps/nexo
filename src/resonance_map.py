@@ -174,6 +174,48 @@ class UnregisteredCallerError(ValueError):
 # Resolution
 # ---------------------------------------------------------------------------
 
+def _load_user_default_resonance() -> str:
+    """Resolve the user's ``default_resonance`` preference.
+
+    Reads ``calibration.json`` first (``preferences.default_resonance``, the
+    location NEXO Desktop's preferences UI writes to) and falls back to
+    ``schedule.json`` (``default_resonance``, the location the CLI used to
+    write to in v5.9.0). Returns an empty string if neither source has a
+    valid tier — callers should treat empty as "no preference".
+    """
+    import json as _json
+    import os as _os
+    from pathlib import Path as _Path
+
+    home = _Path(_os.environ.get("NEXO_HOME", str(_Path.home() / ".nexo")))
+
+    # calibration.json (Desktop UI writes here)
+    cal_path = home / "brain" / "calibration.json"
+    try:
+        if cal_path.exists():
+            cal = _json.loads(cal_path.read_text())
+            prefs = cal.get("preferences") if isinstance(cal, dict) else None
+            if isinstance(prefs, dict):
+                tier = str(prefs.get("default_resonance") or "").strip().lower()
+                if tier in TIERS:
+                    return tier
+    except (OSError, _json.JSONDecodeError):
+        pass
+
+    # schedule.json (CLI legacy)
+    sched_path = home / "config" / "schedule.json"
+    try:
+        if sched_path.exists():
+            sched = _json.loads(sched_path.read_text())
+            tier = str((sched or {}).get("default_resonance") or "").strip().lower()
+            if tier in TIERS:
+                return tier
+    except (OSError, _json.JSONDecodeError):
+        pass
+
+    return ""
+
+
 def resolve_tier_for_caller(caller: str, user_default: str | None = None) -> str:
     """Return the resonance tier that should apply to ``caller``.
 
@@ -181,6 +223,9 @@ def resolve_tier_for_caller(caller: str, user_default: str | None = None) -> str
       if the user has no preference recorded).
     - System-owned callers resolve to their fixed tier.
     - Unknown callers raise ``UnregisteredCallerError``.
+
+    When ``user_default`` is not passed, the function looks it up from the
+    calibration.json preferences first and schedule.json second.
     """
     if not caller:
         raise UnregisteredCallerError(
@@ -188,7 +233,10 @@ def resolve_tier_for_caller(caller: str, user_default: str | None = None) -> str
             "in src/resonance_map.py so its reasoning budget is deliberate."
         )
     if caller in USER_FACING_CALLERS:
-        tier = (user_default or DEFAULT_RESONANCE).strip().lower()
+        resolved_default = user_default
+        if resolved_default is None:
+            resolved_default = _load_user_default_resonance()
+        tier = (resolved_default or DEFAULT_RESONANCE).strip().lower()
         if tier not in TIERS:
             tier = DEFAULT_RESONANCE
         return tier

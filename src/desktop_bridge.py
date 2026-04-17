@@ -192,6 +192,34 @@ def _schema_fields() -> list[dict]:
             ],
         },
         {
+            "path": "preferences.default_resonance",
+            "file": "calibration.json",
+            "label": {"es": "Resonancia por defecto", "en": "Default resonance"},
+            "type": "select",
+            "group": "preferences",
+            "default": "alto",
+            "hint": {
+                "es": (
+                    "Potencia del modelo para sesiones interactivas (nexo chat y "
+                    "nueva conversación en Desktop). Los crons y procesos de fondo "
+                    "(deep sleep, evolution, etc.) ignoran esta preferencia — los "
+                    "definimos nosotros en resonance_map.py por calidad."
+                ),
+                "en": (
+                    "Model power for interactive sessions (nexo chat and Desktop "
+                    "new conversation). Crons and background processes (deep sleep, "
+                    "evolution, etc.) ignore this preference — we pin them per "
+                    "caller in resonance_map.py based on quality needs."
+                ),
+            },
+            "options": [
+                {"value": "maximo", "label": {"es": "Máximo", "en": "Maximum"}},
+                {"value": "alto", "label": {"es": "Alto (recomendado)", "en": "High (recommended)"}},
+                {"value": "medio", "label": {"es": "Medio", "en": "Medium"}},
+                {"value": "bajo", "label": {"es": "Bajo", "en": "Low"}},
+            ],
+        },
+        {
             "path": "meta.role",
             "file": "calibration.json",
             "label": {"es": "Rol / ocupación", "en": "Role / occupation"},

@@ -1099,6 +1099,34 @@ def _clients_sync(args):
     return 0 if result.get("ok") else 1
 
 
+def _write_calibration_default_resonance(tier: str) -> None:
+    """Persist ``preferences.default_resonance`` in ``brain/calibration.json``.
+
+    NEXO Desktop's preferences UI reads from calibration.json (matches the
+    rest of the user-facing knobs — autonomy, communication, assistant_name,
+    …). This helper keeps the CLI path writing to both calibration.json
+    AND schedule.json so the two surfaces never disagree.
+    """
+    cal_path = NEXO_HOME / "brain" / "calibration.json"
+    try:
+        cal_path.parent.mkdir(parents=True, exist_ok=True)
+        if cal_path.exists():
+            data = json.loads(cal_path.read_text())
+            if not isinstance(data, dict):
+                data = {}
+        else:
+            data = {}
+        prefs = data.get("preferences")
+        if not isinstance(prefs, dict):
+            prefs = {}
+        prefs["default_resonance"] = tier
+        data["preferences"] = prefs
+        cal_path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+    except Exception as exc:  # best-effort; schedule.json still has the value
+        print(f"[NEXO] Warning: could not update calibration.json: {exc}",
+              file=sys.stderr)
+
+
 def _preferences(args):
     """Read or change user preferences stored in schedule.json.
 
@@ -1110,7 +1138,11 @@ def _preferences(args):
         load_client_preferences,
         save_client_preferences,
     )
-    from resonance_map import DEFAULT_RESONANCE, TIERS
+    from resonance_map import (
+        DEFAULT_RESONANCE,
+        TIERS,
+        _load_user_default_resonance,
+    )
 
     prefs = load_client_preferences()
     if not isinstance(prefs, dict):
@@ -1125,26 +1157,37 @@ def _preferences(args):
                 file=sys.stderr,
             )
             return 2
+        # Write to schedule.json (legacy CLI location)…
         save_client_preferences(default_resonance=tier)
+        # …and to calibration.json (where NEXO Desktop's preferences UI
+        # reads/writes). Keeping both in sync means the two surfaces agree.
+        _write_calibration_default_resonance(tier)
         prefs = load_client_preferences()
 
-    current_resonance = str(
+    calibration_value = _load_user_default_resonance()
+    schedule_value = str(
         (prefs.get("default_resonance") if isinstance(prefs, dict) else "")
-        or DEFAULT_RESONANCE
-    )
+        or ""
+    ).strip().lower()
+    current_resonance = calibration_value or schedule_value or DEFAULT_RESONANCE
 
     if args.show or args.resonance:
+        is_explicit = bool(calibration_value or schedule_value)
         payload = {
             "default_resonance": current_resonance,
-            "default_resonance_is_explicit": isinstance(prefs, dict)
-                and bool(prefs.get("default_resonance")),
+            "default_resonance_is_explicit": is_explicit,
+            "default_resonance_source": (
+                "calibration.json" if calibration_value
+                else ("schedule.json" if schedule_value else "default")
+            ),
             "available_tiers": list(TIERS),
         }
         if args.json:
             print(json.dumps(payload, indent=2, ensure_ascii=False))
         else:
             print(f"default_resonance = {current_resonance}")
-            if not payload["default_resonance_is_explicit"]:
+            print(f"  source: {payload['default_resonance_source']}")
+            if not is_explicit:
                 print(f"  (inherited from DEFAULT_RESONANCE; run "
                       f"`nexo preferences --resonance alto` to set explicitly)")
         return 0
