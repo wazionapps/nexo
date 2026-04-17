@@ -174,6 +174,13 @@
 
             <div class="blog-card">
                 <div class="blog-card-date">April 17, 2026</div>
+                <h2><a href="/blog/nexo-5-8-0/">NEXO 5.8.0: Classification Columns on Followups and Reminders</a></h2>
+                <p>Task classification moves from client-side regex into persistent storage every MCP client shares. Migration #40 adds <code>internal</code> and <code>owner</code> columns on <code>followups</code> and <code>reminders</code>, with an idempotent one-shot backfill. Taxonomy is <code>owner in {user, waiting, agent, shared}</code> &mdash; <code>agent</code> is deliberately generic so third-party deployments render their own assistant label instead of hardcoding &ldquo;NEXO&rdquo;. Closes a UX paradox where tasks labelled &ldquo;Para ti&rdquo; could be hidden by the &ldquo;Tareas internas&rdquo; filter.</p>
+                <a href="/blog/nexo-5-8-0/" class="read-more">Read more &rarr;</a>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 17, 2026</div>
                 <h2><a href="/blog/nexo-5-7-0/">NEXO 5.7.0: `nexo update` Auto-Updates Claude Code and Codex CLIs</a></h2>
                 <p><code>nexo update</code> now keeps your terminal CLIs in lockstep with NEXO Brain itself. When the global <code>@anthropic-ai/claude-code</code> or <code>@openai/codex</code> packages are installed, the updater checks the npm registry and runs <code>npm install -g &lt;pkg&gt;@latest</code> in-line before the post-update verify step &mdash; so the boot model stays aligned with the settings NEXO already wrote to <code>~/.claude/settings.json</code>. Pass <code>nexo update --no-clis</code> to pin them manually.</p>
                 <a href="/blog/nexo-5-7-0/" class="read-more">Read more &rarr;</a>
