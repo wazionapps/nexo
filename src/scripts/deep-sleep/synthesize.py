@@ -241,7 +241,7 @@ def main():
     try:
         result = run_automation_prompt(
             prompt,
-            model=_USER_MODEL,
+            caller="deep-sleep/synthesize",
             timeout=CLAUDE_TIMEOUT,
             output_format="text",
             allowed_tools="Read,Grep,Bash",

@@ -63,6 +63,10 @@ from tools_credentials import (
 from tools_task_history import (
     handle_task_log, handle_task_list, handle_task_frequency,
 )
+from tools_automation_sessions import (
+    handle_session_log_create,
+    handle_session_log_close,
+)
 from plugin_loader import load_all_plugins, load_plugin, remove_plugin, list_plugins
 
 
@@ -1373,6 +1377,104 @@ def nexo_drive_dismiss(signal_id: int, reason: str) -> str:
         reason: Why this signal was dismissed.
     """
     return handle_drive_dismiss(signal_id, reason)
+
+
+@mcp.tool
+def nexo_session_log_create(
+    caller: str,
+    backend: str,
+    session_type: str = "interactive_desktop",
+    model: str = "",
+    reasoning_effort: str = "",
+    resonance_tier: str = "",
+    cwd: str = "",
+    pid: str = "",
+    context_excerpt: str = "",
+) -> str:
+    """Open an automation_runs row for an interactive Claude/Codex session.
+
+    Designed for clients that spawn Claude/Codex directly (notably NEXO
+    Desktop, which runs a TypeScript process that shells out to the CLI
+    without going through run_automation_prompt). Call this BEFORE
+    spawning the child, store the returned session_id, then call
+    nexo_session_log_close when the session ends.
+
+    Args:
+        caller: Registered caller id (see src/resonance_map.py). For
+                Desktop's "new conversation" button, use
+                "desktop_new_session".
+        backend: "claude_code" or "codex".
+        session_type: "interactive_chat" | "interactive_desktop" — how
+                     the session is shaped. Default "interactive_desktop".
+        model: Concrete model the client resolved, e.g. "claude-opus-4-7[1m]".
+        reasoning_effort: Concrete effort string, e.g. "xhigh".
+        resonance_tier: Tier label ("maximo"/"alto"/"medio"/"bajo"). If
+                        left empty the Brain resolves it from caller.
+        cwd: Working directory the session is anchored to.
+        pid: Child process PID if available.
+        context_excerpt: Optional first-prompt preview (used to size
+                         prompt_chars in telemetry).
+    """
+    import json as _json
+    result = handle_session_log_create(
+        caller=caller,
+        backend=backend,
+        session_type=session_type,
+        model=model,
+        reasoning_effort=reasoning_effort,
+        resonance_tier=resonance_tier,
+        cwd=cwd,
+        pid=pid,
+        context_excerpt=context_excerpt,
+    )
+    return _json.dumps(result, ensure_ascii=False)
+
+
+@mcp.tool
+def nexo_session_log_close(
+    session_id: int,
+    returncode: int = 0,
+    duration_ms: int = 0,
+    input_tokens: int = 0,
+    cached_input_tokens: int = 0,
+    output_tokens: int = 0,
+    total_cost_usd: str = "",
+    telemetry_source: str = "",
+    cost_source: str = "",
+    error: str = "",
+) -> str:
+    """Close an automation_runs row opened by nexo_session_log_create.
+
+    Args:
+        session_id: id returned by the create call.
+        returncode: child exit code (0 = ok).
+        duration_ms: wall-clock duration in milliseconds.
+        input_tokens / cached_input_tokens / output_tokens: client-side
+                     usage counters.
+        total_cost_usd: cost in USD as a string (parsed to float).
+        telemetry_source: short label identifying where the counts came
+                          from ("desktop_stream", "codex_json", ...).
+        cost_source: short label for cost provenance.
+        error: short error message if the session failed.
+    """
+    import json as _json
+    try:
+        cost = float(total_cost_usd) if total_cost_usd else None
+    except ValueError:
+        cost = None
+    result = handle_session_log_close(
+        session_id=session_id,
+        returncode=returncode,
+        duration_ms=duration_ms,
+        input_tokens=input_tokens,
+        cached_input_tokens=cached_input_tokens,
+        output_tokens=output_tokens,
+        total_cost_usd=cost,
+        telemetry_source=telemetry_source,
+        cost_source=cost_source,
+        error=error,
+    )
+    return _json.dumps(result, ensure_ascii=False)
 
 
 if __name__ == "__main__":

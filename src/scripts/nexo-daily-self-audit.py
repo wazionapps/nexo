@@ -2050,7 +2050,7 @@ Also write the machine-readable summary to {LOG_DIR}/self-audit-summary.json.
     try:
         result = run_automation_prompt(
             prompt,
-            model=_USER_MODEL,
+            caller="daily_self_audit",
             timeout=AUTOMATION_SUBPROCESS_TIMEOUT,
             output_format="text",
             allowed_tools="Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__*",

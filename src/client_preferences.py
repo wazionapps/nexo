@@ -494,6 +494,7 @@ def save_client_preferences(
     automation_task_profiles: dict | None = None,
     client_install_preferences: dict | None = None,
     acknowledged_model_recommendations: dict | None = None,
+    default_resonance: str | None = None,
 ) -> Path:
     schedule = apply_client_preferences(
         load_schedule_config(),
@@ -507,6 +508,10 @@ def save_client_preferences(
         client_install_preferences=client_install_preferences,
         acknowledged_model_recommendations=acknowledged_model_recommendations,
     )
+    if default_resonance is not None:
+        tier = str(default_resonance).strip().lower()
+        if tier:
+            schedule["default_resonance"] = tier
     return save_schedule_config(schedule)
 
 

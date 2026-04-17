@@ -174,6 +174,13 @@
 
             <div class="blog-card">
                 <div class="blog-card-date">April 17, 2026</div>
+                <h2><a href="/blog/nexo-5-9-0/">NEXO 5.9.0: Resonance Map + Unified Session Log</a></h2>
+                <p>Every Claude/Codex invocation now flows through a central resonance map (<code>MAXIMO</code> / <code>ALTO</code> / <code>MEDIO</code> / <code>BAJO</code>) and a unified <code>automation_runs</code> table. User-facing callers (<code>nexo chat</code>, Desktop, interactive <code>nexo update</code>) honour the user's <code>default_resonance</code>; system-owned callers are pinned per caller in <code>src/resonance_map.py</code>. Migration #41 adds <code>caller</code>, <code>session_type</code>, <code>started_at</code>, <code>ended_at</code>, <code>pid</code>, <code>resonance_tier</code>. New <code>run_automation_interactive()</code>, MCP tools <code>nexo_session_log_create</code>/<code>_close</code> for Desktop, and <code>nexo preferences --resonance</code> CLI. 20 new tests.</p>
+                <a href="/blog/nexo-5-9-0/" class="read-more">Read more &rarr;</a>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 17, 2026</div>
                 <h2><a href="/blog/nexo-5-8-2/">NEXO 5.8.2: Brain Core Neutralised</a></h2>
                 <p>v5.8.0 shipped an auto-classifier in the Brain core that matched NEXO-specific ID prefixes (<code>NF-PROTOCOL-*</code>, <code>NF-DS-*</code>, &hellip;), Spanish user-verbs (<code>debes</code>, <code>revisar</code>, <code>firmar</code>), and agent keywords (<code>monitor</code>, <code>auditoría diaria</code>). Fine for NEXO&rsquo;s own DB, poison for every third-party agent plugged into the shared Brain. 5.8.2 removes it entirely. The core persists <code>internal=0</code> and <code>owner=NULL</code> when callers omit them; clients that want classification compute it themselves. Desktop&rsquo;s existing <code>_legacyClassifyOwner</code> handles the fallback so users see no visual change.</p>
                 <a href="/blog/nexo-5-8-2/" class="read-more">Read more &rarr;</a>

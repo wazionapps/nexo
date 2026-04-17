@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXO 5.9.0: centralised resonance map + unified session log</title>
+    <meta name="description" content="NEXO Brain 5.9.0 introduces a central resonance map (MAXIMO/ALTO/MEDIO/BAJO) and a unified automation session log. Every Claude/Codex invocation — crons, nexo chat, NEXO Desktop — runs at a deliberate tier and shows up in one table. New nexo preferences --resonance CLI. Migration #41 extends automation_runs.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-5-9-0/">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/blog/nexo-5-9-0/">
+    <meta property="og:title" content="NEXO 5.9.0: centralised resonance map + unified session log">
+    <meta property="og:description" content="One table, one map, one source of truth for every Claude/Codex invocation NEXO makes.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+    <meta property="article:published_time" content="2026-04-17">
+    <meta property="article:author" content="Francisco Cerda Puigserver">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO 5.9.0: resonance map + session log">
+    <meta name="twitter:description" content="MAXIMO/ALTO/MEDIO/BAJO per caller, interactive sessions now in the same table as crons.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "NEXO 5.9.0: centralised resonance map + unified session log",
+        "description": "Every Claude/Codex invocation now flows through a central resonance map and a unified automation session log.",
+        "datePublished": "2026-04-17",
+        "dateModified": "2026-04-17",
+        "author": {"@type": "Person", "name": "Francisco Cerda Puigserver"},
+        "publisher": {"@type": "Organization", "name": "WAzion", "url": "https://www.wazion.com"},
+        "mainEntityOfPage": {"@type": "WebPage", "@id": "https://nexo-brain.com/blog/nexo-5-9-0/"},
+        "url": "https://nexo-brain.com/blog/nexo-5-9-0/",
+        "image": "https://nexo-brain.com/assets/og/og-blog.png",
+        "keywords": ["NEXO 5.9.0", "resonance map", "session log", "automation_runs", "model tiers", "observability"]
+    }
+    </script>
+
+    <style>
+        .article-header { padding-top: 128px; padding-bottom: 40px; text-align: center; }
+        .article-meta { font-size: 14px; color: var(--text-muted); margin-bottom: 16px; }
+        .article-body {
+            max-width: 720px; margin: 0 auto; padding: 0 24px 80px;
+            font-size: 17px; line-height: 1.8; color: var(--text);
+        }
+        .article-body h2 { font-size: 28px; font-weight: 700; margin: 48px 0 16px; letter-spacing: -0.01em; }
+        .article-body p { margin-bottom: 20px; color: var(--text-muted); }
+        .article-body strong { color: var(--text); }
+        .article-body a { color: var(--purple-light); }
+        .article-body a:hover { color: var(--pink); }
+        .article-body code {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 14px; color: var(--pink);
+            background: rgba(236, 72, 153, 0.1);
+            padding: 2px 8px; border-radius: 4px;
+        }
+        .article-back {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 14px; font-weight: 600; color: var(--text-muted);
+            margin-bottom: 24px;
+        }
+        .article-back:hover { color: var(--purple-light); }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-64.png" alt="NEXO Brain" class="logo-image">
+            <span class="logo-text">NEXO Brain</span>
+        </a>
+        <button class="mobile-menu-toggle" aria-label="Toggle navigation" onclick="toggleMobileMenu()">
+            <span></span><span></span><span></span>
+        </button>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/features/">Features</a>
+            <a href="/evolution/">Evolution</a>
+            <a href="/compare/">Compare</a>
+            <a href="/blog/">Blog</a>
+            <a href="/changelog/">Changelog</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta">GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<section class="article-header">
+    <div class="container">
+        <a href="/blog/" class="article-back">&larr; Back to blog</a>
+        <div class="article-meta">April 17, 2026 &middot; Feature &middot; Observability &middot; Model Tiers</div>
+        <h1 class="section-title" style="font-size:clamp(28px,4.5vw,48px);max-width:920px;margin:0 auto 16px;">NEXO 5.9.0: centralised resonance map + unified session log</h1>
+        <p class="section-subtitle" style="max-width:760px;margin:0 auto;">One map decides which Claude/Codex tier every automation call runs at. One table records every invocation &mdash; crons, <code>nexo chat</code>, NEXO Desktop &mdash; from spawn to exit.</p>
+    </div>
+</section>
+
+<section>
+    <div class="article-body">
+
+        <h2>The two problems this release closes</h2>
+        <p>First: before v5.9.0 every script that called Claude or Codex picked its own <code>(model, reasoning_effort)</code> pair &mdash; either explicitly or by falling back to the global defaults. That meant <code>nexo chat</code> (a human waiting at a terminal, reasoning budget matters) and a 4am daily GBP post (generate 200 chars of marketing copy, run it cheap) shared the same tier. Changing one moved both.</p>
+        <p>Second: the interactive surfaces &mdash; <code>nexo chat</code> and NEXO Desktop's &ldquo;new conversation&rdquo; &mdash; bypassed <code>automation_runs</code> entirely because they spawn <code>claude</code> directly to keep interactive stdio. The Brain had no record of when the user actually talked to Claude. Every cron was in the log; every user conversation was a blind spot.</p>
+
+        <h2>The resonance map</h2>
+        <p>New file: <code>src/resonance_map.py</code>. Four tiers (<code>MAXIMO</code> / <code>ALTO</code> / <code>MEDIO</code> / <code>BAJO</code>) each map to a concrete <code>(model, reasoning_effort)</code> pair per backend. Today all four point at Opus 4.7 (1M) for Claude and GPT-5.4 for Codex, with the effort knob doing the tier differentiation (<code>max</code> / <code>xhigh</code> / <code>high</code> / <code>medium</code>). Future backends with different model families just update this one table.</p>
+        <p>Every caller is registered in one of two dicts. <code>USER_FACING_CALLERS</code> holds three entries: <code>nexo_chat</code>, <code>desktop_new_session</code>, <code>nexo_update_interactive</code>. These read the user's <code>default_resonance</code> preference at runtime. <code>SYSTEM_OWNED_CALLERS</code> holds everything else: crons, background scripts, tool helpers. Each one is pinned to a tier we picked per caller &mdash; the user's preference cannot downgrade it. <code>deep-sleep/synthesize</code> runs <code>MAXIMO</code> because cross-session synthesis benefits from every token of reasoning. <code>deep-sleep/extract</code> runs <code>ALTO</code>. <code>gbp/*</code> marketing posts run <code>MEDIO</code> (short copy but user-visible, we don't want embarrassing outputs from low-effort).</p>
+        <p>Unknown callers raise <code>UnregisteredCallerError</code>. There is no silent default tier. Every automation call is auditable back to a named, tiered caller.</p>
+
+        <h2>The unified session log</h2>
+        <p>Migration #41 extends <code>automation_runs</code> with six columns: <code>caller</code>, <code>session_type</code> (<code>headless</code> / <code>interactive_chat</code> / <code>interactive_desktop</code>), <code>started_at</code>, <code>ended_at</code>, <code>pid</code>, <code>resonance_tier</code>. Idempotent: <code>_migrate_add_column</code> is a no-op on existing columns, pre-v5.9.0 rows get empty values.</p>
+        <p>The monolithic <code>_record_automation_run()</code> splits into <code>_record_automation_start()</code> (INSERT with <code>ended_at=NULL</code>, return <code>row_id</code>) + <code>_record_automation_end()</code> (UPDATE by <code>row_id</code>, or fall back to INSERT if start failed). Long-running jobs and interactive sessions now show up in the log while they are still in flight.</p>
+        <p><code>run_automation_interactive()</code> is a new sibling of <code>run_automation_prompt</code>. It spawns an interactive child with the user's terminal stdio inherited, records the row at spawn, updates it on exit. <code>launch_interactive_client()</code> (the path <code>nexo chat</code> uses) now routes through it.</p>
+        <p>For NEXO Desktop, which spawns <code>claude</code> from its TypeScript process without touching <code>agent_runner</code>, two new MCP tools expose the same start/end surface: <code>nexo_session_log_create</code> and <code>nexo_session_log_close</code>. Desktop calls create before spawning, stores the returned <code>session_id</code>, calls close when the conversation ends.</p>
+
+        <h2>Changing your default</h2>
+        <p>New CLI subcommand:</p>
+        <p>&bull; <code>nexo preferences --resonance maximo</code> to set.<br>
+           &bull; <code>nexo preferences --show</code> to read.<br>
+           &bull; <code>nexo preferences --resonance --json</code> for programmatic output.</p>
+        <p>Writes <code>default_resonance</code> into <code>schedule.json</code>. The three user-facing callers read it at runtime through the resonance map. Default default remains <code>ALTO</code>.</p>
+
+        <h2>What this unlocks</h2>
+        <p>A single query now answers &ldquo;what did NEXO do with Claude today, broken down by subsystem?&rdquo; &mdash; including interactive chats and Desktop conversations. Tier decisions move out of individual scripts and into one reviewable file. Promoting Opus 4.7 to the next model only touches <code>_RESONANCE_TABLE</code>. Downgrading a chatty cron from ALTO to MEDIO is one line change that ripples nowhere else.</p>
+
+        <h2>Upgrading</h2>
+        <p>Run <code>nexo update</code>. Migration #41 runs on the next boot (no-op on pre-v5.8.x installs because the columns did not exist yet; additive on v5.8.x). Previously-working crons keep working &mdash; the 13 updated in this release now pass <code>caller=</code>, the rest either still ride the legacy task_profile path or will be migrated in a follow-up pass along with Maria's personal scripts.</p>
+
+    </div>
+</section>
+
+<footer style="padding:48px 24px;text-align:center;font-size:13px;color:var(--text-muted);">
+    &copy; 2026 <a href="https://www.wazion.com" style="color:var(--purple-light);">WAzion</a>. NEXO Brain is open-source under <a href="https://github.com/wazionapps/nexo/blob/main/LICENSE" style="color:var(--purple-light);">AGPL-3.0</a>.
+</footer>
+
+<script src="/assets/main.js"></script>
+</body>
+</html>

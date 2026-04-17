@@ -1,5 +1,62 @@
 # Changelog
 
+## [5.9.0] - 2026-04-17
+
+### Feature: centralised resonance map + unified automation session log
+
+Before v5.9.0 every script that called Claude or Codex picked its own model + reasoning effort — either explicitly or by falling back to the global defaults in `model_defaults.json`. That meant `nexo chat` (interactive, should burn reasoning on user requests) and a 4am daily GBP post (short marketing copy, should be cheap) ended up at the same tier, and changing a default shifted both at once. Interactive sessions (`nexo chat`, Desktop new conversation) also bypassed `automation_runs` entirely, so the Brain had no record of when the user actually talked to Claude.
+
+**Resonance map (`src/resonance_map.py`)**
+
+Four tiers (`MAXIMO` / `ALTO` / `MEDIO` / `BAJO`) mapped per backend to a concrete `(model, reasoning_effort)` pair. Every caller is registered in one of two dicts:
+
+- `USER_FACING_CALLERS` = three entry points (`nexo_chat`, `desktop_new_session`, `nexo_update_interactive`) that honour the user's `default_resonance` preference.
+- `SYSTEM_OWNED_CALLERS` = every cron / script / background task, locked at a fixed tier we pick per caller based on what the job actually needs. `deep-sleep/synthesize` runs `MAXIMO`; `deep-sleep/extract` runs `ALTO`; `evolution/run` and `reflection` run `MAXIMO`; short marketing copy (`gbp/*`) runs `MEDIO`. The user's preference never downgrades a system-owned job.
+
+Unknown callers raise `UnregisteredCallerError` — no silent default. Every automation call is auditable back to a named, tiered caller.
+
+**New `caller=` argument on `run_automation_prompt`**
+
+`run_automation_prompt` accepts a `caller` kwarg and, when present, resolves `(model, effort)` via the resonance map instead of the global task profile. Explicit `model` / `reasoning_effort` still win for edge cases (e.g. the JSON-conversion follow-up inside `deep-sleep/extract.py` that calls with a shorter budget). 13 callers updated in this release: `deep-sleep/extract`, `deep-sleep/synthesize`, `catchup/morning`, `evolution/run`, `sleep/nightly`, `immune/scan`, `daily_self_audit`, `postmortem_consolidator`, `synthesis/daily`, `check_context`, `learning_validator`, `tools/drive_search`, `agent_run/generic`.
+
+**`run_automation_interactive()` for chat + Desktop**
+
+New sibling of `run_automation_prompt` that spawns an interactive Claude/Codex session with stdin/stdout inherited from the user terminal. Records a row in `automation_runs` at spawn (`ended_at IS NULL`) and updates it on exit. `launch_interactive_client` (used by `nexo chat`) now routes through this path, so every interactive session is in the unified log.
+
+**MCP tools for Desktop (`tools_automation_sessions.py`)**
+
+`nexo_session_log_create` and `nexo_session_log_close` expose the same start/end API over MCP so NEXO Desktop — which spawns `claude` from its TypeScript process, not via `agent_runner` — can participate in the unified log. Call create before spawning, store the returned `session_id`, call close when the conversation ends. Every Claude/Codex invocation on the machine now flows through one table.
+
+**Migration #41 on `automation_runs`**
+
+Adds six columns + three indexes: `caller`, `session_type` (`headless` / `interactive_chat` / `interactive_desktop`), `started_at`, `ended_at` (NULL = currently running), `pid`, `resonance_tier`. Idempotent — `_migrate_add_column` is a no-op on existing columns; pre-v5.9.0 rows just get empty values.
+
+**`_record_automation_start` / `_record_automation_end` split**
+
+The monolithic `_record_automation_run` is now a compatibility facade over two new helpers. Start inserts a row with `ended_at IS NULL` and returns a `row_id`; end UPDATEs by `row_id` (or falls back to a single-shot INSERT if start failed). This is what lets long-running jobs and interactive sessions show up in the log while they are still in flight.
+
+**`nexo preferences --resonance` CLI**
+
+New subcommand:
+
+```
+nexo preferences --resonance maximo|alto|medio|bajo   # set default
+nexo preferences --show                               # read current
+```
+
+Writes `default_resonance` into `schedule.json`. The three user-facing callers read it at runtime through the resonance map.
+
+**Tests**
+
+20 new cases across `test_resonance_map.py` (14) and `test_automation_sessions_log.py` (6): tier/backend coverage, user-facing vs system-owned resolution, unknown caller rejection, empty-caller rejection, fallback when backend missing, register/unregister roundtrip, migration #41 schema, start/end persistence, end-without-start fallback, create/close MCP roundtrip. Full agent_runner + task classification suites stay green.
+
+Out of scope for v5.9.0 (intentionally deferred to 5.9.1+):
+
+- Requiring `caller=` at the signature level (enforces only at resolution time for now).
+- Onboarding simplification (the interactive setup flow still asks for model; the new preferences knob is additive).
+- Desktop UI for `default_resonance` (the CLI is enough until Desktop ships its next release).
+- Personal scripts (email-monitor, etc.): will be revisited with Maria as a separate pass.
+
 ## [5.8.2] - 2026-04-17
 
 ### Fix: neutralize Brain core — remove Spanish-first NEXO-specific classification heuristic

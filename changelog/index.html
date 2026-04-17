@@ -181,6 +181,17 @@
     </div>
 </section>
 
+<!-- v5.9.0 Resonance map + unified session log -->
+<section id="v590" class="section-compact" style="background:linear-gradient(135deg,#09111f 0%,#14253a 50%,#1e3a5f 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.9.0 <span style="opacity:.5;font-weight:400;">&mdash; April 17, 2026</span></div>
+        <h2 class="section-title">Centralised Resonance Map + Unified Session Log</h2>
+        <p class="section-subtitle">
+            Every Claude/Codex invocation now flows through a central resonance map in <code>src/resonance_map.py</code>: four tiers (<code>MAXIMO</code> / <code>ALTO</code> / <code>MEDIO</code> / <code>BAJO</code>) each resolve to a concrete <code>(model, reasoning_effort)</code> pair per backend. User-facing callers (<code>nexo chat</code>, Desktop new conversation, interactive <code>nexo update</code>) honour the user's <code>default_resonance</code>; system-owned callers are pinned per caller &mdash; <code>deep-sleep/synthesize</code> and <code>evolution/run</code> run <code>MAXIMO</code>, <code>gbp/*</code> marketing posts run <code>MEDIO</code>. Unknown callers raise <code>UnregisteredCallerError</code>. Migration #41 adds <code>caller</code>, <code>session_type</code>, <code>started_at</code>, <code>ended_at</code>, <code>pid</code>, <code>resonance_tier</code> to <code>automation_runs</code>; interactive sessions record a row at spawn with <code>ended_at=NULL</code> and update it on close. New <code>run_automation_interactive()</code> covers <code>nexo chat</code>; new MCP tools <code>nexo_session_log_create</code> / <code>nexo_session_log_close</code> let NEXO Desktop (which spawns <code>claude</code> directly) feed the same log. New <code>nexo preferences --resonance</code> CLI writes <code>default_resonance</code> into <code>schedule.json</code>. 20 new tests.
+        </p>
+    </div>
+</section>
+
 <!-- v5.8.2 Brain core neutralised — NEXO-specific heuristic removed -->
 <section id="v582" class="section-compact" style="background:linear-gradient(135deg,#09111f 0%,#14253a 50%,#1e3a5f 100%);">
     <div class="container">
