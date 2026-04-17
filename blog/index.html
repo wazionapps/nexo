@@ -174,6 +174,13 @@
 
             <div class="blog-card">
                 <div class="blog-card-date">April 17, 2026</div>
+                <h2><a href="/blog/nexo-5-10-1/">NEXO 5.10.1: Silent Migration of Legacy <code>reasoning_effort=max</code> to the Resonance Map</a></h2>
+                <p>v5.10.0 made the resonance map prevail over the legacy <code>reasoning_effort</code> hint. Anyone whose only recorded preference was <code>reasoning_effort="max"</code> silently fell back to <code>alto</code> — a one-tier downgrade. v5.10.1 adds a one-shot, non-destructive migration inside <code>_run_runtime_post_sync()</code>: <code>max→maximo</code>, <code>xhigh→alto</code>, <code>high→medio</code>, <code>medium→bajo</code>. No-op when an explicit <code>default_resonance</code> is already set. Idempotent. Never raises. 10 new tests plus a test-harness fix that unblocks <code>test_cron_recovery.py</code> against main (1011 passed, 1 skipped).</p>
+                <a href="/blog/nexo-5-10-1/" class="read-more">Read more &rarr;</a>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 17, 2026</div>
                 <h2><a href="/blog/nexo-5-10-0/">NEXO 5.10.0: Extract-Path Bloat Fix + caller= Enforced</a></h2>
                 <p>Deep-sleep Session 1 used to take 57 minutes on some installs because every <code>claude -p</code> child reloaded an 11&nbsp;KB <code>CLAUDE.md</code>, hook sync, plugin refresh, keychain probe. New <code>bare_mode</code> on <code>run_automation_prompt</code> wires <code>claude --bare</code> for JSON-only callers (~4.3× faster per child). <code>caller=</code> is now mandatory — no silent fallback. Five personal scripts joined the resonance map. 65 legacy protocol debts bulk-resolved. 10 new bare-mode tests (974 total).</p>
                 <a href="/blog/nexo-5-10-0/" class="read-more">Read more &rarr;</a>

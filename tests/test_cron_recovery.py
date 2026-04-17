@@ -11,6 +11,31 @@ from pathlib import Path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
 
 
+_CATCHUP_RUNTIME_FILES = (
+    "cron_recovery.py",
+    "runtime_power.py",
+    "client_preferences.py",
+    "agent_runner.py",
+    "model_defaults.py",
+    "model_defaults.json",
+    "bootstrap_docs.py",
+    "db.py",
+    "enforcement_engine.py",
+    "resonance_map.py",
+    "constants.py",
+)
+
+
+def _prime_catchup_runtime_root(repo_src: Path, runtime_root: Path) -> None:
+    """Copy the minimal source tree needed so nexo-catchup.py runs standalone."""
+    (runtime_root / "scripts").mkdir(parents=True, exist_ok=True)
+    for name in _CATCHUP_RUNTIME_FILES:
+        src = repo_src / name
+        if src.exists():
+            shutil.copy2(src, runtime_root / name)
+    shutil.copy2(repo_src / "scripts" / "nexo-catchup.py", runtime_root / "scripts" / "nexo-catchup.py")
+
+
 def test_catchup_candidates_use_successful_cron_runs(tmp_path, monkeypatch):
     import cron_recovery
 
@@ -205,13 +230,8 @@ def test_catchup_candidates_do_not_relaunch_inflight_due_window(tmp_path, monkey
 def test_catchup_script_runs_directly_from_runtime_root(tmp_path):
     repo_src = Path(__file__).resolve().parent.parent / "src"
     runtime_root = tmp_path / "runtime"
-    (runtime_root / "scripts").mkdir(parents=True)
     (runtime_root / "crons").mkdir(parents=True)
-    shutil.copy2(repo_src / "cron_recovery.py", runtime_root / "cron_recovery.py")
-    shutil.copy2(repo_src / "runtime_power.py", runtime_root / "runtime_power.py")
-    shutil.copy2(repo_src / "client_preferences.py", runtime_root / "client_preferences.py")
-    shutil.copy2(repo_src / "agent_runner.py", runtime_root / "agent_runner.py")
-    shutil.copy2(repo_src / "scripts" / "nexo-catchup.py", runtime_root / "scripts" / "nexo-catchup.py")
+    _prime_catchup_runtime_root(repo_src, runtime_root)
     (runtime_root / "crons" / "manifest.json").write_text('{"crons":[]}')
 
     home = tmp_path / "home"
@@ -237,14 +257,9 @@ def test_catchup_script_releases_lock_on_early_crash(tmp_path):
     """Lock must be released even if _heal_personal_schedules or catchup_candidates crashes."""
     repo_src = Path(__file__).resolve().parent.parent / "src"
     runtime_root = tmp_path / "runtime"
-    (runtime_root / "scripts").mkdir(parents=True)
     (runtime_root / "crons").mkdir(parents=True)
     (runtime_root / "operations").mkdir(parents=True)
-    shutil.copy2(repo_src / "cron_recovery.py", runtime_root / "cron_recovery.py")
-    shutil.copy2(repo_src / "runtime_power.py", runtime_root / "runtime_power.py")
-    shutil.copy2(repo_src / "client_preferences.py", runtime_root / "client_preferences.py")
-    shutil.copy2(repo_src / "agent_runner.py", runtime_root / "agent_runner.py")
-    shutil.copy2(repo_src / "scripts" / "nexo-catchup.py", runtime_root / "scripts" / "nexo-catchup.py")
+    _prime_catchup_runtime_root(repo_src, runtime_root)
     # Write a broken manifest that will cause catchup_candidates to fail
     (runtime_root / "crons" / "manifest.json").write_text('{"crons":[{"id":"boom"}]}')
     # Inject a cron_recovery that crashes in catchup_candidates
@@ -298,13 +313,8 @@ def test_catchup_script_self_heals_personal_schedules(tmp_path):
     repo_src = Path(__file__).resolve().parent.parent / "src"
     runtime_root = tmp_path / "runtime"
     marker = tmp_path / "reconcile-called.txt"
-    (runtime_root / "scripts").mkdir(parents=True)
     (runtime_root / "crons").mkdir(parents=True)
-    shutil.copy2(repo_src / "cron_recovery.py", runtime_root / "cron_recovery.py")
-    shutil.copy2(repo_src / "runtime_power.py", runtime_root / "runtime_power.py")
-    shutil.copy2(repo_src / "client_preferences.py", runtime_root / "client_preferences.py")
-    shutil.copy2(repo_src / "agent_runner.py", runtime_root / "agent_runner.py")
-    shutil.copy2(repo_src / "scripts" / "nexo-catchup.py", runtime_root / "scripts" / "nexo-catchup.py")
+    _prime_catchup_runtime_root(repo_src, runtime_root)
     (runtime_root / "crons" / "manifest.json").write_text('{"crons":[]}')
     (runtime_root / "script_registry.py").write_text(
         "from pathlib import Path\n"
