@@ -131,3 +131,81 @@ def test_user_facing_registry_is_small():
         "desktop_new_session",
         "nexo_update_interactive",
     }
+
+
+def test_load_user_default_reads_from_calibration_first(tmp_path, monkeypatch):
+    """The preferences UI in NEXO Desktop writes to
+    ``brain/calibration.json``; the CLI also writes to
+    ``config/schedule.json``. When both exist the calibration value wins
+    (it is the source the UI shows the user)."""
+    import json as _json
+    home = tmp_path / "nexo-home"
+    (home / "brain").mkdir(parents=True)
+    (home / "config").mkdir()
+    (home / "brain" / "calibration.json").write_text(
+        _json.dumps({"preferences": {"default_resonance": "medio"}})
+    )
+    (home / "config" / "schedule.json").write_text(
+        _json.dumps({"default_resonance": "bajo"})
+    )
+    monkeypatch.setenv("NEXO_HOME", str(home))
+    tier = rmap._load_user_default_resonance()
+    assert tier == "medio"
+
+
+def test_load_user_default_falls_back_to_schedule(tmp_path, monkeypatch):
+    import json as _json
+    home = tmp_path / "nexo-home"
+    (home / "config").mkdir(parents=True)
+    (home / "config" / "schedule.json").write_text(
+        _json.dumps({"default_resonance": "bajo"})
+    )
+    monkeypatch.setenv("NEXO_HOME", str(home))
+    assert rmap._load_user_default_resonance() == "bajo"
+
+
+def test_load_user_default_returns_empty_when_neither_source(tmp_path, monkeypatch):
+    monkeypatch.setenv("NEXO_HOME", str(tmp_path / "nexo-empty"))
+    assert rmap._load_user_default_resonance() == ""
+
+
+def test_load_user_default_rejects_invalid_tier(tmp_path, monkeypatch):
+    """Garbage in calibration.json shouldn't downgrade to DEFAULT silently
+    — it returns empty so callers can fall back deliberately."""
+    import json as _json
+    home = tmp_path / "nexo-home"
+    (home / "brain").mkdir(parents=True)
+    (home / "brain" / "calibration.json").write_text(
+        _json.dumps({"preferences": {"default_resonance": "ultra-high"}})
+    )
+    monkeypatch.setenv("NEXO_HOME", str(home))
+    assert rmap._load_user_default_resonance() == ""
+
+
+def test_resolve_tier_for_caller_picks_up_calibration(tmp_path, monkeypatch):
+    """nexo_chat with no explicit user_default must read calibration.json
+    so that whatever Desktop wrote takes effect without any CLI argument."""
+    import json as _json
+    home = tmp_path / "nexo-home"
+    (home / "brain").mkdir(parents=True)
+    (home / "brain" / "calibration.json").write_text(
+        _json.dumps({"preferences": {"default_resonance": "maximo"}})
+    )
+    monkeypatch.setenv("NEXO_HOME", str(home))
+    tier = rmap.resolve_tier_for_caller("nexo_chat", user_default=None)
+    assert tier == "maximo"
+
+
+def test_explicit_user_default_still_overrides_calibration(tmp_path, monkeypatch):
+    """If the caller passes user_default explicitly that wins over the file
+    — the per-call override path stays intact for CLI flags like
+    `nexo chat --resonance max`."""
+    import json as _json
+    home = tmp_path / "nexo-home"
+    (home / "brain").mkdir(parents=True)
+    (home / "brain" / "calibration.json").write_text(
+        _json.dumps({"preferences": {"default_resonance": "bajo"}})
+    )
+    monkeypatch.setenv("NEXO_HOME", str(home))
+    tier = rmap.resolve_tier_for_caller("nexo_chat", user_default="maximo")
+    assert tier == "maximo"

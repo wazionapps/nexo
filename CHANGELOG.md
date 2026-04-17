@@ -1,5 +1,25 @@
 # Changelog
 
+## [5.9.1] - 2026-04-17
+
+### Feature: `default_resonance` reachable from NEXO Desktop's Preferences UI
+
+v5.9.0 shipped `nexo preferences --resonance` as a CLI-only way to change the default tier for interactive sessions. The Desktop Preferences dialog had no matching control, so Desktop users either had to drop to a terminal or leave the default at `alto`. v5.9.1 closes that gap without requiring a Desktop release: NEXO Desktop already fetches its editable fields via `nexo schema --json`, so adding the field at the Brain end makes the selector appear the next time the user opens Preferences.
+
+Changes:
+
+- **`src/desktop_bridge.py`**: new field `preferences.default_resonance` (stored in `brain/calibration.json`) in the `preferences` group. Four labelled options (`Máximo` / `Alto (recomendado)` / `Medio` / `Bajo` in Spanish, `Maximum` / `High (recommended)` / `Medium` / `Low` in English) with an inline hint explaining that the preference only affects interactive sessions — crons and background processes (deep-sleep, evolution, …) stay pinned per caller in `resonance_map.py`. Desktop renders this automatically via its existing `buildFieldsFromBrainSchema()` path.
+- **`src/resonance_map.py`**: new `_load_user_default_resonance()` helper. Reads `brain/calibration.json` first (`preferences.default_resonance`, where Desktop's UI writes) and falls back to `config/schedule.json` (where the v5.9.0 CLI wrote). `resolve_tier_for_caller` now consults that helper when the caller does not pass `user_default` explicitly — so `nexo chat` and `launch_interactive_client` pick up the Desktop-edited value without needing any extra wiring.
+- **`src/cli.py`**: `nexo preferences --resonance` now writes to BOTH `calibration.json` (new canonical location matching the UI) and `schedule.json` (legacy location, kept so clients that read schedule.json keep working). `--show` reports which source provided the current value.
+- **`tests/test_resonance_map.py`**: six new cases (20 total) covering calibration-first resolution, schedule.json fallback, invalid-tier rejection, empty-home fallback, `resolve_tier_for_caller` auto-discovery, and explicit `user_default` override winning over the file.
+
+Out of scope (still deferred from 5.9.0):
+
+- Requiring `caller=` at signature level.
+- Onboarding simplification (the first-run flow still asks for `model`; adding the resonance knob as a pre-onboarding step is a bigger UX change).
+- NEXO Desktop release that embeds MCP `nexo_session_log_create` / `nexo_session_log_close` calls around its direct `claude` spawns. The Brain side is ready; Desktop still needs to call them.
+- Extract.py system-prompt bloat (the reason Session 1 of deep-sleep takes minutes on some installs). Separate investigation.
+
 ## [5.9.0] - 2026-04-17
 
 ### Feature: centralised resonance map + unified automation session log

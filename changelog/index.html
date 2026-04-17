@@ -181,6 +181,17 @@
     </div>
 </section>
 
+<!-- v5.9.1 Resonance selector in NEXO Desktop's Preferences -->
+<section id="v591" class="section-compact" style="background:linear-gradient(135deg,#09111f 0%,#14253a 50%,#1e3a5f 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.9.1 <span style="opacity:.5;font-weight:400;">&mdash; April 17, 2026</span></div>
+        <h2 class="section-title">Resonance Selector in NEXO Desktop's Preferences UI</h2>
+        <p class="section-subtitle">
+            v5.9.0 shipped the four resonance tiers and the <code>nexo preferences --resonance</code> CLI. v5.9.1 surfaces the same control inside NEXO Desktop's existing Preferences dialog without requiring a Desktop release &mdash; Desktop already fetches its editable fields via <code>nexo schema --json</code>, so declaring <code>preferences.default_resonance</code> in <code>src/desktop_bridge.py</code> makes the selector appear automatically (four localised options, inline hint reminding that crons stay pinned per caller). New <code>_load_user_default_resonance()</code> reads <code>brain/calibration.json</code> first (where Desktop writes) and falls back to <code>config/schedule.json</code> (where the v5.9.0 CLI wrote). <code>resolve_tier_for_caller</code> calls it automatically when <code>user_default</code> is not passed, so <code>nexo chat</code> picks up Desktop's edit without changes. <code>nexo preferences --resonance</code> writes to both locations to keep them in sync. 6 new tests (20 total in resonance_map suite).
+        </p>
+    </div>
+</section>
+
 <!-- v5.9.0 Resonance map + unified session log -->
 <section id="v590" class="section-compact" style="background:linear-gradient(135deg,#09111f 0%,#14253a 50%,#1e3a5f 100%);">
     <div class="container">
