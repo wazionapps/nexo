@@ -1010,6 +1010,37 @@ def _m41_automation_sessions_columns(conn):
     )
 
 
+def _m42_v6_0_1_hotfix(conn):
+    """v6.0.1 hotfix — last_heartbeat_ts on sessions + hook_inbox_reminders.
+
+    Two surfaces:
+
+    1. ``sessions.last_heartbeat_ts`` is a REAL column holding the epoch
+       seconds of the most recent ``nexo_heartbeat`` call for that SID.
+       The PostToolUse hook uses it to decide whether to emit an
+       inbox-reminder systemMessage on autopilot sessions that have not
+       checked their inbox in a while.
+
+    2. ``hook_inbox_reminders`` is a tiny table storing the last time we
+       surfaced an inbox reminder per SID. The hook reads/writes it to
+       enforce a rate limit of at most one reminder per minute per
+       session, so long streams of tool calls do not spam the user.
+
+    Idempotent by construction: ``_migrate_add_column`` is a no-op when
+    the column exists, ``CREATE TABLE IF NOT EXISTS`` likewise.
+    """
+    _migrate_add_column(conn, "sessions", "last_heartbeat_ts", "REAL")
+    _migrate_add_index(
+        conn, "idx_sessions_last_heartbeat_ts", "sessions", "last_heartbeat_ts"
+    )
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS hook_inbox_reminders (
+            sid TEXT PRIMARY KEY,
+            last_reminder_ts REAL NOT NULL
+        )"""
+    )
+
+
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
     (2, "followups_reasoning", _m2_followups_reasoning),
@@ -1052,6 +1083,7 @@ MIGRATIONS = [
     (39, "hook_runs", _m39_hook_runs),
     (40, "classification_columns", _m40_classification_columns),
     (41, "automation_sessions_columns", _m41_automation_sessions_columns),
+    (42, "v6_0_1_hotfix", _m42_v6_0_1_hotfix),
 ]
 
 

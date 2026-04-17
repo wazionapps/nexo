@@ -181,6 +181,17 @@
     </div>
 </section>
 
+<!-- v6.0.1 Hotfix — NEXO_INTERACTIVE override + PostToolUse inbox autodetect -->
+<section id="v601" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v6.0.1 <span style="opacity:.5;font-weight:400;">&mdash; April 17, 2026</span></div>
+        <h2 class="section-title"><code>NEXO_INTERACTIVE</code> Override + PostToolUse Inbox Autodetect</h2>
+        <p class="section-subtitle">
+            Two hotfixes on top of 6.0.0. <strong>Fix 1:</strong> <code>protocol_settings.py</code> used to classify the process as interactive only when <code>sys.stdin.isatty() and sys.stdout.isatty()</code> — but NEXO Desktop 0.12.0 spawns <code>claude</code> through pipes, so both sides report False even with a human in the loop and v6.0.0 fell back to <code>lenient</code>. The detector now also treats the process as interactive when <code>NEXO_INTERACTIVE</code> is exactly the string <code>"1"</code>. Truthy-looking aliases (<code>true</code>/<code>yes</code>/<code>on</code>/<code>1&nbsp;</code>/<code>&nbsp;1</code>) are deliberately rejected so a typo cannot silently strict-mode a headless cron. <code>NEXO_INTERACTIVE</code> is an internal contract between Brain and interactive clients — not user-facing, not documented to operators, not a resurrection of the removed <code>NEXO_PROTOCOL_STRICTNESS</code>. <strong>Fix 2:</strong> autopilot Claude Code sessions (long streams of tool calls with no user turns) could not see inbound <code>nexo_send</code> messages until the user intervened manually because <code>nexo_heartbeat</code> only fires on user messages. v6.0.1 adds an inbox-autodetect stage at the end of the <code>PostToolUse</code> hook: when the session has unread messages AND the last heartbeat is more than 60s old (configurable via <code>NEXO_INBOX_CHECK_THRESHOLD_SECONDS</code>), the hook emits a <code>systemMessage</code> telling the agent to run <code>nexo_heartbeat</code> and consume the inbox. Rate-limited to one reminder per minute per SID via the new <code>hook_inbox_reminders</code> table. Added: <code>sessions.last_heartbeat_ts</code> column stamped by every successful heartbeat; helpers <code>update_last_heartbeat_ts</code>, <code>get_last_heartbeat_ts</code>, <code>count_pending_inbox_messages</code>, <code>resolve_sid_from_external</code>, <code>get_last_reminder_ts</code>, <code>mark_reminder_sent</code>, <code>reset_reminders_for_sid</code>. Idempotent migration m42. 6 new pytest modules (<code>test_protocol_strictness_nexo_interactive.py</code>, <code>test_inbox_autodetect.py</code>, <code>test_inbox_reminder_rate_limit.py</code>, <code>test_heartbeat_updates_last_ts.py</code>, <code>test_v6_0_1_migration.py</code>, <code>test_inbox_autodetect_e2e.py</code>); full suite 1065 passed, 1 skipped.
+        </p>
+    </div>
+</section>
+
 <!-- v6.0.0 BREAKING — Tier-only setup, hook manifest unified, auto_capture wired -->
 <section id="v600" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
     <div class="container">

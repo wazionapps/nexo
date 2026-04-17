@@ -123,6 +123,110 @@ def clean_stale_sessions() -> int:
     return count
 
 
+def update_last_heartbeat_ts(sid: str, ts: float | None = None) -> None:
+    """Stamp ``sessions.last_heartbeat_ts`` with the current heartbeat time.
+
+    Added in v6.0.1 so the PostToolUse hook can decide whether an
+    autopilot session has gone long enough without a heartbeat to
+    deserve an inbox reminder. Called from ``handle_heartbeat`` after
+    every successful heartbeat. Never raises — treats a missing
+    session row (test harnesses, race on cleanup) as a no-op.
+    """
+    if not sid:
+        return
+    try:
+        sid = _validate_sid(sid)
+    except Exception:
+        return
+    stamp = float(ts) if ts is not None else now_epoch()
+    conn = get_db()
+    try:
+        conn.execute(
+            "UPDATE sessions SET last_heartbeat_ts = ? WHERE sid = ?",
+            (stamp, sid),
+        )
+        conn.commit()
+    except Exception:
+        pass
+
+
+def get_last_heartbeat_ts(sid: str) -> float | None:
+    """Return the epoch seconds of the most recent heartbeat for ``sid``.
+
+    Returns None when either the session does not exist or the column
+    has never been populated (pre-v6.0.1 rows, or a brand-new session
+    that has not yet called ``nexo_heartbeat``). The hook treats None
+    as "too new to reason about" and skips the reminder.
+    """
+    if not sid:
+        return None
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT last_heartbeat_ts FROM sessions WHERE sid = ?", (sid,)
+        ).fetchone()
+    except Exception:
+        return None
+    if not row:
+        return None
+    try:
+        return float(row["last_heartbeat_ts"]) if row["last_heartbeat_ts"] is not None else None
+    except (TypeError, ValueError, KeyError):
+        return None
+
+
+def count_pending_inbox_messages(sid: str) -> int:
+    """Count unread ``messages`` addressed to ``sid`` (direct or broadcast).
+
+    The concrete read-tracking table is ``message_reads``; a message is
+    "pending" when no row in ``message_reads`` matches ``(message_id, sid)``
+    and the message is not self-sent. Added in v6.0.1 for the PostToolUse
+    inbox-autodetect reminder.
+    """
+    if not sid:
+        return 0
+    try:
+        row = get_db().execute(
+            "SELECT COUNT(*) FROM messages m "
+            "WHERE (m.to_sid = 'all' OR m.to_sid = ?) "
+            "AND m.from_sid != ? "
+            "AND m.id NOT IN (SELECT message_id FROM message_reads WHERE sid = ?)",
+            (sid, sid, sid),
+        ).fetchone()
+    except Exception:
+        return 0
+    if not row:
+        return 0
+    try:
+        return int(row[0])
+    except (TypeError, ValueError):
+        return 0
+
+
+def resolve_sid_from_external(external_id: str) -> str:
+    """Map a Claude Code ``session_id`` back to the NEXO SID we track.
+
+    The PostToolUse hook payload carries the external Claude session id;
+    we want the internal SID to query the messages table. Returns an
+    empty string when no session matches or the external id is empty.
+    """
+    external = (external_id or "").strip()
+    if not external:
+        return ""
+    try:
+        conn = get_db()
+        row = conn.execute(
+            "SELECT sid FROM sessions WHERE external_session_id = ? OR claude_session_id = ? "
+            "ORDER BY last_update_epoch DESC LIMIT 1",
+            (external, external),
+        ).fetchone()
+    except Exception:
+        return ""
+    if row and row["sid"]:
+        return str(row["sid"])
+    return ""
+
+
 def search_sessions(keyword: str) -> list[dict]:
     """Find sessions whose task contains keyword (case-insensitive)."""
     conn = get_db()

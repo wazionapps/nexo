@@ -174,6 +174,13 @@
 
             <div class="blog-card">
                 <div class="blog-card-date">April 17, 2026</div>
+                <h2><a href="/blog/nexo-6-0-1/">NEXO 6.0.1: <code>NEXO_INTERACTIVE</code> Override + PostToolUse Inbox Autodetect</a></h2>
+                <p>Two hotfixes on top of 6.0.0. NEXO Desktop 0.12.0 spawns <code>claude</code> through pipes, and 6.0.0's <code>isatty()</code>-only detector fell back to <code>lenient</code> even with a human in the loop; 6.0.1 accepts <code>NEXO_INTERACTIVE=1</code> as an explicit interactive override (Brain↔Electron contract, not user-facing, only the literal <code>"1"</code> opts in). PostToolUse also gains an inbox-autodetect stage that emits a <code>systemMessage</code> when the session has unread <code>nexo_send</code> messages and 60s+ have passed since the last heartbeat, rate-limited to one reminder per minute per SID via the new <code>hook_inbox_reminders</code> table (migration m42). New column <code>sessions.last_heartbeat_ts</code>. 6 new pytest modules, suite stays green.</p>
+                <a href="/blog/nexo-6-0-1/" class="read-more">Read more &rarr;</a>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 17, 2026</div>
                 <h2><a href="/blog/nexo-6-0-0/">NEXO 6.0.0: Tier-Only Setup, Hook Manifest Unified, <code>auto_capture</code> Wired to Live Events</a></h2>
                 <p>BREAKING. Onboarding no longer asks for model or reasoning effort &mdash; one resonance tier (<code>maximo</code>/<code>alto</code>/<code>medio</code>/<code>bajo</code>) drives every backend via <code>src/resonance_tiers.json</code>. Protocol strictness stops being configurable: TTY runs <code>strict</code>, non-TTY runs <code>lenient</code>. The seven core hooks unify behind <code>src/hooks/manifest.json</code> (plugin and npm read the same file) and two new hooks ship: <code>Notification</code> records live activity, <code>SubagentStop</code> auto-closes stale <code>protocol_tasks</code>. <code>auto_capture</code> is wired to <code>UserPromptSubmit</code> + <code>PostToolUse</code> with persistent 1h dedup and automatic <code>nexo_learning_add</code> on correction matches. <code>~/.nexo/hooks_status.json</code> is published for NEXO Desktop ≥0.12.0. 1057 passed.</p>
                 <a href="/blog/nexo-6-0-0/" class="read-more">Read more &rarr;</a>

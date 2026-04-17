@@ -1,5 +1,32 @@
 # Changelog
 
+## [6.0.1] - 2026-04-17
+
+### Fixed
+
+- `protocol_settings.py` used to ignore `NEXO_INTERACTIVE=1`, so sessions spawned by Electron-class clients (NEXO Desktop 0.12.0 uses `child_process.spawn` with pipes) got classified as non-interactive and fell back to `lenient` even with a human in the loop. The detector now treats the process as interactive when either `stdin+stdout` are TTYs **or** `NEXO_INTERACTIVE` is exactly `"1"`. Truthy-looking aliases (`true`, `yes`, `on`) are deliberately rejected so a typo cannot silently strict-mode a headless cron.
+- Claude Code sessions on autopilot (long streams of tool calls with no user messages) could not see inbound `nexo_send` messages until the user interacted manually, because `nexo_heartbeat` only fires on user turns.
+
+### Added
+
+- `PostToolUse` hook now runs an inbox-autodetect stage after the other steps. When the session has unread messages AND `≥ 60s` have passed since the last heartbeat, the hook emits a `systemMessage` asking the agent to run `nexo_heartbeat` and consume its inbox. Rate-limited to **one reminder per minute per SID** via the new `hook_inbox_reminders` table.
+- `sessions.last_heartbeat_ts` column (idempotent migration m42) — stamped by `handle_heartbeat` on every successful invocation.
+- `hook_inbox_reminders` table (idempotent migration m42) — per-SID rate limiter for the inbox reminder.
+- New DB helpers: `update_last_heartbeat_ts`, `get_last_heartbeat_ts`, `count_pending_inbox_messages`, `resolve_sid_from_external` in `db._sessions`; `get_last_reminder_ts`, `mark_reminder_sent`, `reset_reminders_for_sid` in `db._hook_inbox_reminders`. All re-exported from `db`.
+
+### Changed
+
+- `nexo_heartbeat` now calls `update_last_heartbeat_ts(sid)` at the start of the inner body so the PostToolUse reminder has a fresh anchor after every heartbeat.
+- `_stdio_is_tty()` is kept as a thin deprecated alias that delegates to `_is_interactive()`, so any caller that imported the old name from v6.0.0 still respects the `NEXO_INTERACTIVE` contract.
+
+### Contract (internal, unchanged)
+
+`NEXO_INTERACTIVE=1` is the Brain↔interactive-clients contract. It is not user-facing, not documented to operators, and not a resurrection of the removed `NEXO_PROTOCOL_STRICTNESS` knob. It only signals presence of a human in the loop; the actual strictness value still comes from the interactivity test.
+
+### Tests
+
+Six new pytest cases: `test_protocol_strictness_nexo_interactive.py`, `test_inbox_autodetect.py`, `test_inbox_reminder_rate_limit.py`, `test_heartbeat_updates_last_ts.py`, `test_v6_0_1_migration.py`, and `test_inbox_autodetect_e2e.py`. Full suite stays green.
+
 ## [6.0.0] - 2026-04-17
 
 ### BREAKING
