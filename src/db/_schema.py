@@ -939,18 +939,11 @@ def _m39_hook_runs(conn):
 def _m40_classification_columns(conn):
     """Add internal (INTEGER 0/1) and owner (TEXT) to followups and reminders.
 
-    Background: before this migration, Desktop clients had to compute the
-    "who does this belong to" classification client-side using Spanish regex
-    on description and ID-prefix pattern matching (NF-PROTOCOL-*, NF-DS-*, …).
-    That logic was hardcoded to NEXO's own ID convention and Spanish-speaking
-    users. Any third-party agent plugging into the shared Brain would either
-    see every task as "Seguimiento" (owner=shared fallback) or, worse, have
-    its real user-facing tasks hidden by the Desktop 'internal' filter.
-
-    Fix: make both attributes first-class columns agents can set on create.
-    Vanilla agents that omit them get the legacy heuristic (classify_task)
-    applied on insert and during this one-shot backfill, so existing rows
-    preserve their current Desktop rendering.
+    Agents creating tasks via nexo_followup_create / nexo_reminder_create
+    can set both fields explicitly. The Brain core does not classify tasks
+    on behalf of agents — clients that want automatic classification
+    compute it themselves (NEXO Desktop does, via its legacy client-side
+    helpers) and pass the result.
 
     Values:
         internal: 0 (external, visible) or 1 (agent bookkeeping, hidden).
@@ -960,8 +953,10 @@ def _m40_classification_columns(conn):
             'NEXO'.
 
     Idempotent: _migrate_add_column is a no-op when the column exists,
-    _migrate_add_index likewise. The backfill only touches rows where
-    owner IS NULL, so re-running never overwrites agent-set values.
+    _migrate_add_index likewise. Pre-v5.8.2 versions of this migration
+    also ran a one-shot backfill using a Spanish-first regex heuristic;
+    v5.8.2 removed that heuristic so the core stays neutral across
+    deployments. Rows that were already backfilled keep their values.
     """
     _migrate_add_column(conn, "followups", "internal", "INTEGER DEFAULT 0")
     _migrate_add_column(conn, "followups", "owner", "TEXT DEFAULT NULL")
@@ -971,32 +966,6 @@ def _m40_classification_columns(conn):
     _migrate_add_index(conn, "idx_followups_owner", "followups", "owner")
     _migrate_add_index(conn, "idx_reminders_internal", "reminders", "internal")
     _migrate_add_index(conn, "idx_reminders_owner", "reminders", "owner")
-
-    from db._classification import classify_task
-
-    rows = conn.execute(
-        "SELECT id, description, recurrence FROM followups WHERE owner IS NULL"
-    ).fetchall()
-    for row in rows:
-        internal, owner = classify_task(
-            row["id"], row["description"], None, row["recurrence"]
-        )
-        conn.execute(
-            "UPDATE followups SET internal = ?, owner = ? WHERE id = ?",
-            (internal, owner, row["id"]),
-        )
-
-    rows = conn.execute(
-        "SELECT id, description, category FROM reminders WHERE owner IS NULL"
-    ).fetchall()
-    for row in rows:
-        internal, owner = classify_task(
-            row["id"], row["description"], row["category"], None
-        )
-        conn.execute(
-            "UPDATE reminders SET internal = ?, owner = ? WHERE id = ?",
-            (internal, owner, row["id"]),
-        )
 
 
 MIGRATIONS = [

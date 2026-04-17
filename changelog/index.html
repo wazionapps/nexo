@@ -181,6 +181,17 @@
     </div>
 </section>
 
+<!-- v5.8.2 Brain core neutralised — NEXO-specific heuristic removed -->
+<section id="v582" class="section-compact" style="background:linear-gradient(135deg,#09111f 0%,#14253a 50%,#1e3a5f 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.8.2 <span style="opacity:.5;font-weight:400;">&mdash; April 17, 2026</span></div>
+        <h2 class="section-title">Brain Core Neutralised &mdash; NEXO-Specific Heuristic Removed</h2>
+        <p class="section-subtitle">
+            v5.8.0 shipped an auto-classifier in <code>src/db/_classification.py</code> that fired whenever agents omitted <code>internal</code> or <code>owner</code> on <code>nexo_followup_create</code> / <code>nexo_reminder_create</code>. It matched NEXO-specific ID prefixes (<code>NF-PROTOCOL-*</code>, <code>NF-DS-*</code>, <code>NF-AUDIT-*</code>), Spanish user-verbs (<code>debes</code>, <code>revisar</code>, <code>firmar</code>), and agent keywords (<code>monitor</code>, <code>auditoría diaria</code>, <code>checkpoint</code>). 5.8.2 removes it entirely: the Brain core now persists <code>internal=0</code> and <code>owner=NULL</code> when callers omit them, and clients that want automatic classification (NEXO Desktop does, via <code>_legacyClassifyOwner</code>/<code>_legacyIsInternalTaskId</code>) compute it themselves. Migration #40 keeps the columns + indexes; previously backfilled rows keep their values. <code>normalise_owner</code> still explicitly rejects the string <code>"nexo"</code> so legacy hardcoding cannot sneak back in. Test suite rewritten around the neutral contract (12 cases).
+        </p>
+    </div>
+</section>
+
 <!-- v5.8.1 Watchdog no longer kickstarts its own workers -->
 <section id="v581" class="section-compact" style="background:linear-gradient(135deg,#09111f 0%,#14253a 50%,#1e3a5f 100%);">
     <div class="container">
