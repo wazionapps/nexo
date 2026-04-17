@@ -531,6 +531,7 @@ def run_automation_interactive(
     env: dict | None = None,
     preferences: dict | None = None,
     session_type: str = "interactive_chat",
+    tier: str = "",
 ) -> subprocess.CompletedProcess:
     """Launch an interactive Claude/Codex session with automation_runs logging.
 
@@ -564,8 +565,13 @@ def run_automation_interactive(
         user_default = ""
         if isinstance(prefs, dict):
             user_default = str(prefs.get("default_resonance") or "").strip()
+        # v6.0.2 — respect explicit ``tier`` override so personal/* callers
+        # can force a resonance without registering in the core map.
+        explicit_tier_arg = (tier or "").strip() or None
         resonance_tier = resolve_tier_for_caller(
-            caller, user_default=user_default or None
+            caller,
+            user_default=user_default or None,
+            explicit_tier=explicit_tier_arg,
         )
     except Exception:
         resonance_tier = ""
@@ -848,6 +854,7 @@ def run_automation_prompt(
     env: dict | None = None,
     model: str = "",
     reasoning_effort: str = "",
+    tier: str = "",
     timeout: int = 300,
     output_format: str = "",
     append_system_prompt: str = "",
@@ -891,13 +898,22 @@ def run_automation_prompt(
     user_default = ""
     if isinstance(prefs, dict):
         user_default = str(prefs.get("default_resonance") or "").strip()
+    # v6.0.2 — ``tier`` kwarg propagates to the resolver as ``explicit_tier``
+    # so personal/* callers can pin their reasoning budget per-invocation
+    # without editing the registry. Registered callers remain unchanged.
+    explicit_tier_arg = (tier or "").strip() or None
     # This raises UnregisteredCallerError if caller is unknown — the
     # same fail-closed rule we wanted. No silent fallback.
     resonance_tier = resolve_tier_for_caller(
-        caller, user_default=user_default or None
+        caller,
+        user_default=user_default or None,
+        explicit_tier=explicit_tier_arg,
     )
     mapped_model, mapped_effort = resolve_model_and_effort(
-        caller, selected_backend, user_default=user_default or None
+        caller,
+        selected_backend,
+        user_default=user_default or None,
+        explicit_tier=explicit_tier_arg,
     )
     if mapped_model and not model:
         model = mapped_model

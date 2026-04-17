@@ -213,6 +213,21 @@ ALL_REGISTERED_CALLERS: frozenset[str] = frozenset(
 )
 
 
+# v6.0.2 — Reserved caller prefix for user-owned personal scripts that live
+# outside this repo (``~/.nexo/scripts/``). Callers matching this prefix
+# bypass the registry entirely: they cannot be required to register because
+# they ship with each operator's own install. Instead, the script passes
+# either an explicit ``tier`` (semantic) or a ``reasoning_effort`` (direct
+# override) — or falls back to the user's ``default_resonance`` preference,
+# and finally to ``DEFAULT_RESONANCE`` as the last line of defence.
+#
+# The prefix is NOT a loophole for new core scripts. Anything inside the
+# ``src/`` tree or shipped via the core manifest continues to require a
+# registered entry. The docs (``docs/personal-scripts-guide.md``) explain
+# the split to any NEXO session helping an operator author a new script.
+PERSONAL_CALLER_PREFIX = "personal/"
+
+
 class UnregisteredCallerError(ValueError):
     """Raised when a caller string is not in the resonance registry.
 
@@ -271,22 +286,55 @@ def _load_user_default_resonance() -> str:
     return ""
 
 
-def resolve_tier_for_caller(caller: str, user_default: str | None = None) -> str:
+def _normalise_tier(candidate: str | None) -> str:
+    """Coerce a tier string to canonical lowercase; empty when invalid."""
+    if not candidate:
+        return ""
+    value = str(candidate).strip().lower()
+    return value if value in TIERS else ""
+
+
+def resolve_tier_for_caller(
+    caller: str,
+    user_default: str | None = None,
+    *,
+    explicit_tier: str | None = None,
+) -> str:
     """Return the resonance tier that should apply to ``caller``.
 
-    - User-facing callers resolve to ``user_default`` (or ``DEFAULT_RESONANCE``
-      if the user has no preference recorded).
-    - System-owned callers resolve to their fixed tier.
-    - Unknown callers raise ``UnregisteredCallerError``.
+    Resolution order:
 
-    When ``user_default`` is not passed, the function looks it up from the
-    calibration.json preferences first and schedule.json second.
+    1. ``caller`` is empty → raise ``UnregisteredCallerError`` (same as v6.0.0).
+    2. ``caller`` starts with ``PERSONAL_CALLER_PREFIX``:
+         a. ``explicit_tier`` if valid — semantic override from the script.
+         b. ``user_default`` if valid — operator's configured default.
+         c. Stored ``preferences.default_resonance`` via the loader.
+         d. ``DEFAULT_RESONANCE`` as the final fallback.
+       The registry is NEVER consulted for personal callers: scripts outside
+       the repo cannot register, and forcing them to pin a tier there would
+       defeat the whole purpose of the ``personal/`` contract.
+    3. User-facing callers: user default → DEFAULT (unchanged).
+    4. System-owned callers: fixed tier (unchanged).
+    5. Anything else: ``UnregisteredCallerError`` (unchanged).
     """
     if not caller:
         raise UnregisteredCallerError(
             "caller= is required. Every automation subprocess must be registered "
             "in src/resonance_map.py so its reasoning budget is deliberate."
         )
+
+    if caller.startswith(PERSONAL_CALLER_PREFIX):
+        explicit = _normalise_tier(explicit_tier)
+        if explicit:
+            return explicit
+        from_user = _normalise_tier(user_default)
+        if from_user:
+            return from_user
+        from_prefs = _normalise_tier(_load_user_default_resonance())
+        if from_prefs:
+            return from_prefs
+        return DEFAULT_RESONANCE
+
     if caller in USER_FACING_CALLERS:
         resolved_default = user_default
         if resolved_default is None:
@@ -308,6 +356,8 @@ def resolve_model_and_effort(
     caller: str,
     backend: str,
     user_default: str | None = None,
+    *,
+    explicit_tier: str | None = None,
 ) -> Tuple[str, str]:
     """Return ``(model, reasoning_effort)`` for ``caller`` on ``backend``.
 
@@ -316,7 +366,9 @@ def resolve_model_and_effort(
     empty pair; the caller is expected to handle that by raising or by
     passing its own explicit model/effort arguments.
     """
-    tier = resolve_tier_for_caller(caller, user_default=user_default)
+    tier = resolve_tier_for_caller(
+        caller, user_default=user_default, explicit_tier=explicit_tier
+    )
     backend_entry = _RESONANCE_TABLE.get(tier, {}).get(backend)
     if backend_entry is None:
         return "", ""

@@ -206,18 +206,29 @@ def run_automation_text(
     allowed_tools: str = DEFAULT_ALLOWED_TOOLS,
     append_system_prompt: str = "",
     include_bootstrap: bool = True,
+    caller: str = "",
+    tier: str = "",
 ) -> str:
     """Run the configured NEXO automation backend and return text output.
 
     This avoids hardcoding provider CLIs such as `claude -p` inside personal
     scripts. The runtime routes the call through the selected backend and its
     configured model profile.
+
+    Personal scripts (those living in ``~/.nexo/scripts/``) should pass
+    ``caller="personal/<descriptive-id>"`` and optionally ``tier="alto"``
+    (or another canonical tier) to pick their resonance without editing the
+    NEXO Brain repo. See ``docs/personal-scripts-guide.md`` for the rules.
     """
     runner = NEXO_HOME / "scripts" / "nexo-agent-run.py"
     if not runner.exists():
         raise RuntimeError(f"Automation runner not found: {runner}")
 
     cmd = [sys.executable, str(runner), "--prompt", prompt, "--output-format", "text"]
+    if caller:
+        cmd.extend(["--caller", caller])
+    if tier:
+        cmd.extend(["--tier", tier])
     if model:
         cmd.extend(["--model", model])
     if reasoning_effort:
@@ -261,13 +272,25 @@ def run_automation_json(
     allowed_tools: str = DEFAULT_ALLOWED_TOOLS,
     append_system_prompt: str = "",
     include_bootstrap: bool = True,
+    caller: str = "",
+    tier: str = "",
 ) -> dict:
-    """Run the configured backend and return a parsed JSON object."""
+    """Run the configured backend and return a parsed JSON object.
+
+    v6.0.2 adds ``caller`` and ``tier`` kwargs so personal scripts
+    (``~/.nexo/scripts/``) can identify themselves and pick a resonance
+    without registering in the core repo. See
+    ``docs/personal-scripts-guide.md``.
+    """
     runner = NEXO_HOME / "scripts" / "nexo-agent-run.py"
     if not runner.exists():
         raise RuntimeError(f"Automation runner not found: {runner}")
 
     cmd = [sys.executable, str(runner), "--prompt", prompt, "--output-format", "json"]
+    if caller:
+        cmd.extend(["--caller", caller])
+    if tier:
+        cmd.extend(["--tier", tier])
     if model:
         cmd.extend(["--model", model])
     if reasoning_effort:

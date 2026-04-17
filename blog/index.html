@@ -174,6 +174,13 @@
 
             <div class="blog-card">
                 <div class="blog-card-date">April 17, 2026</div>
+                <h2><a href="/blog/nexo-6-0-2/">NEXO 6.0.2: <code>personal/</code> Caller Prefix + <code>tier</code> Kwarg + Personal Scripts Guide</a></h2>
+                <p>A small patch that unblocks every user-owned script living in <code>~/.nexo/scripts/</code>. Before 6.0.2 they had to either register in the core <code>resonance_map.py</code> (impossible from outside the repo) or fall through to the generic <code>agent_run/generic</code> tier and lose identity. 6.0.2 introduces the reserved caller prefix <code>personal/</code> — any caller starting with it bypasses the registry entirely and picks its resonance from an explicit <code>tier=</code> kwarg, the user's <code>default_resonance</code> preference, or <code>DEFAULT_RESONANCE</code>. New <code>--tier</code> flag on the runner, new <code>caller=</code>/<code>tier=</code> kwargs on the <code>nexo_helper</code> wrappers, and a new <code>docs/personal-scripts-guide.md</code> so any NEXO session helping an operator write a personal script knows the pattern. Registered callers unchanged; non-<code>personal/</code> ids still require an entry and raise <code>UnregisteredCallerError</code> when missing.</p>
+                <a href="/blog/nexo-6-0-2/" class="read-more">Read more &rarr;</a>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 17, 2026</div>
                 <h2><a href="/blog/nexo-6-0-1/">NEXO 6.0.1: <code>NEXO_INTERACTIVE</code> Override + PostToolUse Inbox Autodetect</a></h2>
                 <p>Two hotfixes on top of 6.0.0. NEXO Desktop 0.12.0 spawns <code>claude</code> through pipes, and 6.0.0's <code>isatty()</code>-only detector fell back to <code>lenient</code> even with a human in the loop; 6.0.1 accepts <code>NEXO_INTERACTIVE=1</code> as an explicit interactive override (Brain↔Electron contract, not user-facing, only the literal <code>"1"</code> opts in). PostToolUse also gains an inbox-autodetect stage that emits a <code>systemMessage</code> when the session has unread <code>nexo_send</code> messages and 60s+ have passed since the last heartbeat, rate-limited to one reminder per minute per SID via the new <code>hook_inbox_reminders</code> table (migration m42). New column <code>sessions.last_heartbeat_ts</code>. 6 new pytest modules, suite stays green.</p>
                 <a href="/blog/nexo-6-0-1/" class="read-more">Read more &rarr;</a>

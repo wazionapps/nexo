@@ -1,5 +1,28 @@
 # Changelog
 
+## [6.0.2] - 2026-04-17
+
+### Added
+
+- Reserved caller prefix `personal/` — scripts that live outside the NEXO Brain repo (user-owned LaunchAgents in `~/.nexo/scripts/`) can now invoke the automation backend with their own caller id without registering in `src/resonance_map.py::SYSTEM_OWNED_CALLERS`. The resolver bypasses the registry for any caller whose id starts with `personal/` and follows a deterministic precedence chain: explicit `tier=` → explicit `reasoning_effort=` → `calibration.preferences.default_resonance` → `DEFAULT_RESONANCE` (`"alto"`). Invalid tier values are silently ignored instead of raising, so a typo falls through to the next step rather than breaking the caller.
+- New kwarg `tier: str = ""` on `run_automation_prompt` and `run_automation_interactive` (agent_runner), on `run_automation_text` and `run_automation_json` (templates/nexo_helper.py), and as `--tier` on `nexo-agent-run.py`.
+- New kwarg `caller: str = ""` on `run_automation_text` and `run_automation_json` so personal scripts can declare their id without touching the runner invocation manually; the helper propagates the id to `nexo-agent-run.py --caller`.
+- `docs/personal-scripts-guide.md` — reference for any NEXO session helping a user author a personal script. Explains the prefix, the tier semantics, the precedence rules, anti-patterns, and how to test against a scratch `NEXO_HOME`.
+
+### Changed
+
+- `resolve_tier_for_caller` and `resolve_model_and_effort` accept a new keyword-only argument `explicit_tier`. Existing positional calls continue to work.
+- README gains a `personal-scripts-guide.md` link in the contribution / maintenance section.
+
+### Backcompat
+
+- Callers registered in `USER_FACING_CALLERS` / `SYSTEM_OWNED_CALLERS` keep their v6.0.0 behaviour. No entry in either registry is modified.
+- Callers without the `personal/` prefix continue to require a registry entry and raise `UnregisteredCallerError` when missing.
+
+### Tests
+
+- Three new pytest modules: `test_personal_caller_prefix.py` (8 resolver cases), `test_run_automation_prompt_tier_kwarg.py` (3 cases on the full `run_automation_prompt` surface), `test_nexo_agent_run_tier_flag.py` (1 CLI propagation case). Full suite stays green.
+
 ## [6.0.1] - 2026-04-17
 
 ### Fixed
