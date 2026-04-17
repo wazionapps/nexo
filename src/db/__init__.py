@@ -81,6 +81,14 @@ from db._sessions import (
     track_files, untrack_files, get_all_tracked_files,
     send_message, get_inbox,
     ask_question, answer_question, get_pending_questions, check_answer,
+    update_last_heartbeat_ts, get_last_heartbeat_ts,
+    count_pending_inbox_messages, resolve_sid_from_external,
+)
+
+# PostToolUse inbox-reminder rate limit (v6.0.1)
+_hook_inbox_reminders = _load_submodule("db._hook_inbox_reminders")
+from db._hook_inbox_reminders import (
+    get_last_reminder_ts, mark_reminder_sent, reset_reminders_for_sid,
 )
 
 # Reminders and followups

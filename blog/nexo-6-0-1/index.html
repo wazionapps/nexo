@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXO 6.0.1: NEXO_INTERACTIVE override + PostToolUse inbox autodetect</title>
+    <meta name="description" content="Hotfix on top of 6.0.0. protocol_settings now treats NEXO_INTERACTIVE=1 as an interactive override so NEXO Desktop 0.12.0 stays in strict mode, and PostToolUse auto-detects pending inbox on autopilot sessions with a rate-limited systemMessage.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-6-0-1/">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/blog/nexo-6-0-1/">
+    <meta property="og:title" content="NEXO 6.0.1: NEXO_INTERACTIVE override + PostToolUse inbox autodetect">
+    <meta property="og:description" content="Two hotfixes: Electron-class clients keep strict mode via NEXO_INTERACTIVE=1; autopilot sessions see incoming nexo_send via a PostToolUse reminder. Rate-limited, idempotent, never raises.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+    <meta property="article:published_time" content="2026-04-17">
+    <meta property="article:author" content="Francisco Cerda Puigserver">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO 6.0.1: NEXO_INTERACTIVE override + PostToolUse inbox autodetect">
+    <meta name="twitter:description" content="Hotfix. Electron-class clients (NEXO Desktop 0.12.0) stay strict. Autopilot sessions auto-detect pending inbox.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "NEXO 6.0.1: NEXO_INTERACTIVE override + PostToolUse inbox autodetect",
+        "description": "Hotfix on top of 6.0.0. protocol_settings now treats NEXO_INTERACTIVE=1 as an interactive override so NEXO Desktop 0.12.0 stays strict, and PostToolUse auto-detects pending inbox on autopilot sessions.",
+        "datePublished": "2026-04-17",
+        "dateModified": "2026-04-17",
+        "author": {"@type": "Person", "name": "Francisco Cerda Puigserver"},
+        "publisher": {"@type": "Organization", "name": "WAzion", "url": "https://www.wazion.com"},
+        "mainEntityOfPage": {"@type": "WebPage", "@id": "https://nexo-brain.com/blog/nexo-6-0-1/"},
+        "url": "https://nexo-brain.com/blog/nexo-6-0-1/",
+        "image": "https://nexo-brain.com/assets/og/og-blog.png",
+        "keywords": ["NEXO 6.0.1", "NEXO_INTERACTIVE", "PostToolUse", "inbox autodetect", "protocol_strictness", "NEXO Desktop 0.12.0"]
+    }
+    </script>
+
+    <style>
+        .article-header { padding-top: 128px; padding-bottom: 40px; text-align: center; }
+        .article-meta { font-size: 14px; color: var(--text-muted); margin-bottom: 16px; }
+        .article-body {
+            max-width: 720px; margin: 0 auto; padding: 0 24px 80px;
+            font-size: 17px; line-height: 1.8; color: var(--text);
+        }
+        .article-body h2 { font-size: 26px; margin-top: 48px; margin-bottom: 16px; color: var(--text-bright); }
+        .article-body h3 { font-size: 20px; margin-top: 32px; margin-bottom: 12px; color: var(--text-bright); }
+        .article-body p { margin-bottom: 20px; }
+        .article-body code { background: var(--bg-alt); padding: 2px 6px; border-radius: 4px; font-size: 14px; }
+        .article-body pre { background: var(--bg-alt); padding: 16px; border-radius: 8px; overflow-x: auto; }
+        .article-body pre code { background: transparent; padding: 0; }
+        .article-body ul { margin-bottom: 20px; padding-left: 28px; }
+        .article-body li { margin-bottom: 8px; }
+    </style>
+</head>
+<body>
+<nav class="nav"><div class="nav-inner">
+    <a href="/" class="nav-brand">NEXO</a>
+    <div class="nav-links">
+        <a href="/features/">Features</a>
+        <a href="/blog/">Blog</a>
+        <a href="/changelog/">Changelog</a>
+        <a href="/docs/">Docs</a>
+    </div>
+</div></nav>
+
+<header class="article-header">
+    <div class="container">
+        <div class="article-meta">April 17, 2026 &middot; Patch release</div>
+        <h1 style="font-size:42px;line-height:1.2;max-width:820px;margin:0 auto;">NEXO 6.0.1: <code>NEXO_INTERACTIVE</code> Override + PostToolUse Inbox Autodetect</h1>
+    </div>
+</header>
+
+<article class="article-body">
+    <p>6.0.1 is a patch on top of yesterday's 6.0.0 release, not a new direction. Two concrete bugs surfaced during the NEXO Desktop 0.12.0 coordination window, and this release closes both of them.</p>
+
+    <h2>The Strictness Detector Missed Electron</h2>
+
+    <p>v6.0.0 removed the user-facing <code>NEXO_PROTOCOL_STRICTNESS</code> knob and replaced it with a single rule: interactive TTY sessions run <code>strict</code>, everything else runs <code>lenient</code>. The test was <code>sys.stdin.isatty() and sys.stdout.isatty()</code>. Simple, clean — and wrong for Electron.</p>
+
+    <p>NEXO Desktop 0.12.0 spawns <code>claude</code> via Node's <code>child_process.spawn</code>, wiring both stdin and stdout to pipes so the Electron process can stream the conversation into its chat UI. Both <code>isatty()</code> calls return False. v6.0.0 classified that as "headless cron" and fell through to <code>lenient</code>. Effect: every session a user opened in NEXO Desktop silently ran in the laxer mode, skipping the protocol gates that exist for interactive work.</p>
+
+    <p>v6.0.1 adds a second interactive signal — <code>NEXO_INTERACTIVE=1</code> — that the Desktop side exports in the child env:</p>
+
+    <pre><code>def _is_interactive() -&gt; bool:
+    if os.environ.get("NEXO_INTERACTIVE") == "1":
+        return True
+    try:
+        return bool(sys.stdin.isatty() and sys.stdout.isatty())
+    except Exception:
+        return False</code></pre>
+
+    <p>The override only accepts the exact string <code>"1"</code>. Typos like <code>"true"</code>, <code>"yes"</code>, <code>"on"</code>, or a stray space get rejected, so a misconfigured launchd plist cannot silently re-strict a headless cron. <code>NEXO_INTERACTIVE</code> is a contract between Brain and its interactive clients — not user-facing, not documented to operators, and not a resurrection of <code>NEXO_PROTOCOL_STRICTNESS</code>. The actual strictness still follows the interactive test; this variable only signals that a human is present.</p>
+
+    <h2>Autopilot Sessions Never Saw Their Inbox</h2>
+
+    <p>The other bug has been there for a while but got visible during 0.12.0 testing. <code>nexo_heartbeat</code> is the tool that drains the session inbox; it fires at the start of every user turn. When a session goes into autopilot — long streams of tool calls with no user messages — the heartbeat never runs. Incoming <code>nexo_send</code> messages from other sessions sit in the inbox while the agent keeps working. Francisco had to manually say "you have a message waiting" during the 0.12.0 release window because the executor session genuinely had no way to notice.</p>
+
+    <p>v6.0.1 wires inbox detection into the <code>PostToolUse</code> hook. After every tool call, the hook checks three conditions:</p>
+
+    <ul>
+        <li>Does the session have ≥1 unread message?</li>
+        <li>Has it been ≥60 seconds since the last heartbeat?</li>
+        <li>Has no reminder been surfaced for this session in the last 60 seconds?</li>
+    </ul>
+
+    <p>When all three hold, the hook prints a single-line JSON <code>systemMessage</code> telling the agent to run <code>nexo_heartbeat</code> and consume its inbox before continuing. Rate-limited via a new tiny table:</p>
+
+    <pre><code>CREATE TABLE IF NOT EXISTS hook_inbox_reminders (
+    sid TEXT PRIMARY KEY,
+    last_reminder_ts REAL NOT NULL
+);</code></pre>
+
+    <p>One row per SID, UPSERT on each emission. The rate limit is 60 seconds by default (configurable via <code>NEXO_INBOX_CHECK_THRESHOLD_SECONDS</code>) so long tool-call streams get at most one reminder per minute. Any internal error in the hook collapses to a silent no-op: the tool pipeline is never blocked by this check.</p>
+
+    <h2>New Column: <code>sessions.last_heartbeat_ts</code></h2>
+
+    <p>To answer "how long since the last heartbeat?" cheaply, <code>nexo_heartbeat</code> now stamps <code>sessions.last_heartbeat_ts</code> on every successful invocation. The PostToolUse hook reads that column directly. Migration m42 adds both the column and <code>hook_inbox_reminders</code> idempotently — second-run is a no-op, pre-existing rows keep a NULL stamp (the hook treats NULL as "too new to reason about" and skips the reminder for brand-new sessions).</p>
+
+    <h2>Tests</h2>
+
+    <p>Six new pytest modules cover every path: <code>test_protocol_strictness_nexo_interactive.py</code> (override plus typo rejection), <code>test_inbox_autodetect.py</code> (the three gate conditions), <code>test_inbox_reminder_rate_limit.py</code> (emit / silent / emit sequence with the UPSERT row), <code>test_heartbeat_updates_last_ts.py</code> (heartbeat stamps within 1s of <code>time.time()</code>), <code>test_v6_0_1_migration.py</code> (idempotency + schema_migrations row), and <code>test_inbox_autodetect_e2e.py</code> (the full session-A-sends-B, B-on-autopilot-65s scenario). Full suite: 1065 passed, 1 skipped.</p>
+
+    <p><a href="/changelog/">Full changelog &rarr;</a></p>
+</article>
+
+<footer class="footer">
+    <div class="container" style="text-align:center;color:var(--text-muted);font-size:14px;padding:32px 0;">
+        &copy; 2026 WAzion &middot; <a href="https://github.com/wazionapps/nexo">github.com/wazionapps/nexo</a> &middot; AGPL-3.0
+    </div>
+</footer>
+</body>
+</html>

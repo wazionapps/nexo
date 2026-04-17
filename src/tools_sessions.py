@@ -465,8 +465,15 @@ def handle_heartbeat(sid: str, task: str, context_hint: str = '') -> str:
 
 def _handle_heartbeat_inner(sid: str, task: str, context_hint: str = '') -> str:
     """Inner body of handle_heartbeat — wrapped by tool_span above."""
-    from db import get_db
+    from db import get_db, update_last_heartbeat_ts
     update_session(sid, task)
+    # v6.0.1 — stamp last_heartbeat_ts so the PostToolUse hook can
+    # decide whether to surface a pending-inbox reminder on autopilot
+    # sessions. Best-effort: never break the heartbeat on failure.
+    try:
+        update_last_heartbeat_ts(sid)
+    except Exception:
+        pass
 
     # Temporal anchor — surface authoritative UTC time so clients never drift
     # on date/day-of-week across long sessions. Neutral ISO-8601, no locale,
