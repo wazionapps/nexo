@@ -8,6 +8,7 @@ import sqlite3
 from typing import Any
 
 from db._core import get_db, now_epoch
+from db._classification import classify_task, normalise_internal, normalise_owner
 from db._fts import fts_upsert
 from db._hot_context import capture_context_event
 
@@ -249,15 +250,47 @@ def create_reminder(
     date: str = None,
     status: str = "PENDING",
     category: str = "general",
+    internal: object = None,
+    owner: str | None = None,
 ) -> dict:
-    """Create a new reminder."""
+    """Create a new reminder.
+
+    Agents may pass `internal` (0/1, bool, or string) and `owner`
+    ('user'|'waiting'|'agent'|'shared') to override the default
+    classification. When omitted, classify_task() applies the legacy
+    heuristic so behaviour matches pre-migration #40.
+    """
     conn = get_db()
     now = now_epoch()
+
+    auto_internal, auto_owner = classify_task(id, description, category, None)
+    internal_value = normalise_internal(internal)
+    if internal_value is None:
+        internal_value = auto_internal
+    owner_value = normalise_owner(owner) or auto_owner
+
+    columns = {str(row["name"]) for row in conn.execute("PRAGMA table_info(reminders)").fetchall()}
+    payload: dict[str, object] = {
+        "id": id,
+        "date": date,
+        "description": description,
+        "status": status,
+        "category": category,
+        "created_at": now,
+        "updated_at": now,
+    }
+    if "internal" in columns:
+        payload["internal"] = internal_value
+    if "owner" in columns:
+        payload["owner"] = owner_value
+
+    insert_columns = [c for c in payload if c in columns]
+    placeholders = ", ".join("?" for _ in insert_columns)
+
     try:
         conn.execute(
-            "INSERT INTO reminders (id, date, description, status, category, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (id, date, description, status, category, now, now),
+            f"INSERT INTO reminders ({', '.join(insert_columns)}) VALUES ({placeholders})",
+            [payload[c] for c in insert_columns],
         )
         conn.commit()
     except sqlite3.IntegrityError:
@@ -268,7 +301,7 @@ def create_reminder(
         "reminder",
         id,
         "created",
-        note=f"Reminder created. Category={category}. Date={date or '—'}.",
+        note=f"Reminder created. Category={category}. Date={date or '—'}. Owner={owner_value}.",
         actor="db",
     )
     capture_context_event(
@@ -285,7 +318,13 @@ def create_reminder(
         actor="db",
         source_type="reminder",
         source_id=id,
-        metadata={"category": category, "status": status, "date": date or ""},
+        metadata={
+            "category": category,
+            "status": status,
+            "date": date or "",
+            "internal": internal_value,
+            "owner": owner_value,
+        },
         ttl_hours=24,
     )
     return dict(row)
@@ -306,10 +345,27 @@ def update_reminder(
     if not row:
         return {"error": f"Reminder {id} not found"}
 
-    allowed = {"description", "date", "status", "category"}
+    allowed = {"description", "date", "status", "category", "internal", "owner"}
     updates = {k: v for k, v in kwargs.items() if k in allowed}
+    if "internal" in updates:
+        coerced = normalise_internal(updates["internal"])
+        if coerced is None:
+            updates.pop("internal")
+        else:
+            updates["internal"] = coerced
+    if "owner" in updates:
+        coerced = normalise_owner(updates["owner"])
+        if coerced is None:
+            updates.pop("owner")
+        else:
+            updates["owner"] = coerced
     if not updates:
         return {"error": "No valid fields to update"}
+
+    table_columns = {
+        str(r["name"]) for r in conn.execute("PRAGMA table_info(reminders)").fetchall()
+    }
+    updates = {k: v for k, v in updates.items() if k in table_columns or k == "updated_at"}
 
     updates["updated_at"] = now_epoch()
     set_clause = ", ".join(f"{k} = ?" for k in updates)
@@ -554,8 +610,15 @@ def create_followup(
     reasoning: str = "",
     recurrence: str = None,
     priority: str = "medium",
+    internal: object = None,
+    owner: str | None = None,
 ) -> dict:
-    """Create a new followup with optional reasoning and recurrence."""
+    """Create a new followup with optional reasoning and recurrence.
+
+    Agents may override the default classification via `internal` and
+    `owner`. Omitted values are filled by classify_task() using the
+    legacy heuristics so pre-migration callers keep working identically.
+    """
     conn = get_db()
     now = now_epoch()
     similar = find_similar_followups(description)
@@ -566,6 +629,12 @@ def create_followup(
             f" ⚠ SIMILAR FOLLOWUPS EXIST: {ids} "
             f"(scores: {', '.join(str(s['_similarity']) for s in similar[:3])}). Consider updating instead."
         )
+
+    auto_internal, auto_owner = classify_task(id, description, None, recurrence)
+    internal_value = normalise_internal(internal)
+    if internal_value is None:
+        internal_value = auto_internal
+    owner_value = normalise_owner(owner) or auto_owner
 
     columns = {str(row["name"]) for row in conn.execute("PRAGMA table_info(followups)").fetchall()}
     payload: dict[str, object] = {
@@ -581,6 +650,10 @@ def create_followup(
     }
     if "priority" in columns:
         payload["priority"] = priority or "medium"
+    if "internal" in columns:
+        payload["internal"] = internal_value
+    if "owner" in columns:
+        payload["owner"] = owner_value
 
     insert_columns = [column for column in payload if column in columns]
     placeholders = ", ".join("?" for _ in insert_columns)
@@ -642,10 +715,30 @@ def update_followup(
     if not row:
         return {"error": f"Followup {id} not found"}
 
-    allowed = {"description", "date", "verification", "status", "reasoning", "recurrence", "priority"}
+    allowed = {
+        "description", "date", "verification", "status",
+        "reasoning", "recurrence", "priority", "internal", "owner",
+    }
     updates = {k: v for k, v in kwargs.items() if k in allowed}
+    if "internal" in updates:
+        coerced = normalise_internal(updates["internal"])
+        if coerced is None:
+            updates.pop("internal")
+        else:
+            updates["internal"] = coerced
+    if "owner" in updates:
+        coerced = normalise_owner(updates["owner"])
+        if coerced is None:
+            updates.pop("owner")
+        else:
+            updates["owner"] = coerced
     if not updates:
         return {"error": "No valid fields to update"}
+
+    table_columns = {
+        str(r["name"]) for r in conn.execute("PRAGMA table_info(followups)").fetchall()
+    }
+    updates = {k: v for k, v in updates.items() if k in table_columns or k == "updated_at"}
 
     updates["updated_at"] = now_epoch()
     set_clause = ", ".join(f"{k} = ?" for k in updates)

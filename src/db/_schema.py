@@ -936,6 +936,69 @@ def _m39_hook_runs(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_hook_runs_status ON hook_runs(status)")
 
 
+def _m40_classification_columns(conn):
+    """Add internal (INTEGER 0/1) and owner (TEXT) to followups and reminders.
+
+    Background: before this migration, Desktop clients had to compute the
+    "who does this belong to" classification client-side using Spanish regex
+    on description and ID-prefix pattern matching (NF-PROTOCOL-*, NF-DS-*, …).
+    That logic was hardcoded to NEXO's own ID convention and Spanish-speaking
+    users. Any third-party agent plugging into the shared Brain would either
+    see every task as "Seguimiento" (owner=shared fallback) or, worse, have
+    its real user-facing tasks hidden by the Desktop 'internal' filter.
+
+    Fix: make both attributes first-class columns agents can set on create.
+    Vanilla agents that omit them get the legacy heuristic (classify_task)
+    applied on insert and during this one-shot backfill, so existing rows
+    preserve their current Desktop rendering.
+
+    Values:
+        internal: 0 (external, visible) or 1 (agent bookkeeping, hidden).
+        owner: 'user' | 'waiting' | 'agent' | 'shared' | NULL.
+            'agent' is deliberately generic — Desktop renders the
+            label using the configured assistant name, not a hardcoded
+            'NEXO'.
+
+    Idempotent: _migrate_add_column is a no-op when the column exists,
+    _migrate_add_index likewise. The backfill only touches rows where
+    owner IS NULL, so re-running never overwrites agent-set values.
+    """
+    _migrate_add_column(conn, "followups", "internal", "INTEGER DEFAULT 0")
+    _migrate_add_column(conn, "followups", "owner", "TEXT DEFAULT NULL")
+    _migrate_add_column(conn, "reminders", "internal", "INTEGER DEFAULT 0")
+    _migrate_add_column(conn, "reminders", "owner", "TEXT DEFAULT NULL")
+    _migrate_add_index(conn, "idx_followups_internal", "followups", "internal")
+    _migrate_add_index(conn, "idx_followups_owner", "followups", "owner")
+    _migrate_add_index(conn, "idx_reminders_internal", "reminders", "internal")
+    _migrate_add_index(conn, "idx_reminders_owner", "reminders", "owner")
+
+    from db._classification import classify_task
+
+    rows = conn.execute(
+        "SELECT id, description, recurrence FROM followups WHERE owner IS NULL"
+    ).fetchall()
+    for row in rows:
+        internal, owner = classify_task(
+            row["id"], row["description"], None, row["recurrence"]
+        )
+        conn.execute(
+            "UPDATE followups SET internal = ?, owner = ? WHERE id = ?",
+            (internal, owner, row["id"]),
+        )
+
+    rows = conn.execute(
+        "SELECT id, description, category FROM reminders WHERE owner IS NULL"
+    ).fetchall()
+    for row in rows:
+        internal, owner = classify_task(
+            row["id"], row["description"], row["category"], None
+        )
+        conn.execute(
+            "UPDATE reminders SET internal = ?, owner = ? WHERE id = ?",
+            (internal, owner, row["id"]),
+        )
+
+
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
     (2, "followups_reasoning", _m2_followups_reasoning),
@@ -976,6 +1039,7 @@ MIGRATIONS = [
     (37, "cortex_goal_profile_trace", _m37_cortex_goal_profile_trace),
     (38, "evolution_log_proposal_payload", _m38_evolution_log_proposal_payload),
     (39, "hook_runs", _m39_hook_runs),
+    (40, "classification_columns", _m40_classification_columns),
 ]
 
 

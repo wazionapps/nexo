@@ -1,5 +1,64 @@
 # Changelog
 
+## [5.8.0] - 2026-04-17
+
+### Feature: first-class `internal` and `owner` columns on followups and reminders
+
+Until now, the "who does this belong to?" classification lived client-side
+in NEXO Desktop: spanish-only regex on description plus hardcoded ID-prefix
+patterns (`NF-PROTOCOL-*`, `NF-DS-*`, `R-RELEASE-*`, …) tuned for NEXO's own
+conventions. The result was a UX paradox — tasks marked "Para ti" could
+disappear when the Desktop "Tareas internas" filter was unchecked because
+the two classifications were decided independently — and a portability wall
+for third-party agents plugging into the shared Brain, who would either see
+everything as "Seguimiento" or, worse, have their user-facing tasks hidden.
+
+Migration #40 makes the classification persistent and agent-owned:
+
+- **`src/db/_schema.py`**: new migration `_m40_classification_columns` adds
+  `internal INTEGER DEFAULT 0` and `owner TEXT DEFAULT NULL` to both
+  `followups` and `reminders`, with indexes on each. A one-shot backfill at
+  the end of the migration runs the legacy heuristic against every row where
+  `owner IS NULL`, so existing installs keep their current Desktop rendering
+  identically. The step is idempotent — `_migrate_add_column` is a no-op on
+  the second run, and the backfill filters on `owner IS NULL` so agent-set
+  values are never overwritten.
+- **`src/db/_classification.py`** (new): single source of truth for the
+  heuristic. Exposes `classify_task(id, description, category, recurrence)`
+  returning `(internal, owner)`, plus `normalise_internal` / `normalise_owner`
+  helpers that coerce agent-supplied strings and reject invalid values. The
+  `owner` namespace is deliberately `'user' | 'waiting' | 'agent' | 'shared'`
+  — `'agent'` is generic so non-NEXO deployments (Claude, Codex, hotel-assistant,
+  etc.) do not inherit a NEXO-branded label in the stored data.
+- **`src/db/_reminders.py`**: `create_reminder` / `create_followup` accept
+  optional `internal=` and `owner=` kwargs. When omitted, `classify_task`
+  applies the legacy rules so every pre-migration caller keeps working.
+  `update_reminder` / `update_followup` extend their `allowed` field
+  whitelists with the two columns and run them through the normaliser
+  before persisting.
+- **`src/tools_reminders_crud.py`**: `_format_reminder_payload` and
+  `_format_followup_payload` surface the classification in the read output
+  (`Owner:` + `Internal:` lines). `handle_reminder_create` /
+  `handle_followup_create` / `handle_reminder_update` /
+  `handle_followup_update` pass the overrides through.
+- **`src/server.py`**: `nexo_reminder_create`, `nexo_reminder_update`,
+  `nexo_followup_create`, `nexo_followup_update` gain `internal: str` and
+  `owner: str` parameters, documented with the accepted values. Default is
+  empty string, so agents that never touch the new knobs behave exactly as
+  before.
+- **`tests/test_task_classification.py`** (new, 17 cases): backfill
+  coverage, heuristic fidelity against the legacy Desktop rules (user verbs,
+  waiting triggers, agent-owned recurrences, NF-PROTOCOL-*/NF-DS-*/etc.
+  internal IDs), override precedence, invalid-value rejection (`owner='nexo'`
+  is intentionally rejected to force callers onto the generic taxonomy) and
+  idempotency of the migration itself. Every existing migration + reminder
+  history test continues to pass.
+
+Consumers (NEXO Desktop, dashboard, future clients) can now trust
+`followups.owner` / `followups.internal` as the persistent classification.
+A follow-up Desktop release removes the mirror client-side logic and wires
+UI chips/counters to the stored values.
+
 ## [5.7.0] - 2026-04-17
 
 ### Feature: `nexo update` auto-updates Claude Code + Codex CLIs
