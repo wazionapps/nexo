@@ -1168,6 +1168,202 @@ def _check_npm_version() -> str | None:
     return None
 
 
+# ── External CLI auto-update (Claude Code, Codex) ────────────────────
+# Keep this list aligned with the third-party CLIs that NEXO drives end-to-end.
+# Adding a new CLI here makes `nexo update` auto-install/bump it unless the
+# caller passes include_clis=False. Learning #323: use canonical npm names.
+_EXTERNAL_CLIS: tuple[str, ...] = (
+    "@anthropic-ai/claude-code",
+    "@openai/codex",
+)
+
+
+def _update_external_clis(progress_fn=None) -> dict:
+    """Detect and update NEXO's external terminal CLIs.
+
+    For each package in :data:`_EXTERNAL_CLIS`:
+      1. Read the installed global version via ``npm list -g --json --depth=0``.
+      2. Fetch the latest version from the npm registry via ``npm view <pkg> version``.
+      3. When newer, run ``npm install -g <pkg>@latest``.
+
+    Silently skips packages that are not installed globally — NEXO does not
+    push unsolicited installs of third-party CLIs onto operators.
+
+    Returns a dict keyed by package name. Each entry shape::
+
+        {
+            "old": "2.1.109" | None,
+            "new": "2.1.115" | None,
+            "updated": True | False,
+            "status": "updated" | "already_latest" | "not_installed"
+                      | "skipped" | "failed",
+            "error": "<message>"           # only when status == "failed"/"skipped"
+        }
+    """
+    # Reuse the npm helpers already hardened in plugins/update.py (version
+    # parsing, TimeoutExpired handling, invalid-name validation). Falling back
+    # to "skipped" keeps a partially-copied runtime from crashing the update.
+    try:
+        from plugins.update import (
+            _get_npm_global_version,
+            _get_npm_registry_version,
+            _validate_npm_name,
+        )
+    except Exception as e:  # pragma: no cover — only mid-upgrade installs hit this
+        return {
+            cli: {
+                "old": None,
+                "new": None,
+                "updated": False,
+                "status": "skipped",
+                "error": f"plugins.update helpers unavailable: {e}",
+            }
+            for cli in _EXTERNAL_CLIS
+        }
+
+    results: dict[str, dict] = {}
+
+    for pkg in _EXTERNAL_CLIS:
+        entry: dict = {"old": None, "new": None, "updated": False, "status": "unknown"}
+
+        if not _validate_npm_name(pkg):
+            entry.update({"status": "failed", "error": f"invalid npm name: {pkg!r}"})
+            results[pkg] = entry
+            continue
+
+        old_version = _get_npm_global_version(pkg)
+        if old_version is None:
+            # Not installed globally — don't auto-install third-party CLIs the
+            # operator didn't opt into. Silent skip in the final summary.
+            entry["status"] = "not_installed"
+            results[pkg] = entry
+            continue
+
+        entry["old"] = old_version
+
+        latest = _get_npm_registry_version(pkg)
+        if latest is None:
+            entry.update({
+                "new": old_version,
+                "status": "failed",
+                "error": "npm registry lookup failed",
+            })
+            results[pkg] = entry
+            continue
+
+        if old_version == latest:
+            entry.update({"new": old_version, "status": "already_latest"})
+            results[pkg] = entry
+            continue
+
+        if progress_fn is not None:
+            try:
+                progress_fn(f"Updating {pkg}: {old_version} -> {latest}...")
+            except Exception:
+                pass
+
+        try:
+            r = subprocess.run(
+                ["npm", "install", "-g", f"{pkg}@latest"],
+                capture_output=True,
+                text=True,
+                timeout=180,
+            )
+        except subprocess.TimeoutExpired:
+            # Learning #294: always capture TimeoutExpired explicitly.
+            entry.update({
+                "new": old_version,
+                "status": "failed",
+                "error": "npm install timed out after 180s",
+            })
+            results[pkg] = entry
+            continue
+        except FileNotFoundError:
+            # npm itself missing — no Node.js on PATH. Mark the rest as skipped
+            # and bail: no point retrying subsequent packages.
+            entry.update({
+                "new": old_version,
+                "status": "skipped",
+                "error": "npm not found on PATH",
+            })
+            results[pkg] = entry
+            for remaining in _EXTERNAL_CLIS:
+                results.setdefault(remaining, {
+                    "old": None,
+                    "new": None,
+                    "updated": False,
+                    "status": "skipped",
+                    "error": "npm not found on PATH",
+                })
+            return results
+        except Exception as e:  # pragma: no cover — defensive
+            entry.update({
+                "new": old_version,
+                "status": "failed",
+                "error": str(e)[:500],
+            })
+            results[pkg] = entry
+            continue
+
+        if r.returncode != 0:
+            entry.update({
+                "new": old_version,
+                "status": "failed",
+                "error": (r.stderr or r.stdout or "npm install failed").strip()[:500],
+            })
+            results[pkg] = entry
+            continue
+
+        new_version = _get_npm_global_version(pkg) or latest
+        entry.update({
+            "new": new_version,
+            "updated": new_version != old_version,
+            "status": "updated" if new_version != old_version else "already_latest",
+        })
+        results[pkg] = entry
+
+    return results
+
+
+def _format_external_clis_results(results: dict) -> list[str]:
+    """Render CLI update results as lines for the ``nexo update`` summary.
+
+    Emits a visible warning per bumped CLI (operator must restart the terminal
+    for the new version to take effect), a warning per failure, and a single
+    informational line when nothing changed but something was checked.
+    """
+    if not results:
+        return []
+
+    lines: list[str] = []
+    any_updated = False
+    any_failed = False
+    any_checked_latest = False
+
+    for pkg, entry in results.items():
+        status = entry.get("status")
+        if status == "updated":
+            any_updated = True
+            lines.append(
+                f"  CLI updated: {pkg} {entry.get('old')} -> {entry.get('new')} "
+                f"— reinicia terminal para activar"
+            )
+        elif status == "already_latest":
+            any_checked_latest = True
+        elif status == "failed":
+            any_failed = True
+            lines.append(
+                f"  WARNING: CLI {pkg} update failed: {entry.get('error', 'unknown')}"
+            )
+        # "not_installed" and "skipped" are intentionally silent — third-party
+        # CLIs that the operator never installed shouldn't spam the summary.
+
+    if not any_updated and not any_failed and any_checked_latest:
+        lines.append("  CLIs externos: ya en última versión")
+
+    return lines
+
+
 # ── File-based migrations (migrations/ directory) ────────────────────
 
 def _get_applied_migration_version() -> int:
@@ -2449,7 +2645,13 @@ def _personal_schedule_reconcile_summary(reconcile_result: dict) -> tuple[list[s
     return actions, "Personal schedules: " + ", ".join(parts) + "."
 
 
-def manual_sync_update(*, interactive: bool = False, allow_source_pull: bool = True, progress_fn=None) -> dict:
+def manual_sync_update(
+    *,
+    interactive: bool = False,
+    allow_source_pull: bool = True,
+    progress_fn=None,
+    include_clis: bool = True,
+) -> dict:
     src_dir, repo_dir = _resolve_sync_source()
     if src_dir is None or repo_dir is None:
         return {"ok": False, "mode": "sync", "error": "No source repo recorded for this runtime."}
@@ -2512,6 +2714,18 @@ def manual_sync_update(*, interactive: bool = False, allow_source_pull: bool = T
             sync_result["runtime_dependencies"] = dep_results
         except Exception:
             pass  # Non-critical
+
+        # Auto-update external terminal CLIs (Claude Code, Codex). Best-effort:
+        # a failed third-party install never aborts the NEXO sync itself.
+        if include_clis:
+            try:
+                _emit_progress(progress_fn, "Checking external CLI updates...")
+                cli_results = _update_external_clis(progress_fn=progress_fn)
+                sync_result["external_clis"] = cli_results
+            except Exception as e:
+                sync_result.setdefault("warnings", []).append(
+                    f"external CLI update skipped: {e}"
+                )
 
         _emit_progress(progress_fn, "Runtime update completed.")
     except Exception as e:

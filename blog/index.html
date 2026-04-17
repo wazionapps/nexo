@@ -174,6 +174,13 @@
 
             <div class="blog-card">
                 <div class="blog-card-date">April 17, 2026</div>
+                <h2><a href="/blog/nexo-5-7-0/">NEXO 5.7.0: `nexo update` Auto-Updates Claude Code and Codex CLIs</a></h2>
+                <p><code>nexo update</code> now keeps your terminal CLIs in lockstep with NEXO Brain itself. When the global <code>@anthropic-ai/claude-code</code> or <code>@openai/codex</code> packages are installed, the updater checks the npm registry and runs <code>npm install -g &lt;pkg&gt;@latest</code> in-line before the post-update verify step &mdash; so the boot model stays aligned with the settings NEXO already wrote to <code>~/.claude/settings.json</code>. Pass <code>nexo update --no-clis</code> to pin them manually.</p>
+                <a href="/blog/nexo-5-7-0/" class="read-more">Read more &rarr;</a>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 17, 2026</div>
                 <h2><a href="/blog/nexo-5-6-1/">NEXO 5.6.1: Update Path Hardening — 0-Byte DB Orphans + Claude Code Model Sync</a></h2>
                 <p>Two small-but-sharp fixes in <code>nexo update</code>. 0-byte <code>.db</code> orphans left behind by interrupted installs or aborted <code>sqlite3.connect</code> calls now get purged from <code>~/.nexo/</code> and <code>~/.nexo/data/</code> before the pre-update backup runs, so backup validation no longer trips over empty shells. And the new <code>sync_claude_code_model()</code> helper propagates the NEXO-recommended model into <code>~/.claude/settings.json</code> — the file Claude Code actually reads — when <code>heal_runtime_profiles()</code> migrates the <code>claude_code</code> default.</p>
                 <a href="/blog/nexo-5-6-1/" class="read-more">Read more &rarr;</a>

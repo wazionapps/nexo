@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXO 5.7.0: `nexo update` auto-updates Claude Code and Codex CLIs</title>
+    <meta name="description" content="NEXO Brain 5.7.0 bundles Claude Code and Codex CLI updates into `nexo update`. When the global CLI packages are installed, the updater checks the npm registry and runs `npm install -g <pkg>@latest` in-line, so the boot model stays aligned with ~/.claude/settings.json.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-5-7-0/">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/blog/nexo-5-7-0/">
+    <meta property="og:title" content="NEXO 5.7.0: `nexo update` auto-updates Claude Code and Codex CLIs">
+    <meta property="og:description" content="`nexo update` now keeps Claude Code and Codex CLIs in lockstep with NEXO itself. Pass `--no-clis` to pin them manually.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+    <meta property="article:published_time" content="2026-04-17">
+    <meta property="article:author" content="Francisco Cerda Puigserver">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO 5.7.0: `nexo update` auto-updates Claude Code and Codex CLIs">
+    <meta name="twitter:description" content="One command brings NEXO Brain and your terminal CLIs up to date together. The boot model stays aligned with the settings NEXO already wrote.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "NEXO 5.7.0: `nexo update` auto-updates Claude Code and Codex CLIs",
+        "description": "NEXO Brain 5.7.0 bundles Claude Code and Codex CLI updates into `nexo update`, keeping the boot model aligned with the settings NEXO already wrote to ~/.claude/settings.json.",
+        "datePublished": "2026-04-17",
+        "dateModified": "2026-04-17",
+        "author": {
+            "@type": "Person",
+            "name": "Francisco Cerda Puigserver"
+        },
+        "publisher": {
+            "@type": "Organization",
+            "name": "WAzion",
+            "url": "https://www.wazion.com"
+        },
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https://nexo-brain.com/blog/nexo-5-7-0/"
+        },
+        "url": "https://nexo-brain.com/blog/nexo-5-7-0/",
+        "image": "https://nexo-brain.com/assets/og/og-blog.png",
+        "keywords": ["NEXO 5.7.0", "nexo update", "Claude Code", "Codex", "npm", "auto-update", "terminal CLI"]
+    }
+    </script>
+
+    <style>
+        .article-header { padding-top: 128px; padding-bottom: 40px; text-align: center; }
+        .article-meta { font-size: 14px; color: var(--text-muted); margin-bottom: 16px; }
+        .article-body {
+            max-width: 720px; margin: 0 auto; padding: 0 24px 80px;
+            font-size: 17px; line-height: 1.8; color: var(--text);
+        }
+        .article-body h2 { font-size: 28px; font-weight: 700; margin: 48px 0 16px; letter-spacing: -0.01em; }
+        .article-body p { margin-bottom: 20px; color: var(--text-muted); }
+        .article-body strong { color: var(--text); }
+        .article-body a { color: var(--purple-light); }
+        .article-body a:hover { color: var(--pink); }
+        .article-body code {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 14px; color: var(--pink);
+            background: rgba(236, 72, 153, 0.1);
+            padding: 2px 8px; border-radius: 4px;
+        }
+        .article-back {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 14px; font-weight: 600; color: var(--text-muted);
+            margin-bottom: 24px;
+        }
+        .article-back:hover { color: var(--purple-light); }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-64.png" alt="NEXO Brain" class="logo-image">
+            <span class="logo-text">NEXO Brain</span>
+        </a>
+        <button class="mobile-menu-toggle" aria-label="Toggle navigation" onclick="toggleMobileMenu()">
+            <span></span><span></span><span></span>
+        </button>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/features/">Features</a>
+            <a href="/evolution/">Evolution</a>
+            <a href="/compare/">Compare</a>
+            <a href="/blog/">Blog</a>
+            <a href="/changelog/">Changelog</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta">GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<section class="article-header">
+    <div class="container">
+        <a href="/blog/" class="article-back">&larr; Back to blog</a>
+        <div class="article-meta">April 17, 2026 &middot; Feature &middot; Update flow</div>
+        <h1 class="section-title" style="font-size:clamp(28px,4.5vw,48px);max-width:920px;margin:0 auto 16px;">NEXO 5.7.0: <code>nexo update</code> auto-updates Claude Code and Codex CLIs</h1>
+        <p class="section-subtitle" style="max-width:760px;margin:0 auto;">One command brings NEXO Brain <em>and</em> your terminal CLIs up to date together. The boot model finally stays aligned with the settings NEXO already wrote to <code>~/.claude/settings.json</code>.</p>
+    </div>
+</section>
+
+<section>
+    <div class="article-body">
+
+        <h2>Why this ships now</h2>
+        <p>In v5.6.1 we closed the gap where NEXO would migrate the default <code>claude_code</code> model in <code>client_runtime_profiles</code> but forget to propagate it into <code>~/.claude/settings.json</code>, the file Claude Code actually reads. The new <code>sync_claude_code_model()</code> helper fixed that write path.</p>
+        <p>But the next layer surfaced immediately: you can write <code>claude-opus-4-7</code> into <code>settings.json</code> all day long and Claude Code will still boot on Opus 4 <strong>if the locally-installed CLI is too old to recognise the new model id</strong>. Updating NEXO without updating Claude Code left users in exactly that state.</p>
+
+        <h2>What <code>nexo update</code> does now</h2>
+        <p>Right after migrations and the existing runtime-dependency sync, <code>nexo update</code> now runs a new <code>_update_external_clis()</code> step. For each package in NEXO&rsquo;s curated list &mdash; today <code>@anthropic-ai/claude-code</code> and <code>@openai/codex</code> &mdash; it:</p>
+        <p>&bull; Reads the installed global version via <code>npm list -g --json --depth=0</code>.<br>
+           &bull; Fetches the latest from the npm registry via <code>npm view &lt;pkg&gt; version</code>.<br>
+           &bull; If newer, runs <code>npm install -g &lt;pkg&gt;@latest</code> in-line.<br>
+           &bull; If the package was never installed globally, skips it silently &mdash; NEXO does not push third-party CLIs onto operators who never opted in.</p>
+        <p>A bump ends with a visible warning: <code>CLI updated: @anthropic-ai/claude-code 2.1.109 -&gt; 2.1.115 &mdash; reinicia terminal para activar</code>. If everything was already on the latest version, you get a single informational line: <code>CLIs externos: ya en última versión</code>.</p>
+
+        <h2>What is protected</h2>
+        <p>Failures of the third-party install never cascade into the NEXO rollback path. The git/npm package rollback only covers NEXO itself; a broken <code>npm install -g @openai/codex@latest</code> gets logged as a warning in the summary and the update is still considered successful. <code>TimeoutExpired</code> and <code>FileNotFoundError</code> (no <code>npm</code> on <code>PATH</code>) are handled explicitly so a missing Node.js toolchain degrades gracefully.</p>
+
+        <h2>Opting out</h2>
+        <p>If you pin your terminal CLIs manually, pass <code>nexo update --no-clis</code>. The MCP <code>nexo_update</code> tool gained the same switch: call it with <code>include_clis=False</code> and the external bump is short-circuited. The default is to update.</p>
+
+        <h2>How to upgrade</h2>
+        <p>Run <code>nexo update</code>. Next time a new Claude Code or Codex release ships, the next <code>nexo update</code> picks it up for you.</p>
+
+    </div>
+</section>
+
+<footer style="padding:48px 24px;text-align:center;font-size:13px;color:var(--text-muted);">
+    &copy; 2026 <a href="https://www.wazion.com" style="color:var(--purple-light);">WAzion</a>. NEXO Brain is open-source under <a href="https://github.com/wazionapps/nexo/blob/main/LICENSE" style="color:var(--purple-light);">AGPL-3.0</a>.
+</footer>
+
+<script src="/assets/main.js"></script>
+</body>
+</html>

@@ -181,6 +181,17 @@
     </div>
 </section>
 
+<!-- v5.7.0 Auto-update Claude Code + Codex CLIs inside `nexo update` -->
+<section id="v570" class="section-compact" style="background:linear-gradient(135deg,#09111f 0%,#14253a 50%,#1e3a5f 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.7.0 <span style="opacity:.5;font-weight:400;">&mdash; April 17, 2026</span></div>
+        <h2 class="section-title">`nexo update` Auto-Updates Claude Code and Codex CLIs</h2>
+        <p class="section-subtitle">
+            <code>nexo update</code> now keeps your terminal CLIs in lockstep with NEXO Brain itself. When the global <code>@anthropic-ai/claude-code</code> or <code>@openai/codex</code> packages are installed, the updater checks the npm registry and runs <code>npm install -g &lt;pkg&gt;@latest</code> in-line before the post-update verify step. Packages that were never installed globally are skipped silently. Pass <code>nexo update --no-clis</code> (or <code>include_clis=False</code> on the MCP tool) to pin them manually.
+        </p>
+    </div>
+</section>
+
 <!-- v5.6.1 Update path hardening — 0-byte DB purge + Claude Code model sync -->
 <section id="v561" class="section-compact" style="background:linear-gradient(135deg,#09111f 0%,#14253a 50%,#1e3a5f 100%);">
     <div class="container">
