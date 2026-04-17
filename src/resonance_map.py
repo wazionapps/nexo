@@ -46,6 +46,7 @@ future scripts from silently inheriting the wrong tier.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Tuple
 
@@ -65,7 +66,27 @@ from typing import Tuple
 
 TIERS = ("maximo", "alto", "medio", "bajo")
 
-_RESONANCE_JSON_PATH = Path(__file__).resolve().parent / "resonance_tiers.json"
+# Resolution order for the contract file:
+#   1) ~/.nexo/brain/resonance_tiers.json  (v6.0.3+ public contract path, shared
+#      with NEXO Desktop and any external client)
+#   2) Legacy NEXO_HOME/resonance_tiers.json (pre-v6.0.3 runtime layout)
+#   3) Package source src/resonance_tiers.json (dev checkouts / tests)
+def _resolve_resonance_path() -> Path:
+    nexo_home = os.environ.get("NEXO_HOME") or str(Path.home() / ".nexo")
+    candidates = [
+        Path(nexo_home) / "brain" / "resonance_tiers.json",
+        Path(nexo_home) / "resonance_tiers.json",
+        Path(__file__).resolve().parent / "resonance_tiers.json",
+    ]
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    # No contract present: return the canonical path so the ValueError raised
+    # at load time points at where the contract should live.
+    return candidates[0]
+
+
+_RESONANCE_JSON_PATH = _resolve_resonance_path()
 
 
 def _normalize_tier_entry(entry: dict) -> dict[str, tuple[str, str]]:

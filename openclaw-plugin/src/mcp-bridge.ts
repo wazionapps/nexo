@@ -82,7 +82,7 @@ export class McpBridge {
     await this.send("initialize", {
       protocolVersion: "2024-11-05",
       capabilities: {},
-      clientInfo: { name: "openclaw-memory-nexo-brain", version: "6.0.2" },
+      clientInfo: { name: "openclaw-memory-nexo-brain", version: "6.0.3" },
     });
 
     await this.send("notifications/initialized", {});

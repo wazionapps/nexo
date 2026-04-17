@@ -129,3 +129,100 @@ def test_handle_guard_file_check_skips_file_scoped_rules_for_other_files(guard_e
     output = guard.handle_guard_file_check(["/repo/src/doctor/providers/runtime.py"])
 
     assert "Never edit guard.py directly" not in output
+
+
+# ---------------------------------------------------------------------------
+# v6.0.3 — guard_checks.session_id must carry the caller's SID
+# ---------------------------------------------------------------------------
+
+
+def _seed_session(conn, sid: str, *, ext: str = "", claude_sid: str = "",
+                  last_update: float | None = None) -> None:
+    import time as _time
+    ts = last_update if last_update is not None else _time.time()
+    conn.execute(
+        "INSERT INTO sessions (sid, task, started_epoch, last_update_epoch, "
+        "external_session_id, claude_session_id) "
+        "VALUES (?, 'test', ?, ?, ?, ?)",
+        (sid, ts, ts, ext, claude_sid),
+    )
+    conn.commit()
+
+
+def test_guard_check_persists_active_sid_from_env(guard_env, monkeypatch):
+    db, guard = _reload_guard_stack()
+    db.init_db()
+
+    sid = "nexo-1700000000-11111"
+    conn = db.get_db()
+    _seed_session(conn, sid)
+    monkeypatch.setenv("NEXO_SID", sid)
+
+    guard.handle_guard_check(files="/repo/src/any.py", area="nexo")
+
+    row = conn.execute(
+        "SELECT session_id FROM guard_checks ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+    assert row is not None
+    assert row["session_id"] == sid, (
+        "regression of v6.0.2 bug — guard_checks.session_id must carry the "
+        "caller's SID so missing_file_guard can see the call"
+    )
+
+
+def test_guard_check_resolves_sid_via_external_session_id(guard_env, monkeypatch):
+    db, guard = _reload_guard_stack()
+    db.init_db()
+
+    sid = "nexo-1700000000-22222"
+    claude_sid = "cb7e03a2-aaaa-bbbb-cccc-dddddddddddd"
+    conn = db.get_db()
+    _seed_session(conn, sid, ext=claude_sid, claude_sid=claude_sid)
+    monkeypatch.delenv("NEXO_SID", raising=False)
+    monkeypatch.setenv("CLAUDE_SESSION_ID", claude_sid)
+
+    guard.handle_guard_check(files="/repo/src/any.py", area="nexo")
+
+    row = conn.execute(
+        "SELECT session_id FROM guard_checks ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+    assert row["session_id"] == sid
+
+
+def test_guard_check_falls_back_to_most_recent_session(guard_env, monkeypatch):
+    db, guard = _reload_guard_stack()
+    db.init_db()
+
+    conn = db.get_db()
+    _seed_session(conn, "nexo-1700000000-33333", last_update=1_700_000_000.0)
+    _seed_session(conn, "nexo-1700000500-44444", last_update=1_700_000_500.0)
+    monkeypatch.delenv("NEXO_SID", raising=False)
+    monkeypatch.delenv("CLAUDE_SESSION_ID", raising=False)
+
+    guard.handle_guard_check(files="/repo/src/any.py", area="nexo")
+
+    row = conn.execute(
+        "SELECT session_id FROM guard_checks ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+    assert row["session_id"] == "nexo-1700000500-44444"
+
+
+def test_guard_check_inserts_empty_sid_only_when_no_sessions_exist(guard_env, monkeypatch):
+    db, guard = _reload_guard_stack()
+    db.init_db()
+    monkeypatch.delenv("NEXO_SID", raising=False)
+    monkeypatch.delenv("CLAUDE_SESSION_ID", raising=False)
+
+    conn = db.get_db()
+    assert conn.execute("SELECT COUNT(*) FROM sessions").fetchone()[0] == 0
+
+    guard.handle_guard_check(files="/repo/src/any.py", area="nexo")
+
+    row = conn.execute(
+        "SELECT session_id FROM guard_checks ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+    # With no sessions to resolve, falling back to '' is the safe outcome —
+    # the guard check still completes and the caller sees learnings, but
+    # hook_guardrails will treat it as "no guard seen" (that's the right
+    # signal when no one is actually tracking the caller).
+    assert row["session_id"] == ""
