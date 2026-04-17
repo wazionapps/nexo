@@ -973,6 +973,57 @@ def _migrate_effort_to_resonance(dest: Path = NEXO_HOME) -> list[str]:
     return actions
 
 
+def _relocate_resonance_tiers_contract(dest: Path = NEXO_HOME) -> list[str]:
+    """Ensure ``resonance_tiers.json`` lives at the public contract path
+    ``NEXO_HOME/brain/resonance_tiers.json`` and purge the legacy copy at
+    ``NEXO_HOME/resonance_tiers.json``.
+
+    Context: v6.0.0 defined the public contract (read by NEXO Desktop) as
+    ``~/.nexo/brain/resonance_tiers.json`` but the installer kept copying
+    the file to ``~/.nexo/resonance_tiers.json`` (legacy flat-file layout),
+    so Desktop failed with *"NEXO Brain contract missing"* until the user
+    moved the file by hand. v6.0.3 publishes straight to ``brain/`` and
+    this migration reconciles existing runtimes.
+
+    Idempotent: no-op once the contract file is in ``brain/`` and the
+    legacy file is gone. Never raises — migration must not block an update.
+    """
+    actions: list[str] = []
+    brain_dir = dest / "brain"
+    contract_path = brain_dir / "resonance_tiers.json"
+    legacy_path = dest / "resonance_tiers.json"
+
+    try:
+        brain_dir.mkdir(parents=True, exist_ok=True)
+    except Exception as exc:
+        actions.append(f"resonance-contract-relocate-warning:mkdir:{exc.__class__.__name__}")
+        return actions
+
+    # If the contract already exists in brain/, just drop the legacy copy.
+    if contract_path.is_file():
+        if legacy_path.is_file():
+            try:
+                legacy_path.unlink()
+                actions.append("resonance-contract-relocate:legacy-removed")
+            except Exception as exc:
+                actions.append(f"resonance-contract-relocate-warning:unlink:{exc.__class__.__name__}")
+        return actions
+
+    # Contract missing from brain/ — promote the legacy file if present.
+    if legacy_path.is_file():
+        try:
+            contract_path.write_bytes(legacy_path.read_bytes())
+            legacy_path.unlink()
+            actions.append("resonance-contract-relocate:moved-to-brain")
+        except Exception as exc:
+            actions.append(f"resonance-contract-relocate-warning:move:{exc.__class__.__name__}")
+    # If neither exists, the caller (nexo-brain.js publishBrainContracts)
+    # will write it from the package source on the next install pass; nothing
+    # for this Python migration to do.
+
+    return actions
+
+
 def _bootstrap_profile_from_calibration_meta(dest: Path = NEXO_HOME) -> list[str]:
     """Create ``brain/profile.json`` from ``calibration.json`` fields when the
     profile file does not exist yet.
@@ -2893,6 +2944,17 @@ def _run_runtime_post_sync(dest: Path = NEXO_HOME, progress_fn=None) -> tuple[bo
             actions.append(action)
     except Exception as exc:
         actions.append(f"profile-bootstrap-warning:{exc.__class__.__name__}")
+
+    # v6.0.3 — relocate resonance_tiers.json from NEXO_HOME root (pre-v6.0.3
+    # layout) to NEXO_HOME/brain/ (public contract path consumed by
+    # NEXO Desktop). Idempotent; safe no-op once the move is done.
+    try:
+        _emit_progress(progress_fn, "Relocating resonance_tiers contract to brain/...")
+        reloc_actions = _relocate_resonance_tiers_contract(dest)
+        for action in reloc_actions:
+            actions.append(action)
+    except Exception as exc:
+        actions.append(f"resonance-contract-relocate-warning:{exc.__class__.__name__}")
 
     # v6.0.0 purge — drop legacy fields that moved elsewhere in v6.
     # client_runtime_profiles.*.{model,reasoning_effort} → resonance_tiers.json.

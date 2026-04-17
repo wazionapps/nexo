@@ -235,7 +235,6 @@ function getCoreRuntimeFlatFiles(srcDir = path.join(__dirname, "..", "src")) {
     "runtime_power.py",
     "requirements.txt",
     "model_defaults.json",
-    "resonance_tiers.json",
   ];
   const discoveredRootModules = fs.existsSync(srcDir)
     ? fs.readdirSync(srcDir)
@@ -255,6 +254,29 @@ function getCoreRuntimeFlatFiles(srcDir = path.join(__dirname, "..", "src")) {
 
 function getCoreRuntimePackages() {
   return ["db", "cognitive", "doctor"];
+}
+
+// Brain contracts — files the NEXO Brain publishes to consumers like
+// NEXO Desktop under ~/.nexo/brain/. These are NOT code (they live outside
+// getCoreRuntimeFlatFiles for that reason) but data contracts with a stable
+// path that external clients read. Keep in sync with docs/contracts/.
+function publishBrainContracts(srcDir = path.join(__dirname, "..", "src"), nexoHome = NEXO_HOME) {
+  const brainDir = path.join(nexoHome, "brain");
+  fs.mkdirSync(brainDir, { recursive: true });
+  const contracts = ["resonance_tiers.json"];
+  contracts.forEach((name) => {
+    const src = path.join(srcDir, name);
+    if (fs.existsSync(src)) {
+      fs.copyFileSync(src, path.join(brainDir, name));
+    }
+  });
+  // Clean up legacy location: before v6.0.3 the file was written to
+  // NEXO_HOME/resonance_tiers.json. Remove it so only the contract path
+  // remains authoritative.
+  const legacy = path.join(nexoHome, "resonance_tiers.json");
+  if (fs.existsSync(legacy)) {
+    try { fs.unlinkSync(legacy); } catch (_) { /* best-effort */ }
+  }
 }
 
 function resolveLaunchAgentPath(home) {
@@ -1654,6 +1676,8 @@ async function main() {
             copyDirRec(pkgSrc, path.join(NEXO_HOME, pkg));
           }
         });
+        // Publish Brain contracts to ~/.nexo/brain/ (read by NEXO Desktop et al.)
+        publishBrainContracts(srcDir, NEXO_HOME);
         log("  Core files updated.");
 
         // Reconcile Python dependencies after updating code (mirrors fresh-install logic)
@@ -2489,6 +2513,9 @@ async function main() {
       fs.copyFileSync(src, path.join(NEXO_HOME, f));
     }
   });
+
+  // Publish Brain contracts to ~/.nexo/brain/ (read by NEXO Desktop et al.)
+  publishBrainContracts(srcDir, NEXO_HOME);
 
   // Runtime CLI wrapper lives in NEXO_HOME/bin so it survives npx installs.
   const runtimeCli = [

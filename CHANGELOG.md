@@ -1,5 +1,34 @@
 # Changelog
 
+## [6.0.3] - 2026-04-17
+
+### Fixed
+
+- **`resonance_tiers.json` published at the wrong path.** v6.0.0 defined the public contract as `~/.nexo/brain/resonance_tiers.json` (consumed by NEXO Desktop ≥ 0.12.0) but the installer kept copying the file to `~/.nexo/resonance_tiers.json` (legacy flat-file layout). NEXO Desktop failed to start Claude with *"NEXO Brain contract missing"* on every fresh install and on every update from 6.0.0 / 6.0.1 / 6.0.2 unless the user copied the file by hand. The Brain's own Python runtime still worked because `resonance_map.py` read the legacy location, so the symptom only surfaced for Desktop users.
+- **`nexo_guard_check` persisted rows with `session_id=""`.** The tool hardcoded the empty string on every insert, so `hook_guardrails._session_has_guard_check` (used by `missing_file_guard` and sibling hooks) could never match a guard call to the current session. Under strict protocol that meant every edit tripped the *"no guard_check seen for this session"* block, even right after a successful `nexo_guard_check`. The `guard_checks` table now records the resolved SID (env `NEXO_SID` → env `CLAUDE_SESSION_ID` translated via `sessions.external_session_id` → most-recently-updated `sessions` row). Empty `session_id` is only written when `sessions` is genuinely empty, which is the right *"nothing to guard"* signal.
+
+### Changed
+
+- `bin/nexo-brain.js` — new `publishBrainContracts(srcDir, nexoHome)` helper writes `resonance_tiers.json` straight into `~/.nexo/brain/` on install and update, and unlinks the legacy `~/.nexo/resonance_tiers.json` if present. Removed `resonance_tiers.json` from `getCoreRuntimeFlatFiles()` so it no longer lands at the root.
+- `src/resonance_map.py` — contract resolution now walks: (1) `NEXO_HOME/brain/resonance_tiers.json` → (2) `NEXO_HOME/resonance_tiers.json` (legacy fallback during the rollout) → (3) `src/resonance_tiers.json` (dev checkout). Honours `$NEXO_HOME`.
+- `src/plugins/guard.py` — new `_resolve_active_sid(conn)` helper used by `handle_guard_check` when persisting the audit row.
+
+### Migration
+
+- `src/auto_update.py::_relocate_resonance_tiers_contract` — runs during `nexo update` and promotes a legacy `~/.nexo/resonance_tiers.json` into `~/.nexo/brain/` if the contract path is empty, then unlinks the legacy copy. Idempotent; never raises.
+
+### Tests
+
+- `tests/test_auto_update_relocate_resonance.py` — 5 cases covering the contract relocation migration (promotion, legacy cleanup, idempotency, absence-of-files, exception safety).
+- `tests/test_guard.py` — 4 new cases covering SID resolution for `guard_checks` inserts (env, external_session_id mapping, most-recent fallback, empty-sessions edge case).
+
+### Impact
+
+- Fresh installs of v6.0.3: contract is written to `~/.nexo/brain/` on first boot. Desktop starts cleanly.
+- Updates from v6.0.0 / v6.0.1 / v6.0.2: installer copies the new file, migration removes the legacy one. No user action required beyond restarting NEXO Desktop.
+- Brain-only users (no Desktop): Python runtime keeps working; it now reads from `brain/` instead of the root.
+- Strict-protocol sessions stop seeing the spurious *"no guard_check seen"* block as soon as the Brain runtime is refreshed after the update.
+
 ## [6.0.2] - 2026-04-17
 
 ### Added

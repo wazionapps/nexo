@@ -181,6 +181,17 @@
     </div>
 </section>
 
+<!-- v6.0.3 — Desktop contract path + guard_checks.session_id -->
+<section id="v603" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v6.0.3 <span style="opacity:.5;font-weight:400;">&mdash; April 17, 2026</span></div>
+        <h2 class="section-title">Desktop Contract Path Fix + <code>guard_checks.session_id</code> Fix</h2>
+        <p class="section-subtitle">
+            Double-fix release. <strong>Fix 1:</strong> <code>resonance_tiers.json</code> is now published to the public contract path <code>~/.nexo/brain/resonance_tiers.json</code> that NEXO Desktop &ge; 0.12.0 reads on startup. Pre-v6.0.3 the installer kept writing it to the legacy location <code>~/.nexo/resonance_tiers.json</code>, so Desktop failed to start Claude with <em>"NEXO Brain contract missing"</em> on every fresh install and every update from 6.0.0 / 6.0.1 / 6.0.2 unless the user copied the file by hand. The Brain's own Python runtime never saw the symptom because it read the file from <code>__file__.parent</code>. Fix layered across three files: new <code>publishBrainContracts(srcDir, nexoHome)</code> helper in <code>bin/nexo-brain.js</code> (writes to <code>brain/</code> and unlinks the legacy copy on every install and update); three-step resolution walk in <code>src/resonance_map.py</code> (<code>NEXO_HOME/brain/</code> → legacy <code>NEXO_HOME/</code> → <code>src/</code>, honours <code>$NEXO_HOME</code>); idempotent <code>_relocate_resonance_tiers_contract(dest)</code> migration in <code>src/auto_update.py</code> that promotes legacy runtimes on <code>nexo update</code> and unlinks the old copy. <strong>Fix 2:</strong> <code>nexo_guard_check</code> now writes the caller's SID into <code>guard_checks.session_id</code> instead of the empty string v6.0.2 hardcoded. Resolution walks <code>NEXO_SID</code> env → <code>CLAUDE_SESSION_ID</code> env translated via <code>sessions.external_session_id</code> → most-recently-updated <code>sessions</code> row. The empty string is only written when <code>sessions</code> is literally empty, which is the right "nothing to guard" signal. <code>hook_guardrails._session_has_guard_check</code> can finally match the call to the current session, so strict-protocol sessions stop tripping <em>"no <code>guard_check</code> seen for this session"</em> after every successful call. Tests: 5 new cases in <code>test_auto_update_relocate_resonance.py</code> (relocation, cleanup, idempotency, absence no-op, exception safety); 4 new cases in <code>test_guard.py</code> (env resolution, external_session_id translation, most-recent-session fallback, empty-sessions edge). Full suite stays green.
+        </p>
+    </div>
+</section>
+
 <!-- v6.0.2 — personal/ prefix + tier kwarg + personal scripts guide -->
 <section id="v602" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
     <div class="container">

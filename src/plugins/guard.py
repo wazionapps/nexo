@@ -11,6 +11,55 @@ from pathlib import Path
 from db import get_db, find_similar_learnings, extract_keywords, search_learnings, search_changes
 
 
+def _resolve_active_sid(conn) -> str:
+    """Resolve the SID of the caller invoking this guard check.
+
+    Order of precedence:
+      1. ``NEXO_SID`` env var (headless crons + wrapped CLI set this).
+      2. ``CLAUDE_SESSION_ID`` env var translated via
+         ``sessions.external_session_id`` / ``sessions.claude_session_id``.
+      3. The most-recently-updated session in ``sessions`` (fallback for
+         MCP tool calls where the broker doesn't forward env vars but a
+         single active session exists).
+
+    Returns an empty string if nothing resolves. The caller MUST handle
+    the empty-string case explicitly — persisting ``session_id=""`` was
+    the v6.0.2 bug that left ``missing_file_guard`` blind to successful
+    guard checks.
+    """
+    env_sid = (os.environ.get("NEXO_SID") or "").strip()
+    if env_sid.startswith("nexo-"):
+        return env_sid
+
+    external_candidates = [env_sid] if env_sid else []
+    claude_sid = (os.environ.get("CLAUDE_SESSION_ID") or "").strip()
+    if claude_sid:
+        external_candidates.append(claude_sid)
+    for cand in external_candidates:
+        try:
+            row = conn.execute(
+                "SELECT sid FROM sessions "
+                "WHERE external_session_id = ? OR claude_session_id = ? "
+                "ORDER BY last_update_epoch DESC LIMIT 1",
+                (cand, cand),
+            ).fetchone()
+        except Exception:
+            row = None
+        if row and row["sid"]:
+            return str(row["sid"])
+
+    try:
+        row = conn.execute(
+            "SELECT sid FROM sessions "
+            "ORDER BY last_update_epoch DESC LIMIT 1"
+        ).fetchone()
+    except Exception:
+        row = None
+    if row and row["sid"]:
+        return str(row["sid"])
+    return ""
+
+
 def _split_applies_to(applies_to: str) -> list[str]:
     return [item.strip() for item in str(applies_to or "").split(",") if item.strip()]
 
@@ -370,11 +419,15 @@ def handle_guard_check(files: str = "", area: str = "", include_schemas: str = "
                 (time.time(), lid)
             )
 
-    # Log the guard check
+    # Log the guard check — v6.0.3 fix: resolve the caller's SID instead of
+    # inserting the empty string. Pre-v6.0.3 every row landed with
+    # session_id='' so missing_file_guard could not find the guard call
+    # from hook_guardrails._session_has_guard_check and blocked forever.
+    active_sid = _resolve_active_sid(conn)
     conn.execute(
         "INSERT INTO guard_checks (session_id, files, area, learnings_returned, blocking_rules_returned) "
         "VALUES (?, ?, ?, ?, ?)",
-        ("", files, area, len(result["learnings"]) + len(result["universal_rules"]),
+        (active_sid, files, area, len(result["learnings"]) + len(result["universal_rules"]),
          len(result["blocking_rules"]))
     )
     conn.commit()
