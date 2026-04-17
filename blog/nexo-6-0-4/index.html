@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXO 6.0.4: Interactive launchers honour default_resonance</title>
+    <meta name="description" content="NEXO 6.0.4 closes a gap left over from the v5.9.0 resonance map: nexo chat and the dashboard's Open followup in Terminal action now honour preferences.default_resonance. Pre-v6.0.4 they pulled --model / --effort straight from client_runtime_profiles, so users who switched their Resonance in NEXO Desktop Preferences kept running the stale tier.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-6-0-4/">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/blog/nexo-6-0-4/">
+    <meta property="og:title" content="NEXO 6.0.4: Interactive launchers honour default_resonance">
+    <meta property="og:description" content="nexo chat and the dashboard Terminal launcher stop ignoring the user's Resonance preference. One shared helper, two terminal launchers, four fewer surprise 'max' spawns.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+    <meta property="article:published_time" content="2026-04-17">
+    <meta property="article:author" content="Francisco Cerda Puigserver">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO 6.0.4: Interactive launchers honour default_resonance">
+    <meta name="twitter:description" content="The Resonance preference in NEXO Desktop finally reaches nexo chat and the dashboard's Open followup in Terminal launcher.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "NEXO 6.0.4: Interactive launchers honour default_resonance",
+        "description": "Closes the last gap left by the v5.9.0 resonance rollout: nexo chat and the dashboard's 'Open followup in Terminal' action now consult resonance_map first and fall back to client_runtime_profiles only when the contract is missing.",
+        "datePublished": "2026-04-17",
+        "dateModified": "2026-04-17",
+        "author": {"@type": "Person", "name": "Francisco Cerda Puigserver"},
+        "publisher": {"@type": "Organization", "name": "WAzion", "url": "https://www.wazion.com"},
+        "mainEntityOfPage": {"@type": "WebPage", "@id": "https://nexo-brain.com/blog/nexo-6-0-4/"},
+        "url": "https://nexo-brain.com/blog/nexo-6-0-4/",
+        "image": "https://nexo-brain.com/assets/og/og-blog.png",
+        "keywords": ["NEXO 6.0.4", "default_resonance", "nexo chat", "resonance_map", "client_runtime_profiles", "nexo_followup_terminal", "interactive launcher"]
+    }
+    </script>
+
+    <style>
+        .article-header { padding-top: 128px; padding-bottom: 40px; text-align: center; }
+        .article-meta { font-size: 14px; color: var(--text-muted); margin-bottom: 16px; }
+        .article-body {
+            max-width: 720px; margin: 0 auto; padding: 0 24px 80px;
+            font-size: 17px; line-height: 1.8; color: var(--text);
+        }
+        .article-body h2 { font-size: 26px; margin-top: 48px; margin-bottom: 16px; color: var(--text-bright); }
+        .article-body h3 { font-size: 20px; margin-top: 32px; margin-bottom: 12px; color: var(--text-bright); }
+        .article-body p { margin-bottom: 20px; }
+        .article-body code { background: var(--bg-alt); padding: 2px 6px; border-radius: 4px; font-size: 14px; }
+        .article-body pre { background: var(--bg-alt); padding: 16px; border-radius: 8px; overflow-x: auto; }
+        .article-body pre code { background: transparent; padding: 0; }
+        .article-body ul { margin-bottom: 20px; padding-left: 28px; }
+        .article-body li { margin-bottom: 8px; }
+        .article-body table { width: 100%; border-collapse: collapse; margin: 16px 0 28px; }
+        .article-body th, .article-body td { padding: 8px 12px; border-bottom: 1px solid var(--border); text-align: left; }
+    </style>
+</head>
+<body>
+<nav class="nav"><div class="nav-inner">
+    <a href="/" class="nav-brand">NEXO</a>
+    <div class="nav-links">
+        <a href="/features/">Features</a>
+        <a href="/blog/">Blog</a>
+        <a href="/changelog/">Changelog</a>
+        <a href="/docs/">Docs</a>
+    </div>
+</div></nav>
+
+<header class="article-header">
+    <div class="container">
+        <div class="article-meta">April 17, 2026 &middot; Patch release</div>
+        <h1 style="font-size:42px;line-height:1.2;max-width:820px;margin:0 auto;">NEXO 6.0.4: Interactive launchers honour <code>default_resonance</code></h1>
+    </div>
+</header>
+
+<article class="article-body">
+    <p>One lingering consequence of the v5.9.0 resonance-map rollout: the two interactive terminal launchers were still picking <code>--model</code> / <code>--effort</code> from the legacy <code>client_runtime_profiles</code> in <code>config/schedule.json</code>, not from the user's <code>preferences.default_resonance</code>. Users who switched their Resonance in NEXO Desktop Preferences (for example to <em>Alto</em>, which writes <code>brain/calibration.json</code>) kept getting the stale tier cached in the profile — usually <code>max</code>. Headless automation (<code>run_automation_prompt</code>) and NEXO Desktop new-sessions already honoured the preference correctly; only the terminal surfaces were stuck.</p>
+
+    <h2>What was wrong</h2>
+
+    <p>Two builders in <code>src/agent_runner.py</code> were the culprits:</p>
+
+    <ul>
+        <li><code>build_interactive_client_command</code> &mdash; used by <code>nexo chat</code> (via <code>launch_interactive_client</code>).</li>
+        <li><code>build_followup_terminal_shell_command</code> &mdash; used by the NEXO dashboard's <em>"Open followup in Terminal"</em> action to spawn a fresh Claude/Codex session on a specific followup.</li>
+    </ul>
+
+    <p>Both called <code>resolve_client_runtime_profile(selected, preferences=prefs)</code> and then embedded <code>profile["model"]</code> / <code>profile["reasoning_effort"]</code> into the command. That table lives in <code>config/schedule.json</code> and predates the resonance map: on installs that went through v5.9.0 or earlier, it still holds values like <code>{"claude_code": {"model": "claude-opus-4-7[1m]", "reasoning_effort": "max"}}</code>. <code>run_automation_interactive</code> even computed the right <code>resonance_tier</code> afterward — but only for the telemetry row; the command was already built.</p>
+
+    <h2>The fix</h2>
+
+    <p>A small shared helper does the lookup in one place:</p>
+
+    <pre><code>def _resolve_interactive_model_and_effort(
+    caller: str,
+    backend: str,
+    *,
+    preferences: dict | None = None,
+    tier: str | None = None,
+) -&gt; tuple[str, str]:
+    profile = resolve_client_runtime_profile(backend, preferences=preferences)
+    try:
+        from resonance_map import resolve_model_and_effort
+        user_default = ""
+        if isinstance(preferences, dict):
+            user_default = str(preferences.get("default_resonance") or "").strip()
+        explicit_tier = (tier or "").strip() or None
+        model, effort = resolve_model_and_effort(
+            caller, backend,
+            user_default=user_default or None,
+            explicit_tier=explicit_tier,
+        )
+    except Exception:
+        model, effort = "", ""
+    # Fall back to client_runtime_profiles only when the resonance
+    # contract could not produce a pair (missing resonance_tiers.json,
+    # unknown backend key, etc.).
+    if not model: model = profile.get("model", "")
+    if not effort: effort = profile.get("reasoning_effort", "")
+    return model, effort</code></pre>
+
+    <p>Both builders now use the helper. <code>build_interactive_client_command</code> grew a <code>caller=</code> kwarg (default <code>"nexo_chat"</code>) and a <code>tier=</code> override that <code>run_automation_interactive</code> propagates through. <code>build_followup_terminal_shell_command</code> defaults to <code>caller="nexo_followup_terminal"</code>.</p>
+
+    <h2>Registry change</h2>
+
+    <p><code>nexo_followup_terminal</code> joins the user-facing caller map:</p>
+
+    <pre><code>USER_FACING_CALLERS: dict[str, str] = {
+    "nexo_chat": USE_USER_DEFAULT_SENTINEL,
+    "desktop_new_session": USE_USER_DEFAULT_SENTINEL,
+    "nexo_update_interactive": USE_USER_DEFAULT_SENTINEL,
+    # v6.0.4 &mdash; dashboard "Open followup in Terminal" spawns a fresh
+    # interactive Claude/Codex session. Treat it like nexo_chat so the
+    # user's default_resonance preference flows through.
+    "nexo_followup_terminal": USE_USER_DEFAULT_SENTINEL,
+}</code></pre>
+
+    <p>The sentinel means <em>"ask the user's preference first, fall back to <code>DEFAULT_RESONANCE</code>"</em>. Registry integrity stays strict: every caller must still be registered or live under the <code>personal/</code> prefix.</p>
+
+    <h2>Before vs. after</h2>
+
+    <table>
+        <thead><tr><th>Surface</th><th>Pre-v6.0.4 tier source</th><th>Post-v6.0.4 tier source</th></tr></thead>
+        <tbody>
+            <tr><td><code>nexo chat</code> (terminal CLI)</td><td><code>client_runtime_profiles</code> (stale)</td><td><code>default_resonance</code> via resonance_map</td></tr>
+            <tr><td>Dashboard &rarr; <em>Open followup in Terminal</em></td><td><code>client_runtime_profiles</code> (stale)</td><td><code>default_resonance</code> via resonance_map</td></tr>
+            <tr><td>NEXO Desktop (new conversation)</td><td><code>calibration.json</code> via <code>lib/claude-runtime.js</code></td><td>unchanged</td></tr>
+            <tr><td>Headless crons, deep-sleep, followup-runner, etc.</td><td><code>resolve_model_and_effort</code> (correct)</td><td>unchanged</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Tests</h2>
+
+    <p>Eight tests updated across <code>test_agent_runner.py</code>, <code>test_cli_scripts.py</code>, and <code>test_resonance_map.py</code>. The tests that previously asserted the legacy behaviour (<code>--effort max</code> from <code>client_runtime_profiles</code>) now either pin <code>default_resonance</code> explicitly or assert the resonance-mapped value (<code>--effort xhigh</code> for <code>alto</code>, <code>high</code> for codex). The registry-size guard in <code>test_user_facing_registry_is_small</code> gains the fourth caller.</p>
+
+    <h2>Upgrade</h2>
+
+    <p><code>nexo update</code> picks up the new <code>agent_runner.py</code>. No config migration is needed — the resonance_map path is already the authority on every other surface. If your Desktop Preferences showed <em>Alto</em> but <code>nexo chat</code> kept spawning at <em>Máximo</em>, v6.0.4 closes that loop.</p>
+
+    <p><a href="/changelog/">Full changelog &rarr;</a></p>
+</article>
+
+<footer class="footer">
+    <div class="container" style="text-align:center;color:var(--text-muted);font-size:14px;padding:32px 0;">
+        &copy; 2026 WAzion &middot; <a href="https://github.com/wazionapps/nexo">github.com/wazionapps/nexo</a> &middot; AGPL-3.0
+    </div>
+</footer>
+</body>
+</html>

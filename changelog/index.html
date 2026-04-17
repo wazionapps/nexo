@@ -181,6 +181,17 @@
     </div>
 </section>
 
+<!-- v6.0.4 — Interactive launchers honour default_resonance -->
+<section id="v604" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v6.0.4 <span style="opacity:.5;font-weight:400;">&mdash; April 17, 2026</span></div>
+        <h2 class="section-title">Interactive launchers honour <code>default_resonance</code></h2>
+        <p class="section-subtitle">
+            Closes the last gap left by the v5.9.0 resonance-map rollout. <code>nexo chat</code> (<code>build_interactive_client_command</code>) and the NEXO dashboard's <em>"Open followup in Terminal"</em> action (<code>build_followup_terminal_shell_command</code>) were building the <code>claude</code> / <code>codex</code> command straight from <code>client_runtime_profiles</code> in <code>config/schedule.json</code>, ignoring <code>preferences.default_resonance</code>. Users who switched their Resonance in NEXO Desktop Preferences (Alto → writes <code>brain/calibration.json</code>) kept getting the stale tier cached in the legacy profile — typically <code>max</code>. Headless runs (<code>run_automation_prompt</code>) and NEXO Desktop new-sessions already honoured the preference correctly; only the two terminal launchers were stuck. Fix: a new <code>_resolve_interactive_model_and_effort(caller, backend, ...)</code> helper in <code>src/agent_runner.py</code> consults <code>resonance_map.resolve_model_and_effort</code> first and falls back to <code>client_runtime_profiles</code> only when the resonance contract is missing. Both builders now use it; <code>build_interactive_client_command</code> accepts <code>caller=</code> (default <code>nexo_chat</code>) and <code>tier=</code> overrides that <code>run_automation_interactive</code> propagates through. Registry: <code>nexo_followup_terminal</code> joins <code>USER_FACING_CALLERS</code> with the user-default sentinel so the dashboard launcher resolves against the user's preference. Tests: 8 existing pytest cases updated across <code>test_agent_runner.py</code>, <code>test_cli_scripts.py</code>, and <code>test_resonance_map.py</code>; full suite stays green.
+        </p>
+    </div>
+</section>
+
 <!-- v6.0.3 — Desktop contract path + guard_checks.session_id -->
 <section id="v603" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
     <div class="container">
