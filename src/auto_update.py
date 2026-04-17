@@ -383,7 +383,38 @@ def _shell_rc_files() -> list[Path]:
     return [home_dir / ".bash_profile", home_dir / ".bashrc"]
 
 
+def _should_skip_shell_profile_backfill() -> tuple[bool, str]:
+    """Decide whether to skip writing ``export PATH`` into the user's shell rc.
+
+    The backfill must only touch the real user shell profile when the runtime
+    is installed at the canonical ``$HOME/.nexo`` location. When ``NEXO_HOME``
+    points elsewhere (pytest ``tmp_path``, CI sandbox, containerised test
+    harness) writing to ``~/.bash_profile`` / ``~/.bashrc`` / ``~/.zshrc``
+    leaks a non-canonical ``export PATH`` line into the developer's real
+    shell, which is exactly the bug reported for v6.0.x. Users can force-skip
+    via ``NEXO_SKIP_SHELL_PROFILE=1``.
+    """
+    flag = os.environ.get("NEXO_SKIP_SHELL_PROFILE", "").strip().lower()
+    if flag in {"1", "true", "yes", "on"}:
+        return True, f"NEXO_SKIP_SHELL_PROFILE={flag}"
+    try:
+        canonical = managed_nexo_home()
+    except Exception:
+        canonical = Path.home() / ".nexo"
+    try:
+        same = NEXO_HOME.resolve(strict=False) == canonical.resolve(strict=False)
+    except Exception:
+        same = NEXO_HOME == canonical
+    if not same:
+        return True, f"NEXO_HOME={NEXO_HOME} is not the canonical {canonical}"
+    return False, ""
+
+
 def _ensure_runtime_cli_in_shell():
+    skip, reason = _should_skip_shell_profile_backfill()
+    if skip:
+        _log(f"Skipping shell profile backfill — {reason}")
+        return
     path_line = f'export PATH="{NEXO_HOME / "bin"}:$PATH"'
     comment = "# NEXO runtime CLI"
     for rc_file in _shell_rc_files():

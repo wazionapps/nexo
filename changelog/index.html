@@ -181,6 +181,24 @@
     </div>
 </section>
 
+<!-- v6.0.6 — Installer no longer leaks NEXO_HOME/bin into shell profile -->
+<section id="v606" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="section-inner section-inner--narrow">
+        <div class="section-label">New in v6.0.6 <span style="opacity:.5;font-weight:400;">&mdash; April 17, 2026</span></div>
+        <h2 class="section-title">Installer no longer leaks <code>$NEXO_HOME/bin</code> into the developer&rsquo;s shell profile</h2>
+        <p class="section-subtitle">Any pytest run with <code>NEXO_HOME=/tmp/pytest-xxx</code> used to append <code>export PATH=&quot;/tmp/pytest-xxx/bin:$PATH&quot;</code> to the real <code>~/.bash_profile</code>, <code>~/.bashrc</code>, and <code>~/.zshrc</code>. v6.0.6 gates the write at all three installer sites.</p>
+        <ul class="section-bullets">
+            <li><strong>Root cause.</strong> Both the Python installer (<code>src/auto_update.py::_ensure_runtime_cli_in_shell()</code>) and the two JavaScript sites in <code>bin/nexo-brain.js</code> (install Step 8 + migration restore) computed the rc file list from <code>Path.home()</code> / <code>os.homedir()</code> regardless of where <code>NEXO_HOME</code> pointed. The check was asymmetric: write target came from the real <code>$HOME</code>, but the <code>export PATH</code> value came from <code>NEXO_HOME</code>.</li>
+            <li><strong>Fix (Python).</strong> New helper <code>_should_skip_shell_profile_backfill()</code> returns <code>(skip, reason)</code> based on (a) <code>NEXO_SKIP_SHELL_PROFILE=1|true|yes|on</code> and (b) whether <code>NEXO_HOME</code> resolves to <code>managed_nexo_home()</code>. Consulted by <code>_ensure_runtime_cli_in_shell()</code> before touching any rc file.</li>
+            <li><strong>Fix (JavaScript).</strong> Mirror <code>shouldSkipShellProfileBackfill()</code> in <code>bin/nexo-brain.js</code> gates the install Step 8 alias + PATH block and the migration restore block.</li>
+            <li><strong>Escape hatch.</strong> <code>NEXO_SKIP_SHELL_PROFILE=1</code> force-skips the backfill even when <code>NEXO_HOME</code> is canonical &mdash; useful for sandboxed test runners, container smoke tests, or installs where the host shell must remain untouched.</li>
+            <li><strong>Tests.</strong> <code>tests/test_auto_update_shell_profile.py</code> with 5 regression cases: pytest tmp dir, env flag on, canonical install, all truthy flag values, canonical install with <code>NEXO_SKIP_SHELL_PROFILE=0</code>.</li>
+            <li><strong>Housekeeping.</strong> Removed duplicate <code>.github/workflows/tests 2.yml</code> (accidentally committed with v6.0.5) and purged 78+ stale <code>__pycache__/*\ 2.*</code> Finder-copy artefacts.</li>
+            <li><strong>Suite.</strong> 1098 passed, 2 xfailed, 1 skipped.</li>
+        </ul>
+    </div>
+</section>
+
 <!-- v6.0.5 — Strict pre-tool guardrail no longer blocks with unknown target -->
 <section id="v605" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
     <div class="section-inner section-inner--narrow">

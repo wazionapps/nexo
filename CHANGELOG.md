@@ -1,5 +1,21 @@
 # Changelog
 
+## [6.0.6] - 2026-04-17
+
+### Fixed
+
+- **Installer leaked `export PATH="$NEXO_HOME/bin:$PATH"` into the developer's real shell profile whenever `NEXO_HOME` was not the canonical `$HOME/.nexo`.** Repro: any pytest case, sandbox, or CI job that ran the installer with `NEXO_HOME=/tmp/pytest-xxx` appended `# NEXO runtime CLI\nexport PATH="/tmp/pytest-xxx/bin:$PATH"` to `~/.bash_profile`, `~/.bashrc`, and `~/.zshrc` — contaminating the operator's real shell between runs. `_ensure_runtime_cli_in_shell()` (and its two JavaScript twins in `bin/nexo-brain.js`: install Step 8 and the migration path) computed the rc file list from `Path.home()` / `os.homedir()` regardless of where `NEXO_HOME` pointed. Reported by a Claude Code session recovering the runtime after a full reset.
+
+### Added
+
+- **`src/auto_update.py::_should_skip_shell_profile_backfill()`.** Returns `(skip, reason)` based on (a) `NEXO_SKIP_SHELL_PROFILE=1|true|yes|on` and (b) whether `NEXO_HOME` resolves to the canonical `managed_nexo_home()` path. Used by `_ensure_runtime_cli_in_shell()` to gate the write. Fail-safe: when `NEXO_HOME` matches the canonical install path and the flag is unset, behaviour is unchanged.
+- **`bin/nexo-brain.js::shouldSkipShellProfileBackfill()`.** Mirror of the Python helper. Guards both call sites that touch `.bash_profile`/`.bashrc`/`.zshrc`: the `install` command Step 8 (alias + PATH for fresh operators) and the `migrate` path that restores the alias for existing installs.
+- **`tests/test_auto_update_shell_profile.py`.** Five regression cases covering: pytest tmp dir (non-canonical) → skip, env flag → skip, canonical install → write, multiple truthy flag values, and env flag set to `0` with canonical install → write.
+
+### Housekeeping
+
+- `.github/workflows/tests 2.yml` — duplicate workflow file with a space in the name (accidentally committed alongside `tests.yml`) removed. Also purged 78+ stale `__pycache__/*\ 2.*` duplicates created by Finder copies during earlier releases.
+
 ## [6.0.5] - 2026-04-17
 
 ### Fixed
