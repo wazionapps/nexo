@@ -18,7 +18,18 @@ import time
 from pathlib import Path
 
 from runtime_home import export_resolved_nexo_home, managed_nexo_home
-from tree_hygiene import is_duplicate_artifact_name
+
+try:
+    from tree_hygiene import is_duplicate_artifact_name
+except ModuleNotFoundError as exc:
+    if getattr(exc, "name", "") != "tree_hygiene":
+        raise
+
+    # Older installed runtimes may update into code that references
+    # tree_hygiene.py before that module has been copied over. Fall back
+    # to "no duplicate" so the update can complete and deliver the module.
+    def is_duplicate_artifact_name(_path) -> bool:
+        return False
 
 NEXO_HOME = export_resolved_nexo_home()
 DATA_DIR = NEXO_HOME / "data"

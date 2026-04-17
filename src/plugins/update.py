@@ -11,7 +11,18 @@ import time
 from pathlib import Path
 
 from runtime_home import export_resolved_nexo_home
-from tree_hygiene import is_duplicate_artifact_name
+
+try:
+    from tree_hygiene import is_duplicate_artifact_name
+except ModuleNotFoundError as exc:
+    if getattr(exc, "name", "") != "tree_hygiene":
+        raise
+
+    # Older packaged runtimes may import update.py before tree_hygiene.py
+    # has been copied in. Allow the update to finish so the missing module
+    # can be delivered by the same upgrade.
+    def is_duplicate_artifact_name(_path) -> bool:
+        return False
 
 # db_guard landed in v5.5.5. When plugins/update.py is imported from a runtime
 # that still ships the v5.5.4 tree (e.g. mid-upgrade), the import will fail —

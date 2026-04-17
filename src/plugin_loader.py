@@ -10,7 +10,17 @@ import time
 
 from db import get_db
 from fastmcp.tools import Tool
-from tree_hygiene import is_duplicate_artifact_name
+
+try:
+    from tree_hygiene import is_duplicate_artifact_name
+except ModuleNotFoundError as exc:
+    if getattr(exc, "name", "") != "tree_hygiene":
+        raise
+
+    # Keep older runtimes bootable long enough to receive tree_hygiene.py
+    # during update; duplicate filtering will resume once the module lands.
+    def is_duplicate_artifact_name(_path) -> bool:
+        return False
 
 SERVER_DIR = os.path.dirname(os.path.abspath(__file__))
 PLUGINS_DIR = os.path.join(SERVER_DIR, "plugins")

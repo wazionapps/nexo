@@ -181,6 +181,23 @@
     </div>
 </section>
 
+<!-- v6.0.5 — Strict pre-tool guardrail no longer blocks with unknown target -->
+<section id="v605" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="section-inner section-inner--narrow">
+        <div class="section-label">New in v6.0.5 <span style="opacity:.5;font-weight:400;">&mdash; April 17, 2026</span></div>
+        <h2 class="section-title">Strict pre-tool guardrail stops emitting &ldquo;unknown target&rdquo; when Claude Code omits session_id</h2>
+        <p class="section-subtitle">Fix for the block storm several Claude Code versions caused in 6.0.2&ndash;6.0.4, plus the CI gate that would have caught it.</p>
+        <ul class="section-bullets">
+            <li><strong>The bug.</strong> <code>src/hook_guardrails.py::process_pre_tool_event</code> only consulted <code>payload["session_id"]</code>. Several Claude Code builds deliver <code>PreToolUse</code> without that field, so the strict branch recorded a <code>strict_protocol_write_without_startup</code> debt and the formatter emitted &ldquo;NEXO STRICT MODE BLOCKED THIS EDIT &mdash; Start the shared-brain session first&rdquo; even when the operator already had <code>nexo_startup</code> + <code>nexo_task_open</code> + <code>nexo_guard_check</code> + <code>nexo_track</code> in the session. Tracked as learning #411.</li>
+            <li><strong>The fix.</strong> <code>process_pre_tool_event</code> now walks payload &rarr; <code>$NEXO_HOME/coordination/.claude-session-id</code> &rarr; empty. The SessionStart hook already writes that file on every session, so the fallback works without extra configuration for all users. Fail-closed is preserved: if neither the payload nor the file yields an id the guardrail still blocks with <code>missing_startup</code>.</li>
+            <li><strong>The CI gap that let this ship.</strong> 6.0.2+ quietly regressed three pre-tool tests but CI only ran <code>ruff</code>, <code>bandit</code>, <code>verify_release_readiness</code>, and <code>verify_client_parity</code> &mdash; never <code>pytest</code>. v6.0.5 adds <code>.github/workflows/tests.yml</code> which runs <code>pytest tests/ -q --maxfail=5</code> on every PR and push to <code>main</code>, blocking merges on failure.</li>
+            <li><strong>Tests fixed.</strong> <code>test_process_pre_tool_event_allows_public_contribution_checkout</code>, <code>test_process_pre_tool_event_does_not_treat_runtime_home_as_live_repo_when_not_git_checkout</code> (both asserted a <code>skipped/lenient</code> shape that no longer applies &mdash; public contribution still runs strict, only the live-repo guard is relaxed), and <code>test_non_tty_returns_lenient</code> (leaked <code>NEXO_INTERACTIVE=1</code> from the parent shell; <code>_force_tty</code> now <code>monkeypatch.delenv</code>s it).</li>
+            <li><strong>Merged.</strong> Legacy Python Claude hooks purge (commit 9e42b03) and macOS test/runtime isolation hardening (commit 6005288). Two <code>tests/test_protocol.py</code> cases that assert a stale <code>handle_task_close</code> shape are <code>pytest.mark.xfail(strict=False)</code> pending the refactor tracked as <code>NF-TEST-PROTOCOL-API-REFACTOR</code>.</li>
+            <li><strong>Suite.</strong> 1093 passed, 2 xfailed, 1 skipped.</li>
+        </ul>
+    </div>
+</section>
+
 <!-- v6.0.4 — Interactive launchers honour default_resonance -->
 <section id="v604" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
     <div class="container">

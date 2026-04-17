@@ -36,6 +36,8 @@
 
 <p><code>src/scripts/nexo-update.sh</code> no longer carries a parallel shell implementation of update behavior. It now delegates to the canonical Python update handler, so packaged/runtime updates stop diverging depending on which entry point happened to run.</p>
 
+<p>The compatibility edge also matters during upgrade itself: older installed runtimes that do not yet have <code>tree_hygiene.py</code> now fall back safely while importing the update path, so they can finish the very update that brings that module in instead of crashing halfway through the migration.</p>
+
 <p>That matters because update logic is not a harmless convenience layer. Divergent paths create different runtime states, and one of them can quietly preserve bugs the other already fixed.</p>
 
 <h2>3. Startup now fails closed on corrupt DB state</h2>
