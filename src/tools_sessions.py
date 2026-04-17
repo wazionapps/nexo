@@ -463,6 +463,42 @@ def handle_heartbeat(sid: str, task: str, context_hint: str = '') -> str:
         return _handle_heartbeat_inner(sid, task, context_hint)
 
 
+def _sync_claude_session_id(sid: str) -> None:
+    """Re-sync sessions.claude_session_id from the coordination file.
+
+    Claude Code rotates its PreToolUse session_id mid-run; long-lived NEXO
+    sessions then diverge from the current coordination file and the hook
+    fallback in hook_guardrails resolves to no row → surfaces as
+    'unknown target'. Called on every heartbeat so the mapping stays fresh.
+    """
+    try:
+        coord_file = NEXO_HOME / "coordination" / ".claude-session-id"
+        if not coord_file.exists():
+            return
+        current_cid = coord_file.read_text(encoding="utf-8").strip()
+        if not current_cid:
+            return
+        from db import get_db as _get_db
+        conn = _get_db()
+        row = conn.execute(
+            "SELECT claude_session_id, external_session_id FROM sessions WHERE sid = ?",
+            (sid,),
+        ).fetchone()
+        if not row:
+            return
+        stored_cid = (row["claude_session_id"] or "").strip()
+        stored_ext = (row["external_session_id"] or "").strip()
+        if stored_cid == current_cid and stored_ext == current_cid:
+            return
+        conn.execute(
+            "UPDATE sessions SET claude_session_id = ?, external_session_id = ? WHERE sid = ?",
+            (current_cid, current_cid, sid),
+        )
+        conn.commit()
+    except Exception:
+        pass
+
+
 def _handle_heartbeat_inner(sid: str, task: str, context_hint: str = '') -> str:
     """Inner body of handle_heartbeat — wrapped by tool_span above."""
     from db import get_db, update_last_heartbeat_ts
@@ -474,6 +510,9 @@ def _handle_heartbeat_inner(sid: str, task: str, context_hint: str = '') -> str:
         update_last_heartbeat_ts(sid)
     except Exception:
         pass
+    # v6.0.7 — keep claude_session_id aligned with Claude Code's rotating
+    # PreToolUse UUID so the hook guardrail can always resolve the NEXO sid.
+    _sync_claude_session_id(sid)
 
     # Temporal anchor — surface authoritative UTC time so clients never drift
     # on date/day-of-week across long sessions. Neutral ISO-8601, no locale,
