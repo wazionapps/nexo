@@ -274,6 +274,27 @@ class TestCoreFiltering:
         scripts = list_scripts(include_core=False)
         assert scripts == []
 
+    def test_backup_artifacts_ignored(self, scripts_dir):
+        (scripts_dir / "nexo-email-monitor.py.bak-20260414-030834").write_text(
+            "#!/usr/bin/env python3\n"
+            "# nexo: name=email-monitor\n"
+            "# nexo: runtime=python\n"
+            "# nexo: cron_id=email-monitor\n"
+            "# nexo: interval_seconds=300\n"
+            "# nexo: schedule_required=true\n"
+            "print('backup')\n"
+        )
+        (scripts_dir / "my-tool.py").write_text("# nexo: name=my-tool\nprint('hi')\n")
+
+        report = classify_scripts_dir()
+        classes = {entry["path"].split("/")[-1]: entry["classification"] for entry in report["entries"]}
+        assert classes["nexo-email-monitor.py.bak-20260414-030834"] == "ignored"
+
+        scripts = list_scripts(include_core=False)
+        names = [entry["name"] for entry in scripts]
+        assert "my-tool" in names
+        assert "email-monitor" not in names
+
     def test_classify_scripts_dir(self, scripts_dir):
         (scripts_dir / "nexo-immune.py").write_text("# core script\n")
         (scripts_dir / "my-tool.py").write_text("# nexo: name=my-tool\nprint('hi')\n")

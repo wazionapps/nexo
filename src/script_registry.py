@@ -304,6 +304,10 @@ def _is_ignored(path: Path) -> bool:
     """Check if file should be ignored entirely."""
     if path.name in _IGNORED_FILES:
         return True
+    if re.search(r"\.bak(?:-[\w.-]+)?$", path.name, re.IGNORECASE):
+        return True
+    if path.name.endswith("~"):
+        return True
     if path.name.startswith("."):
         return True
     try:
