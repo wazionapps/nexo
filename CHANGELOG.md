@@ -1,5 +1,24 @@
 # Changelog
 
+## [5.10.2] - 2026-04-17
+
+### Fix: bootstrap `brain/profile.json` from `calibration.json` on `nexo update`
+
+NEXO Desktop's *Preferencias → Avanzado* tab shows two JSON blocks: `brain/calibration.json` (editable personality, language, name, mood history) and `brain/profile.json` (deep-scan results from onboarding). Operators who went through the onboarding flow before v5.9.x ended up with `role` and `technical_level` recorded under `calibration.meta.*` but no `profile.json` file at all — Desktop then rendered an empty `{}` for the profile block with no context, which looked broken. v5.10.2 closes that gap from both ends:
+
+- **Brain** — new `_bootstrap_profile_from_calibration_meta(dest)` runs inside `_run_runtime_post_sync()` right after the v5.10.1 effort→resonance migration. When `brain/profile.json` is missing, empty, or corrupt AND `brain/calibration.json` carries at least one of `meta.role`, `meta.technical_level`, `name`, `language`, the helper seeds `profile.json` with those fields plus a `"source": "auto_update._bootstrap_profile_from_calibration_meta"` marker. Never overwrites a populated profile, never raises, logs `profile-bootstrap:<n>-fields` on the actions trail. Idempotent by construction.
+- **Desktop (v0.11.2)** — the *Avanzado* tab now prefixes each JSON block with a short explanation ("Calibración = personalidad + idioma + identidad editada desde las pestañas anteriores" / "Perfil completo = deep-scan del onboarding, construido por NEXO Brain en segundo plano"). When `profile.json` does not exist, renders a friendly placeholder explaining that the basic fields live meanwhile inside `calibration.meta` and `name`, instead of dumping `{}`.
+
+### Test regression also fixed
+
+`tests/test_resonance_map.py::test_user_facing_caller_with_no_user_default_uses_alto` used to read the real `~/.nexo/brain/calibration.json` on the machine running the suite. After the v5.10.1 migration wrote `default_resonance=maximo` on Francisco's box, the test started asserting against the real fs state instead of the intended library default and failed. Fixed by monkeypatching `_load_user_default_resonance` to return an empty string, isolating the test from the host filesystem.
+
+**Tests**
+
+10 new cases in `tests/test_auto_update_bootstrap_profile.py` covering each seeding path, the two no-op paths (profile already populated / calibration absent or empty), the idempotency on a second run, the corrupt-JSON recoveries on both files, and the empty-string filter.
+
+Full suite: 1021 passed, 1 skipped.
+
 ## [5.10.1] - 2026-04-17
 
 ### Fix: silent migration of legacy `reasoning_effort=max` to the resonance map

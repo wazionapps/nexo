@@ -52,7 +52,11 @@ def test_user_facing_caller_with_invalid_user_default_falls_back():
     assert (model, effort) == rmap._RESONANCE_TABLE[rmap.DEFAULT_RESONANCE]["claude_code"]
 
 
-def test_user_facing_caller_with_no_user_default_uses_alto():
+def test_user_facing_caller_with_no_user_default_uses_alto(monkeypatch):
+    # Isolate from the real user calibration.json on the machine running
+    # the suite — without this, Francisco's "maximo" preference bleeds in
+    # and the assertion fails.
+    monkeypatch.setattr(rmap, "_load_user_default_resonance", lambda: "")
     model, effort = rmap.resolve_model_and_effort("nexo_chat", "claude_code")
     assert (model, effort) == rmap._RESONANCE_TABLE["alto"]["claude_code"]
 

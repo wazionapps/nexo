@@ -174,6 +174,13 @@
 
             <div class="blog-card">
                 <div class="blog-card-date">April 17, 2026</div>
+                <h2><a href="/blog/nexo-5-10-2/">NEXO 5.10.2: Bootstrap <code>brain/profile.json</code> From Calibration + Desktop Explains Each Block</a></h2>
+                <p>NEXO Desktop's <em>Preferencias → Avanzado</em> tab used to render an empty <code>{}</code> for <code>profile.json</code> when the onboarding flow had been interrupted — looked broken. v5.10.2 adds a conservative bootstrap that seeds <code>profile.json</code> from <code>calibration.meta.role</code>, <code>meta.technical_level</code>, <code>name</code>, and <code>language</code> when the file is missing/empty/corrupt. Paired with NEXO Desktop v0.11.2 which prefixes each JSON block with a short explanation of what lives where. Never overwrites a populated profile, idempotent, never raises. 10 new tests (1021 passed, 1 skipped).</p>
+                <a href="/blog/nexo-5-10-2/" class="read-more">Read more &rarr;</a>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 17, 2026</div>
                 <h2><a href="/blog/nexo-5-10-1/">NEXO 5.10.1: Silent Migration of Legacy <code>reasoning_effort=max</code> to the Resonance Map</a></h2>
                 <p>v5.10.0 made the resonance map prevail over the legacy <code>reasoning_effort</code> hint. Anyone whose only recorded preference was <code>reasoning_effort="max"</code> silently fell back to <code>alto</code> — a one-tier downgrade. v5.10.1 adds a one-shot, non-destructive migration inside <code>_run_runtime_post_sync()</code>: <code>max→maximo</code>, <code>xhigh→alto</code>, <code>high→medio</code>, <code>medium→bajo</code>. No-op when an explicit <code>default_resonance</code> is already set. Idempotent. Never raises. 10 new tests plus a test-harness fix that unblocks <code>test_cron_recovery.py</code> against main (1011 passed, 1 skipped).</p>
                 <a href="/blog/nexo-5-10-1/" class="read-more">Read more &rarr;</a>

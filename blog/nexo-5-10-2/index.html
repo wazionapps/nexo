@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXO 5.10.2: bootstrap brain/profile.json from calibration + Desktop explains each block</title>
+    <meta name="description" content="NEXO 5.10.2 auto-seeds brain/profile.json from calibration.meta on nexo update, paired with NEXO Desktop 0.11.2 which prefixes each JSON block in the Avanzado tab with a short explanation and renders a friendly placeholder instead of a confusing empty {}.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-5-10-2/">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/blog/nexo-5-10-2/">
+    <meta property="og:title" content="NEXO 5.10.2: bootstrap profile.json + Desktop explanations">
+    <meta property="og:description" content="No more confusing empty {} in the Avanzado tab. profile.json is seeded from calibration.meta when missing, and every block is labelled with what it is.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+    <meta property="article:published_time" content="2026-04-17">
+    <meta property="article:author" content="Francisco Cerda Puigserver">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO 5.10.2: bootstrap profile.json + Desktop explanations">
+    <meta name="twitter:description" content="Empty {} is gone from Preferencias → Avanzado. Seeded automatically, explained in-place, idempotent, never raises.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "NEXO 5.10.2: bootstrap brain/profile.json from calibration + Desktop explains each block",
+        "description": "NEXO 5.10.2 auto-seeds brain/profile.json from calibration.meta on nexo update and Desktop 0.11.2 prefixes each JSON block in the Avanzado tab with a short explanation.",
+        "datePublished": "2026-04-17",
+        "dateModified": "2026-04-17",
+        "author": {"@type": "Person", "name": "Francisco Cerda Puigserver"},
+        "publisher": {"@type": "Organization", "name": "WAzion", "url": "https://www.wazion.com"},
+        "mainEntityOfPage": {"@type": "WebPage", "@id": "https://nexo-brain.com/blog/nexo-5-10-2/"},
+        "url": "https://nexo-brain.com/blog/nexo-5-10-2/",
+        "image": "https://nexo-brain.com/assets/og/og-blog.png",
+        "keywords": ["NEXO 5.10.2", "profile.json", "calibration", "Desktop 0.11.2", "onboarding", "UX"]
+    }
+    </script>
+
+    <style>
+        .article-header { padding-top: 128px; padding-bottom: 40px; text-align: center; }
+        .article-meta { font-size: 14px; color: var(--text-muted); margin-bottom: 16px; }
+        .article-body {
+            max-width: 720px; margin: 0 auto; padding: 0 24px 80px;
+            font-size: 17px; line-height: 1.8; color: var(--text);
+        }
+        .article-body h2 { font-size: 28px; font-weight: 700; margin: 48px 0 16px; letter-spacing: -0.01em; }
+        .article-body p { margin-bottom: 20px; color: var(--text-muted); }
+        .article-body strong { color: var(--text); }
+        .article-body a { color: var(--purple-light); }
+        .article-body a:hover { color: var(--pink); }
+        .article-body code {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 14px; color: var(--pink);
+            background: rgba(236, 72, 153, 0.1);
+            padding: 2px 8px; border-radius: 4px;
+        }
+        .article-back {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 14px; font-weight: 600; color: var(--text-muted);
+            margin-bottom: 24px;
+        }
+        .article-back:hover { color: var(--purple-light); }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-64.png" alt="NEXO Brain" class="logo-image">
+            <span class="logo-text">NEXO Brain</span>
+        </a>
+        <button class="mobile-menu-toggle" aria-label="Toggle navigation" onclick="toggleMobileMenu()">
+            <span></span><span></span><span></span>
+        </button>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/features/">Features</a>
+            <a href="/evolution/">Evolution</a>
+            <a href="/compare/">Compare</a>
+            <a href="/blog/">Blog</a>
+            <a href="/changelog/">Changelog</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta">GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<section class="article-header">
+    <div class="container">
+        <a href="/blog/" class="article-back">&larr; Back to blog</a>
+        <div class="article-meta">April 17, 2026 &middot; UX &middot; Onboarding &middot; Desktop</div>
+        <h1 class="section-title" style="font-size:clamp(28px,4.5vw,48px);max-width:920px;margin:0 auto 16px;">NEXO 5.10.2: Bootstrap <code>brain/profile.json</code> From Calibration + Desktop Explains Each Block</h1>
+        <p class="section-subtitle" style="max-width:760px;margin:0 auto;">No more confusing empty <code>{}</code> in <em>Preferencias → Avanzado</em>. We seed <code>profile.json</code> when it is missing and label every JSON block with a one-liner explanation.</p>
+    </div>
+</section>
+
+<section>
+    <div class="article-body">
+
+        <h2>The "empty <code>{}</code>" paper cut</h2>
+        <p>NEXO Desktop's <em>Preferencias → Avanzado</em> tab displays two JSON blocks side by side: <code>calibration.json</code> (personality, language, name, mood history — editable from the other tabs) and <code>profile.json</code> (results of the deep-scan that NEXO Brain runs at onboarding). The design is that both exist. But for anyone whose onboarding was interrupted before v5.9.x — or anyone who picked up NEXO before the flow fully stabilised — <code>profile.json</code> never actually landed on disk. The calibration file carried <code>role</code> and <code>technical_level</code> inside <code>meta.*</code>, but the profile tab rendered <code>{}</code> with no context. Looked broken. Was not, technically, but operator-wise it absolutely was.</p>
+
+        <h2>The fix, both sides</h2>
+        <p><strong>Brain side.</strong> New <code>_bootstrap_profile_from_calibration_meta(dest)</code> runs inside <code>_run_runtime_post_sync()</code> on every <code>nexo update</code>, right after the v5.10.1 effort→resonance migration. When <code>brain/profile.json</code> is missing, empty, or corrupt <strong>and</strong> <code>brain/calibration.json</code> carries at least one of:</p>
+        <p>&bull; <code>meta.role</code><br>
+           &bull; <code>meta.technical_level</code><br>
+           &bull; <code>name</code><br>
+           &bull; <code>language</code></p>
+        <p>…the helper seeds <code>profile.json</code> with those fields plus <code>"source": "auto_update._bootstrap_profile_from_calibration_meta"</code> so future audits know where the data came from. Never overwrites a populated profile. Never raises. Idempotent by construction — a second run sees the populated file and does nothing.</p>
+
+        <p><strong>Desktop side (<code>v0.11.2</code>).</strong> The <em>Avanzado</em> tab now prefixes each JSON block with a short, non-technical explanation of what lives inside and where on disk. When <code>profile.json</code> is still absent (no onboarding hints to seed from), the tab renders a framed placeholder saying the basic fields live meanwhile inside <code>calibration.meta</code> and <code>name</code>, instead of the previous empty <code>{}</code>. Shipped alongside v5.10.2 and uploaded to <a href="https://systeam.es/nexo-desktop/update.json">systeam.es</a>.</p>
+
+        <h2>Test regression also fixed</h2>
+        <p><code>tests/test_resonance_map.py::test_user_facing_caller_with_no_user_default_uses_alto</code> used to read the real <code>~/.nexo/brain/calibration.json</code> on the machine running the suite. After the v5.10.1 migration wrote <code>default_resonance=maximo</code> on our dev box, that test started asserting against the real fs state instead of the intended library default and failed. Fixed by monkeypatching <code>_load_user_default_resonance</code> to return an empty string, isolating the test from the host filesystem. Should have been there on day one; it is now.</p>
+
+        <h2>Tests</h2>
+        <p>10 new cases in <code>tests/test_auto_update_bootstrap_profile.py</code> — each seeding path, the two no-op paths (profile already populated / calibration absent or useless), idempotency on a second run, corrupt-JSON recoveries on both files, and the empty-string filter that prevents seeding a profile with <code>{"role": ""}</code>. Full suite: <strong>1021 passed, 1 skipped</strong>.</p>
+
+        <h2>Upgrading</h2>
+        <p>Run <code>nexo update</code>. If your <code>profile.json</code> was missing and your <code>calibration.json</code> had at least one of the four supported fields, you will find a fresh <code>profile.json</code> on disk and the Desktop <em>Avanzado</em> tab will render it with a labelled header. If your profile was already populated, nothing changes — same idempotent discipline as v5.10.1. Install NEXO Desktop <code>v0.11.2</code> from the in-app update banner or from <a href="https://systeam.es/nexo-desktop/">systeam.es/nexo-desktop/</a> to pick up the new block-by-block explanations.</p>
+
+    </div>
+</section>
+
+<footer style="padding:48px 24px;text-align:center;font-size:13px;color:var(--text-muted);">
+    &copy; 2026 <a href="https://www.wazion.com" style="color:var(--purple-light);">WAzion</a>. NEXO Brain is open-source under <a href="https://github.com/wazionapps/nexo/blob/main/LICENSE" style="color:var(--purple-light);">AGPL-3.0</a>.
+</footer>
+
+<script src="/assets/main.js"></script>
+</body>
+</html>

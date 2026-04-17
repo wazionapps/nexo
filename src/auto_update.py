@@ -973,6 +973,84 @@ def _migrate_effort_to_resonance(dest: Path = NEXO_HOME) -> list[str]:
     return actions
 
 
+def _bootstrap_profile_from_calibration_meta(dest: Path = NEXO_HOME) -> list[str]:
+    """Create ``brain/profile.json`` from ``calibration.json`` fields when the
+    profile file does not exist yet.
+
+    Context: the onboarding flow documented in CLAUDE.md writes ``role`` and
+    ``technical_level`` to ``brain/profile.json``. Users who went through the
+    2025/early-2026 flow (or whose onboarding was interrupted) ended up with
+    those values living under ``calibration.json → meta.role`` and
+    ``meta.technical_level`` only, with no ``profile.json`` file at all.
+    NEXO Desktop's "Preferencias → Avanzado" tab then shows an empty
+    ``{}`` for ``profile.json`` with no context — confusing for the operator.
+
+    This migration is conservative and idempotent:
+    - Only runs when ``profile.json`` does not exist (or is empty/invalid).
+    - Only writes when ``calibration.json`` has at least one of
+      ``meta.role`` / ``meta.technical_level`` / ``name`` / ``language``.
+    - Never overwrites an existing profile.
+    - Errors are swallowed into a ``profile-bootstrap-warning:*`` action
+      line; the update path never raises.
+    """
+    import json as _json
+
+    actions: list[str] = []
+
+    cal_path = dest / "brain" / "calibration.json"
+    profile_path = dest / "brain" / "profile.json"
+
+    if profile_path.exists():
+        try:
+            existing = _json.loads(profile_path.read_text())
+            if isinstance(existing, dict) and existing:
+                return actions  # profile already populated, keep untouched
+        except Exception:
+            # Corrupt / empty file — fall through and rewrite below.
+            pass
+
+    if not cal_path.exists():
+        return actions
+
+    try:
+        cal = _json.loads(cal_path.read_text())
+        if not isinstance(cal, dict):
+            return actions
+    except Exception:
+        return actions
+
+    meta = cal.get("meta") if isinstance(cal.get("meta"), dict) else {}
+    payload: dict = {}
+
+    role = str(meta.get("role") or "").strip()
+    tech = str(meta.get("technical_level") or "").strip()
+    name = str(cal.get("name") or "").strip()
+    lang = str(cal.get("language") or "").strip()
+
+    if role:
+        payload["role"] = role
+    if tech:
+        payload["technical_level"] = tech
+    if name:
+        payload["name"] = name
+    if lang:
+        payload["language"] = lang
+
+    if not payload:
+        return actions  # nothing to seed the profile with
+
+    payload["source"] = "auto_update._bootstrap_profile_from_calibration_meta"
+
+    try:
+        profile_path.parent.mkdir(parents=True, exist_ok=True)
+        profile_path.write_text(_json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
+        actions.append(f"profile-bootstrap:{len(payload)-1}-fields")
+    except Exception as exc:
+        actions.append(f"profile-bootstrap-warning:{exc.__class__.__name__}")
+
+    return actions
+
+
 def _heal_deep_sleep_runtime(dest: Path = NEXO_HOME) -> list[str]:
     """Repair deep-sleep state that older runtimes left in a bad shape.
 
@@ -2807,6 +2885,14 @@ def _run_runtime_post_sync(dest: Path = NEXO_HOME, progress_fn=None) -> tuple[bo
             actions.append(action)
     except Exception as exc:
         actions.append(f"resonance-migration-warning:{exc.__class__.__name__}")
+
+    try:
+        _emit_progress(progress_fn, "Bootstrapping profile.json from calibration...")
+        boot_actions = _bootstrap_profile_from_calibration_meta(dest)
+        for action in boot_actions:
+            actions.append(action)
+    except Exception as exc:
+        actions.append(f"profile-bootstrap-warning:{exc.__class__.__name__}")
 
     _emit_progress(progress_fn, "Verifying runtime imports...")
     verify = subprocess.run(
