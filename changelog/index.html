@@ -181,6 +181,17 @@
     </div>
 </section>
 
+<!-- v5.8.0 First-class classification columns on followups + reminders -->
+<section id="v580" class="section-compact" style="background:linear-gradient(135deg,#09111f 0%,#14253a 50%,#1e3a5f 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.8.0 <span style="opacity:.5;font-weight:400;">&mdash; April 17, 2026</span></div>
+        <h2 class="section-title">Classification Columns on Followups and Reminders</h2>
+        <p class="section-subtitle">
+            Task classification moves from client-side regex into persistent storage every MCP client shares. Migration #40 adds <code>internal</code> and <code>owner</code> columns on <code>followups</code> and <code>reminders</code>, with an idempotent one-shot backfill. Taxonomy is <code>owner in {user, waiting, agent, shared}</code> &mdash; <code>agent</code> is deliberately generic so third-party deployments render their own assistant label instead of hardcoding &ldquo;NEXO&rdquo;. <code>nexo_reminder_create</code>, <code>nexo_reminder_update</code>, <code>nexo_followup_create</code>, and <code>nexo_followup_update</code> gain optional <code>internal</code> and <code>owner</code> parameters. Closes a UX paradox where tasks labelled &ldquo;Para ti&rdquo; could be hidden by the &ldquo;Tareas internas&rdquo; filter in NEXO Desktop.
+        </p>
+    </div>
+</section>
+
 <!-- v5.7.0 Auto-update Claude Code + Codex CLIs inside `nexo update` -->
 <section id="v570" class="section-compact" style="background:linear-gradient(135deg,#09111f 0%,#14253a 50%,#1e3a5f 100%);">
     <div class="container">
