@@ -180,6 +180,146 @@ def _append_stderr(stderr: str, message: str) -> str:
     return "\n".join(bits) + "\n"
 
 
+def _record_automation_start(
+    *,
+    caller: str,
+    backend: str,
+    session_type: str,
+    task_profile: str,
+    model: str,
+    reasoning_effort: str,
+    resonance_tier: str,
+    cwd: Path,
+    output_format: str,
+    prompt: str,
+    pid: int | None = None,
+) -> tuple[int | None, str]:
+    """Insert an automation_runs row at START time with ended_at=NULL.
+
+    Returns ``(row_id, error_message)``. Row_id is ``None`` if the insert
+    fails for any reason — callers should degrade gracefully (telemetry is
+    best-effort, never blocking the actual automation call).
+    """
+    try:
+        from db._core import get_db
+    except Exception as exc:
+        return None, f"automation telemetry unavailable: {exc}"
+
+    try:
+        conn = get_db()
+        cur = conn.execute(
+            """
+            INSERT INTO automation_runs (
+                caller, backend, session_type, task_profile, model,
+                reasoning_effort, resonance_tier, cwd, output_format,
+                prompt_chars, status, started_at, pid
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'running', datetime('now'), ?)
+            """,
+            (
+                caller or "",
+                backend,
+                session_type or "headless",
+                task_profile or "default",
+                model or "",
+                reasoning_effort or "",
+                resonance_tier or "",
+                str(cwd),
+                output_format or "text",
+                len(prompt or ""),
+                int(pid) if pid is not None else None,
+            ),
+        )
+        conn.commit()
+        return int(cur.lastrowid), ""
+    except Exception as exc:
+        return None, f"automation telemetry unavailable: {exc}"
+
+
+def _record_automation_end(
+    *,
+    row_id: int | None,
+    returncode: int,
+    duration_ms: int,
+    telemetry: dict,
+) -> tuple[bool, str]:
+    """Close an automation_runs row opened by _record_automation_start.
+
+    Falls back to a fresh INSERT when ``row_id`` is None so callers that
+    never got a start row (start failed, or pre-v5.9.0 code paths) still
+    leave a completion trace.
+    """
+    try:
+        from db._core import get_db
+    except Exception as exc:
+        return False, f"automation telemetry unavailable: {exc}"
+
+    usage = (telemetry or {}).get("usage") or {}
+    metadata = json.dumps(
+        {
+            "warnings": (telemetry or {}).get("warnings") or [],
+            "raw": (telemetry or {}).get("raw") or {},
+        },
+        ensure_ascii=False,
+    )
+    status = "ok" if int(returncode) == 0 else "failed"
+
+    try:
+        conn = get_db()
+        if row_id is not None:
+            conn.execute(
+                """
+                UPDATE automation_runs
+                   SET returncode=?, duration_ms=?,
+                       input_tokens=?, cached_input_tokens=?, output_tokens=?,
+                       total_cost_usd=?, telemetry_source=?, cost_source=?,
+                       status=?, metadata=?, ended_at=datetime('now')
+                 WHERE id=?
+                """,
+                (
+                    int(returncode),
+                    int(duration_ms),
+                    int(usage.get("input_tokens") or 0),
+                    int(usage.get("cached_input_tokens") or 0),
+                    int(usage.get("output_tokens") or 0),
+                    (telemetry or {}).get("total_cost_usd"),
+                    (telemetry or {}).get("telemetry_source", ""),
+                    (telemetry or {}).get("cost_source", ""),
+                    status,
+                    metadata,
+                    int(row_id),
+                ),
+            )
+        else:
+            conn.execute(
+                """
+                INSERT INTO automation_runs (
+                    backend, task_profile, model, reasoning_effort, cwd,
+                    output_format, prompt_chars, returncode, duration_ms,
+                    input_tokens, cached_input_tokens, output_tokens,
+                    total_cost_usd, telemetry_source, cost_source, status,
+                    metadata, ended_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                """,
+                (
+                    "", "default", "", "", "", "text", 0,
+                    int(returncode),
+                    int(duration_ms),
+                    int(usage.get("input_tokens") or 0),
+                    int(usage.get("cached_input_tokens") or 0),
+                    int(usage.get("output_tokens") or 0),
+                    (telemetry or {}).get("total_cost_usd"),
+                    (telemetry or {}).get("telemetry_source", ""),
+                    (telemetry or {}).get("cost_source", ""),
+                    status,
+                    metadata,
+                ),
+            )
+        conn.commit()
+        return True, ""
+    except Exception as exc:
+        return False, f"automation telemetry unavailable: {exc}"
+
+
 def _record_automation_run(
     *,
     backend: str,
@@ -192,54 +332,34 @@ def _record_automation_run(
     returncode: int,
     duration_ms: int,
     telemetry: dict,
+    caller: str = "",
+    session_type: str = "headless",
+    resonance_tier: str = "",
 ) -> tuple[bool, str]:
-    try:
-        from db._core import get_db
-    except Exception as exc:
-        return False, f"automation telemetry unavailable: {exc}"
-
-    try:
-        conn = get_db()
-        usage = telemetry.get("usage") or {}
-        conn.execute(
-            """
-            INSERT INTO automation_runs (
-                backend, task_profile, model, reasoning_effort, cwd, output_format,
-                prompt_chars, returncode, duration_ms,
-                input_tokens, cached_input_tokens, output_tokens,
-                total_cost_usd, telemetry_source, cost_source, status, metadata
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                backend,
-                task_profile or "default",
-                model,
-                reasoning_effort,
-                str(cwd),
-                output_format or "text",
-                len(prompt or ""),
-                int(returncode),
-                int(duration_ms),
-                int(usage.get("input_tokens") or 0),
-                int(usage.get("cached_input_tokens") or 0),
-                int(usage.get("output_tokens") or 0),
-                telemetry.get("total_cost_usd"),
-                telemetry.get("telemetry_source", ""),
-                telemetry.get("cost_source", ""),
-                "ok" if int(returncode) == 0 else "failed",
-                json.dumps(
-                    {
-                        "warnings": telemetry.get("warnings") or [],
-                        "raw": telemetry.get("raw") or {},
-                    },
-                    ensure_ascii=False,
-                ),
-            ),
-        )
-        conn.commit()
-        return True, ""
-    except Exception as exc:
-        return False, f"automation telemetry unavailable: {exc}"
+    """Backwards-compatible facade for code paths that record in a single
+    shot (no separate start row). Prefer the split start/end pair going
+    forward so interactive sessions and long-running jobs can be seen
+    while they are still in flight."""
+    row_id, err = _record_automation_start(
+        caller=caller,
+        backend=backend,
+        session_type=session_type,
+        task_profile=task_profile,
+        model=model,
+        reasoning_effort=reasoning_effort,
+        resonance_tier=resonance_tier,
+        cwd=cwd,
+        output_format=output_format,
+        prompt=prompt,
+    )
+    if err and row_id is None:
+        pass  # fall through, end will insert a single row
+    return _record_automation_end(
+        row_id=row_id,
+        returncode=returncode,
+        duration_ms=duration_ms,
+        telemetry=telemetry,
+    )
 
 
 def _resolve_claude_cli() -> str:
@@ -394,11 +514,94 @@ def launch_interactive_client(
     env: dict | None = None,
     preferences: dict | None = None,
 ) -> subprocess.CompletedProcess:
-    _, cmd = build_interactive_client_command(target=target, client=client, preferences=preferences)
+    return run_automation_interactive(
+        caller="nexo_chat",
+        target=target,
+        client=client,
+        env=env,
+        preferences=preferences,
+    )
+
+
+def run_automation_interactive(
+    *,
+    caller: str,
+    target: str | os.PathLike[str],
+    client: str | None = None,
+    env: dict | None = None,
+    preferences: dict | None = None,
+    session_type: str = "interactive_chat",
+) -> subprocess.CompletedProcess:
+    """Launch an interactive Claude/Codex session with automation_runs logging.
+
+    Unlike ``run_automation_prompt`` the child inherits stdin/stdout/stderr
+    from the current terminal so the user can carry a normal conversation.
+    We still record the run in the ``automation_runs`` table: a row is
+    INSERTed at spawn time with ``ended_at IS NULL`` and UPDATEd when the
+    session exits. Rows that die before the UPDATE (crash, kill -9) can be
+    reconciled later by the watchdog via the ``pid`` column.
+
+    ``caller`` must be registered in ``src/resonance_map.py`` (typically
+    ``nexo_chat``, ``desktop_new_session``, or ``nexo_update_interactive``).
+    The resonance tier resolves through the user's default preference so
+    the interactive surface honours whatever the user selected.
+    """
+    prefs = preferences or load_client_preferences()
+    resolved_client, cmd = build_interactive_client_command(
+        target=target, client=client, preferences=prefs
+    )
     launch_env = os.environ.copy()
     if env:
         launch_env.update(env)
-    return subprocess.run(cmd, env=launch_env, cwd=_interactive_target_cwd(target))
+    cwd_path = Path(_interactive_target_cwd(target))
+
+    # Best-effort resonance lookup — interactive sessions do not swap the
+    # command (the user chose Claude or Codex explicitly), but we still
+    # record which tier they are running at so telemetry is honest.
+    resonance_tier = ""
+    try:
+        from resonance_map import resolve_tier_for_caller
+        user_default = ""
+        if isinstance(prefs, dict):
+            user_default = str(prefs.get("default_resonance") or "").strip()
+        resonance_tier = resolve_tier_for_caller(
+            caller, user_default=user_default or None
+        )
+    except Exception:
+        resonance_tier = ""
+
+    # model / effort come from the pre-built command; we don't replay them
+    # here (build_interactive_client_command already embedded them).
+    row_id, _record_err = _record_automation_start(
+        caller=caller,
+        backend=resolved_client,
+        session_type=session_type,
+        task_profile="",
+        model="",
+        reasoning_effort="",
+        resonance_tier=resonance_tier,
+        cwd=cwd_path,
+        output_format="interactive",
+        prompt="",
+    )
+
+    started_wall = time.perf_counter()
+    try:
+        result = subprocess.run(cmd, env=launch_env, cwd=str(cwd_path))
+    finally:
+        duration_ms = int((time.perf_counter() - started_wall) * 1000)
+        try:
+            _record_automation_end(
+                row_id=row_id,
+                returncode=getattr(result, "returncode", -1)
+                if "result" in locals()
+                else -1,
+                duration_ms=duration_ms,
+                telemetry={},
+            )
+        except Exception:
+            pass
+    return result
 
 
 def build_followup_terminal_shell_command(
@@ -592,6 +795,7 @@ def _build_enforcement_system_prompt() -> str:
 def run_automation_prompt(
     prompt: str,
     *,
+    caller: str = "",
     backend: str | None = None,
     task_profile: str = "",
     cwd: str | os.PathLike[str] | None = None,
@@ -617,6 +821,36 @@ def run_automation_prompt(
         if not reasoning_effort:
             reasoning_effort = profile["reasoning_effort"]
     selected_backend = _resolve_available_backend(selected_backend, preferences=prefs)
+
+    # Resonance map takes over model+effort decisions when the caller is
+    # registered. Explicit model/effort arguments still win (required for
+    # edge cases like the fallback JSON-conversion call inside extract.py
+    # that asks a shorter/cheaper follow-up).
+    resonance_tier = ""
+    if caller and not model and not reasoning_effort:
+        try:
+            from resonance_map import (
+                resolve_model_and_effort,
+                resolve_tier_for_caller,
+                UnregisteredCallerError,
+            )
+            user_default = ""
+            if isinstance(prefs, dict):
+                user_default = str(prefs.get("default_resonance") or "").strip()
+            resonance_tier = resolve_tier_for_caller(
+                caller, user_default=user_default or None
+            )
+            mapped_model, mapped_effort = resolve_model_and_effort(
+                caller, selected_backend, user_default=user_default or None
+            )
+            if mapped_model:
+                model = mapped_model
+            if mapped_effort:
+                reasoning_effort = mapped_effort
+        except (ImportError, UnregisteredCallerError):
+            # Unknown caller during a transitional release: fall back to
+            # the legacy task_profile / model_defaults resolution below.
+            pass
 
     enforcement_fragment = _build_enforcement_system_prompt()
     if enforcement_fragment:
@@ -698,6 +932,9 @@ def run_automation_prompt(
             returncode=result.returncode,
             duration_ms=int((time.perf_counter() - started_at) * 1000),
             telemetry=telemetry,
+            caller=caller,
+            session_type="headless",
+            resonance_tier=resonance_tier,
         )
         stderr = result.stderr or ""
         if not recorded:

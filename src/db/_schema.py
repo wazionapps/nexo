@@ -968,6 +968,48 @@ def _m40_classification_columns(conn):
     _migrate_add_index(conn, "idx_reminders_owner", "reminders", "owner")
 
 
+def _m41_automation_sessions_columns(conn):
+    """Extend automation_runs with session-level tracking.
+
+    v5.9.0 introduces two changes to how we record Claude/Codex invocations:
+
+    1. Every caller is now required to pass a ``caller=`` string registered in
+       ``src/resonance_map.py``. Stored in a new ``caller`` column so every
+       row is traceable to the subsystem that started it (deep-sleep/extract,
+       evolution/run, nexo_chat, desktop_new_session, …).
+
+    2. Interactive sessions (``nexo chat`` and Desktop new conversation) no
+       longer bypass the logging path. They record a row at spawn time with
+       ``ended_at IS NULL`` and update it on close. The ``session_type``
+       column distinguishes ``headless`` from ``interactive_chat`` and
+       ``interactive_desktop`` so dashboards can slice the data by invocation
+       shape.
+
+    Migration is idempotent: ``_migrate_add_column`` is a no-op when the
+    column already exists; existing rows get empty / NULL values which is
+    compatible with callers that have not been updated yet.
+    """
+    _migrate_add_column(conn, "automation_runs", "caller", "TEXT DEFAULT ''")
+    _migrate_add_column(
+        conn, "automation_runs", "session_type", "TEXT DEFAULT 'headless'"
+    )
+    _migrate_add_column(conn, "automation_runs", "started_at", "TEXT")
+    _migrate_add_column(conn, "automation_runs", "ended_at", "TEXT")
+    _migrate_add_column(conn, "automation_runs", "pid", "INTEGER")
+    _migrate_add_column(
+        conn, "automation_runs", "resonance_tier", "TEXT DEFAULT ''"
+    )
+    _migrate_add_index(
+        conn, "idx_automation_runs_caller", "automation_runs", "caller"
+    )
+    _migrate_add_index(
+        conn, "idx_automation_runs_session_type", "automation_runs", "session_type"
+    )
+    _migrate_add_index(
+        conn, "idx_automation_runs_started_at", "automation_runs", "started_at"
+    )
+
+
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
     (2, "followups_reasoning", _m2_followups_reasoning),
@@ -1009,6 +1051,7 @@ MIGRATIONS = [
     (38, "evolution_log_proposal_payload", _m38_evolution_log_proposal_payload),
     (39, "hook_runs", _m39_hook_runs),
     (40, "classification_columns", _m40_classification_columns),
+    (41, "automation_sessions_columns", _m41_automation_sessions_columns),
 ]
 
 

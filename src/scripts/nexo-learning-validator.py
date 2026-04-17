@@ -158,7 +158,7 @@ Rules:
     try:
         result = run_automation_prompt(
             prompt,
-            model=_USER_MODEL,
+            caller="learning_validator",
             timeout=60,
             output_format="text",
             append_system_prompt=JSON_ONLY_SYSTEM_PROMPT,

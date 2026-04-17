@@ -52,6 +52,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         result = run_automation_prompt(
             prompt,
+            caller=getattr(args, "caller", "") or "agent_run/generic",
             cwd=args.cwd or None,
             task_profile=args.task_profile,
             model=args.model,

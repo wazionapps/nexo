@@ -198,7 +198,7 @@ Rules:
     try:
         result = run_automation_prompt(
             prompt,
-            model=_USER_MODEL,
+            caller="check_context",
             timeout=300,
             output_format="text",
             append_system_prompt="Return exactly one valid JSON object.",

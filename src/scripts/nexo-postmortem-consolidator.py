@@ -255,7 +255,7 @@ Execute without asking."""
     try:
         result = run_automation_prompt(
             prompt,
-            model=_USER_MODEL,
+            caller="postmortem_consolidator",
             timeout=AUTOMATION_SUBPROCESS_TIMEOUT,
             output_format="text",
             allowed_tools="Read,Write,Edit,Glob,Grep,Bash,mcp__nexo__*",

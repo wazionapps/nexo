@@ -193,7 +193,7 @@ def analyze_session(
 
         result = run_automation_prompt(
             prompt,
-            model=_USER_MODEL,
+            caller="deep-sleep/extract",
             timeout=CLAUDE_TIMEOUT,
             output_format="text",
             append_system_prompt=JSON_SYSTEM_PROMPT,
@@ -224,7 +224,7 @@ def analyze_session(
             )
             convert_result = run_automation_prompt(
                 convert_prompt,
-                model=_USER_MODEL,
+                caller="deep-sleep/extract",
                 timeout=120,
                 output_format="text",
                 append_system_prompt=JSON_SYSTEM_PROMPT,

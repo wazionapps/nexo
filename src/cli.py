@@ -1099,6 +1099,63 @@ def _clients_sync(args):
     return 0 if result.get("ok") else 1
 
 
+def _preferences(args):
+    """Read or change user preferences stored in schedule.json.
+
+    Today this manages ``default_resonance``. Other knobs (default_client,
+    autonomy level, etc.) can be added here instead of spreading across
+    one-off flags.
+    """
+    from client_preferences import (
+        load_client_preferences,
+        save_client_preferences,
+    )
+    from resonance_map import DEFAULT_RESONANCE, TIERS
+
+    prefs = load_client_preferences()
+    if not isinstance(prefs, dict):
+        prefs = {}
+
+    if args.resonance:
+        tier = args.resonance.lower()
+        if tier not in TIERS:
+            print(
+                f"[NEXO] Unknown resonance tier '{args.resonance}'. "
+                f"Valid values: {', '.join(TIERS)}.",
+                file=sys.stderr,
+            )
+            return 2
+        save_client_preferences(default_resonance=tier)
+        prefs = load_client_preferences()
+
+    current_resonance = str(
+        (prefs.get("default_resonance") if isinstance(prefs, dict) else "")
+        or DEFAULT_RESONANCE
+    )
+
+    if args.show or args.resonance:
+        payload = {
+            "default_resonance": current_resonance,
+            "default_resonance_is_explicit": isinstance(prefs, dict)
+                and bool(prefs.get("default_resonance")),
+            "available_tiers": list(TIERS),
+        }
+        if args.json:
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+        else:
+            print(f"default_resonance = {current_resonance}")
+            if not payload["default_resonance_is_explicit"]:
+                print(f"  (inherited from DEFAULT_RESONANCE; run "
+                      f"`nexo preferences --resonance alto` to set explicitly)")
+        return 0
+
+    # No flag: print usage
+    print("Usage: nexo preferences [--resonance TIER] [--show] [--json]")
+    print(f"  resonance tiers: {', '.join(TIERS)}")
+    print(f"  current default: {current_resonance}")
+    return 0
+
+
 def _contributor_status(args):
     public_contribution = _load_public_contribution_support()
     config = public_contribution["refresh_public_contribution_state"](
@@ -2051,6 +2108,26 @@ def main():
     clients_sync_p = clients_sub.add_parser("sync", help="Sync Claude Code, Claude Desktop, and Codex to the same NEXO brain")
     clients_sync_p.add_argument("--json", action="store_true", help="JSON output")
 
+    # -- preferences --
+    preferences_parser = sub.add_parser(
+        "preferences",
+        help="Read or change NEXO user preferences (resonance, default client, ...)",
+    )
+    preferences_parser.add_argument(
+        "--resonance",
+        choices=["maximo", "alto", "medio", "bajo"],
+        help="Set the default resonance tier for interactive sessions "
+             "(nexo chat, Desktop new conversation, interactive nexo update). "
+             "System-owned callers (deep-sleep, catchup, etc.) ignore this value "
+             "and use the tier hard-coded in resonance_map.py. Default: alto.",
+    )
+    preferences_parser.add_argument(
+        "--show",
+        action="store_true",
+        help="Print the current preferences as JSON and exit.",
+    )
+    preferences_parser.add_argument("--json", action="store_true", help="JSON output")
+
     # -- doctor --
     doctor_parser = sub.add_parser("doctor", help="Unified diagnostics")
     doctor_parser.add_argument("--tier", default="boot", choices=["boot", "runtime", "deep", "all"],
@@ -2245,6 +2322,8 @@ def main():
             return _clients_sync(args)
         clients_parser.print_help()
         return 0
+    elif args.command == "preferences":
+        return _preferences(args)
     elif args.command == "doctor":
         return _doctor(args)
     elif args.command == "contributor":

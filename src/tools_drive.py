@@ -283,6 +283,7 @@ def _llm_classify_signal(text: str) -> dict:
     try:
         result = run_automation_prompt(
             prompt,
+            caller="tools/drive_search",
             task_profile="fast",
             timeout=_LLM_TIMEOUT_SECONDS,
             output_format="text",
