@@ -21,6 +21,27 @@ const path = require("path");
 const readline = require("readline");
 
 let NEXO_HOME = process.env.NEXO_HOME || path.join(require("os").homedir(), ".nexo");
+
+function shouldSkipShellProfileBackfill() {
+  // Mirror of _should_skip_shell_profile_backfill() in src/auto_update.py.
+  // Prevent the installer from leaking ``export PATH`` / operator alias lines
+  // into the developer's real shell profile whenever NEXO_HOME is not the
+  // canonical $HOME/.nexo path (pytest tmp dirs, CI sandboxes, containers).
+  const flag = String(process.env.NEXO_SKIP_SHELL_PROFILE || "").trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(flag)) {
+    return { skip: true, reason: `NEXO_SKIP_SHELL_PROFILE=${flag}` };
+  }
+  const canonical = path.join(require("os").homedir(), ".nexo");
+  let actual = NEXO_HOME;
+  try {
+    actual = path.resolve(NEXO_HOME);
+  } catch {}
+  if (actual !== canonical) {
+    return { skip: true, reason: `NEXO_HOME=${actual} is not the canonical ${canonical}` };
+  }
+  return { skip: false, reason: "" };
+}
+
 const CLAUDE_SETTINGS = path.join(
   require("os").homedir(),
   ".claude",
@@ -1856,6 +1877,10 @@ async function main() {
         const migOperatorName = installed.operator_name || "NEXO";
         const migAliasName = migOperatorName.toLowerCase();
         if (migAliasName !== "nexo") {
+          const migSkip = shouldSkipShellProfileBackfill();
+          if (migSkip.skip) {
+            log(`  Skipping shell profile alias restore — ${migSkip.reason}`);
+          } else {
           const migAliasLine = `alias ${migAliasName}='nexo chat .'`;
           const migAliasComment = `# ${migOperatorName} — open the configured NEXO terminal client`;
           const migNexoPathLine = `export PATH="${path.join(NEXO_HOME, "bin")}:$PATH"`;
@@ -1883,6 +1908,7 @@ async function main() {
               fs.appendFileSync(rcFile, `\n${migAliasComment}\n${migAliasLine}\n`);
               log(`  Restored '${migAliasName}' alias in ${path.basename(rcFile)}`);
             }
+          }
           }
         }
 
@@ -3390,6 +3416,12 @@ ${doScan ? `- Stack: ${Object.keys(profileData.code.languages || {}).slice(0, 5)
 
   // Step 8: Create shell alias and add runtime CLI to PATH
   const aliasName = operatorName.toLowerCase();
+  const installSkipShell = shouldSkipShellProfileBackfill();
+  if (installSkipShell.skip) {
+    log(`Skipping shell profile setup — ${installSkipShell.reason}`);
+    log(`(Runtime CLI wrapper still installed at ${path.join(NEXO_HOME, "bin", "nexo")}; add it to PATH manually if needed.)`);
+    console.log("");
+  } else {
   const nexoPathLine = `export PATH="${path.join(NEXO_HOME, "bin")}:$PATH"`;
   const nexoPathComment = "# NEXO runtime CLI";
 
@@ -3442,6 +3474,7 @@ ${doScan ? `- Stack: ${Object.keys(profileData.code.languages || {}).slice(0, 5)
     log(`After setup, open a new terminal and type: ${aliasName} or nexo`);
   }
   console.log("");
+  }
 
   // Step 9: Generate CLAUDE.md template
   log("Generating operator instructions...");
