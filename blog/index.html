@@ -173,6 +173,20 @@
         <div class="blog-grid">
 
             <div class="blog-card">
+                <div class="blog-card-date">April 17, 2026</div>
+                <h2><a href="/blog/nexo-5-7-0/">NEXO 5.7.0: `nexo update` Auto-Updates Claude Code and Codex CLIs</a></h2>
+                <p><code>nexo update</code> now keeps your terminal CLIs in lockstep with NEXO Brain itself. When the global <code>@anthropic-ai/claude-code</code> or <code>@openai/codex</code> packages are installed, the updater checks the npm registry and runs <code>npm install -g &lt;pkg&gt;@latest</code> in-line before the post-update verify step &mdash; so the boot model stays aligned with the settings NEXO already wrote to <code>~/.claude/settings.json</code>. Pass <code>nexo update --no-clis</code> to pin them manually.</p>
+                <a href="/blog/nexo-5-7-0/" class="read-more">Read more &rarr;</a>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 17, 2026</div>
+                <h2><a href="/blog/nexo-5-6-1/">NEXO 5.6.1: Update Path Hardening — 0-Byte DB Orphans + Claude Code Model Sync</a></h2>
+                <p>Two small-but-sharp fixes in <code>nexo update</code>. 0-byte <code>.db</code> orphans left behind by interrupted installs or aborted <code>sqlite3.connect</code> calls now get purged from <code>~/.nexo/</code> and <code>~/.nexo/data/</code> before the pre-update backup runs, so backup validation no longer trips over empty shells. And the new <code>sync_claude_code_model()</code> helper propagates the NEXO-recommended model into <code>~/.claude/settings.json</code> — the file Claude Code actually reads — when <code>heal_runtime_profiles()</code> migrates the <code>claude_code</code> default.</p>
+                <a href="/blog/nexo-5-6-1/" class="read-more">Read more &rarr;</a>
+            </div>
+
+            <div class="blog-card">
                 <div class="blog-card-date">April 16, 2026</div>
                 <h2><a href="/blog/nexo-5-5-6/">NEXO 5.5.6: Rate-Limiting the Backup/Restore/Export Tools</a></h2>
                 <p>Same-day follow-up to v5.5.5. The data-loss guardrails in v5.5.5 neutralised the <em>consequences</em> of the 2026-04-16 incident; v5.5.6 closes the <em>cause</em>. <code>nexo_backup_now</code>, <code>nexo_backup_restore</code>, and <code>export_user_bundle</code> now refuse reentrant calls inside 30 s / 60 s / 120 s windows, so a runaway MCP client stuck in a tool-use loop can no longer hammer <code>sqlite3.Connection.backup()</code> the way it did when this incident first struck.</p>
@@ -188,8 +202,8 @@
 
             <div class="blog-card">
                 <div class="blog-card-date">April 16, 2026</div>
-                <h2><a href="/blog/nexo-5-6-0/">NEXO 5.6.0: Default Model Upgrade &mdash; Opus 4.6 &rarr; 4.7</a></h2>
-                <p>NEXO Brain now ships with <strong>Claude Opus 4.7</strong> and <code>reasoning_effort: &quot;max&quot;</code> &mdash; the highest reasoning tier available. Auto-migration on <code>nexo update</code> silently upgrades existing users from <code>claude-opus-4-6*</code> to <code>claude-opus-4-7</code>, preserving the 1M context suffix. Codex profiles are untouched.</p>
+                <h2><a href="/blog/nexo-5-6-0/">NEXO 5.6.0: Default Model Upgrade — Opus 4.6 → 4.7</a></h2>
+                <p>NEXO Brain now ships with <strong>Claude Opus 4.7</strong> and <code>reasoning_effort: "max"</code> — the highest reasoning tier available. Auto-migration on <code>nexo update</code> silently upgrades existing users from <code>claude-opus-4-6*</code> to <code>claude-opus-4-7</code>, preserving the 1M context suffix. Codex profiles are untouched.</p>
                 <a href="/blog/nexo-5-6-0/" class="read-more">Read more &rarr;</a>
             </div>
 
