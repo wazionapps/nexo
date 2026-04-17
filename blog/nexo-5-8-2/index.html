@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXO 5.8.2: Brain core neutralised — NEXO-specific heuristic removed</title>
+    <meta name="description" content="NEXO Brain 5.8.2 removes the Spanish-first, NEXO-specific auto-classification heuristic from the core. Third-party agents plugged into the shared Brain no longer inherit NEXO's ID prefixes or Spanish verbs — clients that want classification compute it themselves and pass the result.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-5-8-2/">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/blog/nexo-5-8-2/">
+    <meta property="og:title" content="NEXO 5.8.2: Brain core neutralised — NEXO-specific heuristic removed">
+    <meta property="og:description" content="The Brain no longer auto-classifies followups and reminders. Core persists what agents pass; clients that want classification compute it client-side.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+    <meta property="article:published_time" content="2026-04-17">
+    <meta property="article:author" content="Francisco Cerda Puigserver">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO 5.8.2: Brain core neutralised">
+    <meta name="twitter:description" content="Spanish-first NEXO-specific regex heuristic removed from the core. Third-party agents get a clean shared Brain.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "NEXO 5.8.2: Brain core neutralised — NEXO-specific heuristic removed",
+        "description": "NEXO Brain 5.8.2 removes the Spanish-first, NEXO-specific auto-classification heuristic from the core. Third-party agents plugged into the shared Brain no longer inherit NEXO's ID prefixes or Spanish verbs.",
+        "datePublished": "2026-04-17",
+        "dateModified": "2026-04-17",
+        "author": {
+            "@type": "Person",
+            "name": "Francisco Cerda Puigserver"
+        },
+        "publisher": {
+            "@type": "Organization",
+            "name": "WAzion",
+            "url": "https://www.wazion.com"
+        },
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https://nexo-brain.com/blog/nexo-5-8-2/"
+        },
+        "url": "https://nexo-brain.com/blog/nexo-5-8-2/",
+        "image": "https://nexo-brain.com/assets/og/og-blog.png",
+        "keywords": ["NEXO 5.8.2", "neutralisation", "shared brain", "classification", "third-party agents", "pluralism"]
+    }
+    </script>
+
+    <style>
+        .article-header { padding-top: 128px; padding-bottom: 40px; text-align: center; }
+        .article-meta { font-size: 14px; color: var(--text-muted); margin-bottom: 16px; }
+        .article-body {
+            max-width: 720px; margin: 0 auto; padding: 0 24px 80px;
+            font-size: 17px; line-height: 1.8; color: var(--text);
+        }
+        .article-body h2 { font-size: 28px; font-weight: 700; margin: 48px 0 16px; letter-spacing: -0.01em; }
+        .article-body p { margin-bottom: 20px; color: var(--text-muted); }
+        .article-body strong { color: var(--text); }
+        .article-body a { color: var(--purple-light); }
+        .article-body a:hover { color: var(--pink); }
+        .article-body code {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 14px; color: var(--pink);
+            background: rgba(236, 72, 153, 0.1);
+            padding: 2px 8px; border-radius: 4px;
+        }
+        .article-back {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 14px; font-weight: 600; color: var(--text-muted);
+            margin-bottom: 24px;
+        }
+        .article-back:hover { color: var(--purple-light); }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-64.png" alt="NEXO Brain" class="logo-image">
+            <span class="logo-text">NEXO Brain</span>
+        </a>
+        <button class="mobile-menu-toggle" aria-label="Toggle navigation" onclick="toggleMobileMenu()">
+            <span></span><span></span><span></span>
+        </button>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/features/">Features</a>
+            <a href="/evolution/">Evolution</a>
+            <a href="/compare/">Compare</a>
+            <a href="/blog/">Blog</a>
+            <a href="/changelog/">Changelog</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta">GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<section class="article-header">
+    <div class="container">
+        <a href="/blog/" class="article-back">&larr; Back to blog</a>
+        <div class="article-meta">April 17, 2026 &middot; Fix &middot; Pluralism &middot; Shared Brain</div>
+        <h1 class="section-title" style="font-size:clamp(28px,4.5vw,48px);max-width:920px;margin:0 auto 16px;">NEXO 5.8.2: Brain core neutralised</h1>
+        <p class="section-subtitle" style="max-width:760px;margin:0 auto;">The Brain no longer auto-classifies <code>followups</code> and <code>reminders</code>. Third-party agents plugged into the shared Brain stop inheriting NEXO&rsquo;s ID prefixes and Spanish verbs. Clients that want classification compute it themselves and pass the result.</p>
+    </div>
+</section>
+
+<section>
+    <div class="article-body">
+
+        <h2>What v5.8.0 did (and why it was a problem)</h2>
+        <p>Two weeks ago v5.8.0 added <code>internal</code> and <code>owner</code> as first-class columns on <code>followups</code> and <code>reminders</code>, with four MCP tools to set them (<code>nexo_followup_create</code>, <code>nexo_followup_update</code>, and the two reminder counterparts). That part is fine and stays.</p>
+        <p>What came with it was a regex auto-classifier in <code>src/db/_classification.py</code> that fired automatically when an agent left the new fields blank on create. The heuristic was specific to NEXO in three ways:</p>
+        <p>&bull; <strong>ID prefixes</strong>: <code>NF-PROTOCOL-*</code>, <code>NF-DS-*</code>, <code>NF-AUDIT-*</code>, <code>NF-OPPORTUNITY-*</code>, <code>NF-RETRO-*</code>, <code>R-RELEASE-*</code> &mdash; NEXO&rsquo;s own naming convention.<br>
+           &bull; <strong>Spanish user-verbs</strong>: <code>debes</code>, <code>revisar</code>, <code>firmar</code>, <code>llamar</code>, <code>responder</code>, <code>aprobar</code>, &hellip;<br>
+           &bull; <strong>Agent keywords</strong>: <code>monitor</code>, <code>auditoría diaria</code>, <code>checkpoint</code>, <code>runner</code>, <code>cron</code>.</p>
+        <p>For the reference install with 468 followups and 40 reminders written in Spanish with NEXO prefixes, this was a reasonable bootstrap. For a third-party agent plugged into the shared Brain &mdash; Claude Code, Codex, a hotel-assistant persona, an English-speaking deployment &mdash; it meant either misclassification or silent hiding: rows that happened to match <code>NF-PROTOCOL-*</code> would be flagged <code>internal=1</code> and disappear from default views; English user-facing tasks would fall back to <code>owner=shared</code> and lose their priority signalling.</p>
+
+        <h2>What 5.8.2 removes</h2>
+        <p><code>src/db/_classification.py</code> loses <code>_INTERNAL_ID_PATTERNS</code>, <code>_USER_VERB_RX</code>, <code>_WAITING_RX</code>, <code>_AGENT_RX</code>, <code>is_internal_id()</code>, <code>classify_owner()</code>, and <code>classify_task()</code>. What stays is the pure normalisation layer: <code>VALID_OWNERS</code> (the canonical <code>{user, waiting, agent, shared}</code> set), <code>normalise_owner()</code> (clamp to valid values or return <code>None</code>), and <code>normalise_internal()</code> (coerce truthy / numeric input into <code>{0, 1}</code>). <code>normalise_owner()</code> still explicitly rejects the string <code>"nexo"</code> so legacy hardcoding cannot sneak back in through agent input.</p>
+        <p><code>src/db/_reminders.py</code> stops calling <code>classify_task</code>. When an agent creates a task and omits the new fields, the stored values are <code>internal=0</code> and <code>owner=NULL</code>. Explicit overrides still work, still go through <code>normalise_*</code>, still reject invalid values silently.</p>
+        <p><code>src/db/_schema.py</code>&rsquo;s <code>_m40_classification_columns</code> keeps the four <code>_migrate_add_column</code> calls and the four <code>_migrate_add_index</code> calls. The one-shot backfill loop that used to apply <code>classify_task</code> to every <code>owner IS NULL</code> row is gone. Migrations that already ran keep their backfilled data &mdash; <code>_migrate_add_column</code> is a no-op when the column exists and never touches row data.</p>
+
+        <h2>What clients do now</h2>
+        <p>NEXO Desktop has had its own <code>_legacyClassifyOwner</code> and <code>_legacyIsInternalTaskId</code> helpers in <code>main.js</code> since before v5.8.0 (for compat with Brain &lt; 5.8.0). They stay exactly as they are. Now they run on the <em>current</em> Brain too whenever a row comes back with <code>owner=NULL</code> &mdash; which is every row an agent inserted without setting it explicitly. Desktop users see no visual change.</p>
+        <p>Third-party agents that want automatic classification have two options. They can implement their own client-side rules (language, conventions, ID patterns of their choice) and pass the result to <code>nexo_followup_create</code>. Or they can accept the defaults (<code>internal=0</code>, <code>owner=NULL</code>) and let the client renderer deal with it.</p>
+
+        <h2>Why it matters</h2>
+        <p>The shared Brain has one job: persist memory and expose it through tools. The moment it also encodes opinions about what <em>kind</em> of task a row represents &mdash; based on regex over a specific language and a specific ID convention &mdash; it stops being shared. It becomes NEXO&rsquo;s brain, and everyone else borrows it.</p>
+        <p>v5.8.0 shipped <code>owner=agent</code> instead of <code>owner=nexo</code> for exactly this reason: so deployments render whatever assistant label they carry. v5.8.2 extends the same principle to classification itself. The core knows schemas, not semantics.</p>
+
+        <h2>Upgrading</h2>
+        <p>Run <code>nexo update</code>. Migration #40 is already applied on any install that passed through v5.8.0, so the schema change is a no-op. Rows previously backfilled keep their values. Agents that used to rely on the Brain&rsquo;s implicit classification will see <code>internal=0</code> and <code>owner=NULL</code> on their next <code>create</code>; if that matters to them, they pass the fields explicitly or classify client-side.</p>
+
+    </div>
+</section>
+
+<footer style="padding:48px 24px;text-align:center;font-size:13px;color:var(--text-muted);">
+    &copy; 2026 <a href="https://www.wazion.com" style="color:var(--purple-light);">WAzion</a>. NEXO Brain is open-source under <a href="https://github.com/wazionapps/nexo/blob/main/LICENSE" style="color:var(--purple-light);">AGPL-3.0</a>.
+</footer>
+
+<script src="/assets/main.js"></script>
+</body>
+</html>

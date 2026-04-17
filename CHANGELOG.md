@@ -1,5 +1,26 @@
 # Changelog
 
+## [5.8.2] - 2026-04-17
+
+### Fix: neutralize Brain core — remove Spanish-first NEXO-specific classification heuristic
+
+v5.8.0 added `internal` and `owner` columns on `followups` and `reminders` with a regex-based auto-classifier (`classify_task`, `is_internal_id`, `classify_owner`) that fired whenever an agent left those fields blank. The heuristic was NEXO-specific in three ways: it matched `NF-PROTOCOL-*` / `NF-DS-*` / `NF-AUDIT-*` ID prefixes, it parsed Spanish user-verbs (`debes`, `revisar`, `firmar`, `llamar`), and it treated recurrence + agent keywords (`monitor`, `auditoría diaria`, `checkpoint`) as agent-owned. That was a reasonable bootstrap for NEXO's own DB but bled conventions into any third-party agent plugged into the shared Brain — deployments that did not follow NEXO's Spanish naming would see their user-facing tasks misclassified without ever touching the `internal`/`owner` API.
+
+v5.8.2 removes the heuristic entirely. The Brain core no longer classifies tasks on behalf of agents: when `internal` is omitted it persists as `0`, and when `owner` is omitted it persists as `NULL`. Clients that want automatic classification compute it themselves (NEXO Desktop already does, via its `_legacyClassifyOwner` / `_legacyIsInternalTaskId` helpers) and pass the result to `nexo_followup_create` / `nexo_reminder_create` / their `_update` counterparts.
+
+Changes:
+
+- **`src/db/_classification.py`**: deleted `_INTERNAL_ID_PATTERNS`, `_USER_VERB_RX`, `_WAITING_RX`, `_AGENT_RX`, `is_internal_id()`, `classify_owner()`, `classify_task()`. Kept `VALID_OWNERS`, `normalise_owner()`, `normalise_internal()` — the pure normalisation helpers the DB layer uses to clamp agent input.
+- **`src/db/_reminders.py`**: `create_reminder` / `create_followup` no longer call `classify_task`. When the caller omits `internal`, the stored value is `0`; when it omits `owner`, the stored value is `NULL`. `update_*` paths were already heuristic-free and stay unchanged.
+- **`src/db/_schema.py`**: `_m40_classification_columns` no longer runs the one-shot backfill loop. The migration keeps the four `_migrate_add_column` calls and the four `_migrate_add_index` calls, and becomes a trivial idempotent schema change. Rows that were already backfilled by the v5.8.0 migration keep their values — `_migrate_add_column` is a no-op when the column exists and never touches row data.
+- **`tests/test_task_classification.py`**: rewritten around the neutral contract. 12 cases cover column existence, the generic `VALID_OWNERS` set (explicitly asserting `"nexo"` is not a valid owner), `normalise_*` variant handling, explicit-override persistence, `NULL` defaults on create, invalid owner rejection on update, and migration idempotency.
+
+Compatibility:
+
+- Installs that ran the v5.8.0 migration keep their classified rows (Francisco's reference DB: 468 followups and 40 reminders classified, verified pre-release).
+- NEXO Desktop v0.10.0 reads `owner` / `internal` from the DB when present and falls back to its client-side `_legacyClassifyOwner` / `_legacyIsInternalTaskId` on `NULL` — so rows created post-v5.8.2 without explicit classification render identically to pre-v5.8.0 rows from the user's point of view.
+- Third-party agents that expected the Brain to classify for them now need to either pass `owner`/`internal` explicitly on create or implement their own client-side classifier.
+
 ## [5.8.1] - 2026-04-17
 
 ### Fix: deep-sleep Phase 2 could wedge on the first session of every batch

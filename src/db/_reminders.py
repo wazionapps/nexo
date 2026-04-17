@@ -8,7 +8,7 @@ import sqlite3
 from typing import Any
 
 from db._core import get_db, now_epoch
-from db._classification import classify_task, normalise_internal, normalise_owner
+from db._classification import normalise_internal, normalise_owner
 from db._fts import fts_upsert
 from db._hot_context import capture_context_event
 
@@ -256,18 +256,18 @@ def create_reminder(
     """Create a new reminder.
 
     Agents may pass `internal` (0/1, bool, or string) and `owner`
-    ('user'|'waiting'|'agent'|'shared') to override the default
-    classification. When omitted, classify_task() applies the legacy
-    heuristic so behaviour matches pre-migration #40.
+    ('user'|'waiting'|'agent'|'shared'). When omitted, the Brain persists
+    ``internal=0`` and ``owner=NULL`` — the Brain core does not classify
+    tasks on behalf of agents. Clients that want automatic classification
+    compute it themselves and pass the result.
     """
     conn = get_db()
     now = now_epoch()
 
-    auto_internal, auto_owner = classify_task(id, description, category, None)
     internal_value = normalise_internal(internal)
     if internal_value is None:
-        internal_value = auto_internal
-    owner_value = normalise_owner(owner) or auto_owner
+        internal_value = 0
+    owner_value = normalise_owner(owner)
 
     columns = {str(row["name"]) for row in conn.execute("PRAGMA table_info(reminders)").fetchall()}
     payload: dict[str, object] = {
@@ -615,9 +615,10 @@ def create_followup(
 ) -> dict:
     """Create a new followup with optional reasoning and recurrence.
 
-    Agents may override the default classification via `internal` and
-    `owner`. Omitted values are filled by classify_task() using the
-    legacy heuristics so pre-migration callers keep working identically.
+    Agents may set `internal` and `owner` explicitly. Omitted values
+    persist as ``internal=0`` and ``owner=NULL`` — the Brain core does not
+    classify tasks on behalf of agents. Clients that want automatic
+    classification compute it themselves and pass the result.
     """
     conn = get_db()
     now = now_epoch()
@@ -630,11 +631,10 @@ def create_followup(
             f"(scores: {', '.join(str(s['_similarity']) for s in similar[:3])}). Consider updating instead."
         )
 
-    auto_internal, auto_owner = classify_task(id, description, None, recurrence)
     internal_value = normalise_internal(internal)
     if internal_value is None:
-        internal_value = auto_internal
-    owner_value = normalise_owner(owner) or auto_owner
+        internal_value = 0
+    owner_value = normalise_owner(owner)
 
     columns = {str(row["name"]) for row in conn.execute("PRAGMA table_info(followups)").fetchall()}
     payload: dict[str, object] = {

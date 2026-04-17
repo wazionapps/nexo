@@ -1,17 +1,22 @@
-"""Tests for migration #40 classification columns + helper functions.
+"""Tests for migration #40 classification columns + normalisation helpers.
 
-Guard rails for the Desktop-owned classification that moved to Brain core:
-    - internal and owner exist as real columns
-    - create_*/update_* accept overrides
-    - classify_task() matches the legacy Desktop heuristics so existing
-      rows keep rendering identically after backfill
+v5.8.2 removed the Spanish-first regex heuristic (NF-PROTOCOL-* /
+Spanish verbs) from the Brain core. What remains:
+
+    - internal and owner are real indexed columns.
+    - create_followup / create_reminder accept `internal` and `owner`
+      explicitly and persist them (with validation via normalise_*).
+    - When either field is omitted, the core writes internal=0 and
+      owner=NULL — no auto-classification. Clients that want automatic
+      classification (e.g. NEXO Desktop) compute it themselves.
+    - update_* accepts the same overrides and coerces invalid input
+      to NULL silently instead of persisting garbage.
+    - Migration #40 is idempotent and does NOT touch row data.
 """
 
 import db as db_mod
 from db._classification import (
-    classify_owner,
-    classify_task,
-    is_internal_id,
+    VALID_OWNERS,
     normalise_internal,
     normalise_owner,
 )
@@ -25,55 +30,10 @@ def test_migration_40_columns_exist():
     assert "internal" in rm_cols and "owner" in rm_cols
 
 
-def test_is_internal_id_matches_known_prefixes():
-    assert is_internal_id("NF-PROTOCOL-abc") is True
-    assert is_internal_id("NF-DS-xyz") is True
-    assert is_internal_id("NF-AUDIT-123") is True
-    assert is_internal_id("R-RELEASE-v5.7") is True
-    assert is_internal_id("R-FU-NF-PROTOCOL-foo") is True
-    assert is_internal_id("nf-protocol-lower") is True  # case-insensitive
-
-
-def test_is_internal_id_leaves_user_ids_alone():
-    assert is_internal_id("NF-ANTHROPIC-STARTUP") is False
-    assert is_internal_id("R90") is False
-    assert is_internal_id("NF-NEXO-OPUS47-UPGRADE-EXEC") is False
-    assert is_internal_id(None) is False
-    assert is_internal_id("") is False
-
-
-def test_classify_owner_waiting():
-    assert classify_owner("NF1", "Esperando respuesta de Maria") == "waiting"
-    assert classify_owner("R1", "bloqueado por tema legal") == "waiting"
-    assert classify_owner("R1", "", category="waiting") == "waiting"
-
-
-def test_classify_owner_user():
-    assert classify_owner("NF1", "Francisco debe revisar firma") == "user"
-    assert classify_owner("NF1", "Debes confirmar hoy") == "user"
-    assert classify_owner("NF-PROTOCOL-xyz", "Limpiar hooks") == "user"
-
-
-def test_classify_owner_agent():
-    assert classify_owner("NF1", "Monitor 24h cartera abandonada") == "agent"
-    assert classify_owner("NF1", "auditoría diaria ROAS") == "agent"
-    assert classify_owner(
-        "NF1", "Tarea cualquiera", recurrence="weekly:monday"
-    ) == "agent"
-
-
-def test_classify_owner_shared_default():
-    assert classify_owner("NF1", "Random followup with no keywords") == "shared"
-
-
-def test_classify_task_returns_pair():
-    internal, owner = classify_task("NF-DS-ABC", "Deep sleep housekeeping")
-    assert internal == 1
-    assert owner in {"agent", "shared"}
-
-    internal2, owner2 = classify_task("NF-SHOP", "Francisco debe revisar pedido")
-    assert internal2 == 0
-    assert owner2 == "user"
+def test_valid_owners_is_generic():
+    """The canonical taxonomy must not include NEXO-specific labels."""
+    assert VALID_OWNERS == {"user", "waiting", "agent", "shared"}
+    assert "nexo" not in VALID_OWNERS
 
 
 def test_normalise_internal_accepts_variants():
@@ -98,23 +58,21 @@ def test_normalise_owner_clamp_to_valid():
     assert normalise_owner(None) is None
 
 
-def test_create_followup_autoclassifies():
+def test_create_followup_without_override_persists_defaults():
+    """Brain core does NOT classify when agent omits internal/owner."""
     row = db_mod.create_followup(
-        "NF-TESTCLS-USER", "Francisco debe aprobar presupuesto", date="2026-12-01"
+        "NF-TESTCLS-DEFAULT",
+        "Francisco debe aprobar presupuesto",
+        date="2026-12-01",
     )
-    assert row["owner"] == "user"
     assert row["internal"] == 0
-
-    row2 = db_mod.create_followup(
-        "NF-DS-TESTCLS", "Deep sleep housekeeping", date="2026-12-01"
-    )
-    assert row2["internal"] == 1
+    assert row["owner"] is None
 
 
-def test_create_followup_explicit_override_beats_heuristic():
+def test_create_followup_explicit_override_persists():
     row = db_mod.create_followup(
         "NF-TESTCLS-OVERRIDE",
-        "Francisco debe llamar a cliente",   # heuristic would say user
+        "Francisco debe llamar a cliente",
         date="2026-12-01",
         internal=1,
         owner="agent",
@@ -123,9 +81,20 @@ def test_create_followup_explicit_override_beats_heuristic():
     assert row["owner"] == "agent"
 
 
-def test_create_reminder_autoclassifies():
+def test_create_reminder_without_override_persists_defaults():
     row = db_mod.create_reminder(
-        "R-TESTCLS-WAIT", "Esperando respuesta de Maria", date="2026-12-01"
+        "R-TESTCLS-DEFAULT", "Esperando respuesta", date="2026-12-01"
+    )
+    assert row["internal"] == 0
+    assert row["owner"] is None
+
+
+def test_create_reminder_explicit_override_persists():
+    row = db_mod.create_reminder(
+        "R-TESTCLS-OVERRIDE",
+        "Esperando respuesta",
+        date="2026-12-01",
+        owner="waiting",
     )
     assert row["owner"] == "waiting"
 
@@ -140,28 +109,27 @@ def test_update_followup_accepts_owner_internal():
 
 def test_update_followup_rejects_invalid_owner_silently():
     db_mod.create_followup(
-        "NF-TESTCLS-BADOWNER", "Neutral followup", date="2026-12-01"
+        "NF-TESTCLS-BADOWNER",
+        "Neutral followup",
+        date="2026-12-01",
+        owner="shared",
     )
     db_mod.update_followup("NF-TESTCLS-BADOWNER", owner="nexo")  # invalid value
     row = db_mod.get_followup("NF-TESTCLS-BADOWNER")
-    assert row["owner"] in {"shared", "user", "waiting", "agent"}   # not "nexo"
+    # The invalid "nexo" value must NOT overwrite the stored value.
+    assert row["owner"] in VALID_OWNERS
 
 
-def test_backfill_sets_owner_for_existing_rows():
-    # conftest fixture reapplies migrations on a fresh db, so inserted rows
-    # here already have internal/owner set by create_followup itself. This
-    # test verifies the classify layer stays consistent with backfill.
-    row = db_mod.create_followup(
-        "NF-TESTCLS-BACKFILL",
-        "Random shared task with no keywords",
-        date="2026-12-01",
-    )
-    assert row["internal"] == 0
-    assert row["owner"] == "shared"
+def test_migration_40_does_not_backfill_existing_rows():
+    """v5.8.2 migration only adds columns; it does NOT auto-classify rows."""
+    db_mod.run_migrations()
+    db_mod.run_migrations()  # idempotent
+    version = db_mod.get_schema_version()
+    assert version >= 40
 
 
 def test_migration_40_idempotent():
     db_mod.run_migrations()
-    db_mod.run_migrations()  # should be a no-op, not raise
+    db_mod.run_migrations()
     version = db_mod.get_schema_version()
     assert version >= 40
