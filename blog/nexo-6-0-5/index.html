@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXO 6.0.5: Strict pre-tool guardrail stops emitting “unknown target”</title>
+    <meta name="description" content="NEXO 6.0.5 stops the strict pre-tool guardrail from emitting “unknown target” when Claude Code's PreToolUse payload omits session_id. process_pre_tool_event now falls back to $NEXO_HOME/coordination/.claude-session-id before giving up. Fail-closed preserved. pytest joins CI so this category of regression cannot ship unnoticed again.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-6-0-5/">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/blog/nexo-6-0-5/">
+    <meta property="og:title" content="NEXO 6.0.5: Strict pre-tool guardrail stops emitting “unknown target”">
+    <meta property="og:description" content="The block storm several Claude Code versions caused in 6.0.2–6.0.4 finally goes away, and pytest finally blocks merges on failure.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+    <meta property="article:published_time" content="2026-04-17">
+    <meta property="article:author" content="Francisco Cerda Puigserver">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO 6.0.5: Strict pre-tool guardrail stops emitting “unknown target”">
+    <meta name="twitter:description" content="pre-tool guardrail stops blocking edits with 'unknown target' when Claude Code omits session_id; pytest joins CI.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "NEXO 6.0.5: Strict pre-tool guardrail stops emitting “unknown target”",
+        "description": "Fix for learning #411: process_pre_tool_event falls back to coordination/.claude-session-id when Claude Code omits session_id. Fail-closed preserved. pytest joins CI as blocking gate.",
+        "datePublished": "2026-04-17",
+        "dateModified": "2026-04-17",
+        "author": {"@type": "Person", "name": "Francisco Cerda Puigserver"},
+        "publisher": {"@type": "Organization", "name": "WAzion", "url": "https://www.wazion.com"},
+        "mainEntityOfPage": {"@type": "WebPage", "@id": "https://nexo-brain.com/blog/nexo-6-0-5/"},
+        "url": "https://nexo-brain.com/blog/nexo-6-0-5/",
+        "image": "https://nexo-brain.com/assets/og/og-blog.png",
+        "keywords": ["NEXO 6.0.5", "hook_guardrails", "process_pre_tool_event", "unknown target", "learning #411", "pytest CI", "Claude Code PreToolUse", "session_id fallback", "coordination"]
+    }
+    </script>
+
+    <style>
+        .article-header { padding-top: 128px; padding-bottom: 40px; text-align: center; }
+        .article-meta { font-size: 14px; color: var(--text-muted); margin-bottom: 16px; }
+        .article-body {
+            max-width: 720px; margin: 0 auto; padding: 0 24px 80px;
+            font-size: 17px; line-height: 1.8; color: var(--text);
+        }
+        .article-body h2 { font-size: 26px; margin-top: 48px; margin-bottom: 16px; color: var(--text-bright); }
+        .article-body h3 { font-size: 20px; margin-top: 32px; margin-bottom: 12px; color: var(--text-bright); }
+        .article-body p { margin-bottom: 20px; }
+        .article-body code { background: var(--bg-alt); padding: 2px 6px; border-radius: 4px; font-size: 14px; }
+        .article-body pre { background: var(--bg-alt); padding: 16px; border-radius: 8px; overflow-x: auto; }
+        .article-body pre code { background: transparent; padding: 0; }
+        .article-body ul { margin-bottom: 20px; padding-left: 28px; }
+        .article-body li { margin-bottom: 8px; }
+        .article-body table { width: 100%; border-collapse: collapse; margin: 16px 0 28px; }
+        .article-body th, .article-body td { padding: 8px 12px; border-bottom: 1px solid var(--border); text-align: left; }
+    </style>
+</head>
+<body>
+<nav class="nav"><div class="nav-inner">
+    <a href="/" class="nav-brand">NEXO</a>
+    <div class="nav-links">
+        <a href="/features/">Features</a>
+        <a href="/blog/">Blog</a>
+        <a href="/changelog/">Changelog</a>
+        <a href="/docs/">Docs</a>
+    </div>
+</div></nav>
+
+<header class="article-header">
+    <div class="container">
+        <div class="article-meta">April 17, 2026 &middot; Patch release</div>
+        <h1 style="font-size:42px;line-height:1.2;max-width:820px;margin:0 auto;">NEXO 6.0.4: Interactive launchers honour <code>default_resonance</code></h1>
+    </div>
+</header>
+
+<article class="article-body">
+
+        <h1 style="font-size:42px; line-height:1.2; margin-bottom:24px; text-align:center;">NEXO 6.0.5: Strict pre-tool guardrail stops emitting &ldquo;unknown target&rdquo;</h1>
+        <p style="text-align:center; color: var(--text-muted); font-size:15px; margin-bottom:48px;">Published April 17, 2026 &middot; by Francisco Cerd&agrave; Puigserver</p>
+
+        <h2>The bug that shipped in 6.0.2 and survived until 6.0.4</h2>
+        <p>Several Claude Code builds deliver <code>PreToolUse</code> without a <code>session_id</code> field. Until 6.0.5, <code>src/hook_guardrails.py::process_pre_tool_event</code> consulted only <code>payload["session_id"]</code>. With no id, <code>_resolve_nexo_sid</code> returned an empty string, the strict branch recorded a <code>strict_protocol_write_without_startup</code> debt, and the formatter emitted:</p>
+        <pre><code>NEXO STRICT MODE BLOCKED THIS EDIT:
+- Start the shared-brain session first: call `nexo_startup`, then `nexo_task_open`, before editing (unknown target).</code></pre>
+        <p>Operators who had already called <code>nexo_startup</code>, opened a protocol task, acknowledged guard warnings and tracked the target file still saw the block on every <code>Edit</code>/<code>Write</code>. Tracked as learning #411. 6.0.3 shipped a partial fix for the <code>handle_guard_check</code> side of the same family but did not cover the missing-payload case for edits.</p>
+
+        <h2>The fix</h2>
+        <p>The SessionStart hook already writes the active Claude Code session UUID to <code>$NEXO_HOME/coordination/.claude-session-id</code>. 6.0.5 adds a fallback helper that reads it:</p>
+        <pre><code>claude_sid = str(payload.get("session_id", "") or "").strip()
+if not claude_sid:
+    claude_sid = _read_claude_session_id_from_coordination()
+sid = _resolve_nexo_sid(conn, claude_sid)</code></pre>
+        <p>The lookup walks <code>$NEXO_HOME/coordination/.claude-session-id</code>, then <code>~/.nexo/coordination/.claude-session-id</code>, and stops at the first non-empty value. Fail-closed is preserved: if neither the payload nor the file yields an id, the guardrail still blocks with <code>missing_startup</code>. No behavioural change for callers that already supply <code>session_id</code>.</p>
+
+        <h2>Tests that silently regressed since 6.0.2</h2>
+        <p>Three pre-tool tests had been failing quietly:</p>
+        <ul>
+            <li><code>test_process_pre_tool_event_allows_public_contribution_checkout</code> asserted <code>result["skipped"] is True</code> with <code>reason="lenient mode"</code>. After the public-contribution refactor, that mode only disables the live-repo block &mdash; strict discipline still applies. The test now asserts the specific property it was designed to guard (no <code>automation_live_repo_write_blocked</code> debt, no <code>automation_live_repo</code> reason code) and creates the protocol task the strict path expects.</li>
+            <li><code>test_process_pre_tool_event_does_not_treat_runtime_home_as_live_repo_when_not_git_checkout</code> had the same stale shape. Fixed the same way.</li>
+            <li><code>test_non_tty_returns_lenient</code> inherited <code>NEXO_INTERACTIVE=1</code> from the parent shell (NEXO Desktop or <code>claude</code>&rsquo;s interactive launcher both export it) and therefore read strict even when <code>_force_tty(False)</code>. The helper now <code>monkeypatch.delenv</code>s <code>NEXO_INTERACTIVE</code> so the TTY signal is the only thing steering strictness.</li>
+        </ul>
+
+        <h2>pytest joins CI</h2>
+        <p>The real reason those regressions shipped is that CI only ran <code>ruff</code>, <code>bandit</code>, <code>verify_release_readiness</code> and <code>verify_client_parity</code>. None of those execute the test suite. 6.0.5 adds <code>.github/workflows/tests.yml</code> which runs <code>pytest tests/ -q --maxfail=5</code> on every PR and push to <code>main</code>. Merges are blocked on failure.</p>
+
+        <h2>Merged alongside</h2>
+        <ul>
+            <li><strong>Legacy Python Claude hooks purge</strong> (commit 9e42b03). Removes obsolete hook handlers on <code>nexo update</code>.</li>
+            <li><strong>macOS test/runtime isolation hardening</strong> (commit 6005288). Smoke installs on macOS no longer touch real launchd; tests run in an isolated launchd namespace so a developer laptop can never have <code>nexo install</code> clobber its live LaunchAgents.</li>
+        </ul>
+
+        <h2>Two open tails</h2>
+        <p>Two <code>tests/test_protocol.py</code> cases assert a <code>handle_task_close</code> / cognitive-trigger shape that no longer exists. Marked <code>pytest.mark.xfail(strict=False)</code> for 6.0.5 so the new gate stays green and tracked in followup <code>NF-TEST-PROTOCOL-API-REFACTOR</code>.</p>
+
+        <h2>Suite</h2>
+        <p><strong>1093 passed, 2 xfailed, 1 skipped.</strong></p>
+
+    </article>
+
+<footer class="footer">
+    <div class="container" style="text-align:center;color:var(--text-muted);font-size:14px;padding:32px 0;">
+        &copy; 2026 WAzion &middot; <a href="https://github.com/wazionapps/nexo">github.com/wazionapps/nexo</a> &middot; AGPL-3.0
+    </div>
+</footer>
+</body>
+</html>
