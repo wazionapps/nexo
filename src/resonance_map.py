@@ -173,6 +173,10 @@ USER_FACING_CALLERS: dict[str, str] = {
     "nexo_chat": USE_USER_DEFAULT_SENTINEL,
     "desktop_new_session": USE_USER_DEFAULT_SENTINEL,
     "nexo_update_interactive": USE_USER_DEFAULT_SENTINEL,
+    # v6.0.4 — dashboard "Open followup in Terminal" spawns a fresh
+    # interactive Claude/Codex session. Treat it like nexo_chat so the
+    # user's default_resonance preference flows through.
+    "nexo_followup_terminal": USE_USER_DEFAULT_SENTINEL,
 }
 
 # System-owned callers. Grouped thematically for readability.

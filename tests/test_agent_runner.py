@@ -84,6 +84,11 @@ def test_build_interactive_client_command_uses_codex_when_selected(tmp_path, mon
             "default_terminal_client": "codex",
             "automation_enabled": True,
             "automation_backend": "claude_code",
+            # v6.0.4 — interactive builders now consult resonance_map first.
+            # Pin default_resonance=maximo so the codex branch resolves to
+            # effort=xhigh (same value the legacy client_runtime_profiles
+            # path used to embed directly).
+            "default_resonance": "maximo",
             "client_runtime_profiles": {
                 "claude_code": {"model": "claude-opus-4-7[1m]", "reasoning_effort": "max"},
                 "codex": {"model": "gpt-5.4", "reasoning_effort": "xhigh"},
@@ -120,6 +125,8 @@ def test_build_interactive_client_command_preserves_claude_flags(tmp_path, monke
             "default_terminal_client": "claude_code",
             "automation_enabled": True,
             "automation_backend": "claude_code",
+            # v6.0.4 — pin the tier so the assertion stays on "max".
+            "default_resonance": "maximo",
             "client_runtime_profiles": {
                 "claude_code": {"model": "claude-opus-4-7[1m]", "reasoning_effort": "max"},
                 "codex": {"model": "gpt-5.4", "reasoning_effort": "xhigh"},
@@ -540,6 +547,7 @@ def test_codex_runner_skips_inline_bootstrap_when_global_bootstrap_is_managed(mo
             "default_terminal_client": "codex",
             "automation_enabled": True,
             "automation_backend": "codex",
+            "default_resonance": "maximo",
             "client_runtime_profiles": {
                 "claude_code": {"model": "claude-opus-4-7[1m]", "reasoning_effort": "max"},
                 "codex": {"model": "gpt-5.4", "reasoning_effort": "xhigh"},

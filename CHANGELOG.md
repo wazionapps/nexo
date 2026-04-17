@@ -1,5 +1,17 @@
 # Changelog
 
+## [6.0.4] - 2026-04-17
+
+### Fixed
+
+- **`nexo chat` ignored `preferences.default_resonance`.** `build_interactive_client_command` picked `--model` / `--effort` straight from `client_runtime_profiles` in `config/schedule.json`, so users who changed their Resonance in NEXO Desktop Preferences (Alto → writes `calibration.json`) kept getting whatever model/effort was cached in the legacy profile (usually `max`). Headless runs (`run_automation_prompt`) and NEXO Desktop sessions already honoured the preference correctly; only the terminal launcher was stuck.
+- **Dashboard "Open followup in Terminal" had the same bug.** `build_followup_terminal_shell_command` also pulled from `client_runtime_profiles`, so the Terminal window the dashboard spawned ran at the stale tier instead of the user's current preference.
+
+### Changed
+
+- `src/agent_runner.py` — new `_resolve_interactive_model_and_effort(caller, backend, ...)` helper consults `resonance_map.resolve_model_and_effort` first (honouring `user_default` / explicit tier) and falls back to `client_runtime_profiles` only when the resonance contract is missing. Both `build_interactive_client_command` and `build_followup_terminal_shell_command` now use it. The former accepts a `caller=` kwarg (default `nexo_chat`) and `tier=` override, which `run_automation_interactive` propagates.
+- `src/resonance_map.py` — registers `nexo_followup_terminal` in `USER_FACING_CALLERS` with the user-default sentinel so the dashboard "Open in Terminal" action resolves against the user's preference.
+
 ## [6.0.3] - 2026-04-17
 
 ### Fixed
