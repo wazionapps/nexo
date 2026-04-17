@@ -542,9 +542,31 @@ CORE_HOOK_SPECS = [
     },
 ]
 
+# Claude Code can retain legacy managed hooks from older/plugin-style installs
+# or from transient test runtimes. Treat their handler basenames as managed so
+# the next sync prunes them instead of leaving broken duplicates behind.
 LEGACY_CORE_HOOK_IDENTITIES_BY_EVENT = {
+    "SessionStart": {
+        "session_start.py",
+    },
+    "Stop": {
+        "stop.py",
+    },
+    "UserPromptSubmit": {
+        "auto_capture.py",
+    },
     "PostToolUse": {
         "heartbeat-guard.sh",
+        "post_tool_use.py",
+    },
+    "PreCompact": {
+        "pre_compact.py",
+    },
+    "Notification": {
+        "notification.py",
+    },
+    "SubagentStop": {
+        "subagent_stop.py",
     },
 }
 
@@ -599,7 +621,7 @@ def _hook_identity(command: str) -> str:
     text = str(command or "")
     if ".session-start-ts" in text:
         return "session-start-ts"
-    match = re.search(r"([A-Za-z0-9._-]+\.sh)\b", text)
+    match = re.search(r"([A-Za-z0-9._-]+\.(?:sh|py))\b", text)
     if match:
         return match.group(1)
     return text.strip()

@@ -209,6 +209,75 @@ def test_sync_claude_code_rewrites_legacy_heartbeat_hook_paths_to_core_hooks(tmp
     assert not any("scripts/heartbeat-posttool.sh" in command for command in post_tool_commands)
 
 
+def test_sync_claude_code_prunes_legacy_python_core_hooks_from_temp_runtime(tmp_path):
+    import client_sync
+
+    runtime = _make_runtime(tmp_path)
+    home = tmp_path / "home"
+    settings_path = home / ".claude" / "settings.json"
+    settings_path.parent.mkdir(parents=True)
+    temp_home = (
+        "/private/var/folders/_1/kdg9j8n50sx0w88mmbhdbqqr0000gn/T/"
+        "pytest-of-franciscoc/pytest-94/test_skip_flag_produces_expect0/nexo-home"
+    )
+    settings_path.write_text(json.dumps({
+        "hooks": {
+            "SessionStart": [{
+                "matcher": "*",
+                "hooks": [{"type": "command", "command": f"NEXO_HOME={temp_home} python3 {temp_home}/hooks/session_start.py", "timeout": 40}],
+            }],
+            "Stop": [{
+                "matcher": "*",
+                "hooks": [{"type": "command", "command": f"NEXO_HOME={temp_home} python3 {temp_home}/hooks/stop.py", "timeout": 15}],
+            }],
+            "UserPromptSubmit": [{
+                "matcher": "*",
+                "hooks": [{"type": "command", "command": f"NEXO_HOME={temp_home} python3 {temp_home}/hooks/auto_capture.py", "timeout": 5}],
+            }],
+            "PostToolUse": [{
+                "matcher": "*",
+                "hooks": [{"type": "command", "command": f"NEXO_HOME={temp_home} python3 {temp_home}/hooks/post_tool_use.py", "timeout": 20}],
+            }],
+            "PreCompact": [{
+                "matcher": "*",
+                "hooks": [{"type": "command", "command": f"NEXO_HOME={temp_home} python3 {temp_home}/hooks/pre_compact.py", "timeout": 15}],
+            }],
+            "Notification": [{
+                "matcher": "*",
+                "hooks": [
+                    {"type": "command", "command": f"NEXO_HOME={temp_home} python3 {temp_home}/hooks/notification.py", "timeout": 3},
+                    {"type": "command", "command": "python3 /tmp/custom-notification.py", "timeout": 3},
+                ],
+            }],
+            "SubagentStop": [{
+                "matcher": "*",
+                "hooks": [{"type": "command", "command": f"NEXO_HOME={temp_home} python3 {temp_home}/hooks/subagent_stop.py", "timeout": 10}],
+            }],
+        }
+    }))
+
+    result = client_sync.sync_claude_code(
+        nexo_home=runtime,
+        runtime_root=runtime,
+        operator_name="Atlas",
+        user_home=home,
+    )
+
+    assert result["ok"] is True
+    payload = json.loads(settings_path.read_text())
+    commands = [
+        hook["command"]
+        for sections in payload["hooks"].values()
+        for section in sections
+        for hook in section["hooks"]
+    ]
+    assert not any(temp_home in command for command in commands)
+    assert any("custom-notification.py" in command for command in commands)
+    assert any("session-start.sh" in command for command in commands)
+    assert any("heartbeat-user-msg.sh" in command for command in commands)
+    assert any("protocol-guardrail.sh" in command for command in commands)
+
+
 def test_sync_claude_desktop_preserves_preferences(tmp_path):
     import client_sync
 

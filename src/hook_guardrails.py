@@ -429,6 +429,38 @@ def _collect_automation_live_repo_blocks(
     return blocks
 
 
+def _read_claude_session_id_from_coordination() -> str:
+    """Fallback claude_session_id when Claude Code's PreToolUse payload omits it.
+
+    SessionStart hook writes the active Claude Code session UUID to
+    ``<NEXO_HOME>/coordination/.claude-session-id``. When the PreToolUse
+    payload omits ``session_id`` (observed across several Claude Code
+    versions), the pre-tool guardrail would lose correlation with the open
+    NEXO session and block every write with "unknown target" (learning
+    #411). Reading the coordination file restores the correlation without
+    relaxing fail-closed semantics: if the file is missing or empty the
+    caller still blocks.
+    """
+    candidates = []
+    nexo_home = os.environ.get("NEXO_HOME", "").strip()
+    if nexo_home:
+        candidates.append(Path(nexo_home).expanduser() / "coordination" / ".claude-session-id")
+    candidates.append(Path.home() / ".nexo" / "coordination" / ".claude-session-id")
+    seen: set[str] = set()
+    for path in candidates:
+        key = str(path)
+        if key in seen:
+            continue
+        seen.add(key)
+        try:
+            value = path.read_text().strip()
+        except (FileNotFoundError, OSError):
+            continue
+        if value:
+            return value
+    return ""
+
+
 def process_pre_tool_event(payload: dict) -> dict:
     tool_name = str(payload.get("tool_name", "")).strip()
     op = _operation_kind(tool_name)
@@ -439,7 +471,10 @@ def process_pre_tool_event(payload: dict) -> dict:
     files = _extract_touched_files(tool_input)
     strictness = get_protocol_strictness()
     conn = get_db()
-    sid = _resolve_nexo_sid(conn, str(payload.get("session_id", "")))
+    claude_sid = str(payload.get("session_id", "") or "").strip()
+    if not claude_sid:
+        claude_sid = _read_claude_session_id_from_coordination()
+    sid = _resolve_nexo_sid(conn, claude_sid)
     automation_blocks = _collect_automation_live_repo_blocks(
         conn,
         sid=sid,

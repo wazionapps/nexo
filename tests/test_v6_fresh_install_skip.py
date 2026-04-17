@@ -28,9 +28,12 @@ def _node_available() -> bool:
 def test_skip_flag_produces_expected_calibration(tmp_path):
     home = tmp_path / "nexo-home"
     home.mkdir()
+    user_home = tmp_path / "home"
+    user_home.mkdir()
 
     env = os.environ.copy()
     env.update({
+        "HOME": str(user_home),
         "NEXO_HOME": str(home),
         "NEXO_ALLOW_EPHEMERAL_INSTALL": "1",
         "NEXO_SKIP_POSTINSTALL": "1",  # no need to reboot agents from the test
@@ -75,3 +78,40 @@ def test_skip_flag_is_parsed_as_non_interactive():
     assert marker in text, (
         "nexo-brain.js must honour --skip as a non-interactive alias (v6.0.0)"
     )
+
+
+@pytest.mark.skipif(not _node_available(), reason="node not available")
+def test_ephemeral_install_detects_macos_pytest_temp_paths(tmp_path):
+    driver = tmp_path / "driver.js"
+    driver.write_text(
+        f"""
+const fs = require("fs");
+let src = fs.readFileSync({json.dumps(str(INSTALLER))}, "utf8");
+if (src.startsWith("#!")) {{
+  src = src.replace(/^#![^\\n]*\\n/, "");
+}}
+src = src.replace(/main\\(\\)\\.catch\\([\\s\\S]*$/, "");
+const module_ = {{ exports: {{}} }};
+process.env.HOME = "/Users/tester";
+const fn = new Function("module", "exports", "require", "process", "console", "__filename", "__dirname", "Buffer", src + "\\nmodule.exports.isEphemeralInstall = isEphemeralInstall;");
+fn(module_, module_.exports, require, process, console, {json.dumps(str(INSTALLER))}, {json.dumps(str(INSTALLER.parent))}, Buffer);
+console.log(JSON.stringify({{
+  macos_tmp: module_.exports.isEphemeralInstall("/private/var/folders/_1/abcd1234/T/pytest-of-user/pytest-1/test_case0/nexo-home"),
+  plain_tmp: module_.exports.isEphemeralInstall("/tmp/nexo-home"),
+  normal_home: module_.exports.isEphemeralInstall("/Users/tester/.nexo")
+}}));
+"""
+    )
+
+    result = subprocess.run(
+        ["node", str(driver)],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stderr
+
+    payload = json.loads(result.stdout.strip())
+    assert payload["macos_tmp"] is True
+    assert payload["plain_tmp"] is True
+    assert payload["normal_home"] is False

@@ -33,6 +33,11 @@ def _force_tty(monkeypatch, value: bool) -> None:
     stream = _FakeStream(value)
     monkeypatch.setattr(sys, "stdin", stream)
     monkeypatch.setattr(sys, "stdout", stream)
+    # Clear the Brain<->Electron interactivity contract so the TTY signal is
+    # the only thing that influences strictness. Without this, pytest runs
+    # inherited from an interactive Claude Code/Desktop shell (which exports
+    # NEXO_INTERACTIVE=1) would override the _FakeStream and mask regressions.
+    monkeypatch.delenv("NEXO_INTERACTIVE", raising=False)
 
 
 def test_tty_detection_returns_strict(monkeypatch):

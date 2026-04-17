@@ -93,10 +93,50 @@ const RESONANCE_TIER_NAMES = ["maximo", "alto", "medio", "bajo"];
 const DEFAULT_RESONANCE_TIER = _RESONANCE_TIERS.default_tier || "alto";
 
 function isEphemeralInstall(nexoHome) {
-  const homeDir = require("os").homedir();
+  const os = require("os");
+  const homeDir = os.homedir();
   const allowEphemeral = process.env.NEXO_ALLOW_EPHEMERAL_INSTALL === "1";
   if (allowEphemeral) return false;
-  return nexoHome.startsWith("/tmp/") || homeDir.startsWith("/tmp/");
+
+  const normalize = (candidate) => {
+    if (!candidate) return "";
+    let resolved = String(candidate);
+    try {
+      resolved = fs.realpathSync.native(resolved);
+    } catch {
+      try {
+        resolved = fs.realpathSync(resolved);
+      } catch {
+        resolved = path.resolve(resolved);
+      }
+    }
+    return resolved.replace(/\\/g, "/").replace(/\/+$/, "");
+  };
+
+  const tempRoots = new Set();
+  for (const root of [os.tmpdir(), "/tmp", "/var/folders", "/private/var/folders"]) {
+    const normalized = normalize(root);
+    if (!normalized) continue;
+    tempRoots.add(normalized);
+    if (normalized === "/tmp") {
+      tempRoots.add("/private/tmp");
+    } else if (normalized === "/private/tmp") {
+      tempRoots.add("/tmp");
+    } else if (normalized.startsWith("/var/")) {
+      tempRoots.add(`/private${normalized}`);
+    } else if (normalized.startsWith("/private/var/")) {
+      tempRoots.add(normalized.replace(/^\/private/, ""));
+    }
+  }
+
+  const isWithin = (candidate, root) => (
+    candidate === root || candidate.startsWith(`${root}/`)
+  );
+
+  return [nexoHome, homeDir]
+    .map(normalize)
+    .filter(Boolean)
+    .some((candidate) => Array.from(tempRoots).some((root) => isWithin(candidate, root)));
 }
 
 const rl = readline.createInterface({
@@ -3325,7 +3365,10 @@ ${doScan ? `- Stack: ${Object.keys(profileData.code.languages || {}).slice(0, 5)
   schedule = await maybeConfigurePublicContribution(schedule, useDefaults);
   schedule = await maybeConfigureFullDiskAccess(schedule, useDefaults, python);
   const enabledOptionals = { dashboard: doDashboard, automation: schedule.automation_enabled !== false };
-  if (isEphemeralInstall(NEXO_HOME)) {
+  const smokeTestMode = process.env.NEXO_TESTING_SMOKE === "1";
+  if (smokeTestMode) {
+    log("Smoke test mode detected — skipping LaunchAgents installation.");
+  } else if (isEphemeralInstall(NEXO_HOME)) {
     log("Ephemeral HOME/NEXO_HOME detected — skipping LaunchAgents installation.");
   } else {
     installAllProcesses(platform, python, NEXO_HOME, schedule, LAUNCH_AGENTS, enabledOptionals);

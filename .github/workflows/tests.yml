@@ -1,0 +1,29 @@
+name: Tests
+
+# Added in v6.0.5 after two pre-existing test failures shipped unnoticed
+# because CI only ran lint + verify_release_readiness + verify_client_parity
+# but never executed the pytest suite. With this workflow every PR runs the
+# full unit/integration test suite and blocks merges on failure.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  pytest:
+    name: pytest (tests/)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Run pytest
+        run: python3 -m pytest tests/ -q --maxfail=5

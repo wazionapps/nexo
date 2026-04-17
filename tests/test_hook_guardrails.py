@@ -255,6 +255,72 @@ def test_process_pre_tool_event_blocks_write_without_open_task_in_strict_mode(gu
     assert "open `nexo_task_open" in message
 
 
+def test_process_pre_tool_event_resolves_sid_from_coordination_file_when_payload_lacks_session_id(guardrail_env, monkeypatch):
+    """Learning #411: PreToolUse payload sometimes omits session_id. The guardrail
+    must fall back to <NEXO_HOME>/coordination/.claude-session-id instead of
+    losing correlation and blocking every write with "unknown target"."""
+    db, hook_guardrails = _reload_guardrail_stack()
+    db.init_db()
+    monkeypatch.setattr(hook_guardrails, "get_protocol_strictness", lambda: "strict")
+    sid = "nexo-2008-3008"
+    claude_session_id = "a70fc0d1-da7d-4755-b064-96275e0789ab"
+    db.register_session(
+        sid,
+        "payload omits session_id",
+        external_session_id=claude_session_id,
+        session_client="claude_code",
+    )
+    task = db.create_protocol_task(
+        sid,
+        "Edit with coordination fallback",
+        task_type="edit",
+        files=["/repo/src/hook_guardrails.py"],
+        opened_with_guard=True,
+    )
+    coord_dir = guardrail_env / "coordination"
+    coord_dir.mkdir(parents=True, exist_ok=True)
+    (coord_dir / ".claude-session-id").write_text(claude_session_id + "\n")
+
+    result = hook_guardrails.process_pre_tool_event(
+        {
+            # session_id intentionally omitted — reproduces Claude Code payloads
+            # seen in the wild that do not include it.
+            "tool_name": "Edit",
+            "tool_input": {"file_path": "/repo/src/hook_guardrails.py"},
+        }
+    )
+
+    assert result["session_id"] == sid, (
+        f"expected fallback to resolve sid={sid!r}, got {result.get('session_id')!r}"
+    )
+    # Scope of this test is the session-id fallback. Subsequent guardrail
+    # checks (guard_check recency, etc.) are covered by other tests and must
+    # NOT re-trigger the "missing_startup" path when the fallback worked.
+    reason_codes = [block.get("reason_code") for block in result.get("blocks", [])]
+    assert "missing_startup" not in reason_codes, (
+        f"fallback still hit missing_startup: {reason_codes}"
+    )
+    assert task  # task fixture used to confirm correlation path
+
+
+def test_process_pre_tool_event_still_blocks_when_payload_and_coordination_file_both_missing(guardrail_env, monkeypatch):
+    """Fail-closed is preserved: if neither the payload nor the coordination
+    file yields a session id, the guardrail still blocks with missing_startup."""
+    db, hook_guardrails = _reload_guardrail_stack()
+    db.init_db()
+    monkeypatch.setattr(hook_guardrails, "get_protocol_strictness", lambda: "strict")
+
+    result = hook_guardrails.process_pre_tool_event(
+        {
+            "tool_name": "Edit",
+            "tool_input": {"file_path": "/repo/src/hook_guardrails.py"},
+        }
+    )
+
+    assert result["status"] == "blocked"
+    assert result["blocks"][0]["reason_code"] == "missing_startup"
+
+
 def test_process_pre_tool_event_learning_mode_explains_guard_ack_requirement(guardrail_env, monkeypatch):
     db, hook_guardrails = _reload_guardrail_stack()
     db.init_db()
@@ -330,27 +396,47 @@ def test_process_pre_tool_event_blocks_automation_write_to_live_repo(guardrail_e
 
 
 def test_process_pre_tool_event_allows_public_contribution_checkout(guardrail_env, monkeypatch):
+    """In NEXO_PUBLIC_CONTRIBUTION mode, edits against the live repo must not
+    be blocked by the ``automation_live_repo_write_blocked`` rule. Strict-mode
+    discipline (task/guard) still applies and is validated by dedicated tests;
+    this one focuses on the live-repo guard being disabled."""
     db, hook_guardrails = _reload_guardrail_stack()
     db.init_db()
     monkeypatch.setenv("NEXO_AUTOMATION", "1")
     monkeypatch.setenv("NEXO_PUBLIC_CONTRIBUTION", "1")
+    monkeypatch.setattr(hook_guardrails, "get_protocol_strictness", lambda: "strict")
+    sid = "nexo-2007-3007"
+    target = str(REPO_SRC / "server.py")
     db.register_session(
-        "nexo-2007-3007",
+        sid,
         "public contribution edit",
         external_session_id="claude-auto-2",
         session_client="claude_code",
+    )
+    db.create_protocol_task(
+        sid,
+        "Edit server in public contribution mode",
+        task_type="edit",
+        files=[target],
+        opened_with_guard=True,
     )
 
     result = hook_guardrails.process_pre_tool_event(
         {
             "session_id": "claude-auto-2",
             "tool_name": "Edit",
-            "tool_input": {"file_path": str(REPO_SRC / "server.py")},
+            "tool_input": {"file_path": target},
         }
     )
 
-    assert result["skipped"] is True
-    assert result["reason"] == "lenient mode"
+    reason_codes = [block.get("reason_code") for block in result.get("blocks", [])]
+    debt_types = [block.get("debt_type") for block in result.get("blocks", [])]
+    assert "automation_live_repo" not in reason_codes, (
+        f"public contribution must not trigger live-repo guard; got {reason_codes}"
+    )
+    assert "automation_live_repo_write_blocked" not in debt_types, (
+        f"public contribution must not persist live-repo debt; got {debt_types}"
+    )
     debt = db.get_db().execute(
         "SELECT COUNT(*) AS count FROM protocol_debt WHERE debt_type = 'automation_live_repo_write_blocked'"
     ).fetchone()
@@ -361,6 +447,9 @@ def test_process_pre_tool_event_does_not_treat_runtime_home_as_live_repo_when_no
     guardrail_env,
     monkeypatch,
 ):
+    """Writes against runtime paths that merely look git-owned (fake .git file)
+    must not trigger the live-repo block. Strict-mode discipline still applies
+    independently; this test asserts the live-repo guard specifically."""
     runtime_file = guardrail_env / "operations" / "orchestrator-state.json"
     runtime_file.parent.mkdir(parents=True, exist_ok=True)
     runtime_file.write_text("{}")
@@ -371,23 +460,39 @@ def test_process_pre_tool_event_does_not_treat_runtime_home_as_live_repo_when_no
     monkeypatch.delenv("NEXO_PUBLIC_CONTRIBUTION", raising=False)
     db, hook_guardrails = _reload_guardrail_stack()
     db.init_db()
+    monkeypatch.setattr(hook_guardrails, "get_protocol_strictness", lambda: "strict")
+    sid = "nexo-2008-3008"
+    target = str(runtime_file)
     db.register_session(
-        "nexo-2008-3008",
+        sid,
         "automation runtime write",
         external_session_id="claude-auto-3",
         session_client="claude_code",
+    )
+    db.create_protocol_task(
+        sid,
+        "Edit runtime artifact in automation mode",
+        task_type="edit",
+        files=[target],
+        opened_with_guard=True,
     )
 
     result = hook_guardrails.process_pre_tool_event(
         {
             "session_id": "claude-auto-3",
             "tool_name": "Edit",
-            "tool_input": {"file_path": str(runtime_file)},
+            "tool_input": {"file_path": target},
         }
     )
 
-    assert result["skipped"] is True
-    assert result["reason"] == "lenient mode"
+    reason_codes = [block.get("reason_code") for block in result.get("blocks", [])]
+    debt_types = [block.get("debt_type") for block in result.get("blocks", [])]
+    assert "automation_live_repo" not in reason_codes, (
+        f"runtime home must not be treated as live repo; got {reason_codes}"
+    )
+    assert "automation_live_repo_write_blocked" not in debt_types, (
+        f"runtime home must not persist live-repo debt; got {debt_types}"
+    )
     debt = db.get_db().execute(
         "SELECT COUNT(*) AS count FROM protocol_debt WHERE debt_type = 'automation_live_repo_write_blocked'"
     ).fetchone()
