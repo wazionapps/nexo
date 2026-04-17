@@ -181,6 +181,17 @@
     </div>
 </section>
 
+<!-- v5.10.2 Bootstrap brain/profile.json from calibration + Desktop explanations -->
+<section id="v5102" class="section-compact" style="background:linear-gradient(135deg,#09111f 0%,#14253a 50%,#1e3a5f 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.10.2 <span style="opacity:.5;font-weight:400;">&mdash; April 17, 2026</span></div>
+        <h2 class="section-title">Bootstrap <code>brain/profile.json</code> From Calibration + Desktop Explains Each Block</h2>
+        <p class="section-subtitle">
+            NEXO Desktop's <em>Preferencias → Avanzado</em> tab renders two JSON blocks: <code>calibration.json</code> (editable personality/language/name) and <code>profile.json</code> (deep-scan from onboarding). Operators whose onboarding was interrupted before v5.9.x ended up with <code>role</code> and <code>technical_level</code> only under <code>calibration.meta.*</code> and no <code>profile.json</code> file — the Desktop block rendered an empty <code>{}</code> with no context, which looked broken. v5.10.2 closes the gap from both ends. <strong>Brain:</strong> new <code>_bootstrap_profile_from_calibration_meta(dest)</code> runs inside <code>_run_runtime_post_sync()</code> right after the v5.10.1 effort→resonance migration. When <code>profile.json</code> is missing / empty / corrupt and <code>calibration.json</code> carries any of <code>meta.role</code>, <code>meta.technical_level</code>, <code>name</code>, <code>language</code>, it seeds the profile with those fields plus a <code>source</code> marker. Never overwrites a populated profile, never raises, idempotent. <strong>Desktop v0.11.2:</strong> the Avanzado tab now prefixes each block with a short explanation of what lives where, and renders a friendly placeholder instead of <code>{}</code> when no profile exists yet. Also fixes <code>test_user_facing_caller_with_no_user_default_uses_alto</code> which was leaking real <code>~/.nexo</code> state after the v5.10.1 migration wrote <code>default_resonance=maximo</code> on the dev box. 10 new tests (<code>test_auto_update_bootstrap_profile.py</code>); full suite 1021 passed, 1 skipped.
+        </p>
+    </div>
+</section>
+
 <!-- v5.10.1 Silent migration of legacy reasoning_effort=max to preferences.default_resonance -->
 <section id="v5101" class="section-compact" style="background:linear-gradient(135deg,#09111f 0%,#14253a 50%,#1e3a5f 100%);">
     <div class="container">
