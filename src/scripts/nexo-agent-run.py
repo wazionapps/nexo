@@ -33,6 +33,20 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--task-profile", default="", help="Automation task profile: default|fast|balanced|deep")
     parser.add_argument("--model", default="", help="Backend model hint")
     parser.add_argument("--reasoning-effort", default="", help="Backend reasoning effort/profile")
+    parser.add_argument(
+        "--tier",
+        default="",
+        help="Resonance tier — 'maximo'/'alto'/'medio'/'bajo'. "
+             "v6.0.2+ — used by personal/* callers to override the "
+             "resonance without editing src/resonance_map.py.",
+    )
+    parser.add_argument(
+        "--caller",
+        default="",
+        help="Registered caller id (e.g. nexo_chat) or 'personal/<id>' for "
+             "user-owned scripts. Required in practice; empty falls back "
+             "to 'agent_run/generic' for backward compatibility.",
+    )
     parser.add_argument("--timeout", type=int, default=AUTOMATION_SUBPROCESS_TIMEOUT, help="Timeout in seconds")
     parser.add_argument("--output-format", default="text", help="Requested output format")
     parser.add_argument("--allowed-tools", default="", help="Claude-style allowed tools contract")
@@ -52,11 +66,12 @@ def main(argv: list[str] | None = None) -> int:
     try:
         result = run_automation_prompt(
             prompt,
-            caller=getattr(args, "caller", "") or "agent_run/generic",
+            caller=args.caller or "agent_run/generic",
             cwd=args.cwd or None,
             task_profile=args.task_profile,
             model=args.model,
             reasoning_effort=args.reasoning_effort,
+            tier=args.tier,
             timeout=args.timeout,
             output_format=args.output_format,
             append_system_prompt=append_system_prompt,

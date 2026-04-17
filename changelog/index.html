@@ -181,6 +181,17 @@
     </div>
 </section>
 
+<!-- v6.0.2 — personal/ prefix + tier kwarg + personal scripts guide -->
+<section id="v602" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container">
+        <div class="section-label">New in v6.0.2 <span style="opacity:.5;font-weight:400;">&mdash; April 17, 2026</span></div>
+        <h2 class="section-title"><code>personal/</code> Caller Prefix + <code>tier</code> Kwarg + Personal Scripts Guide</h2>
+        <p class="section-subtitle">
+            v6.0.0 made <code>caller</code> mandatory on <code>run_automation_prompt</code> and resolved it against <code>USER_FACING_CALLERS</code> / <code>SYSTEM_OWNED_CALLERS</code> in <code>src/resonance_map.py</code>. That was exactly right for callers inside the repo — each one deserves a deliberate, reviewable tier. But it was impossible for scripts that live in the operator's <code>~/.nexo/scripts/</code> tree: they cannot edit the public repo, and every one of them collapsed to the generic <code>agent_run/generic</code> fallback, erasing per-script identity. v6.0.2 introduces the reserved caller prefix <code>personal/</code>. The resolver bypasses the registry for any caller whose id starts with it and follows a deterministic precedence chain: explicit <code>tier=</code> → explicit <code>reasoning_effort=</code> → <code>calibration.preferences.default_resonance</code> → <code>DEFAULT_RESONANCE</code> (<code>"alto"</code>). Invalid tier values are silently ignored rather than raising, so a typo falls through to the next step instead of breaking the caller. Added: new kwarg <code>tier: str = ""</code> on <code>run_automation_prompt</code>, <code>run_automation_interactive</code>, <code>nexo_helper.run_automation_text</code>, <code>nexo_helper.run_automation_json</code>; new CLI flags <code>--tier</code> and <code>--caller</code> on <code>nexo-agent-run.py</code>; new doc <code>docs/personal-scripts-guide.md</code> so any NEXO session helping an operator author a personal script knows the exact pattern. Changed: <code>resolve_tier_for_caller</code> and <code>resolve_model_and_effort</code> accept a new keyword-only argument <code>explicit_tier</code>; README gains a link to the new guide. Backcompat: callers registered in either dictionary keep v6.0.0 behaviour untouched; non-<code>personal/</code> ids without a registry entry still raise <code>UnregisteredCallerError</code>. Tests: 3 new pytest modules, 14 new cases. Full suite: 1079 passed, 1 skipped.
+        </p>
+    </div>
+</section>
+
 <!-- v6.0.1 Hotfix — NEXO_INTERACTIVE override + PostToolUse inbox autodetect -->
 <section id="v601" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
     <div class="container">
