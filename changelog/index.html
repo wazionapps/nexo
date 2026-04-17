@@ -181,6 +181,17 @@
     </div>
 </section>
 
+<!-- v5.10.0 Extract-path bloat fix + caller= enforced + personal scripts on the map -->
+<section id="v5100" class="section-compact" style="background:linear-gradient(135deg,#09111f 0%,#14253a 50%,#1e3a5f 100%);">
+    <div class="container">
+        <div class="section-label">New in v5.10.0 <span style="opacity:.5;font-weight:400;">&mdash; April 17, 2026</span></div>
+        <h2 class="section-title">Extract-Path Bloat Fix, caller= Enforced, Personal Scripts on the Map</h2>
+        <p class="section-subtitle">
+            Deep-sleep Session 1 took ~57 min on some installs because every <code>claude -p</code> child reloaded <code>~/.claude/CLAUDE.md</code> (11&nbsp;KB), hook sync, plugin refresh, keychain probe. New <code>bare_mode</code> kwarg on <code>run_automation_prompt</code> wires <code>claude --bare</code> for JSON-only callers: <code>deep-sleep/extract</code> and <code>deep-sleep/synthesize</code> auto-enable it when an <code>ANTHROPIC_API_KEY</code> is resolvable (env → <code>~/.claude/anthropic-api-key.txt</code> → <code>~/.nexo/config/anthropic-api-key.txt</code>; silent fallback when no key). ~4.3× faster per child on the reference install. <code>caller=</code> is now <strong>mandatory</strong> — <code>run_automation_prompt</code> raises <code>UnregisteredCallerError</code> without a registered caller. Five personal scripts (<code>personal/email-monitor</code>, <code>personal/github-monitor</code>, <code>personal/post-x</code>, <code>personal/followup-runner</code> at <code>alto</code>, <code>personal/orchestrator-v2</code> at <code>maximo</code>) joined <code>SYSTEM_OWNED_CALLERS</code>. gbp/* marketing callers bumped <code>medio</code> → <code>alto</code> (public-facing copy, quality first). 65 legacy protocol debts bulk-resolved — patterns structurally closed by mandatory <code>caller=</code> + unified log + bare_mode. 10 new bare-mode tests (974 total in suite).
+        </p>
+    </div>
+</section>
+
 <!-- v5.9.1 Resonance selector in NEXO Desktop's Preferences -->
 <section id="v591" class="section-compact" style="background:linear-gradient(135deg,#09111f 0%,#14253a 50%,#1e3a5f 100%);">
     <div class="container">

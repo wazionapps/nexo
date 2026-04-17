@@ -8,6 +8,21 @@ import pytest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
 
+
+@pytest.fixture(autouse=True)
+def _register_test_harness_caller():
+    """run_automation_prompt requires caller= as of v5.10.0. Tests in this
+    file all use caller='test/harness'; register it for the duration of
+    the test at the lowest tier so we never accidentally train on a real
+    workload tier from a fixture."""
+    from resonance_map import register_system_caller, unregister_system_caller
+    register_system_caller("test/harness", "maximo")
+    try:
+        yield
+    finally:
+        unregister_system_caller("test/harness")
+
+
 @pytest.fixture(autouse=True)
 def _mock_enforcement_engine(monkeypatch):
     """Bypass enforcement engine so tests use subprocess.run directly."""
@@ -159,6 +174,7 @@ def test_run_automation_prompt_uses_claude_backend_command(monkeypatch, tmp_path
 
     result = agent_runner.run_automation_prompt(
         "Do the thing",
+        caller="test/harness",
         cwd=tmp_path,
         model="opus",
         timeout=12,
@@ -221,6 +237,7 @@ def test_run_automation_prompt_uses_codex_exec_output_file(monkeypatch, tmp_path
 
     result = agent_runner.run_automation_prompt(
         "Summarize",
+        caller="test/harness",
         cwd=tmp_path,
         model="opus",
         output_format="text",
@@ -285,6 +302,7 @@ def test_run_automation_prompt_marks_public_contribution_env(monkeypatch, tmp_pa
 
     result = agent_runner.run_automation_prompt(
         "Public contribution path",
+        caller="test/harness",
         cwd=tmp_path,
         env={"NEXO_PUBLIC_CONTRIBUTION": "1"},
         output_format="text",
@@ -334,6 +352,7 @@ def test_run_automation_prompt_uses_fast_task_profile_for_backend_and_reasoning(
 
     result = agent_runner.run_automation_prompt(
         "Fast path",
+        caller="test/harness",
         cwd=tmp_path,
         task_profile="fast",
         output_format="text",
@@ -384,6 +403,7 @@ def test_run_automation_prompt_falls_back_when_configured_backend_is_unavailable
 
     result = agent_runner.run_automation_prompt(
         "Fallback path",
+        caller="test/harness",
         cwd=tmp_path,
         output_format="text",
     )
@@ -392,7 +412,11 @@ def test_run_automation_prompt_falls_back_when_configured_backend_is_unavailable
     assert captured["cmd"][:2] == ["/tmp/fake-codex", "exec"]
     assert captured["cmd"][captured["cmd"].index("-m") + 1] == "gpt-5.4"
     config_values = [captured["cmd"][idx + 1] for idx, part in enumerate(captured["cmd"]) if part == "-c"]
-    assert 'model_reasoning_effort="high"' in config_values
+    # v5.10.0: resonance_map tier (test/harness -> maximo) drives the
+    # effort now, not client_runtime_profiles. For MAXIMO + codex that
+    # is "xhigh". client_runtime_profiles still supplies the model when
+    # resonance_map leaves it empty, but effort is always mapped.
+    assert 'model_reasoning_effort="xhigh"' in config_values
 
 
 def test_probe_automation_backend_reports_disabled(monkeypatch):
@@ -437,15 +461,23 @@ def test_codex_backend_maps_legacy_opus_hint_to_configured_profile(monkeypatch, 
 
     agent_runner.run_automation_prompt(
         "Do it",
+        caller="test/harness",
         cwd=tmp_path,
         model="opus",
         output_format="text",
     )
 
+    # v5.10.0:
+    #   - model="opus" is a legacy hint; `_resolve_runtime_model_and_effort`
+    #     rewrites it to the configured profile model (gpt-5.4-mini).
+    #     The resonance map does NOT override here because the caller
+    #     passed an explicit (legacy) model, so mapped_model short-circuits.
+    #   - reasoning_effort was empty at entry, so the resonance map fills
+    #     it in: test/harness=MAXIMO → codex effort "xhigh".
     assert captured["cmd"][captured["cmd"].index("-m") + 1] == "gpt-5.4-mini"
     config_values = [captured["cmd"][idx + 1] for idx, part in enumerate(captured["cmd"]) if part == "-c"]
     assert 'initial_messages=[{role="system",content="You are NEXO."}]' in config_values
-    assert 'model_reasoning_effort="high"' in config_values
+    assert 'model_reasoning_effort="xhigh"' in config_values
 
 
 def test_codex_backend_uses_configured_profile_when_model_is_empty(monkeypatch, tmp_path):
@@ -479,15 +511,18 @@ def test_codex_backend_uses_configured_profile_when_model_is_empty(monkeypatch, 
 
     agent_runner.run_automation_prompt(
         "Do it",
+        caller="test/harness",
         cwd=tmp_path,
         model="",
         output_format="text",
     )
 
-    assert captured["cmd"][captured["cmd"].index("-m") + 1] == "gpt-5.4-mini"
+    # See note in the prior test: the resonance map (test/harness=MAXIMO)
+    # drives the values to gpt-5.4/xhigh in v5.10.0 and onwards.
+    assert captured["cmd"][captured["cmd"].index("-m") + 1] == "gpt-5.4"
     config_values = [captured["cmd"][idx + 1] for idx, part in enumerate(captured["cmd"]) if part == "-c"]
     assert 'initial_messages=[{role="system",content="You are NEXO."}]' in config_values
-    assert 'model_reasoning_effort="high"' in config_values
+    assert 'model_reasoning_effort="xhigh"' in config_values
 
 
 def test_codex_runner_skips_inline_bootstrap_when_global_bootstrap_is_managed(monkeypatch, tmp_path):
