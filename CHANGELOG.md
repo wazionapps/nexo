@@ -1,5 +1,70 @@
 # Changelog
 
+## [5.8.1] - 2026-04-17
+
+### Fix: deep-sleep Phase 2 could wedge on the first session of every batch
+
+Between 2026-04-14 and 2026-04-17 the nightly deep-sleep on the reference
+install stopped producing extractions / synthesis / applied artifacts. The
+Phase 2 worker would start, get partway through Session 1 of N, and die with
+`Automation backend error (exit 143)`. Every 30 minutes a new worker
+started and hit the same fate, burning API credits on a never-advancing
+loop.
+
+Root cause chain:
+
+- `scripts/nexo-cron-wrapper.sh` only wrote to `cron_runs` at the END of
+  the job. Any wrapper killed mid-flight produced zero database records.
+- `scripts/nexo-watchdog.sh`, running every 1800s, used `cron_runs` as its
+  source of truth for "has this cron run recently?". With no row for
+  deep-sleep it decided the cron was stuck and executed
+  `launchctl kickstart -k "gui/<uid>/com.nexo.deep-sleep"` — the `-k`
+  flag kills the running instance first, so the watchdog was actively
+  killing its own worker.
+- `scripts/deep-sleep/extract.py` cached the first failure (an Anthropic
+  API `overloaded_error`) in a per-session checkpoint and reused it
+  forever, so even when the kickstart loop was broken the same session
+  would report 0 findings indefinitely.
+
+What changed:
+
+- **`scripts/nexo-cron-wrapper.sh`**: two-phase recording. INSERT a row
+  with `ended_at=NULL` at start, UPDATE at end. Foreground command runs
+  under a `wait $!` so `trap TERM/INT/HUP` fires immediately, forwards
+  SIGTERM to the child, and closes the row with `exit_code=143` + an
+  explicit `Killed by SIGTERM` error string. Wrappers killed by the
+  watchdog, crash, or shutdown now show up as failed runs instead of
+  vanishing.
+- **`scripts/nexo-watchdog.sh`**: new in-flight detection. A cron_runs row
+  with `started_at` set and `ended_at` empty is interpreted as "currently
+  running" — never kickstart -k'd. Long-running in-flight rows (age >
+  3×max_stale) only escalate if the worker process is provably dead
+  (`proc_grep` check). Eliminates the kickstart loop.
+- **`scripts/deep-sleep/extract.py`**: classified CLI failures into
+  transient (`overloaded_error`, `rate_limit_error`, `api_error`,
+  `timeout`, `signal`) vs deterministic (`json_parse`, `unknown`).
+  Transient errors do not persist a poisoned checkpoint — the next run
+  gets a clean retry. Deterministic errors increment `error_count` and
+  are skipped once `error_count >= MAX_POISON_ATTEMPTS` (3). Shared
+  context is now slimmed to 200 head lines + metadata so the Claude CLI
+  subprocess does not stream 400+KB of DB dump on every per-session
+  extraction.
+- **`src/auto_update.py`**: new `_heal_deep_sleep_runtime()` runs on every
+  post-sync. It purges poisoned checkpoints from any date directory,
+  releases `sleep.lock` / `sleep-process.lock` / `synthesis.lock` older
+  than 6h, closes dangling `cron_runs` rows older than 6h with an
+  explicit "healed by auto_update (pre-5.8.1 wrapper left row open)"
+  marker, and resets `.watchdog-fails` counters older than 24h. Existing
+  installs get healed silently on their next `nexo update`.
+
+Tests (`tests/test_cron_wrapper_contract.py`,
+`tests/test_deep_sleep_extract.py`,
+`tests/test_auto_update_heal_deep_sleep.py`,
+`tests/test_watchdog_in_flight.py`): 22 new cases covering in-flight row
+insertion, SIGTERM trap, CLI failure classification, poisoned checkpoint
+skipping, transient non-poisoning, heal idempotency, and watchdog
+in-flight detection.
+
 ## [5.8.0] - 2026-04-17
 
 ### Feature: first-class `internal` and `owner` columns on followups and reminders

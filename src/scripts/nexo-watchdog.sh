@@ -594,40 +594,72 @@ for monitor in "${MONITORS[@]}"; do
     run_info=$(cron_last_run_info "$cron_id" || true)
     if [ -n "$run_info" ]; then
       latest_run_has_record=true
-      IFS='|' read -r age _ _ last_exit last_error last_summary <<< "$run_info"
+      IFS='|' read -r age _ last_ended last_exit last_error last_summary <<< "$run_info"
       age="${age:-999999}"
       stale_age=$(format_age "$age")
-      if [ -n "$last_exit" ] && [ "$last_exit" != "0" ]; then
-        latest_run_failed=true
-        status="FAIL"
-        details="${details}Last run exited ${last_exit}. "
-        [ -n "$last_error" ] && details="${details}Error: ${last_error}. "
-      fi
-      if [ "$age" -gt $(( max_stale * 3 )) ]; then
-        if [ "$recovery_policy" = "catchup" ]; then
-          if try_request_catchup; then
-            status="HEALED"
-            details="${details}Self-healed: requested catchup for missed window (last run: $stale_age). "
-            TOTAL_HEALED=$((TOTAL_HEALED + 1))
+
+      # In-flight detection: started_at present but ended_at empty means the
+      # wrapper is still running. Never kickstart -k over an in-flight row —
+      # that was the loop that broke deep-sleep between 2026-04-14 and
+      # 2026-04-17, when the watchdog kept killing the worker that was
+      # actually doing the job. Only intervene if the process is provably
+      # dead (zombie row) AND the run has exceeded 3× max_stale.
+      if [ -z "$last_ended" ]; then
+        if [ "$age" -gt $(( max_stale * 3 )) ] && [ -n "$proc_grep" ] && ! process_running "$proc_grep"; then
+          status="FAIL"
+          details="${details}In-flight for ${stale_age} but process '$proc_grep' dead — stale row. "
+          if [ "$recovery_policy" = "catchup" ]; then
+            if try_request_catchup; then
+              status="HEALED"
+              details="${details}Self-healed: requested catchup for crashed in-flight run. "
+              TOTAL_HEALED=$((TOTAL_HEALED + 1))
+            fi
           else
-            status="FAIL"
-            details="${details}cron_runs stale: $stale_age (limit: $(format_age "$max_stale")). Catchup request failed. "
+            if try_reexecute_missed_cron "$plist_id"; then
+              status="HEALED"
+              details="${details}Self-healed: re-executed crashed in-flight run. "
+              TOTAL_HEALED=$((TOTAL_HEALED + 1))
+            fi
           fi
+        elif [ "$age" -gt $(( max_stale * 3 )) ]; then
+          [ "$status" = "PASS" ] && status="WARN"
+          details="${details}In-flight for ${stale_age} (long-running, process alive). "
         else
-          if try_reexecute_missed_cron "$plist_id"; then
-            status="HEALED"
-            details="${details}Self-healed: re-executed missed cron (last run: $stale_age). "
-            TOTAL_HEALED=$((TOTAL_HEALED + 1))
-          else
-            status="FAIL"
-            details="${details}cron_runs stale: $stale_age (limit: $(format_age "$max_stale")). Re-execute failed. "
-          fi
+          details="${details}In-flight (started ${stale_age}). "
         fi
-      elif [ "$age" -gt "$max_stale" ]; then
-        [ "$status" = "PASS" ] && status="WARN"
-        details="${details}cron_runs slightly stale: $stale_age. "
-      elif [ -z "$details" ] && [ -n "$last_summary" ]; then
-        details="${details}Last run summary: ${last_summary}. "
+      else
+        if [ -n "$last_exit" ] && [ "$last_exit" != "0" ]; then
+          latest_run_failed=true
+          status="FAIL"
+          details="${details}Last run exited ${last_exit}. "
+          [ -n "$last_error" ] && details="${details}Error: ${last_error}. "
+        fi
+        if [ "$age" -gt $(( max_stale * 3 )) ]; then
+          if [ "$recovery_policy" = "catchup" ]; then
+            if try_request_catchup; then
+              status="HEALED"
+              details="${details}Self-healed: requested catchup for missed window (last run: $stale_age). "
+              TOTAL_HEALED=$((TOTAL_HEALED + 1))
+            else
+              status="FAIL"
+              details="${details}cron_runs stale: $stale_age (limit: $(format_age "$max_stale")). Catchup request failed. "
+            fi
+          else
+            if try_reexecute_missed_cron "$plist_id"; then
+              status="HEALED"
+              details="${details}Self-healed: re-executed missed cron (last run: $stale_age). "
+              TOTAL_HEALED=$((TOTAL_HEALED + 1))
+            else
+              status="FAIL"
+              details="${details}cron_runs stale: $stale_age (limit: $(format_age "$max_stale")). Re-execute failed. "
+            fi
+          fi
+        elif [ "$age" -gt "$max_stale" ]; then
+          [ "$status" = "PASS" ] && status="WARN"
+          details="${details}cron_runs slightly stale: $stale_age. "
+        elif [ -z "$details" ] && [ -n "$last_summary" ]; then
+          details="${details}Last run summary: ${last_summary}. "
+        fi
       fi
     else
       stale_age="no cron_runs entry"
