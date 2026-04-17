@@ -174,6 +174,13 @@
 
             <div class="blog-card">
                 <div class="blog-card-date">April 17, 2026</div>
+                <h2><a href="/blog/nexo-5-9-1/">NEXO 5.9.1: Resonance Selector in NEXO Desktop's Preferences</a></h2>
+                <p>v5.9.0 shipped resonance tiers + a CLI control. v5.9.1 surfaces the selector in NEXO Desktop's existing Preferences dialog without requiring a Desktop release &mdash; Desktop fetches its fields via <code>nexo schema --json</code>, so adding <code>preferences.default_resonance</code> at the Brain end makes it appear automatically. Value now lives in <code>brain/calibration.json</code> with a fallback to <code>schedule.json</code>; CLI writes both.</p>
+                <a href="/blog/nexo-5-9-1/" class="read-more">Read more &rarr;</a>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 17, 2026</div>
                 <h2><a href="/blog/nexo-5-9-0/">NEXO 5.9.0: Resonance Map + Unified Session Log</a></h2>
                 <p>Every Claude/Codex invocation now flows through a central resonance map (<code>MAXIMO</code> / <code>ALTO</code> / <code>MEDIO</code> / <code>BAJO</code>) and a unified <code>automation_runs</code> table. User-facing callers (<code>nexo chat</code>, Desktop, interactive <code>nexo update</code>) honour the user's <code>default_resonance</code>; system-owned callers are pinned per caller in <code>src/resonance_map.py</code>. Migration #41 adds <code>caller</code>, <code>session_type</code>, <code>started_at</code>, <code>ended_at</code>, <code>pid</code>, <code>resonance_tier</code>. New <code>run_automation_interactive()</code>, MCP tools <code>nexo_session_log_create</code>/<code>_close</code> for Desktop, and <code>nexo preferences --resonance</code> CLI. 20 new tests.</p>
                 <a href="/blog/nexo-5-9-0/" class="read-more">Read more &rarr;</a>

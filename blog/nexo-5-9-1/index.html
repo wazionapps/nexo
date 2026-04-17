@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXO 5.9.1: default_resonance reachable from NEXO Desktop's Preferences UI</title>
+    <meta name="description" content="NEXO Brain 5.9.1 surfaces the resonance selector in NEXO Desktop's existing Preferences dialog — no Desktop release required. Four localised options (Máximo / Alto / Medio / Bajo) in brain/calibration.json.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-5-9-1/">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/blog/nexo-5-9-1/">
+    <meta property="og:title" content="NEXO 5.9.1: resonance selector in NEXO Desktop">
+    <meta property="og:description" content="Four localised tiers (Máximo / Alto / Medio / Bajo) now appear in the Desktop Preferences dialog automatically.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+    <meta property="article:published_time" content="2026-04-17">
+    <meta property="article:author" content="Francisco Cerda Puigserver">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO 5.9.1: resonance selector in Desktop">
+    <meta name="twitter:description" content="Adding the field at the Brain end makes the UI control appear next time Desktop opens Preferences. No Desktop release needed.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "NEXO 5.9.1: default_resonance reachable from NEXO Desktop's Preferences UI",
+        "description": "Adding the default_resonance field at the Brain end makes it appear in NEXO Desktop's Preferences dialog automatically via the existing buildFieldsFromBrainSchema path. No Desktop release required.",
+        "datePublished": "2026-04-17",
+        "dateModified": "2026-04-17",
+        "author": {"@type": "Person", "name": "Francisco Cerda Puigserver"},
+        "publisher": {"@type": "Organization", "name": "WAzion", "url": "https://www.wazion.com"},
+        "mainEntityOfPage": {"@type": "WebPage", "@id": "https://nexo-brain.com/blog/nexo-5-9-1/"},
+        "url": "https://nexo-brain.com/blog/nexo-5-9-1/",
+        "image": "https://nexo-brain.com/assets/og/og-blog.png",
+        "keywords": ["NEXO 5.9.1", "default resonance", "Desktop preferences", "schema-driven UI", "user-facing tiers"]
+    }
+    </script>
+
+    <style>
+        .article-header { padding-top: 128px; padding-bottom: 40px; text-align: center; }
+        .article-meta { font-size: 14px; color: var(--text-muted); margin-bottom: 16px; }
+        .article-body {
+            max-width: 720px; margin: 0 auto; padding: 0 24px 80px;
+            font-size: 17px; line-height: 1.8; color: var(--text);
+        }
+        .article-body h2 { font-size: 28px; font-weight: 700; margin: 48px 0 16px; letter-spacing: -0.01em; }
+        .article-body p { margin-bottom: 20px; color: var(--text-muted); }
+        .article-body strong { color: var(--text); }
+        .article-body a { color: var(--purple-light); }
+        .article-body a:hover { color: var(--pink); }
+        .article-body code {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 14px; color: var(--pink);
+            background: rgba(236, 72, 153, 0.1);
+            padding: 2px 8px; border-radius: 4px;
+        }
+        .article-back {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 14px; font-weight: 600; color: var(--text-muted);
+            margin-bottom: 24px;
+        }
+        .article-back:hover { color: var(--purple-light); }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-64.png" alt="NEXO Brain" class="logo-image">
+            <span class="logo-text">NEXO Brain</span>
+        </a>
+        <button class="mobile-menu-toggle" aria-label="Toggle navigation" onclick="toggleMobileMenu()">
+            <span></span><span></span><span></span>
+        </button>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/features/">Features</a>
+            <a href="/evolution/">Evolution</a>
+            <a href="/compare/">Compare</a>
+            <a href="/blog/">Blog</a>
+            <a href="/changelog/">Changelog</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta">GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<section class="article-header">
+    <div class="container">
+        <a href="/blog/" class="article-back">&larr; Back to blog</a>
+        <div class="article-meta">April 17, 2026 &middot; Feature &middot; Desktop UI &middot; Schema-driven</div>
+        <h1 class="section-title" style="font-size:clamp(28px,4.5vw,48px);max-width:920px;margin:0 auto 16px;">NEXO 5.9.1: resonance selector in Desktop Preferences</h1>
+        <p class="section-subtitle" style="max-width:760px;margin:0 auto;">Adding the field at the Brain end makes it appear in Desktop's Preferences dialog automatically. No Desktop release needed.</p>
+    </div>
+</section>
+
+<section>
+    <div class="article-body">
+
+        <h2>What v5.9.0 shipped, and what it missed</h2>
+        <p>v5.9.0 introduced four resonance tiers (<code>MAXIMO</code> / <code>ALTO</code> / <code>MEDIO</code> / <code>BAJO</code>) and the <code>nexo preferences --resonance</code> CLI subcommand to let the user pick their default. What it didn't ship: a control in NEXO Desktop's existing Preferences dialog. Users running exclusively through Desktop either had to drop to a terminal to set the tier or live with <code>ALTO</code>.</p>
+
+        <h2>Schema-driven UI to the rescue</h2>
+        <p>NEXO Desktop doesn't hard-code its Preferences fields. It calls <code>nexo schema --json</code> at open time and builds the dialog from the returned payload via <code>buildFieldsFromBrainSchema()</code>. Adding the field at the Brain end &mdash; in <code>src/desktop_bridge.py</code>'s <code>_schema_fields()</code> &mdash; means Desktop renders a select with the four localised options the next time the user opens Preferences. No Electron rebuild, no DMG, no install.</p>
+        <p>The field is declared with <code>"group": "preferences"</code>, so it lands in the existing Preferences tab alongside report style and execution-first. The four options carry Spanish and English labels (<code>Máximo</code> / <code>Alto (recomendado)</code> / <code>Medio</code> / <code>Bajo</code> &mdash; <code>Maximum</code> / <code>High (recommended)</code> / <code>Medium</code> / <code>Low</code>). An inline hint makes it explicit that the preference only affects interactive sessions: background crons (deep-sleep, evolution, postmortem, marketing posts) stay pinned per caller in <code>resonance_map.py</code> because we pick those for quality of output, not for user ergonomics.</p>
+
+        <h2>Where the value lives now</h2>
+        <p>v5.9.0's CLI wrote <code>default_resonance</code> into <code>config/schedule.json</code> because that's where other CLI preferences lived. Desktop's Preferences dialog reads and writes <code>brain/calibration.json</code> &mdash; the file that already holds assistant name, language, autonomy, communication style, etc. To keep the two surfaces in agreement, v5.9.1 does three things:</p>
+        <p>&bull; A new <code>resonance_map._load_user_default_resonance()</code> helper reads <code>calibration.json</code> first and falls back to <code>schedule.json</code>. Invalid tiers (<code>"ultra-high"</code>, typos) are rejected quietly so callers can fall back deliberately.<br>
+           &bull; <code>resolve_tier_for_caller</code> now calls that helper automatically when the caller does not pass <code>user_default</code> explicitly. <code>nexo chat</code>, <code>launch_interactive_client</code>, and any future user-facing caller pick up whatever the Desktop dialog wrote, without changing their call sites.<br>
+           &bull; <code>nexo preferences --resonance</code> writes to <strong>both</strong> <code>calibration.json</code> (new canonical) and <code>schedule.json</code> (legacy). Users switching between CLI and Desktop never see the two surfaces disagree.</p>
+
+        <h2>Upgrading</h2>
+        <p>Run <code>nexo update</code>. Desktop needs nothing beyond what's already installed &mdash; open Preferences → Preferences tab and the new select appears. If you were already on v5.9.0 and had set a tier via CLI, the legacy <code>schedule.json</code> value keeps working through the fallback. Setting the tier from Desktop or running <code>nexo preferences --resonance</code> again promotes it to the new canonical location.</p>
+
+    </div>
+</section>
+
+<footer style="padding:48px 24px;text-align:center;font-size:13px;color:var(--text-muted);">
+    &copy; 2026 <a href="https://www.wazion.com" style="color:var(--purple-light);">WAzion</a>. NEXO Brain is open-source under <a href="https://github.com/wazionapps/nexo/blob/main/LICENSE" style="color:var(--purple-light);">AGPL-3.0</a>.
+</footer>
+
+<script src="/assets/main.js"></script>
+</body>
+</html>
