@@ -1,5 +1,42 @@
 # Changelog
 
+## [6.0.0] - 2026-04-17
+
+### BREAKING
+
+- **Tier-only setup.** Onboarding no longer asks for model or reasoning effort. It asks for one tier (`maximo`/`alto`/`medio`/`bajo`) and that choice drives every backend via `src/resonance_tiers.json`. The legacy `client_runtime_profiles.{claude_code,codex}.{model,reasoning_effort}` fields are removed from the `schedule.json` schema and silently dropped during upgrade.
+- **Protocol strictness is no longer configurable.** Interactive TTY sessions always run `strict`. Non-TTY contexts (crons, tests, pipes) always run `lenient`. The `NEXO_PROTOCOL_STRICTNESS` environment variable, `preferences.protocol_strictness` setting, and the `default/normal/off/warn/soft` aliases are all gone. Users who had a custom strictness see it silently cleared on upgrade and fall through to the TTY/no-TTY decision.
+- **`preferences.show_pending_at_start` moves to NEXO Desktop's electron-store.** Brain no longer reads or writes it; the `calibration.json` key is purged on upgrade. Desktop ≥0.12.0 keeps the UI toggle.
+
+### Added
+
+- `src/resonance_tiers.json` — single source of truth for `tier → (model, effort)` per backend. Consumed by `src/resonance_map.py` at import time (`load_resonance_table()` is exposed for tests) and by NEXO Desktop for its resonance selector.
+- `src/hooks/manifest.json` — unified manifest of the seven core hooks. Both plugin mode (`hooks/hooks.json`) and npm mode (`bin/nexo-brain.js registerAllCoreHooks()`) read the same file, eliminating the pre-v6 divergence where each mode shipped a different list.
+- **Two new hooks registered:** `Notification` (records live-session activity via `hook_observability.record_activity()` so `auto_close_sessions` stops pruning busy sessions) and `SubagentStop` (auto-closes `protocol_tasks` that a subagent opened without calling `nexo_task_close`).
+- `auto_capture.py` is now wired to both `UserPromptSubmit` and `PostToolUse`. Classification still produces decision/correction/explicit facts, but on `correction` matches the hook also calls `nexo_learning_add` (category `auto`, priority `medium`) exactly once per content hash per hour. Dedup is persistent: hits land in a new `auto_capture_dedup` SQLite table with a 1h TTL.
+- `~/.nexo/hooks_status.json` — published after every `registerAllCoreHooks()` invocation. NEXO Desktop uses this file for the "Hooks activos X/Y" widget in its Estado del sistema tab.
+- `nexo-brain --skip` flag — alias of `--yes`/`--defaults`. All three skip onboarding prompts and apply the recommended defaults end-to-end.
+- `hook_observability.record_activity(session_id=..., activity_type=...)` helper, backing the `Notification` hook and any future activity-signalling surface.
+
+### Changed
+
+- Onboarding defaults for Deep scan, Caffeinate (macOS only), and the web Dashboard now answer **yes** on bare ENTER in the interactive flow, and are ON by default in `--yes/--skip` mode.
+- The "What's your name?" prompt falls through to the literal string `"Usuario"` when the operator presses ENTER without typing anything, so `calibration.user.name` always ships with a concrete value.
+- `calibration.json` is written in the canonical nested shape on fresh installs (`user.*`, `personality.*`, `preferences.*`, `meta.*`). `preferences.default_resonance` holds the single tier choice.
+- The v5.x hook list under `~/.claude/settings.json` is pruned to the manifest's seven handlers on every `registerAllCoreHooks()` run — legacy direct-to-shell commands (`heartbeat-posttool.sh`, `protocol-guardrail.sh`, `inbox-hook.sh`, `post-compact.sh`, etc.) are detected and removed. User-custom hooks (anything not owned by the NEXO manifest) are left alone.
+- `bin/postinstall.js` still prints the fresh-install banner (`Run 'nexo-brain' to complete setup.`) and continues to run migration silently on upgrade — neither flow auto-starts onboarding.
+
+### Silent migration (run once per `nexo update`)
+
+- `client_runtime_profiles.{claude_code,codex}.{model,reasoning_effort}` removed from `schedule.json`.
+- `preferences.protocol_strictness` removed from `calibration.json` (and from the top level if any v5.x install wrote it there).
+- `preferences.show_pending_at_start` removed from `calibration.json`.
+- `preferences.default_resonance` seeded to `"alto"` only if the user had no explicit value. Existing values (`maximo`/`medio`/`bajo` or a prior `alto`) are respected and never overwritten on subsequent updates.
+
+### Tests
+
+Eight new / updated test cases: `test_resonance_loader.py`, `test_migration_legacy_to_v6.py`, `test_auto_capture_correction_learning.py`, `test_hooks_status_publish.py`, `test_protocol_strictness_tty.py`, plus the `/tmp/nexo-fresh` smoke-install, `scripts/verify_client_parity.py`, and a cross-mode diff guaranteeing plugin and npm installs register the same seven hooks in `~/.claude/settings.json`.
+
 ## [5.10.2] - 2026-04-17
 
 ### Fix: bootstrap `brain/profile.json` from `calibration.json` on `nexo update`

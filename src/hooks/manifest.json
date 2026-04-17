@@ -1,0 +1,12 @@
+{
+  "version": "1.0",
+  "hooks": [
+    { "event": "SessionStart",     "handler": "src/hooks/session_start.py",   "critical": true  },
+    { "event": "UserPromptSubmit", "handler": "src/hooks/auto_capture.py",    "critical": false },
+    { "event": "PostToolUse",      "handler": "src/hooks/post_tool_use.py",   "critical": false },
+    { "event": "PreCompact",       "handler": "src/hooks/pre_compact.py",     "critical": true  },
+    { "event": "Stop",             "handler": "src/hooks/stop.py",            "critical": true  },
+    { "event": "Notification",     "handler": "src/hooks/notification.py",    "critical": false },
+    { "event": "SubagentStop",     "handler": "src/hooks/subagent_stop.py",   "critical": false }
+  ]
+}

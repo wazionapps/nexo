@@ -60,6 +60,38 @@ const DEFAULT_CLAUDE_CODE_REASONING_EFFORT = _MODEL_DEFAULTS.claude_code.reasoni
 const DEFAULT_CODEX_MODEL = _MODEL_DEFAULTS.codex.model;
 const DEFAULT_CODEX_REASONING_EFFORT = _MODEL_DEFAULTS.codex.reasoning_effort || "";
 
+// v6.0.0 — Hook manifest is the single source of truth for which hook
+// handlers get registered. Both plugin mode (hooks/hooks.json) and npm
+// mode (this installer's registerAllCoreHooks) read from the same file.
+const HOOKS_MANIFEST_PATH = path.join(__dirname, "..", "src", "hooks", "manifest.json");
+function _loadHooksManifest() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(HOOKS_MANIFEST_PATH, "utf8"));
+    if (raw && Array.isArray(raw.hooks)) {
+      return raw;
+    }
+  } catch (_) {}
+  return { version: "1.0", hooks: [] };
+}
+const _HOOKS_MANIFEST = _loadHooksManifest();
+
+// v6.0.0 — Resonance tiers JSON holds the (tier → backend → model+effort)
+// mapping. The installer only reads ``default_tier`` and ``tiers`` keys;
+// the real resolution happens on the Python side via resonance_map.py.
+const RESONANCE_TIERS_PATH = path.join(__dirname, "..", "src", "resonance_tiers.json");
+function _loadResonanceTiers() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(RESONANCE_TIERS_PATH, "utf8"));
+    if (raw && raw.tiers && typeof raw.tiers === "object") {
+      return raw;
+    }
+  } catch (_) {}
+  return { tiers: {}, default_tier: "alto" };
+}
+const _RESONANCE_TIERS = _loadResonanceTiers();
+const RESONANCE_TIER_NAMES = ["maximo", "alto", "medio", "bajo"];
+const DEFAULT_RESONANCE_TIER = _RESONANCE_TIERS.default_tier || "alto";
+
 function isEphemeralInstall(nexoHome) {
   const homeDir = require("os").homedir();
   const allowEphemeral = process.env.NEXO_ALLOW_EPHEMERAL_INSTALL === "1";
@@ -203,6 +235,7 @@ function getCoreRuntimeFlatFiles(srcDir = path.join(__dirname, "..", "src")) {
     "runtime_power.py",
     "requirements.txt",
     "model_defaults.json",
+    "resonance_tiers.json",
   ];
   const discoveredRootModules = fs.existsSync(srcDir)
     ? fs.readdirSync(srcDir)
@@ -494,73 +527,106 @@ const ALL_PROCESSES = [
  * key: unique identifier to detect if already registered (avoids duplicates)
  * timeout: seconds before Claude Code kills the hook (prevents hangs)
  */
-const ALL_CORE_HOOKS = [
-  { event: "SessionStart", key: "session-start-ts", commandTemplate: (nexoHome) =>
-      `date +%s > ${path.join(nexoHome, "operations", ".session-start-ts")}`,
-    timeout: 2, purpose: "Session timing" },
-  { event: "SessionStart", key: "daily-briefing-check.sh", script: "daily-briefing-check.sh",
-    timeout: 5, purpose: "Briefing schedule check" },
-  { event: "SessionStart", key: "session-start.sh", script: "session-start.sh",
-    timeout: 35, purpose: "Briefing + context" },
-  { event: "Stop", key: "session-stop.sh", script: "session-stop.sh",
-    timeout: 10, purpose: "POSTMORTEM — the most important" },
-  { event: "PostToolUse", key: "capture-tool-logs.sh", script: "capture-tool-logs.sh",
-    timeout: 5, purpose: "Operation capture" },
-  { event: "PostToolUse", key: "capture-session.sh", script: "capture-session.sh",
-    timeout: 3, purpose: "Sensory register (session_buffer.jsonl)" },
-  { event: "PostToolUse", key: "inbox-hook.sh", script: "inbox-hook.sh",
-    timeout: 5, purpose: "Inter-session messaging" },
-  { event: "PreCompact", key: "pre-compact.sh", script: "pre-compact.sh",
-    timeout: 10, purpose: "Memory preservation" },
-  { event: "PostCompact", key: "post-compact.sh", script: "post-compact.sh",
-    timeout: 10, purpose: "Memory restoration" },
-];
+// v6.0.0 — Core hook list is driven entirely by src/hooks/manifest.json.
+// Each entry declares the Claude Code event and the relative path to the
+// .py handler inside the installed runtime. Every handler receives a
+// short alias key used to detect existing registrations in settings.hooks.
+const HOOK_TIMEOUTS = {
+  SessionStart:     40,
+  Stop:             15,
+  PreCompact:       15,
+  PostCompact:      15,
+  UserPromptSubmit:  5,
+  PostToolUse:      20,
+  Notification:      3,
+  SubagentStop:     10,
+};
+
+function _manifestHookEntries() {
+  return (_HOOKS_MANIFEST.hooks || []).map((entry) => {
+    const handlerRel = String(entry.handler || "").trim();
+    const handlerBase = handlerRel.split("/").pop() || handlerRel;
+    return {
+      event: entry.event,
+      handler: handlerRel,
+      key: handlerBase,
+      critical: Boolean(entry.critical),
+      timeout: HOOK_TIMEOUTS[entry.event] || 10,
+    };
+  }).filter((h) => h.event && h.handler);
+}
+
+function _hookCommand(hook, hooksDir, nexoHome) {
+  // Resolve handler path under the installed runtime. hooksDir points to
+  // ~/.nexo/hooks, which is the copy of src/hooks/ at install time.
+  const handlerFile = path.basename(hook.handler);
+  const runtimePath = path.join(hooksDir, handlerFile);
+  return `NEXO_HOME=${nexoHome} python3 ${runtimePath}`;
+}
+
+function _writeHooksStatus(nexoHome, manifestEntries, registrations) {
+  // Publish ~/.nexo/hooks_status.json so NEXO Desktop can render the
+  // "Hooks activos X/Y" widget without peeking into settings.json.
+  try {
+    const now = new Date();
+    const pkgJson = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf8"));
+    const total = manifestEntries.length;
+    const registered = registrations.filter((r) => r.status === "active").length;
+    const healthy = total > 0 && registered === total;
+    const payload = {
+      generated_at: now.toISOString().replace(/\.\d+Z$/, "Z"),
+      nexo_version: pkgJson.version || "unknown",
+      total,
+      registered,
+      healthy,
+      hooks: registrations,
+    };
+    fs.mkdirSync(nexoHome, { recursive: true });
+    fs.writeFileSync(
+      path.join(nexoHome, "hooks_status.json"),
+      JSON.stringify(payload, null, 2) + "\n",
+    );
+  } catch (_) {}
+}
 
 /**
- * Register all 8 core hooks in settings.hooks.
- * Additive + auto-migrate: adds missing hooks, updates stale paths, never removes user's custom ones.
+ * Register every hook declared by src/hooks/manifest.json into the
+ * Claude Code settings file. Idempotent, never removes user-owned hooks.
+ * Writes ~/.nexo/hooks_status.json after each run so NEXO Desktop can
+ * display hook health without parsing settings.json.
  */
 function registerAllCoreHooks(settings, hooksDir, nexoHome) {
   if (!settings.hooks) settings.hooks = {};
 
-  // Ensure operations dir exists for timestamp file
-  const opsDir = path.join(nexoHome, "operations");
-  fs.mkdirSync(opsDir, { recursive: true });
+  // Ensure operations dir exists for any hook that wants to drop a file there
+  // (session-start.py writes .session-start-ts here).
+  fs.mkdirSync(path.join(nexoHome, "operations"), { recursive: true });
 
-  for (const hook of ALL_CORE_HOOKS) {
+  const manifestEntries = _manifestHookEntries();
+  const registrations = [];
+
+  for (const hook of manifestEntries) {
     if (!settings.hooks[hook.event]) settings.hooks[hook.event] = [];
 
-    // Build the canonical command for this hook
-    let command;
-    if (hook.commandTemplate) {
-      command = hook.commandTemplate(nexoHome);
-    } else {
-      command = `NEXO_HOME=${nexoHome} bash ${path.join(hooksDir, hook.script)}`;
-    }
-
-    // Claude Code settings.hooks supports two formats:
-    //   Flat:   [{type:"command", command:"..."}]
-    //   Nested: [{matcher:"*", hooks:[{type:"command", command:"..."}]}]
-    // We need to search and update in both formats.
+    const command = _hookCommand(hook, hooksDir, nexoHome);
+    let status = "active";
     let found = false;
 
     for (let idx = 0; idx < settings.hooks[hook.event].length; idx++) {
       const entry = settings.hooks[hook.event][idx];
       if (entry.hooks && Array.isArray(entry.hooks)) {
-        // Nested format: {matcher, hooks: [...]}
         if (!entry.matcher) entry.matcher = "*";
         const subIdx = entry.hooks.findIndex(
-          (h) => h.command && h.command.includes(hook.key)
+          (h) => h.command && h.command.includes(hook.key),
         );
         if (subIdx !== -1) {
           const existing = entry.hooks[subIdx];
           if (existing.command !== command) existing.command = command;
-          if (hook.timeout && !existing.timeout) existing.timeout = hook.timeout;
+          if (hook.timeout) existing.timeout = hook.timeout;
           found = true;
           break;
         }
       } else if (entry.command && entry.command.includes(hook.key)) {
-        // Legacy flat format: migrate to nested matcher+hooks.
         const migrated = { type: "command", command };
         if (hook.timeout) migrated.timeout = hook.timeout;
         settings.hooks[hook.event][idx] = {
@@ -580,6 +646,66 @@ function registerAllCoreHooks(settings, hooksDir, nexoHome) {
         hooks: [newHook],
       });
     }
+
+    // Confirm the handler file exists on disk; if not, mark error.
+    const handlerAbs = path.join(hooksDir, path.basename(hook.handler));
+    if (!fs.existsSync(handlerAbs)) {
+      status = "error";
+    }
+
+    registrations.push({
+      event: hook.event,
+      handler: path.basename(hook.handler),
+      status,
+    });
+  }
+
+  _writeHooksStatus(nexoHome, manifestEntries, registrations);
+
+  // v6.0.0 — also purge any stale v5.x hook commands that referenced the
+  // old .sh scripts directly (post-compact.sh, heartbeat-user-msg.sh,
+  // protocol-guardrail.sh, etc.) so a pre-existing install migrates
+  // cleanly to the manifest-driven world. Only removes NEXO-owned
+  // entries, leaves user-custom hooks alone.
+  const LEGACY_KEYS = [
+    "daily-briefing-check.sh",
+    "capture-tool-logs.sh",
+    "capture-session.sh",
+    "inbox-hook.sh",
+    "heartbeat-posttool.sh",
+    "heartbeat-user-msg.sh",
+    "protocol-guardrail.sh",
+    "protocol-pretool-guardrail.sh",
+    "post-compact.sh",
+    ".session-start-ts",
+  ];
+  for (const event of Object.keys(settings.hooks)) {
+    const entries = settings.hooks[event];
+    if (!Array.isArray(entries)) continue;
+    const manifestEventHandlers = new Set(
+      manifestEntries.filter((h) => h.event === event).map((h) => h.key),
+    );
+    for (let i = entries.length - 1; i >= 0; i--) {
+      const entry = entries[i];
+      if (entry && entry.hooks && Array.isArray(entry.hooks)) {
+        entry.hooks = entry.hooks.filter((h) => {
+          const cmd = String(h.command || "");
+          // Keep anything the manifest owns.
+          if (Array.from(manifestEventHandlers).some((k) => cmd.includes(k))) {
+            return true;
+          }
+          // Drop strictly-legacy NEXO-owned commands.
+          if (LEGACY_KEYS.some((legacy) => cmd.includes(legacy))) {
+            return false;
+          }
+          return true;
+        });
+        if (entry.hooks.length === 0) {
+          entries.splice(i, 1);
+        }
+      }
+    }
+    if (entries.length === 0) delete settings.hooks[event];
   }
 }
 
@@ -620,15 +746,14 @@ function getDefaultSchedule(timezone) {
     default_terminal_client: "claude_code",
     automation_enabled: true,
     automation_backend: "claude_code",
+    // v6.0.0 — model/reasoning_effort have moved to src/resonance_tiers.json
+    // keyed by the operator's preferences.default_resonance. The shape
+    // below stays so that downstream readers that iterate the profile
+    // dict do not need a guard, but the concrete values no longer live
+    // in schedule.json.
     client_runtime_profiles: {
-      claude_code: {
-        model: DEFAULT_CLAUDE_CODE_MODEL,
-        reasoning_effort: DEFAULT_CLAUDE_CODE_REASONING_EFFORT,
-      },
-      codex: {
-        model: DEFAULT_CODEX_MODEL,
-        reasoning_effort: DEFAULT_CODEX_REASONING_EFFORT,
-      },
+      claude_code: {},
+      codex: {},
     },
     client_install_preferences: {
       claude_code: "ask",
@@ -796,15 +921,12 @@ async function askChoice(question, options, defaultValue) {
 }
 
 function defaultClientRuntimeProfiles() {
+  // v6.0.0 — no more model/reasoning_effort here. The resonance tier
+  // (preferences.default_resonance in calibration.json) plus
+  // src/resonance_tiers.json drive the actual model and effort at runtime.
   return {
-    claude_code: {
-      model: DEFAULT_CLAUDE_CODE_MODEL,
-      reasoning_effort: DEFAULT_CLAUDE_CODE_REASONING_EFFORT,
-    },
-    codex: {
-      model: DEFAULT_CODEX_MODEL,
-      reasoning_effort: DEFAULT_CODEX_REASONING_EFFORT,
-    },
+    claude_code: {},
+    codex: {},
   };
 }
 
@@ -820,85 +942,23 @@ function formatRuntimeProfile(profile = {}) {
   return effort ? `${model}/${effort}` : model;
 }
 
-function runtimeProfileCatalog(lang, client) {
+// v6.0.0 — Tier-only setup. Onboarding asks the operator for one resonance
+// tier (maximo / alto / medio / bajo) and that choice drives every backend
+// via src/resonance_tiers.json. No more model or effort questions.
+async function askResonanceTier(lang, currentTier) {
   const recommended = lang === "es" ? " (recomendado)" : " (recommended)";
-  if (client === "claude_code") {
-    return {
-      modelQuestion: `  ¿Qué modelo debe usar ${runtimeClientLabel(client)} para chat y background cuando sea el cliente/backend activo?`,
-      modelQuestionEn: `  Which model should ${runtimeClientLabel(client)} use for chat and background when it is the active client/backend?`,
-      effortQuestion: `  ¿Qué nivel de esfuerzo debe usar ${runtimeClientLabel(client)}?`,
-      effortQuestionEn: `  Which effort level should ${runtimeClientLabel(client)} use?`,
-      customModelQuestion: `  Escribe el alias/nombre de modelo para ${runtimeClientLabel(client)} > `,
-      customModelQuestionEn: `  Enter the model alias/name for ${runtimeClientLabel(client)} > `,
-      customEffortQuestion: `  Escribe el effort para ${runtimeClientLabel(client)} (vacío = default) > `,
-      customEffortQuestionEn: `  Enter the effort for ${runtimeClientLabel(client)} (blank = default) > `,
-      modelDefault: DEFAULT_CLAUDE_CODE_MODEL,
-      effortDefault: "",
-      modelOptions: [
-        { value: DEFAULT_CLAUDE_CODE_MODEL, label: `Opus 4.6 with 1M context${recommended}` },
-        { value: "claude-opus-4-6", label: "Opus 4.6" },
-        { value: "sonnet", label: "Sonnet latest" },
-        { value: "custom", label: lang === "es" ? "Modelo personalizado" : "Custom model" },
-      ],
-      effortOptions: [
-        { value: "", label: lang === "es" ? `Effort por defecto${recommended}` : `Default effort${recommended}` },
-        { value: "high", label: "high" },
-        { value: "max", label: "max" },
-        { value: "custom", label: lang === "es" ? "Effort personalizado" : "Custom effort" },
-      ],
-    };
-  }
-
-  return {
-    modelQuestion: `  ¿Qué modelo debe usar ${runtimeClientLabel(client)} para chat y background cuando sea el cliente/backend activo?`,
-    modelQuestionEn: `  Which model should ${runtimeClientLabel(client)} use for chat and background when it is the active client/backend?`,
-    effortQuestion: `  ¿Qué razonamiento debe usar ${runtimeClientLabel(client)}?`,
-    effortQuestionEn: `  Which reasoning effort should ${runtimeClientLabel(client)} use?`,
-    customModelQuestion: `  Escribe el nombre del modelo para ${runtimeClientLabel(client)} > `,
-    customModelQuestionEn: `  Enter the model name for ${runtimeClientLabel(client)} > `,
-    customEffortQuestion: `  Escribe el reasoning effort para ${runtimeClientLabel(client)} > `,
-    customEffortQuestionEn: `  Enter the reasoning effort for ${runtimeClientLabel(client)} > `,
-    modelDefault: DEFAULT_CODEX_MODEL,
-    effortDefault: DEFAULT_CODEX_REASONING_EFFORT,
-    modelOptions: [
-      { value: "gpt-5.4", label: `GPT-5.4${recommended}` },
-      { value: "gpt-5.4-pro", label: "GPT-5.4 Pro" },
-      { value: "gpt-5.4-mini", label: "GPT-5.4 mini" },
-      { value: "custom", label: lang === "es" ? "Modelo personalizado" : "Custom model" },
-    ],
-    effortOptions: [
-      { value: "xhigh", label: `xhigh${recommended}` },
-      { value: "high", label: "high" },
-      { value: "medium", label: "medium" },
-      { value: "low", label: "low" },
-      { value: "none", label: "none" },
-      { value: "custom", label: lang === "es" ? "Effort personalizado" : "Custom effort" },
-    ],
-  };
-}
-
-async function askClientRuntimeProfile({ lang, client, currentProfile }) {
-  const catalog = runtimeProfileCatalog(lang, client);
-  const modelQuestion = lang === "es" ? catalog.modelQuestion : catalog.modelQuestionEn;
-  const effortQuestion = lang === "es" ? catalog.effortQuestion : catalog.effortQuestionEn;
-  const customModelQuestion = lang === "es" ? catalog.customModelQuestion : catalog.customModelQuestionEn;
-  const customEffortQuestion = lang === "es" ? catalog.customEffortQuestion : catalog.customEffortQuestionEn;
-  let model = await askChoice(modelQuestion, catalog.modelOptions, currentProfile.model || catalog.modelDefault);
-  if (model === "custom") {
-    model = (await ask(customModelQuestion)).trim() || catalog.modelDefault;
-  }
-  let reasoningEffort = await askChoice(
-    effortQuestion,
-    catalog.effortOptions,
-    currentProfile.reasoning_effort ?? catalog.effortDefault,
-  );
-  if (reasoningEffort === "custom") {
-    reasoningEffort = (await ask(customEffortQuestion)).trim();
-  }
-  return {
-    model,
-    reasoning_effort: reasoningEffort,
-  };
+  const question = lang === "es"
+    ? "  ¿Qué nivel de potencia quieres por defecto para tus conversaciones?"
+    : "  Which default power level do you want for your conversations?";
+  const options = [
+    { value: "maximo", label: lang === "es" ? "máximo"                 : "maximum" },
+    { value: "alto",   label: (lang === "es" ? "alto"                  : "high") + recommended },
+    { value: "medio",  label: lang === "es" ? "medio"                  : "medium" },
+    { value: "bajo",   label: lang === "es" ? "bajo"                   : "low" },
+  ];
+  const fallback = RESONANCE_TIER_NAMES.includes(currentTier) ? currentTier : DEFAULT_RESONANCE_TIER;
+  const chosen = await askChoice(question, options, fallback);
+  return RESONANCE_TIER_NAMES.includes(chosen) ? chosen : DEFAULT_RESONANCE_TIER;
 }
 
 function defaultClientSetup(detected) {
@@ -1063,28 +1123,13 @@ async function configureClientSetup({ lang, useDefaults, autoInstall, detected }
     log(strings.desktopManual);
   }
 
-  if (!useDefaults) {
-    const activeRuntimeClients = Array.from(new Set([
-      setup.default_terminal_client,
-      ...(setup.automation_enabled && setup.automation_backend !== "none" ? [setup.automation_backend] : []),
-    ].filter(Boolean)));
-    for (const client of activeRuntimeClients) {
-      setup.client_runtime_profiles[client] = await askClientRuntimeProfile({
-        lang,
-        client,
-        currentProfile: setup.client_runtime_profiles[client] || defaultClientRuntimeProfiles()[client] || {},
-      });
-    }
-  }
+  // v6.0.0 — no per-client model/effort prompts. A single tier question
+  // (asked by the main installer flow, not here) will write
+  // preferences.default_resonance into calibration.json. All runtime
+  // resolution then flows through src/resonance_tiers.json.
 
-  const defaultProfile = formatRuntimeProfile(
-    setup.client_runtime_profiles[setup.default_terminal_client] || defaultClientRuntimeProfiles()[setup.default_terminal_client] || {}
-  );
-  const backendProfile = setup.automation_enabled && setup.automation_backend !== "none"
-    ? formatRuntimeProfile(
-      setup.client_runtime_profiles[setup.automation_backend] || defaultClientRuntimeProfiles()[setup.automation_backend] || {}
-    )
-    : "";
+  const defaultProfile = "tier";
+  const backendProfile = setup.automation_enabled && setup.automation_backend !== "none" ? "tier" : "";
   log(strings.summary(setup.default_terminal_client, defaultProfile, setup.automation_backend, backendProfile, setup.automation_enabled));
   return { setup, detected };
 }
@@ -1508,8 +1553,12 @@ WantedBy=timers.target
 }
 
 async function main() {
-  // Non-interactive mode: --defaults or --yes skips all prompts
-  const useDefaults = process.argv.includes("--defaults") || process.argv.includes("--yes") || process.argv.includes("-y");
+  // Non-interactive mode: --defaults, --yes, --skip, or -y all skip prompts
+  // and apply the recommended defaults end-to-end (v6.0.0 adds --skip).
+  const useDefaults = process.argv.includes("--defaults")
+    || process.argv.includes("--yes")
+    || process.argv.includes("--skip")
+    || process.argv.includes("-y");
 
   console.log("");
   console.log(
@@ -2158,13 +2207,16 @@ async function main() {
     console.log("");
   }
 
-  // Step 2: User's name (P2)
-  let userName = "";
+  // Step 2: User's name (P2) — v6.0.0 empty input falls through to "Usuario"
+  // instead of keeping an empty string. The calibration file always ships
+  // with a concrete user.name so downstream tooling does not need guards.
+  let userName = "Usuario";
   if (!useDefaults) {
     const nameInput = await ask(t.askUserName);
-    userName = nameInput.trim();
-    if (userName) {
-      log(t.userGreet(userName));
+    const trimmedName = nameInput.trim();
+    userName = trimmedName || "Usuario";
+    if (trimmedName) {
+      log(t.userGreet(trimmedName));
       console.log("");
     }
   }
@@ -2174,6 +2226,17 @@ async function main() {
   const operatorName = name.trim() || "NEXO";
   log(t.agentConfirm(operatorName));
   console.log("");
+
+  // Step 3b (v6.0.0): Resonance tier — the ONE power-level question. Drives
+  // every runtime call for both Claude Code and Codex via resonance_tiers.json.
+  let resonanceTier = DEFAULT_RESONANCE_TIER;
+  if (!useDefaults) {
+    resonanceTier = await askResonanceTier(lang, DEFAULT_RESONANCE_TIER);
+    log(lang === "es"
+      ? `Potencia por defecto: ${resonanceTier}.`
+      : `Default power: ${resonanceTier}.`);
+    console.log("");
+  }
 
   // Step 4: Personality Calibration (P4-P8)
   let autonomyLevel = "full", communicationStyle = "concise", honestyLevel = "firm-pushback", proactivityLevel = "proactive", errorHandling = "brief-fix";
@@ -2203,16 +2266,31 @@ async function main() {
   log(`Calibrated: autonomy=${autonomyLevel}, communication=${communicationStyle}, honesty=${honestyLevel}, proactivity=${proactivityLevel}, errors=${errorHandling}`);
   console.log("");
 
-  // Save calibration
+  // Save calibration (v6.0.0 — canonical nested shape with
+  // preferences.default_resonance as the one knob for tier-only setup).
   const calibration = {
-    language: lang,
-    user_name: userName,
-    autonomy: autonomyLevel,
-    communication: communicationStyle,
-    honesty: honestyLevel,
-    proactivity: proactivityLevel,
-    error_handling: errorHandling,
-    auto_install: "ask", // default, updated later if user answers P11
+    version: 1,
+    created: new Date().toISOString().slice(0, 10),
+    user: {
+      name: userName,
+      language: lang,
+      assistant_name: operatorName,
+    },
+    personality: {
+      autonomy: autonomyLevel,
+      communication: communicationStyle,
+      honesty: honestyLevel,
+      proactivity: proactivityLevel,
+      error_handling: errorHandling,
+    },
+    preferences: {
+      menu_on_demand: true,
+      default_resonance: resonanceTier,
+      report_style: "essentials_only",
+      execution_first: true,
+    },
+    meta: {},
+    auto_install: "ask", // updated later if user answers P11
     calibrated_at: new Date().toISOString(),
   };
   // Ensure NEXO_HOME and brain dir exist before writing calibration
@@ -2223,40 +2301,60 @@ async function main() {
     JSON.stringify(calibration, null, 2)
   );
 
-  // Step 5: Deep scan (P9)
-  let doScan = false;
-  let doCaffeinate = false;
-  let doDashboard = false;
+  // Step 5: Deep scan (P9) — v6.0.0 defaults flip to ON when running in
+  // --yes/--skip mode; the interactive prompt below defaults to "yes" too
+  // so a bare ENTER keeps the recommended setup.
+  let doScan = useDefaults;
+  let doCaffeinate = useDefaults && platform === "darwin";
+  let doDashboard = useDefaults;
   let autoInstall = useDefaults ? "auto" : "ask";
+  // v6.0.0 — bare ENTER on each of these prompts is interpreted as "yes"
+  // because the recommended defaults are all on. An explicit "2" or "n"
+  // turns the feature off.
+  const answerIsYesDefault = (answer) => {
+    const trimmed = String(answer || "").trim().toLowerCase();
+    if (!trimmed) return true;
+    if (trimmed === "1" || trimmed.startsWith("y") || trimmed.startsWith("s")) return true;
+    return false;
+  };
   if (!useDefaults) {
     const scanAnswer = await ask(t.scanQ);
-    doScan = scanAnswer.trim() === "1" || scanAnswer.trim().toLowerCase().startsWith("y") || scanAnswer.trim().toLowerCase().startsWith("s");
+    doScan = answerIsYesDefault(scanAnswer);
     console.log("");
 
     // Step 6: Caffeinate (P10) — macOS only
     if (platform === "darwin") {
       const caffeinateAnswer = await ask(t.caffeinateQ);
-      doCaffeinate = caffeinateAnswer.trim() === "1" || caffeinateAnswer.trim().toLowerCase().startsWith("y") || caffeinateAnswer.trim().toLowerCase().startsWith("s");
+      doCaffeinate = answerIsYesDefault(caffeinateAnswer);
       log(doCaffeinate ? `✓ ${t.caffYes}` : t.caffNo);
       console.log("");
     }
 
     // Step 6b: Dashboard — always-on web UI
     const dashAnswer = await ask(t.dashboardQ);
-    doDashboard = dashAnswer.trim() === "1" || dashAnswer.trim().toLowerCase().startsWith("y") || dashAnswer.trim().toLowerCase().startsWith("s");
+    doDashboard = answerIsYesDefault(dashAnswer);
     log(doDashboard ? `✓ ${t.dashYes}` : t.dashNo);
     console.log("");
 
     // Step 7: Auto-install permission (P11)
     const autoInstallAnswer = await ask(t.autoInstallQ);
-    autoInstall = (autoInstallAnswer.trim() === "1" || autoInstallAnswer.trim().toLowerCase().startsWith("y") || autoInstallAnswer.trim().toLowerCase().startsWith("s")) ? "auto" : "ask";
+    autoInstall = answerIsYesDefault(autoInstallAnswer) ? "auto" : "ask";
     calibration.auto_install = autoInstall;
     log(`✓ ${autoInstall === "auto" ? t.autoInstallYes : t.autoInstallNo}`);
     console.log("");
   } else {
-    log("Skipping interactive setup (non-interactive mode).");
+    log("Skipping interactive setup (non-interactive mode, defaults applied).");
+    calibration.auto_install = autoInstall;
     console.log("");
   }
+
+  // Persist the updated calibration (auto_install may have changed post-write above).
+  try {
+    fs.writeFileSync(
+      path.join(NEXO_HOME, "brain", "calibration.json"),
+      JSON.stringify(calibration, null, 2)
+    );
+  } catch (_) {}
 
   const clientConfig = await configureClientSetup({
     lang,

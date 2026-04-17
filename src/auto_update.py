@@ -2894,6 +2894,26 @@ def _run_runtime_post_sync(dest: Path = NEXO_HOME, progress_fn=None) -> tuple[bo
     except Exception as exc:
         actions.append(f"profile-bootstrap-warning:{exc.__class__.__name__}")
 
+    # v6.0.0 purge — drop legacy fields that moved elsewhere in v6.
+    # client_runtime_profiles.*.{model,reasoning_effort} → resonance_tiers.json.
+    # preferences.protocol_strictness → TTY/no-TTY detection.
+    # preferences.show_pending_at_start → NEXO Desktop electron-store.
+    # Never re-raises: the update must finish even if purge fails.
+    try:
+        _emit_progress(progress_fn, "Applying v6.0.0 calibration purge...")
+        from calibration_migration import apply_v6_purge
+        v6_result = apply_v6_purge(nexo_home=dest)
+        if v6_result.get("calibration_changed"):
+            actions.append("v6-purge:calibration")
+        if v6_result.get("schedule_changed"):
+            actions.append("v6-purge:schedule")
+        if v6_result.get("seeded_default_resonance"):
+            actions.append("v6-purge:seeded-default-resonance-alto")
+        if v6_result.get("status") == "noop":
+            actions.append("v6-purge:noop")
+    except Exception as exc:
+        actions.append(f"v6-purge-warning:{exc.__class__.__name__}")
+
     _emit_progress(progress_fn, "Verifying runtime imports...")
     verify = subprocess.run(
         [sys.executable, "-c", "import server"],

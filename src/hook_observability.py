@@ -123,6 +123,30 @@ def record_hook_run(
         return 0
 
 
+def record_activity(
+    *,
+    session_id: str = "",
+    activity_type: str = "notification",
+    metadata: dict | None = None,
+) -> int:
+    """Record a lightweight "session is alive" signal.
+
+    Consumed by the Notification hook (added in v6.0.0) and by any other
+    entry point that wants to tell auto_close_sessions "this session is
+    actively doing something, don't prune it". Internally it stores a row
+    in hook_runs with hook_name=f'activity:{activity_type}' so the same
+    observability surface that renders hook health also shows activity
+    pings without needing a second table.
+    """
+    hook_tag = f"activity:{(activity_type or 'generic').strip().lower()}"[:120]
+    return record_hook_run(
+        hook_tag,
+        session_id=session_id,
+        summary=f"{activity_type or 'generic'} activity",
+        metadata=metadata or {"type": activity_type or "generic"},
+    )
+
+
 def list_recent_hook_runs(
     *,
     hours: int = 24,

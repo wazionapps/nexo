@@ -1,6 +1,6 @@
 {
   "name": "nexo-brain",
-  "version": "5.10.2",
+  "version": "6.0.0",
   "mcpName": "io.github.wazionapps/nexo",
   "description": "NEXO Brain \u2014 Shared brain for AI agents. Persistent memory, semantic RAG, natural forgetting, metacognitive guard, trust scoring, 150+ MCP tools. Works with Claude Code, Codex, Claude Desktop & any MCP client. 100% local, free.",
   "homepage": "https://nexo-brain.com",
@@ -76,6 +76,8 @@
     "bin/postinstall.js",
     "scripts/sync_release_artifacts.py",
     "src/",
+    "src/resonance_tiers.json",
+    "src/hooks/manifest.json",
     "community/",
     "!src/**/__pycache__",
     "!src/**/*.pyc",
