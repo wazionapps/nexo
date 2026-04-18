@@ -343,6 +343,20 @@ def handle_startup(
         external_session_id=linked_session_id,
         session_client=inferred_client,
     )
+    # v43 hotfix: also register in session_claude_aliases so multi-
+    # conversation NEXO Desktop spawns (each with its own claude UUID)
+    # resolve to the same NEXO sid on every PreToolUse hook lookup.
+    # Backward-compatible: if the alias table does not yet exist (older
+    # DB), register_claude_session_alias returns False silently and
+    # the legacy sessions.claude_session_id column stays authoritative.
+    if linked_session_id:
+        try:
+            from hook_guardrails import register_claude_session_alias
+            from db import get_db as _get_db
+            register_claude_session_alias(_get_db(), sid, linked_session_id)
+        except Exception:
+            # Never let alias registration failures block startup.
+            pass
     _start_keepalive(sid)
     active = get_active_sessions()
     other_sessions = [s for s in active if s["sid"] != sid]

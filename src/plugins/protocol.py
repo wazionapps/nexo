@@ -39,6 +39,43 @@ from protocol_settings import get_protocol_strictness
 from tools_sessions import handle_heartbeat
 
 
+# ── R03 (Fase 2 Protocol Enforcer) evidence quality thresholds ────────
+# "evidence" supplied to nexo_task_close must be substantive when an
+# outcome of "done" is claimed. The plan doc 1 R03 rule reads:
+#   SI nexo_task_close Y evidence <50 chars / solo "done|listo|fixed"
+#   ENTONCES rechazar hasta recibir evidence real.
+# Fase 2 spec 0.19 does not promote R03 to CORE (operators can downgrade
+# to soft in guardian.json), but strict mode rejects trivial evidence.
+R03_MIN_EVIDENCE_CHARS = 50
+R03_TRIVIAL_EVIDENCE_PATTERN = re.compile(
+    r"^(done|listo|hecho|fixed|ok|ready|finished|completado|complete|"
+    r"terminado|arreglado|cerrado|solved|resuelto)\s*[\.!]*\s*$",
+    re.IGNORECASE,
+)
+
+
+def _is_trivial_evidence(text: str) -> tuple[bool, str]:
+    """Return (is_trivial, reason).
+
+    Evidence is considered trivial when it is EITHER shorter than
+    R03_MIN_EVIDENCE_CHARS OR matches the single-word acknowledgment
+    pattern. Both checks are structural, NOT language detection:
+    length is language-agnostic, and the pattern targets the exact
+    class of shortcut a caller would use ("done", "listo", "ok") as
+    a filler. Learning #122 prohibits hardcoded keywords for
+    *semantic* detection; this is defensive input validation on a
+    known-finite set of filler tokens.
+    """
+    stripped = (text or "").strip()
+    if not stripped:
+        return True, "empty"
+    if R03_TRIVIAL_EVIDENCE_PATTERN.match(stripped):
+        return True, "single_filler_word"
+    if len(stripped) < R03_MIN_EVIDENCE_CHARS:
+        return True, f"too_short (<{R03_MIN_EVIDENCE_CHARS} chars, got {len(stripped)})"
+    return False, ""
+
+
 ACTION_TASKS = {"edit", "execute", "delegate"}
 RESPONSE_TASKS = {"answer", "analyze"}
 HIGH_STAKES_KEYWORDS = {
@@ -1005,8 +1042,12 @@ def handle_task_close(
     )
 
     # ── Evidence enforcement: reject 'done' without proof in strict mode ──
+    # Fase 2 R03 extension: "evidence" must not be empty, nor <50 chars, nor
+    # a single filler word like "done" / "listo" / "ok". Trivial evidence is
+    # rejected in strict mode and logged as protocol debt in any other mode.
     if task.get("must_verify") and clean_outcome == "done":
-        if clean_evidence:
+        is_trivial, trivial_reason = _is_trivial_evidence(clean_evidence)
+        if not is_trivial:
             resolve_protocol_debts(
                 task_id=task_id,
                 debt_types=["claimed_done_without_evidence"],
@@ -1015,13 +1056,32 @@ def handle_task_close(
         else:
             protocol_strictness = get_protocol_strictness()
             if protocol_strictness == "strict":
+                if trivial_reason == "empty":
+                    err = "Cannot close task as 'done' without evidence."
+                    hint = (
+                        "Provide the `evidence` parameter with verifiable proof: "
+                        "test output, curl response, screenshot path, or real "
+                        "command output."
+                    )
+                else:
+                    err = (
+                        "Cannot close task as 'done' with trivial evidence "
+                        f"({trivial_reason})."
+                    )
+                    hint = (
+                        f"Evidence must be substantive: >= {R03_MIN_EVIDENCE_CHARS} "
+                        "characters AND not a single filler word. Attach real "
+                        "proof — test output excerpt, curl response, DB row, "
+                        "screenshot path, or command stdout."
+                    )
                 return json.dumps(
                     {
                         "ok": False,
-                        "error": "Cannot close task as 'done' without evidence.",
-                        "hint": "Provide the `evidence` parameter with verifiable proof: test output, curl response, screenshot path, or real command output.",
+                        "error": err,
+                        "hint": hint,
                         "task_id": task_id,
                         "protocol_strictness": protocol_strictness,
+                        "evidence_quality_reason": trivial_reason,
                     },
                     ensure_ascii=False,
                     indent=2,
@@ -1031,7 +1091,11 @@ def handle_task_close(
                 task_id,
                 "claimed_done_without_evidence",
                 severity="error",
-                evidence=f"Task closed as done without evidence. Goal: {task.get('goal','')}",
+                evidence=(
+                    f"Task closed as done with trivial evidence "
+                    f"({trivial_reason}). Goal: {task.get('goal','')}. "
+                    f"Evidence provided: {clean_evidence[:200]!r}"
+                ),
                 debts=debts_created,
             )
 

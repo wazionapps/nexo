@@ -2277,6 +2277,25 @@ def main():
     dashboard_parser.add_argument("action", choices=["on", "off", "status"], help="Start, stop, or check dashboard")
 
     # -- desktop bridge (read-only, for NEXO Desktop and any external UI) --
+    # Fase E.5 — quarantine ops surfaced via Desktop Guardian Proposals panel.
+    quarantine_parser = sub.add_parser("quarantine", help="Quarantine proposals (Fase E.5 Desktop UI)")
+    quarantine_sub = quarantine_parser.add_subparsers(dest="quarantine_command")
+
+    qlist_p = quarantine_sub.add_parser("list", help="List quarantine items")
+    qlist_p.add_argument("--status", default="pending",
+                         choices=["pending", "promoted", "rejected", "expired", "all"])
+    qlist_p.add_argument("--limit", type=int, default=20)
+    qlist_p.add_argument("--json", action="store_true", help="JSON output (default)")
+
+    qpromote_p = quarantine_sub.add_parser("promote", help="Promote a quarantine item to STM")
+    qpromote_p.add_argument("id", help="Quarantine item id")
+    qpromote_p.add_argument("--json", action="store_true", help="JSON output (default)")
+
+    qreject_p = quarantine_sub.add_parser("reject", help="Reject a quarantine item")
+    qreject_p.add_argument("id", help="Quarantine item id")
+    qreject_p.add_argument("--reason", default="", help="Optional rejection reason")
+    qreject_p.add_argument("--json", action="store_true", help="JSON output (default)")
+
     schema_parser = sub.add_parser("schema", help="Editable-field schema for Preferences UI")
     schema_parser.add_argument("--json", action="store_true", help="JSON output (default)")
 
@@ -2410,6 +2429,17 @@ def main():
         return _uninstall(args)
     elif args.command == "dashboard":
         return _dashboard(args)
+    elif args.command == "quarantine":
+        from desktop_bridge import cmd_quarantine_list, cmd_quarantine_promote, cmd_quarantine_reject
+        if args.quarantine_command == "list":
+            return cmd_quarantine_list(args)
+        if args.quarantine_command == "promote":
+            return cmd_quarantine_promote(args)
+        if args.quarantine_command == "reject":
+            return cmd_quarantine_reject(args)
+        # No subcommand — show help.
+        quarantine_parser.print_help()
+        return 1
     elif args.command in ("schema", "identity", "onboard", "scan-profile"):
         from desktop_bridge import cmd_schema, cmd_identity, cmd_onboard, cmd_scan_profile
         return {

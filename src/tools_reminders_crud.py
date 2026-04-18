@@ -5,10 +5,139 @@ from db import (
     restore_reminder, add_reminder_note, get_reminder,
     create_followup, update_followup, complete_followup, delete_followup,
     restore_followup, add_followup_note, get_followup,
+    extract_keywords, get_db, get_followups,
     validate_item_read_token,
     find_decisions_by_context_ref, update_decision_outcome,
     set_linked_outcomes_met,
 )
+
+
+# ── R01 (Fase 2 Protocol Enforcer) dedup threshold ────────────────────
+# Two followup descriptions are considered duplicate when Jaccard
+# similarity over extracted keywords exceeds this threshold. The plan
+# (doc 1 R01) specifies >0.80. Jaccard uses the same keyword extractor
+# as find_similar_learnings so dedup behaviour is consistent across
+# artifact types. Operators can bypass the warning by passing
+# force="true" when the duplicate is intentional (e.g. recurring check
+# with a different window). Non-strict / lenient mode only warns, never
+# blocks.
+R01_SIMILARITY_THRESHOLD = 0.80
+
+
+def _find_recurrence_conflicts(recurrence: str, exclude_id: str = "") -> list[dict]:
+    """Fase 2 R08 helper — return active followups with exactly the same
+    recurrence pattern string as the candidate.
+
+    The plan doc 1 R08 targets reminder_create recurrence conflicts, but
+    the NEXO core schema carries recurrence on FOLLOWUPS (nexo_followup_create)
+    not reminders. This helper applies R08 to followups since that is the
+    only artifact in the core with a recurrence field. If a future release
+    adds recurrence to reminders, the helper is schema-agnostic enough to
+    reuse with a different get_rows() call.
+
+    Exact-string match is intentional — timezone-aware calendar-level
+    overlap detection is out of scope and would be easy to get wrong.
+    Operators who want to distinguish "weekly:monday" from another
+    "weekly:monday" schedule can pass force=true.
+    """
+    needle = (recurrence or "").strip()
+    if not needle:
+        return []
+    rows = get_followups()  # default returns active followups
+    hits: list[dict] = []
+    for row in rows:
+        existing_id = str(row.get("id") or "")
+        if exclude_id and existing_id == exclude_id:
+            continue
+        existing_rec = str(row.get("recurrence") or "").strip()
+        if existing_rec and existing_rec == needle:
+            hits.append({
+                "id": existing_id,
+                "recurrence": existing_rec,
+                "description": str(row.get("description") or "")[:120],
+            })
+    return hits[:5]
+
+
+# ── R04 (Fase 2 Protocol Enforcer) retroactive-complete threshold ────
+# Plan doc 1 R04: when the agent executes an action whose description
+# matches an active followup at Jaccard >=0.70, suggest auto-completing
+# that followup. This is a SUGGESTION surface — the actual decision
+# to call nexo_followup_complete belongs to the caller (heartbeat,
+# Cortex). The threshold is lower than R01 (0.80) because R04 fires
+# retroactively on action descriptions rather than on new-followup
+# creation, and more false positives are acceptable in a suggestion
+# channel than in a creation block.
+R04_RETROACTIVE_THRESHOLD = 0.70
+
+
+def find_completable_followups(context_text: str, threshold: float = R04_RETROACTIVE_THRESHOLD) -> list[dict]:
+    """R04 helper — return followups that the current action may have already
+    completed.
+
+    Reuses extract_keywords for Jaccard. Safe to call from the heartbeat
+    path because it runs a single indexed query and a keyword pass over a
+    typically small set of active followups.
+
+    Output: list[{"id", "description", "similarity"}] sorted desc,
+    capped at 5. Empty list means nothing to suggest.
+    """
+    keywords_new = set(extract_keywords(context_text or ""))
+    if not keywords_new:
+        return []
+    try:
+        rows = get_followups()  # default returns active followups
+    except Exception:
+        return []
+    suggestions: list[dict] = []
+    for row in rows:
+        desc = str(row.get("description") or "")
+        keywords_existing = set(extract_keywords(desc))
+        if not keywords_existing:
+            continue
+        overlap = keywords_new & keywords_existing
+        union = keywords_new | keywords_existing
+        similarity = (len(overlap) / len(union)) if union else 0.0
+        if similarity >= threshold:
+            suggestions.append({
+                "id": str(row.get("id") or ""),
+                "description": desc[:160],
+                "similarity": round(similarity, 3),
+            })
+    suggestions.sort(key=lambda x: x["similarity"], reverse=True)
+    return suggestions[:5]
+
+
+def _find_similar_active_followups(description: str, exclude_id: str = "") -> list[tuple[str, float, str]]:
+    """Return active followups whose description exceeds the R01 threshold.
+
+    Output: list of (followup_id, similarity_score, existing_description)
+    sorted by similarity descending, capped at 5. Empty list means no
+    duplicate risk.
+
+    Jaccard similarity over keyword sets. Cheap, deterministic, and
+    language-agnostic modulo the extract_keywords stoplist.
+    """
+    keywords_new = set(extract_keywords(description or ""))
+    if not keywords_new:
+        return []
+    rows = get_followups()  # default returns active followups
+    results: list[tuple[str, float, str]] = []
+    for row in rows:
+        existing_id = str(row.get("id") or "")
+        if exclude_id and existing_id == exclude_id:
+            continue
+        existing_desc = str(row.get("description") or "")
+        keywords_existing = set(extract_keywords(existing_desc))
+        if not keywords_existing:
+            continue
+        overlap = keywords_new & keywords_existing
+        union = keywords_new | keywords_existing
+        similarity = (len(overlap) / len(union)) if union else 0.0
+        if similarity >= R01_SIMILARITY_THRESHOLD:
+            results.append((existing_id, round(similarity, 3), existing_desc))
+    results.sort(key=lambda x: x[1], reverse=True)
+    return results[:5]
 
 
 def _require_item_read(item_type: str, item_id: str, read_token: str) -> str | None:
@@ -221,6 +350,7 @@ def handle_followup_create(
     priority: str = 'medium',
     internal: str = '',
     owner: str = '',
+    force: str = '',
 ) -> str:
     """Create a new NEXO followup. id must start with 'NF'.
 
@@ -237,9 +367,47 @@ def handle_followup_create(
                   Omit to let Brain classify by ID prefix heuristic.
         owner: 'user' | 'waiting' | 'agent' | 'shared'. Omit to let
                Brain classify by description verbs.
+        force: Set to '1' / 'true' to bypass Fase 2 R01 dedup when the
+               near-duplicate followup is intentional. Without force,
+               any Jaccard similarity >= 0.80 against an active
+               followup returns an error listing the matches.
     """
     if not id.startswith('NF'):
         return f"ERROR: Followup ID must start with 'NF' (received: '{id}')."
+
+    # ── R01 (Fase 2 Protocol Enforcer): reject near-duplicate active followups ──
+    force_flag = str(force or "").strip().lower() in {"1", "true", "yes", "on"}
+    # ── R08 (Fase 2 Protocol Enforcer): recurrence conflict warning ──
+    if not force_flag and recurrence:
+        conflicts = _find_recurrence_conflicts(recurrence, exclude_id=id)
+        if conflicts:
+            lines = [
+                f"ERROR: Recurrence conflict detected (R08). Pattern '{recurrence}' "
+                f"already used by {len(conflicts)} active followup(s):",
+            ]
+            for c in conflicts:
+                lines.append(f"  - {c['id']}: {c['description']}")
+            lines.append("Options:")
+            lines.append("  - Pick a different recurrence window (e.g. weekly:tuesday vs weekly:monday)")
+            lines.append("  - Complete / archive the existing schedule first")
+            lines.append("  - Pass force='true' if two identical-cadence followups are intentional")
+            return "\n".join(lines)
+    if not force_flag:
+        similar = _find_similar_active_followups(description, exclude_id=id)
+        if similar:
+            best_id, best_sim, best_desc = similar[0]
+            lines = [
+                f"ERROR: Near-duplicate followup detected (R01). Jaccard >= {R01_SIMILARITY_THRESHOLD:.2f}.",
+                f"Best match: {best_id} (similarity {best_sim:.2f}) — {best_desc[:120]}",
+                "Options:",
+                "  - Update the existing followup via nexo_followup_update",
+                "  - Rephrase the description to remove overlap",
+                "  - Pass force='true' if the duplication is intentional",
+            ]
+            if len(similar) > 1:
+                extras = ", ".join(f"{sid}({sim:.2f})" for sid, sim, _ in similar[1:])
+                lines.append(f"Other matches: {extras}")
+            return "\n".join(lines)
 
     result = create_followup(
         id=id,

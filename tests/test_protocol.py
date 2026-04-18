@@ -353,7 +353,7 @@ def test_task_close_creates_change_log_and_stays_clean():
             sid=sid,
             task_id=opened["task_id"],
             outcome="done",
-            evidence="pytest -q tests/test_doctor.py passed",
+            evidence="pytest -q tests/test_doctor.py passed: 12 passed, 0 failed, 0 skipped in 0.42s; no regressions in doctor providers",
             change_summary="Updated runtime protocol compliance to use live protocol data",
             change_why="Make doctor enforce discipline from live runtime data",
             change_verify="pytest -q tests/test_doctor.py",
@@ -432,7 +432,7 @@ def test_task_close_rejects_invalid_outcome_without_mutating_task():
             sid=sid,
             task_id=opened["task_id"],
             outcome="wrapped-up cleanly",
-            evidence="pytest -q tests/test_protocol.py passed",
+            evidence="pytest -q tests/test_protocol.py passed: 18 passed, 0 failed in 0.33s; protocol_task flow + debt state verified",
         )
     )
 
@@ -492,7 +492,7 @@ def test_task_close_auto_captures_learning_when_correction_has_no_learning():
             sid=sid,
             task_id=opened["task_id"],
             outcome="done",
-            evidence="pytest -q tests/test_guard.py passed",
+            evidence="pytest -q tests/test_guard.py passed: 6 passed, 0 failed in 0.21s; guard_check blocking + acknowledge path covered",
             correction_happened=True,
             change_summary="Reduced guard false positives",
             change_why="Capture missing-learning auto-learning path",
@@ -624,7 +624,7 @@ def test_task_close_explicit_learning_supersedes_conflicting_file_rule():
             sid=sid,
             task_id=opened["task_id"],
             outcome="done",
-            evidence="pytest -q tests/test_guard.py passed",
+            evidence="pytest -q tests/test_guard.py passed: 6 passed, 0 failed in 0.21s; guard_check blocking + acknowledge path covered",
             correction_happened=True,
             change_summary="Guard hotfixes may edit guard.py directly if fully verified",
             change_why="Replace the older blanket prohibition with a tighter canonical rule.",

@@ -26,13 +26,52 @@ def _get_gate_stats():
     from cognitive._ingest import get_gate_stats
     return get_gate_stats()
 
+def _compute_age_days(created_at) -> int | None:
+    """Return integer days since ``created_at`` or None if unparseable.
+
+    Accepts ISO strings (with or without microseconds), naive or aware,
+    and epoch floats. Silent fallback to None so the formatter never
+    breaks on bad timestamps; callers that need the raw string still
+    have it on the result dict.
+    """
+    if created_at is None or created_at == "":
+        return None
+    try:
+        if isinstance(created_at, (int, float)):
+            ts = datetime.fromtimestamp(float(created_at), tz=timezone.utc).replace(tzinfo=None)
+        else:
+            text = str(created_at).strip().replace("T", " ").replace("Z", "").split("+")[0]
+            if "." in text:
+                ts = datetime.strptime(text, "%Y-%m-%d %H:%M:%S.%f")
+            else:
+                ts = datetime.strptime(text, "%Y-%m-%d %H:%M:%S")
+    except (ValueError, TypeError):
+        return None
+    now = _utcnow_naive()
+    delta = now - ts
+    return max(0, int(delta.days))
+
+
 def format_results(results: list[dict]) -> str:
-    """Format search results with enriched context."""
+    """Format search results with enriched context.
+
+    Fase 2 R07 extension: each result is annotated with its age in days
+    so the reader can tell at-a-glance whether the information is fresh
+    or stale. Ages >= 7 days get a [stale:Nd] tag that callers (R24) can
+    use as a signal to verify against authoritative sources before
+    acting on the memory.
+    """
     if not results:
         return "No results found."
 
     lines = []
     for r in results:
+        # R07: always annotate age_days on the result dict so the caller
+        # (handle_cognitive_retrieve, nexo_memory_recall, etc.) has a
+        # structured field to gate stale-memory behaviour on.
+        age_days = _compute_age_days(r.get("created_at"))
+        if age_days is not None:
+            r["age_days"] = age_days
         score = r["score"]
         stype = r["source_type"].upper()
         domain = r.get("domain", "")
@@ -42,7 +81,13 @@ def format_results(results: list[dict]) -> str:
         # Header
         domain_str = f" ({domain})" if domain else ""
         title_str = f': "{title}"' if title else ""
-        header = f"[{score:.2f}] {stype}{domain_str}{title_str}"
+        age_str = ""
+        if age_days is not None:
+            if age_days >= 7:
+                age_str = f" [stale:{age_days}d]"
+            else:
+                age_str = f" [{age_days}d]"
+        header = f"[{score:.2f}] {stype}{domain_str}{title_str}{age_str}"
 
         # Content preview (300 chars)
         preview = content[:300]

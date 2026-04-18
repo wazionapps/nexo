@@ -1,4 +1,5 @@
 from __future__ import annotations
+import sqlite3
 
 """Post-tool guardrails for conditioned file learnings."""
 
@@ -160,18 +161,47 @@ def _extract_touched_files(tool_input) -> list[str]:
 def _resolve_nexo_sid(conn, external_session_id: str) -> str:
     """Resolve a Claude Code UUID to the NEXO session SID it belongs to.
 
-    Primary correlation: exact match on external_session_id / claude_session_id.
+    Resolution order:
 
-    v6.0.7 hotfix — secondary correlation: when no exact match is found AND
-    there is exactly ONE NEXO session with a fresh heartbeat (last update in
-    the past 5 minutes), fall back to that session. This closes the "unknown
-    target" edge case where Claude Code rotated its internal session_id
-    mid-session (e.g. after a compaction) without rewriting the coordination
-    file. The single-session gate prevents mis-attribution when two Claude
-    instances run concurrently.
+    1. ``session_claude_aliases`` (added in migration v43) — a 1-to-N
+       mapping from NEXO sid to every ``claude_session_id`` that has
+       ever been registered against it. Supports NEXO Desktop's
+       multi-conversation workflow where each spawn has a distinct UUID.
+    2. Legacy ``sessions.external_session_id / claude_session_id`` —
+       kept for backward compatibility with rows created before v43.
+    3. Single-session fallback (v6.0.7) — exactly one session with a
+       fresh heartbeat (last 5 min) still triggers the implicit bind;
+       this closes the compaction-rotated-UUID edge case.
     """
     clean_external = external_session_id.strip()
     if clean_external:
+        # 1. Aliases table — supports N claude_sids per nexo sid.
+        try:
+            alias_row = conn.execute(
+                """SELECT sid
+                   FROM session_claude_aliases
+                   WHERE claude_session_id = ?
+                   ORDER BY last_seen DESC
+                   LIMIT 1""",
+                (clean_external,),
+            ).fetchone()
+            if alias_row:
+                return str(alias_row["sid"])
+        except sqlite3.OperationalError as exc:
+            # Narrow-catch per audit MEDIUM: only swallow the specific
+            # "no such table" error that indicates the v43 migration
+            # has not yet been applied. Any other SQLite failure
+            # (schema corruption, lock contention, column drift)
+            # surfaces through the logger so operators see it.
+            msg = str(exc).lower()
+            if "no such table" not in msg:
+                import logging as _log
+                _log.getLogger("nexo.hooks").warning(
+                    "session_claude_aliases probe failed: %s; falling back to legacy lookup",
+                    exc,
+                )
+            # Either way: fall through to legacy path.
+        # 2. Legacy columns (pre-v43 rows).
         row = conn.execute(
             """SELECT sid
                FROM sessions
@@ -183,7 +213,7 @@ def _resolve_nexo_sid(conn, external_session_id: str) -> str:
         if row:
             return str(row["sid"])
 
-    # Fallback: exactly one session heartbeated in the last 5 minutes.
+    # 3. Fallback: exactly one session heartbeated in the last 5 minutes.
     # We prefer this narrow window so we never silently attribute work to
     # a stale session. If the caller has zero or multiple active sessions,
     # fail closed (return "") and let the caller raise missing_startup.
@@ -199,6 +229,36 @@ def _resolve_nexo_sid(conn, external_session_id: str) -> str:
     if len(rows) == 1:
         return str(rows[0]["sid"])
     return ""
+
+
+def register_claude_session_alias(conn, sid: str, claude_session_id: str) -> bool:
+    """Register a ``(sid, claude_session_id)`` alias so PreToolUse hook
+    lookups on this UUID resolve to the NEXO sid.
+
+    Idempotent — re-registering the same pair bumps ``last_seen`` only.
+    Returns True when the alias table accepted the write, False when it
+    is unavailable (pre-v43 schema) so callers know to fall back to the
+    legacy single-column write.
+    """
+    sid = (sid or "").strip()
+    claude_session_id = (claude_session_id or "").strip()
+    if not sid or not claude_session_id:
+        return False
+    import time as _time
+    now = _time.time()
+    try:
+        conn.execute(
+            """INSERT INTO session_claude_aliases
+                 (sid, claude_session_id, first_seen, last_seen)
+               VALUES (?, ?, ?, ?)
+               ON CONFLICT(sid, claude_session_id) DO UPDATE SET
+                   last_seen = excluded.last_seen""",
+            (sid, claude_session_id, now, now),
+        )
+        conn.commit()
+        return True
+    except Exception:
+        return False
 
 
 def _find_open_task_for_file(conn, sid: str, filepath: str) -> dict | None:

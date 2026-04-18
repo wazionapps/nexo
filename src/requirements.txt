@@ -4,6 +4,14 @@ fastmcp>=2.9.0
 numpy
 tomli; python_version < "3.11"
 
+# Fase 2 Protocol Enforcer — Guardian classifier (call_model_raw)
+# Anthropic SDK is the default backend; OpenAI SDK covers the Codex
+# backend path (automation_backend=codex). Version floors correspond
+# to the latest APIs exercised by src/call_model_raw.py — earlier
+# versions lack APITimeoutError / APIStatusError.status_code handling.
+anthropic>=0.80.0
+openai>=2.20.0
+
 # Embedding model (optional but recommended for cognitive features)
 fastembed
 

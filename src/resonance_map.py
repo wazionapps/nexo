@@ -185,6 +185,14 @@ SYSTEM_OWNED_CALLERS: dict[str, str] = {
     "evolution/run":                    "maximo",
     "reflection":                       "maximo",
 
+    # ---- Protocol Enforcer classifier (Fase 2 spec 0.1/0.22) ---------------
+    # Short yes/no classification via call_model_raw (~200ms Haiku). NEVER
+    # elevate to a higher tier — costs per turn are the main constraint when
+    # every R13/R14/R16/R17/R20 decision hits this caller. If quality becomes
+    # an issue, the fix is to refine the prompt or adopt the zero-shot local
+    # classifier (item 0.21), not to raise the tier.
+    "enforcer_classifier":              "muy_bajo",
+
     # ---- Deep sleep: extraction and synthesis benefit from quality --------
     "deep-sleep/extract":               "alto",
     "deep-sleep/synthesize":            "maximo",

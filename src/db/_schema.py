@@ -1041,6 +1041,47 @@ def _m42_v6_0_1_hotfix(conn):
     )
 
 
+def _m43_session_claude_aliases(conn):
+    """Multi-Claude-sid-per-sid aliasing (hotfix for NEXO Desktop
+    multi-conversation workflows).
+
+    NEXO Desktop spawns one `claude` CLI subprocess per conversation.
+    Each spawn fires its own SessionStart hook with a fresh UUID. The
+    legacy schema (``sessions.claude_session_id`` as a single TEXT
+    column) can only remember ONE UUID per sid, so when a second
+    conversation is opened, the hook's PreToolUse lookup
+    (``_resolve_nexo_sid``) receives the wrong UUID and blocks the
+    edit with "unknown target".
+
+    Fix: a 1-to-N alias table. ``nexo_startup`` now also writes
+    ``(sid, claude_session_id, first_seen, last_seen)`` here, and
+    ``_resolve_nexo_sid`` consults this table FIRST (falling back to
+    the legacy ``sessions.claude_session_id`` column for backward
+    compatibility with rows created before this migration).
+
+    Idempotent.
+    """
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS session_claude_aliases (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sid TEXT NOT NULL,
+            claude_session_id TEXT NOT NULL,
+            first_seen REAL NOT NULL,
+            last_seen REAL NOT NULL,
+            UNIQUE(sid, claude_session_id)
+        )"""
+    )
+    _migrate_add_index(
+        conn, "idx_claude_aliases_sid", "session_claude_aliases", "sid"
+    )
+    _migrate_add_index(
+        conn,
+        "idx_claude_aliases_claude_sid",
+        "session_claude_aliases",
+        "claude_session_id",
+    )
+
+
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
     (2, "followups_reasoning", _m2_followups_reasoning),
@@ -1084,6 +1125,7 @@ MIGRATIONS = [
     (40, "classification_columns", _m40_classification_columns),
     (41, "automation_sessions_columns", _m41_automation_sessions_columns),
     (42, "v6_0_1_hotfix", _m42_v6_0_1_hotfix),
+    (43, "session_claude_aliases", _m43_session_claude_aliases),
 ]
 
 

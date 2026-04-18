@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 
 
 @pytest.fixture(autouse=True)
-def workflow_runtime(isolated_db):
+def workflow_runtime(isolated_db, monkeypatch):
     import db._core as db_core
     import db._protocol as db_protocol
     import db._workflow as db_workflow
@@ -23,6 +23,13 @@ def workflow_runtime(isolated_db):
     importlib.reload(db)
     importlib.reload(protocol)
     importlib.reload(workflow)
+    # These pre-Fase-2 tests exercise workflow-module behaviour directly
+    # and do not open a parent protocol task first. Fase 2 R10 now
+    # rejects that pattern in strict mode, which would mass-fail this
+    # entire legacy suite without exercising the code under test. Force
+    # lenient mode here so R10 does not fire; the R10 contract itself is
+    # verified in tests/test_fase_b_atomic.py under explicit strict mode.
+    monkeypatch.setattr("plugins.workflow.get_protocol_strictness", lambda: "lenient")
     yield
 
 

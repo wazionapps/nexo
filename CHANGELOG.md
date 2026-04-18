@@ -1,5 +1,41 @@
 # Changelog
 
+## [6.1.0] - 2026-04-18
+
+### Added — Protocol Enforcer Fase 2 (Capa 2 runtime guardian)
+
+- **Wrapper Bloque 1 (Fase C)** — 4 core rules: R13 pre-Edit guard, R14 post-correction learning window, R16 declared-done without close, R25 Nora/María read-only destructive block. CORE rules have defence-in-depth: guardian.json cannot turn them off.
+- **Wrapper Bloque 2 (Fase D)** — 9 rules: R15 project-context, R17 promise-debt, R18 followup-autocomplete, R19 require-grep-before-Write, R20 constant-change grep probe, R21 legacy-path, R22 personal-script probe, R23 ssh-without-atlas, R24 stale-memory window.
+- **Wrapper Bloque 3 (Fase D2)** — 12 incident-driven rules: R23b deploy-vhost-mismatch, R23c destructive-in-wrong-cwd, R23d chown-R-without-ls, R23e force-push-main (`--force-with-lease` allowed), R23f DB-DELETE/UPDATE-no-WHERE (heredoc aware), R23g secrets-in-output (Bearer/sk-/pk-/api_key/JWT/AWS/GitHub/Shopify/KEY=VALUE/mysql -p<pass>), R23h shebang-vs-interpreter-mismatch (no shell injection), R23i auto-deploy-ignored, R23j global-install, R23k script-duplicates-skill, R23l resource-collision (type-scoped), R23m message-duplicate.
+- **Guardian config** (`guardian_config.py`) — loader + validator + defence-in-depth resolver.
+- **Guardian telemetry** (`guardian_telemetry.py`) — per-enqueue NDJSON event log.
+- **Installer** (`scripts/install_guardian.py`) — seeds presets, SSH hosts, automation_backend, guardian.json with merge-on-update.
+- **`nexo quarantine list|promote|reject`** CLI — Desktop Guardian Proposals panel bridge.
+- **Red-team suite** + **cross-engine parity harness (strict)** — 32 adversarial attempts + 13 parity fixtures.
+- **Log redaction** (`_redact_for_log`) — Bearer/sk-/pk-/api_key/$TOKEN-refs/GitHub/Shopify/AWS/JWT/inline-password.
+- **Documentation**: `docs/guardian-quickstart.md`.
+
+### Added — Multi-Claude-sid aliasing (NEXO Desktop multi-conversation fix)
+
+- **Migration v43** creates `session_claude_aliases` (N-to-1 sid alias map).
+- **`_resolve_nexo_sid`** consults aliases → legacy column → single-active fallback.
+- **`handle_startup`** auto-registers alias on every session_token binding.
+- Fixes: Desktop with 2+ conversations no longer blocks edits with "unknown target".
+
+### Fixed
+
+- Stream routing: `run_with_enforcement` forwards the initial prompt to `on_user_message` (R14/R15 were dead in headless before).
+- `on_user_message` no longer short-circuits on R14 module absence.
+- `_enqueue` accepts explicit `rule_id` (not tag-split-parsed).
+- Templates byte-for-byte Py↔JS across all 25 rules.
+- R23f heredoc multiline; R23 curl URL-anchored; R16 session-scoped; R23e lease-allowed; R23l type-scoped.
+
+### Removed
+
+- Desktop dev-only cross-repo map fallback.
+
+---
+
 ## [6.0.6] - 2026-04-17
 
 ### Fixed

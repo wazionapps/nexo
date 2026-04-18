@@ -1,0 +1,235 @@
+{
+  "$schema": "https://nexo-brain.com/schemas/entities-preset-v1.json",
+  "version": "1.0.0",
+  "description": "Universal preset of entities loaded at `nexo init`. Provides the Guardian with a baseline of destructive commands, legacy runtime paths, and artifact classes so the pre-edit / pre-Bash rules have something to match against on day 0, before the user has trained any observational learning via cognitive_quarantine.",
+  "source": "preset",
+  "confidence": 1.0,
+  "entities": [
+    {
+      "type": "destructive_command",
+      "name": "rm",
+      "aliases": [
+        "remove",
+        "rm -f",
+        "rm -rf"
+      ],
+      "metadata": {
+        "shell": "posix",
+        "severity": "high",
+        "pattern": "^rm\\b"
+      }
+    },
+    {
+      "type": "destructive_command",
+      "name": "mv_overwrite",
+      "aliases": [
+        "mv"
+      ],
+      "metadata": {
+        "shell": "posix",
+        "severity": "medium",
+        "pattern": "^mv\\b",
+        "note": "mv can silently overwrite when target exists; treat as destructive"
+      }
+    },
+    {
+      "type": "destructive_command",
+      "name": "sed_in_place",
+      "aliases": [
+        "sed -i",
+        "sed --in-place",
+        "gsed -i"
+      ],
+      "metadata": {
+        "shell": "posix",
+        "severity": "medium",
+        "pattern": "\\bsed\\b.*-i(\\s|=|$)",
+        "note": "In-place edits bypass normal review"
+      }
+    },
+    {
+      "type": "destructive_command",
+      "name": "redirect_overwrite",
+      "aliases": [
+        ">"
+      ],
+      "metadata": {
+        "shell": "posix",
+        "severity": "medium",
+        "pattern": "(?<![0-9&])>(?!>|&)",
+        "note": "Single > overwrites target; >> appends and is safer"
+      }
+    },
+    {
+      "type": "destructive_command",
+      "name": "shred_dd",
+      "aliases": [
+        "shred",
+        "dd"
+      ],
+      "metadata": {
+        "shell": "posix",
+        "severity": "critical",
+        "pattern": "^(shred|dd)\\b"
+      }
+    },
+    {
+      "type": "destructive_command",
+      "name": "sql_drop",
+      "aliases": [
+        "DROP TABLE",
+        "TRUNCATE",
+        "DELETE FROM"
+      ],
+      "metadata": {
+        "shell": "sql",
+        "severity": "critical",
+        "pattern": "\\b(DROP\\s+TABLE|TRUNCATE|DELETE\\s+FROM\\s+\\w+\\s*;?\\s*$)",
+        "note": "DELETE FROM without WHERE matches bare statement form"
+      }
+    },
+    {
+      "type": "destructive_command",
+      "name": "git_destructive",
+      "aliases": [
+        "git reset --hard",
+        "git push --force",
+        "git push -f",
+        "git clean -fdx"
+      ],
+      "metadata": {
+        "shell": "git",
+        "severity": "high",
+        "pattern": "git\\s+(reset\\s+--hard|push\\s+(-f|--force)|clean\\s+-fd?x?)"
+      }
+    },
+    {
+      "type": "legacy_path",
+      "name": "claude_hooks_to_nexo",
+      "aliases": [],
+      "metadata": {
+        "old": "~/claude/hooks",
+        "canonical": "~/.nexo/hooks",
+        "note": "Pre-v6 runtime lived under ~/claude/*; canonical runtime is ~/.nexo/*"
+      }
+    },
+    {
+      "type": "legacy_path",
+      "name": "claude_scripts_to_nexo",
+      "aliases": [],
+      "metadata": {
+        "old": "~/claude/scripts",
+        "canonical": "~/.nexo/scripts"
+      }
+    },
+    {
+      "type": "legacy_path",
+      "name": "claude_brain_to_nexo",
+      "aliases": [],
+      "metadata": {
+        "old": "~/claude/brain",
+        "canonical": "~/.nexo/brain"
+      }
+    },
+    {
+      "type": "artifact_class",
+      "name": "github_issue",
+      "aliases": [],
+      "metadata": {
+        "tool": "gh issue create",
+        "when": "followup classified as core/product escalation needs an issue instead of local state",
+        "reference_skill": "SK-NEXO-REPO-AUDIT-TO-EXEC-PACK"
+      }
+    },
+    {
+      "type": "artifact_class",
+      "name": "nexo_release",
+      "aliases": [],
+      "metadata": {
+        "flow": "sync_release_artifacts.py + verify_release_readiness.py",
+        "reference_skill": "nexo-release"
+      }
+    },
+    {
+      "type": "vhost_mapping",
+      "name": "systeam_es",
+      "metadata": {
+        "domain": "systeam.es",
+        "host": "vicshop",
+        "docroot": "/home/vicshopsysteam/public_html",
+        "note": "Francisco advisory web"
+      }
+    },
+    {
+      "type": "vhost_mapping",
+      "name": "wazion_com",
+      "metadata": {
+        "domain": "wazion.com",
+        "host": "wazion-gcp",
+        "docroot": "/var/www/wazion.com/public_html"
+      }
+    },
+    {
+      "type": "vhost_mapping",
+      "name": "recambios_bmw",
+      "metadata": {
+        "domain": "recambios-bmw.es",
+        "host": "mundiserver",
+        "docroot": "/home/vicshop/public_html"
+      }
+    },
+    {
+      "type": "vhost_mapping",
+      "name": "allinoneapp",
+      "metadata": {
+        "domain": "allinoneapp.com",
+        "host": "mundiserver",
+        "docroot": "/home/vicshop/allinoneapp"
+      }
+    },
+    {
+      "type": "vhost_mapping",
+      "name": "bulksend",
+      "metadata": {
+        "domain": "bulksend.app",
+        "host": "mundiserver",
+        "docroot": "/home/vicshop/bulksend"
+      }
+    },
+    {
+      "type": "vhost_mapping",
+      "name": "nexo_brain",
+      "metadata": {
+        "domain": "nexo-brain.com",
+        "host": "github-pages",
+        "docroot": "public/"
+      }
+    },
+    {
+      "type": "vhost_mapping",
+      "name": "canarirural",
+      "metadata": {
+        "domain": "canarirural.com",
+        "host": "mundiserver",
+        "docroot": "/home/canariru/public_html",
+        "note": "Shop ID 14 servidor 45.148.1.111, Maria tenant"
+      }
+    },
+    {
+      "type": "vhost_mapping",
+      "name": "vic_shop",
+      "metadata": {
+        "domain": "vicshop.com",
+        "host": "vicshop",
+        "docroot": "/home/vicshopsysteam/vicshop"
+      }
+    }
+  ],
+  "ssh_config_import": {
+    "enabled_default": true,
+    "source": "~/.ssh/config",
+    "imported_as_type": "host",
+    "default_access_mode": "unknown",
+    "note": "Hosts imported from ssh config are tagged access_mode=unknown until user confirms; Guardian R23/R25 treat unknown as requiring confirmation for destructive verbs."
+  }
+}
