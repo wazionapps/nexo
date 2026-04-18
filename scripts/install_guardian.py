@@ -28,6 +28,9 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 PRESETS_SRC = REPO_ROOT / "src" / "presets"
 GUARDIAN_DEFAULT_SRC = PRESETS_SRC / "guardian_default.json"
 ENTITIES_SRC = PRESETS_SRC / "entities_universal.json"
+# v6.3.1 — operator private overrides. .gitignored. Merged on top of
+# the universal preset if present. See src/presets/entities_local.sample.json.
+ENTITIES_LOCAL_SAMPLE_SRC = PRESETS_SRC / "entities_local.sample.json"
 
 
 def _nexo_home() -> pathlib.Path:
@@ -181,6 +184,15 @@ def install(nexo_home: pathlib.Path | None = None, dry_run: bool = False, force:
     actions["entities_preset_copy"] = _copy_preset(
         ENTITIES_SRC, preset_dir / "entities_universal.json", dry_run, force
     )
+    # v6.3.1 — drop a template for the operator's private vhost_mapping /
+    # host / tenant entries. Never overwrite the operator copy.
+    local_target = preset_dir / "entities_local.json"
+    if ENTITIES_LOCAL_SAMPLE_SRC.exists() and not local_target.exists():
+        actions["entities_local_sample_copy"] = _copy_preset(
+            ENTITIES_LOCAL_SAMPLE_SRC, local_target, dry_run, force
+        )
+    else:
+        actions["entities_local_sample_copy"] = "skipped-operator-copy-present" if local_target.exists() else "skipped-sample-missing"
     actions["guardian_default_preset_copy"] = _copy_preset(
         GUARDIAN_DEFAULT_SRC, preset_dir / "guardian_default.json", dry_run, force
     )

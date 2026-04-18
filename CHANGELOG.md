@@ -1,5 +1,50 @@
 # Changelog
 
+## [6.3.1] - 2026-04-19
+
+Security / privacy hotfix. v6.3.0 shipped
+`src/presets/entities_universal.json` with operator-specific entries
+(private IPs, hostnames, docroots, tenant names) that should have
+stayed local to the operator who wrote them. The nightly auditor
+(Opus 4.7 xhigh) caught the leak before anyone pulled the package on
+a fresh install, but the npm package was public for a short window.
+
+### Fixed
+
+- Removed operator-specific `vhost_mapping` entries from
+  `entities_universal.json`: `systeam_es`, `wazion_com`,
+  `recambios_bmw`, `allinoneapp`, `bulksend`, `canarirural`,
+  `vic_shop`.
+- Removed operator-specific alias + anti-example from the
+  `email_to_operator_contact` entry (previously mentioned Maria and
+  CanaRirural by name).
+- The preset now only ships the generic `nexo_brain` vhost
+  (public product site) plus destructive-command /
+  legacy-path / artifact-class entries that are genuinely
+  universal.
+- Also moved `shopify_banner_block` out of the universal preset
+  to the local override. Platform-specific knowledge (Shopify,
+  WooCommerce, Stripe, etc.) belongs to operators who use those
+  platforms, not to every fresh install — the previous location
+  was a second leak of operator context into the public package.
+
+### Added
+
+- `src/presets/entities_local.sample.json` — template operators copy
+  to `~/.nexo/brain/presets/entities_local.json` and fill with their
+  real domains, hosts, IPs, tenants.
+- `.gitignore` blocks `entities_local.json` so operator data never
+  reaches the public npm package again.
+- `scripts/install_guardian.py` drops the sample at `nexo init` and
+  never overwrites an existing operator copy.
+
+### Migration guidance
+
+Operators who installed v6.3.0 on a fresh box and pulled the leaked
+entries into their local preset should rotate any hostname / IP /
+domain that happens to be also someone else's data and move their
+private entries to `~/.nexo/brain/presets/entities_local.json`.
+
 ## [6.3.0] - 2026-04-18
 
 Plan Consolidado — wave 2 (coordinated with NEXO Desktop v0.18.0).
