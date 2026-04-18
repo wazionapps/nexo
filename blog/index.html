@@ -134,7 +134,7 @@
                     <span class="page-chip">Competitive analysis</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="/blog/nexo-5-4-4-test-and-venv-fix/" class="btn btn-primary">Read latest release</a>
+                    <a href="/blog/nexo-6-1-0/" class="btn btn-primary">Read latest release</a>
                     <a href="/changelog/" class="btn btn-secondary">Latest release notes</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -149,7 +149,7 @@
                 <h2>NEXO 5.4.5: CI Test Timeout Fix</h2>
                 <p>Completes the publish workflow fix from v5.4.3–v5.4.4: increases <code>test_update_uses_recorded_source_repo</code> subprocess timeout from 10s to 30s for slow CI runners.</p>
                 <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
-                    <a href="/blog/nexo-5-4-4-test-and-venv-fix/" class="btn btn-primary">Open article</a>
+                    <a href="/blog/nexo-6-1-0/" class="btn btn-primary">Open article</a>
                     <a href="/changelog/#v545" class="btn btn-secondary">Open changelog</a>
                 </div>
                 <div class="blog-mini-stack">
@@ -171,6 +171,13 @@
 <section class="section-flush-top">
     <div class="container">
         <div class="blog-grid">
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 18, 2026</div>
+                <h2><a href="/blog/nexo-6-1-0/">NEXO 6.1.0: Protocol Enforcer Fase 2 + multi-conversation hook aliasing</a></h2>
+                <p>Capa 2 runtime guardian lands. 25 rules (R13&ndash;R25 + R23b&ndash;R23m) watch every tool call, every user message, and every assistant text block as they stream through Claude Code / Codex / NEXO Desktop. Core rules (R13 pre-Edit guard, R14 post-correction learning window, R16 declared-done, R25 Nora/Mar&iacute;a read-only destructive block) ship with defence-in-depth: <code>guardian.json</code> cannot turn them off. Incident-driven D2 batch covers <code>--force</code> to main/master, <code>DELETE</code>/<code>UPDATE</code> without <code>WHERE</code>, <code>scp</code> to the wrong docroot, <code>chown -R</code> on root-ish paths, secrets echoed into output streams, duplicate outbound messages, shebang-vs-interpreter mismatch (no shell injection), and seven more. Templates are byte-for-byte identical across the Python headless engine (<code>src/enforcement_engine.py</code>) and the NEXO Desktop JS twin (<code>enforcement-engine.js</code>). Companion migration v43 <code>session_claude_aliases</code> fixes Desktop multi-conversation: every spawn&rsquo;s Claude UUID is registered so subsequent PreToolUse hooks resolve to the same NEXO sid. External-LLM audit + Opus 4.7 self-audit cycle applied: log redaction covers Bearer/sk-/pk-/api_key/JWT/AWS/GitHub/Shopify/KEY=VALUE/mysql <code>-p&lt;pass&gt;</code>; R23f multiline heredoc; R23h native PATH resolution; R14 awaited; hermetic map lookup; cross-engine parity harness in strict mode. Red-team suite (32 attempts across 12 rules). Guardian telemetry NDJSON + <code>scripts/install_guardian.py</code> installer + <code>docs/guardian-quickstart.md</code>. Suite: <strong>291 pass + 2 skip</strong> documented.</p>
+                <a href="/blog/nexo-6-1-0/" class="read-more">Read more &rarr;</a>
+            </div>
 
             <div class="blog-card">
                 <div class="blog-card-date">April 17, 2026</div>

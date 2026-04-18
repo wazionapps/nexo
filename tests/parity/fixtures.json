@@ -1,0 +1,215 @@
+{
+  "description": "Cross-engine parity fixtures. Each entry runs identically through the Python HeadlessEnforcer and the JS EnforcementEngine. The expected tags set must match between engines.",
+  "version": "1.1.1",
+  "cases": [
+    {
+      "id": "R13-pre-edit-no-guard",
+      "seq": [
+        {
+          "op": "tool",
+          "name": "Edit",
+          "input": {
+            "file_path": "/repo/x.py",
+            "new_string": "SECRET = 'abc'"
+          }
+        }
+      ],
+      "expect_rule_ids": [
+        "R13_pre_edit_guard"
+      ]
+    },
+    {
+      "id": "R23e-force-push-main",
+      "seq": [
+        {
+          "op": "tool",
+          "name": "Bash",
+          "input": {
+            "command": "git push --force origin main"
+          }
+        }
+      ],
+      "expect_rule_ids": [
+        "R23e_force_push_main"
+      ]
+    },
+    {
+      "id": "R23e-lease-allowed",
+      "seq": [
+        {
+          "op": "tool",
+          "name": "Bash",
+          "input": {
+            "command": "git push --force-with-lease origin main"
+          }
+        }
+      ],
+      "expect_rule_ids": []
+    },
+    {
+      "id": "R23f-delete-no-where",
+      "seq": [
+        {
+          "op": "tool",
+          "name": "Bash",
+          "input": {
+            "command": "mysql -e 'DELETE FROM orders;'"
+          }
+        }
+      ],
+      "expect_rule_ids": [
+        "R23f_db_no_where"
+      ]
+    },
+    {
+      "id": "R23f-update-with-where-clean",
+      "seq": [
+        {
+          "op": "tool",
+          "name": "Bash",
+          "input": {
+            "command": "mysql -e \"UPDATE users SET active=false WHERE id=1\""
+          }
+        }
+      ],
+      "expect_rule_ids": []
+    },
+    {
+      "id": "R23f-heredoc-with-where-clean",
+      "seq": [
+        {
+          "op": "tool",
+          "name": "Bash",
+          "input": {
+            "command": "mysql <<EOF\nDELETE FROM orders\nWHERE id=1\nEOF"
+          }
+        }
+      ],
+      "expect_rule_ids": []
+    },
+    {
+      "id": "R23j-global-npm-no-permit",
+      "seq": [
+        {
+          "op": "tool",
+          "name": "Bash",
+          "input": {
+            "command": "npm install -g typescript"
+          }
+        }
+      ],
+      "expect_rule_ids": []
+    },
+    {
+      "id": "R23-curl-with-header-no-false-positive",
+      "seq": [
+        {
+          "op": "seed_host",
+          "name": "api.foo.com",
+          "metadata": {}
+        },
+        {
+          "op": "tool",
+          "name": "Bash",
+          "input": {
+            "command": "curl https://api.foo.com/x"
+          }
+        }
+      ],
+      "expect_rule_ids": []
+    },
+    {
+      "id": "R23e-lease-allowed-exact-empty",
+      "seq": [
+        {
+          "op": "tool",
+          "name": "Bash",
+          "input": {
+            "command": "git push --force-with-lease origin main"
+          }
+        }
+      ],
+      "expect_rule_ids": [],
+      "strict": true
+    },
+    {
+      "id": "R23f-heredoc-with-where-clean-exact-empty",
+      "seq": [
+        {
+          "op": "tool",
+          "name": "Bash",
+          "input": {
+            "command": "mysql <<EOF\nDELETE FROM orders\nWHERE id=1\nEOF"
+          }
+        }
+      ],
+      "expect_rule_ids": [],
+      "strict": true
+    },
+    {
+      "id": "R25-explicit-force-ok-bypass",
+      "seq": [
+        {
+          "op": "seed_host",
+          "name": "maria_server",
+          "metadata": {
+            "access_mode": "read_only"
+          }
+        },
+        {
+          "op": "user",
+          "text": "force OK: limpia la carpeta tmp"
+        },
+        {
+          "op": "tool",
+          "name": "Bash",
+          "input": {
+            "command": "ssh maria_server 'rm -rf /tmp/x'"
+          }
+        }
+      ],
+      "expect_rule_ids": [],
+      "strict": true
+    },
+    {
+      "id": "R23m-duplicate-in-window",
+      "seq": [
+        {
+          "op": "tool",
+          "name": "nexo_email_send",
+          "input": {
+            "to": "maria@example.com",
+            "body": "hola maria el plan adjunto"
+          }
+        },
+        {
+          "op": "tool",
+          "name": "nexo_email_send",
+          "input": {
+            "to": "maria@example.com",
+            "body": "hola maria el plan adjunto"
+          }
+        }
+      ],
+      "expect_rule_ids": [
+        "R23m_message_duplicate"
+      ]
+    },
+    {
+      "id": "R23m-duplicate-outside-window",
+      "note": "cannot simulate time travel from fixture; see unit tests for TTL coverage",
+      "seq": [
+        {
+          "op": "tool",
+          "name": "nexo_email_send",
+          "input": {
+            "to": "m@x.com",
+            "body": "solo un envio"
+          }
+        }
+      ],
+      "expect_rule_ids": [],
+      "strict": true
+    }
+  ]
+}

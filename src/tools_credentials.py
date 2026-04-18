@@ -1,6 +1,23 @@
 """Credentials CRUD tools: get, create, update, delete, list."""
 
-from db import create_credential, update_credential, delete_credential, get_credential, list_credentials
+from db import create_credential, update_credential, delete_credential, get_credential, list_credentials, get_db
+
+
+def _credential_exists(service: str, key: str) -> bool:
+    """Fase 2 R02 helper — exact (service, key) match against active credentials.
+
+    The credentials table already enforces uniqueness via a PRIMARY/UNIQUE key
+    and create_credential returns an IntegrityError-wrapped dict when the
+    collision is hit. This helper lets the handler surface the R02 message
+    BEFORE the DB round-trip, with a more informative error structure that
+    matches the rest of the Fase 2 dedup family (R01, R05, R09).
+    """
+    conn = get_db()
+    row = conn.execute(
+        "SELECT 1 FROM credentials WHERE service = ? AND key = ? LIMIT 1",
+        (service, key),
+    ).fetchone()
+    return row is not None
 
 
 def handle_credential_get(service: str, key: str = '') -> str:
@@ -22,8 +39,31 @@ def handle_credential_get(service: str, key: str = '') -> str:
     return "\n".join(lines)
 
 
-def handle_credential_create(service: str, key: str, value: str, notes: str = '') -> str:
-    """Create a new credential entry."""
+def handle_credential_create(service: str, key: str, value: str, notes: str = '', force: str = '') -> str:
+    """Create a new credential entry.
+
+    Args:
+        service: Service identifier (e.g., 'meta', 'stripe', 'anthropic').
+        key: Credential key within the service (e.g., 'api_key', 'token_live').
+        value: The secret value.
+        notes: Free-form operational notes — never include the value.
+        force: Set to '1'/'true' to OVERWRITE an existing (service, key) pair.
+               Without force, Fase 2 R02 rejects duplicates and points at
+               nexo_credential_update as the canonical edit path.
+    """
+    # ── R02 (Fase 2 Protocol Enforcer): reject exact (service, key) duplicates ──
+    force_flag = str(force or "").strip().lower() in {"1", "true", "yes", "on"}
+    if not force_flag and _credential_exists(service, key):
+        return (
+            f"ERROR: Credential {service}/{key} already exists (R02). "
+            f"Use nexo_credential_update to modify the value/notes, "
+            f"nexo_credential_delete to remove it, or pass force='true' to "
+            f"overwrite (last resort — prefer update for auditability)."
+        )
+    if force_flag and _credential_exists(service, key):
+        # force path — delete the old row then re-insert so updated_at,
+        # notes and value land in a single audit trail entry.
+        delete_credential(service, key)
     result = create_credential(service, key, value, notes)
     if "error" in result:
         return f"ERROR: {result['error']}"

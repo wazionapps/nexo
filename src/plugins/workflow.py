@@ -7,6 +7,7 @@ import json
 from db import (
     create_workflow_goal,
     create_workflow_run,
+    get_db,
     get_workflow_goal,
     get_protocol_task,
     get_workflow_run,
@@ -17,6 +18,34 @@ from db import (
     record_workflow_transition,
     update_workflow_goal,
 )
+from protocol_settings import get_protocol_strictness
+
+
+def _session_has_open_task(session_id: str) -> bool:
+    """Return True if the session has at least one open protocol task.
+
+    Used by R10 (Fase 2 Protocol Enforcer) to enforce that
+    nexo_workflow_open is always anchored to a parent protocol task —
+    either the one explicitly passed via ``protocol_task_id`` or any
+    other open task in the same session. The rule exists because
+    workflows that open without a task leave orphan audit trails;
+    downstream debt tooling cannot correlate checkpoints back to a
+    protocol contract.
+    """
+    clean_sid = (session_id or "").strip()
+    if not clean_sid:
+        return False
+    try:
+        conn = get_db()
+        row = conn.execute(
+            "SELECT 1 FROM protocol_tasks WHERE session_id = ? AND status = ? LIMIT 1",
+            (clean_sid, "open"),
+        ).fetchone()
+        return row is not None
+    except Exception:
+        # Fail-CLOSED on DB errors: assume no open task so the check
+        # blocks in strict mode. Learning #249 — never silently coerce.
+        return False
 
 
 def _parse_json_list(value: str) -> list:
@@ -81,6 +110,35 @@ def handle_workflow_open(
                 ensure_ascii=False,
                 indent=2,
             )
+    else:
+        # ── R10 (Fase 2 Protocol Enforcer): workflow_open requires parent task ──
+        # Workflows exist to make multi-step work resumable and auditable.
+        # Without a parent protocol task the audit trail starts mid-air —
+        # debts, change-log entries, and followups cannot be correlated
+        # back to a contract. Strict mode rejects; lenient mode allows but
+        # flags the orphan.
+        if not _session_has_open_task(clean_sid):
+            strictness = get_protocol_strictness()
+            if strictness == "strict":
+                return json.dumps(
+                    {
+                        "ok": False,
+                        "error": "Cannot open workflow without a parent protocol task.",
+                        "hint": (
+                            "Call `nexo_task_open(...)` first with the same goal, "
+                            "then pass the returned task_id as `protocol_task_id=` "
+                            "when opening the workflow. Alternatively, open any "
+                            "other protocol task in this session beforehand."
+                        ),
+                        "rule_id": "R10_workflow_open_without_task",
+                        "session_id": clean_sid,
+                        "protocol_strictness": strictness,
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            # In lenient mode we allow the workflow but tag the response
+            # so downstream tooling surfaces the orphan condition.
 
     try:
         run = create_workflow_run(

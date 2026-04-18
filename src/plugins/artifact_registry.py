@@ -35,6 +35,103 @@ def _cognitive_ingest_safe(content, source_type, source_id="", source_title="", 
         pass
 
 
+def _find_artifact_duplicate(
+    canonical_name: str,
+    uri: str,
+    ports_json: str,
+    paths_json: str,
+    domain: str,
+) -> dict | None:
+    """Fase 2 R09 helper — detect an already-registered artifact that would
+    collide with the new one.
+
+    A duplicate is declared when an ACTIVE artifact matches on any of:
+      - canonical_name (case-insensitive) WITHIN the same domain, OR
+      - uri (case-insensitive, trimmed), OR
+      - any port in the candidate's ports list (via JSON LIKE match), OR
+      - any path in the candidate's paths list (exact match).
+
+    Domain scoping for canonical_name prevents a legitimate same-name
+    artifact in a different project from being rejected. URI/port/path
+    collisions are treated as domain-independent because those address
+    real resources (a port can only serve one process at a time).
+    """
+    conn = get_db()
+    clean_name = (canonical_name or "").strip().lower()
+    clean_uri = (uri or "").strip().lower()
+    clean_domain = (domain or "").strip()
+
+    try:
+        port_list = json.loads(ports_json or "[]") or []
+    except (json.JSONDecodeError, TypeError):
+        port_list = []
+    try:
+        path_list = json.loads(paths_json or "[]") or []
+    except (json.JSONDecodeError, TypeError):
+        path_list = []
+
+    # Canonical name + domain match
+    if clean_name:
+        row = conn.execute(
+            """SELECT id, canonical_name, uri, domain, ports, paths
+               FROM artifact_registry
+               WHERE LOWER(canonical_name) = ? AND COALESCE(domain, '') = ?
+                     AND COALESCE(state, 'active') != 'archived'
+               LIMIT 1""",
+            (clean_name, clean_domain),
+        ).fetchone()
+        if row:
+            return {"reason": "same_canonical_name_in_domain", "row": dict(row)}
+
+    # URI match (any state != archived)
+    if clean_uri:
+        row = conn.execute(
+            """SELECT id, canonical_name, uri, domain, ports, paths
+               FROM artifact_registry
+               WHERE LOWER(uri) = ? AND COALESCE(state, 'active') != 'archived'
+               LIMIT 1""",
+            (clean_uri,),
+        ).fetchone()
+        if row:
+            return {"reason": "same_uri", "row": dict(row)}
+
+    # Port match — any port in the candidate list collides with any existing
+    if port_list:
+        rows = conn.execute(
+            """SELECT id, canonical_name, uri, domain, ports, paths
+               FROM artifact_registry
+               WHERE ports != '[]' AND ports IS NOT NULL
+                     AND COALESCE(state, 'active') != 'archived'"""
+        ).fetchall()
+        candidate_ports = {str(p) for p in port_list}
+        for row in rows:
+            try:
+                existing_ports = {str(p) for p in (json.loads(row["ports"] or "[]") or [])}
+            except (json.JSONDecodeError, TypeError):
+                continue
+            if candidate_ports & existing_ports:
+                return {"reason": "port_collision", "row": dict(row)}
+
+    # Path match — any path in the candidate list matches any existing path
+    if path_list:
+        rows = conn.execute(
+            """SELECT id, canonical_name, uri, domain, ports, paths
+               FROM artifact_registry
+               WHERE paths != '[]' AND paths IS NOT NULL
+                     AND COALESCE(state, 'active') != 'archived'"""
+        ).fetchall()
+        candidate_paths = {str(p) for p in path_list}
+        for row in rows:
+            try:
+                existing_paths = {str(p) for p in (json.loads(row["paths"] or "[]") or [])}
+            except (json.JSONDecodeError, TypeError):
+                continue
+            if candidate_paths & existing_paths:
+                return {"reason": "path_collision", "row": dict(row)}
+
+    return None
+
+
 def handle_artifact_create(
     kind: str,
     canonical_name: str,
@@ -48,6 +145,7 @@ def handle_artifact_create(
     domain: str = '',
     session_id: str = '',
     metadata: str = '{}',
+    force: str = '',
 ) -> str:
     """Register a new artifact (service, dashboard, script, API, etc.).
 
@@ -66,9 +164,29 @@ def handle_artifact_create(
         domain: Project domain (nexo, my-project, project-a, project-b, etc.)
         session_id: Current session ID
         metadata: JSON object with extra key-value pairs
+        force: Set to '1'/'true' to bypass Fase 2 R09 dedup when the duplicate
+               is intentional (e.g. re-registering after archive). Without
+               force, any match on canonical_name+domain / uri / port / path
+               returns an error pointing at the existing artifact.
     """
     if kind not in VALID_KINDS:
         return f"ERROR: kind must be one of: {', '.join(sorted(VALID_KINDS))}"
+
+    # ── R09 (Fase 2 Protocol Enforcer): reject duplicate artifacts ──
+    force_flag = str(force or "").strip().lower() in {"1", "true", "yes", "on"}
+    if not force_flag:
+        dup = _find_artifact_duplicate(canonical_name, uri, ports, paths, domain)
+        if dup:
+            existing = dup["row"]
+            reason = dup["reason"]
+            return (
+                f"ERROR: Duplicate artifact detected (R09, reason={reason}). "
+                f"Existing artifact #{existing['id']} '{existing['canonical_name']}' "
+                f"(domain={existing.get('domain') or '-'}, uri={existing.get('uri') or '-'}). "
+                "Options: update the existing entry via nexo_artifact_update, "
+                "archive it first, or pass force='true' if the collision is "
+                "intentional."
+            )
 
     # Parse aliases
     try:

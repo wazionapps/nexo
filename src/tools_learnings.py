@@ -4,7 +4,7 @@ import re
 from datetime import datetime
 
 from db import (create_learning, update_learning, delete_learning, search_learnings,
-                list_learnings, find_similar_learnings, get_db, now_epoch, supersede_learning)
+                list_learnings, find_similar_learnings, get_db, now_epoch, supersede_learning, extract_keywords)
 
 NEGATION_PATTERNS = (
     "do not", "don't", "never", "avoid", "skip", "without", "forbid", "forbidden",
@@ -287,6 +287,48 @@ def handle_learning_add(category: str, title: str, content: str, reasoning: str 
     ).fetchone()
     if existing:
         return f"Learning #{existing['id']} already exists with same title in {category}: {existing['title']}. Use nexo_learning_update to modify it."
+
+    # ── R05 (Fase 2 Protocol Enforcer): auto-merge on high Jaccard similarity ──
+    # When a near-duplicate active learning exists (Jaccard >= R05 threshold),
+    # do NOT create a new row. Instead increment the weight on the existing
+    # learning (capped at 1.0) and return a "merged" message. Same-category
+    # scope only — different categories are legitimately distinct even if
+    # keywords overlap.
+    R05_MERGE_THRESHOLD = 0.85
+    existing_for_merge = conn.execute(
+        "SELECT id, title, content, weight FROM learnings WHERE category = ? AND status = 'active'",
+        (category,)
+    ).fetchall()
+    if existing_for_merge:
+        keywords_new = set(extract_keywords(f"{title} {content}"))
+        if keywords_new:
+            best = None  # (id, similarity, title)
+            for row in existing_for_merge:
+                keywords_existing = set(extract_keywords(f"{row['title']} {row['content']}"))
+                if not keywords_existing:
+                    continue
+                overlap = keywords_new & keywords_existing
+                union = keywords_new | keywords_existing
+                similarity = (len(overlap) / len(union)) if union else 0.0
+                if similarity >= R05_MERGE_THRESHOLD and (best is None or similarity > best[1]):
+                    best = (row["id"], similarity, row["title"], row["weight"])
+            if best is not None:
+                existing_id, similarity, existing_title, existing_weight = best
+                # Bump weight (+0.1 capped at 1.0) to strengthen the existing
+                # canonical rule. No duplicate row created.
+                new_weight = min(1.0, float(existing_weight or 0.0) + 0.1)
+                conn.execute(
+                    "UPDATE learnings SET weight = ?, updated_at = ? WHERE id = ?",
+                    (new_weight, now_epoch(), existing_id),
+                )
+                conn.commit()
+                return (
+                    f"Learning #{existing_id} matched new content at Jaccard {similarity:.2f} "
+                    f">= R05 merge threshold ({R05_MERGE_THRESHOLD:.2f}). No duplicate created. "
+                    f"Existing title: {existing_title}. Weight bumped {existing_weight or 0.0:.2f} "
+                    f"→ {new_weight:.2f}. Use nexo_learning_update(id={existing_id}) if you need to "
+                    "refine the canonical text."
+                )
     conflicting = _find_conflicting_active_learning(
         conn,
         category=category,

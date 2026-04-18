@@ -485,3 +485,61 @@ def cmd_scan_profile(args) -> int:
     sys.stdout.write("  preview:\n")
     sys.stdout.write(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
     return 0 if status != "error" else 1
+
+
+# ---------------------------------------------------------------- quarantine (Fase E.5)
+
+def _quarantine_list_impl(status: str = "pending", limit: int = 20) -> list[dict]:
+    """Proxy to cognitive.quarantine_list, surfaced via Desktop bridge.
+
+    Fase E.5 Desktop UI Guardian Proposals panel lists pending quarantine
+    items with [Approve / Reject] actions. Desktop calls
+    `nexo quarantine list --json` and gets the same shape as the MCP tool.
+    """
+    from cognitive import quarantine_list
+    try:
+        return quarantine_list(status=status, limit=limit)
+    except Exception as exc:  # noqa: BLE001
+        return [{"error": str(exc)}]
+
+
+def _quarantine_promote_impl(item_id: int) -> dict:
+    from cognitive import quarantine_promote
+    try:
+        msg = quarantine_promote(item_id)
+        return {"ok": not msg.startswith("ERROR"), "message": msg, "id": item_id}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "message": str(exc), "id": item_id}
+
+
+def _quarantine_reject_impl(item_id: int, reason: str = "") -> dict:
+    from cognitive import quarantine_reject
+    try:
+        msg = quarantine_reject(item_id, reason=reason)
+        return {"ok": not msg.startswith("ERROR"), "message": msg, "id": item_id}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "message": str(exc), "id": item_id}
+
+
+def cmd_quarantine_list(args) -> int:
+    """CLI: `nexo quarantine list [--status X] [--limit N] [--json]`."""
+    items = _quarantine_list_impl(
+        status=getattr(args, "status", "pending") or "pending",
+        limit=int(getattr(args, "limit", 20) or 20),
+    )
+    return _print_json({"items": items})
+
+
+def cmd_quarantine_promote(args) -> int:
+    """CLI: `nexo quarantine promote <id> [--json]`."""
+    result = _quarantine_promote_impl(int(args.id))
+    return _print_json(result)
+
+
+def cmd_quarantine_reject(args) -> int:
+    """CLI: `nexo quarantine reject <id> [--reason X] [--json]`."""
+    result = _quarantine_reject_impl(
+        int(args.id),
+        reason=getattr(args, "reason", "") or "",
+    )
+    return _print_json(result)

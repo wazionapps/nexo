@@ -15,6 +15,10 @@
     "bajo": {
       "claude_code": { "model": "claude-opus-4-7[1m]", "effort": "medium" },
       "codex":       { "model": "gpt-5.4",             "effort": "low" }
+    },
+    "muy_bajo": {
+      "claude_code": { "model": "claude-haiku-4-5-20251001", "effort": "" },
+      "codex":       { "model": "gpt-5.4-mini",              "effort": "low" }
     }
   },
   "default_tier": "alto"

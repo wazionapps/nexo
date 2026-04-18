@@ -98,6 +98,10 @@ def default_client_preferences() -> dict:
         "last_terminal_client": "",
         "automation_enabled": True,
         "automation_backend": CLIENT_CLAUDE_CODE,
+        # True iff the user has EXPLICITLY changed automation_backend from its
+        # installer-chosen value. Installer/update flows (Fase E) only rewrite
+        # automation_backend if this flag is False — respects user opt-out.
+        "automation_user_override": False,
         "client_runtime_profiles": default_client_runtime_profiles(),
         "automation_task_profiles": default_automation_task_profiles(),
         "client_install_preferences": {
@@ -231,6 +235,21 @@ def normalize_last_terminal_client(value, interactive_clients: dict[str, bool] |
 
 def normalize_automation_enabled(value) -> bool:
     return _coerce_bool(value, True)
+
+
+def normalize_automation_user_override(value) -> bool:
+    """Normalize automation_user_override flag.
+
+    Coerces any truthy value to True, falsy to False. Use when loading
+    user preferences or when accepting apply_client_preferences input.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    if isinstance(value, (int, float)):
+        return bool(value)
+    return False
 
 
 def normalize_automation_backend(value, *, automation_enabled: bool = True) -> str:
@@ -380,6 +399,9 @@ def normalize_client_preferences(
         schedule.get("automation_backend"),
         automation_enabled=automation_enabled,
     )
+    automation_user_override = normalize_automation_user_override(
+        schedule.get("automation_user_override")
+    )
     install_preferences = normalize_client_install_preferences(
         schedule.get("client_install_preferences")
     )
@@ -392,6 +414,7 @@ def normalize_client_preferences(
         "last_terminal_client": last_terminal_client,
         "automation_enabled": automation_enabled,
         "automation_backend": automation_backend,
+        "automation_user_override": automation_user_override,
         "client_runtime_profiles": runtime_profiles,
         "automation_task_profiles": normalize_automation_task_profiles(
             schedule.get("automation_task_profiles")
@@ -429,6 +452,7 @@ def apply_client_preferences(
     last_terminal_client: str | None = None,
     automation_enabled=None,
     automation_backend: str | None = None,
+    automation_user_override: bool | None = None,
     client_runtime_profiles: dict | None = None,
     automation_task_profiles: dict | None = None,
     client_install_preferences: dict | None = None,
@@ -453,6 +477,11 @@ def apply_client_preferences(
     merged["automation_backend"] = normalize_automation_backend(
         automation_backend if automation_backend is not None else current["automation_backend"],
         automation_enabled=merged["automation_enabled"],
+    )
+    merged["automation_user_override"] = normalize_automation_user_override(
+        automation_user_override
+        if automation_user_override is not None
+        else current.get("automation_user_override", False)
     )
     merged["client_runtime_profiles"] = normalize_client_runtime_profiles(
         client_runtime_profiles
@@ -490,6 +519,7 @@ def save_client_preferences(
     last_terminal_client: str | None = None,
     automation_enabled=None,
     automation_backend: str | None = None,
+    automation_user_override: bool | None = None,
     client_runtime_profiles: dict | None = None,
     automation_task_profiles: dict | None = None,
     client_install_preferences: dict | None = None,
@@ -503,6 +533,7 @@ def save_client_preferences(
         last_terminal_client=last_terminal_client,
         automation_enabled=automation_enabled,
         automation_backend=automation_backend,
+        automation_user_override=automation_user_override,
         client_runtime_profiles=client_runtime_profiles,
         automation_task_profiles=automation_task_profiles,
         client_install_preferences=client_install_preferences,
