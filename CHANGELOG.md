@@ -1,8 +1,13 @@
 # Changelog
 
-## [Unreleased] — Plan Consolidado v7
+## [6.2.0] - 2026-04-18
 
-Work in progress on `feat/plan-consolidado-v7`. Will ship as v7.0.0 together with NEXO Desktop.
+Plan Consolidado — first coordinated release of the two-wave plan.
+Second wave (T4 LLM classifier wrap, 0.2 cognitive_sentiment reshape,
+0.3 extended entities schema, 0.21 local zero-shot BGE-M3, R06 email
+secret filter, R11 plugin pre-inventory, Fase E.3–E.6, F0.1–F0.6
+scripts migration with the breaking v7.0.0 symlink removal) is tracked
+in `~/Desktop/NEXO-PLAN-CONSOLIDADO-BACKLOG.md`.
 
 ### Added — Plan T5 · R34 identity coherence across terminals
 
