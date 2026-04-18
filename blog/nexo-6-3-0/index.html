@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXO 6.3.0: Plan Consolidado wave 2 + T4 LLM classifier gate</title>
+    <meta name="description" content="NEXO Brain v6.3.0 coordinated with NEXO Desktop v0.18.0 — Plan Consolidado wave 2 lands the T4 LLM classifier gate wrapping R15/R23e/R23f/R23h, extended cognitive_sentiment + entities schema, Fase F telemetry loops + Deep Sleep phase, pinned local zero-shot classifier, hook migration flag, origin column on personal_scripts. Two pre-release auditors caught and fixed a CRITICAL dead-code wire + HIGH classifier ambiguity.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-6-3-0/">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/blog/nexo-6-3-0/">
+    <meta property="og:title" content="NEXO 6.3.0: Plan Consolidado wave 2 + T4 LLM classifier gate">
+    <meta property="og:description" content="T4 gate wraps R15/R23e/R23f/R23h, Fase F loops + Deep Sleep report, pinned mDeBERTa classifier, entities schema extension. Two pre-release auditors fixed CRITICAL dead-code wire + HIGH classifier ambiguity.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+    <meta property="article:published_time" content="2026-04-18">
+    <meta property="article:author" content="Francisco Cerda Puigserver">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO 6.3.0: Plan Consolidado wave 2 + T4 LLM classifier gate">
+    <meta name="twitter:description" content="Plan Consolidado wave 2 — T4 gate wraps R15/R23e/R23f/R23h with byte-parity Py ↔ JS; Fase F loops, pinned mDeBERTa classifier, origin column, hook migration flag. 2 pre-release auditors caught CRITICAL + HIGH before merge.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "NEXO 6.3.0: Plan Consolidado wave 2 + T4 LLM classifier gate",
+        "description": "Plan Consolidado wave 2 coordinated with NEXO Desktop v0.18.0. T4 gate wraps R15/R23e/R23f/R23h byte-parity Py ↔ JS. Fase F telemetry loops + Deep Sleep phase. Pinned mDeBERTa classifier skeleton. Extended cognitive_sentiment and entities schema. Hook migration flag. Origin column on personal_scripts. Two pre-release auditors fixed a CRITICAL dead-code wire and a HIGH classifier ambiguity.",
+        "datePublished": "2026-04-18",
+        "dateModified": "2026-04-18",
+        "author": {"@type": "Person", "name": "Francisco Cerda Puigserver"},
+        "publisher": {"@type": "Organization", "name": "WAzion", "url": "https://www.wazion.com"},
+        "mainEntityOfPage": {"@type": "WebPage", "@id": "https://nexo-brain.com/blog/nexo-6-3-0/"},
+        "url": "https://nexo-brain.com/blog/nexo-6-3-0/",
+        "image": "https://nexo-brain.com/assets/og/og-blog.png",
+        "keywords": ["NEXO 6.3.0", "Plan Consolidado", "T4", "LLM classifier", "R15", "R23e", "R23f", "R23h", "mDeBERTa", "Deep Sleep", "Fase F", "Guardian"]
+    }
+    </script>
+</head>
+<body>
+<main>
+<article class="article-body" style="max-width: 760px; margin: 80px auto; padding: 0 24px; line-height: 1.75;">
+    <h1>NEXO 6.3.0 — Plan Consolidado wave 2 + T4 LLM classifier gate</h1>
+    <p><em>Published 2026-04-18. Coordinated with NEXO Desktop v0.18.0.</em></p>
+
+    <h2>Headline</h2>
+    <p>The Protocol Enforcer gains a real LLM gate. Rules R15 (project context), R23e (force-push to main), R23f (production DELETE/UPDATE without WHERE) and R23h (shebang mismatch) now ask a small classifier <em>"is this regex match actually a drift worth nudging?"</em> before enqueuing an injection. Verdict is tristate — <code>yes</code> proceeds, <code>no</code> skips (cuts false positives), <code>unknown</code> falls through to regex (never silently suppresses a rule on infra flakiness). Byte parity between the Python headless engine and the NEXO Desktop JS twin.</p>
+
+    <h2>Also in this release</h2>
+    <ul>
+        <li><strong>Extended <code>cognitive_sentiment</code> shape</strong> — <code>is_correction</code>, <code>valence ∈ [-1, 1]</code>, <code>intent</code> enum.</li>
+        <li><strong>Entities schema extension</strong> — <code>aliases</code>, <code>metadata</code>, <code>source</code>, <code>confidence</code>, <code>access_mode</code> via idempotent migration <code>m44</code>.</li>
+        <li><strong>21 labelled rule fixtures</strong> + R13 spike gates (FP &lt; 5%, P95 &lt; 3s).</li>
+        <li><strong>Fase F telemetry loops</strong> — <code>src/fase_f_loops.py</code> + <code>src/scripts/phase_guardian_analysis.py</code> feeding Deep Sleep with per-rule aggregates, FP clustering and FN new-rule candidates.</li>
+        <li><strong>Local zero-shot classifier skeleton</strong> — pinned <code>MoritzLaurer/mDeBERTa-v3-base-mnli-xnli</code> at revision <code>a1a5a76a8cb44edb4f92e7e2ea4f0e0ce8ce6e97</code> + upgrade policy docs.</li>
+        <li><strong>Hook respects <code>NEXO_MIGRATING=1</code></strong> — structure migrations no longer need per-file task_open.</li>
+        <li><strong><code>origin</code> column on <code>personal_scripts</code></strong> — lets <code>nexo update</code> and the future Desktop Automations panel separate core vs user scripts without heuristics.</li>
+        <li><strong>R34 identity coherence</strong> added to the system prompt with an explicit anti-example.</li>
+        <li><strong>artifact_class preset entries</strong> — <code>shopify_banner_block</code>, <code>changelog_entry</code>, <code>email_to_operator_contact</code>.</li>
+    </ul>
+
+    <h2>Audit trail</h2>
+    <p>Two parallel auditors ran pre-release per the "2-auditor" mandate. Both flagged the same <strong>CRITICAL F-01</strong>: the first JS wire of the T4 gate called <code>gate.classifyWithLlm</code> (lowercase Llm) while the actual export is <code>classifyWithLLM</code> and is <em>async</em> — the <code>verdict === 'no'</code> check was comparing a Promise to a string, always false, so the gate was dead code. Fixed with <code>await</code> + new integration test. Auditor 1 also found <strong>HIGH H1</strong>: the existing <code>enforcement_classifier.classify</code> returned <code>False</code> both when the classifier said "no" AND when both retries produced an unparseable response — a T4-gated destructive rule would be silently suppressed on a flaky backend. Fixed by introducing <code>tristate=True</code> that returns <code>"yes" | "no" | "unknown"</code> so unparseable answers fall through to regex instead of disabling the rule. H2 removed <code>"otra vez"</code> from <code>CORRECTION_SIGNALS</code> (benign phrases like "envíame la lista otra vez" were flagged as corrections). Re-audit approved the fixes before tagging.</p>
+
+    <h2>Deferred</h2>
+    <p>F0.3–F0.6 physical move of <code>~/.nexo/scripts/</code>, <code>skills/</code>, <code>plugins/</code>, <code>hooks/</code>, <code>rules/</code>, <code>brain/</code>, <code>operations/</code> into <code>core/</code> + <code>personal/</code>, plus the breaking v7.0.0 symlink removal, stay tracked as a follow-up. They require coordinated validation on Francisco's and Nora's live runtimes — moving a LaunchAgent-backed cron without verifying its credentials still resolve after the relocation is how runtime outages happen.</p>
+
+    <p><a href="/changelog/#v630">Open the changelog entry</a> · <a href="https://github.com/wazionapps/nexo/pull/217">PR #217</a> · <a href="/blog/nexo-6-2-0/">Previous: NEXO 6.2.0</a></p>
+</article>
+</main>
+</body>
+</html>

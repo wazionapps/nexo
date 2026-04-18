@@ -181,7 +181,56 @@
     </div>
 </section>
 
-<!-- v6.0.6 — Installer no longer leaks NEXO_HOME/bin into shell profile -->
+<section id="v630" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v6.3.0 <span style="opacity:.5;font-weight:400;">&mdash; April 18, 2026</span></div>
+        <h2 style="color:white;margin-bottom:16px;">Plan Consolidado wave 2 + T4 LLM classifier gate</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            Coordinated with NEXO Desktop v0.18.0. Extends the <code>cognitive_sentiment</code> shape with <code>is_correction</code>, <code>valence</code> and <code>intent</code> enum. Amplia el schema de <code>entities</code> con <code>aliases</code>, <code>metadata</code>, <code>source</code>, <code>confidence</code> y <code>access_mode</code> v&iacute;a la migraci&oacute;n idempotente <code>m44</code>. Aterriza 21 fixtures etiquetadas con spike gates de R13 (FP &lt; 5%, P95 &lt; 3s). Bucles F&aacute;se F (<code>src/fase_f_loops.py</code> + <code>phase_guardian_analysis.py</code>) alimentan Deep Sleep con m&eacute;tricas por regla, agrupaci&oacute;n de falsos positivos y candidatos de falso negativo para nuevas reglas en sombra. Esqueleto del classifier local zero-shot con pin exacto de <code>MoritzLaurer/mDeBERTa-v3-base-mnli-xnli</code> y su pol&iacute;tica de upgrade documentada. El hook de strict mode respeta <code>NEXO_MIGRATING=1</code>, columna <code>origin</code> en <code>personal_scripts</code>, y el gate T4 envuelve R15 / R23e / R23f / R23h con paridad Py &harr; JS. Dos auditores pre-release detectaron un wire JS dead-code (CRITICAL) y una ambig&uuml;edad del classifier (HIGH); ambos corregidos con regression tests antes del merge.
+        </p>
+    </div>
+</section>
+
+<section id="v620" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v6.2.0 <span style="opacity:.5;font-weight:400;">&mdash; April 18, 2026</span></div>
+        <h2 style="color:white;margin-bottom:16px;">Plan Consolidado wave 1 &mdash; Protocol Enforcer Fase 2 + T5 R34</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            Coordinated with NEXO Desktop v0.17.0. Primer release v&iacute;a el plan de dos olas. Introduce R26&ndash;R34 en el system prompt, R-CATALOG (0.X.2) como gate pre-<code>*_create</code>, la secci&oacute;n <code>locations</code> en <code>nexo_system_catalog</code>, T5 R34 identity coherence con paridad CLAUDE.md / AGENTS.md, T0/T1/T2/T3 deuda Desktop, Fase B cerrada 12/12 con tests unitarios y el bug modal bullets corregido.
+        </p>
+    </div>
+</section>
+
+<!-- v6.0.6 &mdash; Installer no longer leaks NEXO_HOME/bin into shell profile -->
+<section id="v611" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v6.1.1 <span style="opacity:.5;font-weight:400;">&mdash; April 18, 2026</span></div>
+        <h2 style="color:white;margin-bottom:16px;">`nexo --help` refresh unblocked for NEXO Desktop subprocess</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            Small follow-up to v6.1.0. The Brain auto-update banner in NEXO Desktop depends on parsing <code>Latest: vX</code> from <code>nexo --help</code>. Prior gate at <code>_should_refresh_latest_version()</code> used <code>isatty()</code> to decide whether to hit npm — this excluded Desktop&rsquo;s subprocess (stdio piped). v6.1.1 drops the TTY gate; the 6-hour cache max-age is the real rate-limit. Fail-closed to installed-only when npm unreachable.
+        </p>
+    </div>
+</section>
+
+<section id="v610" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v6.1.0 <span style="opacity:.5;font-weight:400;">&mdash; April 18, 2026</span></div>
+        <h2 style="color:white;margin-bottom:16px;">Protocol Enforcer Fase 2 + multi-conversation hook aliasing</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            <strong>Protocol Enforcer Fase 2 ships.</strong> Capa 2 runtime guardian with 25 rules (R13&ndash;R25 + R23b&ndash;R23m) keeping Claude Code / Codex / NEXO Desktop aligned to protocol. Core rules (R13 pre-Edit guard, R14 post-correction learning, R16 declared-done, R25 Nora/Mar&iacute;a read-only) ship with defence-in-depth: <code>guardian.json</code> cannot turn them off. Incident-driven D2 covers <code>git push --force</code> to main/master, <code>DELETE</code>/<code>UPDATE</code> without <code>WHERE</code>, <code>scp</code> to the wrong docroot, <code>chown -R</code> on root-ish paths, secrets echoed into output streams, duplicate outbound messages, shebang-vs-interpreter mismatch (no shell injection), and more. Templates byte-for-byte parity across <code>src/enforcement_engine.py</code> and the NEXO Desktop JS twin.
+        </p>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            <strong>Migration v43 <code>session_claude_aliases</code></strong> &mdash; 1-to-N map from NEXO sid to every Claude session UUID. Fixes the NEXO Desktop multi-conversation block where every second conversation&rsquo;s PreToolUse hook failed with &ldquo;unknown target&rdquo;. <code>_resolve_nexo_sid</code> now consults aliases first, falls back to legacy column (pre-v43 rows), then to the v6.0.7 single-active fallback.
+        </p>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            <strong>Audit cycle applied.</strong> External-LLM audit + Opus 4.7 effort-high self-audit. Log redaction now covers Bearer/sk-/pk-/api_key/JWT/AWS/GitHub/Shopify/KEY=VALUE/mysql <code>-p&lt;pass&gt;</code>. R23f heredoc multiline, R23h native PATH resolution, R14 detector awaited, hermetic map lookup, cross-engine parity harness in strict mode, red-team suite (32 attempts across 12 rules). Guardian telemetry NDJSON + <code>scripts/install_guardian.py</code> installer + <code>docs/guardian-quickstart.md</code> operator guide.
+        </p>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            Suite: <strong>291 pass + 2 skip</strong> documented. Paired with NEXO Desktop v0.15.0 (Fase 2 JS twins, Guardian Proposals panel, Brain auto-update install flow with combined &ldquo;Actualizar todo&rdquo; banner).
+        </p>
+    </div>
+</section>
+
 <section id="v606" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
     <div class="section-inner section-inner--narrow">
         <div class="section-label">New in v6.0.6 <span style="opacity:.5;font-weight:400;">&mdash; April 17, 2026</span></div>
