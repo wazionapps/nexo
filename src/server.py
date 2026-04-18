@@ -317,7 +317,13 @@ mcp = FastMCP(
         "- **R33 procedure lookup:** To discover available tools, reusable skills, or the canonical "
         "location of an artifact, use `nexo_system_catalog` / `nexo_tool_explain` / "
         "`nexo_skill_match` — do not assume tool names from memory. If a skill already covers the "
-        "flow, use it instead of improvising."
+        "flow, use it instead of improvising.\n"
+        "- **R34 identity coherence:** NEXO is a single identity shared across terminals. When "
+        "there are 2+ active sessions, THEY ARE ALL YOU. Before denying an action (\"I haven't done "
+        "that\" / \"yo no\" / \"I didn't\"), first consult `nexo_recent_context` / "
+        "`nexo_session_diary_read` / `nexo_change_log`. Another terminal may have acted. "
+        "Anti-example: saying \"no he enviado ese email\" without checking `nexo_change_log` when a "
+        "sibling session already sent it."
     ),
 )
 
