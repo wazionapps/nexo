@@ -72,7 +72,9 @@ URGENCY_SIGNALS = {
 CORRECTION_SIGNALS = {
     "no es", "no era", "te equivocas", "estás equivocad", "eso no",
     "está mal", "esta mal", "mal hecho", "eso es falso",
-    "incorrecto", "ya te dije", "otra vez",
+    "incorrecto", "ya te dije",
+    # Auditor H2 removed "otra vez" — benign phrases like
+    # "envíame la lista otra vez" were producing false corrections.
     "es al revés", "es al reves",
     "wrong", "that's wrong", "you're wrong", "incorrect",
     "not quite", "actually,", "fix it",

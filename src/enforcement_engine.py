@@ -855,13 +855,24 @@ class HeadlessEnforcer:
             self._t4_gate_warned = set()
         try:
             from t4_llm_gate import build_prompt, classify_with_llm
-            from enforcement_classifier import classify as _classifier_fn
+            from enforcement_classifier import classify as _classifier_raw
         except Exception as exc:
             key = (rule_id, f"import:{exc.__class__.__name__}")
             if key not in self._t4_gate_warned:
                 self._t4_gate_warned.add(key)
                 _logger.warning("[T4 gate] import failed for %s: %s", rule_id, exc)
             return False
+
+        # Auditor H1 fix: the legacy bool contract of `classify` collapses
+        # "classifier said no" and "classifier response unparseable after
+        # two retries — conservative fallback" into the same False, which
+        # would silently suppress destructive rules (R23e/R23f/R23h) when
+        # the backend responds with garbage. Force the tristate path so
+        # "unknown" falls through to regex behaviour instead of becoming
+        # a silent rule disable.
+        def _classifier_tristate(q: str, ctx: str) -> str:
+            return _classifier_raw(q, ctx, tristate=True)
+
         prompt = build_prompt(rule_id, span=span, context=context)
         if not prompt:
             key = (rule_id, "no-prompt")
@@ -877,7 +888,7 @@ class HeadlessEnforcer:
                 rule_id,
                 prompt=prompt,
                 context=context,
-                classifier=_classifier_fn,
+                classifier=_classifier_tristate,
             )
         except Exception as exc:
             key = (rule_id, f"classify:{exc.__class__.__name__}")

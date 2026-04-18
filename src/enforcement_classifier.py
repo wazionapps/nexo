@@ -121,7 +121,8 @@ def classify(
     call_raw: Callable[..., str] = call_model_raw,
     cache: _TTLCache = _cache,
     tier: str = "muy_bajo",
-) -> bool:
+    tristate: bool = False,
+):
     """Run a triple-reinforced yes/no classification.
 
     Args:
@@ -130,11 +131,23 @@ def classify(
         call_raw: Injection point for tests — defaults to call_model_raw.
         cache: TTL cache instance. Tests can pass a fresh cache.
         tier: Resonance tier. Default "muy_bajo" (Haiku / gpt-5.4-mini).
+        tristate: When True, return "yes" / "no" / "unknown" as strings.
+            "unknown" represents the conservative-parse-fallback path
+            which existing bool callers cannot distinguish from a real
+            "no". Plan Consolidado wave-2 auditor H1 required this
+            differentiation for destructive rules (R23e, R23f, R23h)
+            wired through the T4 gate: silently suppressing a rule on
+            an unparseable classifier answer is fail-open and unsafe.
+            Default False keeps legacy callers compatible.
 
     Returns:
-        True iff the classifier confidently answers "yes". False otherwise
-        (including when the second retry fails — conservative fallback per
-        plan doc 1 "triple refuerzo").
+        With ``tristate=False`` (default): ``True`` iff the classifier
+        confidently answers "yes", ``False`` otherwise (including the
+        conservative fallback when both retries fail to parse).
+
+        With ``tristate=True``: one of the strings ``"yes"``, ``"no"``,
+        or ``"unknown"``. ``"unknown"`` is returned when both retries
+        produce an unparseable response.
 
     Raises:
         ClassifierUnavailableError: Propagated from call_model_raw when the
@@ -145,6 +158,8 @@ def classify(
     cached = cache.get(key)
     if cached is not None:
         _logger.debug("CACHE_HIT key=%s → %s", key[:12], cached)
+        if tristate:
+            return "yes" if cached else "no"
         return cached
 
     user_text = question if not context else f"{question}\n\nContext:\n{context}"
@@ -161,6 +176,8 @@ def classify(
     if parsed is not None:
         cache.put(key, parsed)
         _logger.debug("FIRST_OK raw=%r → %s", first, parsed)
+        if tristate:
+            return "yes" if parsed else "no"
         return parsed
 
     # Retry with stricter reformulation — one time, then give up conservative.
@@ -176,13 +193,21 @@ def classify(
     if parsed is not None:
         cache.put(key, parsed)
         _logger.debug("RETRY_OK raw=%r → %s", second, parsed)
+        if tristate:
+            return "yes" if parsed else "no"
         return parsed
 
-    # Both attempts unparseable. Conservative default: NO.
+    # Both attempts unparseable. Legacy callers get the conservative False;
+    # tristate callers get "unknown" so a T4 destructive-rule gate can
+    # fall through to regex instead of silently suppressing the rule
+    # on an unparseable classifier answer.
     _logger.warning(
-        "PARSER_FAIL (fallback no) first=%r second=%r q=%r",
+        "PARSER_FAIL (fallback) first=%r second=%r q=%r",
         first, second, question[:120],
     )
+    if tristate:
+        # Do NOT cache "unknown" — retrying on the next call is desirable.
+        return "unknown"
     cache.put(key, False)
     return False
 

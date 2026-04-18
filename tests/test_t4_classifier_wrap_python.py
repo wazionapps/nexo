@@ -100,3 +100,61 @@ def test_build_prompt_for_each_wrapped_rule():
         assert prompt
         assert "Answer exactly" in prompt
         assert "yes" in prompt and "no" in prompt
+
+
+def test_auditor_h1_tristate_unknown_does_not_suppress_rule():
+    """Regression — Auditor 1 found that enforcement_classifier.classify
+    conflated "classifier said no" with "classifier response
+    unparseable after retries", which would silently suppress destructive
+    rules on flaky backends.
+
+    With tristate=True, a conservative-parse-fallback now returns
+    "unknown" and `classify_with_llm` must NOT treat it as "no".
+    """
+    from enforcement_classifier import classify, _TTLCache
+    from t4_llm_gate import classify_with_llm
+
+    def unparseable(*_args, **_kwargs):
+        # Simulates the backend returning something the yes/no parser
+        # can't match. classify() will try twice then fall back.
+        return "something unparseable"
+
+    tristate_cache = _TTLCache()
+
+    def tristate_classifier(q, ctx):
+        return classify(
+            q,
+            ctx,
+            call_raw=unparseable,
+            cache=tristate_cache,
+            tristate=True,
+        )
+
+    verdict = classify_with_llm(
+        "R23e",
+        prompt="Is this a destructive force-push?",
+        context="",
+        classifier=tristate_classifier,
+        cache={},
+    )
+    assert verdict == "unknown", (
+        "unparseable classifier response must not silently suppress "
+        "destructive rules — verdict must be unknown, not no"
+    )
+
+
+def test_classify_legacy_bool_fallback_still_false():
+    """tristate=False keeps the legacy bool contract intact for existing
+    rule callers (R14/R16/R17/R20)."""
+    from enforcement_classifier import classify, _TTLCache
+
+    def unparseable(*_args, **_kwargs):
+        return "???"
+
+    res = classify(
+        "Is this a correction?",
+        "",
+        call_raw=unparseable,
+        cache=_TTLCache(),
+    )
+    assert res is False  # legacy conservative fallback unchanged
