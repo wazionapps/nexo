@@ -64,6 +64,11 @@ except ImportError:  # pragma: no cover
     _R17_WINDOW = 2
 
 try:
+    from r_catalog import should_inject_r_catalog as _r_catalog_should
+except ImportError:  # pragma: no cover
+    _r_catalog_should = None  # type: ignore
+
+try:
     from r20_constant_change import (
         should_inject_r20 as _r20_should,
         INJECTION_PROMPT_TEMPLATE as _R20_PROMPT,
@@ -1341,6 +1346,30 @@ class HeadlessEnforcer:
         self._enqueue(prompt, decision["tag"], rule_id="R22_personal_script")
         _logger.info("[R22 %s] enqueued path=%s missing=%s", mode.upper(), decision["path"], decision["missing"])
 
+    def _check_r_catalog(self, tool_name: str):
+        """R-CATALOG (Plan Consolidado 0.X.2) — pre-create discovery probe."""
+        if _r_catalog_should is None:
+            return
+        mode = self._guardian_rule_mode("R_CATALOG_before_artifact_create")
+        if mode == "off":
+            return
+        # The trigger tool was just appended to recent_tool_records so we
+        # inspect the preceding window (strip the current call).
+        window = 60.0
+        now = time.time()
+        names = [
+            r.tool for r in self.recent_tool_records[:-1]
+            if (now - getattr(r, "ts", now)) <= window
+        ]
+        should, prompt = _r_catalog_should(tool_name, recent_tool_names=names)
+        if not should:
+            return
+        if mode == "shadow":
+            _logger.info("[R_CATALOG SHADOW] would inject for %s", tool_name)
+            return
+        self._enqueue(prompt, f"R_CATALOG:{tool_name}", rule_id="R_CATALOG_before_artifact_create")
+        _logger.info("[R_CATALOG %s] enqueued tool=%s", mode.upper(), tool_name)
+
     def _check_r18(self, tool_name: str, tool_input):
         """R18 — suggest followup_complete on closure-class actions."""
         if _r18_should is None or _r18_format is None:
@@ -1509,6 +1538,10 @@ class HeadlessEnforcer:
 
         # R22 — personal script create without prior context probes.
         self._check_r22(name, tool_input)
+
+        # R-CATALOG (Plan 0.X.2) — nudge if we are about to create/open/add
+        # without having consulted the live inventory in the last 60 s.
+        self._check_r_catalog(name)
 
         # R18 — retroactive followup-complete suggestion on closure actions.
         self._check_r18(name, tool_input)

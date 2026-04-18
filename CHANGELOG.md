@@ -4,6 +4,17 @@
 
 Work in progress on `feat/plan-consolidado-v7`. Will ship as v7.0.0 together with NEXO Desktop.
 
+### Added — Plan 0.X.2 · R-CATALOG pre-create probe
+
+- **`src/r_catalog.py`** + **`nexo-desktop/lib/r-catalog.js`** — pure decision modules, byte-for-byte equivalent. Trigger on any `nexo_*_create` / `_open` / `_add` tool. If none of the six discovery tools (`nexo_system_catalog`, `nexo_tool_explain`, `nexo_skill_match`, `nexo_skill_list`, `nexo_learning_search`, `nexo_guard_check`) fired in the preceding 60-second window, inject a nudge to run one first. Prevents duplicate artefacts (new personal scripts that clone an existing skill, duplicate followups, learning spam).
+- **`src/enforcement_engine.py::_check_r_catalog`** + **`nexo-desktop/enforcement-engine.js::_checkRCatalog`** — wire both engines. Shadow/soft/hard respect `guardian.json.rules.R_CATALOG_before_artifact_create`. Default already shipped as `soft`.
+- **`tests/test_r_catalog.py`** (10 cases) + **`nexo-desktop/tests/r-catalog.test.js`** (11 cases) — parity tests. One dedicated case asserts the injection prompt is byte-for-byte identical between Python and JS so the two engines can never drift.
+
+### Added — Plan 0.X.4 · `locations` in `nexo_system_catalog`
+
+- **`src/system_catalog.py::_locations`** — new canonical path map exposed alongside the catalog sections: `brain.db`, `brain.calibration`, `brain.project_atlas`, `config.dir`, `config.guardian`, `config.guardian_runtime_overrides`, `logs.*`, `skills.*`, `scripts.core`, `hooks.runtime`, `rules.*`, `tool_enforcement_map`, `reports`, `backups`, `snapshots`, `crons.*`. All absolute, resolved from `NEXO_HOME` + `NEXO_CODE` so tests and staging runtimes get coherent paths. `build_system_catalog()` returns it under the `locations` key (outside the per-section summary so existing consumers keep working).
+- **`tests/test_system_catalog_locations.py`** — 3 cases: flat dict of absolute paths, canonical keys present, `build_system_catalog()` exposes the block.
+
 ### Added — Plan 0.15 · drift baseline
 
 - **`scripts/measure_drift_baseline.py`** — reads the last 90 session diaries from `~/.nexo/brain/session_archive/` (fallback `brain/diaries/`), counts occurrences of known drift patterns per rule (R13/R14/R16/R17/R19/R20/R25/R26/R27/R30/R31), and writes an aggregated JSON report to `~/.nexo/reports/drift-baseline-<YYYY-MM-DD>.json`. Pure reader: never writes inside the diary tree. Exits non-zero when no diaries are found so the caller knows the baseline is unusable. Prerequisite for Fase F KPI "reducción >50% por regla en 30 días".
