@@ -8,6 +8,12 @@ build/
 *.egg
 .venv/
 
+# Plan 0.3 / v6.3.1 — operator-specific entity overrides must never be
+# committed. Only the .sample version lives in the repo. Instances drop
+# their real file at ~/.nexo/brain/presets/entities_local.json.
+src/presets/entities_local.json
+.nexo/brain/presets/entities_local.json
+
 # Node
 node_modules/
 package-lock.json

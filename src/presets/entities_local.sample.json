@@ -1,0 +1,30 @@
+{
+  "$schema": "https://nexo-brain.com/schemas/entities-preset-v1.json",
+  "version": "1.0.0",
+  "description": "Operator-specific entity overrides. Copy to ~/.nexo/brain/presets/entities_local.json and edit with YOUR domains, hosts, IPs, tenants. This file is .gitignored — never committed to the public package. The installer merges local entries on top of entities_universal.json at `nexo init` and during `nexo update`.",
+  "source": "local",
+  "confidence": 1.0,
+  "entities": [
+    {
+      "type": "vhost_mapping",
+      "name": "example_main_site",
+      "metadata": {
+        "domain": "example.com",
+        "host": "ssh-alias-for-your-host",
+        "docroot": "/home/user/public_html",
+        "note": "Replace with your real production site. Host must match ~/.ssh/config alias."
+      }
+    },
+    {
+      "type": "host",
+      "name": "example-host-alias",
+      "aliases": ["example-ssh-nickname"],
+      "metadata": {
+        "ip": "203.0.113.1",
+        "provider": "your-cloud-provider",
+        "access_mode": "read_write",
+        "note": "Replace with your real hosts. NEXO reads ~/.ssh/config automatically so you usually don't need to list hosts here."
+      }
+    }
+  ]
+}

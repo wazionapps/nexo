@@ -31,11 +31,13 @@ def test_artifact_class_entries_cover_required_names():
         for e in data["entities"]
         if e.get("type") == "artifact_class"
     }
+    # v6.3.1 — shopify_banner_block moved out of universal to
+    # entities_local.sample.json / entities_local.json because it is
+    # platform-specific knowledge. Universal preset stays generic.
     required = {
         "github_issue",
         "nexo_release",
         "email_to_operator_contact",
-        "shopify_banner_block",
         "changelog_entry",
     }
     missing = required - artifact_names

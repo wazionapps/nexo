@@ -154,7 +154,6 @@
       "type": "artifact_class",
       "name": "email_to_operator_contact",
       "aliases": [
-        "email_to_maria",
         "operator_email",
         "client_message"
       ],
@@ -162,21 +161,8 @@
         "tool": "nexo_email_send",
         "required_from": "info@<operator-domain>",
         "when": "reply / outreach to an operator's external contact (client, vendor, counterparty)",
-        "anti_example": "sending from nexo@systeam.es on behalf of Maria's CanaRirural shop",
+        "anti_example": "sending from the NEXO default mailbox on behalf of an operator's external tenant",
         "reference_learning": "feedback_no_email_followup_completados"
-      }
-    },
-    {
-      "type": "artifact_class",
-      "name": "shopify_banner_block",
-      "aliases": [
-        "banner",
-        "promo_strip"
-      ],
-      "metadata": {
-        "platform": "shopify",
-        "constraints": "max-width container with visible borders — NEVER a hero full-width bleed",
-        "reference_learning": "feedback_shopify_banner_not_hero"
       }
     },
     {
@@ -193,79 +179,16 @@
     },
     {
       "type": "vhost_mapping",
-      "name": "systeam_es",
-      "metadata": {
-        "domain": "systeam.es",
-        "host": "vicshop",
-        "docroot": "/home/vicshopsysteam/public_html",
-        "note": "Francisco advisory web"
-      }
-    },
-    {
-      "type": "vhost_mapping",
-      "name": "wazion_com",
-      "metadata": {
-        "domain": "wazion.com",
-        "host": "wazion-gcp",
-        "docroot": "/var/www/wazion.com/public_html"
-      }
-    },
-    {
-      "type": "vhost_mapping",
-      "name": "recambios_bmw",
-      "metadata": {
-        "domain": "recambios-bmw.es",
-        "host": "mundiserver",
-        "docroot": "/home/vicshop/public_html"
-      }
-    },
-    {
-      "type": "vhost_mapping",
-      "name": "allinoneapp",
-      "metadata": {
-        "domain": "allinoneapp.com",
-        "host": "mundiserver",
-        "docroot": "/home/vicshop/allinoneapp"
-      }
-    },
-    {
-      "type": "vhost_mapping",
-      "name": "bulksend",
-      "metadata": {
-        "domain": "bulksend.app",
-        "host": "mundiserver",
-        "docroot": "/home/vicshop/bulksend"
-      }
-    },
-    {
-      "type": "vhost_mapping",
       "name": "nexo_brain",
       "metadata": {
         "domain": "nexo-brain.com",
         "host": "github-pages",
-        "docroot": "public/"
-      }
-    },
-    {
-      "type": "vhost_mapping",
-      "name": "canarirural",
-      "metadata": {
-        "domain": "canarirural.com",
-        "host": "mundiserver",
-        "docroot": "/home/canariru/public_html",
-        "note": "Shop ID 14 servidor 45.148.1.111, Maria tenant"
-      }
-    },
-    {
-      "type": "vhost_mapping",
-      "name": "vic_shop",
-      "metadata": {
-        "domain": "vicshop.com",
-        "host": "vicshop",
-        "docroot": "/home/vicshopsysteam/vicshop"
+        "docroot": "public/",
+        "note": "Public product site. Safe to ship in the universal preset."
       }
     }
   ],
+  "local_overrides_note": "Operator-specific vhost_mapping entries (private domains, IPs, hostnames, tenant names) live in ~/.nexo/brain/presets/entities_local.json — copy from src/presets/entities_local.sample.json. The installer merges local entries on top of this universal preset at `nexo init`. Never commit operator data to entities_universal.json — v6.3.0 accidentally shipped seven such entries and was patched in v6.3.1.",
   "ssh_config_import": {
     "enabled_default": true,
     "source": "~/.ssh/config",

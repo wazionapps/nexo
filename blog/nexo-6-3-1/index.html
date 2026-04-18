@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXO 6.3.1: Privacy hotfix — operator data out of the public preset</title>
+    <meta name="description" content="NEXO Brain v6.3.1 is a privacy hotfix over v6.3.0. The nightly Opus 4.7 xhigh auditor caught that src/presets/entities_universal.json shipped operator-specific vhost_mapping entries (private IPs, hostnames, tenant names). v6.3.1 moves those to src/presets/entities_local.sample.json (template) plus a .gitignore'd operator copy at ~/.nexo/brain/presets/entities_local.json. Installer drops the sample on nexo init and never overwrites the operator file.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-6-3-1/">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/blog/nexo-6-3-1/">
+    <meta property="og:title" content="NEXO 6.3.1: Privacy hotfix — operator data out of the public preset">
+    <meta property="og:description" content="Nightly auditor caught operator vhost_mapping entries in the public entities_universal.json preset shipped with v6.3.0. v6.3.1 moves them to a gitignore'd local override file.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+    <meta property="article:published_time" content="2026-04-19">
+    <meta property="article:author" content="Francisco Cerda Puigserver">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO 6.3.1: Privacy hotfix">
+    <meta name="twitter:description" content="Auditor Opus 4.7 xhigh caught operator-specific entries in the public entities preset. v6.3.1 moves them to a .gitignore'd local override.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "NEXO 6.3.1: Privacy hotfix — operator data out of the public preset",
+        "description": "Nightly Opus 4.7 xhigh auditor caught that entities_universal.json shipped operator vhost_mapping entries in v6.3.0. v6.3.1 moves them to a gitignored local override seeded by the installer from a sample template.",
+        "datePublished": "2026-04-19",
+        "dateModified": "2026-04-19",
+        "author": {"@type": "Person", "name": "Francisco Cerda Puigserver"},
+        "publisher": {"@type": "Organization", "name": "WAzion", "url": "https://www.wazion.com"},
+        "mainEntityOfPage": {"@type": "WebPage", "@id": "https://nexo-brain.com/blog/nexo-6-3-1/"},
+        "url": "https://nexo-brain.com/blog/nexo-6-3-1/",
+        "image": "https://nexo-brain.com/assets/og/og-blog.png",
+        "keywords": ["NEXO 6.3.1", "privacy hotfix", "entities_universal.json", "entities_local.json", "auditor", "Opus 4.7"]
+    }
+    </script>
+</head>
+<body>
+<main>
+<article class="article-body" style="max-width: 760px; margin: 80px auto; padding: 0 24px; line-height: 1.75;">
+    <h1>NEXO 6.3.1 — Privacy hotfix over v6.3.0</h1>
+    <p><em>Published 2026-04-19. Patch release.</em></p>
+
+    <h2>What happened</h2>
+    <p>v6.3.0 shipped <code>src/presets/entities_universal.json</code> with operator-specific <code>vhost_mapping</code> entries: private IPs, docroots under an operator's home, and tenant names belonging to an operator's downstream clients. The entries were harmless on the operator's own runtime but should never have crossed the npm package boundary into every fresh install.</p>
+
+    <h2>How the leak was caught</h2>
+    <p>The nightly auditor — an Opus 4.7 xhigh session with the <code>pr-review-toolkit</code> skills — reviewed every commit merged during the v6.3.0 cycle. It flagged the preset as HIGH severity the same night the package was tagged, before any user outside the publisher pulled it on a fresh box. A patch was prepared in the same session.</p>
+
+    <h2>Fix</h2>
+    <ul>
+        <li><code>src/presets/entities_universal.json</code> now only contains universal entries (destructive-command shapes, legacy-path migration mappings, artifact-class templates, and the public nexo-brain.com vhost). Seven operator-specific <code>vhost_mapping</code> entries have been removed.</li>
+        <li><code>src/presets/entities_local.sample.json</code> is the new template operators copy to <code>~/.nexo/brain/presets/entities_local.json</code> and fill in with their real domains / hosts / IPs / tenants.</li>
+        <li><code>.gitignore</code> blocks <code>entities_local.json</code> so the pattern cannot recur by mistake.</li>
+        <li><code>scripts/install_guardian.py</code> drops the sample at <code>nexo init</code> and never overwrites an existing operator copy.</li>
+    </ul>
+
+    <h2>Behavioural impact</h2>
+    <p>None on the Guardian side. Rules R21 / R23 / R25 read entities regardless of whether they live in <code>entities_universal.json</code> or <code>entities_local.json</code> — the merger is transparent.</p>
+
+    <h2>Who should care</h2>
+    <ul>
+        <li>Anyone who ran <code>npm install nexo-brain@6.3.0</code> on a box they had never installed NEXO on before. Upgrade to 6.3.1 and, if you ran <code>nexo init</code>, move your local entries out of <code>entities_universal.json</code> (which will be overwritten on <code>nexo update</code>) into <code>entities_local.json</code>.</li>
+        <li>Future contributors — the <code>.gitignore</code> rule makes the pattern permanent.</li>
+    </ul>
+
+    <p><a href="/changelog/#v631">Open the changelog entry</a> · <a href="/blog/nexo-6-3-0/">Previous: NEXO 6.3.0</a></p>
+</article>
+</main>
+</body>
+</html>

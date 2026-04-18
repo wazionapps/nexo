@@ -181,6 +181,16 @@
     </div>
 </section>
 
+<section id="v631" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v6.3.1 <span style="opacity:.5;font-weight:400;">&mdash; April 19, 2026</span></div>
+        <h2 style="color:white;margin-bottom:16px;">Privacy hotfix &mdash; operator data leaves the public preset</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            El auditor Opus 4.7 xhigh nocturno detect&oacute; que <code>src/presets/entities_universal.json</code> en v6.3.0 sub&iacute;a al paquete p&uacute;blico entradas <code>vhost_mapping</code> espec&iacute;ficas del operador (IPs privadas, hostnames de tenants, docroots). v6.3.1 saca esas entradas a <code>src/presets/entities_local.sample.json</code> (plantilla) + <code>~/.nexo/brain/presets/entities_local.json</code> (copia local del operador, <code>.gitignore</code>'d). El installer <code>nexo init</code> escribe la plantilla en la primera instalaci&oacute;n y nunca pisa la copia del operador. Comportamiento del Guardian sin cambios.
+        </p>
+    </div>
+</section>
+
 <section id="v630" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
     <div class="container" style="max-width:860px;">
         <div class="section-label">New in v6.3.0 <span style="opacity:.5;font-weight:400;">&mdash; April 18, 2026</span></div>
