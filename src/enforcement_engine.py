@@ -64,6 +64,16 @@ except ImportError:  # pragma: no cover
     _R17_WINDOW = 2
 
 try:
+    from r_catalog import should_inject_r_catalog as _r_catalog_should
+except ImportError:  # pragma: no cover
+    _r_catalog_should = None  # type: ignore
+
+try:
+    from r34_identity_coherence import should_inject_r34 as _r34_should
+except ImportError:  # pragma: no cover
+    _r34_should = None  # type: ignore
+
+try:
     from r20_constant_change import (
         should_inject_r20 as _r20_should,
         INJECTION_PROMPT_TEMPLATE as _R20_PROMPT,
@@ -812,12 +822,85 @@ class HeadlessEnforcer:
         decision = _r15_should(text or "", project_list, records)
         if not decision:
             return
+        # T4.2 — LLM gate: if the classifier says the turn is
+        # conversational / off-topic, skip the injection. Regex wins on
+        # "unknown" so legitimate R15 hits still fire without a working
+        # classifier.
+        if self._t4_gate_says_no("R15", span=(text or "")[:400]):
+            _logger.info(
+                "[R15 T4] gate=no, skipping project=%s", decision["project"]
+            )
+            return
         prompt = _R15_PROMPT.format(project=decision["project"])
         if mode == "shadow":
             _logger.info("[R15 SHADOW] would inject: project=%s", decision["project"])
             return
         self._enqueue(prompt, decision["tag"], rule_id="R15_project_context")
         _logger.info("[R15 %s] enqueued project=%s", mode.upper(), decision["project"])
+
+    # ------------------------------------------------------------------
+    # T4 LLM gate — central helper (Plan Consolidado T4.2-T4.6).
+    # ------------------------------------------------------------------
+    def _t4_gate_says_no(self, rule_id: str, *, span: str, context: str = "") -> bool:
+        """Return True ONLY when the T4 classifier explicitly votes "no"
+        for this rule hit. "yes" or "unknown" (classifier unavailable,
+        import error, rate limit, parse failure) fall through to regex
+        behaviour — never silently suppress a rule on infra flakiness.
+
+        Every unavailable-path logs a WARNING once per (rule_id, reason)
+        via ``_t4_gate_warned`` so degradations surface in the console
+        without flooding it.
+        """
+        if not hasattr(self, "_t4_gate_warned"):
+            self._t4_gate_warned = set()
+        try:
+            from t4_llm_gate import build_prompt, classify_with_llm
+            from enforcement_classifier import classify as _classifier_raw
+        except Exception as exc:
+            key = (rule_id, f"import:{exc.__class__.__name__}")
+            if key not in self._t4_gate_warned:
+                self._t4_gate_warned.add(key)
+                _logger.warning("[T4 gate] import failed for %s: %s", rule_id, exc)
+            return False
+
+        # Auditor H1 fix: the legacy bool contract of `classify` collapses
+        # "classifier said no" and "classifier response unparseable after
+        # two retries — conservative fallback" into the same False, which
+        # would silently suppress destructive rules (R23e/R23f/R23h) when
+        # the backend responds with garbage. Force the tristate path so
+        # "unknown" falls through to regex behaviour instead of becoming
+        # a silent rule disable.
+        def _classifier_tristate(q: str, ctx: str) -> str:
+            return _classifier_raw(q, ctx, tristate=True)
+
+        prompt = build_prompt(rule_id, span=span, context=context)
+        if not prompt:
+            key = (rule_id, "no-prompt")
+            if key not in self._t4_gate_warned:
+                self._t4_gate_warned.add(key)
+                _logger.warning(
+                    "[T4 gate] no prompt template for rule_id=%s (check PROMPTS)",
+                    rule_id,
+                )
+            return False
+        try:
+            verdict = classify_with_llm(
+                rule_id,
+                prompt=prompt,
+                context=context,
+                classifier=_classifier_tristate,
+            )
+        except Exception as exc:
+            key = (rule_id, f"classify:{exc.__class__.__name__}")
+            if key not in self._t4_gate_warned:
+                self._t4_gate_warned.add(key)
+                _logger.warning(
+                    "[T4 gate] classify failed for %s: %s — regex fallback active",
+                    rule_id,
+                    exc,
+                )
+            return False
+        return verdict == "no"
 
     def _check_r23(self, tool_name: str, tool_input):
         """R23 — ssh/scp/rsync/curl towards an unregistered host."""
@@ -986,6 +1069,10 @@ class HeadlessEnforcer:
         should, prompt = _r23e_should(tool_name, tool_input)
         if not should:
             return
+        span = (tool_input or {}).get("command", "") if isinstance(tool_input, dict) else ""
+        if self._t4_gate_says_no("R23e", span=span):
+            _logger.info("[R23e T4] gate=no, skipping")
+            return
         if mode == "shadow":
             _logger.info("[R23e SHADOW] would inject")
             return
@@ -1002,6 +1089,10 @@ class HeadlessEnforcer:
         markers = self._db_production_markers()
         should, prompt = _r23f_should(tool_name, tool_input, production_markers=markers or None)
         if not should:
+            return
+        span = (tool_input or {}).get("command", "") if isinstance(tool_input, dict) else ""
+        if self._t4_gate_says_no("R23f", span=span):
+            _logger.info("[R23f T4] gate=no, skipping")
             return
         if mode == "shadow":
             _logger.info("[R23f SHADOW] would inject")
@@ -1252,6 +1343,12 @@ class HeadlessEnforcer:
         should, prompt = _r23h_should(tool_name, tool_input)
         if not should:
             return
+        span = ""
+        if isinstance(tool_input, dict):
+            span = tool_input.get("content") or tool_input.get("new_string") or ""
+        if self._t4_gate_says_no("R23h", span=str(span)[:500]):
+            _logger.info("[R23h T4] gate=no, skipping")
+            return
         if mode == "shadow":
             _logger.info("[R23h SHADOW] would inject")
             return
@@ -1341,6 +1438,30 @@ class HeadlessEnforcer:
         self._enqueue(prompt, decision["tag"], rule_id="R22_personal_script")
         _logger.info("[R22 %s] enqueued path=%s missing=%s", mode.upper(), decision["path"], decision["missing"])
 
+    def _check_r_catalog(self, tool_name: str):
+        """R-CATALOG (Plan Consolidado 0.X.2) — pre-create discovery probe."""
+        if _r_catalog_should is None:
+            return
+        mode = self._guardian_rule_mode("R_CATALOG_before_artifact_create")
+        if mode == "off":
+            return
+        # The trigger tool was just appended to recent_tool_records so we
+        # inspect the preceding window (strip the current call).
+        window = 60.0
+        now = time.time()
+        names = [
+            r.tool for r in self.recent_tool_records[:-1]
+            if (now - getattr(r, "ts", now)) <= window
+        ]
+        should, prompt = _r_catalog_should(tool_name, recent_tool_names=names)
+        if not should:
+            return
+        if mode == "shadow":
+            _logger.info("[R_CATALOG SHADOW] would inject for %s", tool_name)
+            return
+        self._enqueue(prompt, f"R_CATALOG:{tool_name}", rule_id="R_CATALOG_before_artifact_create")
+        _logger.info("[R_CATALOG %s] enqueued tool=%s", mode.upper(), tool_name)
+
     def _check_r18(self, tool_name: str, tool_input):
         """R18 — suggest followup_complete on closure-class actions."""
         if _r18_should is None or _r18_format is None:
@@ -1360,6 +1481,40 @@ class HeadlessEnforcer:
             return
         self._enqueue(prompt, decision["tag"], rule_id="R18_followup_autocomplete")
         _logger.info("[R18 %s] enqueued %d matches", mode.upper(), decision["count"])
+
+    def on_assistant_message(self, text: str, *, classifier=None):
+        """R34 entry point — called when an assistant message is complete.
+
+        Plan Consolidado T5. If the message is a past-tense denial of an
+        action (ES/EN patterns) and no shared-brain tool was called in the
+        current turn, the rule fires a reminder to consult the shared brain
+        before asserting what happened.
+
+        Args:
+            text: assistant output text.
+            classifier: optional LLM yes/no callable used to disambiguate
+                regex matches. Tests pass a fake.
+        """
+        if _r34_should is None or not text:
+            return
+        mode = self._guardian_rule_mode("R34_identity_coherence")
+        if mode == "off":
+            return
+        recent_names = [r.tool for r in self.recent_tool_records]
+        try:
+            inject, prompt, matched = _r34_should(
+                text, recent_tool_names=recent_names, classifier=classifier,
+            )
+        except Exception as exc:  # noqa: BLE001
+            _logger.warning("R34 probe failed (%s); staying silent", exc)
+            return
+        if not inject:
+            return
+        if mode == "shadow":
+            _logger.info("[R34 SHADOW] would inject matched=%r", matched)
+            return
+        self._enqueue(prompt, f"R34:{matched[:40]}", rule_id="R34_identity_coherence")
+        _logger.info("[R34 %s] enqueued matched=%r", mode.upper(), matched)
 
     def notify_stale_memory_cited(self):
         """External hook for R24 — caller (handle_cognitive_retrieve post-
@@ -1509,6 +1664,10 @@ class HeadlessEnforcer:
 
         # R22 — personal script create without prior context probes.
         self._check_r22(name, tool_input)
+
+        # R-CATALOG (Plan 0.X.2) — nudge if we are about to create/open/add
+        # without having consulted the live inventory in the last 60 s.
+        self._check_r_catalog(name)
 
         # R18 — retroactive followup-complete suggestion on closure actions.
         self._check_r18(name, tool_input)

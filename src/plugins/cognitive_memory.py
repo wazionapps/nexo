@@ -263,6 +263,9 @@ def handle_cognitive_sentiment(text: str) -> str:
     lines = [
         f"SENTIMENT: {result['sentiment'].upper()} (intensity: {result['intensity']})",
         f"Trust Score: {trust:.0f}/100",
+        f"Intent: {result.get('intent', 'neutral')}",
+        f"Valence: {result.get('valence', 0.0):+.2f}",
+        f"IsCorrection: {bool(result.get('is_correction'))}",
     ]
     if result["signals"]:
         lines.append(f"Signals: {', '.join(result['signals'])}")

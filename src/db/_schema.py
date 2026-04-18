@@ -406,6 +406,7 @@ def _m20_personal_scripts_registry(conn):
             last_run_at TEXT DEFAULT NULL,
             last_exit_code INTEGER DEFAULT NULL,
             last_synced_at TEXT DEFAULT (datetime('now')),
+            origin TEXT NOT NULL DEFAULT 'user',
             created_at TEXT DEFAULT (datetime('now')),
             updated_at TEXT DEFAULT (datetime('now'))
         )
@@ -1082,6 +1083,41 @@ def _m43_session_claude_aliases(conn):
     )
 
 
+def _m45_personal_scripts_origin(conn):
+    """Plan Consolidado F0.1 — mark whether a personal_scripts row is
+    installed by NEXO Core (origin='core'), contributed by the operator
+    (origin='user'), or a dev-only core-dev script (origin='core-dev').
+
+    Used by `nexo update` to know which rows it can replace without
+    overwriting operator-authored automations, and by the Desktop
+    Automations panel (F0.2) to segment the list.
+
+    Idempotent.
+    """
+    _migrate_add_column(conn, "personal_scripts", "origin", "TEXT NOT NULL DEFAULT 'user'")
+    _migrate_add_index(conn, "idx_personal_scripts_origin", "personal_scripts", "origin")
+
+
+def _m44_entities_extended_schema(conn):
+    """Plan Consolidado 0.3 — extend entities with aliases/metadata/source/confidence/access_mode.
+
+    - aliases:     TEXT DEFAULT '[]'   (JSON array of alternative names)
+    - metadata:    TEXT DEFAULT '{}'   (JSON object of arbitrary key/value)
+    - source:      TEXT DEFAULT 'manual'
+                   (enum: preset | manual | quarantine_approved | auto_detected)
+    - confidence:  REAL DEFAULT 1.0     (0..1 — preset=1.0, quarantine≈0.6)
+    - access_mode: TEXT DEFAULT 'unknown'
+                   (enum: read_only | read_write | write_only | unknown)
+
+    Idempotent.
+    """
+    _migrate_add_column(conn, "entities", "aliases", "TEXT DEFAULT '[]'")
+    _migrate_add_column(conn, "entities", "metadata", "TEXT DEFAULT '{}'")
+    _migrate_add_column(conn, "entities", "source", "TEXT NOT NULL DEFAULT 'manual'")
+    _migrate_add_column(conn, "entities", "confidence", "REAL NOT NULL DEFAULT 1.0")
+    _migrate_add_column(conn, "entities", "access_mode", "TEXT DEFAULT 'unknown'")
+
+
 MIGRATIONS = [
     (1, "learnings_columns", _m1_learnings_columns),
     (2, "followups_reasoning", _m2_followups_reasoning),
@@ -1126,6 +1162,8 @@ MIGRATIONS = [
     (41, "automation_sessions_columns", _m41_automation_sessions_columns),
     (42, "v6_0_1_hotfix", _m42_v6_0_1_hotfix),
     (43, "session_claude_aliases", _m43_session_claude_aliases),
+    (44, "entities_extended_schema", _m44_entities_extended_schema),
+    (45, "personal_scripts_origin", _m45_personal_scripts_origin),
 ]
 
 

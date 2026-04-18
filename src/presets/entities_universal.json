@@ -151,6 +151,47 @@
       }
     },
     {
+      "type": "artifact_class",
+      "name": "email_to_operator_contact",
+      "aliases": [
+        "email_to_maria",
+        "operator_email",
+        "client_message"
+      ],
+      "metadata": {
+        "tool": "nexo_email_send",
+        "required_from": "info@<operator-domain>",
+        "when": "reply / outreach to an operator's external contact (client, vendor, counterparty)",
+        "anti_example": "sending from nexo@systeam.es on behalf of Maria's CanaRirural shop",
+        "reference_learning": "feedback_no_email_followup_completados"
+      }
+    },
+    {
+      "type": "artifact_class",
+      "name": "shopify_banner_block",
+      "aliases": [
+        "banner",
+        "promo_strip"
+      ],
+      "metadata": {
+        "platform": "shopify",
+        "constraints": "max-width container with visible borders — NEVER a hero full-width bleed",
+        "reference_learning": "feedback_shopify_banner_not_hero"
+      }
+    },
+    {
+      "type": "artifact_class",
+      "name": "changelog_entry",
+      "aliases": [
+        "CHANGELOG.md append"
+      ],
+      "metadata": {
+        "required_on": "every npm/DMG release",
+        "format": "'## <version> — <date>\\n\\n- ...'",
+        "reference_script": "scripts/verify_release_readiness.py"
+      }
+    },
+    {
       "type": "vhost_mapping",
       "name": "systeam_es",
       "metadata": {

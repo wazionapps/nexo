@@ -134,7 +134,7 @@
                     <span class="page-chip">Competitive analysis</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="/blog/nexo-6-1-1/" class="btn btn-primary">Read latest release</a>
+                    <a href="/blog/nexo-6-3-0/" class="btn btn-primary">Read latest release</a>
                     <a href="/changelog/" class="btn btn-secondary">Latest release notes</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -171,6 +171,20 @@
 <section class="section-flush-top">
     <div class="container">
         <div class="blog-grid">
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 18, 2026</div>
+                <h2><a href="/blog/nexo-6-3-0/">NEXO 6.3.0: Plan Consolidado wave 2 + T4 LLM classifier gate</a></h2>
+                <p>Coordinated with NEXO Desktop v0.18.0. Extends the <code>cognitive_sentiment</code> shape with <code>is_correction</code>, <code>valence</code> and <code>intent</code>; amplia el schema de <code>entities</code> v&iacute;a la migraci&oacute;n <code>m44</code>; ship 21 fixtures etiquetadas con R13 spike gates (FP &lt; 5%, P95 &lt; 3s); bucles F&aacute;se F + fase Deep Sleep; pinned classifier local zero-shot; hook respeta <code>NEXO_MIGRATING=1</code>; <code>origin</code> column en <code>personal_scripts</code>; gate T4 envuelve R15/R23e/R23f/R23h con paridad Py &harr; JS. Dos auditores pre-release detectaron un wire JS dead-code (CRITICAL) y una ambig&uuml;edad del classifier (HIGH); ambos corregidos con regression tests antes del merge.</p>
+                <a href="/blog/nexo-6-3-0/" class="read-more">Read more &rarr;</a>
+            </div>
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 18, 2026</div>
+                <h2><a href="/blog/nexo-6-2-0/">NEXO 6.2.0: Plan Consolidado wave 1 &mdash; Protocol Enforcer Fase 2 + T5 R34</a></h2>
+                <p>Coordinated with NEXO Desktop v0.17.0. Primer release v&iacute;a el plan de dos olas. Introduce R26&ndash;R34 en el system prompt, R-CATALOG (0.X.2) como gate pre-<code>*_create</code>, la secci&oacute;n <code>locations</code> en <code>nexo_system_catalog</code>, T5 R34 identity coherence con paridad CLAUDE.md / AGENTS.md, T0/T1/T2/T3 deuda Desktop, Fase B cerrada 12/12 con tests unitarios y el bug modal bullets corregido.</p>
+                <a href="/blog/nexo-6-2-0/" class="read-more">Read more &rarr;</a>
+            </div>
 
             <div class="blog-card">
                 <div class="blog-card-date">April 18, 2026</div>

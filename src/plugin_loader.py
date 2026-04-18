@@ -46,6 +46,85 @@ def _ensure_src_in_path():
         sys.path.insert(0, SERVER_DIR)
 
 
+# Plan Consolidado R11 — plugin_load pre-inventory check.
+# Before loading any plugin, verify it is declared in
+# ``tool-enforcement-map.json`` OR explicitly allow-listed below. This
+# prevents a stray `.py` file dropped into `src/plugins/` (or the user's
+# personal plugins dir) from loading silently and registering tools that
+# the Guardian has no entry for. Honours learning #335.
+_R11_ALLOW_LIST = frozenset({
+    # Names a plugin file can have that we never want to block — purely
+    # scaffolding files that ship with every install. Intentionally small.
+    "__init__.py",
+})
+
+
+def _collect_declared_plugin_names_from_map() -> set[str]:
+    """Parse the repo's tool-enforcement-map.json and return the set of
+    plugin-backed tool names. Falls back to empty on any IO / JSON error
+    so a broken map never hard-blocks plugin loading (soft gate)."""
+    try:
+        map_path = os.path.join(os.path.dirname(SERVER_DIR), "tool-enforcement-map.json")
+        if not os.path.isfile(map_path):
+            return set()
+        import json as _json
+        with open(map_path, "r", encoding="utf-8") as fh:
+            data = _json.load(fh)
+        tools = data.get("tools") or {}
+        return {
+            name for name, meta in tools.items()
+            if isinstance(meta, dict) and meta.get("source") in ("plugin", "personal_plugin")
+        }
+    except Exception:
+        return set()
+
+
+def _collect_declared_plugin_tool_names(plugin_path: str) -> set[str]:
+    """Scan a plugin file for ``"nexo_<name>"`` string literals that match
+    its tool declarations. Parser-free (regex) so we don't import the
+    plugin before deciding to load it (pre-inventory is, by definition,
+    pre-import)."""
+    try:
+        import re as _re
+        with open(plugin_path, "r", encoding="utf-8") as fh:
+            source = fh.read()
+        return set(_re.findall(r'"(nexo_[a-z_]+)"', source))
+    except Exception:
+        return set()
+
+
+def verify_plugin_in_inventory(filename: str, plugin_path: str) -> tuple[bool, str]:
+    """Return ``(ok, reason)`` for a plugin before it is loaded.
+
+    A plugin passes the R11 gate when EITHER:
+      - The filename is in the allow-list (scaffolding files).
+      - At least one nexo_<tool> string inside the plugin matches an
+        entry whose ``source`` is ``plugin`` / ``personal_plugin`` in
+        ``tool-enforcement-map.json``.
+
+    Plugins with no tool strings pass (they may be helper modules);
+    only plugins that DECLARE tools but none of those tools are in the
+    map are rejected.
+    """
+    if filename in _R11_ALLOW_LIST:
+        return True, "allow-listed"
+    declared = _collect_declared_plugin_tool_names(plugin_path)
+    if not declared:
+        return True, "no tools declared"
+    known = _collect_declared_plugin_names_from_map()
+    if not known:
+        # Map missing or unreadable — soft pass (we don't want a broken
+        # map to block every plugin).
+        return True, "map unavailable"
+    intersection = declared & known
+    if not intersection:
+        return False, (
+            f"plugin tools {sorted(declared)} not present in "
+            "tool-enforcement-map.json (add entries or update `source`)."
+        )
+    return True, f"matched {sorted(intersection)}"
+
+
 def load_all_plugins(mcp) -> int:
     """Load all plugins from repo and personal directories at startup. Returns total tools loaded."""
     _ensure_src_in_path()
@@ -74,6 +153,13 @@ def load_all_plugins(mcp) -> int:
     # Load all in sorted order
     for f in sorted(plugin_map):
         plugins_dir, source_label = plugin_map[f]
+        # Plan Consolidado R11 — pre-inventory gate. Reject unknown plugins
+        # before spawning their SIGALRM timeout + import.
+        plugin_path = os.path.join(plugins_dir, f)
+        ok, reason = verify_plugin_in_inventory(f, plugin_path)
+        if not ok:
+            print(f"[R11 REJECT] {f}: {reason}", file=sys.stderr)
+            continue
         try:
             old_handler = signal.signal(signal.SIGALRM, _timeout_handler)
             signal.alarm(PLUGIN_LOAD_TIMEOUT)

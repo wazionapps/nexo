@@ -1,0 +1,178 @@
+{
+  "description": "Plan Consolidado 0.8 — 20+ labelled fixtures for rule validation. Each case carries expected_rules (may be empty = should NOT fire).",
+  "version": "1.0.0",
+  "cases": [
+    {
+      "id": "R13-edit-without-guard",
+      "rule": "R13",
+      "expected_rules": ["R13_pre_edit_guard"],
+      "seq": [
+        {"op": "tool", "name": "Edit", "files": ["/repo/x.py"]}
+      ]
+    },
+    {
+      "id": "R13-edit-with-fresh-guard",
+      "rule": "R13",
+      "expected_rules": [],
+      "seq": [
+        {"op": "tool", "name": "nexo_guard_check", "files": ["/repo/x.py"], "ts_offset": -10},
+        {"op": "tool", "name": "Edit", "files": ["/repo/x.py"]}
+      ]
+    },
+    {
+      "id": "R13-edit-with-stale-guard-different-path",
+      "rule": "R13",
+      "expected_rules": ["R13_pre_edit_guard"],
+      "seq": [
+        {"op": "tool", "name": "nexo_guard_check", "files": ["/other/y.py"], "ts_offset": -10},
+        {"op": "tool", "name": "Edit", "files": ["/repo/x.py"]}
+      ]
+    },
+    {
+      "id": "R13-multi-edit-with-guard",
+      "rule": "R13",
+      "expected_rules": [],
+      "seq": [
+        {"op": "tool", "name": "nexo_guard_check", "files": ["/repo/a.py", "/repo/b.py"], "ts_offset": -15},
+        {"op": "tool", "name": "MultiEdit", "files": ["/repo/a.py"]}
+      ]
+    },
+    {
+      "id": "R13-read-not-triggered",
+      "rule": "R13",
+      "expected_rules": [],
+      "seq": [
+        {"op": "tool", "name": "Read", "files": ["/repo/x.py"]}
+      ]
+    },
+    {
+      "id": "R14-correction-captured",
+      "rule": "R14",
+      "expected_rules": [],
+      "meta": "R14 fires on user correction — validated by r14 module separately; empty here for spike"
+    },
+    {
+      "id": "R16-done-without-task-close",
+      "rule": "R16",
+      "expected_rules": [],
+      "meta": "R16 is message-level; this fixture is a placeholder to exercise parity structure"
+    },
+    {
+      "id": "R25-nora-readonly",
+      "rule": "R25",
+      "expected_rules": [],
+      "meta": "R25 fires on write calls to Nora runtime; placeholder"
+    },
+    {
+      "id": "R23e-force-push-main",
+      "rule": "R23e",
+      "expected_rules": ["R23e_force_push_main"],
+      "seq": [
+        {"op": "tool", "name": "Bash", "input": {"command": "git push --force origin main"}}
+      ]
+    },
+    {
+      "id": "R23e-force-push-feature-branch-allowed",
+      "rule": "R23e",
+      "expected_rules": [],
+      "seq": [
+        {"op": "tool", "name": "Bash", "input": {"command": "git push --force origin feat/x"}}
+      ]
+    },
+    {
+      "id": "R23f-db-delete-no-where",
+      "rule": "R23f",
+      "expected_rules": ["R23f_db_no_where"],
+      "seq": [
+        {"op": "tool", "name": "Bash", "input": {"command": "mysql -e \"DELETE FROM orders\""}}
+      ]
+    },
+    {
+      "id": "R23f-db-delete-with-where-allowed",
+      "rule": "R23f",
+      "expected_rules": [],
+      "seq": [
+        {"op": "tool", "name": "Bash", "input": {"command": "mysql -e \"DELETE FROM orders WHERE id = 42\""}}
+      ]
+    },
+    {
+      "id": "R13-edit-guard-older-than-30-calls",
+      "rule": "R13",
+      "expected_rules": ["R13_pre_edit_guard"],
+      "seq_generator": {
+        "prepend_noop_calls": 40,
+        "guard_ts_offset": -120,
+        "final": {"op": "tool", "name": "Edit", "files": ["/repo/x.py"]}
+      }
+    },
+    {
+      "id": "R13-edit-guard-outside-60s-window",
+      "rule": "R13",
+      "expected_rules": ["R13_pre_edit_guard"],
+      "seq": [
+        {"op": "tool", "name": "nexo_guard_check", "files": ["/repo/x.py"], "ts_offset": -120},
+        {"op": "tool", "name": "Edit", "files": ["/repo/x.py"]}
+      ]
+    },
+    {
+      "id": "R13-edit-unknown-target",
+      "rule": "R13",
+      "expected_rules": ["R13_pre_edit_guard"],
+      "seq": [
+        {"op": "tool", "name": "Write", "files": []}
+      ]
+    },
+    {
+      "id": "R13-guard-different-prefix-still-applies",
+      "rule": "R13",
+      "expected_rules": [],
+      "seq": [
+        {"op": "tool", "name": "mcp__nexo__nexo_guard_check", "files": ["/repo/x.py"], "ts_offset": -5},
+        {"op": "tool", "name": "Edit", "files": ["/repo/x.py"]}
+      ]
+    },
+    {
+      "id": "R30-done-claim-blocked",
+      "rule": "R30",
+      "expected_rules": [],
+      "meta": "R30 is text-level in system prompt + classifier; ensured via A.x tests separately"
+    },
+    {
+      "id": "R13-edit-python-fixture-ignored",
+      "rule": "R13",
+      "expected_rules": [],
+      "seq": [
+        {"op": "tool", "name": "nexo_guard_check", "files": ["/repo/x.py"], "ts_offset": -2},
+        {"op": "tool", "name": "Read", "files": ["/repo/x.py"]},
+        {"op": "tool", "name": "Edit", "files": ["/repo/x.py"]}
+      ]
+    },
+    {
+      "id": "R13-notebook-edit-without-guard",
+      "rule": "R13",
+      "expected_rules": ["R13_pre_edit_guard"],
+      "seq": [
+        {"op": "tool", "name": "NotebookEdit", "files": ["/repo/nb.ipynb"]}
+      ]
+    },
+    {
+      "id": "R13-delete-without-guard",
+      "rule": "R13",
+      "expected_rules": ["R13_pre_edit_guard"],
+      "seq": [
+        {"op": "tool", "name": "Delete", "files": ["/repo/x.py"]}
+      ]
+    },
+    {
+      "id": "R13-three-guards-then-edit-on-third-path",
+      "rule": "R13",
+      "expected_rules": [],
+      "seq": [
+        {"op": "tool", "name": "nexo_guard_check", "files": ["/a.py"], "ts_offset": -30},
+        {"op": "tool", "name": "nexo_guard_check", "files": ["/b.py"], "ts_offset": -20},
+        {"op": "tool", "name": "nexo_guard_check", "files": ["/c.py"], "ts_offset": -5},
+        {"op": "tool", "name": "Edit", "files": ["/c.py"]}
+      ]
+    }
+  ]
+}

@@ -608,6 +608,56 @@ def _artifact_entries() -> list[dict]:
     ]
 
 
+def _locations() -> dict[str, str]:
+    """Plan Consolidado 0.X.4 — canonical paths for runtime artefacts.
+
+    Returned as absolute strings so callers can ``Path(p).is_file()`` / pass
+    to shells directly. All values are derived from ``NEXO_HOME`` + ``NEXO_CODE``
+    so the map stays correct when the operator overrides ``NEXO_HOME`` (pytest,
+    staging, Nora). Entries whose real path depends on F0 migration progress
+    (pre-F0 flat layout vs post-F0 ``core/`` + ``personal/`` layout) fall back
+    to the flat layout until the migration lands.
+    """
+    home = NEXO_HOME
+    code = NEXO_CODE
+    return {
+        "nexo_home": str(home),
+        "nexo_code": str(code),
+        # Brain state
+        "brain.db": str(home / "data" / "nexo.db"),
+        "brain.calibration": str(home / "brain" / "calibration.json"),
+        "brain.profile": str(home / "brain" / "profile.json"),
+        "brain.project_atlas": str(home / "brain" / "project-atlas.json"),
+        # Config
+        "config.dir": str(home / "config"),
+        "config.guardian": str(home / "config" / "guardian.json"),
+        "config.guardian_runtime_overrides": str(home / "config" / "guardian-runtime-overrides.json"),
+        # Logs
+        "logs.dir": str(home / "logs"),
+        "logs.guardian_telemetry": str(home / "logs" / "guardian-telemetry.ndjson"),
+        "logs.guardian_overrides": str(home / "logs" / "guardian-overrides.log"),
+        # Skills — repo (source-controlled) vs runtime (installed/personal).
+        "skills.repo": str(code / ".." / ".claude-plugin"),
+        "skills.runtime_core": str(home / "skills"),
+        "skills.runtime_personal": str(home / "skills-personal"),
+        # Scripts + hooks + rules
+        "scripts.core": str(code / "scripts"),
+        "scripts.personal_registry": str(home / "brain" / "personal_scripts.db"),
+        "hooks.runtime": str(home / "hooks"),
+        "rules.core": str(code / "rules"),
+        "rules.personal": str(home / "rules"),
+        # Tool enforcement map (repo authority)
+        "tool_enforcement_map": str(code / ".." / "tool-enforcement-map.json"),
+        # Reports + backups + snapshots
+        "reports": str(home / "reports"),
+        "backups": str(home / "backups"),
+        "snapshots": str(home / "snapshots"),
+        # Crons manifest
+        "crons.manifest": str(code / "crons" / "manifest.json"),
+        "crons.runtime_manifest": str(home / "crons" / "manifest.json"),
+    }
+
+
 def build_system_catalog() -> dict:
     catalog = {
         "core_tools": _parse_core_tools(),
@@ -622,6 +672,10 @@ def build_system_catalog() -> dict:
         section: len(catalog.get(section) or [])
         for section in SECTION_ORDER
     }
+    # Plan Consolidado 0.X.4 — locations is a flat dict rather than a list,
+    # so it sits outside SECTION_ORDER and summary counts but still rides on
+    # every catalog read.
+    catalog["locations"] = _locations()
     return catalog
 
 

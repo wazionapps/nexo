@@ -1,5 +1,115 @@
 # Changelog
 
+## [6.3.0] - 2026-04-18
+
+Plan Consolidado — wave 2 (coordinated with NEXO Desktop v0.18.0).
+Closes the remaining items from the v7 roadmap that can land without
+an invasive structure migration. The breaking v7.0.0 (F0.3–F0.6
+physical move of `~/.nexo/scripts/`, `skills/`, `plugins/`, `hooks/`,
+`brain/` into `core/` + `personal/`) is tracked as a follow-up because
+it requires coordinated validation on Francisco's and Nora's live
+runtimes.
+
+### Added
+
+- **Plan 0.2 — cognitive_sentiment shape** — `detect_sentiment` now
+  returns `is_correction: bool`, `valence: float (-1..1)` and
+  `intent` enum alongside the legacy fields. New CORRECTION /
+  ACKNOWLEDGEMENT / INSTRUCTION / QUESTION signal sets, surfaced to
+  callers via `handle_cognitive_sentiment`.
+- **Plan 0.3 — entities schema extension** — five new columns on
+  `entities` (`aliases`, `metadata`, `source`, `confidence`,
+  `access_mode`) via idempotent migration `_m44_entities_extended_schema`.
+  Fresh installs get the full schema on day 0; legacy rows migrate
+  in place.
+- **Plan 0.8 + 0.14 — rule fixtures + R13 spike gates** — 21 labelled
+  fixtures in `tests/fixtures_rules_validation.json`, FP <5 % and
+  P95 <3 s gates on the R13 decision function.
+- **Plan 0.X.5 — artifact_class preset** —
+  `shopify_banner_block`, `changelog_entry` and
+  `email_to_operator_contact` added to `entities_universal.json`.
+- **Plan 0.X.1 + 0.X.6 — system_catalog discoverability smoke** —
+  summary-count coherence + required locations + core_tools intent
+  search covered.
+- **Plan A.4 — R34 added to the system prompt** — trigger + action
+  + anti-example text for identity coherence across terminals.
+- **Plan F.2 / F.3 / F.5 / F.6 — Fase F telemetry loops** —
+  `src/fase_f_loops.py` (per-rule aggregate, FP grouping, FN
+  candidate promotion) + `src/scripts/phase_guardian_analysis.py`
+  Deep Sleep phase writing
+  `~/.nexo/reports/guardian-fase-f-<date>.json`.
+- **Plan 0.21 + F.8 — local zero-shot classifier** —
+  `src/classifier_local.py` with pinned mDeBERTa revision and
+  fail-closed contract, plus `docs/classifier-model-notes.md`
+  (upgrade policy, alternatives, pinning rationale).
+- **Plan F0.0.4 — hook respects `NEXO_MIGRATING=1`** —
+  `process_pre_tool_event` short-circuits during a structure
+  migration, matching the claim already in `nexo_migrate.py`.
+- **Plan F0.1 — `origin` column on `personal_scripts`** — idempotent
+  migration `_m45_personal_scripts_origin` + CREATE TABLE update +
+  index on `origin`. Enables `nexo update` and the future Desktop
+  Automations panel to segment core vs user automations without
+  heuristics.
+- **Plan T4.2–T4.6 — LLM classifier gate wraps R15 / R23e / R23f /
+  R23h** — `_t4_gate_says_no` helper composed of `t4_llm_gate` +
+  `enforcement_classifier`. "no" skips the injection; "yes" /
+  "unknown" / missing-module fall through to regex.
+
+### Deferred to a later release
+
+- F0.3–F0.6 physical move of `~/.nexo/scripts/`, `skills/`,
+  `plugins/`, `hooks/`, `rules/`, `brain/`, `operations/` into
+  `core/` + `personal/`, plus the v7.0.0 symlink removal. Requires
+  coordinated smoke on Francisco + Nora runtimes per learning
+  #450 (credential + function validation after relocation).
+- F0.1 CLI `--origin` filter flag on `nexo scripts list`.
+- F0.2 Desktop "Automations" panel (needs renderer work + IPC).
+
+## [6.2.0] - 2026-04-18
+
+Plan Consolidado — first coordinated release of the two-wave plan.
+Second wave (T4 LLM classifier wrap, 0.2 cognitive_sentiment reshape,
+0.3 extended entities schema, 0.21 local zero-shot BGE-M3, R06 email
+secret filter, R11 plugin pre-inventory, Fase E.3–E.6, F0.1–F0.6
+scripts migration with the breaking v7.0.0 symlink removal) is tracked
+in `~/Desktop/NEXO-PLAN-CONSOLIDADO-BACKLOG.md`.
+
+### Added — Plan T5 · R34 identity coherence across terminals
+
+- **`templates/CLAUDE.md.template`** — new "Identity continuity across terminals" section after Core Systems. Tells the model that when multiple terminals are active, they are all the same NEXO, and that past-tense denials require consulting the shared brain first. Same block added to `templates/CODEX.AGENTS.md.template` so Codex sessions inherit it.
+- **`src/r34_identity_coherence.py`** + **`nexo-desktop/lib/r34-identity-coherence.js`** — pure decision modules, byte-for-byte equivalent. Multilingual regex (ES/EN) pre-filter for past-tense denials ("yo no he hecho eso", "I haven't done that", "it wasn't me"…). If none of the shared-brain tools (`nexo_recent_context`, `nexo_session_diary_read`, `nexo_change_log`, `nexo_status`, `nexo_transcript_*`) fired in the current turn, an optional LLM classifier disambiguates. Fail-closed: classifier error → no injection.
+- **Engines** — `src/enforcement_engine.py::on_assistant_message` (new public API) + `nexo-desktop/enforcement-engine.js::onAssistantMessage`. Both read `guardian.json.rules.R34_identity_coherence` (default **shadow** — the rule logs but does not surface until false-positive rate is measured).
+- **`src/presets/guardian_default.json`** — adds `R34_identity_coherence: shadow`.
+- **`tests/test_r34_identity_coherence.py`** (16 cases) + **`nexo-desktop/tests/r34-identity-coherence.test.js`** (15 cases) — match detection, suppression when shared-brain tool present, classifier yes/no, classifier failure fails closed, empty/non-string safety, byte-parity of the injection prompt with the JS twin.
+
+### Added — Plan 0.X.2 · R-CATALOG pre-create probe
+
+- **`src/r_catalog.py`** + **`nexo-desktop/lib/r-catalog.js`** — pure decision modules, byte-for-byte equivalent. Trigger on any `nexo_*_create` / `_open` / `_add` tool. If none of the six discovery tools (`nexo_system_catalog`, `nexo_tool_explain`, `nexo_skill_match`, `nexo_skill_list`, `nexo_learning_search`, `nexo_guard_check`) fired in the preceding 60-second window, inject a nudge to run one first. Prevents duplicate artefacts (new personal scripts that clone an existing skill, duplicate followups, learning spam).
+- **`src/enforcement_engine.py::_check_r_catalog`** + **`nexo-desktop/enforcement-engine.js::_checkRCatalog`** — wire both engines. Shadow/soft/hard respect `guardian.json.rules.R_CATALOG_before_artifact_create`. Default already shipped as `soft`.
+- **`tests/test_r_catalog.py`** (10 cases) + **`nexo-desktop/tests/r-catalog.test.js`** (11 cases) — parity tests. One dedicated case asserts the injection prompt is byte-for-byte identical between Python and JS so the two engines can never drift.
+
+### Added — Plan 0.X.4 · `locations` in `nexo_system_catalog`
+
+- **`src/system_catalog.py::_locations`** — new canonical path map exposed alongside the catalog sections: `brain.db`, `brain.calibration`, `brain.project_atlas`, `config.dir`, `config.guardian`, `config.guardian_runtime_overrides`, `logs.*`, `skills.*`, `scripts.core`, `hooks.runtime`, `rules.*`, `tool_enforcement_map`, `reports`, `backups`, `snapshots`, `crons.*`. All absolute, resolved from `NEXO_HOME` + `NEXO_CODE` so tests and staging runtimes get coherent paths. `build_system_catalog()` returns it under the `locations` key (outside the per-section summary so existing consumers keep working).
+- **`tests/test_system_catalog_locations.py`** — 3 cases: flat dict of absolute paths, canonical keys present, `build_system_catalog()` exposes the block.
+
+### Added — Plan 0.15 · drift baseline
+
+- **`scripts/measure_drift_baseline.py`** — reads the last 90 session diaries from `~/.nexo/brain/session_archive/` (fallback `brain/diaries/`), counts occurrences of known drift patterns per rule (R13/R14/R16/R17/R19/R20/R25/R26/R27/R30/R31), and writes an aggregated JSON report to `~/.nexo/reports/drift-baseline-<YYYY-MM-DD>.json`. Pure reader: never writes inside the diary tree. Exits non-zero when no diaries are found so the caller knows the baseline is unusable. Prerequisite for Fase F KPI "reducción >50% por regla en 30 días".
+
+### Added — Plan 0.16 · pre-commit parity hook
+
+- **`scripts/hooks/pre-commit`** (tracked) — shared git hook that (1) blocks accidental `.db` / `.env` / `*_token.*` / `*.pem` / `*.key` commits and (2) runs `scripts/verify_tool_map.py` whenever `src/server.py`, `src/plugins/`, `src/tools_*.py`, or `tool-enforcement-map.json` is staged. Prevents new `nexo_*` tools from merging without an enforcement-map entry (learning #335).
+- **`scripts/install-hooks.sh`** — idempotent installer that sets `core.hooksPath=scripts/hooks` and ensures `chmod +x`. Safe to re-run. README-worthy step for every fresh clone.
+
+### Added — Plan 0.17 · `nexo_guardian_rule_override` writer
+
+- **`src/tools_guardian.py`** — MCP writer for `~/.nexo/config/guardian-runtime-overrides.json`. The reader side (`guardian_config.rule_mode`) already honoured this file with TTL + core-rule defence-in-depth; this module adds the writer as a structured tool so an operator or automation can bump a noisy rule to shadow for an hour without editing JSON by hand.
+- **`src/server.py::nexo_guardian_rule_override`** — `@mcp.tool`. Args `rule_id`, `mode` (`off`/`shadow`/`soft`/`hard`), `ttl` (`1h`/`24h`/`session`). Empty `mode` clears the override. Core rules R13/R14/R16/R25/R30 reject `off` at write time (defence in depth against a bad config). Session TTL is bounded at 12 h so an override never lingers past a restart.
+- **`tool-enforcement-map.json`** — added entry for the new tool + 3 orphan backfills (`nexo_recover`, `nexo_session_log_create`, `nexo_session_log_close`) that were in code but missing from the map. 251 tools total.
+- **`tests/test_tools_guardian_override.py`** — 11 cases: shape, core-rule off rejection, invalid mode, invalid TTL, set/clear round-trip, idempotent clear, tool JSON success + error shape, session TTL bounded at 12 h, NDJSON audit log accumulates set + clear events.
+- **`tests/test_measure_drift_baseline.py`** — 4 cases: empty → no scan, matching patterns counted, report written under `~/.nexo/reports/`, main exits 2 when no diaries found.
+
 ## [6.1.1] - 2026-04-18
 
 ### Fixed
