@@ -822,12 +822,49 @@ class HeadlessEnforcer:
         decision = _r15_should(text or "", project_list, records)
         if not decision:
             return
+        # T4.2 — LLM gate: if the classifier says the turn is
+        # conversational / off-topic, skip the injection. Regex wins on
+        # "unknown" so legitimate R15 hits still fire without a working
+        # classifier.
+        if self._t4_gate_says_no("R15", span=(text or "")[:400]):
+            _logger.info(
+                "[R15 T4] gate=no, skipping project=%s", decision["project"]
+            )
+            return
         prompt = _R15_PROMPT.format(project=decision["project"])
         if mode == "shadow":
             _logger.info("[R15 SHADOW] would inject: project=%s", decision["project"])
             return
         self._enqueue(prompt, decision["tag"], rule_id="R15_project_context")
         _logger.info("[R15 %s] enqueued project=%s", mode.upper(), decision["project"])
+
+    # ------------------------------------------------------------------
+    # T4 LLM gate — central helper (Plan Consolidado T4.2-T4.6).
+    # ------------------------------------------------------------------
+    def _t4_gate_says_no(self, rule_id: str, *, span: str, context: str = "") -> bool:
+        """Return True ONLY when the T4 classifier explicitly votes "no"
+        for this rule hit. "yes" or "unknown" (classifier unavailable,
+        import error, rate limit, parse failure) fall through to regex
+        behaviour — never silently suppress a rule on infra flakiness.
+        """
+        try:
+            from t4_llm_gate import build_prompt, classify_with_llm
+            from enforcement_classifier import classify as _classifier_fn
+        except Exception:
+            return False
+        prompt = build_prompt(rule_id, span=span, context=context)
+        if not prompt:
+            return False
+        try:
+            verdict = classify_with_llm(
+                rule_id,
+                prompt=prompt,
+                context=context,
+                classifier=_classifier_fn,
+            )
+        except Exception:
+            return False
+        return verdict == "no"
 
     def _check_r23(self, tool_name: str, tool_input):
         """R23 — ssh/scp/rsync/curl towards an unregistered host."""
@@ -996,6 +1033,10 @@ class HeadlessEnforcer:
         should, prompt = _r23e_should(tool_name, tool_input)
         if not should:
             return
+        span = (tool_input or {}).get("command", "") if isinstance(tool_input, dict) else ""
+        if self._t4_gate_says_no("R23e", span=span):
+            _logger.info("[R23e T4] gate=no, skipping")
+            return
         if mode == "shadow":
             _logger.info("[R23e SHADOW] would inject")
             return
@@ -1012,6 +1053,10 @@ class HeadlessEnforcer:
         markers = self._db_production_markers()
         should, prompt = _r23f_should(tool_name, tool_input, production_markers=markers or None)
         if not should:
+            return
+        span = (tool_input or {}).get("command", "") if isinstance(tool_input, dict) else ""
+        if self._t4_gate_says_no("R23f", span=span):
+            _logger.info("[R23f T4] gate=no, skipping")
             return
         if mode == "shadow":
             _logger.info("[R23f SHADOW] would inject")
@@ -1261,6 +1306,12 @@ class HeadlessEnforcer:
             return
         should, prompt = _r23h_should(tool_name, tool_input)
         if not should:
+            return
+        span = ""
+        if isinstance(tool_input, dict):
+            span = tool_input.get("content") or tool_input.get("new_string") or ""
+        if self._t4_gate_says_no("R23h", span=str(span)[:500]):
+            _logger.info("[R23h T4] gate=no, skipping")
             return
         if mode == "shadow":
             _logger.info("[R23h SHADOW] would inject")
