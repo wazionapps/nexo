@@ -1,5 +1,64 @@
 # Changelog
 
+## [6.4.0] - 2026-04-19
+
+Plan Consolidado fase F1 — multi-tenant email accounts and the JSON
+bridge that lets NEXO Desktop drive email configuration without
+operators ever touching a JSON file.
+
+### Added
+
+- New `email_accounts` table (migration m46). Multi-tenant by `label`,
+  with IMAP/SMTP coords, role (`inbox`/`outbox`/`both`), enabled flag,
+  operator email, and trusted-domain list. Passwords are NEVER stored
+  here — only a pointer (`credential_service`+`credential_key`) into
+  the existing `credentials` table.
+- New CRUD module `src/db/_email_accounts.py` with `add_email_account`
+  (upsert by label), `list_email_accounts`, `get_email_account`,
+  `get_primary_email_account`, `set_email_account_enabled`,
+  `remove_email_account`. Trusted domains and metadata are stored as
+  JSON.
+- New loader `src/email_config.py` with one entrypoint
+  `load_email_config(label=None)`. Prefers the `email_accounts` table;
+  falls back to legacy `~/.nexo/nexo-email/config.json` so existing
+  installs keep working until the auto-migrator runs.
+- New CLI subcommand tree under `nexo email`:
+  - `nexo email setup` — interactive wizard for first-time operators.
+    Prompts label/email/IMAP/SMTP/password (via getpass)/operator/
+    trusted/role, stores password in `credentials`, then offers an
+    IMAP+SMTP test. Designed for operators who will NEVER open a
+    JSON file.
+  - `nexo email add --label X --email X --imap-host X ... --password-stdin --json`
+    — non-interactive variant. Used by NEXO Desktop and any script.
+    Password is read from stdin, never on argv (so it never appears
+    in `ps`).
+  - `nexo email list [--json]`, `nexo email test --label X [--json]`,
+    `nexo email remove --label X --yes [--json]` — JSON output for
+    machine consumers (Desktop / scripts) plus rich text for humans.
+- Auto-migrator script `src/scripts/nexo-email-migrate-config.py`
+  reads legacy `~/.nexo/nexo-email/config.json` and inserts into
+  `credentials` + `email_accounts` (label='primary'). Idempotent.
+  Triggered automatically by `auto_update.py` on next session, so
+  existing operators upgrade transparently.
+- Test suite `tests/test_email_accounts.py` covers add+list, upsert
+  by label, role validation, remove, primary picker, loader prefers
+  table, loader falls back to JSON, migrator end-to-end.
+
+### Changed
+
+- `nexo-email-monitor.py` and `nexo-send-reply.py` now load via
+  `email_config.load_email_config()` first; the legacy JSON path is
+  the fallback. Behavior is identical for existing operators.
+- `_debt_fingerprint()` now passes `usedforsecurity=False` to its
+  SHA1 call (it's a content fingerprint for dedup, not a security
+  hash) so bandit no longer flags it.
+
+### Notes
+
+- The matching NEXO Desktop release (v0.19.0) ships the Email +
+  Automations Settings panels that drive the new `nexo email --json`
+  surface end-to-end.
+
 ## [6.3.1] - 2026-04-19
 
 Security / privacy hotfix. v6.3.0 shipped
