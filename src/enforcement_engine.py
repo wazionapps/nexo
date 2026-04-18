@@ -69,6 +69,11 @@ except ImportError:  # pragma: no cover
     _r_catalog_should = None  # type: ignore
 
 try:
+    from r34_identity_coherence import should_inject_r34 as _r34_should
+except ImportError:  # pragma: no cover
+    _r34_should = None  # type: ignore
+
+try:
     from r20_constant_change import (
         should_inject_r20 as _r20_should,
         INJECTION_PROMPT_TEMPLATE as _R20_PROMPT,
@@ -1389,6 +1394,40 @@ class HeadlessEnforcer:
             return
         self._enqueue(prompt, decision["tag"], rule_id="R18_followup_autocomplete")
         _logger.info("[R18 %s] enqueued %d matches", mode.upper(), decision["count"])
+
+    def on_assistant_message(self, text: str, *, classifier=None):
+        """R34 entry point — called when an assistant message is complete.
+
+        Plan Consolidado T5. If the message is a past-tense denial of an
+        action (ES/EN patterns) and no shared-brain tool was called in the
+        current turn, the rule fires a reminder to consult the shared brain
+        before asserting what happened.
+
+        Args:
+            text: assistant output text.
+            classifier: optional LLM yes/no callable used to disambiguate
+                regex matches. Tests pass a fake.
+        """
+        if _r34_should is None or not text:
+            return
+        mode = self._guardian_rule_mode("R34_identity_coherence")
+        if mode == "off":
+            return
+        recent_names = [r.tool for r in self.recent_tool_records]
+        try:
+            inject, prompt, matched = _r34_should(
+                text, recent_tool_names=recent_names, classifier=classifier,
+            )
+        except Exception as exc:  # noqa: BLE001
+            _logger.warning("R34 probe failed (%s); staying silent", exc)
+            return
+        if not inject:
+            return
+        if mode == "shadow":
+            _logger.info("[R34 SHADOW] would inject matched=%r", matched)
+            return
+        self._enqueue(prompt, f"R34:{matched[:40]}", rule_id="R34_identity_coherence")
+        _logger.info("[R34 %s] enqueued matched=%r", mode.upper(), matched)
 
     def notify_stale_memory_cited(self):
         """External hook for R24 — caller (handle_cognitive_retrieve post-

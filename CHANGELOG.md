@@ -4,6 +4,14 @@
 
 Work in progress on `feat/plan-consolidado-v7`. Will ship as v7.0.0 together with NEXO Desktop.
 
+### Added — Plan T5 · R34 identity coherence across terminals
+
+- **`templates/CLAUDE.md.template`** — new "Identity continuity across terminals" section after Core Systems. Tells the model that when multiple terminals are active, they are all the same NEXO, and that past-tense denials require consulting the shared brain first. Same block added to `templates/CODEX.AGENTS.md.template` so Codex sessions inherit it.
+- **`src/r34_identity_coherence.py`** + **`nexo-desktop/lib/r34-identity-coherence.js`** — pure decision modules, byte-for-byte equivalent. Multilingual regex (ES/EN) pre-filter for past-tense denials ("yo no he hecho eso", "I haven't done that", "it wasn't me"…). If none of the shared-brain tools (`nexo_recent_context`, `nexo_session_diary_read`, `nexo_change_log`, `nexo_status`, `nexo_transcript_*`) fired in the current turn, an optional LLM classifier disambiguates. Fail-closed: classifier error → no injection.
+- **Engines** — `src/enforcement_engine.py::on_assistant_message` (new public API) + `nexo-desktop/enforcement-engine.js::onAssistantMessage`. Both read `guardian.json.rules.R34_identity_coherence` (default **shadow** — the rule logs but does not surface until false-positive rate is measured).
+- **`src/presets/guardian_default.json`** — adds `R34_identity_coherence: shadow`.
+- **`tests/test_r34_identity_coherence.py`** (16 cases) + **`nexo-desktop/tests/r34-identity-coherence.test.js`** (15 cases) — match detection, suppression when shared-brain tool present, classifier yes/no, classifier failure fails closed, empty/non-string safety, byte-parity of the injection prompt with the JS twin.
+
 ### Added — Plan 0.X.2 · R-CATALOG pre-create probe
 
 - **`src/r_catalog.py`** + **`nexo-desktop/lib/r-catalog.js`** — pure decision modules, byte-for-byte equivalent. Trigger on any `nexo_*_create` / `_open` / `_add` tool. If none of the six discovery tools (`nexo_system_catalog`, `nexo_tool_explain`, `nexo_skill_match`, `nexo_skill_list`, `nexo_learning_search`, `nexo_guard_check`) fired in the preceding 60-second window, inject a nudge to run one first. Prevents duplicate artefacts (new personal scripts that clone an existing skill, duplicate followups, learning spam).

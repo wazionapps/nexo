@@ -58,7 +58,8 @@
     "R23d_chown_chmod_recursive": "soft",
     "R23g_secrets_in_output": "soft",
     "R23m_message_duplicate": "soft",
-    "R23h_shebang_mismatch": "shadow"
+    "R23h_shebang_mismatch": "shadow",
+    "R34_identity_coherence": "shadow"
   },
   "core_rules": [
     "R13_pre_edit_guard",
