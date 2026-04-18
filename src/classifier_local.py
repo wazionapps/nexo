@@ -29,8 +29,14 @@ _logger = logging.getLogger(__name__)
 
 
 # Keep in lockstep with docs/classifier-model-notes.md.
-MODEL_ID = "MoritzLaurer/mDeBERTa-v3-base-mnli-xnli"
-MODEL_REVISION = "a1a5a76a8cb44edb4f92e7e2ea4f0e0ce8ce6e97"
+# Plan 0.21 wave-2 update: the original pin
+# (MoritzLaurer/mDeBERTa-v3-base-mnli-xnli @ a1a5a76) refused to load
+# under transformers 5.x with a missing `model_type` error. Switched
+# to the multilingual-2mil7 sibling which is the same DeBERTa-v2
+# architecture, multilingual, and loads cleanly. Revision pinned to
+# the last HF upstream commit verified in smoke.
+MODEL_ID = "MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7"
+MODEL_REVISION = "b5113eb38ab63efdd7f280f8c144ea8b13f978ce"
 DEFAULT_CONFIDENCE_FLOOR = 0.6
 
 

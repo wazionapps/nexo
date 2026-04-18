@@ -149,11 +149,66 @@ def _dedup_record(
 # ---------------------------------------------------------------------------
 
 
+# Labels used when the local zero-shot classifier is consulted. Plan
+# 0.21 wave-2: classifier decides *semantically* between the four
+# buckets; regex stays as a fast prefilter.
+_ZS_LABELS = ("decision", "correction", "explicit", "noise")
+_ZS_CONFIDENCE_FLOOR = 0.65
+_ZS_MIN_LEN_FOR_LLM = 40  # short lines stay regex-only
+
+# Module-level classifier handle, constructed lazily on first use so
+# importing the hook never pays the transformers load cost.
+_zs_classifier = None
+
+
+def _get_zs_classifier():
+    """Return a LocalZeroShotClassifier or None if unavailable."""
+    global _zs_classifier
+    if _zs_classifier is not None:
+        return _zs_classifier
+    try:
+        from classifier_local import LocalZeroShotClassifier  # type: ignore
+    except Exception:
+        _zs_classifier = False  # type: ignore[assignment]
+        return None
+    try:
+        _zs_classifier = LocalZeroShotClassifier()
+    except Exception:
+        _zs_classifier = False  # type: ignore[assignment]
+        return None
+    return _zs_classifier
+
+
+def _zero_shot_classify(line: str) -> tuple[str, float] | None:
+    """Plan 0.21 — ask the local zero-shot classifier to bucket the line.
+
+    Returns ``(label, confidence)`` when the classifier is available and
+    its top confidence clears ``_ZS_CONFIDENCE_FLOOR``. Returns None
+    otherwise (classifier missing, pipeline load failed, low confidence,
+    or any exception). Callers must fall back to the regex decision in
+    that case — the classifier is a pre-filter / tie-breaker, never the
+    exclusive decider.
+    """
+    if len(line) < _ZS_MIN_LEN_FOR_LLM:
+        return None
+    clf = _get_zs_classifier()
+    if not clf:
+        return None
+    try:
+        result = clf.classify(line, _ZS_LABELS)
+    except Exception:
+        return None
+    if result is None or result.confidence < _ZS_CONFIDENCE_FLOOR:
+        return None
+    return result.label, float(result.confidence)
+
+
 def _classify_line(line: str) -> list[tuple[str, str]]:
     line = line.strip()
     if len(line) < _MIN_LINE_LENGTH:
         return []
 
+    # 1. Regex fast-path — cheap and deterministic.
     facts: list[tuple[str, str]] = []
 
     for pattern in _DECISION_PATTERNS:
@@ -170,6 +225,18 @@ def _classify_line(line: str) -> list[tuple[str, str]]:
         if pattern.search(line):
             facts.append(("explicit", line))
             break
+
+    # 2. If regex produced no facts, ask the local zero-shot classifier
+    # for a semantic opinion. This catches multilingual correction
+    # shapes the regex does not know ("la ruta estaba mal en realidad",
+    # "that last paragraph is backwards"). The floor + min-length
+    # guard keep noise / short chatter off the learning pipeline.
+    if not facts:
+        zs = _zero_shot_classify(line)
+        if zs is not None:
+            label, _ = zs
+            if label in {"decision", "correction", "explicit"}:
+                facts.append((label, line))
 
     return facts
 

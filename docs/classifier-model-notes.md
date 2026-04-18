@@ -4,15 +4,16 @@ Plan Consolidado item **0.21** + **F.8**.
 
 ## Current pin
 
-| field           | value                                                           |
-|-----------------|-----------------------------------------------------------------|
-| model id        | `MoritzLaurer/mDeBERTa-v3-base-mnli-xnli`                       |
-| revision (SHA)  | `a1a5a76a8cb44edb4f92e7e2ea4f0e0ce8ce6e97`                      |
-| disk footprint  | ~500 MB (safetensors + tokenizer + config)                     |
-| backend         | CPU-only (torch)                                                |
-| wrapped by      | `src/classifier_local.py` (`LocalZeroShotClassifier`)           |
-| consumer        | `src/auto_capture.py` (item 0.21) + future Capa 2 classifier    |
-| last pin date   | 2026-04-18 (wave-2 prep)                                        |
+| field           | value                                                                     |
+|-----------------|---------------------------------------------------------------------------|
+| model id        | `MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7`                |
+| revision (SHA)  | `b5113eb38ab63efdd7f280f8c144ea8b13f978ce`                                |
+| disk footprint  | ~570 MB (safetensors + tokenizer + config)                               |
+| backend         | CPU-only (torch)                                                          |
+| wrapped by      | `src/classifier_local.py` (`LocalZeroShotClassifier`)                     |
+| consumer        | `src/hooks/auto_capture.py::_zero_shot_classify` (wave-2 wiring)          |
+| last pin date   | 2026-04-19 (wave-2 release)                                               |
+| load status     | green under transformers ≥ 5.3.0 (previous `mDeBERTa-v3-base-mnli-xnli` pin failed `model_type` lookup and was dropped during wave-2). |
 
 The model must be loaded with `revision=<SHA>` so every operator (Francisco,
 Nora, and any future install) downloads the exact same weights. This
