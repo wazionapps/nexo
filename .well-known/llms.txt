@@ -1,8 +1,10 @@
 # NEXO Brain
 
-> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v6.1.0).
+> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v6.1.1).
 
 NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It adds a local shared brain across supported clients, configurable terminal and automation backends, recovery-aware background jobs, startup preflight, runtime self-healing, smarter retrieval defaults, long-horizon overnight analysis, and 150+ MCP tools.
+
+v6.1.1: small fix — `nexo --help` refreshes `Latest: vX` via npm even when invoked via subprocess with piped stdio. Prior TTY gate in `_should_refresh_latest_version()` blocked NEXO Desktop's subprocess from ever populating the version cache, so the Brain auto-update banner never saw a newer version and users had to run `nexo update` manually. Fix removes the TTY gate; 6-hour `_load_latest_version_cache` stays as the real rate-limit; fail-closes to installed-only when npm unreachable.
 
 v6.1.0: Protocol Enforcer Fase 2 ships. Capa 2 runtime guardian with 25 rules (R13 pre-Edit guard, R14 post-correction window, R16 declared-done, R25 Nora/María read-only block, plus 21 more across stream wrapper layers C/D/D2). `src/enforcement_engine.py` (Python headless) + `enforcement-engine.js` (NEXO Desktop) byte-for-byte template parity. Companion migration v43 `session_claude_aliases` fixes NEXO Desktop multi-conversation edits blocked with "unknown target": each Claude spawn's SessionStart hook now registers an alias so `_resolve_nexo_sid` resolves every conversation's UUID to the same NEXO sid. External-LLM audit + Opus 4.7 self-audit cycle applied: log redaction covers Bearer/sk-/pk-/api_key/JWT/AWS/GitHub/Shopify/KEY=VALUE/mysql -p<pass>, R23f heredoc multiline, R23h native PATH resolution (no shell injection), R14 detector awaited, cross-engine parity harness strict mode. Red-team suite (32 attempts across 12 rules). Guardian telemetry NDJSON + `scripts/install_guardian.py` installer + `docs/guardian-quickstart.md` operator guide. 291 pass + 2 skip (documented: `-F` commit-msg is not `--force`; `--force-with-lease` is safe by spec).
 

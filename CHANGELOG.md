@@ -1,5 +1,13 @@
 # Changelog
 
+## [6.1.1] - 2026-04-18
+
+### Fixed
+
+- **`nexo --help` now refreshes the `Latest: vX` line even when invoked via subprocess with piped stdio.** Prior gate in `_should_refresh_latest_version()` only allowed the npm-registry lookup when `sys.stdout.isatty()` or `sys.stderr.isatty()` returned True. NEXO Desktop spawns `nexo --help` with `stdio: ['ignore', 'pipe', 'pipe']`, so `isatty()` always returned False, the version cache was never populated from Desktop, and the Brain auto-update banner never saw a newer `Latest: vX` line to offer the upgrade. The 6-hour `max_age_seconds` at `_load_latest_version_cache()` is the real rate-limit and still prevents excessive npm hits; the TTY gate was redundant and broke the Desktop bridge. Fix: `_should_refresh_latest_version()` now returns True unconditionally; `_fetch_latest_version` still fail-closes to `None` on any subprocess error so the help line degrades to installed-only when npm is unreachable.
+
+---
+
 ## [6.1.0] - 2026-04-18
 
 ### Added — Protocol Enforcer Fase 2 (Capa 2 runtime guardian)

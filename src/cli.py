@@ -118,10 +118,23 @@ def _fetch_latest_version(timeout_seconds: int = 2) -> str | None:
 
 
 def _should_refresh_latest_version() -> bool:
-    try:
-        return sys.stdout.isatty() or sys.stderr.isatty()
-    except Exception:
-        return False
+    """Decide whether to hit the npm registry to refresh `latest` version.
+
+    Prior behaviour gated this on `isatty()` so `nexo --help` never made
+    a network call outside an interactive terminal. That also meant NEXO
+    Desktop — which spawns `nexo` via subprocess with piped stdio — could
+    never populate the version cache, so the Desktop update banner for
+    Brain never saw a newer `Latest: vX` line in the help output and no
+    Brain update was ever offered automatically (v6.1.1 fix).
+
+    The 6-hour `max_age_seconds` at `_load_latest_version_cache()` is the
+    real rate-limit. This function now returns True unconditionally so
+    missing/stale cache entries are always refreshed, regardless of tty
+    context. Fail-closed: `_fetch_latest_version` still catches every
+    subprocess error and returns None, so the help line falls back to
+    installed-only when npm is unreachable.
+    """
+    return True
 
 
 def _version_sort_key(raw: str) -> tuple[tuple[int, ...], int, str]:

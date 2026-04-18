@@ -157,6 +157,12 @@
     <priority>0.75</priority>
   </url>
   <url>
+    <loc>https://nexo-brain.com/blog/nexo-6-1-1/</loc>
+    <lastmod>2026-04-18</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
     <loc>https://nexo-brain.com/blog/nexo-6-1-0/</loc>
     <lastmod>2026-04-18</lastmod>
     <changefreq>monthly</changefreq>

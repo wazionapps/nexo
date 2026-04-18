@@ -134,7 +134,7 @@
                     <span class="page-chip">Competitive analysis</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="/blog/nexo-6-1-0/" class="btn btn-primary">Read latest release</a>
+                    <a href="/blog/nexo-6-1-1/" class="btn btn-primary">Read latest release</a>
                     <a href="/changelog/" class="btn btn-secondary">Latest release notes</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -149,7 +149,7 @@
                 <h2>NEXO 5.4.5: CI Test Timeout Fix</h2>
                 <p>Completes the publish workflow fix from v5.4.3–v5.4.4: increases <code>test_update_uses_recorded_source_repo</code> subprocess timeout from 10s to 30s for slow CI runners.</p>
                 <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
-                    <a href="/blog/nexo-6-1-0/" class="btn btn-primary">Open article</a>
+                    <a href="/blog/nexo-6-1-1/" class="btn btn-primary">Open article</a>
                     <a href="/changelog/#v545" class="btn btn-secondary">Open changelog</a>
                 </div>
                 <div class="blog-mini-stack">
@@ -171,6 +171,13 @@
 <section class="section-flush-top">
     <div class="container">
         <div class="blog-grid">
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 18, 2026</div>
+                <h2><a href="/blog/nexo-6-1-1/">NEXO 6.1.1: `nexo --help` refresh unblocked for NEXO Desktop subprocess</a></h2>
+                <p>Small follow-up to v6.1.0. The Brain auto-update banner in NEXO Desktop relies on parsing <code>Latest: vX | Installed: vY</code> from <code>nexo --help</code> output. Prior gate at <code>_should_refresh_latest_version()</code> checked <code>sys.stdout.isatty()</code> to decide whether to hit the npm registry for a fresh <code>latest</code>, which excluded Desktop&rsquo;s subprocess call (stdio piped, no TTY). The version cache never populated, the banner never saw a newer version, and users had to run <code>nexo update</code> manually in a terminal. v6.1.1 drops the TTY gate; the 6-hour cache max-age at <code>_load_latest_version_cache()</code> remains as the real rate-limit. Fail-closed: <code>_fetch_latest_version</code> catches every subprocess error and returns None, so the help line degrades to installed-only when npm is unreachable. Ships together with NEXO Desktop v0.16.0 (beta channel toggle, composer cross-conversation aislation, Guardian Proposals hidden by default, i18n audit ES→EN, status dot sync with background tasks).</p>
+                <a href="/blog/nexo-6-1-1/" class="read-more">Read more &rarr;</a>
+            </div>
 
             <div class="blog-card">
                 <div class="blog-card-date">April 18, 2026</div>

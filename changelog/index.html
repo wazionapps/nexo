@@ -182,6 +182,16 @@
 </section>
 
 <!-- v6.0.6 — Installer no longer leaks NEXO_HOME/bin into shell profile -->
+<section id="v611" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v6.1.1 <span style="opacity:.5;font-weight:400;">&mdash; April 18, 2026</span></div>
+        <h2 style="color:white;margin-bottom:16px;">`nexo --help` refresh unblocked for NEXO Desktop subprocess</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            Small follow-up to v6.1.0. The Brain auto-update banner in NEXO Desktop depends on parsing <code>Latest: vX</code> from <code>nexo --help</code>. Prior gate at <code>_should_refresh_latest_version()</code> used <code>isatty()</code> to decide whether to hit npm — this excluded Desktop&rsquo;s subprocess (stdio piped). v6.1.1 drops the TTY gate; the 6-hour cache max-age is the real rate-limit. Fail-closed to installed-only when npm unreachable.
+        </p>
+    </div>
+</section>
+
 <section id="v610" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
     <div class="container" style="max-width:860px;">
         <div class="section-label">New in v6.1.0 <span style="opacity:.5;font-weight:400;">&mdash; April 18, 2026</span></div>
