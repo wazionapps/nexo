@@ -346,13 +346,24 @@ def detect_sentiment(text: str) -> dict:
     if urgency_hits and valence >= 0:
         valence = round(min(valence - 0.2, 1.0), 3)
 
-    # is_correction: prioritize explicit correction signals, fallback to
-    # short+very-negative+no question shape.
+    # is_correction: prioritize explicit correction signals. The
+    # fallback path (no explicit CORRECTION_SIGNALS hit) requires a
+    # stronger combination to avoid false-positives from general venting
+    # directed at third-party systems (e.g. "FAILED", "no funciona"):
+    # explicit 2+ all-caps words OR a direct second-person reference
+    # (tú/te/you) that anchors the correction at NEXO.
+    second_person = any(
+        tok in (" " + text_lower + " ")
+        for tok in (" tú ", " te ", " you ", " eso ", " eso que ")
+    )
     is_correction = bool(correction_hits) or (
         sentiment == "negative"
         and is_short
         and not question_hits
-        and (all_caps_words >= 1 or raw_neg >= 2)
+        and (
+            all_caps_words >= 2
+            or (raw_neg >= 2 and second_person)
+        )
     )
 
     # Intent: prioritized enum — correction > question > instruction >

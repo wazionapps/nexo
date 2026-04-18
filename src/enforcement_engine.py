@@ -846,14 +846,31 @@ class HeadlessEnforcer:
         for this rule hit. "yes" or "unknown" (classifier unavailable,
         import error, rate limit, parse failure) fall through to regex
         behaviour — never silently suppress a rule on infra flakiness.
+
+        Every unavailable-path logs a WARNING once per (rule_id, reason)
+        via ``_t4_gate_warned`` so degradations surface in the console
+        without flooding it.
         """
+        if not hasattr(self, "_t4_gate_warned"):
+            self._t4_gate_warned = set()
         try:
             from t4_llm_gate import build_prompt, classify_with_llm
             from enforcement_classifier import classify as _classifier_fn
-        except Exception:
+        except Exception as exc:
+            key = (rule_id, f"import:{exc.__class__.__name__}")
+            if key not in self._t4_gate_warned:
+                self._t4_gate_warned.add(key)
+                _logger.warning("[T4 gate] import failed for %s: %s", rule_id, exc)
             return False
         prompt = build_prompt(rule_id, span=span, context=context)
         if not prompt:
+            key = (rule_id, "no-prompt")
+            if key not in self._t4_gate_warned:
+                self._t4_gate_warned.add(key)
+                _logger.warning(
+                    "[T4 gate] no prompt template for rule_id=%s (check PROMPTS)",
+                    rule_id,
+                )
             return False
         try:
             verdict = classify_with_llm(
@@ -862,7 +879,15 @@ class HeadlessEnforcer:
                 context=context,
                 classifier=_classifier_fn,
             )
-        except Exception:
+        except Exception as exc:
+            key = (rule_id, f"classify:{exc.__class__.__name__}")
+            if key not in self._t4_gate_warned:
+                self._t4_gate_warned.add(key)
+                _logger.warning(
+                    "[T4 gate] classify failed for %s: %s — regex fallback active",
+                    rule_id,
+                    exc,
+                )
             return False
         return verdict == "no"
 
