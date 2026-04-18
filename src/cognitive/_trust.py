@@ -3,7 +3,15 @@ import re
 import numpy as np
 from datetime import datetime, timedelta, timezone
 from cognitive._core import _get_db, embed, cosine_similarity, _blob_to_array
-from cognitive._core import POSITIVE_SIGNALS, NEGATIVE_SIGNALS, URGENCY_SIGNALS
+from cognitive._core import (
+    POSITIVE_SIGNALS,
+    NEGATIVE_SIGNALS,
+    URGENCY_SIGNALS,
+    CORRECTION_SIGNALS,
+    ACKNOWLEDGEMENT_SIGNALS,
+    INSTRUCTION_SIGNALS,
+    QUESTION_SIGNALS,
+)
 
 
 # Trust score events — default deltas (overridable via trust_event_config table)
@@ -248,31 +256,57 @@ def check_correction_fatigue() -> list[dict]:
 
     return fatigued
 
+SENTIMENT_INTENTS = (
+    "correction",
+    "acknowledgement",
+    "question",
+    "instruction",
+    "urgency",
+    "complaint",
+    "praise",
+    "neutral",
+)
+
+
 def detect_sentiment(text: str) -> dict:
     """Analyze user's text for sentiment signals.
 
-    Returns detected sentiment, intensity, and action guidance for NEXO.
+    Returns detected sentiment, intensity, action guidance, and the structured
+    shape required by Plan Consolidado 0.2:
+      - is_correction: bool
+      - valence: float in [-1.0, 1.0]
+      - intent: enum (SENTIMENT_INTENTS)
+
     Not a model — keyword + heuristic based. Fast and deterministic.
     """
     if not text:
-        return {"sentiment": "neutral", "intensity": 0.5, "signals": [], "guidance": ""}
+        return {
+            "sentiment": "neutral",
+            "intensity": 0.5,
+            "signals": [],
+            "guidance": "",
+            "is_correction": False,
+            "valence": 0.0,
+            "intent": "neutral",
+        }
 
     text_lower = text.lower()
-    words = set(text_lower.split())
 
     positive_hits = [s for s in POSITIVE_SIGNALS if s in text_lower]
     negative_hits = [s for s in NEGATIVE_SIGNALS if s in text_lower]
     urgency_hits = [s for s in URGENCY_SIGNALS if s in text_lower]
+    correction_hits = [s for s in CORRECTION_SIGNALS if s in text_lower]
+    ack_hits = [s for s in ACKNOWLEDGEMENT_SIGNALS if s in text_lower]
+    instruction_hits = [s for s in INSTRUCTION_SIGNALS if s in text_lower]
+    question_hits = [s for s in QUESTION_SIGNALS if s in text_lower]
 
     # Heuristics
     is_short = len(text) < 30
-    has_caps = any(c.isupper() for c in text[1:]) if len(text) > 1 else False  # ignore first char
-    has_exclamation = "!" in text
     all_caps_words = sum(1 for w in text.split() if w.isupper() and len(w) > 1)
 
     # Score
-    pos_score = len(positive_hits)
-    neg_score = len(negative_hits)
+    pos_score = len(positive_hits) + len(ack_hits)
+    neg_score = len(negative_hits) + len(correction_hits)
 
     # Caps/short boost negative
     if all_caps_words >= 2:
@@ -283,7 +317,7 @@ def detect_sentiment(text: str) -> dict:
     if urgency_hits:
         neg_score += 1  # Urgency often means something is wrong
 
-    # Determine sentiment
+    # Determine sentiment label
     if neg_score > pos_score and neg_score >= 1:
         sentiment = "negative"
         intensity = min(1.0, 0.3 + neg_score * 0.15)
@@ -304,11 +338,51 @@ def detect_sentiment(text: str) -> dict:
         intensity = 0.5
         guidance = ""
 
+    # Valence: normalized -1..1 from raw pos/neg counts (ignores caps boost).
+    raw_pos = len(positive_hits) + len(ack_hits)
+    raw_neg = len(negative_hits) + len(correction_hits)
+    denom = max(raw_pos + raw_neg, 1)
+    valence = round((raw_pos - raw_neg) / denom, 3)
+    if urgency_hits and valence >= 0:
+        valence = round(min(valence - 0.2, 1.0), 3)
+
+    # is_correction: prioritize explicit correction signals, fallback to
+    # short+very-negative+no question shape.
+    is_correction = bool(correction_hits) or (
+        sentiment == "negative"
+        and is_short
+        and not question_hits
+        and (all_caps_words >= 1 or raw_neg >= 2)
+    )
+
+    # Intent: prioritized enum — correction > question > instruction >
+    # urgency > acknowledgement/praise > complaint > neutral.
+    if is_correction:
+        intent = "correction"
+    elif question_hits:
+        intent = "question"
+    elif instruction_hits:
+        intent = "instruction"
+    elif urgency_hits:
+        intent = "urgency"
+    elif ack_hits and sentiment != "negative":
+        intent = "acknowledgement"
+    elif positive_hits and sentiment == "positive":
+        intent = "praise"
+    elif sentiment == "negative":
+        intent = "complaint"
+    else:
+        intent = "neutral"
+
     return {
         "sentiment": sentiment,
         "intensity": round(intensity, 2),
-        "signals": positive_hits + negative_hits + urgency_hits,
+        "signals": positive_hits + negative_hits + urgency_hits
+        + correction_hits + ack_hits + instruction_hits,
         "guidance": guidance,
+        "is_correction": is_correction,
+        "valence": valence,
+        "intent": intent,
     }
 
 

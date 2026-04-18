@@ -259,6 +259,11 @@ def init_db():
             type TEXT NOT NULL DEFAULT 'general',
             value TEXT NOT NULL,
             notes TEXT DEFAULT '',
+            aliases TEXT DEFAULT '[]',
+            metadata TEXT DEFAULT '{}',
+            source TEXT NOT NULL DEFAULT 'manual',
+            confidence REAL NOT NULL DEFAULT 1.0,
+            access_mode TEXT DEFAULT 'unknown',
             created_at REAL NOT NULL,
             updated_at REAL NOT NULL
         );

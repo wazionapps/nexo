@@ -67,6 +67,40 @@ URGENCY_SIGNALS = {
     "rápido", "ya", "ahora", "urgente", "asap", "inmediatamente", "corre",
 }
 
+# Correction signals — text patterns that indicate the user is correcting NEXO.
+# Stronger than generic negative: implies "you were wrong, here's the truth".
+CORRECTION_SIGNALS = {
+    "no es", "no era", "te equivocas", "estás equivocad", "eso no",
+    "está mal", "esta mal", "mal hecho", "eso es falso",
+    "incorrecto", "ya te dije", "otra vez",
+    "es al revés", "es al reves",
+    "wrong", "that's wrong", "you're wrong", "incorrect",
+    "not quite", "actually,", "fix it",
+}
+
+# Acknowledgement signals — user explicitly confirms something NEXO proposed.
+ACKNOWLEDGEMENT_SIGNALS = {
+    "gracias", "perfecto", "genial", "exactly", "correcto",
+    "así es", "asi es", "bien hecho", "buen trabajo",
+}
+
+# Instruction signals — user asks NEXO to do something.
+INSTRUCTION_SIGNALS = {
+    "haz ", "hazlo", "crea ", "ejecuta ", "implementa ", "arregla ",
+    "envía ", "envia ", "mueve ", "dime ", "revisa ", "borra ",
+    "actualiza ", "publica ", "lanza ",
+    "run ", "execute ", "implement ", "send ", "review ",
+    "update ", "publish ", "ship ",
+}
+
+# Question signals — interrogatives.
+QUESTION_SIGNALS = {
+    "?", "¿", "qué ", "cómo ", "cuándo ", "dónde ", "por qué", "cual ",
+    "cuál ", "puedes ", "podrías ",
+    "what ", "how ", "when ", "where ", "why ", "which ", "can you",
+    "could you",
+}
+
 # Trust score events — default deltas (overridable via trust_event_config table)
 _DEFAULT_TRUST_EVENTS = {
     # Positive
