@@ -1,8 +1,10 @@
 # NEXO Brain
 
-> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v6.3.0).
+> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v6.3.1).
 
 NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It adds a local shared brain across supported clients, configurable terminal and automation backends, recovery-aware background jobs, startup preflight, runtime self-healing, smarter retrieval defaults, long-horizon overnight analysis, and 150+ MCP tools.
+
+v6.3.1: privacy hotfix — remove operator-specific vhost_mapping entries that v6.3.0 accidentally shipped inside the public `entities_universal.json`. Operator private entries now live in `~/.nexo/brain/presets/entities_local.json` (`.gitignore`'d, seeded from `entities_local.sample.json`).
 
 v6.3.0: Plan Consolidado wave 2, coordinated with NEXO Desktop v0.18.0. Extended `cognitive_sentiment` shape (`is_correction`, `valence`, `intent` enum); entities schema gains `aliases`/`metadata`/`source`/`confidence`/`access_mode` via idempotent migration m44; 21 labelled rule fixtures + R13 spike gates (FP < 5%, P95 < 3s); `artifact_class` preset entries (`shopify_banner_block`, `changelog_entry`, `email_to_operator_contact`); R34 identity-coherence added to the system prompt with an explicit anti-example; Fase F telemetry loops (`fase_f_loops` + Deep Sleep `phase_guardian_analysis` report); pinned local zero-shot classifier skeleton (`MoritzLaurer/mDeBERTa-v3-base-mnli-xnli` at revision `a1a5a76a8cb44edb4f92e7e2ea4f0e0ce8ce6e97`) plus `docs/classifier-model-notes.md`; `process_pre_tool_event` respects `NEXO_MIGRATING=1`; `origin` column on `personal_scripts` via m45; T4 LLM gate wraps R15/R23e/R23f/R23h with byte-for-byte Py ↔ JS parity. `enforcement_classifier.classify` now supports `tristate=True` so an unparseable conservative fallback returns `"unknown"` instead of silently suppressing destructive rules.
 
