@@ -62,7 +62,7 @@ def test_create_followup_without_override_persists_defaults():
     """Brain core does NOT classify when agent omits internal/owner."""
     row = db_mod.create_followup(
         "NF-TESTCLS-DEFAULT",
-        "Francisco debe aprobar presupuesto",
+        "Alice debe aprobar presupuesto",
         date="2026-12-01",
     )
     assert row["internal"] == 0
@@ -72,7 +72,7 @@ def test_create_followup_without_override_persists_defaults():
 def test_create_followup_explicit_override_persists():
     row = db_mod.create_followup(
         "NF-TESTCLS-OVERRIDE",
-        "Francisco debe llamar a cliente",
+        "Alice debe llamar a cliente",
         date="2026-12-01",
         internal=1,
         owner="agent",

@@ -9,7 +9,7 @@ Usa esta skill cuando haya que ejecutar una fase de auditoria de NEXO y el cuell
    - mecanismo de update
    - tests y estado git
 2. Fija la regla de autonomia antes de empezar:
-   - Francisco no quiere checkpoints uno-a-uno para trabajo mecanico
+   - el operador no quiere checkpoints uno-a-uno para trabajo mecanico
    - NEXO hace branches, PRs, merge y reporta despues con evidencia
    - solo un blast radius arquitectonico enorme merece checkpoint
 3. Trata `evolution_apply` como una decision tecnica de implementacion, no como permiso humano:

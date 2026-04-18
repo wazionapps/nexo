@@ -43,7 +43,7 @@ def test_session_diary_write_distinguishes_recent_and_historical_commit_ref_gaps
         "INSERT INTO change_log (files, commit_ref, created_at) VALUES ('src/plugins/protocol.py', '', datetime('now', '-20 days'))"
     )
     conn.execute(
-        "INSERT INTO change_log (files, commit_ref, created_at) VALUES ('/Users/franciscoc/.nexo/operations/orchestrator-state.json', '', datetime('now', '-1 day'))"
+        "INSERT INTO change_log (files, commit_ref, created_at) VALUES ('/home/user/.nexo/operations/orchestrator-state.json', '', datetime('now', '-1 day'))"
     )
     conn.commit()
 
@@ -87,7 +87,7 @@ def test_change_log_message_distinguishes_repo_and_local_commit_refs(monkeypatch
         session_id="sid-test",
     )
     local_msg = episodic_memory.handle_change_log(
-        files="/Users/franciscoc/.nexo/operations/orchestrator-state.json",
+        files="/home/user/.nexo/operations/orchestrator-state.json",
         what_changed="Checkpoint local",
         why="Persistir continuidad",
         session_id="sid-test",

@@ -24,7 +24,7 @@ def test_system_catalog_surfaces_new_core_tools_and_runtime_metadata(monkeypatch
         json.dumps(
             {
                 "nexo": {
-                    "path": "/Users/franciscoc/Documents/_PhpstormProjects/nexo",
+                    "path": "/repo/nexo",
                     "aliases": ["brain", "shared brain"],
                     "services": {"mcp": 8000},
                 }

@@ -25,7 +25,7 @@
   ],
   "steps": [
     "Abrir goal, workflow y task antes de tocar la auditoria; resolver repo/runtime real, DB real, tests y estado git antes de interpretar el informe.",
-    "Fijar la regla de autonomia: NEXO hace branches, PRs, merge y progreso periodico; no pedir checkpoints uno-a-uno a Francisco para trabajo mecanico.",
+    "Fijar la regla de autonomia: NEXO hace branches, PRs, merge y progreso periodico; no pedir checkpoints uno-a-uno al operador para trabajo mecanico.",
     "Para `evolution_apply`, separar dos planos: el sandbox es para materializar/aplicar cambios aceptados con snapshot/rollback; no es un freno para el modo de trabajo autonomo del agente.",
     "Lanzar verificacion empirica de TODOS los items en paralelo: grep+read, SQL/schema real, AST/tests, logs. Partir de la hipotesis de FP hasta tener evidencia.",
     "Clasificar cada item en `real_gap`, `casi_fp` o `fp` y ordenar solo los reales por blast radius/riesgo.",
@@ -34,7 +34,7 @@
     "Cerrar con evidencia de PRs, tests y merge status reales; no usar diarios o workflow text como sustituto."
   ],
   "gotchas": [
-    "No pedir aprobacion manual a Francisco para cada PR: learning #198 confirma autonomia total con transparencia y reportes periodicos.",
+    "No pedir aprobacion manual al operador para cada PR cuando la autonomia total esta confirmada; mantener transparencia y reportes periodicos.",
     "No duplicar el sandbox de evolution en otros sitios: el apply de cambios aceptados ya reutiliza evolution_log + sandbox/snapshot/rollback.",
     "El ratio historico de FPs en esta clase de auditoria es alto; si no hay evidencia concreta, el item no se toca."
   ],

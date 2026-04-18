@@ -916,7 +916,7 @@ nexo skills sync               # Sync filesystem skill definitions into SQLite
 nexo skills list               # List published/stable skills
 nexo skills get SK-...         # Inspect a skill definition
 nexo skills apply SK-... --dry-run --json  # Resolve guide/execute/hybrid without running it
-nexo skills approve SK-... --execution-level local --approved-by Francisco  # Optional metadata override
+nexo skills approve SK-... --execution-level local --approved-by operator  # Optional metadata override
 nexo skills evolution          # Show text→script and improvement candidates
 
 # Unified Doctor

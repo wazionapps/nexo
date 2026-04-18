@@ -120,7 +120,7 @@ def test_sync_claude_code_removes_legacy_managed_hooks_but_keeps_custom_hooks(tm
                     "hooks": [
                         {
                             "type": "command",
-                            "command": "NEXO_HOME=/Users/franciscoc/claude bash /Users/franciscoc/claude/hooks/heartbeat-guard.sh",
+                            "command": "NEXO_HOME=/home/user/claude bash /home/user/claude/hooks/heartbeat-guard.sh",
                             "timeout": 5,
                         },
                         {
@@ -169,7 +169,7 @@ def test_sync_claude_code_rewrites_legacy_heartbeat_hook_paths_to_core_hooks(tmp
                     "hooks": [
                         {
                             "type": "command",
-                            "command": "NEXO_HOME=/Users/franciscoc/.nexo bash /Users/franciscoc/.nexo/scripts/heartbeat-user-msg.sh",
+                            "command": "NEXO_HOME=/home/user/.nexo bash /home/user/.nexo/scripts/heartbeat-user-msg.sh",
                             "timeout": 3,
                         }
                     ],
@@ -181,7 +181,7 @@ def test_sync_claude_code_rewrites_legacy_heartbeat_hook_paths_to_core_hooks(tmp
                     "hooks": [
                         {
                             "type": "command",
-                            "command": "NEXO_HOME=/Users/franciscoc/.nexo bash /Users/franciscoc/.nexo/scripts/heartbeat-posttool.sh",
+                            "command": "NEXO_HOME=/home/user/.nexo bash /home/user/.nexo/scripts/heartbeat-posttool.sh",
                             "timeout": 3,
                         }
                     ],

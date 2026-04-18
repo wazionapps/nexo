@@ -46,7 +46,7 @@ def test_reminder_handlers_require_read_before_mutation(isolated_db):
     fresh_token = _extract_read_token(refreshed)
     noted = reminders_tools.handle_reminder_note(
         id="R-HIST-1",
-        note="Asked Francisco and waiting for reply.",
+        note="Asked Alice and waiting for reply.",
         read_token=fresh_token,
     )
     assert "note added" in noted
@@ -84,7 +84,7 @@ def test_followup_handlers_soft_delete_and_restore(isolated_db):
     note_token = _extract_read_token(noted_detail)
     noted = reminders_tools.handle_followup_note(
         id="NF-HIST-1",
-        note="Francisco answered, execute the task and close.",
+        note="Alice answered, execute the task and close.",
         read_token=note_token,
     )
     assert "note added" in noted

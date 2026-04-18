@@ -193,9 +193,9 @@ class TestSkillsRuntime:
         approved = skills_runtime.approve_skill_execution(
             "SK-LOCAL-EDIT",
             execution_level="local",
-            approved_by="Francisco",
+            approved_by="Alice",
         )
-        assert approved["approved_by"] == "Francisco"
+        assert approved["approved_by"] == "Alice"
 
     def test_packaged_installs_keep_core_and_personal_skills_separate(self, tmp_path, monkeypatch):
         install_home = tmp_path / "installed-nexo"
@@ -531,12 +531,12 @@ class TestSkillsCli:
             "--execution-level",
             "local",
             "--approved-by",
-            "Francisco",
+            "Alice",
             "--json",
         )
         assert approved.returncode == 0
         approved_data = json.loads(approved.stdout)
-        assert approved_data["approved_by"] == "Francisco"
+        assert approved_data["approved_by"] == "Alice"
         assert approved_data["approved_at"]
 
     def test_cli_skill_lifecycle_commands(self, skills_env):

@@ -45,7 +45,7 @@ def test_parse_archive_dir_extracts_table_rows_and_bullets(tmp_path, monkeypatch
 
 ## 2026-02-26 — Errores operativos NEXO
 - **Error 1: Puerto SSH incorrecto.** Probé puertos 22 y 22022 antes de leer credentials.md.
-- **Regla:** Rutas locales PhpStorm: `vicshopsysteam` = servidor Recambios BMW.
+- **Regla:** Rutas locales IDE: `example-shop-sys` = servidor ExampleStore.
 """,
         encoding="utf-8",
     )

@@ -81,7 +81,7 @@ def test_auto_close_promotes_draft_with_checkpoint_context(tmp_path, monkeypatch
         tasks_seen=json.dumps(["Draft release notes", "Check cron recovery"]),
         change_ids="[]",
         decision_ids="[]",
-        last_context_hint="Francisco explained the overnight memory gap and wanted continuity fixes.",
+        last_context_hint="Alice explained the overnight memory gap and wanted continuity fixes.",
         heartbeat_count=3,
         summary_draft="Session tasks: Draft release notes, Check cron recovery",
     )
