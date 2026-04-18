@@ -2046,6 +2046,13 @@ def main():
     parser.add_argument("-v", "--version", action="store_true", help="Show version")
     sub = parser.add_subparsers(dest="command")
 
+    # -- email (Plan F1 — interactive wizard for email accounts) --
+    try:
+        from cli_email import register_email_parser
+        register_email_parser(sub)
+    except Exception as _exc_email:  # pragma: no cover
+        pass
+
     # -- chat --
     chat_parser = sub.add_parser("chat", help="Launch a NEXO terminal client")
     chat_parser.add_argument("path", nargs="?", default=".", help="Working directory (default: current directory)")
@@ -2353,6 +2360,14 @@ def main():
     if args.version:
         print(f"nexo v{_get_version()}")
         return 0
+
+    if args.command == "email":
+        # Plan F1 — setup / list / test / remove cuentas email.
+        fn = getattr(args, "func", None)
+        if fn is None:
+            print("usage: nexo email {setup,list,test,remove}")
+            return 1
+        return int(fn(args) or 0)
 
     if args.command == "scripts":
         if args.scripts_command == "list":
