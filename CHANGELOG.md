@@ -1,5 +1,70 @@
 # Changelog
 
+## [6.3.0] - 2026-04-18
+
+Plan Consolidado — wave 2 (coordinated with NEXO Desktop v0.18.0).
+Closes the remaining items from the v7 roadmap that can land without
+an invasive structure migration. The breaking v7.0.0 (F0.3–F0.6
+physical move of `~/.nexo/scripts/`, `skills/`, `plugins/`, `hooks/`,
+`brain/` into `core/` + `personal/`) is tracked as a follow-up because
+it requires coordinated validation on Francisco's and Nora's live
+runtimes.
+
+### Added
+
+- **Plan 0.2 — cognitive_sentiment shape** — `detect_sentiment` now
+  returns `is_correction: bool`, `valence: float (-1..1)` and
+  `intent` enum alongside the legacy fields. New CORRECTION /
+  ACKNOWLEDGEMENT / INSTRUCTION / QUESTION signal sets, surfaced to
+  callers via `handle_cognitive_sentiment`.
+- **Plan 0.3 — entities schema extension** — five new columns on
+  `entities` (`aliases`, `metadata`, `source`, `confidence`,
+  `access_mode`) via idempotent migration `_m44_entities_extended_schema`.
+  Fresh installs get the full schema on day 0; legacy rows migrate
+  in place.
+- **Plan 0.8 + 0.14 — rule fixtures + R13 spike gates** — 21 labelled
+  fixtures in `tests/fixtures_rules_validation.json`, FP <5 % and
+  P95 <3 s gates on the R13 decision function.
+- **Plan 0.X.5 — artifact_class preset** —
+  `shopify_banner_block`, `changelog_entry` and
+  `email_to_operator_contact` added to `entities_universal.json`.
+- **Plan 0.X.1 + 0.X.6 — system_catalog discoverability smoke** —
+  summary-count coherence + required locations + core_tools intent
+  search covered.
+- **Plan A.4 — R34 added to the system prompt** — trigger + action
+  + anti-example text for identity coherence across terminals.
+- **Plan F.2 / F.3 / F.5 / F.6 — Fase F telemetry loops** —
+  `src/fase_f_loops.py` (per-rule aggregate, FP grouping, FN
+  candidate promotion) + `src/scripts/phase_guardian_analysis.py`
+  Deep Sleep phase writing
+  `~/.nexo/reports/guardian-fase-f-<date>.json`.
+- **Plan 0.21 + F.8 — local zero-shot classifier** —
+  `src/classifier_local.py` with pinned mDeBERTa revision and
+  fail-closed contract, plus `docs/classifier-model-notes.md`
+  (upgrade policy, alternatives, pinning rationale).
+- **Plan F0.0.4 — hook respects `NEXO_MIGRATING=1`** —
+  `process_pre_tool_event` short-circuits during a structure
+  migration, matching the claim already in `nexo_migrate.py`.
+- **Plan F0.1 — `origin` column on `personal_scripts`** — idempotent
+  migration `_m45_personal_scripts_origin` + CREATE TABLE update +
+  index on `origin`. Enables `nexo update` and the future Desktop
+  Automations panel to segment core vs user automations without
+  heuristics.
+- **Plan T4.2–T4.6 — LLM classifier gate wraps R15 / R23e / R23f /
+  R23h** — `_t4_gate_says_no` helper composed of `t4_llm_gate` +
+  `enforcement_classifier`. "no" skips the injection; "yes" /
+  "unknown" / missing-module fall through to regex.
+
+### Deferred to a later release
+
+- F0.3–F0.6 physical move of `~/.nexo/scripts/`, `skills/`,
+  `plugins/`, `hooks/`, `rules/`, `brain/`, `operations/` into
+  `core/` + `personal/`, plus the v7.0.0 symlink removal. Requires
+  coordinated smoke on Francisco + Nora runtimes per learning
+  #450 (credential + function validation after relocation).
+- F0.1 CLI `--origin` filter flag on `nexo scripts list`.
+- F0.2 Desktop "Automations" panel (needs renderer work + IPC).
+
 ## [6.2.0] - 2026-04-18
 
 Plan Consolidado — first coordinated release of the two-wave plan.
