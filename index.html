@@ -51,7 +51,7 @@
         "operatingSystem": "macOS, Linux, Windows",
         "url": "https://nexo-brain.com",
         "downloadUrl": "https://www.npmjs.com/package/nexo-brain",
-        "softwareVersion": "6.3.1",
+        "softwareVersion": "6.4.0",
         "license": "https://www.gnu.org/licenses/agpl-3.0",
         "author": {
             "@type": "Organization",
@@ -697,7 +697,7 @@
     <div class="container">
         <div class="hero-badge fade-up">
             <span class="dot"></span>
-            <span id="version-badge">v6.3.1</span> &mdash; privacy hotfix sobre v6.3.0 (el auditor nocturno cazó que el preset p&uacute;blico de entities shipped mappings privados del operador). v6.3.0 trajo Plan Consolidado wave 2 coordinada con NEXO Desktop v0.18.0. Extiende el shape de <code>cognitive_sentiment</code> (is_correction / valence / intent); amplia el schema <code>entities</code>; introduce el gate T4 que envuelve R15/R23e/R23f/R23h con classifier LLM (paridad Py &harr; JS); fixtures etiquetadas + spike gates R13; bucle F&aacute;se F de telemetr&iacute;a + fase Deep Sleep; esqueleto del classifier local con pin de revisi&oacute;n mDeBERTa; el hook respeta <code>NEXO_MIGRATING=1</code>; <code>origin</code> column en <code>personal_scripts</code>. 2 auditores pre-release corrigieron un dead-code CRITICAL y una ambig&uuml;edad HIGH del classifier antes del merge.
+            <span id="version-badge">v6.4.0</span> &mdash; Plan Consolidado fase F1: cuentas de email multi-tenant (<code>email_accounts</code> table), wizard interactivo <code>nexo email setup</code>, comando no-interactivo <code>nexo email add --password-stdin --json</code> para el bridge de NEXO Desktop, y migrador idempotente desde el legacy <code>~/.nexo/nexo-email/config.json</code>. La release coordinada de NEXO Desktop (v0.19.0) trae los paneles Email + Automatizaciones en Settings &mdash; los operadores no t&eacute;cnicos ya no tocan ning&uacute;n fichero de configuraci&oacute;n.
         </div>
         <div class="fade-up" style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;">
             <img src="https://img.shields.io/npm/v/nexo-brain?color=7C3AED&label=npm" alt="npm version">

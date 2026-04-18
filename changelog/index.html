@@ -181,6 +181,16 @@
     </div>
 </section>
 
+<section id="v640" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v6.4.0 <span style="opacity:.5;font-weight:400;">&mdash; April 19, 2026</span></div>
+        <h2 style="color:white;margin-bottom:16px;">Plan Consolidado fase F1 &mdash; multi-tenant email accounts + Desktop bridge</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            Una nueva tabla <code>email_accounts</code> (migraci&oacute;n <code>m46</code>) permite que un mismo NEXO Brain gestione varias cuentas de correo a la vez, cada una con sus coordenadas IMAP / SMTP, rol (<code>inbox</code>/<code>outbox</code>/<code>both</code>), email del operador y dominios de confianza. Las contrase&ntilde;as <strong>no</strong> se guardan en esta tabla &mdash; s&oacute;lo un puntero (<code>credential_service</code>+<code>credential_key</code>) a la <code>credentials</code> table existente, igual que cualquier otro secreto del runtime. <code>nexo email setup</code> es un wizard interactivo (preguntas guiadas, getpass, prueba IMAP+SMTP en el mismo flujo). <code>nexo email add --label X --email X --imap-host X --password-stdin --json</code> es la variante no-interactiva: la contrase&ntilde;a se lee desde stdin para que nunca aparezca en argv ni en <code>ps</code>. <code>list</code> / <code>test</code> / <code>remove</code> aceptan <code>--json</code> para consumidores m&aacute;quina. La release coordinada de NEXO Desktop (v0.19.0) usa este contrato JSON para ofrecer un panel <em>Settings &rarr; Email</em> que listo, a&ntilde;ado, prueba y elimina cuentas con un formulario modal &mdash; los operadores no t&eacute;cnicos ya no editan ning&uacute;n fichero de configuraci&oacute;n. Un migrador idempotente (<code>auto_update.py</code>) promociona el legacy <code>~/.nexo/nexo-email/config.json</code> en la siguiente sesi&oacute;n; los operadores existentes no necesitan hacer nada.
+        </p>
+    </div>
+</section>
+
 <section id="v631" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
     <div class="container" style="max-width:860px;">
         <div class="section-label">New in v6.3.1 <span style="opacity:.5;font-weight:400;">&mdash; April 19, 2026</span></div>
