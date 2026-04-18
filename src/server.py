@@ -68,6 +68,7 @@ from tools_automation_sessions import (
     handle_session_log_close,
 )
 from plugin_loader import load_all_plugins, load_plugin, remove_plugin, list_plugins
+from tools_guardian import handle_guardian_rule_override
 
 
 # ── Graceful shutdown: close DB on any termination signal ──────────
@@ -508,6 +509,29 @@ def nexo_system_catalog(section: str = "", query: str = "", limit: int = 20) -> 
 def nexo_tool_explain(name: str) -> str:
     """Explain a live NEXO tool/capability from the generated system catalog."""
     return handle_tool_explain(name)
+
+
+@mcp.tool
+def nexo_guardian_rule_override(rule_id: str, mode: str = "", ttl: str = "24h") -> str:
+    """Temporarily override a Guardian rule's mode (Plan Consolidado 0.17).
+
+    Writes to ``~/.nexo/config/guardian-runtime-overrides.json`` which
+    ``guardian_config.rule_mode`` already honours at read time. Useful when
+    a rule is noisy during an incident and needs to drop to shadow for an
+    hour without a server restart.
+
+    Args:
+        rule_id: The full rule identifier (e.g. ``R13_pre_edit_guard``).
+        mode: One of ``off`` / ``shadow`` / ``soft`` / ``hard``. Pass empty
+            string together with a rule_id to clear an existing override.
+            Core rules (R13/R14/R16/R25/R30) reject ``off``.
+        ttl: Window for the override. One of ``1h`` / ``24h`` / ``session``
+            (session = 12 h best-effort cap). Default ``24h``.
+
+    Returns a JSON string ``{ok, rule_id, mode, ttl_label, expires_at, path}``
+    on success, ``{ok:false, error}`` on invalid arguments.
+    """
+    return handle_guardian_rule_override(rule_id, mode, ttl)
 
 
 @mcp.tool

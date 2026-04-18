@@ -1,0 +1,47 @@
+#!/bin/bash
+# NEXO Brain pre-commit hook — tracked in the repo so contributors share
+# the same guarantees. Install once per clone:
+#     bash scripts/install-hooks.sh
+# (sets core.hooksPath=scripts/hooks and chmod +x on the hook).
+#
+# Responsibilities (Plan Consolidado 0.16):
+#   1. Block obvious private data (.db / .env / *_token.* / *.pem / *.key).
+#   2. Run scripts/verify_tool_map.py when anything in src/server.py,
+#      src/plugins/, src/tools_*.py, or tool-enforcement-map.json is staged.
+#      Exits non-zero if a new nexo_* tool is missing from the map or if
+#      an orphan map entry has no backing code. Honours learning #335.
+
+set -euo pipefail
+
+RED='\033[0;31m'
+NC='\033[0m'
+
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACMR)
+[ -z "$STAGED_FILES" ] && exit 0
+
+# --- Block private data -----------------------------------------------
+DB_FILES=$(echo "$STAGED_FILES" | grep -E '\.(db|db-wal|db-shm)$' || true)
+if [ -n "$DB_FILES" ]; then
+    echo -e "${RED}BLOCKED: Database files staged:${NC}"
+    echo "$DB_FILES" | sed 's/^/  /'
+    exit 1
+fi
+
+SECRET_FILES=$(echo "$STAGED_FILES" | grep -v '^src/' | grep -E '\.env$|_token\.|\.key$|\.pem$' || true)
+if [ -n "$SECRET_FILES" ]; then
+    echo -e "${RED}BLOCKED: Secret files staged:${NC}"
+    echo "$SECRET_FILES" | sed 's/^/  /'
+    exit 1
+fi
+
+# --- Tool-enforcement-map parity (Plan 0.16) --------------------------
+TOOL_MAP_TOUCHED=$(echo "$STAGED_FILES" | grep -E '^(src/server\.py|src/plugins/|src/tools_|tool-enforcement-map\.json)$' || true)
+if [ -n "$TOOL_MAP_TOUCHED" ]; then
+    if ! python3 scripts/verify_tool_map.py >/dev/null; then
+        echo -e "${RED}BLOCKED: tool-enforcement-map.json out of sync.${NC}"
+        echo "Run python3 scripts/verify_tool_map.py locally, add/remove entries, and stage the updated map."
+        exit 1
+    fi
+fi
+
+exit 0

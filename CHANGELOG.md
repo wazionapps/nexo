@@ -1,5 +1,26 @@
 # Changelog
 
+## [Unreleased] — Plan Consolidado v7
+
+Work in progress on `feat/plan-consolidado-v7`. Will ship as v7.0.0 together with NEXO Desktop.
+
+### Added — Plan 0.15 · drift baseline
+
+- **`scripts/measure_drift_baseline.py`** — reads the last 90 session diaries from `~/.nexo/brain/session_archive/` (fallback `brain/diaries/`), counts occurrences of known drift patterns per rule (R13/R14/R16/R17/R19/R20/R25/R26/R27/R30/R31), and writes an aggregated JSON report to `~/.nexo/reports/drift-baseline-<YYYY-MM-DD>.json`. Pure reader: never writes inside the diary tree. Exits non-zero when no diaries are found so the caller knows the baseline is unusable. Prerequisite for Fase F KPI "reducción >50% por regla en 30 días".
+
+### Added — Plan 0.16 · pre-commit parity hook
+
+- **`scripts/hooks/pre-commit`** (tracked) — shared git hook that (1) blocks accidental `.db` / `.env` / `*_token.*` / `*.pem` / `*.key` commits and (2) runs `scripts/verify_tool_map.py` whenever `src/server.py`, `src/plugins/`, `src/tools_*.py`, or `tool-enforcement-map.json` is staged. Prevents new `nexo_*` tools from merging without an enforcement-map entry (learning #335).
+- **`scripts/install-hooks.sh`** — idempotent installer that sets `core.hooksPath=scripts/hooks` and ensures `chmod +x`. Safe to re-run. README-worthy step for every fresh clone.
+
+### Added — Plan 0.17 · `nexo_guardian_rule_override` writer
+
+- **`src/tools_guardian.py`** — MCP writer for `~/.nexo/config/guardian-runtime-overrides.json`. The reader side (`guardian_config.rule_mode`) already honoured this file with TTL + core-rule defence-in-depth; this module adds the writer as a structured tool so an operator or automation can bump a noisy rule to shadow for an hour without editing JSON by hand.
+- **`src/server.py::nexo_guardian_rule_override`** — `@mcp.tool`. Args `rule_id`, `mode` (`off`/`shadow`/`soft`/`hard`), `ttl` (`1h`/`24h`/`session`). Empty `mode` clears the override. Core rules R13/R14/R16/R25/R30 reject `off` at write time (defence in depth against a bad config). Session TTL is bounded at 12 h so an override never lingers past a restart.
+- **`tool-enforcement-map.json`** — added entry for the new tool + 3 orphan backfills (`nexo_recover`, `nexo_session_log_create`, `nexo_session_log_close`) that were in code but missing from the map. 251 tools total.
+- **`tests/test_tools_guardian_override.py`** — 11 cases: shape, core-rule off rejection, invalid mode, invalid TTL, set/clear round-trip, idempotent clear, tool JSON success + error shape, session TTL bounded at 12 h, NDJSON audit log accumulates set + clear events.
+- **`tests/test_measure_drift_baseline.py`** — 4 cases: empty → no scan, matching patterns counted, report written under `~/.nexo/reports/`, main exits 2 when no diaries found.
+
 ## [6.1.1] - 2026-04-18
 
 ### Fixed
