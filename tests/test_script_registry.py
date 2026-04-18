@@ -62,6 +62,27 @@ def scripts_dir(tmp_path, monkeypatch):
     import script_registry
     monkeypatch.setattr(script_registry, "NEXO_HOME", nexo_home)
 
+    # Plan Consolidado wave 2 CI pollution fix: close any shared DB
+    # connection carried over from a previous test AND patch DB_PATH so
+    # the next get_db() opens a fresh connection rooted in this tmp
+    # NEXO_HOME. Before this block the process-global `_shared_conn`
+    # and `DB_PATH` (evaluated at import time) would still point at a
+    # previous test's DB — `init_db()` created the schema there but
+    # the `personal_scripts` table this test inspects lived elsewhere,
+    # so `list_personal_scripts()` returned [] in the full CI run.
+    try:
+        from db import _core as _db_core
+        if _db_core._shared_conn is not None:
+            try:
+                _db_core._shared_conn.close()
+            except Exception:
+                pass
+            _db_core._shared_conn = None
+        monkeypatch.setattr(_db_core, "DB_PATH", str(nexo_home / "data" / "nexo.db"))
+        (nexo_home / "data").mkdir(exist_ok=True)
+    except Exception:
+        pass
+
     return scripts
 
 
