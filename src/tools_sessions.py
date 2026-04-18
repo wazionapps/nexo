@@ -273,6 +273,34 @@ def handle_session_export_bundle(sid: str = "", path: str = "") -> str:
     )
 
 
+def _autodetect_claude_session_id() -> str:
+    """Read the Claude Code UUID from the SessionStart coordination file.
+
+    SessionStart hook (see ~/.nexo/hooks/session-start.sh) writes the current
+    Claude Code session UUID to ``<NEXO_HOME>/coordination/.claude-session-id``
+    so the PreToolUse guardrail can correlate. Any nexo_startup call that
+    forgets to pass session_token would otherwise create a session row
+    without a UUID, and the strict hook would later block every edit with
+    "unknown target" (learning #411 / #403 / #404).
+
+    Mirrors the fallback logic in hook_guardrails._read_claude_session_id_from_coordination
+    so both sides of the correlation agree on the same UUID.
+    """
+    import os as _os
+    from pathlib import Path as _Path
+    # NEXO_HOME is always set when the MCP server spawned this process; prefer it.
+    # When absent (bare scripts), fall back to the default ~/.nexo path. No
+    # "check both" path — callers that explicitly set NEXO_HOME to an isolated
+    # directory want the isolation respected.
+    env = _os.environ.get("NEXO_HOME", "").strip()
+    base = _Path(env).expanduser() if env else (_Path.home() / ".nexo")
+    path = base / "coordination" / ".claude-session-id"
+    try:
+        return path.read_text().strip()
+    except (FileNotFoundError, OSError):
+        return ""
+
+
 def handle_startup(
     task: str = "Startup",
     claude_session_id: str = "",
@@ -292,8 +320,21 @@ def handle_startup(
     sid = _generate_sid()
     cleaned = clean_stale_sessions()
     linked_session_id = (session_token or claude_session_id or "").strip()
+    # v6.0.7 hotfix: when the caller did not pass an explicit UUID, fall back to
+    # the Claude Code SessionStart UUID written by the SessionStart hook to
+    # <NEXO_HOME>/coordination/.claude-session-id. This fixes the "unknown
+    # target" strict-hook block observed for operators whose scripts call
+    # nexo_startup() without propagating the hook payload (bug revisited
+    # after PR #208 — PR #208 covered the hook side; this covers the
+    # startup side so every session row is born correlated).
+    if not linked_session_id:
+        linked_session_id = _autodetect_claude_session_id()
     inferred_client = (session_client or "").strip()
     if not inferred_client and claude_session_id and not session_token:
+        inferred_client = "claude_code"
+    if not inferred_client and linked_session_id:
+        # If we recovered the UUID from the coordination file, the only
+        # client that writes there is Claude Code.
         inferred_client = "claude_code"
     register_session(
         sid,

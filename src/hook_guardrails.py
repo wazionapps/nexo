@@ -158,17 +158,47 @@ def _extract_touched_files(tool_input) -> list[str]:
 
 
 def _resolve_nexo_sid(conn, external_session_id: str) -> str:
-    if not external_session_id.strip():
-        return ""
-    row = conn.execute(
+    """Resolve a Claude Code UUID to the NEXO session SID it belongs to.
+
+    Primary correlation: exact match on external_session_id / claude_session_id.
+
+    v6.0.7 hotfix — secondary correlation: when no exact match is found AND
+    there is exactly ONE NEXO session with a fresh heartbeat (last update in
+    the past 5 minutes), fall back to that session. This closes the "unknown
+    target" edge case where Claude Code rotated its internal session_id
+    mid-session (e.g. after a compaction) without rewriting the coordination
+    file. The single-session gate prevents mis-attribution when two Claude
+    instances run concurrently.
+    """
+    clean_external = external_session_id.strip()
+    if clean_external:
+        row = conn.execute(
+            """SELECT sid
+               FROM sessions
+               WHERE external_session_id = ? OR claude_session_id = ?
+               ORDER BY last_update_epoch DESC
+               LIMIT 1""",
+            (clean_external, clean_external),
+        ).fetchone()
+        if row:
+            return str(row["sid"])
+
+    # Fallback: exactly one session heartbeated in the last 5 minutes.
+    # We prefer this narrow window so we never silently attribute work to
+    # a stale session. If the caller has zero or multiple active sessions,
+    # fail closed (return "") and let the caller raise missing_startup.
+    import time as _time
+    cutoff_epoch = _time.time() - 300.0
+    rows = conn.execute(
         """SELECT sid
            FROM sessions
-           WHERE external_session_id = ? OR claude_session_id = ?
-           ORDER BY last_update_epoch DESC
-           LIMIT 1""",
-        (external_session_id.strip(), external_session_id.strip()),
-    ).fetchone()
-    return str(row["sid"]) if row else ""
+           WHERE last_update_epoch >= ?
+           ORDER BY last_update_epoch DESC""",
+        (cutoff_epoch,),
+    ).fetchall()
+    if len(rows) == 1:
+        return str(rows[0]["sid"])
+    return ""
 
 
 def _find_open_task_for_file(conn, sid: str, filepath: str) -> dict | None:
