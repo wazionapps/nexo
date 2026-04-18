@@ -406,6 +406,7 @@ def _m20_personal_scripts_registry(conn):
             last_run_at TEXT DEFAULT NULL,
             last_exit_code INTEGER DEFAULT NULL,
             last_synced_at TEXT DEFAULT (datetime('now')),
+            origin TEXT NOT NULL DEFAULT 'user',
             created_at TEXT DEFAULT (datetime('now')),
             updated_at TEXT DEFAULT (datetime('now'))
         )
@@ -1082,6 +1083,21 @@ def _m43_session_claude_aliases(conn):
     )
 
 
+def _m45_personal_scripts_origin(conn):
+    """Plan Consolidado F0.1 — mark whether a personal_scripts row is
+    installed by NEXO Core (origin='core'), contributed by the operator
+    (origin='user'), or a dev-only core-dev script (origin='core-dev').
+
+    Used by `nexo update` to know which rows it can replace without
+    overwriting operator-authored automations, and by the Desktop
+    Automations panel (F0.2) to segment the list.
+
+    Idempotent.
+    """
+    _migrate_add_column(conn, "personal_scripts", "origin", "TEXT NOT NULL DEFAULT 'user'")
+    _migrate_add_index(conn, "idx_personal_scripts_origin", "personal_scripts", "origin")
+
+
 def _m44_entities_extended_schema(conn):
     """Plan Consolidado 0.3 — extend entities with aliases/metadata/source/confidence/access_mode.
 
@@ -1147,6 +1163,7 @@ MIGRATIONS = [
     (42, "v6_0_1_hotfix", _m42_v6_0_1_hotfix),
     (43, "session_claude_aliases", _m43_session_claude_aliases),
     (44, "entities_extended_schema", _m44_entities_extended_schema),
+    (45, "personal_scripts_origin", _m45_personal_scripts_origin),
 ]
 
 

@@ -557,6 +557,20 @@ def process_pre_tool_event(payload: dict) -> dict:
     if op not in {"write", "delete"}:
         return {"ok": True, "skipped": True, "reason": "operation not blocked", "strictness": get_protocol_strictness()}
 
+    # Plan Consolidado F0.0.4 — skip hook-level strict blocking while a
+    # structure migration is in flight. NEXO_MIGRATING=1 is set by
+    # nexo_migrate.run_structure_migration while it moves files and
+    # re-paths the runtime. Without this bypass a legitimate migration
+    # cannot edit anything without having opened task_open for each
+    # individual moved file, which defeats the whole migration flow.
+    if os.environ.get("NEXO_MIGRATING") == "1":
+        return {
+            "ok": True,
+            "skipped": True,
+            "reason": "structure migration in progress (NEXO_MIGRATING=1)",
+            "strictness": get_protocol_strictness(),
+        }
+
     tool_input = payload.get("tool_input")
     files = _extract_touched_files(tool_input)
     strictness = get_protocol_strictness()
