@@ -1,8 +1,10 @@
 # NEXO Brain
 
-> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v6.1.1).
+> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v6.3.0).
 
 NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It adds a local shared brain across supported clients, configurable terminal and automation backends, recovery-aware background jobs, startup preflight, runtime self-healing, smarter retrieval defaults, long-horizon overnight analysis, and 150+ MCP tools.
+
+v6.3.0: Plan Consolidado wave 2, coordinated with NEXO Desktop v0.18.0. Extended `cognitive_sentiment` shape (`is_correction`, `valence`, `intent` enum); entities schema gains `aliases`/`metadata`/`source`/`confidence`/`access_mode` via idempotent migration m44; 21 labelled rule fixtures + R13 spike gates (FP < 5%, P95 < 3s); `artifact_class` preset entries (`shopify_banner_block`, `changelog_entry`, `email_to_operator_contact`); R34 identity-coherence added to the system prompt with an explicit anti-example; Fase F telemetry loops (`fase_f_loops` + Deep Sleep `phase_guardian_analysis` report); pinned local zero-shot classifier skeleton (`MoritzLaurer/mDeBERTa-v3-base-mnli-xnli` at revision `a1a5a76a8cb44edb4f92e7e2ea4f0e0ce8ce6e97`) plus `docs/classifier-model-notes.md`; `process_pre_tool_event` respects `NEXO_MIGRATING=1`; `origin` column on `personal_scripts` via m45; T4 LLM gate wraps R15/R23e/R23f/R23h with byte-for-byte Py ↔ JS parity. `enforcement_classifier.classify` now supports `tristate=True` so an unparseable conservative fallback returns `"unknown"` instead of silently suppressing destructive rules.
 
 v6.1.1: small fix — `nexo --help` refreshes `Latest: vX` via npm even when invoked via subprocess with piped stdio. Prior TTY gate in `_should_refresh_latest_version()` blocked NEXO Desktop's subprocess from ever populating the version cache, so the Brain auto-update banner never saw a newer version and users had to run `nexo update` manually. Fix removes the TTY gate; 6-hour `_load_latest_version_cache` stays as the real rate-limit; fail-closes to installed-only when npm unreachable.
 
