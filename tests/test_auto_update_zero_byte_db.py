@@ -22,7 +22,7 @@ if str(REPO_SRC) not in sys.path:
 
 def _reload_auto_update(monkeypatch, home: Path):
     """Reload auto_update against a tmp NEXO_HOME so module-level paths pick
-    up the fixture directory instead of Francisco's real ~/.nexo."""
+    up the fixture directory instead of the operator's real ~/.nexo."""
     import importlib
     monkeypatch.setenv("NEXO_HOME", str(home))
     import auto_update as au

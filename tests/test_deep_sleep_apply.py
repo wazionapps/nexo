@@ -302,7 +302,7 @@ def test_abandoned_followups_are_archived_not_active(monkeypatch, tmp_path):
         {
             "abandoned_projects": [
                 {
-                    "description": "Canales YouTube de Francisco — preguntados pero no respondidos",
+                    "description": "Canales YouTube del operador — preguntados pero no respondidos",
                     "has_followup": False,
                     "recommendation": "Archive as historical context.",
                 }

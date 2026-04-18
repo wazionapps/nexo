@@ -234,16 +234,16 @@ def test_dashboard_recent_context_api_surfaces_hot_context(isolated_db):
 
     db.capture_context_event(
         event_type="context_capture",
-        title="Review DNS with Maria",
+        title="Review DNS with Bob",
         summary="Talked about registrar ownership and next step.",
-        body="Francisco said the domain is not his and Maria should handle it.",
-        topic="dns maria registrar",
-        context_key="topic:dns-maria-registrar",
-        context_title="Review DNS with Maria",
-        context_summary="Waiting Maria action on registrar side.",
+        body="Alice said the domain is not his and Bob should handle it.",
+        topic="dns bob registrar",
+        context_key="topic:dns-bob-registrar",
+        context_title="Review DNS with Bob",
+        context_summary="Waiting Bob action on registrar side.",
         context_type="topic",
         state="waiting_third_party",
-        owner="maria",
+        owner="bob",
         actor="test",
         source_type="email",
         source_id="thread-1",
@@ -251,12 +251,12 @@ def test_dashboard_recent_context_api_surfaces_hot_context(isolated_db):
         ttl_hours=24,
     )
 
-    res = client.get("/api/recent-context?query=dns maria")
+    res = client.get("/api/recent-context?query=dns bob")
     assert res.status_code == 200
     payload = res.json()
     assert payload["has_matches"] is True
     assert payload["counts"]["contexts"] >= 1
-    assert payload["contexts"][0]["context_key"] == "topic:dns-maria-registrar"
+    assert payload["contexts"][0]["context_key"] == "topic:dns-bob-registrar"
     assert any(event["event_type"] == "context_capture" for event in payload["events"])
 
 

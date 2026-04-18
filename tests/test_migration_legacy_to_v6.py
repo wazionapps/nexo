@@ -36,7 +36,7 @@ def _seed_v5_home(tmp_path: Path) -> Path:
     config.mkdir()
     (brain / "calibration.json").write_text(json.dumps({
         "version": 1,
-        "user": {"name": "Francisco"},
+        "user": {"name": "Alice"},
         "personality": {"autonomy": "full"},
         "preferences": {
             "protocol_strictness": "off",
@@ -73,7 +73,7 @@ def test_purge_removes_all_legacy_fields_and_seeds_default_resonance(tmp_path):
     assert cal["preferences"]["default_resonance"] == "alto"
 
     # Untouched surroundings
-    assert cal["user"]["name"] == "Francisco"
+    assert cal["user"]["name"] == "Alice"
     assert cal["personality"]["autonomy"] == "full"
     assert cal["preferences"]["menu_on_demand"] is True
     assert sched["timezone"] == "Europe/Madrid"

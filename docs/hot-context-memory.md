@@ -92,7 +92,7 @@ Example:
 
 ```bash
 nexo call nexo_pre_action_context --input '{
-  "query":"francisco email dns recambiosbmw",
+  "query":"alice email dns example-shop",
   "hours":24,
   "limit":8
 }'
@@ -113,11 +113,11 @@ Example:
 
 ```bash
 nexo call nexo_recent_context_capture --input '{
-  "title":"SES issue for holidays2thecanaries",
-  "summary":"Maria owns the decision. Waiting third party confirmation.",
-  "topic":"holidays2thecanaries ses",
+  "title":"SES issue for example-travel",
+  "summary":"Bob owns the decision. Waiting third party confirmation.",
+  "topic":"example-travel ses",
   "state":"waiting_third_party",
-  "owner":"maria",
+  "owner":"bob",
   "source_type":"email",
   "source_id":"thread-123"
 }'

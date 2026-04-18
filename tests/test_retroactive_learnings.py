@@ -225,7 +225,7 @@ class TestApplyLearningRetroactively:
             db,
             title="Translate technical jargon before replying",
             content="Avoid raw protocol jargon in operator-facing answers",
-            prevention="Always translate protocol jargon before replying to Francisco",
+            prevention="Always translate protocol jargon before replying to Alice",
             applies_to="francisco-briefing,email-digest",
         )
         _seed_decision(
@@ -248,7 +248,7 @@ class TestApplyLearningRetroactively:
             learning_keywords=retroactive_learnings._significant_tokens(
                 "Translate technical jargon before replying "
                 "Avoid raw protocol jargon in operator-facing answers "
-                "Always translate protocol jargon before replying to Francisco"
+                "Always translate protocol jargon before replying to Alice"
             ),
             learning_applies_to=retroactive_learnings._split_applies_to("francisco-briefing,email-digest"),
             decision_row={

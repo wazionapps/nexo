@@ -212,20 +212,19 @@ SYSTEM_OWNED_CALLERS: dict[str, str] = {
     "tools/drive_search":               "medio",
 
     # ---- Marketing automation ---------------------------------------------
-    # These post to Google Business Profile on behalf of Francisco's
-    # businesses. Short copy, but user-visible on a public surface; a
-    # mediocre post embarrasses the brand. Running them ALTO even though
-    # it's ~200 chars keeps the output quality tight.
+    # Generic Google Business Profile helpers. Short copy, but user-visible
+    # on a public surface; a mediocre post embarrasses the brand. Running
+    # them ALTO even though it's ~200 chars keeps the output quality tight.
+    # Operator-specific GBP posts (e.g. one caller per business) belong
+    # under the ``personal/`` prefix in the operator's own registry.
     "gbp/daily_post":                   "alto",
-    "gbp/post_wazion":                  "alto",
-    "gbp/post_psicologa":               "alto",
     "gbp/monthly_audit":                "alto",
     "gbp/reviews_watch":                "alto",
 
     # ---- Personal scripts (operators' own LaunchAgents) -------------------
-    # Francisco + Maria ship the same set of personal scripts via
-    # ~/.nexo/scripts (installed per-user, not through the core manifest).
-    # They all call into mcp__nexo__* so they cannot run under --bare.
+    # Operators ship their own personal scripts via ``~/.nexo/scripts``
+    # (installed per-user, not through the core manifest). They all call
+    # into ``mcp__nexo__*`` so they cannot run under ``--bare``.
     "personal/email-monitor":           "alto",   # answer real user emails, quality matters
     "personal/github-monitor":          "alto",   # reason about issues/PRs, not mechanical
     "personal/post-x":                  "alto",   # public-facing copy

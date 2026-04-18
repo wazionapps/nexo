@@ -37,18 +37,18 @@ class TestCreateSignal:
         assert result["tension"] == 1.0
 
     def test_retrievable_after_create(self):
-        result = create_drive_signal("gap", "task_close", "No model for ICNEA pricing", area="canaririural")
+        result = create_drive_signal("gap", "task_close", "No model for example-pms pricing", area="example-tourism")
         signal = get_drive_signal(result["id"])
         assert signal is not None
         assert signal["signal_type"] == "gap"
-        assert signal["area"] == "canaririural"
+        assert signal["area"] == "example-tourism"
         assert signal["status"] == "latent"
 
 
 class TestReinforce:
     def test_tension_increases(self):
-        created = create_drive_signal("pattern", "heartbeat", "María pregunta lo mismo cada trimestre")
-        result = reinforce_drive_signal(created["id"], "María preguntó otra vez por lo mismo")
+        created = create_drive_signal("pattern", "heartbeat", "Bob pregunta lo mismo cada trimestre")
+        result = reinforce_drive_signal(created["id"], "Bob preguntó otra vez por lo mismo")
         assert result["ok"]
         assert result["new_tension"] > result["old_tension"]
 
@@ -282,7 +282,7 @@ class TestDetection:
 
     def test_pattern_detected(self):
         result = detect_drive_signal(
-            "María pregunta otra vez por el resumen trimestral, siempre pasa lo mismo",
+            "Bob pregunta otra vez por el resumen trimestral, siempre pasa lo mismo",
             source="heartbeat", source_id="test-sid",
         )
         assert result is not None
@@ -296,7 +296,7 @@ class TestDetection:
 
     def test_gap_detected(self):
         result = detect_drive_signal(
-            "No sé cómo funciona el pricing de ICNEA para las agencias",
+            "No sé cómo funciona el pricing de example-pms para las agencias",
             source="task_close", source_id="task-123",
         )
         assert result is not None

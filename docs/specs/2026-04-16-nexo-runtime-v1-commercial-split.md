@@ -24,12 +24,12 @@ Without an explicit split now, the risk is building a commercial layer directly 
 Today there are already two separate repos:
 
 1. `wazionapps/nexo`
-   - local path: `/Users/franciscoc/Documents/_PhpstormProjects/nexo`
+   - local path: `~/checkouts/nexo`
    - remote: `https://github.com/wazionapps/nexo.git`
    - contains the OSS runtime, MCP server, onboarding bridge, docs, blog, release assets, adapters, and packaging logic
 
 2. `wazionapps/nexo-desktop`
-   - local path: `/Users/franciscoc/Documents/_PhpstormProjects/nexo-desktop`
+   - local path: `~/checkouts/nexo-desktop`
    - remote: `https://github.com/wazionapps/nexo-desktop.git`
    - contains the Electron app, updater, renderer, preload, local installer helpers, and Desktop UX
 

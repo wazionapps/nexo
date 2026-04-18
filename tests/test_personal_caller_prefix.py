@@ -23,7 +23,7 @@ import resonance_map as rmap  # noqa: E402
 @pytest.fixture(autouse=True)
 def _isolate_preferences(monkeypatch):
     """Neutralise the host's on-disk calibration so every assertion in this
-    module exercises the resolver, not Francisco's real ``default_resonance``.
+    module exercises the resolver, not the operator's real ``default_resonance``.
     """
     monkeypatch.setattr(rmap, "_load_user_default_resonance", lambda: "")
 

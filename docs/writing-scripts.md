@@ -182,7 +182,7 @@ Example:
 from nexo_helper import call_tool_text
 
 bundle = call_tool_text("nexo_pre_action_context", {
-    "query": "francisco email dns recambiosbmw",
+    "query": "alice email dns example-shop",
     "hours": 24,
     "limit": 6,
 })
@@ -190,10 +190,10 @@ print(bundle)
 
 call_tool_text("nexo_recent_context_capture", {
     "title": "Awaiting registrar action",
-    "summary": "Asked Maria to handle the registrar. Waiting external action.",
-    "topic": "dns recambiosbmw",
+    "summary": "Asked Bob to handle the registrar. Waiting external action.",
+    "topic": "dns example-shop",
     "state": "waiting_third_party",
-    "owner": "maria",
+    "owner": "bob",
     "source_type": "email",
     "source_id": "thread-123",
 })

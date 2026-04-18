@@ -60,14 +60,14 @@ def test_bootstraps_from_meta_role_and_technical_level(tmp_path, monkeypatch):
 def test_includes_name_and_language_when_present(tmp_path, monkeypatch):
     home = tmp_path / "home"
     _seed_calibration(home, {
-        "name": "Francisco",
+        "name": "Alice",
         "language": "es",
         "meta": {"role": "founder"},
     })
     au = _reload_auto_update(monkeypatch, home)
     au._bootstrap_profile_from_calibration_meta(home)
     prof = _load_profile(home)
-    assert prof["name"] == "Francisco"
+    assert prof["name"] == "Alice"
     assert prof["language"] == "es"
     assert prof["role"] == "founder"
 

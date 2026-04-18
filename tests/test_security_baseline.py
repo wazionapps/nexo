@@ -121,7 +121,7 @@ class TestHashFingerprintLoadSmoke:
     in a slow algorithm or losing determinism."""
 
     def test_md5_fingerprint_is_stable_and_fast(self):
-        sample = "deploy nexo-cron-wrapper push to mundiserver"
+        sample = "deploy nexo-cron-wrapper push to example-server"
         first = hashlib.md5(sample.encode(), usedforsecurity=False).hexdigest()
         # 10000 hashes must complete in under 1s on any modern machine.
         start = time.perf_counter()

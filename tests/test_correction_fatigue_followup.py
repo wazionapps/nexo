@@ -77,7 +77,7 @@ def test_fatigued_memories_create_followup_with_high_priority(fatigue_env, monke
             "memory_id": 101,
             "corrections_7d": 4,
             "types": "explicit,implicit,explicit,implicit",
-            "content": "El servidor de Recambios BMW se llama mundiserver",
+            "content": "El servidor de ExampleStore se llama example-server",
             "strength": 0.2,
             "source_type": "session",
             "domain": "ecommerce",
@@ -86,10 +86,10 @@ def test_fatigued_memories_create_followup_with_high_priority(fatigue_env, monke
             "memory_id": 202,
             "corrections_7d": 3,
             "types": "explicit",
-            "content": "WAzion soporta sesiones múltiples por número",
+            "content": "ChatBot soporta sesiones múltiples por número",
             "strength": 0.2,
             "source_type": "session",
-            "domain": "wazion",
+            "domain": "chatbot",
         },
     ]
 

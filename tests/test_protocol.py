@@ -40,7 +40,7 @@ def test_task_open_records_protocol_contract():
             goal="Harden protocol discipline",
             task_type="edit",
             area="nexo-ops",
-            files="/Users/franciscoc/Documents/_PhpstormProjects/nexo/src/server.py",
+            files="/repo/src/server.py",
             plan='["inspect", "patch", "test"]',
             evidence_refs='["spec", "repo inspection"]',
             verification_step="run pytest",
@@ -343,7 +343,7 @@ def test_task_close_creates_change_log_and_stays_clean():
             goal="Patch runtime provider",
             task_type="edit",
             area="nexo-ops",
-            files="/Users/franciscoc/Documents/_PhpstormProjects/nexo/src/doctor/providers/runtime.py",
+            files="/repo/src/doctor/providers/runtime.py",
             plan='["inspect", "patch", "pytest"]',
             verification_step="run targeted pytest",
         )
@@ -386,7 +386,7 @@ def test_task_close_opens_protocol_debt_when_done_without_evidence():
             goal="Edit without evidence",
             task_type="edit",
             area="nexo-ops",
-            files="/Users/franciscoc/Documents/_PhpstormProjects/nexo/src/plugins/cortex.py",
+            files="/repo/src/plugins/cortex.py",
             plan='["inspect", "patch"]',
             verification_step="run pytest",
         )
@@ -422,7 +422,7 @@ def test_task_close_rejects_invalid_outcome_without_mutating_task():
             goal="Exercise invalid close outcome handling",
             task_type="edit",
             area="nexo-ops",
-            files="/Users/franciscoc/Documents/_PhpstormProjects/nexo/src/plugins/protocol.py",
+            files="/repo/src/plugins/protocol.py",
             plan='["inspect", "validate"]',
             verification_step="run pytest",
         )
@@ -482,7 +482,7 @@ def test_task_close_auto_captures_learning_when_correction_has_no_learning():
             goal="Fix guard false positive",
             task_type="edit",
             area="nexo-ops",
-            files="/Users/franciscoc/Documents/_PhpstormProjects/nexo/src/plugins/guard.py",
+            files="/repo/src/plugins/guard.py",
             plan='["inspect", "patch", "test"]',
             verification_step="run pytest",
         )
@@ -509,7 +509,7 @@ def test_task_close_auto_captures_learning_when_correction_has_no_learning():
     assert learning is not None
     assert learning["status"] == "active"
     assert learning["title"] == "Reduced guard false positives"
-    assert "/Users/franciscoc/Documents/_PhpstormProjects/nexo/src/plugins/guard.py" in learning["applies_to"]
+    assert "/repo/src/plugins/guard.py" in learning["applies_to"]
 
 
 def test_high_stakes_action_close_opens_debt_without_cortex_evaluation():
@@ -599,7 +599,7 @@ def test_task_close_explicit_learning_supersedes_conflicting_file_rule():
         "nexo-ops",
         "Never edit guard.py directly",
         "Never edit guard.py directly; route all fixes through wrapper helpers instead.",
-        applies_to="/Users/franciscoc/Documents/_PhpstormProjects/nexo/src/plugins/guard.py",
+        applies_to="/repo/src/plugins/guard.py",
         status="active",
     )
     get_db().execute(
@@ -614,7 +614,7 @@ def test_task_close_explicit_learning_supersedes_conflicting_file_rule():
             goal="Stabilize guard hotfix path",
             task_type="edit",
             area="nexo-ops",
-            files="/Users/franciscoc/Documents/_PhpstormProjects/nexo/src/plugins/guard.py",
+            files="/repo/src/plugins/guard.py",
             plan='["inspect", "patch", "test"]',
             verification_step="run pytest",
         )
@@ -646,7 +646,7 @@ def test_task_close_explicit_learning_supersedes_conflicting_file_rule():
     assert old_row["status"] == "superseded"
     assert new_row["status"] == "active"
     assert new_row["supersedes_id"] == existing["id"]
-    assert "/Users/franciscoc/Documents/_PhpstormProjects/nexo/src/plugins/guard.py" in new_row["applies_to"]
+    assert "/repo/src/plugins/guard.py" in new_row["applies_to"]
 
 
 def test_task_open_surfaces_attention_management_when_focus_is_split():
