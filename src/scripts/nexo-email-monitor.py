@@ -179,7 +179,10 @@ def _debt_fingerprint(debt_block):
     text = (debt_block or "").strip()
     if not text:
         return ""
-    return hashlib.sha1(text.encode("utf-8")).hexdigest()
+    # SHA1 is used purely to detect duplicate debt blocks across runs;
+    # usedforsecurity=False tells bandit (and readers) this is a
+    # fingerprint, not a security hash — collisions do not harm anything.
+    return hashlib.sha1(text.encode("utf-8"), usedforsecurity=False).hexdigest()
 
 
 def load_empty_inbox_backoff_state():
