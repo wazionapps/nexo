@@ -1519,10 +1519,54 @@ def _run_db_migrations() -> bool:
         applied = run_migrations(conn)
         if applied > 0:
             _log(f"Applied {applied} DB migration(s)")
+        # Plan Consolidado F1 — one-shot legacy email config migration.
+        # After m46 adds the table, operators installed pre-v6.4.0 still
+        # keep their data inside ~/.nexo/nexo-email/config.json. If the
+        # table is empty and the JSON exists, port the primary account
+        # over automatically so scripts pick up the new source on the
+        # next cron without the operator running anything manually.
+        _maybe_migrate_legacy_email_config()
         return True
     except Exception as e:
         _log(f"DB migration error: {e}")
         return False
+
+
+def _maybe_migrate_legacy_email_config() -> None:
+    """F1 auto-migrator — idempotent. Runs the helper script the first
+    time after v6.4.0 lands on an existing runtime."""
+    try:
+        from db._email_accounts import get_email_account
+    except Exception:
+        return  # m46 not applied yet (older runtime), nothing to do
+    try:
+        legacy = NEXO_HOME / "nexo-email" / "config.json"
+        if not legacy.exists():
+            return
+        if get_email_account("primary"):
+            return  # already migrated
+        import subprocess as _sp
+        script = Path(__file__).resolve().parent / "scripts" / "nexo-email-migrate-config.py"
+        if not script.exists():
+            return
+        _log("F1: migrating legacy email config.json → email_accounts table")
+        env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parent)}
+        r = _sp.run(
+            [sys.executable, str(script)],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if r.returncode == 0:
+            line = (r.stdout.strip().splitlines() or ["ok"])[-1]
+            _log(f"F1 email migration: {line}")
+        else:
+            _log(f"F1 email migration FAILED (rc={r.returncode}): {r.stderr.strip()[:200]}")
+    except _sp.TimeoutExpired:
+        _log("F1 email migration timed out after 30s")
+    except Exception as exc:
+        _log(f"F1 email migration skipped: {exc}")
 
 
 # ── npm version check (notify only) ─────────────────────────────────

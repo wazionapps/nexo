@@ -1083,6 +1083,55 @@ def _m43_session_claude_aliases(conn):
     )
 
 
+def _m46_email_accounts(conn):
+    """Plan Consolidado F1 — first-class multi-account email config.
+
+    Replaces the legacy ~/.nexo/nexo-email/config.json (single tenant,
+    password in cleartext, Francisco-hardcoded) with a structured table.
+
+    Columns:
+      - id: internal primary key.
+      - label: operator-friendly name ('primary', 'wazion', 'canari').
+      - email: address the account sends from.
+      - imap_host, imap_port: inbound server.
+      - smtp_host, smtp_port: outbound server.
+      - credential_service, credential_key: reference into the
+        `credentials` table (never store the password in this row).
+      - operator_email: where the briefing / digest is sent when this
+        account runs the morning agent.
+      - trusted_domains: JSON array of domains the inbox treats as
+        priority (not hard filter).
+      - role: 'inbox' (monitor only), 'outbox' (send only), 'both'.
+      - enabled: on/off without having to delete the row.
+      - created_at / updated_at.
+
+    Idempotent.
+    """
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS email_accounts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            label TEXT NOT NULL UNIQUE,
+            email TEXT NOT NULL,
+            imap_host TEXT NOT NULL DEFAULT '',
+            imap_port INTEGER NOT NULL DEFAULT 993,
+            smtp_host TEXT NOT NULL DEFAULT '',
+            smtp_port INTEGER NOT NULL DEFAULT 465,
+            credential_service TEXT NOT NULL DEFAULT '',
+            credential_key TEXT NOT NULL DEFAULT '',
+            operator_email TEXT NOT NULL DEFAULT '',
+            trusted_domains TEXT NOT NULL DEFAULT '[]',
+            role TEXT NOT NULL DEFAULT 'both',
+            enabled INTEGER NOT NULL DEFAULT 1,
+            metadata TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now'))
+        )
+        """
+    )
+    _migrate_add_index(conn, "idx_email_accounts_enabled", "email_accounts", "enabled")
+
+
 def _m45_personal_scripts_origin(conn):
     """Plan Consolidado F0.1 — mark whether a personal_scripts row is
     installed by NEXO Core (origin='core'), contributed by the operator
@@ -1164,6 +1213,7 @@ MIGRATIONS = [
     (43, "session_claude_aliases", _m43_session_claude_aliases),
     (44, "entities_extended_schema", _m44_entities_extended_schema),
     (45, "personal_scripts_origin", _m45_personal_scripts_origin),
+    (46, "email_accounts", _m46_email_accounts),
 ]
 
 

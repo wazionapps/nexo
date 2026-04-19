@@ -14,6 +14,21 @@ on:
     branches: [main]
 
 jobs:
+  no-personal-data:
+    name: no operator-specific data in src/
+    # Plan Consolidado v6.4.0 — second-pass auditor caught two
+    # operator-specific runner scripts that had been copied into
+    # src/scripts/ mid-refactor (full of one operator's email
+    # addresses, tenant domains, real names). This guard prevents
+    # the same class of leak from happening again — same intent as
+    # the v6.3.1 .gitignore block on entities_local.json, but at the
+    # CI level so we catch it before merge instead of in production.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Run grep guard
+        run: bash scripts/check_no_personal_data.sh
+
   bandit:
     name: bandit (high severity, high confidence)
     runs-on: ubuntu-latest

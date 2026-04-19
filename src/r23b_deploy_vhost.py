@@ -4,8 +4,8 @@ Pure decision module. Part of Fase D2 (hard bloqueante).
 
 Triggers when an scp/rsync command writes to a remote path that maps to
 a known vhost_mapping entity, and the surrounding context references a
-different domain. The classic incident: pushing systeam.es assets to
-the vicshop docroot because the mental-model-cached entity was wrong.
+different domain. The classic incident: pushing site-A assets to
+site-B's docroot because the mental-model-cached entity was wrong.
 """
 from __future__ import annotations
 
