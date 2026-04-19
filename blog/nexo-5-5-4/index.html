@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXO 5.5.4: Deep Sleep Stops Blocking on Unparseable Sessions</title>
+    <meta name="description" content="NEXO 5.5.4 reduces Deep Sleep Phase 2 retries from 3 to 2, adds a JSON escape hatch so the model always returns parseable output, and unifies the automation subprocess timeout to 3h across 10 scripts via a single shared constant.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-5-5-4/">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/blog/nexo-5-5-4/">
+    <meta property="og:title" content="NEXO 5.5.4: Deep Sleep Stops Blocking on Unparseable Sessions">
+    <meta property="og:description" content="Phase 2 extraction was retrying the same unparseable session three times behind a 6h per-attempt safety net. 5.5.4 caps retries, adds a JSON escape hatch, and unifies the timeout to 3h everywhere.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+    <meta property="article:published_time" content="2026-04-16">
+    <meta property="article:author" content="Francisco Cerda Puigserver">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO 5.5.4: Deep Sleep Stops Blocking on Unparseable Sessions">
+    <meta name="twitter:description" content="Retries reduced from 3 to 2, JSON escape hatch in the system prompt, and a single AUTOMATION_SUBPROCESS_TIMEOUT constant across 10 scripts.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "NEXO 5.5.4: Deep Sleep Stops Blocking on Unparseable Sessions",
+        "description": "NEXO 5.5.4 reduces Deep Sleep Phase 2 retries from 3 to 2, adds a JSON escape hatch so the model always returns parseable output, and unifies the automation subprocess timeout to 3h across 10 scripts via a single shared constant.",
+        "datePublished": "2026-04-16",
+        "dateModified": "2026-04-16",
+        "author": {
+            "@type": "Person",
+            "name": "Francisco Cerda Puigserver"
+        },
+        "publisher": {
+            "@type": "Organization",
+            "name": "WAzion",
+            "url": "https://www.wazion.com"
+        },
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https://nexo-brain.com/blog/nexo-5-5-4/"
+        },
+        "url": "https://nexo-brain.com/blog/nexo-5-5-4/",
+        "image": "https://nexo-brain.com/assets/og/og-blog.png",
+        "keywords": ["NEXO 5.5.4", "Deep Sleep", "retry logic", "JSON schema", "subprocess timeout"]
+    }
+    </script>
+
+    <style>
+        .article-header { padding-top: 128px; padding-bottom: 40px; text-align: center; }
+        .article-meta { font-size: 14px; color: var(--text-muted); margin-bottom: 16px; }
+        .article-body {
+            max-width: 720px; margin: 0 auto; padding: 0 24px 80px;
+            font-size: 17px; line-height: 1.8; color: var(--text);
+        }
+        .article-body h2 { font-size: 28px; font-weight: 700; margin: 48px 0 16px; letter-spacing: -0.01em; }
+        .article-body p { margin-bottom: 20px; color: var(--text-muted); }
+        .article-body strong { color: var(--text); }
+        .article-body a { color: var(--purple-light); }
+        .article-body a:hover { color: var(--pink); }
+        .article-body code {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 14px; color: var(--pink);
+            background: rgba(236, 72, 153, 0.1);
+            padding: 2px 8px; border-radius: 4px;
+        }
+        .article-back {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 14px; font-weight: 600; color: var(--text-muted);
+            margin-bottom: 24px;
+        }
+        .article-back:hover { color: var(--purple-light); }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-64.png" alt="NEXO Brain" class="logo-image">
+            <span class="logo-text">NEXO Brain</span>
+        </a>
+        <button class="mobile-menu-toggle" aria-label="Toggle navigation" onclick="toggleMobileMenu()">
+            <span></span><span></span><span></span>
+        </button>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/features/">Features</a>
+            <a href="/evolution/">Evolution</a>
+            <a href="/compare/">Compare</a>
+            <a href="/blog/">Blog</a>
+            <a href="/changelog/">Changelog</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta">GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<section class="article-header">
+    <div class="container">
+        <a href="/blog/" class="article-back">&larr; Back to blog</a>
+        <div class="article-meta">April 16, 2026 &middot; Fix &middot; Runtime</div>
+        <h1 class="section-title" style="font-size:clamp(28px,4.5vw,48px);max-width:920px;margin:0 auto 16px;">NEXO 5.5.4: Deep Sleep Stops Blocking on Unparseable Sessions</h1>
+        <p class="section-subtitle" style="max-width:760px;margin:0 auto;">Phase 2 extraction was retrying the same session three times with identical prompt and context, hiding a 6h per-attempt safety net that silently drifted out of alignment with its own &quot;3h&quot; comment. 5.5.4 caps retries, adds a JSON escape hatch, and unifies the timeout to 3h everywhere via a single shared constant.</p>
+    </div>
+</section>
+
+<section>
+    <div class="article-body">
+
+        <h2>The failure mode</h2>
+        <p>Deep Sleep Phase 2 (<code>extract.py</code>) walks every session from the last 48 hours and asks the configured automation backend to return a JSON summary for each one. When the backend returned non-JSON output &mdash; a common semantic failure for large or ambiguous transcripts &mdash; the script retried the same session three times with identical prompt and context. The retries almost never succeeded, because the cause was deterministic, not transient.</p>
+        <p>Worse, the per-attempt safety net was <code>21600</code> seconds (6 hours). The comment next to that value read &quot;3h safety net&quot;, but the value had drifted out of alignment with the comment across 10 scripts. In the worst observed case, a single unparseable session could stall the entire night's run for up to ~18h before the skip logic finally kicked in.</p>
+
+        <h2>What 5.5.4 changes</h2>
+        <p><strong>Retries reduced from 3 to 2.</strong> Two attempts is enough to cover transient backend hiccups. A second failure is almost always deterministic, so further retries just burn time. Failed sessions are still checkpointed with <code>error: &quot;cannot_comply&quot;</code> and the run continues normally.</p>
+        <p><strong>JSON escape hatch in the system prompt.</strong> The <code>JSON_SYSTEM_PROMPT</code> now instructs the model to return a structured <code>{session_id, findings:[], error:&quot;cannot_comply&quot;, reason:&quot;&hellip;&quot;}</code> object whenever it cannot comply with the extraction schema for any reason. This guarantees parseable output even on degenerate inputs and removes the most common cause of retry loops.</p>
+        <p><strong>Unified automation subprocess timeout.</strong> A new <code>src/constants.py</code> defines <code>AUTOMATION_SUBPROCESS_TIMEOUT = 10800</code> (3 hours). All 10 scripts that previously hard-coded <code>21600</code> &mdash; <code>extract.py</code>, <code>synthesize.py</code>, <code>nexo-evolution-run.py</code>, <code>nexo-agent-run.py</code>, <code>nexo-synthesis.py</code>, <code>nexo-sleep.py</code>, <code>nexo-catchup.py</code>, <code>nexo-immune.py</code>, <code>nexo-daily-self-audit.py</code>, <code>nexo-postmortem-consolidator.py</code> &mdash; now import the shared constant. Future tuning is one edit, not ten.</p>
+
+        <h2>Why this matters</h2>
+        <p>Deep Sleep is the cron that carries every learning, pattern, and context packet from one working day to the next. When Phase 2 blocks, the morning briefing, the applied-findings pipeline, and the weekly summaries all run late or not at all. 5.5.4 turns a 10-script coordination footgun into a single-source-of-truth constant and gives the model an honest way to report &quot;I cannot summarise this&quot; without stalling the whole night.</p>
+
+    </div>
+</section>
+
+<footer>
+    <div class="container" style="text-align:center; padding: 48px 24px 32px; color: var(--text-muted); font-size: 14px;">
+        <p>&copy; 2024&ndash;2026 WAzion &middot; <a href="https://github.com/wazionapps/nexo" style="color:var(--purple-light);">GitHub</a> &middot; AGPL-3.0</p>
+    </div>
+</footer>
+
+<script>
+function toggleMobileMenu() {
+    document.querySelector('.nav-links').classList.toggle('active');
+    document.querySelector('.mobile-menu-toggle').classList.toggle('active');
+}
+</script>
+
+</body>
+</html>

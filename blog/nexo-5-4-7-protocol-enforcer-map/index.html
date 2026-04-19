@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXO 5.4.7: Protocol Enforcer Tool Map</title>
+    <meta name="description" content="NEXO 5.4.7 adds tool-enforcement-map.json — a canonical map of all 247 MCP tools with enforcement metadata for the Protocol Enforcer.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-5-4-7-protocol-enforcer-map/">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/blog/nexo-5-4-7-protocol-enforcer-map/">
+    <meta property="og:title" content="NEXO 5.4.7: Protocol Enforcer Tool Map">
+    <meta property="og:description" content="Canonical map of all 247 NEXO Brain tools with enforcement rules. Desktop and headless sessions read it to enforce protocol compliance.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+    <meta property="article:published_time" content="2026-04-15">
+    <meta property="article:author" content="Francisco Cerda Puigserver">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO 5.4.7: Protocol Enforcer Tool Map">
+    <meta name="twitter:description" content="Canonical map of all 247 NEXO Brain tools with enforcement rules.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "NEXO 5.4.7: Protocol Enforcer Tool Map",
+        "description": "NEXO 5.4.7 adds tool-enforcement-map.json — a canonical map of all 247 MCP tools with enforcement metadata for the Protocol Enforcer.",
+        "datePublished": "2026-04-15",
+        "dateModified": "2026-04-15",
+        "author": {
+            "@type": "Person",
+            "name": "Francisco Cerda Puigserver"
+        },
+        "publisher": {
+            "@type": "Organization",
+            "name": "WAzion",
+            "url": "https://www.wazion.com"
+        },
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https://nexo-brain.com/blog/nexo-5-4-7-protocol-enforcer-map/"
+        },
+        "url": "https://nexo-brain.com/blog/nexo-5-4-7-protocol-enforcer-map/",
+        "image": "https://nexo-brain.com/assets/og/og-blog.png",
+        "keywords": ["NEXO 5.4.7", "protocol enforcer", "tool map", "enforcement", "MCP tools"]
+    }
+    </script>
+
+    <style>
+        .article-header { padding-top: 128px; padding-bottom: 40px; text-align: center; }
+        .article-meta { font-size: 14px; color: var(--text-muted); margin-bottom: 16px; }
+        .article-body {
+            max-width: 720px; margin: 0 auto; padding: 0 24px 80px;
+            font-size: 17px; line-height: 1.8; color: var(--text);
+        }
+        .article-body h2 { font-size: 28px; font-weight: 700; margin: 48px 0 16px; letter-spacing: -0.01em; }
+        .article-body p { margin-bottom: 20px; color: var(--text-muted); }
+        .article-body strong { color: var(--text); }
+        .article-body a { color: var(--purple-light); }
+        .article-body a:hover { color: var(--pink); }
+        .article-body code {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 14px; color: var(--pink);
+            background: rgba(236, 72, 153, 0.1);
+            padding: 2px 8px; border-radius: 4px;
+        }
+        .article-back {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 14px; font-weight: 600; color: var(--text-muted);
+            margin-bottom: 24px;
+        }
+        .article-back:hover { color: var(--purple-light); }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-64.png" alt="NEXO Brain" class="logo-image">
+            <span class="logo-text">NEXO Brain</span>
+        </a>
+        <button class="mobile-menu-toggle" aria-label="Toggle navigation" onclick="toggleMobileMenu()">
+            <span></span><span></span><span></span>
+        </button>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/features/">Features</a>
+            <a href="/evolution/">Evolution</a>
+            <a href="/compare/">Compare</a>
+            <a href="/blog/">Blog</a>
+            <a href="/changelog/">Changelog</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta">GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<section class="article-header">
+    <div class="container">
+        <a href="/blog/" class="article-back">&larr; Back to blog</a>
+        <div class="article-meta">April 15, 2026 &middot; Feature &middot; Protocol</div>
+        <h1 class="section-title" style="font-size:clamp(28px,4.5vw,48px);max-width:920px;margin:0 auto 16px;">NEXO 5.4.7: Protocol Enforcer Tool Map</h1>
+        <p class="section-subtitle" style="max-width:760px;margin:0 auto;">A canonical map of all 247 MCP tools with enforcement metadata. Desktop and headless sessions read it to mechanically enforce protocol compliance.</p>
+    </div>
+</section>
+
+<section>
+    <div class="article-body">
+
+        <h2>The problem</h2>
+        <p>NEXO Brain relies on the AI model remembering to call protocol tools like <strong>heartbeat</strong>, <strong>diary</strong>, and <strong>startup</strong>. In practice, the model often skips these &mdash; especially during long sessions or complex tasks. There was no mechanical enforcement layer.</p>
+
+        <h2>The solution</h2>
+        <p>A new <code>tool-enforcement-map.json</code> file in the repo root maps all 247 MCP tools with enforcement metadata. Each tool declares whether it needs enforcement, what type (periodic, event-based, session lifecycle), the trigger threshold, and the prompt to inject when the rule is violated.</p>
+        <p>16 tools have enforcement rules. The remaining 231 are utility, query, or management tools that don't need mechanical enforcement.</p>
+
+        <h2>Enforcement types</h2>
+        <p>The map supports 7 enforcement types: <code>on_session_start</code>, <code>on_session_end</code>, <code>periodic_by_messages</code>, <code>periodic_by_time</code>, <code>before_tool</code>, <code>after_tool</code>, and <code>on_event</code>. Each type defines when the enforcer should inject a prompt to force the model to comply.</p>
+
+        <h2>Drift detection</h2>
+        <p>A new <code>scripts/verify_tool_map.py</code> script scans all tool definitions in <code>server.py</code> and <code>plugins/</code>, compares against the map, and fails if any tool is missing or orphaned. This runs in CI to prevent drift.</p>
+
+    </div>
+</section>
+
+<footer>
+    <div class="container" style="text-align:center; padding: 48px 24px 32px; color: var(--text-muted); font-size: 14px;">
+        <p>&copy; 2024&ndash;2026 WAzion &middot; <a href="https://github.com/wazionapps/nexo" style="color:var(--purple-light);">GitHub</a> &middot; AGPL-3.0</p>
+    </div>
+</footer>
+
+<script>
+function toggleMobileMenu() {
+    document.querySelector('.nav-links').classList.toggle('active');
+    document.querySelector('.mobile-menu-toggle').classList.toggle('active');
+}
+</script>
+
+</body>
+</html>

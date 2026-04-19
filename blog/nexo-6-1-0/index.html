@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXO 6.1.0: Protocol Enforcer Fase 2 + multi-conversation hook aliasing</title>
+    <meta name="description" content="NEXO 6.1.0 ships the Protocol Enforcer Fase 2 — a Capa 2 runtime guardian with 25 rules that keep Claude Code / Codex / Desktop aligned to NEXO discipline. Also fixes the NEXO Desktop multi-conversation 'unknown target' block via a v43 migration that aliases N claude_session_ids per NEXO sid.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-6-1-0/">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/blog/nexo-6-1-0/">
+    <meta property="og:title" content="NEXO 6.1.0: Protocol Enforcer Fase 2 + multi-conversation hook aliasing">
+    <meta property="og:description" content="Capa 2 runtime guardian with 25 rules (R13–R25 + R23b–R23m) keeps Claude agents on protocol. Migration v43 unblocks Desktop multi-conversation edits.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+    <meta property="article:published_time" content="2026-04-18">
+    <meta property="article:author" content="Francisco Cerda Puigserver">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO 6.1.0: Protocol Enforcer Fase 2 + multi-conversation hook aliasing">
+    <meta name="twitter:description" content="Protocol Enforcer Fase 2 (25 rules, 3 layers, byte-for-byte Py↔JS parity) + multi-claude-sid hotfix. External-LLM audit + Opus 4.7 self-audit cycle applied.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-1LNEMCJMS7');
+    </script>
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "NEXO 6.1.0: Protocol Enforcer Fase 2 + multi-conversation hook aliasing",
+        "description": "Fix for installer shell-profile pollution. _should_skip_shell_profile_backfill() gates the write when NEXO_HOME is non-canonical or NEXO_SKIP_SHELL_PROFILE=1 is set. Regression caught by the pytest CI gate introduced in v6.0.5.",
+        "datePublished": "2026-04-17",
+        "dateModified": "2026-04-17",
+        "author": {"@type": "Person", "name": "Francisco Cerda Puigserver"},
+        "publisher": {"@type": "Organization", "name": "WAzion", "url": "https://www.wazion.com"},
+        "mainEntityOfPage": {"@type": "WebPage", "@id": "https://nexo-brain.com/blog/nexo-6-1-0/"},
+        "url": "https://nexo-brain.com/blog/nexo-6-1-0/",
+        "image": "https://nexo-brain.com/assets/og/og-blog.png",
+        "keywords": ["NEXO 6.1.0", "installer", "shell profile", "NEXO_HOME", "bash_profile", "bashrc", "zshrc", "pytest isolation", "auto_update"]
+    }
+    </script>
+
+    <style>
+        .article-header { padding-top: 128px; padding-bottom: 40px; text-align: center; }
+        .article-meta { font-size: 14px; color: var(--text-muted); margin-bottom: 16px; }
+        .article-body {
+            max-width: 720px; margin: 0 auto; padding: 0 24px 80px;
+            font-size: 17px; line-height: 1.8; color: var(--text);
+        }
+        .article-body h2 { font-size: 26px; margin-top: 48px; margin-bottom: 16px; color: var(--text-bright); }
+        .article-body h3 { font-size: 20px; margin-top: 32px; margin-bottom: 12px; color: var(--text-bright); }
+        .article-body p { margin-bottom: 20px; }
+        .article-body code { background: var(--bg-alt); padding: 2px 6px; border-radius: 4px; font-size: 14px; }
+        .article-body pre { background: var(--bg-alt); padding: 16px; border-radius: 8px; overflow-x: auto; }
+        .article-body pre code { background: transparent; padding: 0; }
+        .article-body ul { margin-bottom: 20px; padding-left: 28px; }
+        .article-body li { margin-bottom: 8px; }
+    </style>
+</head>
+<body>
+<nav class="nav"><div class="nav-inner">
+    <a href="/" class="nav-brand">NEXO</a>
+    <div class="nav-links">
+        <a href="/features/">Features</a>
+        <a href="/blog/">Blog</a>
+        <a href="/changelog/">Changelog</a>
+        <a href="/docs/">Docs</a>
+        <a href="https://github.com/wazionapps/nexo">GitHub</a>
+    </div>
+</div></nav>
+
+<header class="article-header">
+    <div class="article-meta">April 17, 2026 &mdash; 3 min read</div>
+    <h1>NEXO 6.1.0: Installer no longer leaks <code>$NEXO_HOME/bin</code> into the developer&rsquo;s shell profile</h1>
+</header>
+
+<article class="article-body">
+
+<p>Every time the NEXO installer ran with <code>NEXO_HOME</code> pointing outside <code>$HOME/.nexo</code> &mdash; which is the normal case for <em>any</em> pytest fixture that builds an isolated runtime at <code>tmp_path</code> &mdash; it appended a stale <code>export PATH=&quot;$NEXO_HOME/bin:$PATH&quot;</code> line to the real <code>~/.bash_profile</code>, <code>~/.bashrc</code>, and <code>~/.zshrc</code>. Over a few test runs the developer&rsquo;s shell profile ended up peppered with references to directories that no longer existed.</p>
+
+<h2>Root cause</h2>
+
+<p>Both installer paths &mdash; the Python one in <code>src/auto_update.py::_ensure_runtime_cli_in_shell()</code> and the two JavaScript sites in <code>bin/nexo-brain.js</code> (install Step 8 + the migration restore path) &mdash; computed the rc file list from <code>Path.home()</code> / <code>os.homedir()</code> regardless of where <code>NEXO_HOME</code> pointed. The check was asymmetric: the write target came from the operator&rsquo;s real <code>$HOME</code>, but the <code>export PATH</code> value came from <code>NEXO_HOME</code>. With a temporary <code>NEXO_HOME</code> you got a guaranteed-broken line.</p>
+
+<h2>Fix</h2>
+
+<p>A single helper now gates all three call sites:</p>
+
+<pre><code>def _should_skip_shell_profile_backfill() -&gt; tuple[bool, str]:
+    flag = os.environ.get(&quot;NEXO_SKIP_SHELL_PROFILE&quot;, &quot;&quot;).strip().lower()
+    if flag in {&quot;1&quot;, &quot;true&quot;, &quot;yes&quot;, &quot;on&quot;}:
+        return True, f&quot;NEXO_SKIP_SHELL_PROFILE={flag}&quot;
+    canonical = managed_nexo_home()
+    if NEXO_HOME.resolve(strict=False) != canonical.resolve(strict=False):
+        return True, f&quot;NEXO_HOME={NEXO_HOME} is not the canonical {canonical}&quot;
+    return False, &quot;&quot;</code></pre>
+
+<p>The JavaScript mirror lives in <code>bin/nexo-brain.js::shouldSkipShellProfileBackfill()</code> and is consulted by both the fresh-install Step 8 and the migration block that restores the operator alias for existing installs.</p>
+
+<h2>Escape hatch for intentional isolated installs</h2>
+
+<p><code>NEXO_SKIP_SHELL_PROFILE=1</code> (also <code>true</code>, <code>yes</code>, <code>on</code>) force-skips the backfill even when <code>NEXO_HOME</code> happens to be canonical. Useful for sandboxed test runners, container smoke tests, or any scenario where you want the runtime installed but explicitly do not want the alias wired into the host shell.</p>
+
+<h2>Regression tests</h2>
+
+<p><code>tests/test_auto_update_shell_profile.py</code> lands with the fix and covers five cases:</p>
+
+<ul>
+    <li>pytest tmp dir (non-canonical <code>NEXO_HOME</code>) &rarr; skip.</li>
+    <li><code>NEXO_SKIP_SHELL_PROFILE=1</code> with canonical <code>NEXO_HOME</code> &rarr; skip.</li>
+    <li>Canonical install, flag unset &rarr; write.</li>
+    <li>All truthy flag values (<code>1</code>, <code>true</code>, <code>TRUE</code>, <code>yes</code>, <code>on</code>) &rarr; skip.</li>
+    <li>Canonical install with <code>NEXO_SKIP_SHELL_PROFILE=0</code> &rarr; write (falsy values are ignored).</li>
+</ul>
+
+<p>The pytest CI workflow introduced in v6.0.5 (<code>.github/workflows/tests.yml</code>) is what caught this category of drift on merge. In 6.0.2&ndash;6.0.4, three pre-tool test regressions shipped because CI only ran <code>ruff</code>, <code>bandit</code>, and the client-parity checks; <code>pytest</code> itself was never a blocking gate. With <code>tests.yml</code> in place, any future installer change that breaks this contract will fail the PR, not the developer&rsquo;s <code>~/.bash_profile</code>.</p>
+
+<h2>Housekeeping</h2>
+
+<p>This release also removes <code>.github/workflows/tests 2.yml</code> &mdash; a duplicate workflow with a space in its name that slipped in alongside the real <code>tests.yml</code> in the v6.0.5 release, plus dozens of stale <code>__pycache__/*\ 2.*</code> files generated by Finder copies on previous commits.</p>
+
+<h2>Upgrade</h2>
+
+<pre><code>nexo update</code></pre>
+
+<p>Or on a fresh machine:</p>
+
+<pre><code>npm install -g nexo-brain@6.1.0
+nexo install</code></pre>
+
+<p>Existing operators who never ran a test harness against the installer will see no behavioural change. Contributors working on packaging / installer code &mdash; and anyone who noticed mystery <code>export PATH</code> lines accumulating in their shell profile &mdash; get their real shell back.</p>
+
+</article>
+
+<footer style="max-width: 720px; margin: 0 auto 60px; padding: 0 24px; text-align: center; color: var(--text-muted); font-size: 14px;">
+    &larr; <a href="/blog/" style="color: var(--accent);">Back to blog</a> &middot; <a href="/changelog/" style="color: var(--accent);">Changelog</a> &middot; <a href="https://github.com/wazionapps/nexo" style="color: var(--accent);">GitHub</a>
+</footer>
+
+</body>
+</html>

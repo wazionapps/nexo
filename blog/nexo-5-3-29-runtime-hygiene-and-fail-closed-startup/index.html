@@ -6,7 +6,6 @@
 <title>NEXO Brain v5.3.29 — Runtime Hygiene, Fail-Closed Startup, and Honest Cron Tracing | nexo-brain.com</title>
 <meta name="description" content="v5.3.29 hardens duplicate-artifact hygiene, converges update paths on one core, makes startup fail closed on corrupt DB state, and preserves cron evidence even when SQLite is down.">
 <link rel="stylesheet" href="../../assets/blog.css">
-    <script src="/assets/site-shell.js" defer></script>
 </head>
 <body>
 <article class="blog-post">
@@ -36,6 +35,8 @@
 <h2>2. There is one update core again</h2>
 
 <p><code>src/scripts/nexo-update.sh</code> no longer carries a parallel shell implementation of update behavior. It now delegates to the canonical Python update handler, so packaged/runtime updates stop diverging depending on which entry point happened to run.</p>
+
+<p>The compatibility edge also matters during upgrade itself: older installed runtimes that do not yet have <code>tree_hygiene.py</code> now fall back safely while importing the update path, so they can finish the very update that brings that module in instead of crashing halfway through the migration.</p>
 
 <p>That matters because update logic is not a harmless convenience layer. Divergent paths create different runtime states, and one of them can quietly preserve bugs the other already fixed.</p>
 

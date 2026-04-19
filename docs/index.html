@@ -3,55 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="description" content="Documentation hub for NEXO Brain. Quickstart, install/update flow, personal artifacts manual, recent memory, transcript fallback, live system map, demos, SDK, compare scorecard, client parity checklist, and the full GitHub wiki.">
-    <meta name="robots" content="index, follow">
     <title>Docs — NEXO Brain</title>
+    <meta name="description" content="Documentation hub for NEXO Brain: quickstart, workflows, recent memory, architecture, portability, SDK, Docker, and contribution references.">
+    <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/docs/">
-
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/docs/">
     <meta property="og:title" content="Docs — NEXO Brain">
-    <meta property="og:description" content="Documentation hub for NEXO Brain. Quickstart, install/update flow, personal artifacts manual, recent memory, transcript fallback, live system map, demos, SDK, compare scorecard, client parity checklist, and the full GitHub wiki.">
-    <meta property="og:image" content="https://nexo-brain.com/assets/og/og-docs.png">
-    <meta property="og:image:width" content="1200">
-    <meta property="og:image:height" content="630">
-
+    <meta property="og:description" content="Documentation hub for NEXO Brain: quickstart, workflows, recent memory, architecture, portability, SDK, Docker, and contribution references.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/og/og-home.png">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Docs — NEXO Brain">
-    <meta name="twitter:description" content="Documentation hub for NEXO Brain. Quickstart, install/update flow, personal artifacts manual, recent memory, transcript fallback, live system map, demos, SDK, compare scorecard, client parity checklist, and the full GitHub wiki.">
-    <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-docs.png">
-
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-1LNEMCJMS7"></script>
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-      gtag('config', 'G-1LNEMCJMS7');
-    </script>
-
-    <script type="application/ld+json">
-    {
-        "@context": "https://schema.org",
-        "@type": "CollectionPage",
-        "name": "Docs — NEXO Brain",
-        "description": "Documentation hub for NEXO Brain. Quickstart, install/update flow, personal artifacts manual, recent memory, transcript fallback, live system map, demos, SDK, compare scorecard, client parity checklist, and the full GitHub wiki.",
-        "url": "https://nexo-brain.com/docs/",
-        "isPartOf": {
-            "@type": "WebSite",
-            "name": "NEXO Brain",
-            "url": "https://nexo-brain.com"
-        }
-    }
-    </script>
-
+    <meta name="twitter:description" content="Documentation hub for NEXO Brain: quickstart, workflows, recent memory, architecture, portability, SDK, Docker, and contribution references.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-home.png">
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
     <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
     <link rel="stylesheet" href="/assets/style.css">
-    <script src="/assets/site-shell.js" defer></script>
 </head>
 <body class="features-page">
-
 <nav>
     <div class="container">
         <a href="/" class="nav-logo">
@@ -64,217 +34,63 @@
         <div class="nav-links">
             <a href="/">Home</a>
             <a href="/features/">Features</a>
-            <a href="/desktop/">Desktop</a>
             <a href="/evolution/">Evolution</a>
             <a href="/compare/">Compare</a>
             <a href="/blog/">Blog</a>
             <a href="/changelog/">Changelog</a>
             <a href="/docs/">Docs</a>
-            <a href="https://github.com/wazionapps/nexo" class="nav-cta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>GitHub</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta">GitHub</a>
         </div>
     </div>
 </nav>
 
 <section class="pt-nav page-hero">
     <div class="container">
-        <div class="page-hero-grid">
-            <div class="page-hero-copy">
-                <div class="section-label">Documentation hub</div>
-                <h1 class="section-title" style="font-size:clamp(34px,5vw,58px);">Docs</h1>
-                <p class="section-subtitle">
-                    Start with the fast path, then go deeper only if you need it. This is the clean public map of NEXO: install, recent memory, transcript fallback, live system map, demos, use cases, memory model, SDKs, compare scorecard, and runtime parity.
-                </p>
-                <div class="page-chip-row">
-                    <span class="page-chip">Quickstart first</span>
-                    <span class="page-chip">Libre / open-source positioning</span>
-                    <span class="page-chip">Install flow explained</span>
-                    <span class="page-chip">Recent memory + live system map</span>
-                    <span class="page-chip">Personal artifacts manual</span>
-                </div>
-                <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="https://github.com/wazionapps/nexo/blob/main/docs/quickstart-5-minutes.md" class="btn btn-primary">Open quickstart</a>
-                    <a href="/demos/" class="btn btn-secondary">See demos</a>
-                    <a href="/features/benchmark/" class="btn btn-secondary">Benchmarks</a>
-                    <a href="/solutions/" class="btn btn-secondary">Search-intent pages</a>
-                </div>
-            </div>
-            <div class="page-visual">
-                <div class="page-stack">
-                    <div class="page-stack-card">
-                        <strong>Get started</strong>
-                        <span>Install, verify, remember, recall, consolidate, and open your first workflow.</span>
-                    </div>
-                    <div class="page-stack-card">
-                        <strong>Understand the model</strong>
-                        <span>Memory classes, client parity, compare scorecards, and vertical reference paths.</span>
-                    </div>
-                    <div class="page-stack-card">
-                        <strong>Go deeper only when needed</strong>
-                        <span>Demos and search-intent pages help evaluators fast; the full GitHub wiki still exists for the heavier install and ops surface.</span>
-                    </div>
-                </div>
-            </div>
+        <div class="page-hero-copy" style="max-width:900px;">
+            <div class="section-label">Documentation</div>
+            <h1 class="section-title" style="font-size:clamp(34px,5vw,58px);">Docs hub</h1>
+            <p class="section-subtitle">This page groups the most useful references in the repo. The source docs still live in GitHub-flavoured markdown inside the public repository, but the web route is now real and navigable.</p>
         </div>
     </div>
 </section>
 
 <section>
     <div class="container">
-        <div class="section-label">Core paths</div>
-        <h2 class="section-title">Start with the docs that unblock real usage fastest</h2>
         <div class="features-grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));">
-            <a href="https://github.com/wazionapps/nexo/blob/main/docs/quickstart-5-minutes.md" class="feature-card" style="text-decoration:none;color:inherit;">
-                <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></div>
-                <h3>5-minute quickstart</h3>
-                <p>Install, verify, remember, recall, consolidate, and open your first durable workflow.</p>
+            <a id="quickstart" href="https://github.com/wazionapps/nexo/blob/main/docs/quickstart-5-minutes.md" class="feature-card" style="text-decoration:none;color:inherit;">
+                <h3>Quickstart</h3>
+                <p>Fast install path, the first commands to run, and the shortest honest route into a usable runtime.</p>
             </a>
-            <a href="/docs/install-flow/" class="feature-card" style="text-decoration:none;color:inherit;">
-                <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18"/><path d="m5 10 7-7 7 7"/></svg></div>
-                <h3>Install flow</h3>
-                <p>See the actual runtime setup path: shared brain, clients, automation backend, and model profiles.</p>
+            <a id="workflows" href="https://github.com/wazionapps/nexo/blob/main/docs/workflows-quickstart.md" class="feature-card" style="text-decoration:none;color:inherit;">
+                <h3>Workflow quickstart</h3>
+                <p>How the runtime is meant to be used in normal day-to-day work once installation is complete.</p>
             </a>
-            <a href="/docs/recent-memory-and-system-map/" class="feature-card" style="text-decoration:none;color:inherit;">
-                <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14"/><path d="M5 12h14"/><circle cx="12" cy="12" r="9"/></svg></div>
-                <h3>Recent memory + system map</h3>
-                <p>See the new continuity ladder: hot context first, transcript fallback second, and the live runtime catalog for NEXO self-knowledge.</p>
+            <a id="recent-memory" href="https://github.com/wazionapps/nexo/blob/main/docs/recent-memory-fallbacks-and-system-catalog.md" class="feature-card" style="text-decoration:none;color:inherit;">
+                <h3>Recent memory and system catalog</h3>
+                <p>How NEXO keeps short-horizon continuity and what it inspects when recent context is too thin.</p>
             </a>
-            <a href="https://github.com/wazionapps/nexo/blob/main/docs/sdk-python.md" class="feature-card" style="text-decoration:none;color:inherit;">
-                <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m8 3-4 9h5l-1 9 8-12h-5l3-6z"/></svg></div>
+            <a id="architecture" href="https://github.com/wazionapps/nexo/blob/main/docs/architecture-visuals.md" class="feature-card" style="text-decoration:none;color:inherit;">
+                <h3>Architecture visuals</h3>
+                <p>A visual route through the runtime model, memory surfaces, and product structure.</p>
+            </a>
+            <a id="portability" href="https://github.com/wazionapps/nexo/blob/main/docs/session-portability.md" class="feature-card" style="text-decoration:none;color:inherit;">
+                <h3>Session portability</h3>
+                <p>What survives across client switches, runtime restarts, and longer work loops.</p>
+            </a>
+            <a id="sdk" href="https://github.com/wazionapps/nexo/blob/main/docs/sdk-python.md" class="feature-card" style="text-decoration:none;color:inherit;">
                 <h3>Python SDK</h3>
-                <p>Minimal wrapper for <code>remember</code>, <code>recall</code>, <code>consolidate</code>, and <code>run_workflow</code>.</p>
+                <p>Reference for integrations that want to consume runtime surfaces programmatically.</p>
             </a>
-            <a href="/compare/" class="feature-card" style="text-decoration:none;color:inherit;">
-                <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg></div>
-                <h3>Compare scorecard</h3>
-                <p>Inspectable claim map, benchmark artifacts, raw scorecard JSON, and parity proof for the public product story.</p>
+            <a id="docker" href="https://github.com/wazionapps/nexo/blob/main/docs/docker-setup.md" class="feature-card" style="text-decoration:none;color:inherit;">
+                <h3>Docker setup</h3>
+                <p>Container route for operators who want a more controlled runtime envelope.</p>
             </a>
-            <a href="https://github.com/wazionapps/nexo/blob/main/docs/personal-artifacts-manual.md" class="feature-card" style="text-decoration:none;color:inherit;">
-                <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg></div>
-                <h3>Personal artifacts manual</h3>
-                <p>The canonical operator guide for deciding when to create a personal script, skill, plugin, or schedule, and how to wire it without improvising.</p>
-            </a>
-            <a href="/features/benchmark/" class="feature-card" style="text-decoration:none;color:inherit;">
-                <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m7 14 4-4 3 3 5-7"/></svg></div>
-                <h3>Benchmarks and public proof</h3>
-                <p>LoCoMo for the memory slice, operator runtime pack for the broader local-runtime story, plus the compare scorecard and claim map.</p>
+            <a id="contribution" href="https://github.com/wazionapps/nexo/blob/main/docs/public-contribution.md" class="feature-card" style="text-decoration:none;color:inherit;">
+                <h3>Public contribution guide</h3>
+                <p>How public-core contributions, release discipline, and review-gated changes are expected to work.</p>
             </a>
         </div>
     </div>
 </section>
-
-<section>
-    <div class="container">
-        <div class="section-label">Evaluate fast</div>
-        <h2 class="section-title">Show the product before asking people to read everything</h2>
-        <div class="features-grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr));">
-            <a href="/demos/" class="feature-card" style="text-decoration:none;color:inherit;">
-                <h3>Demo hub</h3>
-                <p>Three short walkthroughs: install path, shared brain across Claude Code and Codex, and the review-gated public Evolution loop.</p>
-            </a>
-            <a href="/solutions/claude-code-memory/" class="feature-card" style="text-decoration:none;color:inherit;">
-                <h3>Claude Code memory</h3>
-                <p>High-intent landing page for people already searching for a real memory layer on top of Claude Code.</p>
-            </a>
-            <a href="/solutions/codex-memory/" class="feature-card" style="text-decoration:none;color:inherit;">
-                <h3>Codex memory</h3>
-                <p>The Codex-first path: managed AGENTS bootstrap, shared brain, and background automation that does not reset every session.</p>
-            </a>
-            <a href="/solutions/mcp-memory-server/" class="feature-card" style="text-decoration:none;color:inherit;">
-                <h3>MCP memory server</h3>
-                <p>A cleaner entry point for people searching category-level terms rather than a specific client integration.</p>
-            </a>
-            <a href="/use-cases/" class="feature-card" style="text-decoration:none;color:inherit;">
-                <h3>Use cases</h3>
-                <p>Five operator patterns NEXO already serves well, without pretending we have public testimonials we cannot prove yet.</p>
-            </a>
-            <a href="https://github.com/wazionapps/nexo/wiki" class="feature-card" style="text-decoration:none;color:inherit;">
-                <h3>Full wiki</h3>
-                <p>When someone wants the complete install and runtime surface, the deep reference still lives on GitHub.</p>
-            </a>
-        </div>
-    </div>
-</section>
-
-<section>
-    <div class="container">
-        <div class="section-label">Reference docs</div>
-        <h2 class="section-title">The rest of the public mental model</h2>
-        <div class="features-grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr));">
-            <a href="https://github.com/wazionapps/nexo/blob/main/docs/memory-classes.md" class="feature-card" style="text-decoration:none;color:inherit;">
-                <h3>Memory classes</h3>
-                <p>Working, session, episodic, semantic, procedural, graph, and shared-brain memory roles in one map.</p>
-            </a>
-            <a href="https://github.com/wazionapps/nexo/blob/main/docs/recent-memory-fallbacks-and-system-catalog.md" class="feature-card" style="text-decoration:none;color:inherit;">
-                <h3>Recent memory ladder</h3>
-                <p>Repo-side reference for hot context, transcript fallback, and the live NEXO system catalog.</p>
-            </a>
-            <a href="https://github.com/wazionapps/nexo/blob/main/docs/reference-verticals.md" class="feature-card" style="text-decoration:none;color:inherit;">
-                <h3>Reference verticals</h3>
-                <p>Coding agent, release operator, and ops/automation owner paths where NEXO becomes useful quickly.</p>
-            </a>
-            <a href="https://github.com/wazionapps/nexo/blob/main/docs/client-parity-checklist.md" class="feature-card" style="text-decoration:none;color:inherit;">
-                <h3>Client parity checklist</h3>
-                <p>The operational checklist that keeps Claude Code, Codex, and shared-brain behavior aligned.</p>
-            </a>
-            <a href="/features/" class="feature-card" style="text-decoration:none;color:inherit;">
-                <h3>Feature map</h3>
-                <p>Architecture, benchmarks, tools, Deep Sleep, Evolution, and the wider runtime surface.</p>
-            </a>
-        </div>
-    </div>
-</section>
-
-<section class="cta-section">
-    <div class="container">
-        <h2 class="section-title">Need the full surface?</h2>
-        <p class="section-subtitle" style="margin:16px auto 48px;">The public docs stay tight. The GitHub wiki still holds deeper install, configuration, and runtime references when you want the full surface.</p>
-        <div class="hero-actions">
-            <a href="https://github.com/wazionapps/nexo/wiki" class="btn btn-primary">Open the full wiki</a>
-            <a href="https://github.com/wazionapps/nexo/blob/main/docs/quickstart-5-minutes.md" class="btn btn-secondary">Read quickstart</a>
-            <a href="/" class="btn btn-secondary">Back home</a>
-        </div>
-    </div>
-</section>
-
-<footer>
-    <div class="container">
-        <div class="footer-content">
-            <div class="footer-left">
-                Created by <strong>Francisco Cerd&agrave; Puigserver</strong> &amp; <strong>NEXO</strong> (Claude Opus) &bull; Built by <a href="https://www.wazion.com">WAzion</a> &bull; AGPL-3.0 License &bull; &copy; 2026
-            </div>
-            <div class="footer-links">
-                <a href="https://github.com/wazionapps/nexo">GitHub</a>
-                <a href="https://x.com/NEXOBRAIN">X / Twitter</a>
-                <a href="https://github.com/sponsors/wazionapps">Sponsor</a>
-                <a href="/features/">Features</a>
-                <a href="/compare/">Compare</a>
-                <a href="/changelog/">Changelog</a>
-            </div>
-        </div>
-    </div>
-</footer>
-
-<div id="cookie-consent" style="display:none;position:fixed;bottom:0;left:0;right:0;background:rgba(10,10,15,0.95);border-top:1px solid #1E1E2E;padding:12px 24px;z-index:200;font-size:13px;color:#94A3B8;text-align:center;">
-    This site uses analytics cookies. <a href="https://www.wazion.com/en/privacy" style="color:#A78BFA;">Privacy Policy</a>
-    <button onclick="document.getElementById('cookie-consent').style.display='none';localStorage.setItem('cc','1')" style="margin-left:16px;background:#7C3AED;color:#fff;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Accept</button>
-    <button onclick="document.getElementById('cookie-consent').style.display='none';localStorage.setItem('cc','0');window['ga-disable-G-1LNEMCJMS7']=true" style="margin-left:8px;background:transparent;color:#94A3B8;border:1px solid #333;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;">Decline</button>
-</div>
-<script>
-if(!localStorage.getItem('cc')){document.getElementById('cookie-consent').style.display='block';}
-else if(localStorage.getItem('cc')==='0'){window['ga-disable-G-1LNEMCJMS7']=true;}
-
-(function() {
-    var navLinks = document.querySelector('.nav-links');
-    var navToggle = document.querySelector('.nav-toggle');
-    navLinks.querySelectorAll('a').forEach(function(link) {
-        link.addEventListener('click', function() { navLinks.classList.remove('open'); });
-    });
-    document.addEventListener('click', function(e) {
-        if (navLinks.classList.contains('open') && !navLinks.contains(e.target) && !navToggle.contains(e.target)) {
-            navLinks.classList.remove('open');
-        }
-    });
-})();
-</script>
 </body>
 </html>
