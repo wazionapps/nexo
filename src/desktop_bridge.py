@@ -18,8 +18,21 @@ import sys
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 1
-ONBOARD_VERSION = 1
+SCHEMA_VERSION = 2
+ONBOARD_VERSION = 2
+DEFAULT_ASSISTANT_NAME = "Nova"
+RESERVED_ASSISTANT_NAME_VALUES = ("NEXO", "NEXO Brain", "NEXO Desktop")
+
+
+def _assistant_name_key(value: str | None) -> str:
+    return re.sub(r"[\W_]+", "", str(value or ""), flags=re.UNICODE).casefold()
+
+
+def _is_reserved_assistant_name(value: str | None) -> bool:
+    normalized = _assistant_name_key(value)
+    if not normalized:
+        return False
+    return normalized in {"nexo", "nexobrain", "nexodesktop"}
 
 
 def _nexo_home() -> Path:
@@ -96,7 +109,12 @@ def _schema_fields() -> list[dict]:
             "label": {"es": "Nombre del asistente", "en": "Assistant name"},
             "type": "text",
             "group": "personal",
-            "default": "NEXO",
+            "default": DEFAULT_ASSISTANT_NAME,
+            "hint": {
+                "es": "El nombre del asistente no puede ser NEXO ni una variante del nombre del producto.",
+                "en": "The assistant name cannot be NEXO or a product-name variant.",
+            },
+            "reserved_values": list(RESERVED_ASSISTANT_NAME_VALUES),
         },
         {
             "path": "personality.autonomy",
@@ -282,7 +300,7 @@ def _resolve_identity() -> dict:
             return {"name": value.strip(), "source": source,
                     "writable_source": "calibration.user.assistant_name"}
 
-    return {"name": "NEXO", "source": "default",
+    return {"name": DEFAULT_ASSISTANT_NAME, "source": "default",
             "writable_source": "calibration.user.assistant_name"}
 
 
@@ -323,7 +341,13 @@ def _onboard_steps() -> list[dict]:
             "writes": "user.assistant_name",
             "file": "calibration.json",
             "optional": True,
-            "default": "NEXO",
+            "default": DEFAULT_ASSISTANT_NAME,
+            "validate": r"^\S.{0,60}$",
+            "hint": {
+                "es": "No puede llamarse NEXO ni usar el nombre del producto.",
+                "en": "It cannot be called NEXO or use the product name.",
+            },
+            "reserved_values": list(RESERVED_ASSISTANT_NAME_VALUES),
         },
         {
             "id": "role",

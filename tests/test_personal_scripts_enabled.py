@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 from pathlib import Path
@@ -51,6 +52,21 @@ def _seed_script(home, name, enabled=True):
         f"# nexo: description=test script\n"
         f"# nexo: runtime=python\n"
         f"print('hello from {name}')\n",
+        encoding="utf-8",
+    )
+    p.chmod(0o755)
+    return p
+
+
+def _seed_core_script(home, filename, name):
+    p = home / "core" / "scripts" / filename
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(
+        "#!/usr/bin/env python3\n"
+        f"# nexo: name={name}\n"
+        "# nexo: description=core automation\n"
+        "# nexo: runtime=python\n"
+        "print('core')\n",
         encoding="utf-8",
     )
     p.chmod(0o755)
@@ -137,3 +153,251 @@ def test_list_scripts_with_all_includes_enabled_field(isolated_home):
     rows = list_scripts(include_core=True)
     target = next(r for r in rows if r["name"] == "round-trip-demo")
     assert target["enabled"] is True
+
+
+def test_toggleable_core_script_persists_origin_core(isolated_home, monkeypatch):
+    _seed_core_script(isolated_home, "nexo-email-monitor.py", "email-monitor")
+    import script_registry as sr
+    import automation_controls as ac
+    from db._personal_scripts import get_personal_script
+
+    monkeypatch.setattr(
+        ac,
+        "get_script_runtime_contract",
+        lambda name: {
+            "name": name,
+            "toggleable_core": True,
+            "supports_extra_instructions": True,
+            "available": True,
+            "blocked_reason": "",
+            "blocked_reason_code": "",
+            "eligible_labels": ["agent"],
+        },
+    )
+
+    disabled = sr.set_personal_script_enabled("email-monitor", False)
+    assert disabled["ok"] is True
+    assert disabled["enabled"] is False
+    assert disabled["origin"] == "core"
+
+    row = get_personal_script("email-monitor", include_core=True)
+    assert row is not None
+    assert row["origin"] == "core"
+    assert row["enabled"] is False
+
+    enabled = sr.set_personal_script_enabled("email-monitor", True)
+    assert enabled["ok"] is True
+    assert enabled["enabled"] is True
+    assert enabled["origin"] == "core"
+
+
+def test_toggleable_core_script_blocks_enable_when_prerequisite_missing(isolated_home, monkeypatch):
+    _seed_core_script(isolated_home, "nexo-followup-runner.py", "followup-runner")
+    import script_registry as sr
+    import automation_controls as ac
+
+    monkeypatch.setattr(
+        ac,
+        "get_script_runtime_contract",
+        lambda name: {
+            "name": name,
+            "toggleable_core": True,
+            "supports_extra_instructions": True,
+            "available": False,
+            "blocked_reason": "Missing agent email account",
+            "blocked_reason_code": "missing_account",
+            "eligible_labels": [],
+        },
+    )
+
+    result = sr.set_personal_script_enabled("followup-runner", True)
+    assert result["ok"] is False
+    assert result["error"] == "Missing agent email account"
+    assert result["blocked_reason_code"] == "missing_account"
+
+
+def test_toggleable_core_script_extra_instructions_round_trip(isolated_home, monkeypatch):
+    _seed_core_script(isolated_home, "nexo-email-monitor.py", "email-monitor")
+    import script_registry as sr
+    import automation_controls as ac
+
+    monkeypatch.setattr(
+        ac,
+        "get_script_runtime_contract",
+        lambda name: {
+            "name": name,
+            "toggleable_core": True,
+            "supports_extra_instructions": True,
+            "available": True,
+            "blocked_reason": "",
+            "blocked_reason_code": "",
+            "eligible_labels": ["agent"],
+        },
+    )
+
+    result = sr.set_script_extra_instructions("email-monitor", "Responde en tono breve.")
+    assert result["ok"] is True
+    assert result["supports_extra_instructions"] is True
+    assert result["operator_extra_instructions"] == "Responde en tono breve."
+
+    status = sr.get_personal_script_status("email-monitor")
+    assert status["ok"] is True
+    assert status["operator_extra_instructions"] == "Responde en tono breve."
+    assert status["supports_extra_instructions"] is True
+
+    rows = sr.list_scripts(include_core=True)
+    target = next(r for r in rows if r["name"] == "email-monitor")
+    assert target["operator_extra_instructions"] == "Responde en tono breve."
+    assert target["supports_extra_instructions"] is True
+
+
+def test_toggleable_core_script_schedule_override_round_trip(isolated_home, monkeypatch):
+    _seed_core_script(isolated_home, "nexo-email-monitor.py", "email-monitor")
+    import script_registry as sr
+    import automation_controls as ac
+
+    monkeypatch.setattr(ac, "_sync_core_crons_runtime", lambda: {"ok": True, "method": "test"})
+
+    result = sr.set_script_schedule_override("email-monitor", interval_seconds=300)
+    assert result["ok"] is True
+    assert result["schedule_source"] == "override"
+    assert result["effective_schedule_label"] == "every 5m"
+    assert result["interval_seconds"] == 300
+
+    schedule_path = isolated_home / "personal" / "config" / "schedule.json"
+    payload = json.loads(schedule_path.read_text())
+    assert payload["core_automation_overrides"]["email-monitor"]["interval_seconds"] == 300
+
+    status = sr.get_personal_script_status("email-monitor")
+    assert status["ok"] is True
+    assert status["schedule_source"] == "override"
+    assert status["effective_schedule_label"] == "every 5m"
+
+    rows = sr.list_scripts(include_core=True)
+    target = next(r for r in rows if r["name"] == "email-monitor")
+    assert target["effective_schedule_label"] == "every 5m"
+    assert target["schedule_configurable"] is True
+    assert target["schedules"][0]["schedule_label"] == "every 5m"
+
+    reset = sr.set_script_schedule_override("email-monitor", clear=True)
+    assert reset["ok"] is True
+    assert reset["schedule_source"] == "manifest"
+    assert reset["effective_schedule_label"] == "every 1m"
+
+    payload = json.loads(schedule_path.read_text())
+    assert payload.get("core_automation_overrides", {}) == {}
+
+
+def test_toggleable_core_script_schedule_override_validates_minimum(isolated_home, monkeypatch):
+    _seed_core_script(isolated_home, "nexo-followup-runner.py", "followup-runner")
+    import script_registry as sr
+    import automation_controls as ac
+
+    monkeypatch.setattr(ac, "_sync_core_crons_runtime", lambda: {"ok": True, "method": "test"})
+
+    result = sr.set_script_schedule_override("followup-runner", interval_seconds=60)
+    assert result["ok"] is False
+    assert ">= 300" in result["error"]
+
+
+def test_toggleable_core_script_calendar_schedule_override_round_trip(isolated_home, monkeypatch):
+    _seed_core_script(isolated_home, "nexo-morning-agent.py", "morning-agent")
+    import script_registry as sr
+    import automation_controls as ac
+
+    monkeypatch.setattr(ac, "_sync_core_crons_runtime", lambda: {"ok": True, "method": "test"})
+    monkeypatch.setattr(
+        ac,
+        "TOGGLEABLE_CORE_SCRIPT_NAMES",
+        frozenset(set(ac.TOGGLEABLE_CORE_SCRIPT_NAMES) | {"morning-agent"}),
+    )
+    monkeypatch.setattr(
+        ac,
+        "_CORE_AUTOMATION_SCHEDULES",
+        {**dict(ac._CORE_AUTOMATION_SCHEDULES), "morning-agent": {"kind": "calendar"}},
+    )
+    monkeypatch.setattr(
+        ac,
+        "get_core_manifest_cron",
+        lambda name: {
+            "id": "morning-agent",
+            "script": "scripts/nexo-morning-agent.py",
+            "schedule": {"hour": 7, "minute": 0},
+        } if name == "morning-agent" else {},
+    )
+
+    result = sr.set_script_schedule_override("morning-agent", daily_at="08:15")
+    assert result["ok"] is True
+    assert result["schedule_type"] == "calendar"
+    assert result["schedule_source"] == "override"
+    assert result["effective_schedule_label"] == "08:15 daily"
+
+    schedule_path = isolated_home / "personal" / "config" / "schedule.json"
+    payload = json.loads(schedule_path.read_text())
+    assert payload["core_automation_overrides"]["morning-agent"]["schedule"] == {"hour": 8, "minute": 15}
+
+    status = sr.get_personal_script_status("morning-agent")
+    assert status["ok"] is True
+    assert status["schedule_type"] == "calendar"
+    assert status["effective_schedule_label"] == "08:15 daily"
+
+    rows = sr.list_scripts(include_core=True)
+    target = next(r for r in rows if r["name"] == "morning-agent")
+    assert target["schedule_configurable"] is True
+    assert target["schedule_type"] == "calendar"
+    assert target["effective_schedule_label"] == "08:15 daily"
+
+    reset = sr.set_script_schedule_override("morning-agent", clear=True)
+    assert reset["ok"] is True
+    assert reset["schedule_source"] == "manifest"
+    assert reset["effective_schedule_label"] == "07:00 daily"
+
+
+def test_toggleable_core_script_calendar_schedule_override_validates_format(isolated_home, monkeypatch):
+    _seed_core_script(isolated_home, "nexo-morning-agent.py", "morning-agent")
+    import script_registry as sr
+    import automation_controls as ac
+
+    monkeypatch.setattr(ac, "_sync_core_crons_runtime", lambda: {"ok": True, "method": "test"})
+    monkeypatch.setattr(
+        ac,
+        "TOGGLEABLE_CORE_SCRIPT_NAMES",
+        frozenset(set(ac.TOGGLEABLE_CORE_SCRIPT_NAMES) | {"morning-agent"}),
+    )
+    monkeypatch.setattr(
+        ac,
+        "_CORE_AUTOMATION_SCHEDULES",
+        {**dict(ac._CORE_AUTOMATION_SCHEDULES), "morning-agent": {"kind": "calendar"}},
+    )
+    monkeypatch.setattr(
+        ac,
+        "get_core_manifest_cron",
+        lambda name: {
+            "id": "morning-agent",
+            "script": "scripts/nexo-morning-agent.py",
+            "schedule": {"hour": 7, "minute": 0},
+        } if name == "morning-agent" else {},
+    )
+
+    result = sr.set_script_schedule_override("morning-agent", daily_at="25:99")
+    assert result["ok"] is False
+    assert "HH:MM" in result["error"]
+
+
+def test_list_scripts_include_core_surfaces_last_cron_run_for_core_entry(isolated_home):
+    _seed_core_script(isolated_home, "nexo-email-monitor.py", "email-monitor")
+    from db import get_db
+    from script_registry import list_scripts
+
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO cron_runs (cron_id, started_at, ended_at, exit_code, summary) VALUES (?, datetime('now'), datetime('now'), ?, ?)",
+        ("email-monitor", 0, "Processed 2 inbox threads"),
+    )
+    conn.commit()
+
+    rows = list_scripts(include_core=True)
+    target = next(r for r in rows if r["name"] == "email-monitor")
+    assert target["last_exit_code"] == 0
+    assert target["last_run_at"]
+    assert target["last_summary"] == "Processed 2 inbox threads"

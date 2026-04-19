@@ -13,6 +13,7 @@ Entry points:
   nexo scripts ensure-schedules [--dry-run] [--json]
   nexo scripts schedules [--json]
   nexo scripts unschedule NAME [--json]
+  nexo scripts schedule NAME (--every-minutes N | --every-seconds N | --reset) [--json]
   nexo scripts remove NAME [--keep-file] [--json]
   nexo scripts run NAME_OR_PATH [-- args...]
   nexo scripts doctor [NAME_OR_PATH] [--json]
@@ -53,7 +54,7 @@ TERMINAL_CLIENT_LABELS = {
     "codex": "Codex",
 }
 TERMINAL_CLIENT_ORDER = ("claude_code", "codex")
-VERSION_STATUS_CACHE = NEXO_HOME / "config" / "cli-version-status.json"
+VERSION_STATUS_CACHE = paths.config_dir() / "cli-version-status.json"
 LATEST_NPM_PACKAGE = "nexo-brain"
 
 
@@ -406,7 +407,7 @@ def _scripts_create(args):
             runtime=args.runtime,
             force=args.force,
         )
-    except FileExistsError as e:
+    except (FileExistsError, ValueError) as e:
         print(str(e), file=sys.stderr)
         return 1
 
@@ -471,6 +472,75 @@ def _scripts_set_enabled(args, enabled):
     return 0
 
 
+def _scripts_set_instructions(args):
+    from script_registry import set_script_extra_instructions
+
+    if getattr(args, "clear", False):
+        text = ""
+    elif getattr(args, "stdin", False):
+        try:
+            text = sys.stdin.read()
+        except Exception as exc:
+            msg = f"Could not read instructions from stdin: {exc}"
+            if args.json:
+                print(json.dumps({"ok": False, "error": msg}, ensure_ascii=False))
+            else:
+                print(msg, file=sys.stderr)
+            return 1
+    else:
+        text = getattr(args, "text", None) or ""
+
+    result = set_script_extra_instructions(args.name, text)
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 0 if result.get("ok") else 1
+    if not result.get("ok"):
+        print(result.get("error", "Failed to update extra instructions"), file=sys.stderr)
+        return 1
+    if result.get("cleared"):
+        print(f"Extra instructions cleared for {result['name']}.")
+    else:
+        print(f"Extra instructions updated for {result['name']}.")
+    return 0
+
+
+def _scripts_set_schedule(args):
+    from script_registry import set_script_schedule_override
+
+    interval_seconds = None
+    daily_at = None
+    if getattr(args, "every_minutes", None) is not None:
+        interval_seconds = int(args.every_minutes) * 60
+    elif getattr(args, "every_seconds", None) is not None:
+        interval_seconds = int(args.every_seconds)
+    elif getattr(args, "daily_at", None):
+        daily_at = str(args.daily_at).strip()
+
+    result = set_script_schedule_override(
+        args.name,
+        interval_seconds=interval_seconds,
+        daily_at=daily_at,
+        clear=bool(getattr(args, "reset", False)),
+    )
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 0 if result.get("ok") else 1
+    if not result.get("ok"):
+        print(result.get("error", "Failed to update schedule"), file=sys.stderr)
+        return 1
+
+    label = str(result.get("effective_schedule_label") or "").strip()
+    source = str(result.get("schedule_source") or "manifest").strip()
+    sync_result = result.get("runtime_sync") if isinstance(result.get("runtime_sync"), dict) else {}
+    if label:
+        print(f"Schedule updated for {result['name']}: {label} ({source})")
+    else:
+        print(f"Schedule updated for {result['name']}.")
+    if sync_result.get("ok") is False:
+        print(f"  Warning: saved, but runtime sync failed: {sync_result.get('error', 'unknown error')}")
+    return 0
+
+
 def _scripts_status(args):
     from script_registry import get_personal_script_status
 
@@ -493,6 +563,16 @@ def _scripts_status(args):
             print(f"  summary: {summary[:120]}")
     else:
         print("  last run: (none)")
+    blocked_reason = (result.get("blocked_reason") or "").strip()
+    if blocked_reason:
+        print(f"  blocked: {blocked_reason}")
+    schedule_label = (result.get("effective_schedule_label") or "").strip()
+    if schedule_label:
+        schedule_source = (result.get("schedule_source") or "manifest").strip()
+        print(f"  schedule: {schedule_label} ({schedule_source})")
+    extra = (result.get("operator_extra_instructions") or "").strip()
+    if extra:
+        print(f"  extra instructions: {extra[:160]}")
     return 0
 
 
@@ -1146,9 +1226,16 @@ def _prompt_model_recommendations(*, interactive: bool) -> None:
 
 
 def _clients_sync(args):
+    from client_preferences import load_client_preferences
     from client_sync import format_sync_summary, sync_all_clients
 
-    result = sync_all_clients(nexo_home=NEXO_HOME, runtime_root=NEXO_CODE)
+    result = sync_all_clients(
+        nexo_home=NEXO_HOME,
+        runtime_root=NEXO_CODE,
+        enabled_clients=("claude_code", "claude_desktop", "codex"),
+        preferences=load_client_preferences(),
+        auto_install_missing_claude=bool(getattr(args, "auto_install_missing_claude", False)),
+    )
     if args.json:
         print(json.dumps(result, indent=2, ensure_ascii=False))
     else:
@@ -1187,12 +1274,14 @@ def _write_calibration_default_resonance(tier: str) -> None:
 def _preferences(args):
     """Read or change user preferences stored in schedule.json.
 
-    Today this manages ``default_resonance``. Other knobs (default_client,
-    autonomy level, etc.) can be added here instead of spreading across
-    one-off flags.
+    User-facing knobs that multiple surfaces depend on should land here
+    instead of being spread across ad-hoc files or one-off flags.
     """
     from client_preferences import (
+        BACKEND_NONE,
+        AUTOMATION_BACKEND_KEYS,
         load_client_preferences,
+        normalize_default_terminal_client,
         save_client_preferences,
     )
     from resonance_map import (
@@ -1205,6 +1294,15 @@ def _preferences(args):
     if not isinstance(prefs, dict):
         prefs = {}
 
+    automation_enabled = None
+    if getattr(args, "automation_enabled", False):
+        automation_enabled = True
+    elif getattr(args, "automation_disabled", False):
+        automation_enabled = False
+
+    automation_backend = getattr(args, "automation_backend", None)
+    automation_changed = automation_enabled is not None or automation_backend is not None
+
     if args.resonance:
         tier = args.resonance.lower()
         if tier not in TIERS:
@@ -1214,11 +1312,29 @@ def _preferences(args):
                 file=sys.stderr,
             )
             return 2
-        # Write to schedule.json (legacy CLI location)…
-        save_client_preferences(default_resonance=tier)
-        # …and to calibration.json (where NEXO Desktop's preferences UI
-        # reads/writes). Keeping both in sync means the two surfaces agree.
-        _write_calibration_default_resonance(tier)
+    else:
+        tier = None
+
+    if automation_enabled is True and not automation_backend:
+        current_backend = str(prefs.get("automation_backend") or "").strip().lower()
+        if current_backend in AUTOMATION_BACKEND_KEYS and current_backend != BACKEND_NONE:
+            automation_backend = current_backend
+        else:
+            automation_backend = normalize_default_terminal_client(
+                prefs.get("default_terminal_client"),
+                interactive_clients=prefs.get("interactive_clients"),
+            ) or "claude_code"
+
+    if tier or automation_changed:
+        save_client_preferences(
+            default_resonance=tier,
+            automation_enabled=automation_enabled,
+            automation_backend=automation_backend,
+            automation_user_override=True if automation_changed else None,
+        )
+        if tier:
+            # Write to calibration.json as well so Desktop and CLI agree.
+            _write_calibration_default_resonance(tier)
         prefs = load_client_preferences()
 
     calibration_value = _load_user_default_resonance()
@@ -1228,7 +1344,7 @@ def _preferences(args):
     ).strip().lower()
     current_resonance = calibration_value or schedule_value or DEFAULT_RESONANCE
 
-    if args.show or args.resonance:
+    if args.show or tier or automation_changed:
         is_explicit = bool(calibration_value or schedule_value)
         payload = {
             "default_resonance": current_resonance,
@@ -1238,19 +1354,33 @@ def _preferences(args):
                 else ("schedule.json" if schedule_value else "default")
             ),
             "available_tiers": list(TIERS),
+            "automation_enabled": bool(prefs.get("automation_enabled", True)),
+            "automation_backend": str(prefs.get("automation_backend") or BACKEND_NONE),
+            "automation_user_override": bool(prefs.get("automation_user_override", False)),
+            "available_automation_backends": list(AUTOMATION_BACKEND_KEYS),
+            "default_terminal_client": str(prefs.get("default_terminal_client") or "claude_code"),
         }
         if args.json:
             print(json.dumps(payload, indent=2, ensure_ascii=False))
         else:
             print(f"default_resonance = {current_resonance}")
             print(f"  source: {payload['default_resonance_source']}")
+            print(
+                "automation = "
+                + ("enabled" if payload["automation_enabled"] else "disabled")
+                + f" · backend={payload['automation_backend']}"
+            )
             if not is_explicit:
                 print(f"  (inherited from DEFAULT_RESONANCE; run "
                       f"`nexo preferences --resonance alto` to set explicitly)")
         return 0
 
     # No flag: print usage
-    print("Usage: nexo preferences [--resonance TIER] [--show] [--json]")
+    print(
+        "Usage: nexo preferences [--resonance TIER] "
+        "[--automation-enabled|--automation-disabled] "
+        "[--automation-backend BACKEND] [--show] [--json]"
+    )
     print(f"  resonance tiers: {', '.join(TIERS)}")
     print(f"  current default: {current_resonance}")
     return 0
@@ -2070,7 +2200,7 @@ Commands:
   nexo export [path]                                 Export a portable user-data bundle
   nexo import PATH                                   Import a portable user-data bundle
   nexo doctor [--tier boot|runtime|deep|all] [--fix]   System diagnostics
-  nexo scripts list|create|classify|sync|reconcile|ensure-schedules|schedules|run|doctor|call|unschedule|remove
+  nexo scripts list|create|classify|sync|reconcile|ensure-schedules|schedules|schedule|run|doctor|call|unschedule|remove
                                                       Personal scripts
   nexo skills list|apply|sync|approve                  Executable skills
   nexo clients sync                                    Sync Claude/Codex shared-brain configs and bootstrap files
@@ -2161,17 +2291,40 @@ def main():
     unschedule_p.add_argument("--json", action="store_true", help="JSON output")
 
     # scripts enable / disable / status (Plan F0.2.2)
-    enable_p = scripts_sub.add_parser("enable", help="Enable a personal script (cron wrapper will run it again)")
+    enable_p = scripts_sub.add_parser("enable", help="Enable a script or supported core automation")
     enable_p.add_argument("name", help="Script name or path")
     enable_p.add_argument("--json", action="store_true", help="JSON output")
 
-    disable_p = scripts_sub.add_parser("disable", help="Disable a personal script (cron wrapper will skip it)")
+    disable_p = scripts_sub.add_parser("disable", help="Disable a script or supported core automation")
     disable_p.add_argument("name", help="Script name or path")
     disable_p.add_argument("--json", action="store_true", help="JSON output")
 
     status_p = scripts_sub.add_parser("status", help="Show enabled flag + last cron_runs row for a script")
     status_p.add_argument("name", help="Script name or path")
     status_p.add_argument("--json", action="store_true", help="JSON output")
+
+    instructions_p = scripts_sub.add_parser(
+        "instructions",
+        help="Set or clear operator extra instructions for a supported automation",
+    )
+    instructions_p.add_argument("name", help="Script name or path")
+    instructions_group = instructions_p.add_mutually_exclusive_group(required=True)
+    instructions_group.add_argument("--text", help="Instruction text to persist")
+    instructions_group.add_argument("--stdin", action="store_true", help="Read instruction text from stdin")
+    instructions_group.add_argument("--clear", action="store_true", help="Clear any persisted extra instructions")
+    instructions_p.add_argument("--json", action="store_true", help="JSON output")
+
+    schedule_p = scripts_sub.add_parser(
+        "schedule",
+        help="Change the cadence of a supported core automation",
+    )
+    schedule_p.add_argument("name", help="Script name or path")
+    schedule_group = schedule_p.add_mutually_exclusive_group(required=True)
+    schedule_group.add_argument("--every-minutes", type=int, help="Run the automation every N minutes")
+    schedule_group.add_argument("--every-seconds", type=int, help="Run the automation every N seconds")
+    schedule_group.add_argument("--daily-at", type=str, help="Run the automation every day at HH:MM (24h)")
+    schedule_group.add_argument("--reset", action="store_true", help="Restore the shipped default cadence")
+    schedule_p.add_argument("--json", action="store_true", help="JSON output")
 
     # scripts remove
     remove_p = scripts_sub.add_parser("remove", help="Remove a personal script and any attached schedules")
@@ -2227,6 +2380,11 @@ def main():
     clients_sub = clients_parser.add_subparsers(dest="clients_command")
     clients_sync_p = clients_sub.add_parser("sync", help="Sync Claude Code, Claude Desktop, and Codex to the same NEXO brain")
     clients_sync_p.add_argument("--json", action="store_true", help="JSON output")
+    clients_sync_p.add_argument(
+        "--auto-install-missing-claude",
+        action="store_true",
+        help="Install Claude Code automatically when the selected runtime needs it and it is missing.",
+    )
 
     # -- preferences --
     preferences_parser = sub.add_parser(
@@ -2245,6 +2403,22 @@ def main():
         "--show",
         action="store_true",
         help="Print the current preferences as JSON and exit.",
+    )
+    automation_enabled_group = preferences_parser.add_mutually_exclusive_group()
+    automation_enabled_group.add_argument(
+        "--automation-enabled",
+        action="store_true",
+        help="Allow background automations to run.",
+    )
+    automation_enabled_group.add_argument(
+        "--automation-disabled",
+        action="store_true",
+        help="Pause background automations without deleting their schedules.",
+    )
+    preferences_parser.add_argument(
+        "--automation-backend",
+        choices=["claude_code", "codex", "none"],
+        help="Backend used by background automations when they are enabled.",
     )
     preferences_parser.add_argument("--json", action="store_true", help="JSON output")
 
@@ -2457,6 +2631,10 @@ def main():
             return _scripts_set_enabled(args, False)
         elif args.scripts_command == "status":
             return _scripts_status(args)
+        elif args.scripts_command == "instructions":
+            return _scripts_set_instructions(args)
+        elif args.scripts_command == "schedule":
+            return _scripts_set_schedule(args)
         else:
             scripts_parser.print_help()
             return 0

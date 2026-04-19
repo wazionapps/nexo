@@ -77,8 +77,13 @@ _DEDUP_TTL_SECONDS = 3600  # 1 hour
 
 
 def _dedup_db_path() -> Path:
-    home = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
-    return home / "data" / "auto_capture_dedup.db"
+    try:
+        import paths
+
+        return paths.data_dir() / "auto_capture_dedup.db"
+    except Exception:
+        home = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+        return home / "data" / "auto_capture_dedup.db"
 
 
 def _dedup_connection() -> sqlite3.Connection | None:

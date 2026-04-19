@@ -80,24 +80,40 @@ def _seed_public_surfaces(root: Path, version: str, *, include_well_known: bool 
     )
     (root / "index.html").write_text(
         f'<span id="version-badge">v{version}</span>\n'
-        f'"softwareVersion": "{version}"\n',
+        f'"softwareVersion": "{version}"\n'
+        f'<a href="/changelog/#v{version_anchor}">Latest release</a>\n',
         encoding="utf-8",
     )
+    for route in (
+        "features/index.html",
+        "evolution/index.html",
+        "compare/index.html",
+        "docs/index.html",
+        "demos/index.html",
+        "solutions/index.html",
+        "watch/index.html",
+    ):
+        path = root / route
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(f"<html><body>{route}</body></html>\n", encoding="utf-8")
     blog_dir = root / "blog"
     blog_dir.mkdir(exist_ok=True)
     (blog_dir / "index.html").write_text(
-        f'<a href="/blog/nexo-{version_slug}-release/">Read latest release</a>\n'
-        f"<h2>NEXO {version}: Release</h2>\n",
+        f'<a href="/blog/nexo-{version_slug}/">Read latest release</a>\n'
+        f"<h2>NEXO {version}: Release</h2>\n"
+        f'<a href="/changelog/#v{version_anchor}">Open changelog</a>\n',
         encoding="utf-8",
     )
     changelog_dir = root / "changelog"
     changelog_dir.mkdir(exist_ok=True)
     (changelog_dir / "index.html").write_text(
-        f'<section id="v{version_anchor}">New in v{version}</section>\n',
+        f'<section id="v{version_anchor}">New in v{version}</section>\n'
+        f"<a>Start with v{version}</a>\n",
         encoding="utf-8",
     )
     (root / "sitemap.xml").write_text(
-        f"https://nexo-brain.com/blog/nexo-{version_slug}-release/\n",
+        f"<loc>https://nexo-brain.com/features/</loc>\n"
+        f"https://nexo-brain.com/blog/nexo-{version_slug}/\n",
         encoding="utf-8",
     )
     if include_well_known:
@@ -244,11 +260,21 @@ def test_check_repo_public_surfaces_rejects_drift(tmp_path):
         module._check_repo_public_surfaces("5.3.29", repo_root=tmp_path)
 
 
+def test_check_repo_public_surfaces_rejects_missing_required_route(tmp_path):
+    module = _load_module()
+    _seed_public_surfaces(tmp_path, "5.3.29")
+    (tmp_path / "features" / "index.html").unlink()
+
+    with pytest.raises(SystemExit, match="features/index.html missing file"):
+        module._check_repo_public_surfaces("5.3.29", repo_root=tmp_path)
+
+
 def test_check_website_rejects_missing_current_release_markers(tmp_path):
     module = _load_module()
     _seed_public_surfaces(tmp_path, "5.3.29", include_well_known=True)
     (tmp_path / "blog" / "index.html").write_text(
-        '<a href="/blog/nexo-5-3-24-model-defaults-and-headless-safe-update/">Read latest release</a>\n',
+        '<a href="/blog/nexo-5-3-24-model-defaults-and-headless-safe-update/">Read latest release</a>\n'
+        '<a href="/changelog/#v5329">Open changelog</a>\n',
         encoding="utf-8",
     )
 

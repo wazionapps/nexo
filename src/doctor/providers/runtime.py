@@ -46,8 +46,8 @@ LIVE_PROTOCOL_SESSION_FRESHNESS = 1800  # 30 minutes
 AUXILIARY_CORE_LAUNCHAGENT_IDS = {"backup", "dashboard", "prevent-sleep", "tcc-approve"}
 SPECIAL_LAUNCHAGENT_IDS = {"prevent-sleep", "tcc-approve"}
 SPECIAL_ENV_NORMALIZE_IDS = SPECIAL_LAUNCHAGENT_IDS
-OPTIONALS_FILE = NEXO_HOME / "config" / "optionals.json"
-SCHEDULE_FILE = NEXO_HOME / "config" / "schedule.json"
+OPTIONALS_FILE = paths.config_dir() / "optionals.json"
+SCHEDULE_FILE = paths.config_dir() / "schedule.json"
 PACKAGE_JSON = NEXO_CODE / "package.json"
 CHANGELOG_FILE = NEXO_CODE / "CHANGELOG.md"
 

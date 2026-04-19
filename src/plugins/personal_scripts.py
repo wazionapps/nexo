@@ -53,7 +53,10 @@ def handle_personal_script_create(
     interval_seconds: int = 0,
 ) -> str:
     init_db()
-    created = create_script(name, description=description, runtime=runtime)
+    try:
+        created = create_script(name, description=description, runtime=runtime)
+    except (FileExistsError, ValueError) as exc:
+        return json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False)
     if schedule or interval_seconds:
         cron_id = created["name"]
         handle_schedule_add(

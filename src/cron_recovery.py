@@ -15,8 +15,8 @@ from pathlib import Path
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parent)))
 LAUNCH_AGENTS_DIR = Path.home() / "Library" / "LaunchAgents"
-OPTIONALS_FILE = NEXO_HOME / "config" / "optionals.json"
-SCHEDULE_FILE = NEXO_HOME / "config" / "schedule.json"
+OPTIONALS_FILE = paths.config_dir() / "optionals.json"
+SCHEDULE_FILE = paths.config_dir() / "schedule.json"
 DB_PATH = paths.db_path()
 STATE_FILE = paths.operations_dir() / ".catchup-state.json"
 
@@ -84,6 +84,11 @@ def resolve_declared_schedule(cron: dict) -> dict:
 
 
 def load_enabled_crons() -> list[dict]:
+    try:
+        from automation_controls import apply_core_automation_overrides
+    except Exception:
+        apply_core_automation_overrides = None
+
     manifest_candidates = [
         paths.crons_dir() / "manifest.json",
         NEXO_CODE / "crons" / "manifest.json",
@@ -112,6 +117,11 @@ def load_enabled_crons() -> list[dict]:
             if optional_key and not optional_enabled:
                 continue
             enabled.append(dict(cron))
+        if callable(apply_core_automation_overrides):
+            try:
+                return apply_core_automation_overrides(enabled)
+            except Exception:
+                return enabled
         return enabled
     return []
 

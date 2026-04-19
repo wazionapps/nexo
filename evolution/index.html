@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Evolution — NEXO Brain</title>
+    <meta name="description" content="How NEXO Evolution works: a review-gated self-improvement loop that turns runtime evidence into bounded, auditable product changes.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/evolution/">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://nexo-brain.com/evolution/">
+    <meta property="og:title" content="Evolution — NEXO Brain">
+    <meta property="og:description" content="How NEXO Evolution works: a review-gated self-improvement loop that turns runtime evidence into bounded, auditable product changes.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/og/og-home.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Evolution — NEXO Brain">
+    <meta name="twitter:description" content="How NEXO Evolution works: a review-gated self-improvement loop that turns runtime evidence into bounded, auditable product changes.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-home.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body class="features-page">
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-64.png" alt="NEXO Brain" width="32" height="32">
+            NEXO Brain
+        </a>
+        <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/features/">Features</a>
+            <a href="/evolution/">Evolution</a>
+            <a href="/compare/">Compare</a>
+            <a href="/blog/">Blog</a>
+            <a href="/changelog/">Changelog</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta">GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<section class="pt-nav page-hero">
+    <div class="container">
+        <div class="page-hero-grid">
+            <div class="page-hero-copy">
+                <div class="section-label">Review-gated improvement</div>
+                <h1 class="section-title" style="font-size:clamp(34px,5vw,58px);">How Evolution works</h1>
+                <p class="section-subtitle">Evolution is the bounded loop that lets NEXO inspect recurring patterns, propose changes, and keep those proposals reviewable. It exists to compound what works without letting the runtime silently rewrite itself.</p>
+                <div class="page-chip-row">
+                    <span class="page-chip">Evidence first</span>
+                    <span class="page-chip">Draft PRs</span>
+                    <span class="page-chip">Rollback capable</span>
+                    <span class="page-chip">One open proposal at a time</span>
+                </div>
+                <div class="hero-actions" style="justify-content:flex-start;">
+                    <a href="/blog/" class="btn btn-primary">See release examples</a>
+                    <a href="/changelog/" class="btn btn-secondary">Browse release history</a>
+                    <a href="/docs/public-contribution/" class="btn btn-secondary">Contribution guide</a>
+                </div>
+            </div>
+            <div class="page-visual">
+                <div class="page-stack">
+                    <div class="page-stack-card">
+                        <strong>1. Observe</strong>
+                        <span>Runtime evidence, recurring friction, audit findings, and operator patterns accumulate during normal work.</span>
+                    </div>
+                    <div class="page-stack-card">
+                        <strong>2. Propose</strong>
+                        <span>NEXO frames bounded changes with rationale, scope, and intended outcome instead of free-form “self-modification”.</span>
+                    </div>
+                    <div class="page-stack-card">
+                        <strong>3. Review</strong>
+                        <span>Public-core changes can go through draft PRs and human review; local/runtime changes still need explicit gates and evidence.</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section>
+    <div class="container">
+        <div class="features-grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));">
+            <div class="feature-card">
+                <h3>What Evolution can do</h3>
+                <p>Refine prompts, tighten release gates, improve product wiring, open bounded public proposals, and turn recurring patterns into explicit product changes.</p>
+            </div>
+            <div class="feature-card">
+                <h3>What it should not do</h3>
+                <p>Silently rewrite the operator environment, bypass review, mutate unrelated user data, or keep opening parallel proposal branches without closure.</p>
+            </div>
+            <div class="feature-card">
+                <h3>Why the loop matters</h3>
+                <p>Without a review-gated improvement surface, an “adaptive” agent drifts. With it, improvements can compound while still being inspected, measured, and reverted.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section style="background:rgba(18,18,26,0.35);">
+    <div class="container">
+        <div class="section-label">Operational constraints</div>
+        <h2 class="section-title">The loop is intentionally constrained</h2>
+        <div class="features-grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));">
+            <div class="feature-card">
+                <h3>One proposal at a time</h3>
+                <p>The public-facing flow stays reviewable by pausing while its own proposal is still open.</p>
+            </div>
+            <div class="feature-card">
+                <h3>Evidence over vibes</h3>
+                <p>Changes should tie back to observed friction, reproducible drift, or concrete operator/runtime outcomes.</p>
+            </div>
+            <div class="feature-card">
+                <h3>Rollback remains possible</h3>
+                <p>Evolution is useful only if the system can back out of wrong changes instead of building mythology around them.</p>
+            </div>
+        </div>
+    </div>
+</section>
+</body>
+</html>

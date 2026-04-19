@@ -143,7 +143,7 @@ def _read_followup(followup_id: str) -> tuple | None:
     conn = sqlite3.connect(db_path)
     try:
         return conn.execute(
-            "SELECT id, status, priority, description FROM followups WHERE id = ?",
+            "SELECT id, status, priority, description, verification FROM followups WHERE id = ?",
             (followup_id,),
         ).fetchone()
     finally:
@@ -191,6 +191,7 @@ def test_critical_watcher_opens_followup_with_correct_priority(watcher_env, monk
     assert row[2] == "critical"
     assert "CRITICAL" in row[3]
     assert "Production API" in row[3]
+    assert "runtime/data/nexo.db" in row[4] or "test_nexo.db" in row[4]
 
 
 def test_degraded_watcher_opens_high_priority_followup(watcher_env):
@@ -213,6 +214,7 @@ def test_degraded_watcher_opens_high_priority_followup(watcher_env):
     assert row is not None
     assert row[2] == "high"
     assert "DEGRADED" in row[3]
+    assert "runtime/data/nexo.db" in row[4] or "test_nexo.db" in row[4]
 
 
 def test_followup_idempotent_across_runs(watcher_env, monkeypatch):

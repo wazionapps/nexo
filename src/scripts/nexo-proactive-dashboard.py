@@ -19,9 +19,11 @@ import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import paths
+
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 
-NEXO_DB = NEXO_HOME / "data" / "nexo.db"
+NEXO_DB = paths.db_path()
 INACTIVE_STATUSES = {"DELETED", "ARCHIVED", "BLOCKED", "WAITING", "CANCELLED"}
 
 
@@ -161,7 +163,7 @@ def check_session_gaps() -> list[dict]:
 def check_evolution_status() -> list[dict]:
     """Check if evolution system is healthy."""
     alerts = []
-    obj_file = NEXO_HOME / "brain" / "evolution-objective.json"
+    obj_file = paths.brain_dir() / "evolution-objective.json"
     if obj_file.exists():
         obj = json.loads(obj_file.read_text())
         if not obj.get("evolution_enabled", True):
@@ -241,7 +243,7 @@ def check_cron_health() -> list[dict]:
     alerts = []
 
     # Check backup cron
-    backup_dir = NEXO_HOME / "backups"
+    backup_dir = paths.backups_dir()
     if backup_dir.exists():
         backups = sorted(backup_dir.glob("nexo-*.db"), key=lambda p: p.stat().st_mtime, reverse=True)
         if backups:
@@ -254,7 +256,7 @@ def check_cron_health() -> list[dict]:
                 })
 
     # Check immune system
-    immune_status = NEXO_HOME / "coordination" / "immune-status.json"
+    immune_status = paths.coordination_dir() / "immune-status.json"
     if immune_status.exists():
         try:
             status = json.loads(immune_status.read_text())

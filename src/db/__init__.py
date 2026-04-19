@@ -203,6 +203,7 @@ from db._skills import (
     validate_skill_params, render_command_template, sync_skill_directories,
     import_skill_from_directory, approve_skill, collect_scriptable_skill_candidates,
     collect_skill_improvement_candidates, materialize_personal_skill_definition,
+    retire_superseded_personal_skills,
     get_skill_outcome_evidence, list_skill_outcome_reviews,
     get_skill_health_report,
 )

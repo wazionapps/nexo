@@ -215,6 +215,45 @@
       "max_catchup_age": 172800,
       "run_on_boot": true,
       "run_on_wake": true
+    },
+    {
+      "id": "email-monitor",
+      "script": "scripts/nexo-email-monitor.py",
+      "interval_seconds": 60,
+      "description": "Monitor the agent inbox and process actionable email threads",
+      "core": true,
+      "optional": "automation",
+      "recovery_policy": "run_once_on_wake",
+      "idempotent": true,
+      "max_catchup_age": 1200,
+      "run_on_boot": false,
+      "run_on_wake": true
+    },
+    {
+      "id": "followup-runner",
+      "script": "scripts/nexo-followup-runner.py",
+      "interval_seconds": 3600,
+      "description": "Execute due followups and produce operator-visible outcomes",
+      "core": true,
+      "optional": "automation",
+      "recovery_policy": "run_once_on_wake",
+      "idempotent": true,
+      "max_catchup_age": 7200,
+      "run_on_boot": false,
+      "run_on_wake": true
+    },
+    {
+      "id": "morning-agent",
+      "script": "scripts/nexo-morning-agent.py",
+      "schedule": {"hour": 7, "minute": 0},
+      "description": "Generate and send the operator's daily morning briefing email",
+      "core": true,
+      "optional": "automation",
+      "recovery_policy": "catchup",
+      "idempotent": true,
+      "max_catchup_age": 86400,
+      "run_on_boot": false,
+      "run_on_wake": true
     }
   ]
 }

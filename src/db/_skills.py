@@ -181,6 +181,57 @@ def _normalize_match_token(value: str | None) -> str:
     return re.sub(r"[^a-z0-9]+", " ", str(value or "").strip().lower()).strip()
 
 
+def _load_core_skill_identity_index() -> dict[str, dict[str, str]]:
+    ids: dict[str, str] = {}
+    names: dict[str, str] = {}
+    slugs: dict[str, str] = {}
+    root = CORE_SKILLS_DIR
+    if not root.is_dir():
+        return {"ids": ids, "names": names, "slugs": slugs}
+
+    for child in sorted(root.iterdir()):
+        if not child.is_dir() or child.name.startswith("."):
+            continue
+        definition_path = child / SKILL_DEFINITION_FILENAME
+        if not definition_path.is_file():
+            continue
+        try:
+            data = json.loads(definition_path.read_text())
+        except Exception:
+            continue
+        skill_id = str(data.get("id", "") or "").strip()
+        name = str(data.get("name", "") or "").strip()
+        if skill_id:
+            ids[skill_id.lower()] = skill_id
+            slugs[_safe_slug(skill_id)] = skill_id
+        if name:
+            token = _normalize_match_token(name)
+            if token:
+                names[token] = skill_id or name
+            slugs[_safe_slug(name)] = skill_id or name
+        slugs[child.name.strip().lower()] = skill_id or child.name
+    return {"ids": ids, "names": names, "slugs": slugs}
+
+
+def _personal_skill_core_collision(skill_id: str, name: str) -> tuple[str, str] | None:
+    index = _load_core_skill_identity_index()
+    normalized_id = str(skill_id or "").strip().lower()
+    normalized_name = _normalize_match_token(name)
+    slug_candidates = {
+        _safe_slug(skill_id),
+        _safe_slug(name),
+    }
+
+    if normalized_id and normalized_id in index["ids"]:
+        return "id", index["ids"][normalized_id]
+    if normalized_name and normalized_name in index["names"]:
+        return "name", index["names"][normalized_name]
+    for slug in slug_candidates:
+        if slug and slug in index["slugs"]:
+            return "slug", index["slugs"][slug]
+    return None
+
+
 def _outcome_skill_id_from_candidate(candidate: dict) -> str:
     raw_parts = [
         candidate.get("area", ""),
@@ -442,6 +493,88 @@ def _definition_priority(source_kind: str) -> int:
     return SOURCE_PRIORITY.get(source_kind, 0)
 
 
+def _skill_identity_from_directory(skill_dir: Path) -> tuple[str, str] | None:
+    definition_path = skill_dir / SKILL_DEFINITION_FILENAME
+    if not definition_path.is_file():
+        return None
+    data = json.loads(definition_path.read_text())
+    skill_id = str(data.get("id", "") or "").strip()
+    name = str(data.get("name", "") or "").strip()
+    if not skill_id or not name:
+        return None
+    return skill_id, name
+
+
+def retire_superseded_personal_skills(*, dry_run: bool = False) -> dict:
+    """Archive personal skill directories that now collide with core identities."""
+    report = {
+        "ok": True,
+        "dry_run": dry_run,
+        "candidates": [],
+        "archived": [],
+        "errors": [],
+    }
+    if not PERSONAL_SKILLS_DIR.is_dir():
+        return report
+
+    core_index = _load_core_skill_identity_index()
+    backup_root: Path | None = None
+    for child in sorted(PERSONAL_SKILLS_DIR.iterdir()):
+        if not child.is_dir() or child.name.startswith("."):
+            continue
+
+        try:
+            identity = _skill_identity_from_directory(child)
+        except Exception as exc:
+            report["errors"].append({"path": str(child), "error": str(exc)})
+            continue
+        if identity is None:
+            continue
+
+        skill_id, name = identity
+        collision = _personal_skill_core_collision(skill_id, name)
+        if collision is None:
+            slug = child.name.strip().lower()
+            if slug and slug in core_index["slugs"]:
+                collision = ("slug", core_index["slugs"][slug])
+        if collision is None:
+            continue
+
+        kind, reference = collision
+        report["candidates"].append({
+            "id": skill_id,
+            "name": name,
+            "path": str(child),
+            "collision_kind": kind,
+            "collision_reference": reference,
+        })
+        if dry_run:
+            continue
+
+        if backup_root is None:
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d-%H%M%S")
+            backup_root = paths.backups_dir() / f"retired-personal-skills-{timestamp}"
+            backup_root.mkdir(parents=True, exist_ok=True)
+        target = backup_root / child.name
+        suffix = 2
+        while target.exists():
+            target = backup_root / f"{child.name}-{suffix}"
+            suffix += 1
+        try:
+            shutil.move(str(child), str(target))
+            report["archived"].append({
+                "id": skill_id,
+                "name": name,
+                "path": str(child),
+                "backup_path": str(target),
+                "collision_kind": kind,
+                "collision_reference": reference,
+            })
+        except Exception as exc:
+            report["errors"].append({"path": str(child), "error": str(exc)})
+    return report
+
+
 # ── CRUD ───────────────────────────────────────────────────────────
 
 def create_skill(
@@ -471,6 +604,12 @@ def create_skill(
     definition_path: str = "",
 ) -> dict:
     """Create a new skill entry."""
+    source_kind = _normalize_source_kind(source_kind)
+    if source_kind == "personal":
+        collision = _personal_skill_core_collision(skill_id, name)
+        if collision is not None:
+            kind, reference = collision
+            return {"error": f"Personal skill collides with core skill ({kind}: {reference})"}
     level = _normalize_level(level)
     tags_json = _json_string(tags, [])
     trigger_json = _json_string(trigger_patterns, [])
@@ -493,7 +632,6 @@ def create_skill(
                 lines.append(f"- {gotcha}")
         content = "\n".join(lines)
 
-    source_kind = _normalize_source_kind(source_kind)
     mode = _normalize_mode(mode, has_script=bool(file_path), has_content=bool(content))
     execution_level = _normalize_execution_level(execution_level)
     if mode == "guide":
@@ -1340,6 +1478,10 @@ def materialize_personal_skill_definition(skill_data: dict) -> dict:
     name = str(skill_data.get("name", "")).strip()
     if not skill_id or not name:
         return {"error": "skill_data requires id and name"}
+    collision = _personal_skill_core_collision(skill_id, name)
+    if collision is not None:
+        kind, reference = collision
+        return {"error": f"Personal skill collides with core skill ({kind}: {reference})"}
 
     skill_dir = PERSONAL_SKILLS_DIR / _safe_slug(skill_id)
     skill_dir.mkdir(parents=True, exist_ok=True)

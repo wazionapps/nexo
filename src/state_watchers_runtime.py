@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import json
 import os
+import paths
+import shlex
 import sqlite3
 import subprocess
 from datetime import datetime, timedelta, timezone
@@ -18,15 +20,15 @@ def _db_path() -> Path:
     explicit = os.environ.get("NEXO_TEST_DB") or os.environ.get("NEXO_DB")
     if explicit:
         return Path(explicit)
-    return _nexo_home() / "data" / "nexo.db"
+    return paths.db_path()
 
 
 def _summary_file() -> Path:
-    return _nexo_home() / "operations" / "state-watchers-status.json"
+    return paths.operations_dir() / "state-watchers-status.json"
 
 
 def _manifest_file() -> Path:
-    return _nexo_home() / "crons" / "manifest.json"
+    return paths.crons_dir() / "manifest.json"
 
 
 def _now_iso() -> str:
@@ -374,7 +376,7 @@ def _open_watcher_followup(result: dict) -> dict:
     )
     description = "\n".join(description_lines)
     verification = (
-        f"sqlite3 ~/.nexo/data/nexo.db \"SELECT last_health, last_result "
+        f"sqlite3 {shlex.quote(str(_db_path()))} \"SELECT last_health, last_result "
         f"FROM state_watchers WHERE watcher_id = '{watcher_id}'\""
     )
 

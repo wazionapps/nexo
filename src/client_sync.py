@@ -78,6 +78,16 @@ except Exception:
 
 
 CLAUDE_CODE_NPM_PACKAGE = "@anthropic-ai/claude-code"
+HOOK_TIMEOUTS_BY_EVENT = {
+    "SessionStart": 40,
+    "Stop": 15,
+    "PreCompact": 15,
+    "PostCompact": 15,
+    "UserPromptSubmit": 5,
+    "PostToolUse": 20,
+    "Notification": 3,
+    "SubagentStop": 10,
+}
 
 
 
@@ -151,6 +161,39 @@ def _cli_install_env(user_home: Path | None = None) -> dict[str, str]:
     return env
 
 
+def _managed_claude_prefix(user_home: Path | None = None) -> Path:
+    explicit = str(os.environ.get("NEXO_CLAUDE_PREFIX", "")).strip()
+    if explicit:
+        return Path(explicit).expanduser()
+    home = user_home or _user_home()
+    return home / ".nexo" / "runtime" / "bootstrap" / "npm-global"
+
+
+def _bundled_npm_runtime() -> tuple[str, str]:
+    node_bin = str(os.environ.get("NEXO_DESKTOP_NODE", "")).strip()
+    npm_cli = str(os.environ.get("NEXO_DESKTOP_NPM_CLI", "")).strip()
+    if node_bin and npm_cli and Path(node_bin).exists() and Path(npm_cli).exists():
+        return node_bin, npm_cli
+    return "", ""
+
+
+def _persist_managed_claude_path(claude_path: str, *, user_home: Path | None = None) -> None:
+    path_str = str(claude_path or "").strip()
+    if not path_str:
+        return
+    home = user_home or _user_home()
+    targets = [
+        home / ".nexo" / "config" / "claude-cli-path",
+        home / ".nexo" / "personal" / "config" / "claude-cli-path",
+    ]
+    for target in targets:
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(path_str + "\n", encoding="utf-8")
+        except Exception:
+            continue
+
+
 def _installed_client_path(client_key: str, *, user_home: Path | None = None) -> str:
     info = detect_installed_clients(user_home=user_home).get(client_key, {})
     if info.get("installed"):
@@ -162,6 +205,7 @@ def ensure_claude_code_installed(*, user_home: str | os.PathLike[str] | None = N
     home_path = Path(user_home).expanduser() if user_home else _user_home()
     existing = _installed_client_path("claude_code", user_home=home_path)
     if existing:
+        _persist_managed_claude_path(existing, user_home=home_path)
         return {
             "ok": True,
             "client": "claude_code",
@@ -174,6 +218,47 @@ def ensure_claude_code_installed(*, user_home: str | os.PathLike[str] | None = N
 
     attempts: list[str] = []
     env = _cli_install_env(home_path)
+    managed_prefix = _managed_claude_prefix(home_path)
+    env.setdefault("npm_config_prefix", str(managed_prefix))
+    env["PATH"] = os.pathsep.join(
+        [str(managed_prefix / "bin"), *(item for item in str(env.get("PATH", "")).split(os.pathsep) if item)]
+    )
+
+    desktop_node, bundled_npm_cli = _bundled_npm_runtime()
+    if desktop_node and bundled_npm_cli:
+        try:
+            install = subprocess.run(
+                [
+                    desktop_node,
+                    bundled_npm_cli,
+                    "install",
+                    "-g",
+                    "--prefix",
+                    str(managed_prefix),
+                    CLAUDE_CODE_NPM_PACKAGE,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=300,
+                env={**env, "ELECTRON_RUN_AS_NODE": "1"},
+            )
+            if install.returncode != 0:
+                attempts.append((install.stderr or install.stdout or "bundled npm install failed").strip())
+        except Exception as exc:
+            attempts.append(f"bundled npm install failed: {exc}")
+
+        installed_after_bundle = _installed_client_path("claude_code", user_home=home_path)
+        if installed_after_bundle:
+            _persist_managed_claude_path(installed_after_bundle, user_home=home_path)
+            return {
+                "ok": True,
+                "client": "claude_code",
+                "installed": True,
+                "changed": True,
+                "action": "installed_via_bundled_npm",
+                "path": installed_after_bundle,
+                "attempts": attempts,
+            }
 
     try:
         probe = subprocess.run(
@@ -190,6 +275,7 @@ def ensure_claude_code_installed(*, user_home: str | os.PathLike[str] | None = N
 
     installed_after_probe = _installed_client_path("claude_code", user_home=home_path)
     if installed_after_probe:
+        _persist_managed_claude_path(installed_after_probe, user_home=home_path)
         return {
             "ok": True,
             "client": "claude_code",
@@ -223,6 +309,7 @@ def ensure_claude_code_installed(*, user_home: str | os.PathLike[str] | None = N
 
     installed_path = _installed_client_path("claude_code", user_home=home_path)
     if installed_path:
+        _persist_managed_claude_path(installed_path, user_home=home_path)
         return {
             "ok": True,
             "client": "claude_code",
@@ -458,140 +545,91 @@ def _write_json_object(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
 
 
-CORE_HOOK_SPECS = [
-    {
-        "event": "SessionStart",
-        "identity": "session-start-ts",
-        "timeout": 2,
-        "command_template": lambda nexo_home, _runtime_root, _hooks_dir: (
-            f"mkdir -p {shlex.quote(str(nexo_home / 'operations'))} && "
-            f"date +%s > {shlex.quote(str(nexo_home / 'operations' / '.session-start-ts'))}"
-        ),
-    },
-    {
-        "event": "SessionStart",
-        "identity": "daily-briefing-check.sh",
-        "timeout": 5,
-        "script": "daily-briefing-check.sh",
-    },
-    {
-        "event": "SessionStart",
-        "identity": "session-start.sh",
-        "timeout": 35,
-        "script": "session-start.sh",
-    },
-    {
-        "event": "Stop",
-        "identity": "session-stop.sh",
-        "timeout": 10,
-        "script": "session-stop.sh",
-    },
-    {
-        "event": "PreToolUse",
-        "identity": "protocol-pretool-guardrail.sh",
-        "timeout": 5,
-        "script": "protocol-pretool-guardrail.sh",
-    },
-    {
-        "event": "UserPromptSubmit",
-        "identity": "heartbeat-user-msg.sh",
-        "timeout": 3,
-        "script": "heartbeat-user-msg.sh",
-    },
-    {
-        "event": "PostToolUse",
-        "identity": "capture-tool-logs.sh",
-        "timeout": 5,
-        "script": "capture-tool-logs.sh",
-    },
-    {
-        "event": "PostToolUse",
-        "identity": "capture-session.sh",
-        "timeout": 3,
-        "script": "capture-session.sh",
-    },
-    {
-        "event": "PostToolUse",
-        "identity": "inbox-hook.sh",
-        "timeout": 5,
-        "script": "inbox-hook.sh",
-    },
-    {
-        "event": "PostToolUse",
-        "identity": "protocol-guardrail.sh",
-        "timeout": 5,
-        "script": "protocol-guardrail.sh",
-    },
-    {
-        "event": "PostToolUse",
-        "identity": "heartbeat-posttool.sh",
-        "timeout": 3,
-        "script": "heartbeat-posttool.sh",
-    },
-    {
-        "event": "PreCompact",
-        "identity": "pre-compact.sh",
-        "timeout": 10,
-        "script": "pre-compact.sh",
-    },
-    {
-        "event": "PostCompact",
-        "identity": "post-compact.sh",
-        "timeout": 10,
-        "script": "post-compact.sh",
-    },
-]
+def _load_manifest_hook_specs(runtime_root: Path) -> list[dict]:
+    hooks_dir = _resolve_hook_source_dir(runtime_root)
+    manifest_path = hooks_dir / "manifest.json"
+    if not manifest_path.is_file():
+        return []
+    try:
+        payload = json.loads(manifest_path.read_text())
+    except Exception:
+        return []
+    hooks = payload.get("hooks") if isinstance(payload, dict) else None
+    if not isinstance(hooks, list):
+        return []
+    specs: list[dict] = []
+    for entry in hooks:
+        if not isinstance(entry, dict):
+            continue
+        event = str(entry.get("event") or "").strip()
+        handler = str(entry.get("handler") or "").strip()
+        if not event or not handler:
+            continue
+        handler_name = Path(handler).name
+        specs.append({
+            "event": event,
+            "identity": handler_name,
+            "timeout": HOOK_TIMEOUTS_BY_EVENT.get(event, 5),
+            "handler": handler_name,
+            "interpreter": "python",
+        })
+    return specs
+
+
+def _core_hook_specs(runtime_root: Path) -> list[dict]:
+    return _load_manifest_hook_specs(runtime_root)
 
 # Claude Code can retain legacy managed hooks from older/plugin-style installs
 # or from transient test runtimes. Treat their handler basenames as managed so
 # the next sync prunes them instead of leaving broken duplicates behind.
 LEGACY_CORE_HOOK_IDENTITIES_BY_EVENT = {
     "SessionStart": {
-        "session_start.py",
+        "daily-briefing-check.sh",
+        "session-start.sh",
+        ".session-start-ts",
     },
     "Stop": {
-        "stop.py",
+        "session-stop.sh",
+    },
+    "PreToolUse": {
+        "protocol-pretool-guardrail.sh",
     },
     "UserPromptSubmit": {
-        "auto_capture.py",
+        "heartbeat-user-msg.sh",
     },
     "PostToolUse": {
         "heartbeat-guard.sh",
-        "post_tool_use.py",
+        "capture-tool-logs.sh",
+        "capture-session.sh",
+        "inbox-hook.sh",
+        "protocol-guardrail.sh",
+        "heartbeat-posttool.sh",
     },
     "PreCompact": {
-        "pre_compact.py",
+        "pre-compact.sh",
     },
-    "Notification": {
-        "notification.py",
-    },
-    "SubagentStop": {
-        "subagent_stop.py",
+    "PostCompact": {
+        "post-compact.sh",
     },
 }
 
-
-def _current_core_hook_identities_by_event() -> dict[str, set[str]]:
+def _current_core_hook_identities_by_event(core_hook_specs: list[dict]) -> dict[str, set[str]]:
     identities: dict[str, set[str]] = {}
-    for spec in CORE_HOOK_SPECS:
+    for spec in core_hook_specs:
         identities.setdefault(spec["event"], set()).add(spec["identity"])
     return identities
 
 
-CURRENT_CORE_HOOK_IDENTITIES_BY_EVENT = _current_core_hook_identities_by_event()
-
-
-def _managed_core_hook_identities_by_event() -> dict[str, set[str]]:
-    managed = {event: set(identities) for event, identities in CURRENT_CORE_HOOK_IDENTITIES_BY_EVENT.items()}
+def _managed_core_hook_identities_by_event(current_identities: dict[str, set[str]] | None = None) -> dict[str, set[str]]:
+    managed = {event: set(identities) for event, identities in (current_identities or {}).items()}
     for event, identities in LEGACY_CORE_HOOK_IDENTITIES_BY_EVENT.items():
         managed.setdefault(event, set()).update(identities)
     return managed
 
-
-MANAGED_CORE_HOOK_IDENTITIES_BY_EVENT = _managed_core_hook_identities_by_event()
-
-
 def _resolve_hook_source_dir(runtime_root: Path) -> Path:
+    core = runtime_root / "core" / "hooks"
+    if core.is_dir():
+        return core
     direct = runtime_root / "hooks"
     if direct.is_dir():
         return direct
@@ -608,8 +646,14 @@ def _render_hook_command(spec: dict, *, nexo_home: Path, runtime_root: Path, hoo
     command_template = spec.get("command_template")
     if callable(command_template):
         return command_template(nexo_home, runtime_root, hooks_dir)
-    script_name = spec.get("script", "").strip()
-    script_path = hooks_dir / script_name
+    handler_name = (spec.get("handler") or spec.get("script") or "").strip()
+    script_path = hooks_dir / handler_name
+    if spec.get("interpreter") == "python" or handler_name.endswith(".py"):
+        return (
+            f"NEXO_HOME={shlex.quote(str(nexo_home))} "
+            f"NEXO_CODE={shlex.quote(str(runtime_root))} "
+            f"{shlex.quote(_resolve_python(nexo_home))} {shlex.quote(str(script_path))}"
+        )
     return (
         f"NEXO_HOME={shlex.quote(str(nexo_home))} "
         f"NEXO_CODE={shlex.quote(str(runtime_root))} "
@@ -653,10 +697,13 @@ def _merge_core_hooks(existing_hooks, *, runtime_root: Path, nexo_home: Path) ->
     hooks_payload = dict(existing_hooks) if isinstance(existing_hooks, dict) else {}
     hooks_dir = _resolve_hook_source_dir(runtime_root)
     managed_count = 0
+    core_hook_specs = _core_hook_specs(runtime_root)
+    current_identities_by_event = _current_core_hook_identities_by_event(core_hook_specs)
+    managed_identities_by_event = _managed_core_hook_identities_by_event(current_identities_by_event)
 
-    for event, managed_identities in MANAGED_CORE_HOOK_IDENTITIES_BY_EVENT.items():
+    for event, managed_identities in managed_identities_by_event.items():
         sections = _normalize_hook_sections(hooks_payload.get(event))
-        desired_identities = CURRENT_CORE_HOOK_IDENTITIES_BY_EVENT.get(event, set())
+        desired_identities = current_identities_by_event.get(event, set())
         cleaned_sections: list[dict] = []
         for section in sections:
             cleaned_hooks = []
@@ -671,9 +718,12 @@ def _merge_core_hooks(existing_hooks, *, runtime_root: Path, nexo_home: Path) ->
                     "hooks": cleaned_hooks,
                 }
             )
-        hooks_payload[event] = cleaned_sections
+        if cleaned_sections:
+            hooks_payload[event] = cleaned_sections
+        else:
+            hooks_payload.pop(event, None)
 
-    for spec in CORE_HOOK_SPECS:
+    for spec in core_hook_specs:
         event = spec["event"]
         sections = _normalize_hook_sections(hooks_payload.get(event))
         hooks_payload[event] = sections
@@ -744,7 +794,7 @@ def _claude_desktop_managed_metadata(server_config: dict, *, operator_name: str)
         "claude_desktop": {
             "shared_brain_managed": True,
             "shared_brain_mode": "mcp_only",
-            "managed_operator": operator_name or server_config.get("env", {}).get("NEXO_NAME", "") or "NEXO",
+            "managed_operator": operator_name or server_config.get("env", {}).get("NEXO_NAME", "") or "operator",
             "managed_runtime_home": server_config.get("env", {}).get("NEXO_HOME", ""),
             "managed_runtime_root": server_config.get("env", {}).get("NEXO_CODE", ""),
         }
@@ -1057,6 +1107,28 @@ def sync_all_clients(
     preferences: dict | None = None,
     auto_install_missing_claude: bool = False,
 ) -> dict:
+    nexo_home_path = Path(nexo_home).expanduser() if nexo_home else _default_nexo_home()
+    guardian_runtime_surfaces_result: dict = {
+        "ok": False,
+        "path": "",
+        "entity_count": 0,
+        "source": "",
+    }
+    try:
+        from guardian_runtime_surfaces import write_guardian_runtime_surfaces
+
+        guardian_runtime_surfaces_result = write_guardian_runtime_surfaces(
+            nexo_home=nexo_home_path,
+        )
+    except Exception as exc:
+        guardian_runtime_surfaces_result = {
+            "ok": False,
+            "error": str(exc),
+            "path": "",
+            "entity_count": 0,
+            "source": "",
+        }
+
     if enabled_clients is None:
         if preferences is None:
             enabled_set = set(INTERACTIVE_CLIENT_KEYS)
@@ -1111,13 +1183,14 @@ def sync_all_clients(
         and all(item.get("ok") for item in install_results.values())
     )
     return {
-        "ok": ok,
-        "nexo_home": str(Path(nexo_home).expanduser() if nexo_home else _default_nexo_home()),
+        "ok": ok and guardian_runtime_surfaces_result.get("ok", False),
+        "nexo_home": str(nexo_home_path),
         "runtime_root": str(_resolve_runtime_root(
-            Path(nexo_home).expanduser() if nexo_home else _default_nexo_home(),
+            nexo_home_path,
             runtime_root,
         )),
         "enabled_clients": sorted(enabled_set),
+        "guardian_runtime_surfaces": guardian_runtime_surfaces_result,
         "install_results": install_results,
         "clients": results,
     }

@@ -161,6 +161,25 @@ def test_detect_installed_clients_reports_binary_and_desktop(monkeypatch, tmp_pa
     assert detected["claude_desktop"]["detected_by"] in {"app", "config"}
 
 
+def test_detect_installed_clients_finds_managed_bootstrap_claude_binary(monkeypatch, tmp_path):
+    import client_preferences
+
+    home = tmp_path / "home"
+    managed_claude = home / ".nexo" / "runtime" / "bootstrap" / "npm-global" / "bin" / "claude"
+    managed_claude.parent.mkdir(parents=True)
+    managed_claude.write_text("#!/bin/sh\n")
+
+    monkeypatch.setattr(client_preferences.shutil, "which", lambda name: None)
+    monkeypatch.setattr(client_preferences, "sys", type("SysStub", (), {"platform": "linux"})())
+    monkeypatch.setattr(client_preferences, "os", type("OSStub", (), {"name": "posix", "environ": os.environ})())
+
+    detected = client_preferences.detect_installed_clients(home)
+
+    assert detected["claude_code"]["installed"] is True
+    assert detected["claude_code"]["path"] == str(managed_claude)
+    assert detected["claude_code"]["detected_by"] == "binary"
+
+
 def test_normalize_client_preferences_backfills_existing_codex_artifacts(tmp_path):
     import client_preferences
 

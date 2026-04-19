@@ -35,17 +35,18 @@ if str(NEXO_CODE) not in sys.path:
 
 from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
 from constants import AUTOMATION_SUBPROCESS_TIMEOUT
+import paths
 
-CLAUDE_DIR = NEXO_HOME
-COORD_DIR = CLAUDE_DIR / "coordination"
-NEXO_DB = NEXO_HOME / "data" / "nexo.db"
+CLAUDE_DIR = paths.home()
+COORD_DIR = paths.coordination_dir()
+NEXO_DB = paths.db_path()
 OUTPUT_FILE = COORD_DIR / "daily-synthesis.md"
 LAST_RUN_FILE = COORD_DIR / "synthesis-last-run"
 LOCK_FILE = COORD_DIR / "synthesis.lock"
 def _resolve_claude_cli() -> Path:
     """Find claude CLI: saved path > PATH > common locations."""
     import shutil as _shutil
-    saved = NEXO_HOME / "config" / "claude-cli-path"
+    saved = paths.config_dir() / "claude-cli-path"
     if saved.exists():
         p = Path(saved.read_text().strip())
         if p.exists():
@@ -274,7 +275,7 @@ def collect_data() -> dict:
         data["outcome_checker_summary_error"] = outcome_checker_error
 
     update_summary, update_summary_error = _load_json_summary(
-        NEXO_HOME / "logs" / "update-last-summary.json",
+        paths.logs_dir() / "update-last-summary.json",
         actionable=_update_summary_actionable,
     )
     if update_summary is not None:
@@ -461,7 +462,7 @@ def main():
 
         # Register for catch-up
         try:
-            state_file = NEXO_HOME / "operations" / ".catchup-state.json"
+            state_file = paths.operations_dir() / ".catchup-state.json"
             st = json.loads(state_file.read_text()) if state_file.exists() else {}
             st["synthesis"] = datetime.now().isoformat()
             state_file.write_text(json.dumps(st, indent=2))

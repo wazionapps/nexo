@@ -19,6 +19,7 @@ import tempfile
 import traceback
 from datetime import datetime
 from pathlib import Path
+from paths import brain_dir, data_dir, logs_dir
 
 HOME = Path.home()
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(HOME / ".nexo")))
@@ -27,16 +28,16 @@ _script_dir = Path(__file__).resolve().parent
 _repo_src = _script_dir.parent  # src/scripts/ -> src/
 NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(_repo_src) if (_repo_src / "server.py").exists() else str(NEXO_HOME)))
 
-LOG_DIR = NEXO_HOME / "logs"
+LOG_DIR = logs_dir()
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 SUMMARY_FILE = LOG_DIR / "runtime-preflight-summary.json"
-DB_FILE = NEXO_HOME / "data" / "nexo.db"
+DB_FILE = data_dir() / "nexo.db"
 # Evolution config: NEXO_HOME/brain/ (canonical), NEXO_HOME/cortex/ (legacy fallback), NEXO_CODE (dev fallback)
 def _find_evolution_file(name: str) -> Path:
-    for candidate in [NEXO_HOME / "brain" / name, NEXO_HOME / "cortex" / name, NEXO_CODE / name]:
+    for candidate in [brain_dir() / name, NEXO_HOME / "cortex" / name, NEXO_CODE / name]:
         if candidate.exists():
             return candidate
-    return NEXO_HOME / "brain" / name  # default canonical path
+    return brain_dir() / name  # default canonical path
 
 CORTEX_OBJECTIVE = _find_evolution_file("evolution-objective.json")
 CORTEX_PROMPT = _find_evolution_file("evolution-prompt.md")

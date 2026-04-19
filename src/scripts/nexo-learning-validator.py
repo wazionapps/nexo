@@ -29,11 +29,14 @@ import os
 import sqlite3
 import sys
 from pathlib import Path
+from paths import data_dir
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parents[1])))
 if str(NEXO_CODE) not in sys.path:
     sys.path.insert(0, str(NEXO_CODE))
+
+DB_PATH = data_dir() / "nexo.db"
 
 from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
 
@@ -43,9 +46,7 @@ try:
 except Exception:
     _USER_MODEL = ""
 
-
-
-NEXO_DB = NEXO_HOME / "data" / "nexo.db"
+NEXO_DB = DB_PATH
 JSON_ONLY_SYSTEM_PROMPT = (
     "Return exactly one valid JSON object. No markdown fences. No prose outside JSON."
 )

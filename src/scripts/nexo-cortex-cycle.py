@@ -50,9 +50,10 @@ NEXO_CODE = Path(
     )
 )
 sys.path.insert(0, str(NEXO_CODE))
+import paths
 
-OPERATIONS_DIR = NEXO_HOME / "operations"
-LOGS_DIR = NEXO_HOME / "logs"
+OPERATIONS_DIR = paths.operations_dir()
+LOGS_DIR = paths.logs_dir()
 QUALITY_FILE = OPERATIONS_DIR / "cortex-quality-latest.json"
 LOG_FILE = LOGS_DIR / "cortex-cycle.log"
 FOLLOWUP_ID = "NF-CORTEX-QUALITY-DROP"

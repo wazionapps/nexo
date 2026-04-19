@@ -11,7 +11,10 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 NEXO_HOME="${NEXO_HOME:-$HOME/.nexo}"
-LOG_DIR="$NEXO_HOME/logs"
+LOG_DIR="$NEXO_HOME/runtime/logs"
+if [ ! -d "$LOG_DIR" ] && [ -d "$NEXO_HOME/logs" ]; then
+    LOG_DIR="$NEXO_HOME/logs"
+fi
 DEEP_SLEEP_DIR="$NEXO_HOME/runtime/operations/deep-sleep"
 WATERMARK_FILE="$DEEP_SLEEP_DIR/.watermark"
 RUN_ID=$(date +%Y-%m-%d)

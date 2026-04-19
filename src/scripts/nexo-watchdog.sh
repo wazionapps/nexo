@@ -14,9 +14,18 @@ HOME_DIR="$HOME"
 NEXO_HOME="${NEXO_HOME:-$HOME/.nexo}"
 NEXO_DIR="$NEXO_HOME"
 CORTEX_DIR="$NEXO_HOME/personal/brain"
+[ ! -d "$CORTEX_DIR" ] && [ -d "$NEXO_HOME/brain" ] && CORTEX_DIR="$NEXO_HOME/brain"
+CONFIG_DIR="$NEXO_HOME/personal/config"
+[ ! -d "$CONFIG_DIR" ] && [ -d "$NEXO_HOME/config" ] && CONFIG_DIR="$NEXO_HOME/config"
 OPS_DIR="$NEXO_HOME/runtime/operations"
+[ ! -d "$OPS_DIR" ] && [ -d "$NEXO_HOME/operations" ] && OPS_DIR="$NEXO_HOME/operations"
 LOG_DIR="$NEXO_HOME/runtime/logs"
-DB_PATH="$NEXO_HOME/runtime/data/nexo.db"
+[ ! -d "$LOG_DIR" ] && [ -d "$NEXO_HOME/logs" ] && LOG_DIR="$NEXO_HOME/logs"
+DATA_DIR="$NEXO_HOME/runtime/data"
+[ ! -d "$DATA_DIR" ] && [ -d "$NEXO_HOME/data" ] && DATA_DIR="$NEXO_HOME/data"
+BACKUP_DIR="$NEXO_HOME/runtime/backups"
+[ ! -d "$BACKUP_DIR" ] && [ -d "$NEXO_HOME/backups" ] && BACKUP_DIR="$NEXO_HOME/backups"
+DB_PATH="$DATA_DIR/nexo.db"
 LOG="$LOG_DIR/watchdog.log"
 STATUS_JSON="$OPS_DIR/watchdog-status.json"
 REPORT_TXT="$OPS_DIR/watchdog-report.txt"
@@ -63,8 +72,9 @@ import json, sys, platform
 
 nexo_home = '$NEXO_HOME'
 is_mac = platform.system() == 'Darwin'
-optionals_file = '$NEXO_HOME/config/optionals.json'
-schedule_file = '$NEXO_HOME/config/schedule.json'
+optionals_file = '$CONFIG_DIR/optionals.json'
+schedule_file = '$CONFIG_DIR/schedule.json'
+logs_dir = '$LOG_DIR'
 optionals = {}
 automation_default = True
 
@@ -102,8 +112,8 @@ for c in data.get('crons', []):
         svc_id = 'com.nexo.' + cid
     else:
         svc_id = 'nexo-' + cid + '.timer'
-    stdout_log = nexo_home + '/logs/' + cid + '-stdout.log'
-    stderr_log = nexo_home + '/logs/' + cid + '-stderr.log'
+    stdout_log = logs_dir + '/' + cid + '-stdout.log'
+    stderr_log = logs_dir + '/' + cid + '-stderr.log'
 
     recovery_policy = c.get('recovery_policy')
     if not recovery_policy:
@@ -176,7 +186,7 @@ MONITORS+=("${PERSONAL_MONITORS[@]+"${PERSONAL_MONITORS[@]}"}")
 CRON_MONITORS=()
 if [ "${NEXO_MAINTAINER:-}" = "1" ]; then
   CRON_MONITORS+=(
-    "Backup|$NEXO_DIR/scripts/nexo-backup.sh|$NEXO_DIR/backups/|7200|Hourly"
+    "Backup|$NEXO_DIR/core/scripts/nexo-backup.sh|$BACKUP_DIR/|7200|Hourly"
   )
 fi
 
@@ -391,13 +401,14 @@ try_verify_repair() {
 
 try_repair_backup() {
   # Use the core backup script (nexo-backup.sh)
-  local backup_script="$NEXO_DIR/scripts/nexo-backup.sh"
+  local backup_script="$NEXO_DIR/core/scripts/nexo-backup.sh"
+  [ ! -x "$backup_script" ] && backup_script="$NEXO_DIR/scripts/nexo-backup.sh"
   [ ! -x "$backup_script" ] && backup_script="$SCRIPT_DIR/nexo-backup.sh"
   if [ -x "$backup_script" ]; then
     bash "$backup_script" 2>/dev/null
     sleep 1
     local newest
-    newest=$(ls -t "$NEXO_DIR/backups/nexo-"*.db 2>/dev/null | head -1)
+    newest=$(ls -t "$BACKUP_DIR"/nexo-*.db 2>/dev/null | head -1)
     if [ -n "$newest" ]; then
       if $IS_MACOS; then local age=$(( TS_EPOCH - $(stat -f %m "$newest") )); else local age=$(( TS_EPOCH - $(stat -c %Y "$newest") )); fi
       if [ "$age" -lt 60 ]; then
@@ -853,15 +864,15 @@ done
 # --- SQLite integrity ---
 SQLITE_STATUS="PASS"
 SQLITE_DETAIL=""
-INTEGRITY=$(sqlite3 "$NEXO_DIR/data/nexo.db" "PRAGMA integrity_check;" 2>/dev/null || echo "CORRUPT")
+INTEGRITY=$(sqlite3 "$DB_PATH" "PRAGMA integrity_check;" 2>/dev/null || echo "CORRUPT")
 if [ "$INTEGRITY" != "ok" ]; then
   SQLITE_STATUS="FAIL"
   SQLITE_DETAIL="Integrity check: $INTEGRITY"
   log "CRITICAL: SQLite integrity check failed: $INTEGRITY"
   TOTAL_FAIL=$((TOTAL_FAIL + 1))
-  LATEST_BACKUP=$(ls -t "$NEXO_DIR/backups/nexo-"*.db 2>/dev/null | head -1)
+  LATEST_BACKUP=$(ls -t "$BACKUP_DIR"/nexo-*.db 2>/dev/null | head -1)
   if [ -n "$LATEST_BACKUP" ]; then
-    cp "$LATEST_BACKUP" "$NEXO_DIR/data/nexo.db"
+    cp "$LATEST_BACKUP" "$DB_PATH"
     log "RESTORED from $LATEST_BACKUP"
     SQLITE_DETAIL="${SQLITE_DETAIL}. Restored from backup."
   fi
@@ -933,7 +944,7 @@ fi
 # --- Backup freshness ---
 BACKUP_STATUS="PASS"
 BACKUP_DETAIL=""
-LATEST_BACKUP=$(ls -t "$NEXO_DIR/backups/nexo-"*.db 2>/dev/null | head -1)
+LATEST_BACKUP=$(ls -t "$BACKUP_DIR"/nexo-*.db 2>/dev/null | head -1)
 if [ -n "$LATEST_BACKUP" ]; then
   if $IS_MACOS; then BACKUP_AGE=$(( TS_EPOCH - $(stat -f %m "$LATEST_BACKUP") )); else BACKUP_AGE=$(( TS_EPOCH - $(stat -c %Y "$LATEST_BACKUP") )); fi
   BACKUP_AGE_STR=$(format_age "$BACKUP_AGE")
@@ -962,7 +973,7 @@ fi
 # --- Cognitive DB check ---
 COG_STATUS="PASS"
 COG_DETAIL=""
-COG_DB="$NEXO_DIR/data/cognitive.db"
+COG_DB="$DATA_DIR/cognitive.db"
 if [ -f "$COG_DB" ]; then
   COG_INT=$(sqlite3 "$COG_DB" "PRAGMA integrity_check;" 2>/dev/null || echo "CORRUPT")
   if [ "$COG_INT" != "ok" ]; then

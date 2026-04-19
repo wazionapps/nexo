@@ -32,6 +32,7 @@ import os
 from pathlib import Path
 from typing import Any
 
+import paths
 
 # Core rules — Fase 2 spec 0.19 + 0.5. These rules may only be shadow /
 # soft / hard. mode=off is rejected by the validator. Any future Fase 2
@@ -62,8 +63,7 @@ def _default_config_path() -> Path:
 
 
 def _user_config_path() -> Path:
-    nexo_home = os.environ.get("NEXO_HOME") or str(Path.home() / ".nexo")
-    return Path(nexo_home) / "config" / "guardian.json"
+    return paths.config_dir() / "guardian.json"
 
 
 def load_default_guardian_config() -> dict[str, Any]:
@@ -252,7 +252,7 @@ def rule_mode(config: dict[str, Any], rule_id: str, default: str = "shadow") -> 
         return mode
     raw_path = overrides_cfg.get(
         "path",
-        "~/.nexo/config/guardian-runtime-overrides.json",
+        "~/.nexo/personal/config/guardian-runtime-overrides.json",
     )
     try:
         override_path = Path(os.path.expanduser(str(raw_path)))

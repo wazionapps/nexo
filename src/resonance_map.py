@@ -205,7 +205,9 @@ SYSTEM_OWNED_CALLERS: dict[str, str] = {
     "daily_self_audit":                 "alto",
     "postmortem_consolidator":          "alto",
     "proactive_dashboard":              "alto",
+    "email_monitor":                    "alto",
     "followup_runner":                  "alto",
+    "morning_agent":                    "alto",
 
     # ---- Defensive / consistency tasks ------------------------------------
     "immune/scan":                      "medio",

@@ -8,6 +8,7 @@ This module manages the opt-in "public core evolution" mode:
 """
 
 import json
+import importlib
 import os
 import paths
 import platform
@@ -17,9 +18,6 @@ import socket
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
-
-from runtime_power import load_schedule_config, save_schedule_config
-
 
 UPSTREAM_REPO = "wazionapps/nexo"
 CONFIG_KEY = "public_contribution"
@@ -79,6 +77,11 @@ def _default_public_contribution() -> dict:
     }
 
 
+def _runtime_power_module():
+    """Resolve runtime_power lazily so reload-heavy tests see the live module."""
+    return importlib.import_module("runtime_power")
+
+
 def normalize_public_contribution_config(config: dict | None) -> dict:
     merged = dict(_default_public_contribution())
     if isinstance(config, dict):
@@ -107,14 +110,15 @@ def normalize_public_contribution_config(config: dict | None) -> dict:
 
 
 def load_public_contribution_config(schedule: dict | None = None) -> dict:
-    schedule = schedule or load_schedule_config()
+    schedule = schedule or _runtime_power_module().load_schedule_config()
     return normalize_public_contribution_config(schedule.get(CONFIG_KEY))
 
 
 def save_public_contribution_config(config: dict) -> dict:
-    schedule = load_schedule_config()
+    runtime_power = _runtime_power_module()
+    schedule = runtime_power.load_schedule_config()
     schedule[CONFIG_KEY] = normalize_public_contribution_config(config)
-    save_schedule_config(schedule)
+    runtime_power.save_schedule_config(schedule)
     return schedule[CONFIG_KEY]
 
 

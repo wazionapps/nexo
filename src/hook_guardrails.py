@@ -7,6 +7,7 @@ import json
 import os
 import sys
 from pathlib import Path
+import paths
 
 from db import create_protocol_debt, get_db
 from plugins.guard import _load_conditioned_learnings, _normalize_path_token
@@ -535,6 +536,7 @@ def _read_claude_session_id_from_coordination() -> str:
     nexo_home = os.environ.get("NEXO_HOME", "").strip()
     if nexo_home:
         candidates.append(Path(nexo_home).expanduser() / "coordination" / ".claude-session-id")
+    candidates.append(paths.coordination_dir() / ".claude-session-id")
     candidates.append(Path.home() / ".nexo" / "coordination" / ".claude-session-id")
     seen: set[str] = set()
     for path in candidates:

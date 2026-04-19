@@ -42,11 +42,17 @@ function resolveCodeDir() {
   if (fs.existsSync(repoCandidate)) {
     return path.join(__dirname, "..", "src");
   }
+  if (fs.existsSync(path.join(NEXO_HOME, "core", "cli.py"))) {
+    return path.join(NEXO_HOME, "core");
+  }
   if (fs.existsSync(path.join(NEXO_HOME, "cli.py"))) {
     return NEXO_HOME;
   }
   if (fs.existsSync(path.join(NEXO_HOME, "claude", "cli.py"))) {
     return path.join(NEXO_HOME, "claude");
+  }
+  if (fs.existsSync(path.join(NEXO_HOME, "core"))) {
+    return path.join(NEXO_HOME, "core");
   }
   return NEXO_HOME;
 }

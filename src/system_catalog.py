@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 
 from db import get_db, list_skills, sync_skill_directories
+from db._skills import CORE_SKILLS_DIR
 from plugin_loader import PERSONAL_PLUGINS_DIR, PLUGINS_DIR, list_plugins
 from script_registry import list_scripts
 
@@ -625,37 +626,37 @@ def _locations() -> dict[str, str]:
         "nexo_home": str(home),
         "nexo_code": str(code),
         # Brain state
-        "brain.db": str(home / "data" / "nexo.db"),
-        "brain.calibration": str(home / "brain" / "calibration.json"),
-        "brain.profile": str(home / "brain" / "profile.json"),
-        "brain.project_atlas": str(home / "brain" / "project-atlas.json"),
+        "brain.db": str(paths.db_path()),
+        "brain.calibration": str(paths.brain_dir() / "calibration.json"),
+        "brain.profile": str(paths.brain_dir() / "profile.json"),
+        "brain.project_atlas": str(paths.brain_dir() / "project-atlas.json"),
         # Config
-        "config.dir": str(home / "config"),
-        "config.guardian": str(home / "config" / "guardian.json"),
-        "config.guardian_runtime_overrides": str(home / "config" / "guardian-runtime-overrides.json"),
+        "config.dir": str(paths.config_dir()),
+        "config.guardian": str(paths.config_dir() / "guardian.json"),
+        "config.guardian_runtime_overrides": str(paths.config_dir() / "guardian-runtime-overrides.json"),
         # Logs
-        "logs.dir": str(home / "logs"),
-        "logs.guardian_telemetry": str(home / "logs" / "guardian-telemetry.ndjson"),
-        "logs.guardian_overrides": str(home / "logs" / "guardian-overrides.log"),
+        "logs.dir": str(paths.logs_dir()),
+        "logs.guardian_telemetry": str(paths.logs_dir() / "guardian-telemetry.ndjson"),
+        "logs.guardian_overrides": str(paths.logs_dir() / "guardian-overrides.log"),
         # Skills — repo (source-controlled) vs runtime (installed/personal).
         "skills.repo": str(code / ".." / ".claude-plugin"),
-        "skills.runtime_core": str(home / "skills"),
-        "skills.runtime_personal": str(home / "skills-personal"),
+        "skills.runtime_core": str(CORE_SKILLS_DIR),
+        "skills.runtime_personal": str(paths.personal_skills_dir()),
         # Scripts + hooks + rules
         "scripts.core": str(code / "scripts"),
-        "scripts.personal_registry": str(home / "brain" / "personal_scripts.db"),
-        "hooks.runtime": str(home / "hooks"),
+        "scripts.personal_registry": str(paths.brain_dir() / "personal_scripts.db"),
+        "hooks.runtime": str(paths.personal_hooks_dir()),
         "rules.core": str(code / "rules"),
-        "rules.personal": str(home / "rules"),
+        "rules.personal": str(paths.personal_rules_dir()),
         # Tool enforcement map (repo authority)
         "tool_enforcement_map": str(code / ".." / "tool-enforcement-map.json"),
         # Reports + backups + snapshots
-        "reports": str(home / "reports"),
-        "backups": str(home / "backups"),
-        "snapshots": str(home / "snapshots"),
+        "reports": str(paths.exports_dir()),
+        "backups": str(paths.backups_dir()),
+        "snapshots": str(paths.snapshots_dir()),
         # Crons manifest
         "crons.manifest": str(code / "crons" / "manifest.json"),
-        "crons.runtime_manifest": str(home / "crons" / "manifest.json"),
+        "crons.runtime_manifest": str(paths.crons_dir() / "manifest.json"),
     }
 
 

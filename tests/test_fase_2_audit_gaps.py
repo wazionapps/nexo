@@ -142,3 +142,45 @@ def test_r24_window_reset_after_verification_tool():
     # Window should reset (verification seen) — no injection.
     hits = [q for q in enforcer.injection_queue if q.get("rule_id") == "R24_stale_memory"]
     assert hits == []
+
+
+def test_r23m_rule_mode_off_logs_skip_telemetry(tmp_path, monkeypatch):
+    monkeypatch.setenv("NEXO_HOME", str(tmp_path))
+    import guardian_telemetry as gt
+    importlib.reload(gt)
+    from enforcement_engine import HeadlessEnforcer
+
+    enforcer = HeadlessEnforcer()
+    enforcer._guardian_mode_cache["R23m_message_duplicate"] = "off"
+    enforcer._check_r23m(
+        "nexo_email_send",
+        {"to": "maria@example.com", "body": "Hi Maria, the plan is attached"},
+    )
+
+    entries = [json.loads(l) for l in gt._telemetry_path().read_text().splitlines() if l.strip()]
+    assert any(
+        e["rule_id"] == "R23m_message_duplicate"
+        and e["event"] == "skipped"
+        and e["details"].get("reason") == "rule_mode_off"
+        for e in entries
+    )
+
+
+def test_r15_missing_dataset_logs_skip_telemetry(tmp_path, monkeypatch):
+    monkeypatch.setenv("NEXO_HOME", str(tmp_path))
+    import guardian_telemetry as gt
+    importlib.reload(gt)
+    from enforcement_engine import HeadlessEnforcer
+
+    enforcer = HeadlessEnforcer()
+    enforcer._guardian_mode_cache["R15_project_context"] = "soft"
+    enforcer.on_user_message_r15("Review the WAzion rollout", projects=[], recent_records=[])
+
+    entries = [json.loads(l) for l in gt._telemetry_path().read_text().splitlines() if l.strip()]
+    assert any(
+        e["rule_id"] == "R15_project_context"
+        and e["event"] == "skipped"
+        and e["details"].get("reason") == "missing_dataset"
+        and e["details"].get("dataset") == "projects"
+        for e in entries
+    )

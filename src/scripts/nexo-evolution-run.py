@@ -33,12 +33,16 @@ NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 _script_dir = Path(__file__).resolve().parent
 _repo_src = _script_dir.parent  # src/scripts/ -> src/
 NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(_repo_src) if (_repo_src / "server.py").exists() else str(NEXO_HOME)))
+if str(NEXO_CODE) not in sys.path:
+    sys.path.insert(0, str(NEXO_CODE))
+
+import paths
 
 # ── Paths ────────────────────────────────────────────────────────────────
-CLAUDE_DIR = NEXO_HOME
-NEXO_DB = CLAUDE_DIR / "data" / "nexo.db"
-LOG_DIR = CLAUDE_DIR / "logs"
-SNAPSHOTS_DIR = CLAUDE_DIR / "snapshots"
+CLAUDE_DIR = paths.home()
+NEXO_DB = paths.db_path()
+LOG_DIR = paths.logs_dir()
+SNAPSHOTS_DIR = paths.snapshots_dir()
 SANDBOX_DIR = CLAUDE_DIR / "sandbox" / "workspace"
 MAX_CONSECUTIVE_FAILURES = 3
 MAX_SNAPSHOTS = 8
@@ -85,21 +89,21 @@ def _repo_root() -> Path | None:
 
 def _public_safe_prefixes() -> list[str]:
     return [
-        str(CLAUDE_DIR / "scripts") + "/",
-        str(CLAUDE_DIR / "plugins") + "/",
-        str(CLAUDE_DIR / "skills") + "/",
+        str(paths.core_scripts_dir()) + "/",
+        str(paths.core_plugins_dir()) + "/",
+        str(paths.personal_skills_dir()) + "/",
         str(CLAUDE_DIR / "skills-runtime") + "/",
     ]
 
 
 def _managed_safe_prefixes() -> list[str]:
     prefixes = [
-        str(CLAUDE_DIR / "scripts") + "/",
-        str(CLAUDE_DIR / "plugins") + "/",
-        str(CLAUDE_DIR / "brain") + "/",
-        str(CLAUDE_DIR / "coordination") + "/",
-        str(CLAUDE_DIR / "logs") + "/",
-        str(CLAUDE_DIR / "skills") + "/",
+        str(paths.core_scripts_dir()) + "/",
+        str(paths.core_plugins_dir()) + "/",
+        str(paths.brain_dir()) + "/",
+        str(paths.coordination_dir()) + "/",
+        str(paths.logs_dir()) + "/",
+        str(paths.personal_skills_dir()) + "/",
         str(CLAUDE_DIR / "skills-core") + "/",
         str(CLAUDE_DIR / "skills-runtime") + "/",
         str(NEXO_CODE) + "/",
@@ -135,7 +139,7 @@ def _immutable_files_for_mode(mode: str) -> set[str]:
 def _resolve_claude_cli() -> Path:
     """Find claude CLI: saved path > PATH > common locations."""
     import shutil as _shutil
-    saved = NEXO_HOME / "config" / "claude-cli-path"
+    saved = paths.config_dir() / "claude-cli-path"
     if saved.exists():
         p = Path(saved.read_text().strip())
         if p.exists():
@@ -177,7 +181,6 @@ def log(msg: str):
 
 
 # ── Import from evolution_cycle.py (lives in NEXO_CODE, i.e. src/) ──────
-sys.path.insert(0, str(NEXO_CODE))
 from agent_runner import probe_automation_backend, run_automation_prompt
 from constants import AUTOMATION_SUBPROCESS_TIMEOUT
 from evolution_cycle import (
@@ -1128,7 +1131,7 @@ def execute_auto_proposal(proposal: dict, cycle_num: int, conn: sqlite3.Connecti
         log(f"  ROLLBACK: {e}")
         if snapshot_ref:
             try:
-                restore_script = CLAUDE_DIR / "scripts" / "nexo-snapshot-restore.sh"
+                restore_script = paths.core_scripts_dir() / "nexo-snapshot-restore.sh"
                 subprocess.run(
                     [str(restore_script), snapshot_ref],
                     capture_output=True, timeout=15, check=True
@@ -1646,7 +1649,7 @@ def _update_catchup_state():
         import json as _json
         from pathlib import Path as _Path
 
-        _state_file = NEXO_HOME / "operations" / ".catchup-state.json"
+        _state_file = paths.operations_dir() / ".catchup-state.json"
         _state = _json.loads(_state_file.read_text()) if _state_file.exists() else {}
         _state["evolution"] = datetime.now().isoformat()
         _state_file.write_text(_json.dumps(_state, indent=2))

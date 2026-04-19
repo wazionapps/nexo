@@ -30,6 +30,7 @@ if _PARENT not in sys.path:
     sys.path.insert(0, _PARENT)
 
 from agent_runner import AgentRunnerError, build_followup_terminal_shell_command
+import paths
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -145,16 +146,14 @@ class ChatMessage(BaseModel):
 
 def _cognitive_db():
     """Direct connection to cognitive.db."""
-    nexo_home = os.environ.get("NEXO_HOME", str(Path.home() / ".nexo"))
-    db_path = Path(nexo_home) / "data" / "cognitive.db"
+    db_path = Path(os.environ.get("NEXO_COGNITIVE_DB") or str(paths.data_dir() / "cognitive.db"))
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
     return conn
 
 def _email_db():
     """Direct connection to nexo-email.db."""
-    nexo_home = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
-    db_path = nexo_home / "nexo-email" / "nexo-email.db"
+    db_path = paths.nexo_email_dir() / "nexo-email.db"
     if not db_path.exists():
         return None
     conn = sqlite3.connect(str(db_path))
@@ -163,8 +162,7 @@ def _email_db():
 
 
 def _deep_sleep_dir() -> Path:
-    nexo_home = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
-    return nexo_home / "operations" / "deep-sleep"
+    return paths.operations_dir() / "deep-sleep"
 
 
 def _normalize_item_status(status: object) -> str:
@@ -1189,8 +1187,7 @@ async def api_calendar(
 @app.get("/api/watchdog")
 async def api_watchdog():
     """Read watchdog status from file."""
-    nexo_home = os.environ.get("NEXO_HOME", str(Path.home() / ".nexo"))
-    watchdog_path = Path(nexo_home) / "operations" / "watchdog-status.json"
+    watchdog_path = paths.operations_dir() / "watchdog-status.json"
     if not watchdog_path.exists():
         return JSONResponse(
             {"error": "watchdog-status.json not found", "path": str(watchdog_path)},
@@ -1318,8 +1315,7 @@ async def api_chat(body: ChatMessage):
         return {"answer": "Recent overnight activity:", "data": [dict(r) for r in rows], "query_type": "diary"}
 
     elif any(w in msg for w in ["watchdog", "salud", "health", "status"]):
-        nexo_home = os.environ.get("NEXO_HOME", str(Path.home() / ".nexo"))
-        wp = Path(nexo_home) / "operations" / "watchdog-status.json"
+        wp = paths.operations_dir() / "watchdog-status.json"
         if wp.exists():
             return {"answer": "Watchdog status:", "data": json.loads(wp.read_text()), "query_type": "watchdog"}
         return {"answer": "Watchdog not available.", "data": [], "query_type": "watchdog"}
@@ -1796,9 +1792,8 @@ async def api_credentials():
 
 @app.get("/api/backups")
 async def api_backups():
-    nexo_home = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
-    backup_dir = nexo_home / "backups"
-    data_dir = nexo_home / "data"
+    backup_dir = paths.backups_dir()
+    data_root = paths.data_dir()
     backups = []
     if backup_dir.exists():
         for item in sorted(backup_dir.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True)[:20]:
@@ -1807,7 +1802,7 @@ async def api_backups():
                             "modified": datetime.datetime.fromtimestamp(stat.st_mtime).isoformat(), "is_dir": item.is_dir()})
     db_sizes = {}
     for dbfile in ["nexo.db", "cognitive.db"]:
-        p = data_dir / dbfile
+        p = data_root / dbfile
         if p.exists():
             db_sizes[dbfile] = round(p.stat().st_size / 1048576, 2)
     return {"backups": backups, "db_sizes": db_sizes}

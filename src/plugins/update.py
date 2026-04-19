@@ -142,6 +142,15 @@ def _find_npm_pkg_src() -> Path | None:
     return None
 
 
+def _runtime_code_root(runtime_root: Path | None = None) -> Path:
+    runtime_root = Path(runtime_root or NEXO_HOME)
+    core_root = runtime_root / "core"
+    for candidate in (core_root, runtime_root):
+        if (candidate / "cli.py").is_file() or (candidate / "server.py").is_file() or (candidate / "db").is_dir():
+            return candidate
+    return core_root if core_root.exists() else runtime_root
+
+
 def _core_artifact_source_dir() -> Path | None:
     """Return the canonical source directory for packaged core artifacts."""
     if _PACKAGED_INSTALL:
@@ -171,7 +180,7 @@ def _refresh_installed_manifest():
                     if _paths_match(f, dest):
                         continue
                     shutil.copy2(str(f), str(dest))
-        config_dir = NEXO_HOME / "config"
+        config_dir = paths.config_dir()
         config_dir.mkdir(parents=True, exist_ok=True)
         payload = {
             "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -806,7 +815,7 @@ def _normalize_preferences_for_client_sync() -> dict:
     from client_preferences import normalize_client_preferences
     from model_defaults import heal_runtime_profiles
 
-    schedule_path = NEXO_HOME / "config" / "schedule.json"
+    schedule_path = paths.config_dir() / "schedule.json"
     schedule_payload = json.loads(schedule_path.read_text()) if schedule_path.exists() else {}
     # Heal invalid models (e.g. Claude-family written into codex profile by
     # earlier buggy versions). Must run BEFORE normalize so the healed values
@@ -835,9 +844,10 @@ def _sync_packaged_clients() -> tuple[bool, str | None]:
 
     try:
         preferences = _normalize_preferences_for_client_sync()
+        runtime_root = _runtime_code_root()
         result = sync_all_clients(
             nexo_home=NEXO_HOME,
-            runtime_root=NEXO_HOME,
+            runtime_root=runtime_root,
             operator_name=os.environ.get("NEXO_NAME", ""),
             preferences=preferences,
             auto_install_missing_claude=True,
@@ -898,6 +908,7 @@ def _sync_packaged_crons(progress_fn=None) -> tuple[bool, str | None]:
     if not sync_path.is_file():
         _refresh_installed_manifest()
         return True, None
+    runtime_root = _runtime_code_root()
     try:
         _emit_progress(progress_fn, "Syncing core cron definitions...")
         result = subprocess.run(
@@ -906,7 +917,7 @@ def _sync_packaged_crons(progress_fn=None) -> tuple[bool, str | None]:
             capture_output=True,
             text=True,
             timeout=30,
-            env={**os.environ, "NEXO_HOME": str(NEXO_HOME), "NEXO_CODE": str(NEXO_HOME)},
+            env={**os.environ, "NEXO_HOME": str(NEXO_HOME), "NEXO_CODE": str(runtime_root)},
         )
         if result.returncode != 0:
             return False, result.stderr.strip() or result.stdout.strip() or "cron sync failed"
@@ -914,6 +925,43 @@ def _sync_packaged_crons(progress_fn=None) -> tuple[bool, str | None]:
         return True, None
     except Exception as e:
         return False, f"cron sync error: {e}"
+
+
+def _finalize_packaged_runtime_layout() -> tuple[bool, str | None]:
+    runtime_root = _runtime_code_root()
+    py_path = os.environ.get("PYTHONPATH", "").strip()
+    py_paths = [str(runtime_root), str(NEXO_HOME)]
+    if py_path:
+        py_paths.append(py_path)
+    try:
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                (
+                    "import auto_update; "
+                    "auto_update._maybe_migrate_to_f06_layout(); "
+                    "auto_update._ensure_f06_legacy_shims(); "
+                    "auto_update._rewrite_f06_launch_agents()"
+                ),
+            ],
+            cwd=str(NEXO_HOME),
+            capture_output=True,
+            text=True,
+            timeout=60,
+            env={
+                **os.environ,
+                "NEXO_HOME": str(NEXO_HOME),
+                "NEXO_CODE": str(runtime_root),
+                "PYTHONPATH": os.pathsep.join(py_paths),
+            },
+        )
+    except Exception as e:
+        return False, f"layout finalize error: {e}"
+    if result.returncode != 0:
+        detail = result.stderr.strip() or result.stdout.strip() or "unknown layout finalize failure"
+        return False, detail
+    return True, None
 
 
 def _reload_launch_agents_after_bump() -> dict:
@@ -1066,6 +1114,11 @@ def _handle_packaged_update(progress_fn=None, *, include_clis: bool = True) -> s
     verify_err = _verify_import()
     if verify_err:
         errors.append(f"verification: {verify_err}")
+
+    _emit_progress(progress_fn, "Canonicalizing packaged runtime layout...")
+    layout_ok, layout_error = _finalize_packaged_runtime_layout()
+    if not layout_ok:
+        errors.append(f"layout finalize: {layout_error}")
 
     hook_sync_warning = None
     cron_sync_warning = None
@@ -1361,7 +1414,7 @@ def handle_update(
             from client_preferences import normalize_client_preferences
             from model_defaults import heal_runtime_profiles
 
-            schedule_path = NEXO_HOME / "config" / "schedule.json"
+            schedule_path = paths.config_dir() / "schedule.json"
             schedule_payload = json.loads(schedule_path.read_text()) if schedule_path.exists() else {}
             # Heal Claude-family models written into Codex profile by earlier
             # buggy versions.  Must run BEFORE normalize so healed values

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import paths
 import shlex
 import shutil
 import subprocess
@@ -363,7 +364,7 @@ def _record_automation_run(
 
 
 def _resolve_claude_cli() -> str:
-    saved = NEXO_HOME / "config" / "claude-cli-path"
+    saved = paths.config_dir() / "claude-cli-path"
     if saved.exists():
         candidate = saved.read_text().strip()
         if candidate and Path(candidate).exists():
@@ -869,7 +870,7 @@ def _build_enforcement_system_prompt() -> str:
 
 _ANTHROPIC_API_KEY_SEARCH_PATHS = (
     Path.home() / ".claude" / "anthropic-api-key.txt",
-    Path.home() / ".nexo" / "config" / "anthropic-api-key.txt",
+    paths.config_dir() / "anthropic-api-key.txt",
 )
 
 

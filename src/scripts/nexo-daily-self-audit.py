@@ -27,6 +27,16 @@ import subprocess
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
+from paths import (
+    brain_dir,
+    config_dir,
+    core_plugins_dir,
+    core_scripts_dir,
+    data_dir,
+    logs_dir,
+    operations_dir,
+    snapshots_dir,
+)
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 # Auto-detect: if running from repo (src/scripts/), use src/ as NEXO_CODE
@@ -47,24 +57,40 @@ try:
 except Exception:
     _USER_MODEL = ""
 
-LOG_DIR = NEXO_HOME / "logs"
+LOG_DIR = logs_dir()
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 AUDIT_HISTORY_DIR = LOG_DIR / "self-audit"
 AUDIT_HISTORY_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE = LOG_DIR / "self-audit.log"
-NEXO_DB = NEXO_HOME / "data" / "nexo.db"
+NEXO_DB = data_dir() / "nexo.db"
 # Configure your main project repo to check for uncommitted changes (optional)
 PROJECT_REPO_DIR = None  # e.g., Path.home() / "projects" / "my-repo"
-HASH_REGISTRY = NEXO_HOME / "scripts" / ".watchdog-hashes"
-SNAPSHOT_GOLDEN = NEXO_HOME / "snapshots" / "golden" / "files" / "claude"
+HASH_REGISTRY = core_scripts_dir() / ".watchdog-hashes"
+SNAPSHOT_GOLDEN = snapshots_dir() / "golden" / "files" / "claude"
 RUNTIME_PREFLIGHT_SUMMARY = LOG_DIR / "runtime-preflight-summary.json"
 WATCHDOG_SMOKE_SUMMARY = LOG_DIR / "watchdog-smoke-summary.json"
 RESTORE_LOG = LOG_DIR / "snapshot-restores.log"
-CORTEX_LOG_DIR = NEXO_HOME / "brain" / "logs"
+CORTEX_LOG_DIR = brain_dir() / "logs"
+
+
+def _hash_registry_path() -> Path:
+    return core_scripts_dir() / ".watchdog-hashes"
+
+
+def _snapshot_golden_dir() -> Path:
+    return snapshots_dir() / "golden" / "files" / "claude"
+
+
+def _runtime_preflight_summary_path() -> Path:
+    return logs_dir() / "runtime-preflight-summary.json"
+
+
+def _watchdog_smoke_summary_path() -> Path:
+    return logs_dir() / "watchdog-smoke-summary.json"
 def _resolve_claude_cli() -> Path:
     """Find claude CLI: saved path > PATH > common locations."""
     import shutil as _shutil
-    saved = NEXO_HOME / "config" / "claude-cli-path"
+    saved = config_dir() / "claude-cli-path"
     if saved.exists():
         p = Path(saved.read_text().strip())
         if p.exists():
@@ -913,7 +939,7 @@ def check_cron_errors():
 
 def check_evolution_health():
     # Check brain/ (canonical) first, fall back to cortex/ (legacy)
-    obj_file = NEXO_HOME / "brain" / "evolution-objective.json"
+    obj_file = brain_dir() / "evolution-objective.json"
     if not obj_file.exists():
         obj_file = NEXO_HOME / "cortex" / "evolution-objective.json"
     if not obj_file.exists():
@@ -1521,9 +1547,10 @@ def _sha256(path):
 
 
 def check_watchdog_registry():
-    if not HASH_REGISTRY.exists():
+    hash_registry = _hash_registry_path()
+    if not hash_registry.exists():
         return
-    text = HASH_REGISTRY.read_text(errors="ignore")
+    text = hash_registry.read_text(errors="ignore")
     forbidden = ["CLAUDE.md", "AGENTS.md", "server.py", "plugin_loader.py"]
     bad = [name for name in forbidden if name in text]
     if bad:
@@ -1531,9 +1558,10 @@ def check_watchdog_registry():
 
 
 def check_snapshot_sync():
+    snapshot_golden = _snapshot_golden_dir()
     pairs = [
-        (NEXO_CODE / "db" / "__init__.py", SNAPSHOT_GOLDEN / "db" / "__init__.py"),
-        (NEXO_CODE / "evolution_cycle.py", SNAPSHOT_GOLDEN / "evolution_cycle.py"),
+        (NEXO_CODE / "db" / "__init__.py", snapshot_golden / "db" / "__init__.py"),
+        (NEXO_CODE / "evolution_cycle.py", snapshot_golden / "evolution_cycle.py"),
     ]
     drift = [live.name for live, snap in pairs
              if not live.exists() or not snap.exists() or _sha256(live) != _sha256(snap)]
@@ -1576,9 +1604,10 @@ def check_bad_responses():
 
 
 def check_runtime_preflight():
-    if not RUNTIME_PREFLIGHT_SUMMARY.exists():
+    runtime_preflight_summary = _runtime_preflight_summary_path()
+    if not runtime_preflight_summary.exists():
         return
-    data = json.loads(RUNTIME_PREFLIGHT_SUMMARY.read_text())
+    data = json.loads(runtime_preflight_summary.read_text())
     ts = data.get("timestamp")
     try:
         when = datetime.fromisoformat(ts)
@@ -1610,9 +1639,10 @@ def run_watchdog_smoke():
 
 
 def check_watchdog_smoke():
-    if not WATCHDOG_SMOKE_SUMMARY.exists():
+    watchdog_smoke_summary = _watchdog_smoke_summary_path()
+    if not watchdog_smoke_summary.exists():
         return
-    data = json.loads(WATCHDOG_SMOKE_SUMMARY.read_text())
+    data = json.loads(watchdog_smoke_summary.read_text())
     ts = data.get("timestamp")
     try:
         when = datetime.fromisoformat(ts)
@@ -1625,7 +1655,7 @@ def check_watchdog_smoke():
 
 
 def check_cognitive_health():
-    cognitive_db = NEXO_HOME / "data" / "cognitive.db"
+    cognitive_db = data_dir() / "cognitive.db"
     if not cognitive_db.exists():
         finding("WARN", "cognitive", "cognitive.db not found")
         return
@@ -1860,10 +1890,11 @@ def _sync_managed_bootstraps_inline() -> list[str]:
 
 
 def _sanitize_watchdog_registry_inline() -> dict:
-    if not HASH_REGISTRY.exists():
+    hash_registry = _hash_registry_path()
+    if not hash_registry.exists():
         return {"ok": False, "removed": []}
     forbidden = ["CLAUDE.md", "AGENTS.md", "server.py", "plugin_loader.py"]
-    original_lines = HASH_REGISTRY.read_text(errors="ignore").splitlines()
+    original_lines = hash_registry.read_text(errors="ignore").splitlines()
     kept_lines = []
     removed: set[str] = set()
     for line in original_lines:
@@ -1878,14 +1909,15 @@ def _sanitize_watchdog_registry_inline() -> dict:
     new_text = "\n".join(kept_lines)
     if kept_lines:
         new_text += "\n"
-    HASH_REGISTRY.write_text(new_text)
+    hash_registry.write_text(new_text)
     return {"ok": True, "removed": sorted(removed)}
 
 
 def _refresh_golden_snapshots_inline() -> dict:
+    snapshot_golden = _snapshot_golden_dir()
     pairs = [
-        (NEXO_CODE / "db" / "__init__.py", SNAPSHOT_GOLDEN / "db" / "__init__.py"),
-        (NEXO_CODE / "evolution_cycle.py", SNAPSHOT_GOLDEN / "evolution_cycle.py"),
+        (NEXO_CODE / "db" / "__init__.py", snapshot_golden / "db" / "__init__.py"),
+        (NEXO_CODE / "evolution_cycle.py", snapshot_golden / "evolution_cycle.py"),
     ]
     refreshed: list[str] = []
     for live, snap in pairs:
@@ -1900,7 +1932,7 @@ def _refresh_golden_snapshots_inline() -> dict:
 
 
 def _disable_broken_personal_plugins_inline(conn: sqlite3.Connection | None) -> dict:
-    plugins_dir = NEXO_HOME / "plugins"
+    plugins_dir = core_plugins_dir()
     if not plugins_dir.exists():
         return {"disabled": [], "registry_pruned": 0}
 
@@ -2136,7 +2168,7 @@ def main():
 
     # Register for catch-up
     try:
-        state_file = NEXO_HOME / "operations" / ".catchup-state.json"
+        state_file = operations_dir() / ".catchup-state.json"
         st = json.loads(state_file.read_text()) if state_file.exists() else {}
         st["self-audit"] = datetime.now().isoformat()
         state_file.write_text(json.dumps(st, indent=2))

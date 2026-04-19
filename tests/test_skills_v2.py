@@ -246,6 +246,82 @@ class TestSkillsRuntime:
         assert core["source_kind"] == "core"
         assert personal["source_kind"] == "personal"
 
+    def test_materialize_personal_skill_definition_rejects_core_collision(self, skills_env):
+        db, _, _, _ = _reload_skill_stack()
+        db.init_db()
+
+        result = db.materialize_personal_skill_definition(
+            {
+                "id": "SK-RUN-RUNTIME-DOCTOR",
+                "name": "Personal Runtime Doctor",
+                "description": "Should be rejected because core already owns this identity.",
+                "level": "published",
+                "mode": "guide",
+                "content": "# Collision\n",
+            }
+        )
+
+        assert "collides with core skill" in result["error"]
+
+    def test_retire_superseded_personal_skills_archives_core_shadow(self, tmp_path, monkeypatch):
+        install_home = tmp_path / "installed-nexo"
+        for dirname in ["data", "skills", "skills-core", "skills-runtime", "runtime"]:
+            (install_home / dirname).mkdir(parents=True, exist_ok=True)
+
+        _write_skill_definition(
+            install_home / "skills-core",
+            "core-doctor",
+            {
+                "id": "SK-CORE-DOCTOR",
+                "name": "Core Doctor",
+                "description": "Core skill",
+                "level": "published",
+                "mode": "guide",
+            },
+            guide="# Core Doctor\n",
+        )
+        shadow_dir = _write_skill_definition(
+            install_home / "skills",
+            "legacy-core-doctor",
+            {
+                "id": "SK-CORE-DOCTOR",
+                "name": "Legacy Core Doctor",
+                "description": "Legacy personal shadow",
+                "level": "published",
+                "mode": "guide",
+            },
+            guide="# Legacy Core Doctor\n",
+        )
+
+        monkeypatch.setenv("NEXO_HOME", str(install_home))
+        monkeypatch.setenv("NEXO_CODE", str(install_home))
+
+        db, _, _, db_skills = _reload_skill_stack()
+        db.init_db()
+
+        result = db_skills.retire_superseded_personal_skills()
+
+        assert result["ok"] is True
+        assert len(result["archived"]) == 1
+        archived = Path(result["archived"][0]["backup_path"])
+        assert not shadow_dir.exists()
+        assert archived.is_dir()
+
+    def test_create_skill_rejects_personal_name_collision_with_core(self, skills_env):
+        db, _, _, _ = _reload_skill_stack()
+        db.init_db()
+
+        result = db.create_skill(
+            skill_id="SK-PERSONAL-RUNTIME-DOCTOR",
+            name="Run Runtime Doctor",
+            description="Should be rejected because core already owns this name.",
+            level="draft",
+            content="# Collision\n",
+            source_kind="personal",
+        )
+
+        assert "collides with core skill" in result["error"]
+
     def test_scriptable_candidates_promote_to_executable_drafts(self, skills_env):
         db, skills_runtime, _, _ = _reload_skill_stack()
         db.init_db()

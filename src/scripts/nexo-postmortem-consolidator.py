@@ -38,6 +38,7 @@ sys.path.insert(0, str(NEXO_CODE))
 
 from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
 from constants import AUTOMATION_SUBPROCESS_TIMEOUT
+import paths
 
 try:
     from client_preferences import resolve_user_model as _resolve_user_model
@@ -46,16 +47,16 @@ except Exception:
     _USER_MODEL = ""
 
 
-NEXO_DB = NEXO_HOME / "data" / "nexo.db"
+NEXO_DB = paths.db_path()
 # Memory directory — adjust to match your project's memory location
-MEMORY_DIR = NEXO_HOME / "memory"
+MEMORY_DIR = paths.memory_dir()
 MEMORY_INDEX = MEMORY_DIR / "MEMORY.md"
-HISTORY_FILE = NEXO_HOME / "coordination" / "postmortem-history.json"
-CONSOLIDATION_LOG = NEXO_HOME / "logs" / "postmortem-consolidation.log"
+HISTORY_FILE = paths.coordination_dir() / "postmortem-history.json"
+CONSOLIDATION_LOG = paths.logs_dir() / "postmortem-consolidation.log"
 def _resolve_claude_cli() -> Path:
     """Find claude CLI: saved path > PATH > common locations."""
     import shutil as _shutil
-    saved = NEXO_HOME / "config" / "claude-cli-path"
+    saved = paths.config_dir() / "claude-cli-path"
     if saved.exists():
         p = Path(saved.read_text().strip())
         if p.exists():
@@ -73,7 +74,7 @@ def _resolve_claude_cli() -> Path:
     return HOME / ".local" / "bin" / "claude"
 
 CLAUDE_CLI = _resolve_claude_cli()
-SESSION_BUFFER = NEXO_HOME / "brain" / "session_buffer.jsonl"
+SESSION_BUFFER = paths.brain_dir() / "session_buffer.jsonl"
 
 TODAY = date.today()
 TODAY_STR = TODAY.isoformat()
@@ -420,7 +421,7 @@ def analyze_force_events():
 
 def already_ran_today() -> bool:
     """Prevent running twice on the same day."""
-    marker = NEXO_HOME / "coordination" / "postmortem-last-run"
+    marker = paths.coordination_dir() / "postmortem-last-run"
     if marker.exists():
         try:
             return marker.read_text().strip() == TODAY_STR
@@ -430,7 +431,7 @@ def already_ran_today() -> bool:
 
 
 def mark_done():
-    marker = NEXO_HOME / "coordination" / "postmortem-last-run"
+    marker = paths.coordination_dir() / "postmortem-last-run"
     marker.parent.mkdir(parents=True, exist_ok=True)
     marker.write_text(TODAY_STR)
 
@@ -474,7 +475,7 @@ def main():
     # Register successful run only if no stages failed
     if not had_errors:
         try:
-            state_file = NEXO_HOME / "operations" / ".catchup-state.json"
+            state_file = paths.operations_dir() / ".catchup-state.json"
             state = json.loads(state_file.read_text()) if state_file.exists() else {}
             state["postmortem"] = datetime.now().isoformat()
             state_file.write_text(json.dumps(state, indent=2))

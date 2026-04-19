@@ -555,15 +555,18 @@ def _claude_desktop_config_path(home: Path) -> Path:
 
 
 def _which_with_nvm(name: str, home: Path | None = None) -> str:
-    """Like shutil.which but also searches nvm and ~/.nexo/bin."""
+    """Like shutil.which but also searches managed NEXO bins and nvm."""
     found = shutil.which(name)
     if found:
         return found
     home = home or _user_home()
     # Check ~/.nexo/bin
-    candidate = home / ".nexo" / "bin" / name
-    if candidate.exists():
-        return str(candidate)
+    for candidate in (
+        home / ".nexo" / "bin" / name,
+        home / ".nexo" / "runtime" / "bootstrap" / "npm-global" / "bin" / name,
+    ):
+        if candidate.exists():
+            return str(candidate)
     # Check nvm node bins
     nvm_dir = home / ".nvm" / "versions" / "node"
     if nvm_dir.is_dir():

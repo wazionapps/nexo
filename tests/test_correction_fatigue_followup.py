@@ -98,7 +98,7 @@ def test_fatigued_memories_create_followup_with_high_priority(fatigue_env, monke
 
     conn = sqlite3.connect(str(db_path))
     row = conn.execute(
-        "SELECT id, status, priority, description FROM followups WHERE id = ?",
+        "SELECT id, status, priority, description, verification FROM followups WHERE id = ?",
         (mod.CORRECTION_FATIGUE_FOLLOWUP_ID,),
     ).fetchone()
     conn.close()
@@ -111,6 +111,7 @@ def test_fatigued_memories_create_followup_with_high_priority(fatigue_env, monke
     assert "LTM #101" in row[3]
     assert "LTM #202" in row[3]
     assert "under_review" in row[3]
+    assert "cognitive.db" in row[4]
 
 
 def test_idempotent_across_runs(fatigue_env, monkeypatch):

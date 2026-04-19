@@ -31,6 +31,7 @@ _runtime_root = Path(os.environ.get("NEXO_CODE", str(_DEFAULT_RUNTIME_ROOT)))
 if str(_runtime_root) not in sys.path:
     sys.path.insert(0, str(_runtime_root))
 
+import paths
 from cron_recovery import resolve_declared_schedule, should_run_at_load
 try:
     from runtime_power import resolve_launchagent_path
@@ -56,15 +57,32 @@ RUNTIME_ROOT = NEXO_HOME
 MANIFEST = Path(__file__).resolve().parent / "manifest.json"
 LAUNCH_AGENTS_DIR = Path.home() / "Library" / "LaunchAgents"
 LABEL_PREFIX = "com.nexo."
-LOG_DIR = NEXO_HOME / "logs"
-OPTIONALS_FILE = NEXO_HOME / "config" / "optionals.json"
-SCHEDULE_FILE = NEXO_HOME / "config" / "schedule.json"
+LOG_DIR = paths.logs_dir()
+OPTIONALS_FILE = paths.config_dir() / "optionals.json"
+SCHEDULE_FILE = paths.config_dir() / "schedule.json"
 CORE_CRON_MANAGED_ENV = "NEXO_MANAGED_CORE_CRON"
 PERSONAL_CRON_MANAGED_ENV = "NEXO_MANAGED_PERSONAL_CRON"
 PERSONAL_CRON_ID_ENV = "NEXO_PERSONAL_CRON_ID"
 RETIRED_CORE_FILES = (
+    Path("core") / "scripts" / "nexo-day-orchestrator.sh",
     Path("scripts") / "nexo-day-orchestrator.sh",
 )
+
+
+def _runtime_scripts_dir() -> Path:
+    new = RUNTIME_ROOT / "core" / "scripts"
+    legacy = RUNTIME_ROOT / "scripts"
+    if not new.exists() and legacy.exists():
+        return legacy
+    return new
+
+
+def _runtime_crons_dir() -> Path:
+    new = RUNTIME_ROOT / "runtime" / "crons"
+    legacy = RUNTIME_ROOT / "crons"
+    if not new.exists() and legacy.exists():
+        return legacy
+    return new
 
 
 def log(msg: str):
@@ -74,10 +92,11 @@ def log(msg: str):
 def _sync_watchdog_hash_registry():
     """Keep the immutable-hash registry aligned with the runtime watchdog script."""
     try:
-        watchdog_path = RUNTIME_ROOT / "scripts" / "nexo-watchdog.sh"
+        scripts_dir = _runtime_scripts_dir()
+        watchdog_path = scripts_dir / "nexo-watchdog.sh"
         if not watchdog_path.exists():
             return
-        registry_path = RUNTIME_ROOT / "scripts" / ".watchdog-hashes"
+        registry_path = scripts_dir / ".watchdog-hashes"
         entries: dict[str, str] = {}
         if registry_path.exists():
             for line in registry_path.read_text().splitlines():
@@ -98,7 +117,7 @@ def _sync_watchdog_hash_registry():
 def _refresh_runtime_manifest():
     """Keep the installed crons manifest aligned with the source manifest."""
     try:
-        runtime_manifest = RUNTIME_ROOT / "crons" / "manifest.json"
+        runtime_manifest = _runtime_crons_dir() / "manifest.json"
         runtime_manifest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(MANIFEST, runtime_manifest)
     except Exception as e:
@@ -121,6 +140,11 @@ def _cleanup_retired_core_files():
 
 
 def load_manifest() -> list[dict]:
+    try:
+        from automation_controls import apply_core_automation_overrides
+    except Exception:
+        apply_core_automation_overrides = None
+
     with open(MANIFEST) as f:
         data = json.load(f)
     crons = data.get("crons", [])
@@ -150,17 +174,72 @@ def load_manifest() -> list[dict]:
         if optional_key and not enabled:
             continue
         filtered.append(cron)
+    if callable(apply_core_automation_overrides):
+        try:
+            return apply_core_automation_overrides(filtered)
+        except Exception as e:
+            log(f"WARNING: could not apply core automation overrides: {e}")
     return filtered
 
 
+def _source_runtime_mappings() -> list[tuple[list[Path], Path]]:
+    """Map source/runtime roots to the canonical F0.6 runtime targets."""
+    return [
+        (
+            [
+                SOURCE_ROOT / "scripts",
+                RUNTIME_ROOT / "scripts",
+                paths.core_scripts_dir(),
+            ],
+            Path("core") / "scripts",
+        ),
+        (
+            [
+                SOURCE_ROOT / "crons",
+                RUNTIME_ROOT / "crons",
+                paths.crons_dir(),
+            ],
+            Path("runtime") / "crons",
+        ),
+        (
+            [
+                SOURCE_ROOT / "hooks",
+                RUNTIME_ROOT / "hooks",
+                paths.core_hooks_dir(),
+            ],
+            Path("core") / "hooks",
+        ),
+    ]
+
+
+def _resolve_source_artifact(relative_path: str | Path) -> Path:
+    """Resolve a manifest/runtime relative path across repo and F0.6 runtime layouts."""
+    rel = Path(relative_path)
+    direct = SOURCE_ROOT / rel
+    if direct.exists():
+        return direct
+
+    for roots, _target_root in _source_runtime_mappings():
+        for root in roots:
+            candidate = root / Path(*rel.parts[1:]) if rel.parts else root
+            if rel.parts and root.name == rel.parts[0] and candidate.exists():
+                return candidate
+    return direct
+
+
 def _runtime_relative_path(src: Path) -> Path:
-    """Return the path inside NEXO_HOME that mirrors the source tree."""
-    src = src.resolve()
-    try:
-        return src.relative_to(SOURCE_ROOT.resolve())
-    except Exception:
-        # Best effort fallback for unexpected inputs.
-        return Path("scripts") / src.name
+    """Return the canonical path inside NEXO_HOME for a core artifact."""
+    resolved = src.resolve(strict=False)
+    for roots, target_root in _source_runtime_mappings():
+        for root in roots:
+            try:
+                relative = resolved.relative_to(root.resolve(strict=False))
+            except Exception:
+                continue
+            return target_root / relative
+
+    # Best effort fallback for unexpected inputs.
+    return Path("core") / "scripts" / resolved.name
 
 
 def _copy_into_runtime(src: Path) -> Path:
@@ -196,7 +275,7 @@ def build_plist(cron: dict) -> dict:
     """Build a macOS LaunchAgent plist dict from a manifest entry."""
     cron_id = cron["id"]
     label = f"{LABEL_PREFIX}{cron_id}"
-    script_src = SOURCE_ROOT / cron["script"]
+    script_src = _resolve_source_artifact(cron["script"])
     script_type = cron.get("type", "python")
 
     # Copy scripts into NEXO_HOME preserving the source tree layout.
@@ -204,14 +283,14 @@ def build_plist(cron: dict) -> dict:
     script_path = str(script_dest)
 
     # Also copy the wrapper and any subdirectories (e.g., deep-sleep/)
-    wrapper_src = SOURCE_ROOT / "scripts" / "nexo-cron-wrapper.sh"
+    wrapper_src = _resolve_source_artifact("scripts/nexo-cron-wrapper.sh")
     wrapper_dest = _copy_into_runtime(wrapper_src)
     wrapper_path = str(wrapper_dest)
 
     # Copy script subdirectories if they exist (e.g., deep-sleep/ for nexo-deep-sleep.sh)
     script_name = script_src.stem  # e.g., "nexo-deep-sleep"
     subdir_name = script_name.replace("nexo-", "")  # e.g., "deep-sleep"
-    subdir_src = SOURCE_ROOT / "scripts" / subdir_name
+    subdir_src = _resolve_source_artifact(Path("scripts") / subdir_name)
     if subdir_src.is_dir():
         _copy_into_runtime(subdir_src)
 
@@ -392,7 +471,9 @@ def sync(dry_run: bool = False):
             log(f"  OK: {cron_id}")
 
     # 2. Remove crons that are in installed but NOT in manifest and ARE core
-    #    (personal crons like shopify-backup, email-monitor are left alone)
+    #    (personal crons like shopify-backup are left alone; manifest-owned
+    #     core automations such as email-monitor/followup-runner are tracked
+    #     by the manifest and should not appear as "personal" examples here)
     for cron_id, plist_path in installed.items():
         if cron_id not in manifest_ids:
             try:
@@ -421,7 +502,7 @@ def sync_linux(dry_run: bool = False):
     LOG_DIR.mkdir(parents=True, exist_ok=True)
 
     manifest_crons = load_manifest()
-    wrapper_src = SOURCE_ROOT / "scripts" / "nexo-cron-wrapper.sh"
+    wrapper_src = _resolve_source_artifact("scripts/nexo-cron-wrapper.sh")
     wrapper_dest = _copy_into_runtime(wrapper_src)
 
     log(f"Manifest: {len(manifest_crons)} core crons")
@@ -434,13 +515,13 @@ def sync_linux(dry_run: bool = False):
 
     for cron in manifest_crons:
         cron_id = cron["id"]
-        script_src = SOURCE_ROOT / cron["script"]
+        script_src = _resolve_source_artifact(cron["script"])
         script_dest = _copy_into_runtime(script_src)
         script_type = cron.get("type", "python")
 
         # Copy subdirectories
         subdir_name = script_src.stem.replace("nexo-", "")
-        subdir_src = SOURCE_ROOT / "scripts" / subdir_name
+        subdir_src = _resolve_source_artifact(Path("scripts") / subdir_name)
         if subdir_src.is_dir():
             _copy_into_runtime(subdir_src)
 

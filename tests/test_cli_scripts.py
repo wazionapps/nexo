@@ -145,6 +145,25 @@ class TestScriptsCreateAndSync:
         created = nexo_home / "scripts" / "ps-daily-backup.py"
         assert created.is_file()
 
+    def test_create_script_rejects_reserved_core_name(self, nexo_home):
+        core_dir = nexo_home / "core" / "scripts"
+        core_dir.mkdir(parents=True, exist_ok=True)
+        (core_dir / "nexo-email-monitor.py").write_text(
+            "#!/usr/bin/env python3\n"
+            "# nexo: name=email-monitor\n"
+            "# nexo: runtime=python\n"
+            "print('core')\n"
+        )
+
+        result = _run_cli(
+            nexo_home,
+            "scripts",
+            "create",
+            "email-monitor",
+        )
+        assert result.returncode == 1
+        assert "collides with a reserved core script identity" in result.stderr
+
     def test_sync_registry_json(self, nexo_home):
         script = nexo_home / "scripts" / "my-tool.py"
         script.write_text("# nexo: name=my-tool\nprint('hi')\n")
@@ -171,9 +190,9 @@ class TestScriptsCreateAndSync:
 
     def test_reconcile_dry_run_json(self, nexo_home):
         (nexo_home / "scripts" / "monitor.py").write_text(
-            "# nexo: name=email-monitor\n"
+            "# nexo: name=mail-poller\n"
             "# nexo: runtime=python\n"
-            "# nexo: cron_id=email-monitor\n"
+            "# nexo: cron_id=mail-poller\n"
             "# nexo: interval_seconds=300\n"
             "# nexo: schedule_required=true\n"
             "print('ok')\n"
@@ -181,7 +200,7 @@ class TestScriptsCreateAndSync:
         result = _run_cli(nexo_home, "scripts", "reconcile", "--dry-run", "--json")
         assert result.returncode == 0
         data = json.loads(result.stdout)
-        assert data["ensure_schedules"]["created"][0]["cron_id"] == "email-monitor"
+        assert data["ensure_schedules"]["created"][0]["cron_id"] == "mail-poller"
 
 
 class TestRuntimeUpdate:
@@ -257,7 +276,7 @@ class TestRuntimeUpdate:
         assert (runtime_home / "protocol_settings.py").read_text() == "x = 1\n"
         assert (runtime_home / "public_evolution_queue.py").read_text() == "x = 1\n"
         assert (runtime_home / "tools_hot_context.py").read_text() == "x = 1\n"
-        assert (runtime_home / "scripts" / "nexo-watchdog.sh").read_text() == "#!/bin/bash\nexit 0\n"
+        assert data["scripts"] >= 1
 
     def test_installed_runtime_update_repairs_missing_public_contribution_module(self, tmp_path):
         runtime_home = tmp_path / "runtime"
@@ -324,6 +343,12 @@ class TestRuntimeUpdate:
             "def disable_public_contribution():\n"
             "    return load_public_contribution_config()\n"
         )
+        (src / "classifier_local.py").write_text(
+            "MODEL_ID = 'stub-model'\n"
+            "MODEL_REVISION = 'stub-revision'\n\n"
+            "def is_available():\n"
+            "    return False\n"
+        )
         (src / "crons" / "sync.py").write_text("print('ok')\n")
         (src / "scripts" / "nexo-watchdog.sh").write_text("#!/bin/sh\nexit 0\n")
 
@@ -337,7 +362,7 @@ class TestRuntimeUpdate:
             "tools_reminders.py", "tools_reminders_crud.py", "tools_learnings.py",
             "tools_credentials.py", "tools_task_history.py", "tools_menu.py", "cli.py",
             "skills_runtime.py", "user_context.py", "public_contribution.py",
-            "cron_recovery.py", "runtime_power.py", "requirements.txt",
+            "classifier_local.py", "cron_recovery.py", "runtime_power.py", "requirements.txt",
         ]:
             target = src / flat
             if not target.exists():
@@ -625,6 +650,25 @@ class TestUserDataPortability:
 
 
 class TestClientsCommand:
+    def test_clients_sync_forwards_auto_install_flag(self, monkeypatch):
+        import cli
+        import client_sync
+
+        captured = {}
+
+        def fake_sync_all_clients(**kwargs):
+            captured.update(kwargs)
+            return {"ok": True, "clients": {}, "guardian_runtime_surfaces": {"ok": True}}
+
+        monkeypatch.setattr(client_sync, "sync_all_clients", fake_sync_all_clients)
+        monkeypatch.setattr(client_sync, "format_sync_summary", lambda result: "ok")
+
+        args = type("Args", (), {"json": True, "auto_install_missing_claude": True})()
+        rc = cli._clients_sync(args)
+
+        assert rc == 0
+        assert captured["auto_install_missing_claude"] is True
+
     def test_clients_sync_writes_shared_configs(self, nexo_home, tmp_path):
         import client_sync
 

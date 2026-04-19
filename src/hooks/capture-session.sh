@@ -10,8 +10,12 @@
 set -uo pipefail
 
 NEXO_HOME="${NEXO_HOME:-$HOME/.nexo}"
-BUFFER="$NEXO_HOME/brain/session_buffer.jsonl"
-mkdir -p "$NEXO_HOME/brain"
+BRAIN_DIR="$NEXO_HOME/personal/brain"
+if [ ! -d "$BRAIN_DIR" ] && [ -d "$NEXO_HOME/brain" ]; then
+    BRAIN_DIR="$NEXO_HOME/brain"
+fi
+BUFFER="$BRAIN_DIR/session_buffer.jsonl"
+mkdir -p "$BRAIN_DIR"
 
 INPUT=$(cat 2>/dev/null || true)
 [ -z "$INPUT" ] && exit 0

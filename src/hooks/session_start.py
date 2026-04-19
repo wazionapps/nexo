@@ -24,6 +24,10 @@ from pathlib import Path
 
 _DIR = Path(__file__).resolve().parent
 _NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
+if str(_DIR.parent) not in sys.path:
+    sys.path.insert(0, str(_DIR.parent))
+
+import paths
 
 
 def _record(duration_ms: int, exit_code: int, summary: str) -> None:
@@ -62,7 +66,7 @@ def main() -> int:
     started = time.time()
 
     # Step 1: write .session-start-ts so downstream scripts know when this session began.
-    ops_dir = _NEXO_HOME / "operations"
+    ops_dir = paths.operations_dir()
     ops_dir.mkdir(parents=True, exist_ok=True)
     try:
         (ops_dir / ".session-start-ts").write_text(str(int(started)))

@@ -123,3 +123,8 @@ def test_short_lines_never_invoke_classifier(monkeypatch):
     # Line length under _ZS_MIN_LEN_FOR_LLM (40 chars).
     auto_capture._classify_line("no funciona aun")
     assert called == []
+
+
+def test_dedup_db_path_uses_runtime_data_layout(tmp_path, monkeypatch):
+    monkeypatch.setenv("NEXO_HOME", str(tmp_path))
+    assert auto_capture._dedup_db_path() == tmp_path / "runtime" / "data" / "auto_capture_dedup.db"
