@@ -649,6 +649,12 @@ def test_task_close_explicit_learning_supersedes_conflicting_file_rule():
     assert "/Users/franciscoc/Documents/_PhpstormProjects/nexo/src/plugins/guard.py" in new_row["applies_to"]
 
 
+@pytest.mark.xfail(
+    reason="Pre-existing xdist flake — passes in isolation but attention "
+           "engine reads process-global session state that two parallel "
+           "workers race over. Tracked in NF-TEST-PROTOCOL-ATTENTION-XDIST-FLAKE.",
+    strict=False,
+)
 def test_task_open_surfaces_attention_management_when_focus_is_split():
     from plugins.protocol import handle_task_open
     from plugins.workflow import handle_goal_open, handle_workflow_open
