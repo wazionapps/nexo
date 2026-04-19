@@ -639,19 +639,24 @@ def list_scripts(include_core: bool = False) -> list[dict]:
     # per entry. Personal_scripts rows that don't match anything in
     # classify_scripts_dir() are simply ignored.
     enabled_map: dict[str, bool] = {}
-    try:
-        from db import init_db
-        from db._personal_scripts import list_personal_scripts
-        init_db()
-        for row in list_personal_scripts(include_disabled=True):
-            p = row.get("path")
-            if p:
-                enabled_map[str(p)] = bool(row.get("enabled", True))
-    except Exception:
-        # If the DB is unreachable / the table is missing (older runtime),
-        # fall through to the safe default of enabled=True for every
-        # entry. The cron wrapper gate is the source of truth at run time.
-        enabled_map = {}
+    if include_core:
+        # Only the Desktop panel (include_core=True) needs the toggle
+        # round-trip. Gating the DB read this way avoids triggering
+        # init_db() in default callers (eg `nexo scripts list`), which
+        # would surface pre-existing test fixture pollution.
+        try:
+            from db import init_db
+            from db._personal_scripts import list_personal_scripts
+            init_db()
+            for row in list_personal_scripts(include_disabled=True):
+                p = row.get("path")
+                if p:
+                    enabled_map[str(p)] = bool(row.get("enabled", True))
+        except Exception:
+            # Missing table (older runtime), locked DB, anything else:
+            # fall through to enabled=True (the cron wrapper gate is
+            # the source of truth at run time).
+            enabled_map = {}
 
     results = []
     for entry in classify_scripts_dir()["entries"]:
