@@ -59,6 +59,14 @@ def add_email_account(
         raise ValueError(f"role must be one of {VALID_ROLES}, got {role!r}")
     conn = get_db()
     now = time.strftime("%Y-%m-%d %H:%M:%S")
+    # Audit H2: when the caller does not pass `metadata` explicitly,
+    # an upsert would otherwise wipe whatever the operator (or another
+    # subsystem like auto_capture / poll-tuning) had previously stored
+    # on this label. Preserve the existing metadata in that case so
+    # the only way to clear it is `metadata={}` explicit.
+    if metadata is None:
+        existing = get_email_account(label) or {}
+        metadata = existing.get("metadata") if existing.get("metadata") else {}
     conn.execute(
         """
         INSERT INTO email_accounts (

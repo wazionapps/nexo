@@ -190,3 +190,71 @@ def test_migrate_script_populates_table(isolated_home):
     ).fetchone()
     assert row is not None
     assert row[0] == "hidden"
+
+
+def test_metadata_preserved_when_re_adding_without_metadata_arg(isolated_home):
+    """Audit H2 regression: re-running add_email_account on an existing
+    label without passing `metadata=` must keep whatever metadata the
+    operator (or another subsystem) had stored. Otherwise editing one
+    field via the wizard silently wipes auto-capture / poll-tuning
+    state."""
+    from db._email_accounts import add_email_account, get_email_account
+
+    add_email_account(
+        label="primary",
+        email="me@example.com",
+        imap_host="imap.example.com",
+        smtp_host="smtp.example.com",
+        credential_service="email",
+        credential_key="primary",
+        operator_email="me@example.com",
+        trusted_domains=["example.com"],
+        metadata={"check_interval_seconds": 90, "operator_aliases": ["me@personal.com"]},
+    )
+    # Re-add as the wizard would (no metadata kwarg) — change role only.
+    add_email_account(
+        label="primary",
+        email="me@example.com",
+        imap_host="imap.example.com",
+        smtp_host="smtp.example.com",
+        credential_service="email",
+        credential_key="primary",
+        operator_email="me@example.com",
+        trusted_domains=["example.com"],
+        role="inbox",
+    )
+    out = get_email_account("primary")
+    assert out["role"] == "inbox"
+    assert out["metadata"].get("check_interval_seconds") == 90
+    assert out["metadata"].get("operator_aliases") == ["me@personal.com"]
+
+
+def test_metadata_can_be_explicitly_cleared(isolated_home):
+    """Counterpart to the H2 fix: explicit metadata={} still overwrites
+    so callers retain a way to wipe state when they really mean it."""
+    from db._email_accounts import add_email_account, get_email_account
+
+    add_email_account(
+        label="primary",
+        email="me@example.com",
+        imap_host="imap.example.com",
+        smtp_host="smtp.example.com",
+        credential_service="email",
+        credential_key="primary",
+        operator_email="me@example.com",
+        trusted_domains=[],
+        metadata={"keep_me": "yes"},
+    )
+    add_email_account(
+        label="primary",
+        email="me@example.com",
+        imap_host="imap.example.com",
+        smtp_host="smtp.example.com",
+        credential_service="email",
+        credential_key="primary",
+        operator_email="me@example.com",
+        trusted_domains=[],
+        metadata={},
+    )
+    out = get_email_account("primary")
+    assert out["metadata"] == {}

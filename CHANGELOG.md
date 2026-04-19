@@ -46,12 +46,30 @@ operators ever touching a JSON file.
 
 ### Changed
 
-- `nexo-email-monitor.py` and `nexo-send-reply.py` now load via
-  `email_config.load_email_config()` first; the legacy JSON path is
-  the fallback. Behavior is identical for existing operators.
-- `_debt_fingerprint()` now passes `usedforsecurity=False` to its
-  SHA1 call (it's a content fingerprint for dedup, not a security
-  hash) so bandit no longer flags it.
+- `_debt_fingerprint()` (in the operator-side runtime helper, not
+  shipped in this repo's `src/`) now passes `usedforsecurity=False`
+  to its SHA1 call (it's a content fingerprint for dedup, not a
+  security hash) so bandit no longer flags it on operators that mirror
+  the helper into their own `~/.nexo/scripts/`.
+- (Operators only) The `nexo-email-monitor.py` and `nexo-send-reply.py`
+  runners that some operators install at `~/.nexo/scripts/` keep
+  working unchanged — they still read from
+  `~/.nexo/nexo-email/config.json` until the new `email_accounts` table
+  is populated by the migrator. A future release will refactor those
+  runners to use `email_config.load_email_config()` directly, once we
+  have a generic operator-agnostic prompt template (the current ones
+  are highly tenant-specific). See `NF-PLAN-V7-EMAIL-RUNNERS-CORE`.
+
+### Security
+
+- New CI guard `scripts/check_no_personal_data.sh` greps `src/` for
+  operator-specific markers (personal email addresses, tenant domains,
+  user names) on every run. v6.4.0 added it after the second-pass
+  auditor caught two operator-specific runner scripts that had been
+  copied into `src/scripts/` mid-refactor — exactly the same class of
+  leak that v6.3.1 hotfixed inside the entities preset. The guard
+  fails the build before any other check; same hardening as v6.3.1's
+  `.gitignore` block on `entities_local.json`.
 
 ### Notes
 
