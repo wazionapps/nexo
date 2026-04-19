@@ -29,21 +29,22 @@ MANIFEST = REPO_ROOT / "src" / "crons" / "manifest.json"
 
 def _bootstrap_home(tmp_path: Path) -> Path:
     home = tmp_path / "nexo"
-    (home / "operations").mkdir(parents=True)
+    (home / "runtime" / "operations").mkdir(parents=True)
     (home / "runtime" / "data").mkdir(parents=True)
-    (home / "logs").mkdir(parents=True)
-    (home / "scripts").mkdir(parents=True)
-    (home / "crons").mkdir(parents=True)
-    (home / "config").mkdir(parents=True)
+    (home / "runtime" / "logs").mkdir(parents=True)
+    (home / "runtime" / "crons").mkdir(parents=True)
+    (home / "runtime" / "backups").mkdir(parents=True)
+    (home / "personal" / "config").mkdir(parents=True)
+    (home / "core" / "scripts").mkdir(parents=True)
 
     # Minimal manifest with just deep-sleep so we exercise a single monitor
-    (home / "crons" / "manifest.json").write_text(
+    (home / "runtime" / "crons" / "manifest.json").write_text(
         '{"crons":[{"id":"deep-sleep","script":"scripts/nexo-deep-sleep.sh",'
         '"type":"shell","schedule":{"hour":4,"minute":30},"core":true,'
         '"recovery_policy":"catchup","max_catchup_age":172800}]}'
     )
-    (home / "config" / "optionals.json").write_text("{}")
-    (home / "config" / "schedule.json").write_text('{"automation_enabled":true}')
+    (home / "personal" / "config" / "optionals.json").write_text("{}")
+    (home / "personal" / "config" / "schedule.json").write_text('{"automation_enabled":true}')
 
     # cron_runs schema
     db = home / "runtime" / "data" / "nexo.db"

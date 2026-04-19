@@ -1,6 +1,6 @@
 {
   "name": "nexo-brain",
-  "version": "7.0.0",
+  "version": "7.1.0",
   "description": "Local cognitive runtime for Claude Code \u2014 persistent memory, overnight learning, doctor diagnostics, personal scripts, recovery-aware jobs, startup preflight, and optional dashboard/power helper.",
   "author": {
     "name": "NEXO Brain",
@@ -26,7 +26,7 @@
   "hooks": "./hooks/hooks.json",
   "userConfig": {
     "operator_name": {
-      "description": "What should your AI co-operator call itself? (default: NEXO)",
+      "description": "What should your AI co-operator call itself? (default: Nova)",
       "sensitive": false
     }
   }

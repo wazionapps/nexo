@@ -5,6 +5,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from paths import data_dir, operations_dir
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 # Auto-detect: if running from repo (src/scripts/), use src/ as NEXO_CODE
@@ -16,7 +17,7 @@ from datetime import datetime, timedelta
 sys.path.insert(0, str(NEXO_CODE))
 import cognitive
 
-STATE_FILE = NEXO_HOME / "operations" / ".catchup-state.json"
+STATE_FILE = operations_dir() / ".catchup-state.json"
 
 
 CORRECTION_FATIGUE_FOLLOWUP_ID = "NF-CORRECTION-FATIGUE"
@@ -43,7 +44,7 @@ def _open_correction_fatigue_followup(fatigued: list) -> str:
     db_path = (
         os.environ.get("NEXO_TEST_DB")
         or os.environ.get("NEXO_DB")
-        or str(NEXO_HOME / "data" / "nexo.db")
+        or str(data_dir() / "nexo.db")
     )
     if not Path(db_path).exists():
         return "skipped_no_db"
@@ -63,7 +64,7 @@ def _open_correction_fatigue_followup(fatigued: list) -> str:
         lines.append(f"... and {len(fatigued) - 10} more")
     description = "\n".join(lines)
     verification = (
-        "sqlite3 ~/.nexo/data/cognitive.db \"SELECT id, content, strength, tags "
+        f"sqlite3 {str(data_dir() / 'cognitive.db')} \"SELECT id, content, strength, tags "
         "FROM ltm_memories WHERE tags LIKE '%under_review%' ORDER BY strength ASC LIMIT 50\""
     )
     now_epoch = datetime.now().timestamp()

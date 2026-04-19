@@ -17,6 +17,29 @@ def _make_runtime(root: Path, *, operator_name: str = "Atlas") -> Path:
     (runtime / "server.py").write_text("print('server')\n")
     hooks_dir = runtime / "hooks"
     hooks_dir.mkdir(parents=True)
+    manifest = {
+        "version": "1.0",
+        "hooks": [
+            {"event": "SessionStart", "handler": "src/hooks/session_start.py", "critical": True},
+            {"event": "UserPromptSubmit", "handler": "src/hooks/auto_capture.py", "critical": False},
+            {"event": "PostToolUse", "handler": "src/hooks/post_tool_use.py", "critical": False},
+            {"event": "PreCompact", "handler": "src/hooks/pre_compact.py", "critical": True},
+            {"event": "Stop", "handler": "src/hooks/stop.py", "critical": True},
+            {"event": "Notification", "handler": "src/hooks/notification.py", "critical": False},
+            {"event": "SubagentStop", "handler": "src/hooks/subagent_stop.py", "critical": False},
+        ],
+    }
+    (hooks_dir / "manifest.json").write_text(json.dumps(manifest))
+    for handler in (
+        "session_start.py",
+        "auto_capture.py",
+        "post_tool_use.py",
+        "pre_compact.py",
+        "stop.py",
+        "notification.py",
+        "subagent_stop.py",
+    ):
+        (hooks_dir / handler).write_text("#!/usr/bin/env python3\n")
     for script in (
         "daily-briefing-check.sh",
         "session-start.sh",
@@ -80,13 +103,15 @@ def test_sync_claude_code_preserves_existing_settings(tmp_path):
         for section in sections
         for hook in section.get("hooks", [])
     ]
-    assert any("session-start.sh" in command for command in all_hook_commands)
-    assert any("protocol-pretool-guardrail.sh" in command for command in all_hook_commands)
-    assert any("heartbeat-user-msg.sh" in command for command in all_hook_commands)
-    assert any("capture-tool-logs.sh" in command for command in all_hook_commands)
-    assert any("protocol-guardrail.sh" in command for command in all_hook_commands)
-    assert any("heartbeat-posttool.sh" in command for command in all_hook_commands)
-    assert any(".session-start-ts" in command for command in all_hook_commands)
+    assert any("session_start.py" in command for command in all_hook_commands)
+    assert any("auto_capture.py" in command for command in all_hook_commands)
+    assert any("post_tool_use.py" in command for command in all_hook_commands)
+    assert any("pre_compact.py" in command for command in all_hook_commands)
+    assert any("stop.py" in command for command in all_hook_commands)
+    assert any("notification.py" in command for command in all_hook_commands)
+    assert any("subagent_stop.py" in command for command in all_hook_commands)
+    assert not any("heartbeat-user-msg.sh" in command for command in all_hook_commands)
+    assert not any("protocol-pretool-guardrail.sh" in command for command in all_hook_commands)
     assert payload["mcpServers"]["other"]["command"] == "node"
     assert payload["mcpServers"]["nexo"]["args"] == [str(runtime / "server.py")]
     assert payload["mcpServers"]["nexo"]["env"]["NEXO_HOME"] == str(runtime)
@@ -147,14 +172,12 @@ def test_sync_claude_code_removes_legacy_managed_hooks_but_keeps_custom_hooks(tm
     commands = [hook["command"] for hook in post_tool_hooks]
     assert not any("heartbeat-guard.sh" in command for command in commands)
     assert any("custom-post-tool.sh" in command for command in commands)
-    assert any("capture-tool-logs.sh" in command for command in commands)
-    assert any("capture-session.sh" in command for command in commands)
-    assert any("inbox-hook.sh" in command for command in commands)
-    assert any("protocol-guardrail.sh" in command for command in commands)
-    assert any("heartbeat-posttool.sh" in command for command in commands)
+    assert any("post_tool_use.py" in command for command in commands)
+    assert not any("capture-tool-logs.sh" in command for command in commands)
+    assert not any("protocol-guardrail.sh" in command for command in commands)
 
 
-def test_sync_claude_code_rewrites_legacy_heartbeat_hook_paths_to_core_hooks(tmp_path):
+def test_sync_claude_code_rewrites_legacy_shell_hook_paths_to_unified_manifest_hooks(tmp_path):
     import client_sync
 
     runtime = _make_runtime(tmp_path)
@@ -203,10 +226,44 @@ def test_sync_claude_code_rewrites_legacy_heartbeat_hook_paths_to_core_hooks(tmp
     post_tool_hooks = payload["hooks"]["PostToolUse"][0]["hooks"]
     user_prompt_commands = [hook["command"] for hook in user_prompt_hooks]
     post_tool_commands = [hook["command"] for hook in post_tool_hooks]
-    assert any("hooks/heartbeat-user-msg.sh" in command for command in user_prompt_commands)
+    assert any("hooks/auto_capture.py" in command for command in user_prompt_commands)
     assert not any("scripts/heartbeat-user-msg.sh" in command for command in user_prompt_commands)
-    assert any("hooks/heartbeat-posttool.sh" in command for command in post_tool_commands)
+    assert not any("hooks/heartbeat-user-msg.sh" in command for command in user_prompt_commands)
+    assert any("hooks/post_tool_use.py" in command for command in post_tool_commands)
     assert not any("scripts/heartbeat-posttool.sh" in command for command in post_tool_commands)
+    assert not any("hooks/heartbeat-posttool.sh" in command for command in post_tool_commands)
+
+
+def test_sync_all_clients_writes_guardian_runtime_surfaces_snapshot(tmp_path):
+    import client_sync
+
+    runtime = _make_runtime(tmp_path)
+    preset_dir = runtime / "personal" / "brain" / "presets"
+    preset_dir.mkdir(parents=True, exist_ok=True)
+    (preset_dir / "entities_universal.json").write_text(json.dumps({
+        "entities": [
+            {
+                "type": "host",
+                "name": "maria",
+                "metadata": {"aliases": ["maria-db"], "access_mode": "read_only"},
+            }
+        ]
+    }))
+
+    result = client_sync.sync_all_clients(
+        nexo_home=runtime,
+        runtime_root=runtime,
+        enabled_clients=["claude_desktop"],
+        user_home=tmp_path / "home",
+    )
+
+    assert result["ok"] is True
+    surfaces = result["guardian_runtime_surfaces"]
+    assert surfaces["ok"] is True
+    assert surfaces["entity_count"] == 1
+    written = json.loads((runtime / "personal" / "brain" / "guardian-runtime-surfaces.json").read_text())
+    assert written["source"] == "preset_fallback"
+    assert "maria" in written["known_hosts"]
 
 
 def test_sync_claude_code_prunes_legacy_python_core_hooks_from_temp_runtime(tmp_path):
@@ -273,9 +330,9 @@ def test_sync_claude_code_prunes_legacy_python_core_hooks_from_temp_runtime(tmp_
     ]
     assert not any(temp_home in command for command in commands)
     assert any("custom-notification.py" in command for command in commands)
-    assert any("session-start.sh" in command for command in commands)
-    assert any("heartbeat-user-msg.sh" in command for command in commands)
-    assert any("protocol-guardrail.sh" in command for command in commands)
+    assert any("session_start.py" in command for command in commands)
+    assert any("auto_capture.py" in command for command in commands)
+    assert any("post_tool_use.py" in command for command in commands)
 
 
 def test_sync_claude_desktop_preserves_preferences(tmp_path):
@@ -427,6 +484,76 @@ def test_sync_all_clients_auto_installs_selected_claude_code_when_missing(tmp_pa
     assert attempts[1] == ["npm", "install", "-g", "@anthropic-ai/claude-code"]
     assert result["install_results"]["claude_code"]["action"] == "installed"
     assert result["install_results"]["claude_code"]["path"] == "/tmp/fake-claude"
+
+
+def test_sync_all_clients_auto_installs_claude_via_bundled_npm_runtime(tmp_path, monkeypatch):
+    import client_sync
+
+    runtime = _make_runtime(tmp_path)
+    home = tmp_path / "home"
+    desktop_node = tmp_path / "electron-node"
+    npm_cli = tmp_path / "npm-cli.js"
+    desktop_node.write_text("")
+    npm_cli.write_text("")
+
+    attempts = []
+    install_state = {"installed": False}
+
+    def fake_detect(user_home=None):
+        managed_path = Path(user_home or home) / ".nexo" / "runtime" / "bootstrap" / "npm-global" / "bin" / "claude"
+        return {
+            "claude_code": {
+                "installed": install_state["installed"],
+                "path": str(managed_path) if install_state["installed"] else "",
+                "detected_by": "binary" if install_state["installed"] else "missing",
+            },
+            "codex": {"installed": False, "path": "", "detected_by": "missing"},
+            "claude_desktop": {"installed": False, "path": "", "detected_by": "missing"},
+        }
+
+    def fake_run(cmd, **kwargs):
+        attempts.append({"cmd": cmd, "env": kwargs.get("env", {})})
+        if cmd[:4] == [str(desktop_node), str(npm_cli), "install", "-g"]:
+            install_state["installed"] = True
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(client_sync, "detect_installed_clients", fake_detect)
+    monkeypatch.setattr(client_sync.subprocess, "run", fake_run)
+    monkeypatch.setenv("NEXO_DESKTOP_NODE", str(desktop_node))
+    monkeypatch.setenv("NEXO_DESKTOP_NPM_CLI", str(npm_cli))
+
+    result = client_sync.sync_all_clients(
+        nexo_home=runtime,
+        runtime_root=runtime,
+        operator_name="Atlas",
+        user_home=home,
+        preferences={
+            "interactive_clients": {
+                "claude_code": True,
+                "codex": False,
+                "claude_desktop": False,
+            },
+            "default_terminal_client": "claude_code",
+            "automation_enabled": True,
+            "automation_backend": "claude_code",
+        },
+        auto_install_missing_claude=True,
+    )
+
+    managed_prefix = home / ".nexo" / "runtime" / "bootstrap" / "npm-global"
+    assert result["ok"] is True
+    assert attempts[0]["cmd"] == [
+        str(desktop_node),
+        str(npm_cli),
+        "install",
+        "-g",
+        "--prefix",
+        str(managed_prefix),
+        "@anthropic-ai/claude-code",
+    ]
+    assert attempts[0]["env"]["ELECTRON_RUN_AS_NODE"] == "1"
+    assert result["install_results"]["claude_code"]["action"] == "installed_via_bundled_npm"
+    assert (home / ".nexo" / "config" / "claude-cli-path").read_text().strip() == str(managed_prefix / "bin" / "claude")
 
 
 def test_sync_codex_defaults_operator_name_when_runtime_version_has_blank_value(tmp_path, monkeypatch):

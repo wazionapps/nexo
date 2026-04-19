@@ -15,6 +15,7 @@ import threading
 import time
 from pathlib import Path
 import re
+import paths
 
 try:
     from r13_pre_edit_guard import should_inject_r13, ToolCallRecord, WATCHED_WRITE_TOOLS
@@ -235,7 +236,7 @@ except ImportError:  # pragma: no cover
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 MAP_FILENAME = "tool-enforcement-map.json"
-LOG_DIR = NEXO_HOME / "logs"
+LOG_DIR = paths.logs_dir()
 
 _logger = logging.getLogger("nexo.enforcer")
 if not _logger.handlers:
@@ -305,8 +306,9 @@ def _redact_for_log(text: str, max_len: int = 200) -> str:
 
 def _load_map() -> dict | None:
     for candidate in [
-        NEXO_HOME / MAP_FILENAME,
-        NEXO_HOME / "brain" / MAP_FILENAME,
+        paths.home() / MAP_FILENAME,
+        paths.brain_dir() / MAP_FILENAME,
+        paths.legacy_brain_dir() / MAP_FILENAME,
         Path(__file__).parent.parent / MAP_FILENAME,
     ]:
         if not candidate.exists():
@@ -442,6 +444,41 @@ class HeadlessEnforcer:
             mode = "shadow"
         self._guardian_mode_cache[rule_id] = mode
         return mode
+
+    def _guardian_rule_event(
+        self,
+        rule_id: str,
+        event: str,
+        *,
+        mode: str = "",
+        details: dict | None = None,
+    ) -> None:
+        if not rule_id or not event:
+            return
+        try:
+            from guardian_telemetry import log_event as _telemetry_log  # type: ignore
+            _telemetry_log(
+                rule_id,
+                event,
+                mode=mode or self._guardian_mode_cache.get(rule_id, ""),
+                tool="",
+                session_id=self._session_id or "",
+                details=details or {},
+            )
+        except Exception:
+            pass
+
+    def _guardian_rule_skip(
+        self,
+        rule_id: str,
+        reason: str,
+        *,
+        mode: str = "",
+        details: dict | None = None,
+    ) -> None:
+        payload = dict(details or {})
+        payload.setdefault("reason", reason)
+        self._guardian_rule_event(rule_id, "skipped", mode=mode, details=payload)
 
     def _extract_files(self, tool_input) -> list[str]:
         """Best-effort extraction of file paths from a stream-json tool_use input."""
@@ -814,14 +851,27 @@ class HeadlessEnforcer:
             return
         mode = self._guardian_rule_mode("R15_project_context")
         if mode == "off":
+            self._guardian_rule_skip("R15_project_context", "rule_mode_off", mode=mode)
             return
         project_list = projects if projects is not None else self._projects_from_entities()
         if not project_list:
+            self._guardian_rule_skip(
+                "R15_project_context",
+                "missing_dataset",
+                mode=mode,
+                details={"dataset": "projects"},
+            )
             return
         records = recent_records if recent_records is not None else self.recent_tool_records
         decision = _r15_should(text or "", project_list, records)
         if not decision:
             return
+        self._guardian_rule_event(
+            "R15_project_context",
+            "evaluated",
+            mode=mode,
+            details={"project": decision["project"], "tag": decision["tag"]},
+        )
         # T4.2 — LLM gate: if the classifier says the turn is
         # conversational / off-topic, skip the injection. Regex wins on
         # "unknown" so legitimate R15 hits still fire without a working
@@ -830,10 +880,22 @@ class HeadlessEnforcer:
             _logger.info(
                 "[R15 T4] gate=no, skipping project=%s", decision["project"]
             )
+            self._guardian_rule_skip(
+                "R15_project_context",
+                "classifier_voted_no",
+                mode=mode,
+                details={"project": decision["project"], "tag": decision["tag"]},
+            )
             return
         prompt = _R15_PROMPT.format(project=decision["project"])
         if mode == "shadow":
             _logger.info("[R15 SHADOW] would inject: project=%s", decision["project"])
+            self._guardian_rule_skip(
+                "R15_project_context",
+                "shadow_mode",
+                mode=mode,
+                details={"project": decision["project"], "tag": decision["tag"]},
+            )
             return
         self._enqueue(prompt, decision["tag"], rule_id="R15_project_context")
         _logger.info("[R15 %s] enqueued project=%s", mode.upper(), decision["project"])
@@ -861,6 +923,11 @@ class HeadlessEnforcer:
             if key not in self._t4_gate_warned:
                 self._t4_gate_warned.add(key)
                 _logger.warning("[T4 gate] import failed for %s: %s", rule_id, exc)
+            self._guardian_rule_event(
+                rule_id,
+                "classifier_unavailable",
+                details={"reason": "import_failed", "error": str(exc)},
+            )
             return False
 
         # Auditor H1 fix: the legacy bool contract of `classify` collapses
@@ -882,6 +949,11 @@ class HeadlessEnforcer:
                     "[T4 gate] no prompt template for rule_id=%s (check PROMPTS)",
                     rule_id,
                 )
+            self._guardian_rule_skip(
+                rule_id,
+                "missing_prompt_template",
+                details={"gate": "t4"},
+            )
             return False
         try:
             verdict = classify_with_llm(
@@ -899,6 +971,11 @@ class HeadlessEnforcer:
                     rule_id,
                     exc,
                 )
+            self._guardian_rule_event(
+                rule_id,
+                "classifier_unavailable",
+                details={"reason": "classify_failed", "error": str(exc)},
+            )
             return False
         return verdict == "no"
 
@@ -1264,6 +1341,7 @@ class HeadlessEnforcer:
             return
         mode = self._guardian_rule_mode("R23k_script_duplicates_skill")
         if mode == "off":
+            self._guardian_rule_skip("R23k_script_duplicates_skill", "rule_mode_off", mode=mode)
             return
         # Silent skill_match probe — fail-closed on any backend error.
         matches: list[dict] = []
@@ -1280,6 +1358,20 @@ class HeadlessEnforcer:
                 matches = list(_skill_match(description) or [])
         except Exception as exc:  # noqa: BLE001
             _logger.warning("R23k skill_match probe failed (%s)", exc)
+            self._guardian_rule_skip(
+                "R23k_script_duplicates_skill",
+                "dataset_probe_failed",
+                mode=mode,
+                details={"dataset": "skill_matches", "error": str(exc)},
+            )
+            return
+        if not matches:
+            self._guardian_rule_skip(
+                "R23k_script_duplicates_skill",
+                "missing_dataset",
+                mode=mode,
+                details={"dataset": "skill_matches"},
+            )
             return
         should, prompt = _r23k_should(
             tool_name,
@@ -1288,8 +1380,20 @@ class HeadlessEnforcer:
         )
         if not should:
             return
+        self._guardian_rule_event(
+            "R23k_script_duplicates_skill",
+            "evaluated",
+            mode=mode,
+            details={"match_count": len(matches)},
+        )
         if mode == "shadow":
             _logger.info("[R23k SHADOW] would inject")
+            self._guardian_rule_skip(
+                "R23k_script_duplicates_skill",
+                "shadow_mode",
+                mode=mode,
+                details={"match_count": len(matches)},
+            )
             return
         self._enqueue(prompt, "R23k_script_duplicates_skill", rule_id="R23k_script_duplicates_skill")
         _logger.info("[R23k %s] enqueued", mode.upper())
@@ -1301,8 +1405,6 @@ class HeadlessEnforcer:
         if tool_name not in {"nexo_send", "nexo_email_send", "gmail_send"}:
             return
         mode = self._guardian_rule_mode("R23m_message_duplicate")
-        if mode == "off":
-            return
         should, prompt = _r23m_should(
             tool_name,
             tool_input,
@@ -1325,10 +1427,25 @@ class HeadlessEnforcer:
                 )
                 if len(self._r23m_recent_messages) > self._r23m_max_recent:
                     self._r23m_recent_messages.pop(0)
+        if mode == "off":
+            self._guardian_rule_skip("R23m_message_duplicate", "rule_mode_off", mode=mode)
+            return
         if not should:
             return
+        self._guardian_rule_event(
+            "R23m_message_duplicate",
+            "evaluated",
+            mode=mode,
+            details={"window_seconds": 15 * 60, "recent_messages": len(self._r23m_recent_messages)},
+        )
         if mode == "shadow":
             _logger.info("[R23m SHADOW] would inject")
+            self._guardian_rule_skip(
+                "R23m_message_duplicate",
+                "shadow_mode",
+                mode=mode,
+                details={"recent_messages": len(self._r23m_recent_messages)},
+            )
             return
         self._enqueue(prompt, "R23m_message_duplicate", rule_id="R23m_message_duplicate")
         _logger.info("[R23m %s] enqueued", mode.upper())
@@ -1339,18 +1456,22 @@ class HeadlessEnforcer:
             return
         mode = self._guardian_rule_mode("R23h_shebang_mismatch")
         if mode == "off":
+            self._guardian_rule_skip("R23h_shebang_mismatch", "rule_mode_off", mode=mode)
             return
         should, prompt = _r23h_should(tool_name, tool_input)
         if not should:
             return
+        self._guardian_rule_event("R23h_shebang_mismatch", "evaluated", mode=mode)
         span = ""
         if isinstance(tool_input, dict):
             span = tool_input.get("content") or tool_input.get("new_string") or ""
         if self._t4_gate_says_no("R23h", span=str(span)[:500]):
             _logger.info("[R23h T4] gate=no, skipping")
+            self._guardian_rule_skip("R23h_shebang_mismatch", "classifier_voted_no", mode=mode)
             return
         if mode == "shadow":
             _logger.info("[R23h SHADOW] would inject")
+            self._guardian_rule_skip("R23h_shebang_mismatch", "shadow_mode", mode=mode)
             return
         self._enqueue(prompt, "R23h_shebang_mismatch", rule_id="R23h_shebang_mismatch")
         _logger.info("[R23h %s] enqueued", mode.upper())

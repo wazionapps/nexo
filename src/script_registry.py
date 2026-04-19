@@ -14,7 +14,9 @@ import re
 import shutil
 import stat
 import subprocess
+import time
 from pathlib import Path
+import paths
 
 from runtime_home import export_resolved_nexo_home
 
@@ -106,7 +108,7 @@ def get_nexo_home() -> Path:
 
 
 def get_scripts_dir() -> Path:
-    return NEXO_HOME / "scripts"
+    return paths.personal_scripts_dir()
 
 
 def _apply_legacy_personal_script_backfills() -> None:
@@ -188,7 +190,7 @@ def load_core_script_names() -> set[str]:
     manifest_candidates = []
     if packaged_src is not None:
         manifest_candidates.append(packaged_src / "crons" / "manifest.json")
-    manifest_candidates.extend([NEXO_CODE / "crons" / "manifest.json", NEXO_HOME / "crons" / "manifest.json"])
+    manifest_candidates.extend([NEXO_CODE / "crons" / "manifest.json", paths.crons_dir() / "manifest.json"])
 
     for manifest_path in manifest_candidates:
         if manifest_path.exists():
@@ -207,15 +209,16 @@ def load_core_script_names() -> set[str]:
         _add_filenames_from_dir(names, packaged_src / "scripts")
     else:
         for artifact_path in (
-            NEXO_HOME / "config" / "runtime-core-artifacts.json",
+            paths.config_dir() / "runtime-core-artifacts.json",
             NEXO_CODE / "config" / "runtime-core-artifacts.json",
             NEXO_CODE.parent / "config" / "runtime-core-artifacts.json",
         ):
             if artifact_path.exists():
                 _add_runtime_artifact_names(names, artifact_path)
 
-        _add_filenames_from_dir(names, NEXO_HOME / "hooks")
+        _add_filenames_from_dir(names, paths.core_hooks_dir())
         _add_filenames_from_dir(names, NEXO_CODE / "hooks")
+        _add_filenames_from_dir(names, paths.core_scripts_dir(), skip_if_scripts_dir=True)
         _add_filenames_from_dir(names, NEXO_CODE / "scripts", skip_if_scripts_dir=True)
 
     for legacy_name, canonical_name in _LEGACY_CORE_SCRIPT_ALIASES.items():
@@ -223,6 +226,87 @@ def load_core_script_names() -> set[str]:
             names.add(legacy_name)
     names.update(_LEGACY_CORE_RUNTIME_FILES)
     return names
+
+
+def _add_script_identity_variants(tokens: set[str], value: str | Path | None) -> None:
+    queue = [str(value or "").strip().lower()]
+    seen: set[str] = set()
+    while queue:
+        raw = queue.pop()
+        candidate = raw.strip().lower()
+        if not candidate or candidate in seen:
+            continue
+        seen.add(candidate)
+        tokens.add(candidate)
+
+        stem = Path(candidate).stem.strip().lower()
+        if stem and stem not in seen:
+            queue.append(stem)
+        if candidate.startswith(PERSONAL_SCRIPT_FILENAME_PREFIX):
+            stripped = candidate[len(PERSONAL_SCRIPT_FILENAME_PREFIX):].strip()
+            if stripped and stripped not in seen:
+                queue.append(stripped)
+        if candidate.startswith("nexo-"):
+            stripped = candidate[len("nexo-"):].strip()
+            if stripped and stripped not in seen:
+                queue.append(stripped)
+
+
+def _script_identity_tokens(path: Path, meta: dict | None = None) -> set[str]:
+    meta = meta or {}
+    tokens: set[str] = set()
+    _add_script_identity_variants(tokens, path.name)
+    _add_script_identity_variants(tokens, path.stem)
+    _add_script_identity_variants(tokens, meta.get("name", ""))
+    return tokens
+
+
+def _add_script_identities_from_dir(identities: set[str], directory: Path, *, skip_if_scripts_dir: bool = False) -> None:
+    if not directory.is_dir():
+        return
+    if skip_if_scripts_dir:
+        try:
+            if directory.resolve() == get_scripts_dir().resolve():
+                return
+        except Exception:
+            pass
+    for item in directory.iterdir():
+        if not item.is_file() or item.name.startswith("."):
+            continue
+        identities.update(_script_identity_tokens(item, parse_inline_metadata(item)))
+
+
+def load_core_script_identities() -> set[str]:
+    """Load every logical identifier reserved by core-managed scripts."""
+    identities: set[str] = set()
+    for name in load_core_script_names():
+        _add_script_identity_variants(identities, name)
+
+    packaged_src = _find_packaged_core_source_dir()
+    if packaged_src is not None:
+        _add_script_identities_from_dir(identities, packaged_src / "hooks")
+        _add_script_identities_from_dir(identities, packaged_src / "scripts")
+    else:
+        _add_script_identities_from_dir(identities, paths.core_hooks_dir())
+        _add_script_identities_from_dir(identities, NEXO_CODE / "hooks")
+        _add_script_identities_from_dir(identities, paths.core_scripts_dir(), skip_if_scripts_dir=True)
+        _add_script_identities_from_dir(identities, NEXO_CODE / "scripts", skip_if_scripts_dir=True)
+
+    for legacy_name, canonical_name in _LEGACY_CORE_SCRIPT_ALIASES.items():
+        _add_script_identity_variants(identities, legacy_name)
+        _add_script_identity_variants(identities, canonical_name)
+    return identities
+
+
+def _script_collides_with_core_identity(path: Path, meta: dict | None = None, *, core_identities: set[str] | None = None) -> bool:
+    identities = core_identities if core_identities is not None else load_core_script_identities()
+    return bool(_script_identity_tokens(path, meta) & identities)
+
+
+def _logical_name_collides_with_core_identity(name: str, *, core_identities: set[str] | None = None) -> bool:
+    identities = core_identities if core_identities is not None else load_core_script_identities()
+    probe = Path(f"{name}.py")
+    return _script_collides_with_core_identity(probe, {"name": name}, core_identities=identities)
 
 
 def parse_inline_metadata(path: Path) -> dict:
@@ -606,6 +690,7 @@ def classify_scripts_dir() -> dict:
         candidate_dirs.append(legacy)
 
     core_names = load_core_script_names()
+    core_identities = load_core_script_identities()
     entries: list[dict] = []
     seen_keys: set[tuple[str, str]] = set()
     for sdir in candidate_dirs:
@@ -644,6 +729,17 @@ def classify_scripts_dir() -> dict:
             else:
                 is_core = f.name in core_names
                 cls = "core" if is_core else "personal"
+            if not is_core and _script_collides_with_core_identity(f, meta, core_identities=core_identities):
+                entries.append(
+                    _script_entry(
+                        f,
+                        meta,
+                        is_core=False,
+                        classification="ignored",
+                        reason="shadowed by core script identity",
+                    )
+                )
+                continue
             entries.append(_script_entry(f, meta, is_core=is_core, classification=cls))
 
     summary: dict[str, int] = {}
@@ -668,7 +764,7 @@ def list_scripts(include_core: bool = False) -> list[dict]:
     # Build a path -> enabled map once so we don't open a transaction
     # per entry. Personal_scripts rows that don't match anything in
     # classify_scripts_dir() are simply ignored.
-    enabled_map: dict[str, bool] = {}
+    row_map: dict[str, dict] = {}
     if include_core:
         # Only the Desktop panel (include_core=True) needs the toggle
         # round-trip. Gating the DB read this way avoids triggering
@@ -678,18 +774,21 @@ def list_scripts(include_core: bool = False) -> list[dict]:
             from db import init_db
             from db._personal_scripts import list_personal_scripts
             init_db()
-            for row in list_personal_scripts(include_disabled=True):
+            for row in list_personal_scripts(include_disabled=True, include_core=True):
                 p = row.get("path")
                 if p:
-                    enabled_map[str(p)] = bool(row.get("enabled", True))
+                    row_map[str(p)] = row
         except Exception:
             # Missing table (older runtime), locked DB, anything else:
             # fall through to enabled=True (the cron wrapper gate is
             # the source of truth at run time).
-            enabled_map = {}
+            row_map = {}
 
+    entries = classify_scripts_dir()["entries"]
     results = []
-    for entry in classify_scripts_dir()["entries"]:
+    cron_ids: list[str] = []
+    cron_id_by_path: dict[str, str] = {}
+    for entry in entries:
         if entry["classification"] not in {"personal", "core"}:
             continue
         if entry["core"] and not include_core:
@@ -697,8 +796,96 @@ def list_scripts(include_core: bool = False) -> list[dict]:
         hidden = _truthy(entry.get("metadata", {}).get("hidden"))
         if hidden and not include_core:
             continue
-        entry["enabled"] = enabled_map.get(entry["path"], True)
+        row = row_map.get(entry["path"]) or {}
+        metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+        try:
+            from automation_controls import get_script_runtime_contract
+            contract = get_script_runtime_contract(entry["name"])
+        except Exception:
+            contract = {
+                "toggleable_core": False,
+                "supports_extra_instructions": False,
+                "requires_email_account": False,
+                "available": True,
+                "blocked_reason": "",
+                "blocked_reason_code": "",
+                "eligible_labels": [],
+            }
+        entry["enabled"] = bool(row.get("enabled", True))
+        entry["can_toggle"] = (
+            entry["classification"] == "personal"
+            or bool(contract.get("toggleable_core"))
+        )
+        entry["supports_extra_instructions"] = bool(contract.get("supports_extra_instructions"))
+        entry["operator_extra_instructions"] = str(metadata.get("operator_extra_instructions") or "")
+        entry["runtime_contract"] = contract
+        entry["available"] = bool(contract.get("available", True))
+        entry["blocked_reason"] = str(contract.get("blocked_reason") or "")
+        entry["blocked_reason_code"] = str(contract.get("blocked_reason_code") or "")
+        entry["eligible_labels"] = list(contract.get("eligible_labels") or [])
+        entry["schedule_configurable"] = bool(contract.get("schedule_configurable"))
+        entry["schedule_type"] = str(contract.get("schedule_type") or "")
+        entry["schedule_source"] = str(contract.get("schedule_source") or "")
+        entry["effective_schedule_label"] = str(contract.get("effective_schedule_label") or "")
+        entry["interval_seconds"] = int(contract.get("interval_seconds", 0) or 0)
+        entry["default_interval_seconds"] = int(contract.get("default_interval_seconds", 0) or 0)
+        entry["minimum_interval_seconds"] = int(contract.get("minimum_interval_seconds", 0) or 0)
+        entry["maximum_interval_seconds"] = int(contract.get("maximum_interval_seconds", 0) or 0)
+        entry["interval_step_seconds"] = int(contract.get("interval_step_seconds", 0) or 0)
+        if entry["effective_schedule_label"]:
+            entry["schedules"] = [{
+                "schedule_label": entry["effective_schedule_label"],
+                "schedule_source": entry["schedule_source"],
+                "schedule_type": entry["schedule_type"],
+                "interval_seconds": entry["interval_seconds"],
+            }]
+        declared = entry.get("declared_schedule") if isinstance(entry.get("declared_schedule"), dict) else {}
+        cron_id = str(declared.get("cron_id") or entry.get("name") or "").strip()
+        if cron_id:
+            cron_ids.append(cron_id)
+            cron_id_by_path[entry["path"]] = cron_id
         results.append(entry)
+
+    latest_runs = {}
+    if include_core and cron_ids:
+        try:
+            from db import init_db
+            from db._core import get_db
+
+            init_db()
+            conn = get_db()
+            placeholders = ",".join("?" for _ in cron_ids)
+            rows = conn.execute(
+                f"""
+                SELECT c1.cron_id, c1.started_at, c1.exit_code, c1.summary
+                FROM cron_runs c1
+                JOIN (
+                    SELECT cron_id, MAX(id) AS max_id
+                    FROM cron_runs
+                    WHERE cron_id IN ({placeholders})
+                    GROUP BY cron_id
+                ) latest ON latest.max_id = c1.id
+                """,
+                tuple(cron_ids),
+            ).fetchall()
+            latest_runs = {
+                str(row["cron_id"]): {
+                    "started_at": row["started_at"],
+                    "exit_code": row["exit_code"],
+                    "summary": row["summary"],
+                }
+                for row in rows
+            }
+        except Exception:
+            latest_runs = {}
+
+    for entry in results:
+        cron_id = cron_id_by_path.get(entry["path"], "")
+        latest = latest_runs.get(cron_id)
+        if latest:
+            entry["last_run_at"] = latest.get("started_at")
+            entry["last_exit_code"] = latest.get("exit_code")
+            entry["last_summary"] = str(latest.get("summary") or "")
     return results
 
 
@@ -712,26 +899,20 @@ def _within_scripts_dir(path: Path) -> bool:
 
 def resolve_script(name: str) -> dict | None:
     """Find a script by name (metadata name or filename stem)."""
-    scripts_dir = get_scripts_dir()
-    if not scripts_dir.is_dir():
-        return None
-
-    for f in scripts_dir.iterdir():
-        if not f.is_file() or _is_ignored(f):
+    for entry in classify_scripts_dir()["entries"]:
+        if entry.get("classification") not in {"personal", "core", "core-dev"}:
             continue
-        meta = parse_inline_metadata(f)
-        if not _is_script_candidate(f, meta):
-            continue
-        script_name = meta.get("name", f.stem)
-        if script_name == name or f.stem == name:
-            runtime = classify_runtime(f, meta)
+        path = Path(entry["path"])
+        script_name = entry.get("name", path.stem)
+        if script_name == name or path.stem == name or path.name == name:
             return {
                 "name": script_name,
-                "runtime": runtime,
-                "description": meta.get("description", ""),
-                "path": str(f),
-                "core": f.name in load_core_script_names(),
-                "metadata": meta,
+                "runtime": entry.get("runtime", "unknown"),
+                "description": entry.get("description", ""),
+                "path": entry["path"],
+                "core": bool(entry.get("core")),
+                "metadata": entry.get("metadata", {}),
+                "classification": entry.get("classification", ""),
             }
     return None
 
@@ -1359,6 +1540,79 @@ def reconcile_personal_scripts(*, dry_run: bool = False) -> dict:
     }
 
 
+def retire_superseded_personal_scripts(*, dry_run: bool = False) -> dict:
+    """Archive personal scripts that now collide with reserved core identities.
+
+    This keeps fresh/update installs free of legacy residues after scripts are
+    promoted from personal to core. Files are never deleted outright: they are
+    moved into runtime/backups so operator data can still be recovered manually.
+    """
+    scripts_dir = get_scripts_dir()
+    report = {
+        "ok": True,
+        "dry_run": dry_run,
+        "candidates": [],
+        "archived": [],
+        "unscheduled": [],
+        "errors": [],
+    }
+    if not scripts_dir.is_dir():
+        return report
+
+    core_identities = load_core_script_identities()
+    candidates: list[tuple[Path, dict]] = []
+    for path in sorted(scripts_dir.iterdir()):
+        if not path.is_file():
+            continue
+        meta = parse_inline_metadata(path)
+        if _is_ignored(path) or not _is_script_candidate(path, meta):
+            continue
+        if _script_collides_with_core_identity(path, meta, core_identities=core_identities):
+            candidates.append((path, meta))
+
+    if not candidates:
+        return report
+
+    schedule_records = _discover_personal_schedule_records()
+    backup_root: Path | None = None
+    for path, meta in candidates:
+        name = meta.get("name", path.stem)
+        report["candidates"].append({"name": name, "path": str(path)})
+        resolved_path = str(path.expanduser().resolve(strict=False))
+        matching_schedules = [
+            record for record in schedule_records
+            if str(Path(record.get("script_path", "")).expanduser().resolve(strict=False)) == resolved_path
+        ]
+        if dry_run:
+            continue
+
+        for record in matching_schedules:
+            removed = _remove_schedule_file(
+                cron_id=str(record.get("cron_id", "")),
+                plist_path=str(record.get("plist_path", "")),
+            )
+            report["unscheduled"].append(removed)
+
+        if backup_root is None:
+            backup_root = paths.backups_dir() / f"retired-personal-scripts-{time.strftime('%Y-%m-%d-%H%M%S')}"
+            backup_root.mkdir(parents=True, exist_ok=True)
+        target = backup_root / path.name
+        suffix = 2
+        while target.exists():
+            target = backup_root / f"{path.stem}-{suffix}{path.suffix}"
+            suffix += 1
+        try:
+            shutil.move(str(path), str(target))
+            report["archived"].append({
+                "name": name,
+                "path": str(path),
+                "backup_path": str(target),
+            })
+        except Exception as exc:
+            report["errors"].append({"path": str(path), "error": str(exc)})
+    return report
+
+
 def _template_path(filename: str) -> Path | None:
     candidates = [
         NEXO_HOME / "templates" / filename,
@@ -1395,6 +1649,8 @@ def create_script(name: str, *, description: str = "", runtime: str = "python", 
     scripts_dir = get_scripts_dir()
     scripts_dir.mkdir(parents=True, exist_ok=True)
     logical_name = _logical_personal_script_name(name)
+    if _logical_name_collides_with_core_identity(logical_name):
+        raise ValueError(f"Personal script name collides with a reserved core script identity: {logical_name}")
     filename = _personal_script_filename_from_name(name, runtime)
     path = scripts_dir / filename
     if path.exists() and not force:
@@ -1536,25 +1792,56 @@ def set_personal_script_enabled(name_or_path: str, enabled: bool) -> dict:
     script is disabled, so the LaunchAgent can stay loaded but the
     script itself is dormant.
     """
-    from db import init_db, get_personal_script
+    from automation_controls import get_script_runtime_contract
+    from db import init_db
     from db._core import get_db
+    from db._personal_scripts import get_personal_script, upsert_personal_script
 
     init_db()
     sync_personal_scripts()
-    script = get_personal_script(name_or_path) or resolve_script(name_or_path)
+    script = get_personal_script(name_or_path, include_core=True) or resolve_script(name_or_path)
     if not script:
         return {"ok": False, "error": f"Script not found: {name_or_path}"}
-    if script.get("core") and not _within_scripts_dir(Path(script.get("path", ""))):
+    contract = get_script_runtime_contract(script.get("name", ""))
+    toggleable_core = bool(contract.get("toggleable_core"))
+    script_origin = "core" if (
+        bool(script.get("core"))
+        or str(script.get("origin") or "") == "core"
+        or toggleable_core
+    ) else "user"
+    if script.get("core") and not toggleable_core and not _within_scripts_dir(Path(script.get("path", ""))):
         return {
             "ok": False,
             "error": "Refusing to toggle a packaged core script via this entry point — "
                      "use `nexo scripts unschedule` to stop it instead.",
         }
+    if enabled and not bool(contract.get("available", True)):
+        return {
+            "ok": False,
+            "error": str(contract.get("blocked_reason") or "Script prerequisites are not satisfied."),
+            "blocked_reason_code": str(contract.get("blocked_reason_code") or ""),
+        }
+    if script_origin == "core" and toggleable_core:
+        existing = get_personal_script(script.get("path", ""), include_core=True)
+        if not existing:
+            upsert_personal_script(
+                name=script.get("name", name_or_path),
+                path=script.get("path", ""),
+                description=script.get("description", ""),
+                runtime=script.get("runtime", "unknown"),
+                metadata=script.get("metadata", {}),
+                created_by="nexo-core",
+                source="core-toggle",
+                origin="core",
+                enabled=True,
+                has_inline_metadata=bool(script.get("metadata")),
+            )
     target = 1 if enabled else 0
     conn = get_db()
     cur = conn.execute(
-        "UPDATE personal_scripts SET enabled = ?, updated_at = CURRENT_TIMESTAMP WHERE path = ?",
-        (target, script["path"]),
+        "UPDATE personal_scripts SET enabled = ?, updated_at = CURRENT_TIMESTAMP "
+        "WHERE path = ? OR name = ?",
+        (target, script["path"], script.get("name", name_or_path)),
     )
     conn.commit()
     changed = bool(cur.rowcount)
@@ -1564,18 +1851,22 @@ def set_personal_script_enabled(name_or_path: str, enabled: bool) -> dict:
         "path": script.get("path", ""),
         "enabled": bool(target),
         "changed": changed,
+        "origin": script_origin,
+        "runtime_contract": contract,
     }
 
 
 def get_personal_script_status(name_or_path: str) -> dict:
     """Plan F0.2.2 — read-only view of one personal script for the
     Desktop panel and the `nexo scripts status` CLI verb."""
-    from db import init_db, get_personal_script
+    from automation_controls import get_script_runtime_contract
+    from db import init_db
     from db._core import get_db
+    from db._personal_scripts import get_personal_script
 
     init_db()
     sync_personal_scripts()
-    script = get_personal_script(name_or_path) or resolve_script(name_or_path)
+    script = get_personal_script(name_or_path, include_core=True) or resolve_script(name_or_path)
     if not script:
         return {"ok": False, "error": f"Script not found: {name_or_path}"}
     conn = get_db()
@@ -1585,6 +1876,7 @@ def get_personal_script_status(name_or_path: str) -> dict:
         (script.get("name") or "",),
     ).fetchone()
     last_run = dict(last) if last else None
+    contract = get_script_runtime_contract(script.get("name", ""))
     return {
         "ok": True,
         "name": script.get("name"),
@@ -1593,7 +1885,95 @@ def get_personal_script_status(name_or_path: str) -> dict:
         "core": bool(script.get("core")),
         "classification": script.get("classification", "user"),
         "last_run": last_run,
+        "runtime_contract": contract,
+        "blocked_reason": str(contract.get("blocked_reason") or ""),
+        "supports_extra_instructions": bool(contract.get("supports_extra_instructions")),
+        "operator_extra_instructions": str((script.get("metadata") or {}).get("operator_extra_instructions") or ""),
+        "schedule_configurable": bool(contract.get("schedule_configurable")),
+        "schedule_type": str(contract.get("schedule_type") or ""),
+        "schedule_source": str(contract.get("schedule_source") or ""),
+        "effective_schedule_label": str(contract.get("effective_schedule_label") or ""),
+        "interval_seconds": int(contract.get("interval_seconds", 0) or 0),
+        "default_interval_seconds": int(contract.get("default_interval_seconds", 0) or 0),
+        "minimum_interval_seconds": int(contract.get("minimum_interval_seconds", 0) or 0),
+        "maximum_interval_seconds": int(contract.get("maximum_interval_seconds", 0) or 0),
+        "interval_step_seconds": int(contract.get("interval_step_seconds", 0) or 0),
     }
+
+
+def set_script_extra_instructions(name_or_path: str, instructions: str) -> dict:
+    """Persist operator-side prompt additions without touching the core prompt."""
+    from automation_controls import supports_operator_extra_instructions
+    from db import init_db
+    from db._personal_scripts import get_personal_script, upsert_personal_script
+
+    init_db()
+    sync_personal_scripts()
+    script = get_personal_script(name_or_path, include_core=True) or resolve_script(name_or_path)
+    if not script:
+        return {"ok": False, "error": f"Script not found: {name_or_path}"}
+    if not supports_operator_extra_instructions(script.get("name", "")):
+        return {
+            "ok": False,
+            "error": "This automation does not support operator extra instructions.",
+        }
+
+    existing = get_personal_script(script.get("path", ""), include_core=True)
+    metadata = dict((existing or script).get("metadata") or {})
+    text = str(instructions or "").strip()
+    script_origin = "core" if (
+        bool(script.get("core"))
+        or str(script.get("origin") or "") == "core"
+    ) else "user"
+    if text:
+        metadata["operator_extra_instructions"] = text
+    else:
+        metadata.pop("operator_extra_instructions", None)
+
+    upsert_personal_script(
+        name=script.get("name", name_or_path),
+        path=script.get("path", ""),
+        description=script.get("description", ""),
+        runtime=script.get("runtime", "unknown"),
+        metadata=metadata,
+        created_by="nexo-core" if script_origin == "core" else "manual",
+        source="core-toggle" if script_origin == "core" else "filesystem",
+        origin=script_origin,
+        enabled=bool((existing or script).get("enabled", True)),
+        has_inline_metadata=bool(script.get("metadata")),
+    )
+
+    return {
+        "ok": True,
+        "name": script.get("name", name_or_path),
+        "path": script.get("path", ""),
+        "supports_extra_instructions": True,
+        "operator_extra_instructions": text,
+        "cleared": not bool(text),
+    }
+
+
+def set_script_schedule_override(
+    name_or_path: str,
+    *,
+    interval_seconds: int | None = None,
+    daily_at: str | None = None,
+    clear: bool = False,
+) -> dict:
+    from automation_controls import set_core_automation_schedule
+    from db import init_db
+
+    init_db()
+    sync_personal_scripts()
+    script = resolve_script(name_or_path)
+    if not script:
+        return {"ok": False, "error": f"Script not found: {name_or_path}"}
+    return set_core_automation_schedule(
+        script.get("name", name_or_path),
+        interval_seconds=interval_seconds,
+        daily_at=daily_at,
+        clear=clear,
+    )
 
 
 def doctor_script(path_or_name: str) -> dict:
@@ -1610,6 +1990,7 @@ def doctor_script(path_or_name: str) -> dict:
     meta = parse_inline_metadata(p)
     runtime = classify_runtime(p, meta)
     core_names = load_core_script_names()
+    core_identities = load_core_script_identities()
     is_core = p.name in core_names
 
     # File exists
@@ -1621,11 +2002,10 @@ def doctor_script(path_or_name: str) -> dict:
 
     # Name collision with core
     name = meta.get("name", p.stem)
-    if not is_core:
-        for core in core_names:
-            core_stem = Path(core).stem
-            if name == core_stem:
-                items.append({"level": "fail", "msg": f"Name collision with core script: {core}"})
+    if not is_core and _script_collides_with_core_identity(p, meta, core_identities=core_identities):
+        colliding = sorted(_script_identity_tokens(p, meta) & core_identities)
+        surface = colliding[0] if colliding else name
+        items.append({"level": "fail", "msg": f"Name collision with core script identity: {surface}"})
 
     # Runtime recognized
     if runtime == "unknown":

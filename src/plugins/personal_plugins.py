@@ -110,12 +110,18 @@ def handle_personal_plugin_create(
 
     script_result = None
     if create_companion_script:
-        script_result = create_script(
-            plugin_stem,
-            description=f"Companion script for plugin {plugin_stem}",
-            runtime=script_runtime,
-            force=force,
-        )
+        try:
+            script_result = create_script(
+                plugin_stem,
+                description=f"Companion script for plugin {plugin_stem}",
+                runtime=script_runtime,
+                force=force,
+            )
+        except (FileExistsError, ValueError) as exc:
+            return json.dumps({
+                "ok": False,
+                "error": str(exc),
+            }, ensure_ascii=False)
 
     return json.dumps({
         "ok": True,

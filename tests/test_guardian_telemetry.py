@@ -56,13 +56,15 @@ def test_log_event_fail_closed_on_bad_dir(tel, monkeypatch, tmp_path):
 
 
 def test_summarize_rule_counts_events(tel):
-    for event in ["trigger", "trigger", "injection", "compliance", "false_positive", "trigger"]:
+    for event in ["trigger", "trigger", "injection", "compliance", "false_positive", "trigger", "skipped", "classifier_unavailable"]:
         tel.log_event("R16_declared_done", event, mode="hard")
     counts = tel.summarize_rule("R16_declared_done")
     assert counts["trigger"] == 3
     assert counts["injection"] == 1
     assert counts["compliance"] == 1
     assert counts["false_positive"] == 1
+    assert counts["skipped"] == 1
+    assert counts["classifier_unavailable"] == 1
 
 
 def test_summarize_filters_by_rule(tel):

@@ -16,13 +16,15 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 
+import paths
+
 HOME = Path.home()
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(HOME / ".nexo")))
 NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(NEXO_HOME)))
-BRAIN_DIR = NEXO_HOME / "brain"
-LOG_DIR = NEXO_HOME / "logs"
+BRAIN_DIR = paths.brain_dir()
+LOG_DIR = paths.logs_dir()
 SUMMARY_FILE = LOG_DIR / "watchdog-smoke-summary.json"
-HASH_REGISTRY = NEXO_HOME / "scripts" / ".watchdog-hashes"
+HASH_REGISTRY = paths.core_scripts_dir() / ".watchdog-hashes"
 RESTORE_LOG = LOG_DIR / "snapshot-restores.log"
 
 
@@ -42,7 +44,7 @@ def main() -> int:
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     findings = []
 
-    db_path = NEXO_HOME / "data" / "nexo.db"
+    db_path = paths.db_path()
     integrity = "missing"
     if db_path.exists():
         try:
@@ -63,7 +65,7 @@ def main() -> int:
     if not nexo_server_running:
         findings.append({"severity": "INFO", "area": "server", "msg": "nexo-brain not running (normal if no active session)"})
 
-    backups = sorted((NEXO_HOME / "backups").glob("nexo-*.db"), key=lambda p: p.stat().st_mtime, reverse=True)
+    backups = sorted(paths.backups_dir().glob("nexo-*.db"), key=lambda p: p.stat().st_mtime, reverse=True)
     if backups:
         age_seconds = int(datetime.now().timestamp() - backups[0].stat().st_mtime)
         if age_seconds > 7200:

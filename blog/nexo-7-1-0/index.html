@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.1.0: post-F0.6 contract closure — runtime, Guardian, automations</title>
+<meta name="description" content="NEXO Brain v7.1.0 closes the post-F0.6 runtime contract: canonical core code root, layout healing after sync/update, Guardian runtime surfaces for Desktop, configurable core automations, richer email routing, and local classifier auto-install.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-1-0/">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.1.0: post-F0.6 contract closure — runtime, Guardian, automations","datePublished":"2026-04-19","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head><body><main><article style="max-width:760px;margin:80px auto;padding:0 24px;line-height:1.75;">
+<h1>NEXO 7.1.0 — post-F0.6 contract closure</h1>
+<p><em>Published 2026-04-19. Minor release.</em></p>
+<p>v7.0.0 split the runtime physically into <code>~/.nexo/{core,personal,runtime}</code>. v7.0.1 fixed the one remaining shared-DB caller that still pointed at the dead legacy path. v7.1.0 closes the next layer of debt: the runtime now behaves consistently as a product contract, not as a partially migrated operator install with a few new directories on top.</p>
+<h2>Canonical runtime root</h2>
+<p><code>~/.nexo/core</code> is now treated as the canonical shipped code root across install, update, cron sync, and client sync. Layout finalisers re-run automatically after runtime sync/update so fresh installs, upgraded installs, and packaged Desktop bundles stop drifting into “mixed tree” states.</p>
+<h2>Guardian surfaces shared with Desktop</h2>
+<p>Brain now exports a canonical <code>guardian-runtime-surfaces.json</code> snapshot under <code>~/.nexo/personal/brain/</code>. Desktop consumes that snapshot for live Guardian datasets such as known hosts, read-only hosts, destructive command patterns, projects, legacy mappings, vhost mappings, DB production markers, and entity context. That replaces the old situation where Desktop could quietly drift behind Brain on safety-critical datasets.</p>
+<h2>Core automations are product surfaces now</h2>
+<p><code>email-monitor</code>, <code>followup-runner</code>, and the new <code>morning-agent</code> are now closed core automations with a proper runtime contract: enable/disable, schedule or interval overrides where relevant, prerequisite checks, and additive operator instructions separate from the product prompt. <code>nexo-send-reply.py</code> remains the shared helper behind those automations rather than an exposed standalone product automation.</p>
+<h2>Email routing is no longer a one-account story</h2>
+<p>The email runtime model now distinguishes the single agent mailbox from multiple operator mailboxes on the same <code>email_accounts</code> surface. Operator inboxes can carry human descriptions plus <code>can_read</code>, <code>can_send</code>, and <code>is_default</code> permissions so automations and Desktop can route followups, replies, alerts, and fallback destinations without personal hardcodes.</p>
+<h2>Local classifier baseline auto-installs</h2>
+<p>The local classifier baseline now auto-installs on fresh installs and on <code>nexo update</code> unless the operator explicitly opts out with <code>NEXO_LOCAL_CLASSIFIER=off</code>. The installer writes state to runtime operations, logs failures without crashing the main update flow, and leaves subsequent updates free to retry if the machine was offline during the first attempt.</p>
+<h2>Coordinated Desktop release</h2>
+<p>The companion NEXO Desktop release v0.22.0 turns the same contract into a closed product flow: guided bootstrap, Claude login handoff, productised automations, richer email surfaces, cleaner preferences, and Brain/Desktop Guardian parity. Brain remains fully usable on its own as the open public runtime.</p>
+</article></main></body></html>

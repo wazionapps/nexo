@@ -77,15 +77,11 @@ def test_parity_python(case, tmp_path):
             raise ValueError(f"unknown op {op}")
     observed = {q.get("rule_id") for q in enforcer.injection_queue if q.get("rule_id")}
     expected = set(case.get("expect_rule_ids") or [])
-    strict = bool(case.get("strict", False)) or expected == set()
-    if strict:
-        # Exact equality: extra injections count as a parity bug (the
-        # opposite-engine did not fire them, so the rule sets have drifted).
-        assert observed == expected, (
-            f"{case['id']}: strict mismatch — expected {expected}, observed {observed}"
-        )
-    else:
-        # Relaxed inclusion for legacy cases: every expected rule MUST
-        # fire; extras are tolerated until the case is tightened.
-        missing = expected - observed
-        assert not missing, f"{case['id']}: expected {expected}, observed {observed}"
+    # Exact equality is the only mode. Extra injections count as a parity
+    # bug (the opposite-engine did not fire them, so the rule sets have
+    # drifted). The legacy "subset" mode was removed because it let
+    # silent drift slip through on fixtures without an explicit
+    # "strict": true flag.
+    assert observed == expected, (
+        f"{case['id']}: parity mismatch — expected {expected}, observed {observed}"
+    )

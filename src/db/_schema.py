@@ -1132,6 +1132,77 @@ def _m46_email_accounts(conn):
     _migrate_add_index(conn, "idx_email_accounts_enabled", "email_accounts", "enabled")
 
 
+def _m47_email_operator_accounts(conn):
+    """F2 — enrich email_accounts with agent/operator split + permissions.
+
+    Keeps the single-table model while making the product contract explicit:
+
+    - account_type='agent': the single mailbox NEXO monitors automatically.
+    - account_type='operator': human-owned inboxes NEXO may read/send on demand.
+    - description: semantic label shown in Desktop and used for user-facing matching.
+    - can_read / can_send: operator permissions for on-demand access.
+    - is_default: fallback operator destination for alerts / ambiguous sends.
+
+    Idempotent.
+    """
+    _migrate_add_column(
+        conn, "email_accounts", "account_type", "TEXT NOT NULL DEFAULT 'agent'"
+    )
+    _migrate_add_column(
+        conn, "email_accounts", "description", "TEXT NOT NULL DEFAULT ''"
+    )
+    _migrate_add_column(
+        conn, "email_accounts", "can_read", "INTEGER NOT NULL DEFAULT 0"
+    )
+    _migrate_add_column(
+        conn, "email_accounts", "can_send", "INTEGER NOT NULL DEFAULT 0"
+    )
+    _migrate_add_column(
+        conn, "email_accounts", "is_default", "INTEGER NOT NULL DEFAULT 0"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_email_accounts_account_type "
+        "ON email_accounts(account_type)"
+    )
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_email_accounts_default "
+        "ON email_accounts(is_default) WHERE is_default = 1"
+    )
+
+
+def _m48_email_agent_contract_backfill(conn):
+    """F2 follow-up — normalize legacy agent rows after m47.
+
+    Existing installs upgraded from m46 -> m47 inherit the new columns with the
+    raw SQL defaults (`0` / empty string), which would incorrectly leave the
+    primary agent mailbox without read/send permissions even when role='both'.
+
+    Normalize every agent row so the stored contract matches the runtime rules:
+    - account_type defaults to 'agent'
+    - can_read / can_send derive from role for agent rows
+    - description gets a neutral default if it was still blank
+    - is_default is always off for agent rows
+    """
+    conn.execute(
+        "UPDATE email_accounts "
+        "SET account_type = 'agent' "
+        "WHERE COALESCE(account_type, '') = ''"
+    )
+    conn.execute(
+        "UPDATE email_accounts "
+        "SET can_read = CASE WHEN role IN ('inbox', 'both') THEN 1 ELSE 0 END, "
+        "    can_send = CASE WHEN role IN ('outbox', 'both') THEN 1 ELSE 0 END, "
+        "    is_default = 0 "
+        "WHERE COALESCE(account_type, 'agent') = 'agent'"
+    )
+    conn.execute(
+        "UPDATE email_accounts "
+        "SET description = 'Agent mailbox' "
+        "WHERE COALESCE(account_type, 'agent') = 'agent' "
+        "AND COALESCE(description, '') = ''"
+    )
+
+
 def _m45_personal_scripts_origin(conn):
     """Plan Consolidado F0.1 — mark whether a personal_scripts row is
     installed by NEXO Core (origin='core'), contributed by the operator
@@ -1214,6 +1285,8 @@ MIGRATIONS = [
     (44, "entities_extended_schema", _m44_entities_extended_schema),
     (45, "personal_scripts_origin", _m45_personal_scripts_origin),
     (46, "email_accounts", _m46_email_accounts),
+    (47, "email_operator_accounts", _m47_email_operator_accounts),
+    (48, "email_agent_contract_backfill", _m48_email_agent_contract_backfill),
 ]
 
 

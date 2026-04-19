@@ -19,7 +19,6 @@ from pathlib import Path
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parents[2])))
-DEEP_SLEEP_DIR = NEXO_HOME / "operations" / "deep-sleep"
 PROMPT_FILE = Path(__file__).parent / "extract-prompt.md"
 
 if str(NEXO_CODE) not in sys.path:
@@ -27,11 +26,20 @@ if str(NEXO_CODE) not in sys.path:
 
 from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
 from constants import AUTOMATION_SUBPROCESS_TIMEOUT
+import paths
 try:
     from client_preferences import resolve_user_model as _resolve_user_model
     _USER_MODEL = _resolve_user_model()
 except Exception:
     _USER_MODEL = ""
+
+def _deep_sleep_dir() -> Path:
+    """Resolve the active deep-sleep workspace at call time.
+
+    Tests and post-migration installs can monkeypatch NEXO_HOME after this
+    module has been imported, so we must not freeze the path at import time.
+    """
+    return paths.operations_dir() / "deep-sleep"
 
 
 # 3h safety net for the Claude CLI subprocess. Prevents zombie processes while
@@ -236,7 +244,8 @@ def analyze_session(
 
         if not parsed:
             # Save raw output for debugging
-            debug_file = DEEP_SLEEP_DIR / f"debug-extract-{session_id[:20]}.txt"
+            debug_file = _deep_sleep_dir() / f"debug-extract-{session_id[:20]}.txt"
+            debug_file.parent.mkdir(parents=True, exist_ok=True)
             debug_file.write_text(result.stdout[:5000])
             print(f"    Failed to parse JSON. Raw output saved to {debug_file}", file=sys.stderr)
             return None, "json_parse"
@@ -300,10 +309,11 @@ def _save_checkpoint(path: Path, payload: dict) -> None:
 
 def main():
     target_date = sys.argv[1] if len(sys.argv) > 1 else datetime.now().strftime("%Y-%m-%d")
+    deep_sleep_dir = _deep_sleep_dir()
 
-    context_file = DEEP_SLEEP_DIR / f"{target_date}-context.txt"
-    meta_file = DEEP_SLEEP_DIR / f"{target_date}-meta.json"
-    date_dir = DEEP_SLEEP_DIR / target_date
+    context_file = deep_sleep_dir / f"{target_date}-context.txt"
+    meta_file = deep_sleep_dir / f"{target_date}-meta.json"
+    date_dir = deep_sleep_dir / target_date
 
     if not context_file.exists() and not date_dir.exists():
         print(f"[extract] No context for {target_date}. Run collect.py first.")
@@ -332,7 +342,8 @@ def main():
     if not session_files:
         print(f"[extract] No sessions to analyze for {target_date}.")
         output = {"date": target_date, "sessions_analyzed": 0, "extractions": []}
-        output_file = DEEP_SLEEP_DIR / f"{target_date}-extractions.json"
+        output_file = deep_sleep_dir / f"{target_date}-extractions.json"
+        output_file.parent.mkdir(parents=True, exist_ok=True)
         with open(output_file, "w") as f:
             json.dump(output, f, indent=2, ensure_ascii=False)
         print(f"[extract] Output: {output_file}")
@@ -476,7 +487,8 @@ def main():
         "extractions": all_extractions,
     }
 
-    output_file = DEEP_SLEEP_DIR / f"{target_date}-extractions.json"
+    output_file = deep_sleep_dir / f"{target_date}-extractions.json"
+    output_file.parent.mkdir(parents=True, exist_ok=True)
     with open(output_file, "w") as f:
         json.dump(output, f, indent=2, ensure_ascii=False)
 

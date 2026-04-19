@@ -45,6 +45,9 @@ def test_add_and_list(isolated_home):
     )
     assert a["label"] == "primary"
     assert a["imap_port"] == 993
+    assert a["account_type"] == "agent"
+    assert a["can_read"] is True
+    assert a["can_send"] is True
 
     rows = list_email_accounts()
     assert len(rows) == 1
@@ -80,6 +83,36 @@ def test_remove(isolated_home):
     assert list_email_accounts() == []
 
 
+def test_cli_enable_disable_account(isolated_home, capsys):
+    from types import SimpleNamespace
+
+    from cli_email import cmd_email_set_enabled
+    from db._email_accounts import add_email_account, get_email_account
+
+    add_email_account(
+        label="primary",
+        email="agent@example.com",
+        imap_host="imap.agent.com",
+        smtp_host="smtp.agent.com",
+    )
+
+    rc = cmd_email_set_enabled(
+        SimpleNamespace(label="primary", label_pos=None, json=True, enabled=False)
+    )
+    assert rc == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["enabled"] is False
+    assert get_email_account("primary")["enabled"] is False
+
+    rc = cmd_email_set_enabled(
+        SimpleNamespace(label="primary", label_pos=None, json=True, enabled=True)
+    )
+    assert rc == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["enabled"] is True
+    assert get_email_account("primary")["enabled"] is True
+
+
 def test_primary_picks_most_recent(isolated_home):
     import time as _time
     from db._email_accounts import (
@@ -93,6 +126,43 @@ def test_primary_picks_most_recent(isolated_home):
 
     primary = get_primary_email_account()
     assert primary["label"] == "newer"
+
+
+def test_primary_ignores_operator_accounts_and_default_operator_is_separate(isolated_home):
+    import time as _time
+    from db._email_accounts import (
+        add_email_account,
+        get_default_operator_email_account,
+        get_primary_email_account,
+    )
+
+    add_email_account(
+        label="agent",
+        email="agent@example.com",
+        imap_host="imap.agent.com",
+        smtp_host="smtp.agent.com",
+        credential_service="email",
+        credential_key="agent",
+        account_type="agent",
+        role="both",
+    )
+    _time.sleep(1.1)
+    add_email_account(
+        label="operator-default",
+        email="owner@example.com",
+        account_type="operator",
+        description="Owner default",
+        can_read=False,
+        can_send=False,
+        is_default=True,
+    )
+
+    primary = get_primary_email_account()
+    default_operator = get_default_operator_email_account()
+    assert primary["label"] == "agent"
+    assert default_operator["label"] == "operator-default"
+    assert default_operator["account_type"] == "operator"
+    assert default_operator["is_default"] is True
 
 
 def test_loader_prefers_table_over_legacy_json(isolated_home):
@@ -114,6 +184,16 @@ def test_loader_prefers_table_over_legacy_json(isolated_home):
         smtp_host="smtp.real.com",
         credential_service="email",
         credential_key="primary",
+        account_type="agent",
+    )
+    add_email_account(
+        label="operator-default",
+        email="owner@company.com",
+        account_type="operator",
+        description="Owner default",
+        can_read=False,
+        can_send=False,
+        is_default=True,
     )
 
     legacy = isolated_home / "nexo-email" / "config.json"
@@ -123,12 +203,57 @@ def test_loader_prefers_table_over_legacy_json(isolated_home):
     for mod in list(sys.modules):
         if mod == "email_config":
             sys.modules.pop(mod, None)
-    from email_config import load_email_config
+    from email_config import load_email_config, load_email_runtime_snapshot
 
     cfg = load_email_config()
     assert cfg["email"] == "real@table.com"
     assert cfg["password"] == "sekret-1"
     assert cfg["_source"] == "email_accounts"
+    assert cfg["operator_email"] == "owner@company.com"
+    assert cfg["default_operator_account"]["email"] == "owner@company.com"
+    assert len(cfg["operator_accounts"]) == 1
+
+    snapshot = load_email_runtime_snapshot()
+    assert snapshot["_source"] == "email_accounts"
+    assert snapshot["agent_account"]["email"] == "real@table.com"
+    assert snapshot["default_operator_account"]["email"] == "owner@company.com"
+
+
+def test_loader_surfaces_sent_folder_from_account_metadata(isolated_home):
+    from db._email_accounts import add_email_account
+    from db._core import get_db
+    import time as _time
+
+    conn = get_db()
+    now = _time.time()
+    conn.execute(
+        "INSERT INTO credentials (service, key, value, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+        ("email", "primary", "sekret-1", now, now),
+    )
+    conn.commit()
+    add_email_account(
+        label="primary",
+        email="real@table.com",
+        imap_host="imap.real.com",
+        smtp_host="smtp.real.com",
+        credential_service="email",
+        credential_key="primary",
+        account_type="agent",
+        metadata={"sent_folder": "Sent Items", "operator_aliases": ["owner@company.com"]},
+    )
+
+    for mod in list(sys.modules):
+        if mod == "email_config":
+            sys.modules.pop(mod, None)
+    from email_config import load_email_config, load_email_runtime_snapshot
+
+    cfg = load_email_config()
+    assert cfg is not None
+    assert cfg["sent_folder"] == "Sent Items"
+
+    snapshot = load_email_runtime_snapshot()
+    assert snapshot is not None
+    assert snapshot["agent_account"]["sent_folder"] == "Sent Items"
 
 
 def test_loader_falls_back_to_legacy_when_table_empty(isolated_home):
@@ -175,13 +300,25 @@ def test_migrate_script_populates_table(isolated_home):
     rc = mod.main([])
     assert rc == 0
 
-    from db._email_accounts import get_email_account
+    from db._email_accounts import (
+        get_default_operator_email_account,
+        get_email_account,
+        list_email_accounts,
+    )
     a = get_email_account("primary")
     assert a is not None
     assert a["email"] == "migrate@me.com"
     assert a["trusted_domains"] == ["migrate.com"]
     assert a["operator_email"] == "me@personal.com"
     assert a["metadata"]["operator_aliases"] == ["me@personal.com", "me@work.com"]
+    assert a["account_type"] == "agent"
+
+    operator_rows = list_email_accounts(account_type="operator")
+    assert len(operator_rows) == 2
+    default_operator = get_default_operator_email_account()
+    assert default_operator is not None
+    assert default_operator["email"] == "me@personal.com"
+    assert default_operator["is_default"] is True
 
     from db._core import get_db
     conn = get_db()
@@ -190,6 +327,119 @@ def test_migrate_script_populates_table(isolated_home):
     ).fetchone()
     assert row is not None
     assert row[0] == "hidden"
+
+
+def test_email_agent_backfill_migration_normalizes_legacy_agent_permissions(isolated_home):
+    from db._core import get_db
+    from db._schema import _m48_email_agent_contract_backfill
+
+    conn = get_db()
+    conn.execute(
+        """
+        INSERT INTO email_accounts (
+            label, email, imap_host, imap_port, smtp_host, smtp_port,
+            credential_service, credential_key, operator_email,
+            trusted_domains, role, enabled, metadata,
+            account_type, description, can_read, can_send, is_default,
+            created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+        """,
+        (
+            "primary",
+            "agent@example.com",
+            "imap.example.com",
+            993,
+            "smtp.example.com",
+            465,
+            "email",
+            "primary",
+            "owner@example.com",
+            "[]",
+            "both",
+            1,
+            "{}",
+            "agent",
+            "",
+            0,
+            0,
+            1,
+        ),
+    )
+    conn.commit()
+
+    _m48_email_agent_contract_backfill(conn)
+    conn.commit()
+
+    row = conn.execute(
+        "SELECT account_type, description, can_read, can_send, is_default "
+        "FROM email_accounts WHERE label = 'primary'"
+    ).fetchone()
+    assert row is not None
+    assert row[0] == "agent"
+    assert row[1] == "Agent mailbox"
+    assert row[2] == 1
+    assert row[3] == 1
+    assert row[4] == 0
+
+
+def test_migrate_script_normalizes_existing_primary_before_operator_backfill(isolated_home):
+    from db._email_accounts import add_email_account, get_email_account, get_default_operator_email_account
+
+    add_email_account(
+        label="primary",
+        email="existing@agent.com",
+        imap_host="imap.agent.com",
+        smtp_host="smtp.agent.com",
+        credential_service="email",
+        credential_key="primary",
+        operator_email="existing-owner@example.com",
+        role="both",
+        account_type="agent",
+        description="",
+        can_read=False,
+        can_send=False,
+        metadata={"operator_aliases": ["existing-owner@example.com"]},
+    )
+
+    legacy = isolated_home / "nexo-email" / "config.json"
+    legacy.write_text(json.dumps({
+        "email": "existing@agent.com",
+        "password": "hidden",
+        "imap_host": "imap.agent.com",
+        "imap_port": 993,
+        "smtp_host": "smtp.agent.com",
+        "smtp_port": 465,
+        "operator_email": "owner@personal.com",
+        "trusted_domains": ["agent.com"],
+        "francisco_emails": ["owner@personal.com", "owner@work.com"],
+        "sender_policy": "open",
+        "sent_folder": "Sent Items",
+    }))
+
+    import importlib.util
+    migrate_path = Path(SRC) / "scripts" / "nexo-email-migrate-config.py"
+    spec = importlib.util.spec_from_file_location("nexo_email_migrate_existing", migrate_path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    rc = mod.main([])
+    assert rc == 0
+
+    primary = get_email_account("primary")
+    assert primary is not None
+    assert primary["can_read"] is True
+    assert primary["can_send"] is True
+    assert primary["description"] == "Agent mailbox"
+    assert primary["metadata"]["sent_folder"] == "Sent Items"
+    assert primary["metadata"]["operator_aliases"] == [
+        "existing-owner@example.com",
+        "owner@personal.com",
+        "owner@work.com",
+    ]
+
+    default_operator = get_default_operator_email_account()
+    assert default_operator is not None
+    assert default_operator["email"] == "owner@personal.com"
 
 
 def test_metadata_preserved_when_re_adding_without_metadata_arg(isolated_home):

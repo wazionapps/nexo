@@ -1041,7 +1041,9 @@ def test_run_mechanical_autofixes_sanitizes_registry_and_refreshes_snapshots(sel
     assert any(item["area"] == "snapshots" and item["severity"] == "INFO" for item in module.findings)
     assert not any(item["area"] == "watchdog" and "mutable files still protected" in item["msg"] for item in module.findings)
     assert not any(item["area"] == "snapshots" and "golden snapshot drift" in item["msg"] for item in module.findings)
-    assert (self_audit_env / "snapshots" / "golden" / "files" / "claude" / "evolution_cycle.py").is_file()
+    assert (
+        self_audit_env / "runtime" / "snapshots" / "golden" / "files" / "claude" / "evolution_cycle.py"
+    ).is_file()
 
 
 def test_run_mechanical_autofixes_disables_broken_personal_plugins(self_audit_env, monkeypatch):

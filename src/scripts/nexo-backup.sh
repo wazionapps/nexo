@@ -2,7 +2,10 @@
 # NEXO DB hourly backup — crontab: 0 * * * * $NEXO_HOME/core/scripts/nexo-backup.sh
 NEXO_HOME="${NEXO_HOME:-$HOME/.nexo}"
 NEXO_DIR="$NEXO_HOME"
-BACKUP_DIR="$NEXO_HOME/backups"
+BACKUP_DIR="$NEXO_HOME/runtime/backups"
+if [ ! -d "$BACKUP_DIR" ] && [ -d "$NEXO_HOME/backups" ]; then
+    BACKUP_DIR="$NEXO_HOME/backups"
+fi
 WEEKLY_DIR="$BACKUP_DIR/weekly"
 DB="$NEXO_HOME/runtime/data/nexo.db"
 RETENTION_HOURS=48

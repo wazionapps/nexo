@@ -7,6 +7,7 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
+from paths import coordination_dir, logs_dir
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 _script_dir = Path(__file__).resolve().parent
@@ -17,8 +18,8 @@ if str(NEXO_CODE) not in sys.path:
 
 import db as nexo_db
 
-LOG_FILE = NEXO_HOME / "logs" / "outcome-checker.log"
-SUMMARY_FILE = NEXO_HOME / "coordination" / "outcome-checker-summary.json"
+LOG_FILE = logs_dir() / "outcome-checker.log"
+SUMMARY_FILE = coordination_dir() / "outcome-checker-summary.json"
 
 
 def log(message: str):

@@ -11,16 +11,29 @@ import pathlib
 import threading
 
 NEXO_HOME = os.environ.get("NEXO_HOME", os.path.expanduser("~/.nexo"))
-_data_dir = os.path.join(NEXO_HOME, "data")
-os.makedirs(_data_dir, exist_ok=True)
 
-DB_PATH = os.environ.get(
-    "NEXO_TEST_DB",
-    os.environ.get(
-        "NEXO_DB",
-        os.path.join(_data_dir, "nexo.db"),
-    ),
-)
+# Plan F0.6 — transition-aware DB path. Post-F0.6: runtime/data/nexo.db.
+# Pre-F0.6 fallback: data/nexo.db. Tests + NEXO_TEST_DB / NEXO_DB env
+# overrides win unconditionally.
+def _resolve_db_path() -> str:
+    test_override = os.environ.get("NEXO_TEST_DB")
+    if test_override:
+        return test_override
+    db_override = os.environ.get("NEXO_DB")
+    if db_override:
+        return db_override
+    new_path = os.path.join(NEXO_HOME, "runtime", "data", "nexo.db")
+    legacy_path = os.path.join(NEXO_HOME, "data", "nexo.db")
+    if os.path.isfile(new_path):
+        return new_path
+    if os.path.isfile(legacy_path):
+        return legacy_path
+    # Fresh install or new layout — default to new.
+    return new_path
+
+DB_PATH = _resolve_db_path()
+_data_dir = os.path.dirname(DB_PATH)
+os.makedirs(_data_dir, exist_ok=True)
 
 # TTLs in seconds (match session-coord.sh behavior)
 SESSION_STALE_SECONDS = 900    # 15 min (documented TTL)

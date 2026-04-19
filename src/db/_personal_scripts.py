@@ -7,11 +7,12 @@ what they do, and which schedules/plists are attached to them.
 """
 
 import datetime
+import importlib
 import json
 import os
 from pathlib import Path
 
-from db._core import get_db
+import paths
 from runtime_home import resolve_nexo_home
 
 
@@ -22,17 +23,61 @@ def _now_text() -> str:
     return datetime.datetime.now().isoformat(timespec="seconds")
 
 
+def _get_db():
+    """Resolve db._core lazily so reload-heavy tests use the live connection module."""
+    return importlib.import_module("db._core").get_db()
+
+
 def _canonical_scripts_dir() -> Path:
-    home = resolve_nexo_home(os.environ.get("NEXO_HOME", str(NEXO_HOME)))
-    return home / "scripts"
+    return paths.personal_scripts_dir()
+
+
+def _canonical_script_dirs() -> list[Path]:
+    legacy = resolve_nexo_home(os.environ.get("NEXO_HOME", str(NEXO_HOME))) / "scripts"
+    ordered = [
+        paths.personal_scripts_dir(),
+        paths.core_scripts_dir(),
+        paths.core_dev_scripts_dir(),
+    ]
+    result: list[Path] = []
+    seen: set[str] = set()
+    for candidate in ordered:
+        key = str(candidate.resolve(strict=False))
+        if key not in seen:
+            seen.add(key)
+            result.append(candidate)
+    legacy_key = str(legacy.resolve(strict=False))
+    if legacy_key not in seen:
+        result.append(legacy)
+    return result
 
 
 def _normalize_script_path(path: str | Path) -> str:
     candidate = Path(path).expanduser()
+    resolved = candidate.resolve(strict=False)
+    canonical_dirs = _canonical_script_dirs()
+    legacy_dir = resolve_nexo_home(os.environ.get("NEXO_HOME", str(NEXO_HOME))) / "scripts"
+
+    for scripts_dir in canonical_dirs:
+        if scripts_dir == legacy_dir:
+            continue
+        try:
+            relative = resolved.relative_to(scripts_dir.resolve(strict=False))
+        except Exception:
+            continue
+        return str(scripts_dir / relative)
+
     try:
-        relative = candidate.resolve(strict=False).relative_to(_canonical_scripts_dir().resolve(strict=False))
+        relative = resolved.relative_to(legacy_dir.resolve(strict=False))
     except Exception:
         return str(candidate)
+
+    for scripts_dir in canonical_dirs:
+        if scripts_dir == legacy_dir:
+            continue
+        target = scripts_dir / relative
+        if target.exists():
+            return str(target)
     return str(_canonical_scripts_dir() / relative)
 
 
@@ -102,10 +147,11 @@ def upsert_personal_script(
     metadata: dict | None = None,
     created_by: str = "manual",
     source: str = "filesystem",
+    origin: str = "user",
     enabled: bool = True,
     has_inline_metadata: bool = False,
 ) -> dict:
-    conn = get_db()
+    conn = _get_db()
     path = _normalize_script_path(path)
     script_id = _ensure_script_id(conn, name, path)
     now = _now_text()
@@ -113,8 +159,8 @@ def upsert_personal_script(
         """
         INSERT INTO personal_scripts (
             id, name, path, description, runtime, metadata_json, created_by, source,
-            enabled, has_inline_metadata, last_synced_at, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            origin, enabled, has_inline_metadata, last_synced_at, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(path) DO UPDATE SET
             name = excluded.name,
             description = excluded.description,
@@ -122,6 +168,7 @@ def upsert_personal_script(
             metadata_json = excluded.metadata_json,
             created_by = COALESCE(NULLIF(personal_scripts.created_by, ''), excluded.created_by),
             source = excluded.source,
+            origin = excluded.origin,
             -- Plan F0.2.2: preserve operator-set `enabled` flag across sync runs.
             -- Sync defaults to enabled=True for INSERTs; on UPDATE we keep
             -- whatever the operator (or `nexo scripts disable`) set.
@@ -138,6 +185,7 @@ def upsert_personal_script(
             _json_dump(metadata or {}, {}),
             created_by,
             source,
+            origin or "user",
             1 if enabled else 0,
             1 if has_inline_metadata else 0,
             now,
@@ -150,16 +198,19 @@ def upsert_personal_script(
 
 
 def delete_missing_personal_scripts(active_paths: list[str]) -> int:
-    conn = get_db()
+    conn = _get_db()
     normalized_paths = [_normalize_script_path(path) for path in active_paths]
     if normalized_paths:
         placeholders = ",".join("?" for _ in normalized_paths)
         rows = conn.execute(
-            f"SELECT id FROM personal_scripts WHERE path NOT IN ({placeholders})",
+            f"SELECT id FROM personal_scripts "
+            f"WHERE COALESCE(origin, 'user') != 'core' AND path NOT IN ({placeholders})",
             tuple(normalized_paths),
         ).fetchall()
     else:
-        rows = conn.execute("SELECT id FROM personal_scripts").fetchall()
+        rows = conn.execute(
+            "SELECT id FROM personal_scripts WHERE COALESCE(origin, 'user') != 'core'"
+        ).fetchall()
 
     count = len(rows)
     for row in rows:
@@ -179,7 +230,7 @@ def register_personal_script_schedule(
     description: str = "",
     enabled: bool = True,
 ) -> dict | None:
-    conn = get_db()
+    conn = _get_db()
     script_path = _normalize_script_path(script_path)
     script = conn.execute(
         "SELECT id FROM personal_scripts WHERE path = ?",
@@ -230,7 +281,7 @@ def register_personal_script_schedule(
 
 
 def delete_missing_personal_schedules(active_cron_ids: list[str]) -> int:
-    conn = get_db()
+    conn = _get_db()
     if active_cron_ids:
         placeholders = ",".join("?" for _ in active_cron_ids)
         rows = conn.execute(
@@ -247,7 +298,7 @@ def delete_missing_personal_schedules(active_cron_ids: list[str]) -> int:
 
 
 def list_personal_script_schedules(script_id: str = "", include_disabled: bool = True) -> list[dict]:
-    conn = get_db()
+    conn = _get_db()
     clauses = []
     params: list = []
     if script_id:
@@ -264,7 +315,7 @@ def list_personal_script_schedules(script_id: str = "", include_disabled: bool =
 
 
 def get_personal_script_schedule(cron_id: str) -> dict | None:
-    conn = get_db()
+    conn = _get_db()
     row = conn.execute(
         "SELECT * FROM personal_script_schedules WHERE cron_id = ?",
         (cron_id,),
@@ -273,7 +324,7 @@ def get_personal_script_schedule(cron_id: str) -> dict | None:
 
 
 def delete_personal_script_schedule(cron_id: str) -> int:
-    conn = get_db()
+    conn = _get_db()
     result = conn.execute(
         "DELETE FROM personal_script_schedules WHERE cron_id = ?",
         (cron_id,),
@@ -289,7 +340,7 @@ def hydrate_personal_schedule(row: dict) -> dict:
 
 
 def _latest_cron_runs_by_id(cron_ids: list[str]) -> dict[str, dict]:
-    conn = get_db()
+    conn = _get_db()
     if not cron_ids:
         return {}
     placeholders = ",".join("?" for _ in cron_ids)
@@ -324,9 +375,14 @@ def hydrate_personal_script(row: dict) -> dict:
     return row
 
 
-def list_personal_scripts(include_disabled: bool = True) -> list[dict]:
-    conn = get_db()
-    where = "" if include_disabled else "WHERE enabled = 1"
+def list_personal_scripts(include_disabled: bool = True, *, include_core: bool = False) -> list[dict]:
+    conn = _get_db()
+    clauses: list[str] = []
+    if not include_disabled:
+        clauses.append("enabled = 1")
+    if not include_core:
+        clauses.append("COALESCE(origin, 'user') != 'core'")
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     rows = conn.execute(
         f"SELECT * FROM personal_scripts {where} ORDER BY name COLLATE NOCASE ASC"
     ).fetchall()
@@ -361,13 +417,16 @@ def list_personal_scripts(include_disabled: bool = True) -> list[dict]:
     return scripts
 
 
-def get_personal_script(name_or_path: str) -> dict | None:
-    conn = get_db()
+def get_personal_script(name_or_path: str, *, include_core: bool = False) -> dict | None:
+    conn = _get_db()
     normalized_path = _normalize_script_path(name_or_path)
+    clauses = ["(path = ? OR name = ?)"]
+    if not include_core:
+        clauses.append("COALESCE(origin, 'user') != 'core'")
     row = conn.execute(
         """
         SELECT * FROM personal_scripts
-        WHERE path = ? OR name = ?
+        WHERE """ + " AND ".join(clauses) + """
         ORDER BY path = ? DESC
         LIMIT 1
         """,
@@ -382,7 +441,7 @@ def get_personal_script(name_or_path: str) -> dict | None:
 
 
 def delete_personal_script(name_or_path: str) -> int:
-    conn = get_db()
+    conn = _get_db()
     normalized_path = _normalize_script_path(name_or_path)
     result = conn.execute(
         "DELETE FROM personal_scripts WHERE path = ? OR name = ? OR id = ?",
@@ -392,7 +451,7 @@ def delete_personal_script(name_or_path: str) -> int:
 
 
 def record_personal_script_run(name_or_path: str, exit_code: int, run_at: str | None = None) -> None:
-    conn = get_db()
+    conn = _get_db()
     run_at = run_at or _now_text()
     normalized_path = _normalize_script_path(name_or_path)
     conn.execute(
@@ -412,9 +471,46 @@ def sync_personal_scripts_registry(
     prune_missing: bool = True,
 ) -> dict:
     schedule_records = schedule_records or []
+    conn = _get_db()
+    repaired_paths: list[dict] = []
     active_paths: list[str] = []
     upserted = 0
     scheduled = 0
+
+    rows = conn.execute("SELECT id, path FROM personal_scripts ORDER BY id ASC").fetchall()
+    for row in rows:
+        old_path = str(row["path"] or "")
+        if not old_path:
+            continue
+        new_path = _normalize_script_path(old_path)
+        if new_path == old_path:
+            continue
+        existing = conn.execute(
+            "SELECT id FROM personal_scripts WHERE path = ? AND id != ? LIMIT 1",
+            (new_path, row["id"]),
+        ).fetchone()
+        if existing:
+            conn.execute(
+                "UPDATE personal_script_schedules SET script_id = ? WHERE script_id = ?",
+                (existing["id"], row["id"]),
+            )
+            conn.execute("DELETE FROM personal_scripts WHERE id = ?", (row["id"],))
+            repaired_paths.append({
+                "id": row["id"],
+                "old_path": old_path,
+                "new_path": new_path,
+                "deduped_into": existing["id"],
+            })
+            continue
+        conn.execute(
+            "UPDATE personal_scripts SET path = ?, updated_at = ? WHERE id = ?",
+            (new_path, _now_text(), row["id"]),
+        )
+        repaired_paths.append({
+            "id": row["id"],
+            "old_path": old_path,
+            "new_path": new_path,
+        })
 
     for record in script_records:
         path = _normalize_script_path(record["path"])
@@ -427,6 +523,7 @@ def sync_personal_scripts_registry(
             metadata=record.get("metadata", {}),
             created_by=record.get("created_by", "manual"),
             source=record.get("source", "filesystem"),
+            origin=record.get("origin", "user"),
             enabled=record.get("enabled", True),
             has_inline_metadata=bool(record.get("metadata")),
         )
@@ -458,6 +555,7 @@ def sync_personal_scripts_registry(
     pruned_schedules = delete_missing_personal_schedules(active_cron_ids) if prune_missing else 0
     return {
         "ok": True,
+        "paths_repaired": repaired_paths,
         "scripts_upserted": upserted,
         "schedules_upserted": scheduled,
         "scripts_pruned": pruned_scripts,

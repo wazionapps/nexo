@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Docs — NEXO Brain</title>
+    <meta name="description" content="Documentation hub for NEXO Brain: quickstart, workflows, recent memory, architecture, portability, SDK, Docker, and contribution references.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/docs/">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://nexo-brain.com/docs/">
+    <meta property="og:title" content="Docs — NEXO Brain">
+    <meta property="og:description" content="Documentation hub for NEXO Brain: quickstart, workflows, recent memory, architecture, portability, SDK, Docker, and contribution references.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/og/og-home.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Docs — NEXO Brain">
+    <meta name="twitter:description" content="Documentation hub for NEXO Brain: quickstart, workflows, recent memory, architecture, portability, SDK, Docker, and contribution references.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-home.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body class="features-page">
+<nav>
+    <div class="container">
+        <a href="/" class="nav-logo">
+            <img src="/assets/logo-64.png" alt="NEXO Brain" width="32" height="32">
+            NEXO Brain
+        </a>
+        <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/features/">Features</a>
+            <a href="/evolution/">Evolution</a>
+            <a href="/compare/">Compare</a>
+            <a href="/blog/">Blog</a>
+            <a href="/changelog/">Changelog</a>
+            <a href="/docs/">Docs</a>
+            <a href="https://github.com/wazionapps/nexo" class="nav-cta">GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<section class="pt-nav page-hero">
+    <div class="container">
+        <div class="page-hero-copy" style="max-width:900px;">
+            <div class="section-label">Documentation</div>
+            <h1 class="section-title" style="font-size:clamp(34px,5vw,58px);">Docs hub</h1>
+            <p class="section-subtitle">This page groups the most useful references in the repo. The source docs still live in GitHub-flavoured markdown inside the public repository, but the web route is now real and navigable.</p>
+        </div>
+    </div>
+</section>
+
+<section>
+    <div class="container">
+        <div class="features-grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));">
+            <a id="quickstart" href="https://github.com/wazionapps/nexo/blob/main/docs/quickstart-5-minutes.md" class="feature-card" style="text-decoration:none;color:inherit;">
+                <h3>Quickstart</h3>
+                <p>Fast install path, the first commands to run, and the shortest honest route into a usable runtime.</p>
+            </a>
+            <a id="workflows" href="https://github.com/wazionapps/nexo/blob/main/docs/workflows-quickstart.md" class="feature-card" style="text-decoration:none;color:inherit;">
+                <h3>Workflow quickstart</h3>
+                <p>How the runtime is meant to be used in normal day-to-day work once installation is complete.</p>
+            </a>
+            <a id="recent-memory" href="https://github.com/wazionapps/nexo/blob/main/docs/recent-memory-fallbacks-and-system-catalog.md" class="feature-card" style="text-decoration:none;color:inherit;">
+                <h3>Recent memory and system catalog</h3>
+                <p>How NEXO keeps short-horizon continuity and what it inspects when recent context is too thin.</p>
+            </a>
+            <a id="architecture" href="https://github.com/wazionapps/nexo/blob/main/docs/architecture-visuals.md" class="feature-card" style="text-decoration:none;color:inherit;">
+                <h3>Architecture visuals</h3>
+                <p>A visual route through the runtime model, memory surfaces, and product structure.</p>
+            </a>
+            <a id="portability" href="https://github.com/wazionapps/nexo/blob/main/docs/session-portability.md" class="feature-card" style="text-decoration:none;color:inherit;">
+                <h3>Session portability</h3>
+                <p>What survives across client switches, runtime restarts, and longer work loops.</p>
+            </a>
+            <a id="sdk" href="https://github.com/wazionapps/nexo/blob/main/docs/sdk-python.md" class="feature-card" style="text-decoration:none;color:inherit;">
+                <h3>Python SDK</h3>
+                <p>Reference for integrations that want to consume runtime surfaces programmatically.</p>
+            </a>
+            <a id="docker" href="https://github.com/wazionapps/nexo/blob/main/docs/docker-setup.md" class="feature-card" style="text-decoration:none;color:inherit;">
+                <h3>Docker setup</h3>
+                <p>Container route for operators who want a more controlled runtime envelope.</p>
+            </a>
+            <a id="contribution" href="https://github.com/wazionapps/nexo/blob/main/docs/public-contribution.md" class="feature-card" style="text-decoration:none;color:inherit;">
+                <h3>Public contribution guide</h3>
+                <p>How public-core contributions, release discipline, and review-gated changes are expected to work.</p>
+            </a>
+        </div>
+    </div>
+</section>
+</body>
+</html>
