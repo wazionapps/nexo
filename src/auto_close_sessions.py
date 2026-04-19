@@ -11,8 +11,15 @@ import os
 import sys
 import datetime
 
-# Ensure we can import from the source directory
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Ensure imports work both from ``src/auto_close_sessions.py`` and from the
+# packaged runtime copy under ``core/scripts/auto_close_sessions.py``.
+_THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+_IMPORT_ROOTS = [_THIS_DIR]
+if os.path.basename(_THIS_DIR) == "scripts":
+    _IMPORT_ROOTS.append(os.path.dirname(_THIS_DIR))
+for _candidate in _IMPORT_ROOTS:
+    if _candidate and _candidate not in sys.path:
+        sys.path.insert(0, _candidate)
 os.environ["NEXO_SKIP_FS_INDEX"] = "1"  # Skip FTS rebuild on import
 
 from db import (
