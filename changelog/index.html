@@ -181,6 +181,22 @@
     </div>
 </section>
 
+<section class="section-compact" style="background:rgba(124,58,237,0.08);">
+    <div class="container desktop-disclaimer" style="max-width:860px;font-size:13px;line-height:1.55;">
+        <p><strong>Sobre NEXO Desktop.</strong> NEXO Desktop es un cliente acompa&ntilde;ante closed-source distribuido aparte en <a href="https://systeam.es/nexo-desktop">systeam.es/nexo-desktop</a>. Cuando una entrada de changelog menciona "NEXO Desktop" se refiere a una versi&oacute;n coordinada de ese cliente que consume el contrato CLI/MCP del Brain. El c&oacute;digo de Desktop no vive en este repo; el Brain (AGPL-3.0) es 100% usable por s&iacute; solo desde terminal, Codex, Claude Code, o cualquier cliente MCP.</p>
+    </div>
+</section>
+
+<section id="v650" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v6.5.0 <span style="opacity:.5;font-weight:400;">&mdash; April 19, 2026</span></div>
+        <h2 style="color:white;margin-bottom:16px;">Plan Consolidado fase F0.2 &mdash; toggle por script para operadores</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            Tres verbos nuevos en el CLI: <code>nexo scripts enable &lt;name&gt;</code>, <code>nexo scripts disable &lt;name&gt;</code>, <code>nexo scripts status &lt;name&gt;</code> &mdash; todos aceptan <code>--json</code> para consumidores m&aacute;quina (incluido el panel <em>Automatizaciones</em> del cliente NEXO Desktop, que es un producto separado closed-source). El wrapper del cron (<code>nexo-cron-wrapper.sh</code>) lee <code>personal_scripts.enabled</code> en cada tick: cuando est&aacute; desactivado sale con <code>exit 0</code> y <code>summary='[disabled]'</code> mientras el LaunchAgent sigue cargado, as&iacute; reactivar es un solo comando. El upsert de <code>personal_scripts</code> ya no sobreescribe <code>enabled</code> en la rama UPDATE: la flag puesta por el operador es <em>sticky</em> a trav&eacute;s de <code>nexo scripts sync</code>. Cuatro tests nuevos en <code>tests/test_personal_scripts_enabled.py</code> cubren round-trip, error envelope, status shape y la regresi&oacute;n del sticky flag.
+        </p>
+    </div>
+</section>
+
 <section id="v640" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
     <div class="container" style="max-width:860px;">
         <div class="section-label">New in v6.4.0 <span style="opacity:.5;font-weight:400;">&mdash; April 19, 2026</span></div>
