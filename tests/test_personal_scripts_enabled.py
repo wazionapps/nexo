@@ -93,3 +93,32 @@ def test_status_after_disable_reports_disabled(isolated_home):
     s = get_personal_script_status("demo")
     assert s["ok"]
     assert s["enabled"] is False
+
+
+def test_list_scripts_with_all_includes_enabled_field(isolated_home):
+    """Audit C1 regression — every entry returned by `nexo scripts list
+    --json --all` must carry an `enabled` field so the Desktop toggle
+    can round-trip. Without this, the panel button is one-way (always
+    "Disable", clicks always disable, no way to re-enable from UI)."""
+    _seed_script(isolated_home, "round-trip-demo")
+    from script_registry import sync_personal_scripts, list_scripts, set_personal_script_enabled
+
+    sync_personal_scripts()
+
+    rows = list_scripts(include_core=True)
+    assert any(r["name"] == "round-trip-demo" for r in rows)
+    target = next(r for r in rows if r["name"] == "round-trip-demo")
+    assert "enabled" in target
+    assert target["enabled"] is True
+
+    # Disable -> list again -> entry is now enabled=False (round-trip).
+    set_personal_script_enabled("round-trip-demo", False)
+    rows = list_scripts(include_core=True)
+    target = next(r for r in rows if r["name"] == "round-trip-demo")
+    assert target["enabled"] is False
+
+    # Re-enable -> back to True (the actual fix the auditor demanded).
+    set_personal_script_enabled("round-trip-demo", True)
+    rows = list_scripts(include_core=True)
+    target = next(r for r in rows if r["name"] == "round-trip-demo")
+    assert target["enabled"] is True

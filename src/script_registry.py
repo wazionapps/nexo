@@ -626,7 +626,33 @@ def list_scripts(include_core: bool = False) -> list[dict]:
     """List scripts in NEXO_HOME/scripts/.
 
     By default only personal scripts. With include_core=True, also shows core/cron scripts.
+
+    Plan F0.2.4 fix — every entry now carries an `enabled` field
+    hydrated from the `personal_scripts` table. Core entries default
+    to True (they ship enabled and are not toggleable from this entry
+    point); personal entries default to True when no row exists yet
+    (sync hasn't run) so the Desktop toggle has a stable starting
+    state. The flag is what powers the Settings -> Automatizaciones
+    toggle's round-trip.
     """
+    # Build a path -> enabled map once so we don't open a transaction
+    # per entry. Personal_scripts rows that don't match anything in
+    # classify_scripts_dir() are simply ignored.
+    enabled_map: dict[str, bool] = {}
+    try:
+        from db import init_db
+        from db._personal_scripts import list_personal_scripts
+        init_db()
+        for row in list_personal_scripts(include_disabled=True):
+            p = row.get("path")
+            if p:
+                enabled_map[str(p)] = bool(row.get("enabled", True))
+    except Exception:
+        # If the DB is unreachable / the table is missing (older runtime),
+        # fall through to the safe default of enabled=True for every
+        # entry. The cron wrapper gate is the source of truth at run time.
+        enabled_map = {}
+
     results = []
     for entry in classify_scripts_dir()["entries"]:
         if entry["classification"] not in {"personal", "core"}:
@@ -636,6 +662,7 @@ def list_scripts(include_core: bool = False) -> list[dict]:
         hidden = _truthy(entry.get("metadata", {}).get("hidden"))
         if hidden and not include_core:
             continue
+        entry["enabled"] = enabled_map.get(entry["path"], True)
         results.append(entry)
     return results
 
