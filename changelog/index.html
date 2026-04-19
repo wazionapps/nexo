@@ -187,6 +187,16 @@
     </div>
 </section>
 
+<section id="v701" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.0.1 <span style="opacity:.5;font-weight:400;">&mdash; April 19, 2026 &mdash; <strong>HOTFIX</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">db._core.DB_PATH transition-aware (post-F0.6)</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            <code>src/db/_core.py::DB_PATH</code> era el &uacute;nico caller que segu&iacute;a hardcoded a la ruta legacy pre-F0.6. Tras la migraci&oacute;n F0.6 la DB vive en <code>~/.nexo/runtime/data/nexo.db</code>, pero ese m&oacute;dulo segu&iacute;a abriendo <code>~/.nexo/data/nexo.db</code> (inexistente). Resultado: <code>nexo email list</code>, <code>nexo scripts list</code>, <code>nexo_task_open</code> y todo lo dem&aacute;s que comparte la conexi&oacute;n DB devolv&iacute;an resultados vac&iacute;os. Fix: DB_PATH ahora es transition-aware (NEXO_TEST_DB y NEXO_DB env overrides mantienen prioridad).
+        </p>
+    </div>
+</section>
+
 <section id="v700" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
     <div class="container" style="max-width:860px;">
         <div class="section-label">New in v7.0.0 <span style="opacity:.5;font-weight:400;">&mdash; April 19, 2026 &mdash; <strong>BREAKING</strong></span></div>

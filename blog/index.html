@@ -134,7 +134,7 @@
                     <span class="page-chip">Competitive analysis</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="/blog/nexo-7-0-0/" class="btn btn-primary">Read latest release</a>
+                    <a href="/blog/nexo-7-0-1/" class="btn btn-primary">Read latest release</a>
                     <a href="/changelog/" class="btn btn-secondary">Latest release notes</a>
             <p class="desktop-disclaimer field-hint" style="margin-top:18px;padding:10px 14px;background:rgba(124,58,237,0.08);border-radius:8px;border:1px solid rgba(124,58,237,0.2);font-size:13px;line-height:1.55;"><strong>NEXO Desktop</strong> es un cliente acompa&ntilde;ante closed-source distribuido aparte en <a href="https://systeam.es/nexo-desktop">systeam.es/nexo-desktop</a>. Cuando un release habla de "NEXO Desktop" se refiere a una versi&oacute;n coordinada de ese cliente que consume el contrato CLI/MCP del Brain. El Brain (este repo, AGPL-3.0) es 100% usable por s&iacute; solo desde terminal, Codex, Claude Code, o cualquier cliente MCP.</p>
 
@@ -173,6 +173,13 @@
 <section class="section-flush-top">
     <div class="container">
         <div class="blog-grid">
+
+                        <div class="blog-card">
+                <div class="blog-card-date">April 19, 2026</div>
+                <h2><a href="/blog/nexo-7-0-1/">NEXO 7.0.1: hotfix — db._core.DB_PATH transition-aware</a></h2>
+                <p>CRITICAL hotfix sobre v7.0.0. <code>src/db/_core.py::DB_PATH</code> era el único caller que seguía hardcoded a la ruta legacy pre-F0.6. Tras la migración F0.6 el DB vive en <code>~/.nexo/runtime/data/nexo.db</code>, pero ese módulo seguía abriendo <code>~/.nexo/data/nexo.db</code> (inexistente). Resultado: <code>nexo email list</code>, <code>nexo scripts list</code>, <code>nexo_task_open</code> y todo lo demás que comparte la conexión DB devolvían resultados vacíos. Fix: DB_PATH ahora es transition-aware (igual que el resto de paths.py).</p>
+                <a href="/blog/nexo-7-0-1/" class="read-more">Read more &rarr;</a>
+            </div>
 
             <div class="blog-card">
                 <div class="blog-card-date">April 19, 2026</div>
