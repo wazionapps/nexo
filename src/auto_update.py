@@ -3613,6 +3613,23 @@ def _resolve_sync_source() -> tuple[Path | None, Path | None]:
         return None
 
     try:
+        runtime_core = (dest / "core").resolve()
+        code_resolved = NEXO_CODE.resolve()
+    except Exception:
+        runtime_core = dest / "core"
+        code_resolved = NEXO_CODE
+
+    # Packaged/runtime-only installs resolve the launcher to ``~/.nexo/core``.
+    # Those must use the packaged updater path instead of treating the managed
+    # runtime itself as a mutable source repository. Only a recorded external
+    # source repo in ``version.json`` should reactivate source-sync mode.
+    if code_resolved == runtime_core:
+        version_source = _runtime_version_source()
+        if version_source:
+            return version_source / "src", version_source
+        return None, None
+
+    try:
         same_as_runtime = NEXO_CODE.resolve() == dest.resolve()
     except Exception:
         same_as_runtime = NEXO_CODE == dest
@@ -3798,6 +3815,31 @@ def _backup_runtime_tree(dest: Path = NEXO_HOME) -> str:
     return str(backup_dir)
 
 
+def _remove_runtime_copy_target(target: Path) -> None:
+    """Remove a runtime copy destination, handling symlinks explicitly.
+
+    F0.6 installs keep compatibility shims such as ``~/.nexo/db ->
+    ~/.nexo/core/db``. ``shutil.rmtree(..., ignore_errors=True)`` does not
+    remove those symlinks, which makes subsequent ``copytree(...)`` calls fail
+    with ``FileExistsError`` during ``nexo update``. This helper treats
+    symlink/file targets differently from real directories so runtime sync and
+    rollback can replace shim paths safely.
+    """
+    import shutil
+
+    try:
+        if target.is_symlink() or target.is_file():
+            target.unlink()
+            return
+        if target.is_dir():
+            shutil.rmtree(str(target), ignore_errors=True)
+            return
+        if target.exists():
+            target.unlink()
+    except FileNotFoundError:
+        return
+
+
 def _restore_runtime_tree(backup_dir: str, dest: Path = NEXO_HOME) -> None:
     import shutil
 
@@ -3807,11 +3849,11 @@ def _restore_runtime_tree(backup_dir: str, dest: Path = NEXO_HOME) -> None:
     for item in bdir.iterdir():
         target = dest / item.name
         if item.is_dir():
-            if target.exists():
-                shutil.rmtree(target, ignore_errors=True)
+            _remove_runtime_copy_target(target)
             shutil.copytree(str(item), str(target))
         else:
             target.parent.mkdir(parents=True, exist_ok=True)
+            _remove_runtime_copy_target(target)
             shutil.copy2(str(item), str(target))
 
 
@@ -3834,8 +3876,7 @@ def _copy_runtime_from_source(src_dir: Path, repo_dir: Path, dest: Path = NEXO_H
         pkg_src = src_dir / pkg
         pkg_dest = dest / pkg
         if pkg_src.is_dir():
-            if pkg_dest.exists():
-                shutil.rmtree(str(pkg_dest), ignore_errors=True)
+            _remove_runtime_copy_target(pkg_dest)
             shutil.copytree(
                 str(pkg_src),
                 str(pkg_dest),
@@ -3847,30 +3888,37 @@ def _copy_runtime_from_source(src_dir: Path, repo_dir: Path, dest: Path = NEXO_H
     for name in flat_files:
         src_file = src_dir / name
         if src_file.is_file():
-            shutil.copy2(str(src_file), str(dest / name))
+            target = dest / name
+            _remove_runtime_copy_target(target)
+            shutil.copy2(str(src_file), str(target))
             copied_files += 1
 
     _emit_progress(progress_fn, "Copying plugin modules...")
     plugins_src = src_dir / "plugins"
     plugins_dest = dest / "plugins"
     if plugins_src.is_dir():
+        if plugins_dest.is_symlink():
+            _remove_runtime_copy_target(plugins_dest)
         plugins_dest.mkdir(parents=True, exist_ok=True)
         for item in plugins_src.iterdir():
             if item.is_file() and item.suffix == ".py" and not is_duplicate_artifact_name(item):
-                shutil.copy2(str(item), str(plugins_dest / item.name))
+                target = plugins_dest / item.name
+                _remove_runtime_copy_target(target)
+                shutil.copy2(str(item), str(target))
 
     _emit_progress(progress_fn, "Copying scripts...")
     scripts_src = src_dir / "scripts"
     scripts_dest = dest / "scripts"
     if scripts_src.is_dir():
+        if scripts_dest.is_symlink():
+            _remove_runtime_copy_target(scripts_dest)
         scripts_dest.mkdir(parents=True, exist_ok=True)
         for item in scripts_src.iterdir():
             if item.name == "__pycache__" or item.name.startswith(".") or is_duplicate_artifact_name(item):
                 continue
             dst = scripts_dest / item.name
             if item.is_dir():
-                if dst.exists():
-                    shutil.rmtree(str(dst), ignore_errors=True)
+                _remove_runtime_copy_target(dst)
                 shutil.copytree(str(item), str(dst), ignore=_runtime_copy_ignore())
             elif item.is_file():
                 existing_class = installed_script_classes.get(item.name, "")
@@ -3899,25 +3947,37 @@ def _copy_runtime_from_source(src_dir: Path, repo_dir: Path, dest: Path = NEXO_H
     templates_src = repo_dir / "templates"
     templates_dest = dest / "templates"
     if templates_src.is_dir():
+        if templates_dest.is_symlink():
+            _remove_runtime_copy_target(templates_dest)
         templates_dest.mkdir(parents=True, exist_ok=True)
         for item in templates_src.iterdir():
             if item.name == "__pycache__" or is_duplicate_artifact_name(item):
                 continue
             if item.is_file():
-                shutil.copy2(str(item), str(templates_dest / item.name))
+                target = templates_dest / item.name
+                _remove_runtime_copy_target(target)
+                shutil.copy2(str(item), str(target))
             elif item.is_dir():
                 sub_dest = templates_dest / item.name
+                if sub_dest.is_symlink():
+                    _remove_runtime_copy_target(sub_dest)
                 sub_dest.mkdir(parents=True, exist_ok=True)
                 for sub in item.iterdir():
                     if sub.is_file() and not is_duplicate_artifact_name(sub):
-                        shutil.copy2(str(sub), str(sub_dest / sub.name))
+                        target = sub_dest / sub.name
+                        _remove_runtime_copy_target(target)
+                        shutil.copy2(str(sub), str(target))
 
     package_json = repo_dir / "package.json"
     if package_json.is_file():
-        shutil.copy2(str(package_json), str(dest / "package.json"))
+        package_target = dest / "package.json"
+        _remove_runtime_copy_target(package_target)
+        shutil.copy2(str(package_json), str(package_target))
         try:
             pkg = json.loads(package_json.read_text())
-            (dest / "version.json").write_text(json.dumps({
+            version_target = dest / "version.json"
+            _remove_runtime_copy_target(version_target)
+            version_target.write_text(json.dumps({
                 "version": pkg.get("version", "?"),
                 "source": str(repo_dir),
             }, indent=2))
@@ -3928,8 +3988,7 @@ def _copy_runtime_from_source(src_dir: Path, repo_dir: Path, dest: Path = NEXO_H
     skills_src = src_dir / "skills"
     skills_dest = dest / "skills-core"
     if skills_src.is_dir():
-        if skills_dest.exists():
-            shutil.rmtree(str(skills_dest), ignore_errors=True)
+        _remove_runtime_copy_target(skills_dest)
         shutil.copytree(str(skills_src), str(skills_dest), ignore=_runtime_copy_ignore())
 
     bin_dir = dest / "bin"

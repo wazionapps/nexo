@@ -1,5 +1,38 @@
 # Changelog
 
+## [7.1.1] - 2026-04-20
+
+Hotfix over v7.1.0. The packaged updater path was still mixing two runtime
+models: packaged installs under `~/.nexo/core` and true source-linked sync.
+On real F0.6 runtimes that left `nexo update` vulnerable to compatibility-shim
+conflicts (`db`, `cognitive`, `skills-core`, root Python modules, and other
+shimmed paths), causing `FileExistsError` / "same file" failures during update.
+
+### Fixed
+
+- `src/auto_update.py` now treats `~/.nexo/core` as a packaged runtime root,
+  not as an implicit mutable source repo. Only explicit `version.json.source`
+  records reactivate source-sync mode.
+- Runtime copy/restore flows are now shim-aware: they remove symlink/file
+  targets explicitly before `copytree` / `copy2`, so F0.6 compatibility links
+  no longer break update rollback or replay.
+- `tests/test_startup_preflight.py` now covers packaged-runtime detection plus
+  symlink/file replacement for package dirs, core-skill shims, root Python
+  modules, script/plugin shims, and runtime-tree restore.
+
+### Verification
+
+- Reproduced on Francisco's real runtime before the fix:
+  - `FileExistsError: '/Users/franciscoc/.nexo/db'`
+  - `FileExistsError: '/Users/franciscoc/.nexo/skills-core'`
+  - `'/Users/franciscoc/.nexo/core/agent_runner.py' and '/Users/franciscoc/.nexo/agent_runner.py' are the same file`
+- Verified locally after the fix:
+  - source-linked runtime sync succeeds
+  - installed `~/.nexo/bin/nexo update --json --no-clis` succeeds again
+  - `1668 passed, 3 skipped, 1 xfailed, 5 xpassed`
+  - `check_no_personal_data.sh` OK
+  - `verify_release_readiness.py --ci` OK
+
 ## [7.1.0] - 2026-04-19
 
 Minor release that closes the post-F0.6 runtime contract and ships

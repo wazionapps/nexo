@@ -137,6 +137,49 @@ def test_resolve_sync_source_supports_hybrid_runtime_code_dir(tmp_path, monkeypa
     assert repo_dir == runtime_code
 
 
+def test_resolve_sync_source_uses_packaged_updater_for_runtime_core_without_recorded_source(tmp_path, monkeypatch):
+    import auto_update
+
+    runtime_home = tmp_path / "runtime"
+    runtime_core = runtime_home / "core"
+    runtime_core.mkdir(parents=True)
+    (runtime_core / "db").mkdir()
+    (runtime_home / "package.json").write_text("{}\n")
+
+    monkeypatch.setenv("NEXO_HOME", str(runtime_home))
+    monkeypatch.setattr(auto_update, "NEXO_HOME", runtime_home)
+    monkeypatch.setattr(auto_update, "NEXO_CODE", runtime_core)
+
+    src_dir, repo_dir = auto_update._resolve_sync_source()
+
+    assert src_dir is None
+    assert repo_dir is None
+
+
+def test_resolve_sync_source_uses_recorded_source_for_runtime_core_when_present(tmp_path, monkeypatch):
+    import auto_update
+
+    runtime_home = tmp_path / "runtime"
+    runtime_core = runtime_home / "core"
+    recorded_repo = tmp_path / "repo"
+    (runtime_core / "db").mkdir(parents=True)
+    (runtime_home / "package.json").write_text("{}\n")
+    (recorded_repo / "src" / "db").mkdir(parents=True)
+    (recorded_repo / "package.json").write_text("{}\n")
+    (runtime_home / "version.json").write_text(
+        json.dumps({"version": "7.1.1", "source": str(recorded_repo)})
+    )
+
+    monkeypatch.setenv("NEXO_HOME", str(runtime_home))
+    monkeypatch.setattr(auto_update, "NEXO_HOME", runtime_home)
+    monkeypatch.setattr(auto_update, "NEXO_CODE", runtime_core)
+
+    src_dir, repo_dir = auto_update._resolve_sync_source()
+
+    assert src_dir == recorded_repo / "src"
+    assert repo_dir == recorded_repo
+
+
 def test_copy_runtime_from_source_creates_skill_scaffold_dirs(tmp_path, monkeypatch):
     import auto_update
 
@@ -167,6 +210,86 @@ def test_copy_runtime_from_source_creates_skill_scaffold_dirs(tmp_path, monkeypa
     assert (dest / "skills").is_dir()
     assert (dest / "skills-runtime").is_dir()
     assert (dest / "skills-core" / "demo-skill" / "skill.json").is_file()
+
+
+def test_copy_runtime_from_source_replaces_f06_symlink_package_targets(tmp_path, monkeypatch):
+    import auto_update
+
+    src_dir = tmp_path / "src"
+    repo_dir = tmp_path / "repo"
+    dest = tmp_path / "runtime"
+
+    (src_dir / "db").mkdir(parents=True)
+    (src_dir / "cognitive").mkdir(parents=True)
+    (src_dir / "scripts").mkdir(parents=True)
+    (src_dir / "skills" / "demo-skill").mkdir(parents=True)
+    (src_dir / "db" / "__init__.py").write_text("# new db\n")
+    (src_dir / "cognitive" / "__init__.py").write_text("# new cognitive\n")
+    (src_dir / "skills" / "demo-skill" / "skill.json").write_text("{}\n")
+    (repo_dir / "templates").mkdir(parents=True)
+    (repo_dir / "package.json").write_text("{}\n")
+
+    (dest / "core" / "db").mkdir(parents=True)
+    (dest / "core" / "cognitive").mkdir(parents=True)
+    (dest / "core" / "skills").mkdir(parents=True)
+    (dest / "db").symlink_to(dest / "core" / "db", target_is_directory=True)
+    (dest / "cognitive").symlink_to(dest / "core" / "cognitive", target_is_directory=True)
+    (dest / "skills-core").symlink_to(dest / "core" / "skills", target_is_directory=True)
+
+    monkeypatch.setattr(auto_update, "_installed_scripts_classification", lambda _dest: {})
+
+    result = auto_update._copy_runtime_from_source(src_dir, repo_dir, dest)
+
+    assert result["packages"] >= 2
+    assert (dest / "db").is_dir()
+    assert not (dest / "db").is_symlink()
+    assert (dest / "db" / "__init__.py").read_text() == "# new db\n"
+    assert (dest / "cognitive").is_dir()
+    assert not (dest / "cognitive").is_symlink()
+    assert (dest / "cognitive" / "__init__.py").read_text() == "# new cognitive\n"
+    assert (dest / "skills-core").is_dir()
+    assert not (dest / "skills-core").is_symlink()
+    assert (dest / "skills-core" / "demo-skill" / "skill.json").is_file()
+
+
+def test_copy_runtime_from_source_replaces_f06_symlink_file_and_scripts_targets(tmp_path, monkeypatch):
+    import auto_update
+
+    src_dir = tmp_path / "src"
+    repo_dir = tmp_path / "repo"
+    dest = tmp_path / "runtime"
+
+    (src_dir / "db").mkdir(parents=True)
+    (src_dir / "scripts").mkdir(parents=True)
+    (src_dir / "plugins").mkdir(parents=True)
+    (src_dir / "agent_runner.py").write_text("# new runner\n")
+    (src_dir / "scripts" / "nexo-watchdog.sh").write_text("#!/bin/bash\necho updated\n")
+    (src_dir / "plugins" / "guard.py").write_text("# new plugin\n")
+    (repo_dir / "templates").mkdir(parents=True)
+    (repo_dir / "package.json").write_text('{"version":"7.1.1"}\n')
+
+    (dest / "core" / "scripts").mkdir(parents=True)
+    (dest / "core" / "plugins").mkdir(parents=True)
+    (dest / "core" / "agent_runner.py").write_text("# old runner\n")
+    (dest / "agent_runner.py").symlink_to(dest / "core" / "agent_runner.py")
+    (dest / "scripts").symlink_to(dest / "core" / "scripts", target_is_directory=True)
+    (dest / "plugins").symlink_to(dest / "core" / "plugins", target_is_directory=True)
+
+    monkeypatch.setattr(auto_update, "_installed_scripts_classification", lambda _dest: {})
+
+    result = auto_update._copy_runtime_from_source(src_dir, repo_dir, dest)
+
+    assert result["files"] >= 1
+    assert (dest / "agent_runner.py").is_file()
+    assert not (dest / "agent_runner.py").is_symlink()
+    assert (dest / "agent_runner.py").read_text() == "# new runner\n"
+    assert (dest / "scripts").is_dir()
+    assert not (dest / "scripts").is_symlink()
+    assert (dest / "scripts" / "nexo-watchdog.sh").is_file()
+    assert (dest / "plugins").is_dir()
+    assert not (dest / "plugins").is_symlink()
+    assert (dest / "plugins" / "guard.py").is_file()
+    assert (dest / "version.json").is_file()
 
 
 def test_reinstall_runtime_pip_deps_creates_venv_when_missing(tmp_path, monkeypatch):
@@ -428,3 +551,20 @@ def test_copy_runtime_from_source_preserves_personal_script_collision(tmp_path, 
     assert stats["scripts"] == 1
     assert len(stats["script_conflicts"]) == 1
     assert stats["script_conflicts"][0]["name"] == "email-triage-agent.py"
+
+
+def test_restore_runtime_tree_replaces_symlink_targets(tmp_path):
+    import auto_update
+
+    backup_dir = tmp_path / "backup"
+    runtime_home = tmp_path / "runtime"
+    (backup_dir / "db").mkdir(parents=True)
+    (backup_dir / "db" / "__init__.py").write_text("# restored\n")
+    (runtime_home / "core" / "db").mkdir(parents=True)
+    (runtime_home / "db").symlink_to(runtime_home / "core" / "db", target_is_directory=True)
+
+    auto_update._restore_runtime_tree(str(backup_dir), runtime_home)
+
+    assert (runtime_home / "db").is_dir()
+    assert not (runtime_home / "db").is_symlink()
+    assert (runtime_home / "db" / "__init__.py").read_text() == "# restored\n"
