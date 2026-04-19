@@ -607,7 +607,7 @@ def classify_scripts_dir() -> dict:
 
     core_names = load_core_script_names()
     entries: list[dict] = []
-    seen_names: set[str] = set()
+    seen_keys: set[tuple[str, str]] = set()
     for sdir in candidate_dirs:
         if not sdir.is_dir():
             continue
@@ -625,9 +625,12 @@ def classify_scripts_dir() -> dict:
         for f in sorted(sdir.iterdir()):
             if not f.is_file():
                 continue
-            if f.name in seen_names:
+            # Dedup by (name, dir-classification) so a personal script with
+            # the same filename as a core script doesn't disappear (D2 audit fix).
+            dedup_key = (f.name, dir_classification or "legacy")
+            if dedup_key in seen_keys:
                 continue
-            seen_names.add(f.name)
+            seen_keys.add(dedup_key)
             meta = parse_inline_metadata(f)
             if _is_ignored(f):
                 entries.append(_script_entry(f, meta, is_core=False, classification="ignored", reason="internal or hidden artifact"))

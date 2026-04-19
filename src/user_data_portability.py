@@ -329,7 +329,7 @@ def import_user_bundle(bundle_path: str) -> dict:
 
         imported_scripts = 0
         scripts_dir = bundle_root / "personal-scripts"
-        target_scripts_dir = paths.core_scripts_dir()
+        target_scripts_dir = paths.personal_scripts_dir()
         target_scripts_dir.mkdir(parents=True, exist_ok=True)
         if scripts_dir.is_dir():
             for script_path in sorted(scripts_dir.iterdir()):

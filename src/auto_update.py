@@ -1527,6 +1527,12 @@ def _run_db_migrations() -> bool:
         # over automatically so scripts pick up the new source on the
         # next cron without the operator running anything manually.
         _maybe_migrate_legacy_email_config()
+        # Plan Consolidado F0.6 — one-shot physical layout migration.
+        # If ~/.nexo/.structure-version is absent or pre-F0.6, move the
+        # flat layout into ~/.nexo/{core,personal,runtime}/<X>/, rewrite
+        # personal_scripts.path + LaunchAgent plists, then write the
+        # F0.6 marker. Idempotent: returns immediately when already F0.6.
+        _maybe_migrate_to_f06_layout()
         return True
     except Exception as e:
         _log(f"DB migration error: {e}")
@@ -1571,6 +1577,240 @@ def _maybe_migrate_legacy_email_config() -> None:
 
 
 # ── npm version check (notify only) ─────────────────────────────────
+
+
+def _maybe_migrate_to_f06_layout() -> None:
+    """Plan F0.6 — one-shot physical layout migration. Idempotent.
+
+    Pre-condition: ``~/.nexo/.structure-version`` is absent or its content
+    is not ``F0.6``. After running, every dir from the flat layout
+    (``~/.nexo/scripts/``, ``brain/``, ``data/``, ``operations/``, ...)
+    has been moved to its post-F0.6 home (``~/.nexo/{core,personal,runtime}/<X>/``),
+    ``personal_scripts.path`` rows point at the new locations, every
+    ``com.nexo.*.plist`` LaunchAgent has been rewritten to use the new
+    paths, and ``~/.nexo/.structure-version`` is set to ``F0.6``.
+
+    A snapshot is taken before the move at ``~/.nexo-pre-f06-snapshot/``
+    so a complete rollback is ``mv ~/.nexo-pre-f06-snapshot ~/.nexo``.
+
+    Failures are non-fatal — the helper logs and returns; the operator
+    can re-run ``nexo update`` later.
+    """
+    try:
+        marker = NEXO_HOME / ".structure-version"
+        try:
+            current = marker.read_text(encoding="utf-8").strip()
+        except Exception:
+            current = ""
+        if current == "F0.6":
+            return  # already migrated
+        # Refuse to migrate from a non-NEXO_HOME or a fresh install
+        # without legacy dirs to move.
+        legacy_anchors = [NEXO_HOME / sub for sub in
+                          ("scripts", "brain", "data", "operations", "logs", "backups",
+                           "memory", "cognitive", "coordination", "exports",
+                           "nexo-email", "doctor", "snapshots", "crons",
+                           "skills", "plugins", "hooks", "rules")]
+        present = [p for p in legacy_anchors if p.exists() and not p.is_symlink()]
+        if not present:
+            # Fresh install — write marker and return.
+            try:
+                marker.write_text("F0.6\n", encoding="utf-8")
+            except Exception:
+                pass
+            return
+
+        _log("[F0.6] starting layout migration...")
+        import shutil
+        import sqlite3
+        import re as _re
+        # 1. Snapshot
+        snapshot = Path(str(NEXO_HOME) + "-pre-f06-snapshot")
+        if not snapshot.exists():
+            try:
+                shutil.copytree(NEXO_HOME, snapshot, symlinks=True, ignore_dangling_symlinks=True)
+                _log(f"[F0.6] snapshot at {snapshot}")
+            except Exception as e:
+                _log(f"[F0.6] snapshot failed (non-fatal): {e}")
+
+        # 2. Ensure target dirs
+        for sub in ("core/scripts", "core-dev/scripts", "personal/scripts",
+                    "personal/brain", "personal/skills",
+                    "core/plugins", "core/hooks", "core/rules",
+                    "runtime/data", "runtime/logs", "runtime/operations",
+                    "runtime/backups", "runtime/memory", "runtime/cognitive",
+                    "runtime/coordination", "runtime/exports",
+                    "runtime/nexo-email", "runtime/doctor",
+                    "runtime/snapshots", "runtime/crons"):
+            (NEXO_HOME / sub).mkdir(parents=True, exist_ok=True)
+
+        # 3. Classify scripts: load core names from packaged manifest
+        core_names: set[str] = set()
+        artifacts = NEXO_HOME / "config" / "runtime-core-artifacts.json"
+        try:
+            data = json.loads(artifacts.read_text(encoding="utf-8"))
+            for name in data.get("script_names", []):
+                core_names.add(name)
+        except Exception:
+            pass
+        for f in (NEXO_HOME / "core" / "scripts").iterdir() if (NEXO_HOME / "core" / "scripts").is_dir() else []:
+            core_names.add(f.name)
+        dev_names: set[str] = set()
+        if (NEXO_HOME / "core-dev" / "scripts").is_dir():
+            for f in (NEXO_HOME / "core-dev" / "scripts").iterdir():
+                dev_names.add(f.name)
+
+        def _classify(name: str) -> str:
+            if name in dev_names:
+                return "core-dev"
+            if name in core_names:
+                return "core"
+            return "personal"
+
+        # 4. Move script files (handle existing F0.3/0.4 symlinks)
+        legacy_scripts = NEXO_HOME / "scripts"
+        if legacy_scripts.is_dir() and not legacy_scripts.is_symlink():
+            for f in sorted(legacy_scripts.iterdir()):
+                if not f.is_file():
+                    continue
+                cls = _classify(f.name)
+                root = {
+                    "core": NEXO_HOME / "core" / "scripts",
+                    "personal": NEXO_HOME / "personal" / "scripts",
+                    "core-dev": NEXO_HOME / "core-dev" / "scripts",
+                }[cls]
+                dst = root / f.name
+                if dst.is_symlink():
+                    target = dst.resolve()
+                    if target == f.resolve():
+                        dst.unlink()
+                if dst.exists():
+                    if dst.is_file() and f.is_file() and dst.read_bytes() == f.read_bytes():
+                        f.unlink()
+                        continue
+                    dst.rename(dst.with_suffix(dst.suffix + ".f06bak"))
+                shutil.move(str(f), str(dst))
+
+        # 5. Move tree dirs (brain, data, logs, ...)
+        TREE_MAP = [
+            ("brain", NEXO_HOME / "personal" / "brain"),
+            ("data", NEXO_HOME / "runtime" / "data"),
+            ("logs", NEXO_HOME / "runtime" / "logs"),
+            ("operations", NEXO_HOME / "runtime" / "operations"),
+            ("backups", NEXO_HOME / "runtime" / "backups"),
+            ("memory", NEXO_HOME / "runtime" / "memory"),
+            ("cognitive", NEXO_HOME / "runtime" / "cognitive"),
+            ("coordination", NEXO_HOME / "runtime" / "coordination"),
+            ("exports", NEXO_HOME / "runtime" / "exports"),
+            ("nexo-email", NEXO_HOME / "runtime" / "nexo-email"),
+            ("doctor", NEXO_HOME / "runtime" / "doctor"),
+            ("snapshots", NEXO_HOME / "runtime" / "snapshots"),
+            ("crons", NEXO_HOME / "runtime" / "crons"),
+            ("skills", NEXO_HOME / "personal" / "skills"),
+            ("plugins", NEXO_HOME / "core" / "plugins"),
+            ("hooks", NEXO_HOME / "core" / "hooks"),
+            ("rules", NEXO_HOME / "core" / "rules"),
+        ]
+        for legacy_name, new_dir in TREE_MAP:
+            legacy = NEXO_HOME / legacy_name
+            if not legacy.is_dir() or legacy.is_symlink():
+                continue
+            new_dir.parent.mkdir(parents=True, exist_ok=True)
+            # Per-item move so we don't kill files via symlink-loop.
+            for item in list(legacy.iterdir()):
+                target = new_dir / item.name
+                if target.is_symlink() and target.resolve() == item.resolve():
+                    target.unlink()
+                if target.exists():
+                    if item.is_file() and target.is_file() and item.stat().st_size == target.stat().st_size:
+                        try:
+                            item.unlink()
+                            continue
+                        except Exception:
+                            pass
+                    # Backup conflict and proceed
+                    try:
+                        target.rename(target.with_suffix(target.suffix + ".f06bak"))
+                    except Exception:
+                        continue
+                try:
+                    shutil.move(str(item), str(target))
+                except Exception as e:
+                    _log(f"[F0.6] move {item} -> {target} failed: {e}")
+            try:
+                legacy.rmdir()
+            except OSError:
+                pass
+
+        # 6. UPDATE personal_scripts.path
+        try:
+            db = NEXO_HOME / "runtime" / "data" / "nexo.db"
+            if not db.is_file():
+                db = NEXO_HOME / "data" / "nexo.db"
+            if db.is_file():
+                conn = sqlite3.connect(str(db))
+                rows = conn.execute("SELECT id, path FROM personal_scripts").fetchall()
+                updates = []
+                legacy_root = str(NEXO_HOME / "scripts") + "/"
+                for row_id, old_path in rows:
+                    if not old_path or not old_path.startswith(legacy_root):
+                        continue
+                    name = Path(old_path).name
+                    cls = _classify(name)
+                    new_root = {
+                        "core": NEXO_HOME / "core" / "scripts",
+                        "personal": NEXO_HOME / "personal" / "scripts",
+                        "core-dev": NEXO_HOME / "core-dev" / "scripts",
+                    }[cls]
+                    updates.append((str(new_root / name), row_id))
+                if updates:
+                    conn.executemany("UPDATE personal_scripts SET path = ? WHERE id = ?", updates)
+                    conn.commit()
+                    _log(f"[F0.6] UPDATEd {len(updates)} personal_scripts.path rows")
+                conn.close()
+        except Exception as e:
+            _log(f"[F0.6] DB UPDATE failed (non-fatal): {e}")
+
+        # 7. Rewrite LaunchAgent plists
+        try:
+            la_dir = Path.home() / "Library" / "LaunchAgents"
+            count = 0
+            if la_dir.is_dir():
+                for plist in sorted(la_dir.glob("com.nexo.*.plist")):
+                    try:
+                        text = plist.read_text(encoding="utf-8")
+                    except Exception:
+                        continue
+                    original = text
+                    def _repl_script(m):
+                        full = m.group(0)
+                        name = Path(full).name
+                        cls = _classify(name)
+                        new_root = {
+                            "core": NEXO_HOME / "core" / "scripts",
+                            "personal": NEXO_HOME / "personal" / "scripts",
+                            "core-dev": NEXO_HOME / "core-dev" / "scripts",
+                        }[cls]
+                        return str(new_root / name)
+                    text = _re.sub(rf"{_re.escape(str(NEXO_HOME))}/scripts/[\w\-\.]+\.(py|sh|js)", _repl_script, text)
+                    text = text.replace(f"{NEXO_HOME}/logs/", f"{NEXO_HOME}/runtime/logs/")
+                    if text != original:
+                        plist.write_text(text, encoding="utf-8")
+                        count += 1
+                _log(f"[F0.6] rewrote {count} LaunchAgent plists")
+        except Exception as e:
+            _log(f"[F0.6] plist rewrite failed (non-fatal): {e}")
+
+        # 8. Write marker
+        try:
+            marker.write_text("F0.6\n", encoding="utf-8")
+            _log("[F0.6] marker written: ~/.nexo/.structure-version = F0.6")
+        except Exception as e:
+            _log(f"[F0.6] marker write failed: {e}")
+        _log("[F0.6] migration done")
+    except Exception as e:
+        _log(f"[F0.6] unexpected error (non-fatal, runtime keeps working): {e}")
+
 
 def _check_npm_version() -> str | None:
     """For non-git installs: check npm registry for a newer version. Returns notification or None."""

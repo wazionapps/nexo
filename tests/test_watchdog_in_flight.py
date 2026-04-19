@@ -81,7 +81,7 @@ def _run_watchdog(home: Path, env_overrides: dict | None = None) -> subprocess.C
 
 
 def _read_report(home: Path) -> str:
-    report = home / "operations" / "watchdog-report.txt"
+    report = home / "runtime" / "operations" / "watchdog-report.txt"
     return report.read_text() if report.exists() else ""
 
 
