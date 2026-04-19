@@ -27,11 +27,13 @@ def _nexo_home() -> Path:
 
 
 def _calibration_path() -> Path:
-    return _nexo_home() / "brain" / "calibration.json"
+    import paths
+    return paths.brain_dir() / "calibration.json"
 
 
 def _profile_path() -> Path:
-    return _nexo_home() / "brain" / "profile.json"
+    import paths
+    return paths.brain_dir() / "profile.json"
 
 
 def _read_json(path: Path) -> dict:

@@ -47,7 +47,8 @@ def _check_runtime() -> dict:
 
 
 def _check_database() -> dict:
-    db_path = _nexo_home() / "data" / "nexo.db"
+    import paths
+    db_path = paths.db_path()
     out: dict[str, Any] = {"path": str(db_path), "exists": db_path.is_file()}
     if not out["exists"]:
         out["status"] = "error"
