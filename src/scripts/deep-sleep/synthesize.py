@@ -27,7 +27,6 @@ except Exception:
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parents[2])))
-DEEP_SLEEP_DIR = NEXO_HOME / "operations" / "deep-sleep"
 PROMPT_FILE = Path(__file__).parent / "synthesize-prompt.md"
 
 if str(NEXO_CODE) not in sys.path:
@@ -35,6 +34,9 @@ if str(NEXO_CODE) not in sys.path:
 
 from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
 from constants import AUTOMATION_SUBPROCESS_TIMEOUT
+import paths
+
+DEEP_SLEEP_DIR = paths.operations_dir() / "deep-sleep"
 
 CLAUDE_TIMEOUT = AUTOMATION_SUBPROCESS_TIMEOUT
 ACTION_VERBS = {"add", "implement", "create", "write", "build", "enforce", "automate", "validate", "guard", "fix", "review"}

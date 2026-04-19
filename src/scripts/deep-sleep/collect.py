@@ -26,11 +26,72 @@ if str(NEXO_CODE) not in sys.path:
     sys.path.insert(0, str(NEXO_CODE))
 
 import transcript_utils as _transcripts
+import paths
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
-DEEP_SLEEP_DIR = NEXO_HOME / "operations" / "deep-sleep"
-NEXO_DB = NEXO_HOME / "data" / "nexo.db"
-COGNITIVE_DB = NEXO_HOME / "data" / "cognitive.db"
+
+
+def _resolve_nexo_db() -> Path:
+    candidates = [
+        paths.resolve_db_path(),
+        paths.legacy_db_path(),
+        paths.data_dir() / "nexo.db",
+    ]
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    for env_key in ("NEXO_TEST_DB", "NEXO_DB"):
+        value = str(os.environ.get(env_key, "") or "").strip()
+        if value:
+            candidate = Path(value).expanduser()
+            if candidate.is_file():
+                return candidate
+            return candidate
+    return paths.resolve_db_path()
+
+
+def _resolve_cognitive_db() -> Path:
+    new = paths.data_dir() / "cognitive.db"
+    legacy = paths.legacy_data_dir() / "cognitive.db"
+    if not new.is_file() and legacy.is_file():
+        return legacy
+    return new
+
+
+def _resolve_deep_sleep_dir() -> Path:
+    new = paths.operations_dir() / "deep-sleep"
+    legacy = paths.legacy_operations_dir() / "deep-sleep"
+    if not new.exists() and legacy.exists():
+        return legacy
+    return new
+
+
+class _DynamicPath:
+    def __init__(self, resolver):
+        self._resolver = resolver
+
+    def _path(self) -> Path:
+        return Path(self._resolver())
+
+    def __fspath__(self):
+        return os.fspath(self._path())
+
+    def __str__(self) -> str:
+        return str(self._path())
+
+    def __repr__(self) -> str:
+        return repr(self._path())
+
+    def __truediv__(self, other):
+        return self._path() / other
+
+    def __getattr__(self, name):
+        return getattr(self._path(), name)
+
+
+DEEP_SLEEP_DIR = _DynamicPath(_resolve_deep_sleep_dir)
+NEXO_DB = _DynamicPath(_resolve_nexo_db)
+COGNITIVE_DB = _DynamicPath(_resolve_cognitive_db)
 _TABLE_COLUMNS_CACHE: dict[tuple[str, str], set[str]] = {}
 
 MIN_USER_MESSAGES = 3  # Skip trivial sessions
@@ -230,7 +291,7 @@ def _compact_diary_row(row: dict) -> dict:
 
 
 def _load_project_aliases() -> dict[str, set[str]]:
-    atlas_path = NEXO_HOME / "brain" / "project-atlas.json"
+    atlas_path = paths.brain_dir() / "project-atlas.json"
     aliases: dict[str, set[str]] = {}
     if not atlas_path.is_file():
         return aliases
@@ -473,9 +534,10 @@ def collect_long_horizon_context(
     target_day = datetime.strptime(target_date, "%Y-%m-%d")
     horizon_start = target_day - timedelta(days=horizon_days)
     recent_start = target_day - timedelta(days=recent_days)
+    nexo_db = _resolve_nexo_db()
 
     diary_rows = safe_query(
-        NEXO_DB,
+        nexo_db,
         "SELECT session_id, created_at, summary, mental_state, domain, self_critique, source "
         "FROM session_diary ORDER BY created_at ASC"
     )
@@ -499,11 +561,11 @@ def collect_long_horizon_context(
     recurring_states = Counter(row["mental_state"] for row in compact_diaries if row.get("mental_state"))
     recurring_critiques = Counter(row["self_critique"] for row in compact_diaries if row.get("self_critique"))
 
-    learning_reasoning_sql = _optional_column_sql(NEXO_DB, "learnings", "reasoning", "''")
-    learning_prevention_sql = _optional_column_sql(NEXO_DB, "learnings", "prevention", "''")
-    learning_applies_sql = _optional_column_sql(NEXO_DB, "learnings", "applies_to", "''")
+    learning_reasoning_sql = _optional_column_sql(nexo_db, "learnings", "reasoning", "''")
+    learning_prevention_sql = _optional_column_sql(nexo_db, "learnings", "prevention", "''")
+    learning_applies_sql = _optional_column_sql(nexo_db, "learnings", "applies_to", "''")
     learning_rows = safe_query(
-        NEXO_DB,
+        nexo_db,
         f"SELECT category, title, content, created_at, updated_at, {learning_reasoning_sql}, "
         f"{learning_prevention_sql}, {learning_applies_sql} "
         "FROM learnings ORDER BY COALESCE(updated_at, created_at) DESC LIMIT 120"
@@ -550,7 +612,7 @@ def collect_long_horizon_context(
     sampled_sessions.sort(key=lambda row: row["modified"])
 
     stale_followups = safe_query(
-        NEXO_DB,
+        nexo_db,
         "SELECT id, description, date, status, created_at, updated_at FROM followups "
         "WHERE status NOT IN ('COMPLETED', 'CANCELLED') ORDER BY date ASC, created_at ASC LIMIT 50"
     )
@@ -631,7 +693,7 @@ def discover_extras() -> list[dict]:
 
 def collect_error_logs(target_date: str) -> list[dict]:
     """Scan NEXO_HOME/logs/ for lines containing errors from today."""
-    log_dir = NEXO_HOME / "logs"
+    log_dir = paths.logs_dir()
     if not log_dir.exists():
         return []
 

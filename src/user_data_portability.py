@@ -127,6 +127,19 @@ def _copy_file_if_present(src: Path, dest: Path) -> bool:
     return True
 
 
+def _user_section_source(dirname: str) -> Path:
+    mapping = {
+        "coordination": paths.coordination_dir(),
+        "nexo-email": paths.nexo_email_dir(),
+        "assets": NEXO_HOME / "assets",
+    }
+    return mapping.get(dirname, NEXO_HOME / dirname)
+
+
+def _user_section_target(dirname: str) -> Path:
+    return _user_section_source(dirname)
+
+
 def _safe_extract(archive_path: Path, dest_dir: Path) -> None:
     resolved_dest = dest_dir.resolve()
     with tarfile.open(archive_path, "r:*") as tar:
@@ -198,7 +211,7 @@ def export_user_bundle(output_path: str = "") -> dict:
             sections["brain"] = {"path": "brain", "files": copied}
 
         for dirname in USER_DIRS[1:]:
-            src_dir = NEXO_HOME / dirname
+            src_dir = _user_section_source(dirname)
             if not src_dir.is_dir():
                 continue
             copied = _copy_tree_filtered(src_dir, bundle_root / dirname)
@@ -206,7 +219,7 @@ def export_user_bundle(output_path: str = "") -> dict:
 
         copied_configs: list[str] = []
         for filename in USER_CONFIG_FILES:
-            if _copy_file_if_present(NEXO_HOME / "config" / filename, bundle_root / "config" / filename):
+            if _copy_file_if_present(paths.config_dir() / filename, bundle_root / "config" / filename):
                 copied_configs.append(filename)
         if copied_configs:
             sections["config"] = {"path": "config", "files": copied_configs}
@@ -317,12 +330,12 @@ def import_user_bundle(bundle_path: str) -> dict:
             src_dir = bundle_root / dirname
             if not src_dir.is_dir():
                 continue
-            copied = _copy_tree_filtered(src_dir, NEXO_HOME / dirname)
+            copied = _copy_tree_filtered(src_dir, _user_section_target(dirname))
             restored[dirname] = {"path": dirname, "files": copied}
 
         restored_configs: list[str] = []
         for filename in USER_CONFIG_FILES:
-            if _copy_file_if_present(bundle_root / "config" / filename, NEXO_HOME / "config" / filename):
+            if _copy_file_if_present(bundle_root / "config" / filename, paths.config_dir() / filename):
                 restored_configs.append(filename)
         if restored_configs:
             restored["config"] = {"path": "config", "files": restored_configs}

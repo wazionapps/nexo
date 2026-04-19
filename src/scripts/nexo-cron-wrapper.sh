@@ -27,7 +27,10 @@ SPOOL_DIR="$NEXO_HOME/runtime/operations/cron-spool"
 
 # Unlock macOS Keychain so headless Claude Code can read auth tokens.
 # Claude Code stores its API key in the login keychain which auto-locks.
-KEYCHAIN_PASS_FILE="$NEXO_HOME/config/.keychain-pass"
+KEYCHAIN_PASS_FILE="$NEXO_HOME/personal/config/.keychain-pass"
+if [ ! -f "$KEYCHAIN_PASS_FILE" ] && [ -f "$NEXO_HOME/config/.keychain-pass" ]; then
+    KEYCHAIN_PASS_FILE="$NEXO_HOME/config/.keychain-pass"
+fi
 if [ -f "$KEYCHAIN_PASS_FILE" ] && [ "$(uname)" = "Darwin" ]; then
     security unlock-keychain -p "$(cat "$KEYCHAIN_PASS_FILE")" ~/Library/Keychains/login.keychain-db 2>/dev/null || true
 fi

@@ -3,6 +3,7 @@ import json
 import os
 import stat
 import sys
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -30,6 +31,7 @@ from script_registry import (
     ensure_personal_schedules,
     sync_personal_scripts,
     unschedule_personal_script,
+    retire_superseded_personal_scripts,
 )
 
 
@@ -496,17 +498,77 @@ class TestRegistrySync:
         assert entry["filename_prefixed"] is True
         assert entry["naming_policy"] == "preferred"
 
+    def test_classify_scripts_dir_ignores_personal_shadow_of_core_logical_name(self, scripts_dir):
+        core_dir = scripts_dir.parent / "core" / "scripts"
+        core_dir.mkdir(parents=True, exist_ok=True)
+        (core_dir / "nexo-morning-agent.py").write_text(
+            "#!/usr/bin/env python3\n"
+            "# nexo: name=morning-agent\n"
+            "# nexo: runtime=python\n"
+            "print('core')\n"
+        )
+        shadow = scripts_dir / "morning-agent.py"
+        shadow.write_text(
+            "#!/usr/bin/env python3\n"
+            "# nexo: name=morning-agent\n"
+            "# nexo: runtime=python\n"
+            "print('legacy')\n"
+        )
+
+        report = classify_scripts_dir()
+        entry = next(item for item in report["entries"] if item["path"] == str(shadow))
+        assert entry["classification"] == "ignored"
+        assert "core script identity" in entry["reason"]
+
+    def test_create_script_rejects_core_logical_name_collision(self, scripts_dir):
+        core_dir = scripts_dir.parent / "core" / "scripts"
+        core_dir.mkdir(parents=True, exist_ok=True)
+        (core_dir / "nexo-email-monitor.py").write_text(
+            "#!/usr/bin/env python3\n"
+            "# nexo: name=email-monitor\n"
+            "# nexo: runtime=python\n"
+            "print('core')\n"
+        )
+
+        with pytest.raises(ValueError):
+            create_script("email-monitor", description="should fail", runtime="python")
+
+    def test_retire_superseded_personal_scripts_archives_core_shadow(self, scripts_dir):
+        core_dir = scripts_dir.parent / "core" / "scripts"
+        core_dir.mkdir(parents=True, exist_ok=True)
+        (core_dir / "nexo-morning-agent.py").write_text(
+            "#!/usr/bin/env python3\n"
+            "# nexo: name=morning-agent\n"
+            "# nexo: runtime=python\n"
+            "print('core')\n"
+        )
+        shadow = scripts_dir / "morning-agent.py"
+        shadow.write_text(
+            "#!/usr/bin/env python3\n"
+            "# nexo: name=morning-agent\n"
+            "# nexo: runtime=python\n"
+            "print('legacy')\n"
+        )
+
+        result = retire_superseded_personal_scripts()
+
+        assert result["ok"] is True
+        assert len(result["archived"]) == 1
+        archived = Path(result["archived"][0]["backup_path"])
+        assert not shadow.exists()
+        assert archived.is_file()
+
     @pytest.mark.xfail(reason="CI order-dependent db._core global state pollution — NF-TEST-SCRIPT-REGISTRY-POLLUTION", strict=False)
     def test_sync_personal_scripts_links_schedule(self, scripts_dir, monkeypatch):
         import script_registry
 
         init_db()
-        script = scripts_dir / "backup.py"
+        script = scripts_dir / "vault-sync.py"
         script.write_text(
-            "# nexo: name=backup\n"
-            "# nexo: description=Backup\n"
+            "# nexo: name=vault-sync\n"
+            "# nexo: description=Vault sync\n"
             "# nexo: runtime=python\n"
-            "# nexo: cron_id=backup\n"
+            "# nexo: cron_id=vault-sync\n"
             "# nexo: interval_seconds=300\n"
             "# nexo: schedule_required=true\n"
             "print('ok')\n"
@@ -516,15 +578,15 @@ class TestRegistrySync:
             script_registry,
             "_discover_personal_schedule_records",
             lambda: [{
-                "cron_id": "backup",
+                "cron_id": "vault-sync",
                 "script_path": str(script),
                 "schedule_type": "interval",
                 "schedule_value": "300",
                 "schedule_label": "every 300s",
-                "launchd_label": "com.nexo.backup",
-                "plist_path": "/tmp/com.nexo.backup.plist",
+                "launchd_label": "com.nexo.vault-sync",
+                "plist_path": "/tmp/com.nexo.vault-sync.plist",
                 "enabled": True,
-                "description": "Backup schedule",
+                "description": "Vault sync schedule",
                 "managed_marker": True,
                 "script_exists": True,
                 "script_within_scripts_dir": True,
@@ -540,7 +602,7 @@ class TestRegistrySync:
         assert scripts[0]["has_schedule"] is True
         schedules = list_personal_script_schedules()
         assert len(schedules) == 1
-        assert schedules[0]["cron_id"] == "backup"
+        assert schedules[0]["cron_id"] == "vault-sync"
 
     @pytest.mark.xfail(reason="CI order-dependent db._core global state pollution — NF-TEST-SCRIPT-REGISTRY-POLLUTION", strict=False)
     def test_sync_personal_scripts_allows_duplicate_names_with_distinct_paths(self, scripts_dir, monkeypatch):
@@ -575,27 +637,27 @@ class TestRegistrySync:
         legacy_home = nexo_home.parent / "claude"
         legacy_home.symlink_to(nexo_home, target_is_directory=True)
 
-        script = scripts_dir / "nexo-email-monitor.py"
+        script = scripts_dir / "mail-poller.py"
         script.write_text(
             "#!/usr/bin/env python3\n"
-            "# nexo: name=email-monitor\n"
+            "# nexo: name=mail-poller\n"
             "# nexo: runtime=python\n"
             "print('ok')\n"
         )
 
         legacy_record = {
-            "name": "email-monitor",
+            "name": "mail-poller",
             "path": str(legacy_home / "scripts" / script.name),
             "runtime": "python",
             "description": "",
-            "metadata": {"name": "email-monitor", "runtime": "python"},
+            "metadata": {"name": "mail-poller", "runtime": "python"},
         }
         current_record = {
-            "name": "email-monitor",
+            "name": "mail-poller",
             "path": str(script),
             "runtime": "python",
             "description": "",
-            "metadata": {"name": "email-monitor", "runtime": "python"},
+            "metadata": {"name": "mail-poller", "runtime": "python"},
         }
 
         first = sync_personal_scripts_registry([legacy_record], [])
@@ -605,8 +667,76 @@ class TestRegistrySync:
         assert second["registered_scripts"] == 1
         scripts = list_personal_scripts()
         assert len(scripts) == 1
-        assert scripts[0]["id"] == "ps-email-monitor"
+        assert scripts[0]["id"] == "ps-mail-poller"
         assert scripts[0]["path"] == str(script)
+
+    def test_sync_personal_scripts_registry_repairs_stale_legacy_paths_post_f06(self, tmp_path, monkeypatch):
+        nexo_home = tmp_path / "nexo"
+        personal_scripts = nexo_home / "personal" / "scripts"
+        core_scripts = nexo_home / "core" / "scripts"
+        runtime_data = nexo_home / "runtime" / "data"
+        personal_scripts.mkdir(parents=True)
+        core_scripts.mkdir(parents=True)
+        runtime_data.mkdir(parents=True)
+
+        core_script = core_scripts / "nexo-email-monitor.py"
+        core_script.write_text(
+            "#!/usr/bin/env python3\n"
+            "# nexo: name=email-monitor\n"
+            "# nexo: runtime=python\n"
+            "print('ok')\n"
+        )
+
+        monkeypatch.setenv("NEXO_HOME", str(nexo_home))
+        monkeypatch.setenv("HOME", str(tmp_path))
+
+        import script_registry
+        from db import _core as _db_core
+
+        monkeypatch.setattr(script_registry, "NEXO_HOME", nexo_home)
+        if _db_core._shared_conn is not None:
+            try:
+                _db_core._shared_conn.close()
+            except Exception:
+                pass
+            _db_core._shared_conn = None
+        monkeypatch.setattr(_db_core, "DB_PATH", str(runtime_data / "nexo.db"))
+
+        init_db()
+        conn = _db_core.get_db()
+        conn.execute(
+            """
+            INSERT INTO personal_scripts (
+                id, name, path, description, runtime, metadata_json, created_by, source,
+                origin, enabled, has_inline_metadata, last_synced_at, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            """,
+            (
+                "ps-email-monitor",
+                "email-monitor",
+                str(nexo_home / "scripts" / "nexo-email-monitor.py"),
+                "",
+                "python",
+                "{}",
+                "nexo-core",
+                "core-toggle",
+                "core",
+                1,
+                1,
+            ),
+        )
+        conn.commit()
+
+        result = sync_personal_scripts_registry([], [])
+        scripts = list_personal_scripts(include_core=True)
+
+        assert result["paths_repaired"] == [{
+            "id": "ps-email-monitor",
+            "old_path": str(nexo_home / "scripts" / "nexo-email-monitor.py"),
+            "new_path": str(core_script),
+        }]
+        assert len(scripts) == 1
+        assert scripts[0]["path"] == str(core_script)
 
     def test_ensure_personal_schedules_dry_run(self, scripts_dir, monkeypatch):
         import script_registry
@@ -614,10 +744,10 @@ class TestRegistrySync:
         init_db()
         script = scripts_dir / "monitor.py"
         script.write_text(
-            "# nexo: name=email-monitor\n"
-            "# nexo: description=Monitor inbox\n"
+            "# nexo: name=mail-poller\n"
+            "# nexo: description=Poll operator inbox\n"
             "# nexo: runtime=python\n"
-            "# nexo: cron_id=email-monitor\n"
+            "# nexo: cron_id=mail-poller\n"
             "# nexo: interval_seconds=300\n"
             "# nexo: schedule_required=true\n"
             "print('ok')\n"
@@ -625,8 +755,8 @@ class TestRegistrySync:
         monkeypatch.setattr(script_registry, "_discover_personal_schedule_records", lambda: [])
 
         result = ensure_personal_schedules(dry_run=True)
-        assert result["created"][0]["cron_id"] == "email-monitor"
-        assert result["sync"]["missing_declared_schedules"][0]["name"] == "email-monitor"
+        assert result["created"][0]["cron_id"] == "mail-poller"
+        assert result["sync"]["missing_declared_schedules"][0]["name"] == "mail-poller"
 
     def test_ensure_personal_keep_alive_schedule_repairs_manual_daemon(self, scripts_dir, monkeypatch):
         import script_registry
@@ -682,17 +812,17 @@ class TestRegistrySync:
         import script_registry
 
         init_db()
-        script = scripts_dir / "email-monitor.py"
+        script = scripts_dir / "mail-poller.py"
         script.write_text(
-            "# nexo: name=email-monitor\n"
+            "# nexo: name=mail-poller\n"
             "# nexo: runtime=python\n"
-            "# nexo: cron_id=email-monitor\n"
+            "# nexo: cron_id=mail-poller\n"
             "# nexo: interval_seconds=300\n"
             "# nexo: schedule_required=true\n"
             "print('ok')\n"
         )
 
-        plist_path = scripts_dir / "com.nexo.email-monitor.plist"
+        plist_path = scripts_dir / "com.nexo.mail-poller.plist"
         plist_path.write_text("plist")
 
         monkeypatch.setattr(
@@ -700,12 +830,12 @@ class TestRegistrySync:
             "audit_personal_schedules",
             lambda: {
                 "schedules": [{
-                    "cron_id": "email-monitor",
+                    "cron_id": "mail-poller",
                     "script_path": str(script),
                     "schedule_type": "interval",
                     "schedule_value": "300",
                     "schedule_label": "every 300s",
-                    "launchd_label": "com.nexo.email-monitor",
+                    "launchd_label": "com.nexo.mail-poller",
                     "plist_path": str(plist_path),
                     "enabled": True,
                     "schedule_managed": True,
@@ -728,7 +858,7 @@ class TestRegistrySync:
 
         result = ensure_personal_schedules(dry_run=False)
         entry = result["already_present"][0]
-        assert entry["cron_id"] == "email-monitor"
+        assert entry["cron_id"] == "mail-poller"
         assert entry["reloaded"] is True
         assert entry["reason"] == "plist on disk but not loaded in launchd"
         assert any(args[1] == "bootstrap" for args in calls)
@@ -737,17 +867,17 @@ class TestRegistrySync:
         import script_registry
 
         init_db()
-        script = scripts_dir / "email-monitor.py"
+        script = scripts_dir / "mail-poller.py"
         script.write_text(
-            "# nexo: name=email-monitor\n"
+            "# nexo: name=mail-poller\n"
             "# nexo: runtime=python\n"
-            "# nexo: cron_id=email-monitor\n"
+            "# nexo: cron_id=mail-poller\n"
             "# nexo: interval_seconds=300\n"
             "# nexo: schedule_required=true\n"
             "print('ok')\n"
         )
 
-        plist_path = scripts_dir / "com.nexo.email-monitor.plist"
+        plist_path = scripts_dir / "com.nexo.mail-poller.plist"
         plist_path.write_text("plist")
 
         monkeypatch.setattr(
@@ -755,12 +885,12 @@ class TestRegistrySync:
             "audit_personal_schedules",
             lambda: {
                 "schedules": [{
-                    "cron_id": "email-monitor",
+                    "cron_id": "mail-poller",
                     "script_path": str(script),
                     "schedule_type": "interval",
                     "schedule_value": "300",
                     "schedule_label": "every 300s",
-                    "launchd_label": "com.nexo.email-monitor",
+                    "launchd_label": "com.nexo.mail-poller",
                     "plist_path": str(plist_path),
                     "enabled": True,
                     "schedule_managed": True,
@@ -780,7 +910,7 @@ class TestRegistrySync:
 
         result = ensure_personal_schedules(dry_run=False)
         entry = result["already_present"][0]
-        assert entry["cron_id"] == "email-monitor"
+        assert entry["cron_id"] == "mail-poller"
         assert entry["reload_failed"] is True
         assert entry["reason"] == "bootstrap failed"
 
@@ -788,31 +918,31 @@ class TestRegistrySync:
         import script_registry
 
         init_db()
-        script = scripts_dir / "backup.py"
+        script = scripts_dir / "vault-sync.py"
         script.write_text(
-            "# nexo: name=backup\n"
+            "# nexo: name=vault-sync\n"
             "# nexo: runtime=python\n"
-            "# nexo: cron_id=backup\n"
+            "# nexo: cron_id=vault-sync\n"
             "# nexo: interval_seconds=300\n"
             "# nexo: schedule_required=true\n"
             "print('ok')\n"
         )
-        plist_path = scripts_dir / "com.nexo.backup.plist"
+        plist_path = scripts_dir / "com.nexo.vault-sync.plist"
         plist_path.write_text("plist")
 
         def _discover():
             if not plist_path.exists():
                 return []
             return [{
-                "cron_id": "backup",
+                "cron_id": "vault-sync",
                 "script_path": str(script),
                 "schedule_type": "interval",
                 "schedule_value": "300",
                 "schedule_label": "every 300s",
-                "launchd_label": "com.nexo.backup",
+                "launchd_label": "com.nexo.vault-sync",
                 "plist_path": str(plist_path),
                 "enabled": True,
-                "description": "Backup schedule",
+                "description": "Vault sync schedule",
                 "managed_marker": True,
                 "script_exists": True,
                 "script_within_scripts_dir": True,
@@ -823,20 +953,20 @@ class TestRegistrySync:
         monkeypatch.setattr(script_registry.subprocess, "run", lambda *args, **kwargs: None)
 
         sync_personal_scripts()
-        result = unschedule_personal_script("backup")
+        result = unschedule_personal_script("vault-sync")
         assert result["ok"] is True
-        assert result["removed_schedules"][0]["cron_id"] == "backup"
+        assert result["removed_schedules"][0]["cron_id"] == "vault-sync"
         assert list_personal_script_schedules() == []
 
     def test_sync_reports_manual_schedule_without_blessing_it(self, scripts_dir, monkeypatch):
         import script_registry
 
         init_db()
-        script = scripts_dir / "backup.py"
+        script = scripts_dir / "vault-sync.py"
         script.write_text(
-            "# nexo: name=backup\n"
+            "# nexo: name=vault-sync\n"
             "# nexo: runtime=python\n"
-            "# nexo: cron_id=backup\n"
+            "# nexo: cron_id=vault-sync\n"
             "# nexo: interval_seconds=300\n"
             "# nexo: schedule_required=true\n"
             "print('ok')\n"
@@ -846,15 +976,15 @@ class TestRegistrySync:
             script_registry,
             "_discover_personal_schedule_records",
             lambda: [{
-                "cron_id": "backup",
+                "cron_id": "vault-sync",
                 "script_path": str(script),
                 "schedule_type": "interval",
                 "schedule_value": "300",
                 "schedule_label": "every 300s",
-                "launchd_label": "com.nexo.backup",
-                "plist_path": "/tmp/com.nexo.backup.plist",
+                "launchd_label": "com.nexo.vault-sync",
+                "plist_path": "/tmp/com.nexo.vault-sync.plist",
                 "enabled": True,
-                "description": "Backup schedule",
+                "description": "Vault sync schedule",
                 "managed_marker": False,
                 "script_exists": True,
                 "script_within_scripts_dir": True,

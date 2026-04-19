@@ -154,11 +154,42 @@ def _surface_version_markers(version: str) -> list[tuple[str, list[str]]]:
         ("llms.txt", [f"(v{version}).", f"v{version}:"]),
         (
             "index.html",
-            [f'id="version-badge">v{version}<', f'"softwareVersion": "{version}"'],
+            [
+                f'id="version-badge">v{version}<',
+                f'"softwareVersion": "{version}"',
+                f'href="/changelog/#v{version_anchor}"',
+            ],
         ),
-        ("blog/index.html", [f"/blog/nexo-{version_slug}", f"NEXO {version}:"]),
-        ("changelog/index.html", [f'id="v{version_anchor}"', f"New in v{version}"]),
-        ("sitemap.xml", [f"/blog/nexo-{version_slug}"]),
+        (
+            "blog/index.html",
+            [
+                f"/blog/nexo-{version_slug}/",
+                f"NEXO {version}:",
+                f'href="/changelog/#v{version_anchor}"',
+            ],
+        ),
+        (
+            "changelog/index.html",
+            [f'id="v{version_anchor}"', f"New in v{version}", f"Start with v{version}"],
+        ),
+        (
+            "sitemap.xml",
+            [f"https://nexo-brain.com/blog/nexo-{version_slug}/", "<loc>https://nexo-brain.com/features/</loc>"],
+        ),
+    ]
+
+
+def _required_public_routes() -> list[str]:
+    return [
+        "features/index.html",
+        "evolution/index.html",
+        "compare/index.html",
+        "blog/index.html",
+        "changelog/index.html",
+        "docs/index.html",
+        "demos/index.html",
+        "solutions/index.html",
+        "watch/index.html",
     ]
 
 
@@ -193,6 +224,11 @@ def _check_public_surfaces(
                 if marker not in text:
                     missing.append(f"{well_known} missing {marker}")
                     break
+
+    for raw_path in _required_public_routes():
+        path = root / raw_path
+        if not path.is_file():
+            missing.append(f"{path} missing file")
 
     if missing:
         raise SystemExit(f"[release-readiness] {label} drift:\n- " + "\n- ".join(missing))

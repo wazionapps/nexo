@@ -17,6 +17,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from paths import data_dir, logs_dir
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 _script_dir = Path(__file__).resolve().parent
@@ -25,9 +26,9 @@ NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(_repo_src) if (_repo_src / "ser
 if str(NEXO_CODE) not in sys.path:
     sys.path.insert(0, str(NEXO_CODE))
 
-LOG_DIR = NEXO_HOME / "logs"
+LOG_DIR = logs_dir()
 LOG_FILE = LOG_DIR / "auto-update.log"
-LOCK_FILE = NEXO_HOME / "data" / "auto-update.lock"
+LOCK_FILE = data_dir() / "auto-update.lock"
 MAX_LOG_SIZE = 512 * 1024  # 512 KB
 
 

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Blog — NEXO Brain</title>
-    <meta name="description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.29 runtime hygiene, fail-closed startup, and honest cron tracing release.">
+    <meta name="description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.1.0 contract-closure release and the 7.0.x F0.6 migration follow-up.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/blog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/blog/">
     <meta property="og:title" content="Blog — NEXO Brain">
-    <meta property="og:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.29 runtime hygiene, fail-closed startup, and honest cron tracing release.">
+    <meta property="og:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.1.0 contract-closure release and the 7.0.x F0.6 migration follow-up.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Blog — NEXO Brain">
-    <meta name="twitter:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.29 runtime hygiene, fail-closed startup, and honest cron tracing release.">
+    <meta name="twitter:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.1.0 contract-closure release and the 7.0.x F0.6 migration follow-up.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Blog — NEXO Brain",
-        "description": "Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, now including the v5.3.29 runtime hygiene, fail-closed startup, and honest cron tracing release.",
+        "description": "Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.1.0 contract-closure release and the 7.0.x F0.6 migration follow-up.",
         "url": "https://nexo-brain.com/blog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -130,38 +130,37 @@
                 </p>
                 <div class="page-chip-row">
                     <span class="page-chip">Release notes</span>
-                    <span class="page-chip">Memory architecture</span>
-                    <span class="page-chip">Competitive analysis</span>
+                    <span class="page-chip">Runtime architecture</span>
+                    <span class="page-chip">Shared brain product notes</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="/blog/nexo-7-0-1/" class="btn btn-primary">Read latest release</a>
+                    <a href="/blog/nexo-7-1-0/" class="btn btn-primary">Read latest release</a>
                     <a href="/changelog/" class="btn btn-secondary">Latest release notes</a>
-            <p class="desktop-disclaimer field-hint" style="margin-top:18px;padding:10px 14px;background:rgba(124,58,237,0.08);border-radius:8px;border:1px solid rgba(124,58,237,0.2);font-size:13px;line-height:1.55;"><strong>NEXO Desktop</strong> es un cliente acompa&ntilde;ante closed-source distribuido aparte en <a href="https://systeam.es/nexo-desktop">systeam.es/nexo-desktop</a>. Cuando un release habla de "NEXO Desktop" se refiere a una versi&oacute;n coordinada de ese cliente que consume el contrato CLI/MCP del Brain. El Brain (este repo, AGPL-3.0) es 100% usable por s&iacute; solo desde terminal, Codex, Claude Code, o cualquier cliente MCP.</p>
-
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
+                <p class="desktop-disclaimer field-hint" style="margin-top:18px;padding:10px 14px;background:rgba(124,58,237,0.08);border-radius:8px;border:1px solid rgba(124,58,237,0.2);font-size:13px;line-height:1.55;"><strong>NEXO Desktop</strong> is a separate closed-source companion app distributed at <a href="https://systeam.es/nexo-desktop">systeam.es/nexo-desktop</a>. When a release mentions NEXO Desktop it refers to a coordinated client release that consumes the Brain CLI/MCP contract; the Brain in this repo remains fully usable on its own.</p>
             </div>
             <div class="blog-featured-card">
                 <div class="section-label">Latest release</div>
                 <div class="blog-featured-meta">
-                    <span class="compare-chip">April 14, 2026</span>
-                    <span class="compare-chip">Hotfix</span>
-                    <span class="compare-chip">CI / tests</span>
+                    <span class="compare-chip">April 19, 2026</span>
+                    <span class="compare-chip">Minor release</span>
+                    <span class="compare-chip">Runtime / product contract</span>
                 </div>
-                <h2>NEXO 5.4.5: CI Test Timeout Fix</h2>
-                <p>Completes the publish workflow fix from v5.4.3–v5.4.4: increases <code>test_update_uses_recorded_source_repo</code> subprocess timeout from 10s to 30s for slow CI runners.</p>
+                <h2>NEXO 7.1.0: post-F0.6 contract closure — runtime, Guardian, automations</h2>
+                <p>v7.1.0 turns the F0.6 migration into a stable product contract: canonical <code>~/.nexo/core</code> runtime root, Brain-generated Guardian surfaces for Desktop, configurable core automations, richer email routing, and local classifier auto-install.</p>
                 <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
-                    <a href="/blog/nexo-6-1-1/" class="btn btn-primary">Open article</a>
-                    <a href="/changelog/#v545" class="btn btn-secondary">Open changelog</a>
+                    <a href="/blog/nexo-7-1-0/" class="btn btn-primary">Open article</a>
+                    <a href="/changelog/#v710" class="btn btn-secondary">Open changelog</a>
                 </div>
                 <div class="blog-mini-stack">
                     <div class="blog-mini-card">
                         <strong>Companion view</strong>
-                        <span><a href="/changelog/#v544">The 5.4.4 changelog section</a></span>
+                        <span><a href="/changelog/#v710">See the full v7.1.0 changelog</a></span>
                     </div>
                     <div class="blog-mini-card">
                         <strong>Previous release</strong>
-                        <span><a href="/blog/nexo-5-4-2-traceability-and-buffer-close-loop/">NEXO 5.4.2: Traceability truth + Sensory Register buffer close-loop</a>.</span>
+                        <span><a href="/blog/nexo-7-0-1/">NEXO 7.0.1: hotfix — db._core.DB_PATH transition-aware</a>.</span>
                     </div>
                 </div>
             </div>
@@ -174,7 +173,14 @@
     <div class="container">
         <div class="blog-grid">
 
-                        <div class="blog-card">
+            <div class="blog-card">
+                <div class="blog-card-date">April 19, 2026</div>
+                <h2><a href="/blog/nexo-7-1-0/">NEXO 7.1.0: post-F0.6 contract closure — runtime, Guardian, automations</a></h2>
+                <p>v7.1.0 closes the remaining “half migration, half product” gap after the F0.6 runtime split. Brain now treats <code>~/.nexo/core</code> as the canonical shipped code root, exports Guardian runtime surfaces for Desktop, productises <code>email-monitor</code>, <code>followup-runner</code>, and <code>morning-agent</code>, upgrades the email routing model, and auto-installs the local classifier baseline on fresh installs and updates.</p>
+                <a href="/blog/nexo-7-1-0/" class="read-more">Read more &rarr;</a>
+            </div>
+
+            <div class="blog-card">
                 <div class="blog-card-date">April 19, 2026</div>
                 <h2><a href="/blog/nexo-7-0-1/">NEXO 7.0.1: hotfix — db._core.DB_PATH transition-aware</a></h2>
                 <p>CRITICAL hotfix sobre v7.0.0. <code>src/db/_core.py::DB_PATH</code> era el único caller que seguía hardcoded a la ruta legacy pre-F0.6. Tras la migración F0.6 el DB vive en <code>~/.nexo/runtime/data/nexo.db</code>, pero ese módulo seguía abriendo <code>~/.nexo/data/nexo.db</code> (inexistente). Resultado: <code>nexo email list</code>, <code>nexo scripts list</code>, <code>nexo_task_open</code> y todo lo demás que comparte la conexión DB devolvían resultados vacíos. Fix: DB_PATH ahora es transition-aware (igual que el resto de paths.py).</p>

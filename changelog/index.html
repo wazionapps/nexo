@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.29 hardens runtime hygiene, converges update paths on one core, makes startup fail closed on corrupt DB state, and preserves cron evidence when SQLite is unavailable.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.1.0 closes the post-F0.6 runtime and product contract with canonical layout healing, Guardian runtime surfaces, configurable core automations, and local classifier auto-install.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.29 hardens runtime hygiene, converges update paths on one core, makes startup fail closed on corrupt DB state, and preserves cron evidence when SQLite is unavailable.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.1.0 closes the post-F0.6 runtime and product contract with canonical layout healing, Guardian runtime surfaces, configurable core automations, and local classifier auto-install.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.29 hardens runtime hygiene, converges update paths on one core, makes startup fail closed on corrupt DB state, and preserves cron evidence when SQLite is unavailable.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.1.0 closes the post-F0.6 runtime and product contract with canonical layout healing, Guardian runtime surfaces, configurable core automations, and local classifier auto-install.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v5.3.29 hardens runtime hygiene, converges update paths on one core, makes startup fail closed on corrupt DB state, and preserves cron evidence when SQLite is unavailable.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.1.0 closes the post-F0.6 runtime and product contract with canonical layout healing, Guardian runtime surfaces, configurable core automations, and local classifier auto-install.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,78 +87,58 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v5.4.2 live</span>
-                    <span class="page-chip">Traceability truth</span>
-                    <span class="page-chip">Sensory Register close-loop</span>
-                    <span class="page-chip">Doc alignment</span>
+                    <span class="page-chip">v7.1.0 live</span>
+                    <span class="page-chip">Runtime contract closure</span>
+                    <span class="page-chip">Guardian parity</span>
+                    <span class="page-chip">Core automations</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v542" class="btn btn-primary">Start with v5.4.2</a>
-                    <a href="#v400" class="btn btn-secondary">See v4.0.0</a>
+                    <a href="#v710" class="btn btn-primary">Start with v7.1.0</a>
+                    <a href="#v701" class="btn btn-secondary">See v7.0.1</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
             </div>
             <div class="page-visual">
                 <div class="page-stack">
                     <div class="page-stack-card">
-                        <strong>v5.4.2</strong>
-                        <span>Traceability truth + Sensory Register close-loop. Repo commit-ref warnings stop inflating local/runtime ops into fake git debt, the nocturnal postmortem drains pending <code>session_buffer.jsonl</code> events as a real queue, and docs now match the real stop-hook / reflection boundary.</span>
+                        <strong>v7.1.0</strong>
+                        <span>Post-F0.6 contract closure: canonical <code>core</code> code root, layout healing after update, Guardian runtime surfaces for Desktop, productised core automations, and local classifier auto-install.</span>
                     </div>
                     <div class="page-stack-card">
-                        <strong>v5.4.1</strong>
-                        <span>Hook hygiene fix. The PostToolUse <code>capture-session.sh</code> hook had been reading a nonexistent env var since 2026-04-12, silently writing <code>"tool":"unknown"</code> to the Sensory Register for 48 hours. v5.4.1 parses <code>tool_name</code> from stdin JSON, stops filtering <code>Bash</code>, removes a runtime-only duplicate, and purges pre-fix entries on update.</span>
+                        <strong>v7.0.1</strong>
+                        <span>Hotfix over F0.6: the final shared-DB caller now resolves the transition-aware runtime path, so post-migration installs stop seeing empty results from DB-backed commands.</span>
                     </div>
                     <div class="page-stack-card">
-                        <strong>v5.4.0</strong>
-                        <span>Runtime events bus at <code>~/.nexo/runtime/events.ndjson</code>, <code>nexo notify</code> for one-shot proactive events, <code>nexo health --json</code> subsystem snapshot, <code>nexo logs --tail --json</code> structured log access, and a safe flat→nested <code>calibration.json</code> migration that runs silently inside <code>nexo update</code>.</span>
+                        <strong>v7.0.0</strong>
+                        <span>Plan Consolidado F0.6: the runtime is physically split into <code>core</code>, <code>personal</code>, and <code>runtime</code>, with transition-aware helpers and auto-migration for existing operators.</span>
+                    </div>
+                    <div class="page-stack-card">
+                        <strong>v6.5.0</strong>
+                        <span>Operators can enable, disable, and inspect personal automations as a product surface instead of editing schedulers by hand. Desktop consumes the same contract through its Automations panel.</span>
+                    </div>
+                    <div class="page-stack-card">
+                        <strong>v6.4.0</strong>
+                        <span>Multi-tenant email accounts, credential pointers, machine-safe setup, and a Desktop bridge finally make email management usable for non-technical operators.</span>
+                    </div>
+                    <div class="page-stack-card">
+                        <strong>v6.3.0–6.3.1</strong>
+                        <span>Guardian gets its classifier/telemetry foundation and then immediately corrects the privacy boundary by keeping operator-specific entities out of the public preset.</span>
                     </div>
                     <div class="page-stack-card">
                         <strong>v5.3.30</strong>
-                        <span>Desktop bridge: four read-only CLI commands (<code>nexo schema</code>, <code>nexo identity</code>, <code>nexo onboard</code>, <code>nexo scan-profile</code>) expose editable schema, identity, onboarding wizard, and profile heuristics as JSON so external UIs auto-adapt.</span>
+                        <span>The Desktop bridge exposes onboarding, schema, identity, and profile heuristics as JSON so external clients stop hardcoding the Brain contract.</span>
                     </div>
                     <div class="page-stack-card">
                         <strong>v5.3.29</strong>
-                        <span>Duplicate artifact hygiene now fails closed, packaged/runtime updates converge on one core, startup stops respawning an empty brain on corrupt DB state, and cron evidence survives transient SQLite failure.</span>
-                    </div>
-                    <div class="page-stack-card">
-                        <strong>v5.3.28</strong>
-                        <span><code>guard_check</code> is now enforced per-file instead of being satisfiable once per session, closing a loophole in protocol discipline.</span>
-                    </div>
-                    <div class="page-stack-card">
-                        <strong>v5.3.27</strong>
-                        <span><code>nexo_heartbeat</code> now emits authoritative <code>NOW_UTC</code>, stopping date drift in long sessions and delayed closeouts.</span>
-                    </div>
-                    <div class="page-stack-card">
-                        <strong>v5.2.1</strong>
-                        <span>Deep-sleep datetime crash fix (7/8 Phase 4 failures) and cortex auto-outcome creation that closes the decision→verification feedback loop.</span>
-                    </div>
-                    <div class="page-stack-card">
-                        <strong>v5.2.0</strong>
-                        <span>Bilingual response discipline (Spanish + English high-stakes detection with negation suppression), numeric confidence safeguard with positive context signals, and a cortex-quality cache reader that closes the v5.1.0 cron's write-only snapshot loop.</span>
-                    </div>
-                    <div class="page-stack-card">
-                        <strong>v5.1.1</strong>
-                        <span>Release trace hygiene patch. New doctor check surfaces stale audit-phase workflows; self-audit auto-retires stale WG-AUDIT-* placeholder goals; diary warnings split recent vs historical commit_ref gaps.</span>
+                        <span>Runtime hygiene turns fail-closed: duplicate artifacts are blocked, startup preflight is synchronous, corrupt DB state stops respawning an empty brain, and cron evidence survives SQLite trouble.</span>
                     </div>
                     <div class="page-stack-card">
                         <strong>v5.1.0</strong>
-                        <span>Every open evolution, adaptive, cognitive, and skills loop closes under itself. Bitemporal KG export, OpenTelemetry spans, and lint/security/release gates on every PR.</span>
-                    </div>
-                    <div class="page-stack-card">
-                        <strong>v5.0.4</strong>
-                        <span>Personal-script runtime bridges are more robust, doctor false positives are quieter, and simple artifact reads answer sooner instead of looking hung.</span>
-                    </div>
-                    <div class="page-stack-card">
-                        <strong>v5.0.1</strong>
-                        <span>Legacy managed Claude Code hooks are purged safely on upgrade, so real installs stop carrying warning drift from older releases.</span>
-                    </div>
-                    <div class="page-stack-card">
-                        <strong>v4.1.0</strong>
-                        <span>Drive/Curiosity: tension-based signals that accumulate during work and mature into autonomous investigations.</span>
+                        <span>Evolution, adaptive, cognitive, and skills loops close under evidence. This is where NEXO becomes more than memory and starts behaving like a cognitive runtime.</span>
                     </div>
                     <div class="page-stack-card">
                         <strong>What changed most</strong>
-                        <span>NEXO stopped being “just memory” and became a cognitive runtime that can prioritize, evaluate, measure, and reuse what actually works.</span>
+                        <span>The product now reads more honestly end to end: shared brain, operational safety, operator-facing surfaces, and public proof are converging instead of drifting as separate stories.</span>
                     </div>
                 </div>
             </div>
@@ -184,6 +164,16 @@
 <section class="section-compact" style="background:rgba(124,58,237,0.08);">
     <div class="container desktop-disclaimer" style="max-width:860px;font-size:13px;line-height:1.55;">
         <p><strong>Sobre NEXO Desktop.</strong> NEXO Desktop es un cliente acompa&ntilde;ante closed-source distribuido aparte en <a href="https://systeam.es/nexo-desktop">systeam.es/nexo-desktop</a>. Cuando una entrada de changelog menciona "NEXO Desktop" se refiere a una versi&oacute;n coordinada de ese cliente que consume el contrato CLI/MCP del Brain. El c&oacute;digo de Desktop no vive en este repo; el Brain (AGPL-3.0) es 100% usable por s&iacute; solo desde terminal, Codex, Claude Code, o cualquier cliente MCP.</p>
+    </div>
+</section>
+
+<section id="v710" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.1.0 <span style="opacity:.5;font-weight:400;">&mdash; April 19, 2026 &mdash; <strong>MINOR</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">Post-F0.6 contract closure &mdash; runtime, Guardian, automations</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            v7.1.0 turns the F0.6 layout split into a stable runtime/product contract. Install/update flows now treat <code>~/.nexo/core</code> as the canonical shipped code root and re-run layout healers after sync, Brain exports <code>guardian-runtime-surfaces.json</code> so Desktop stops drifting on live Guardian datasets, <code>email-monitor</code>/<code>followup-runner</code>/<code>morning-agent</code> become configurable core automations with explicit prerequisites and additive operator instructions, the email runtime model now distinguishes agent-vs-operator inboxes with permissions and default routing, and the local classifier baseline auto-installs on fresh installs and <code>nexo update</code> unless the operator explicitly opts out with <code>NEXO_LOCAL_CLASSIFIER=off</code>.
+        </p>
     </div>
 </section>
 

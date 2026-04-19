@@ -1,4 +1,4 @@
-"""v6.0.0 — registerAllCoreHooks() must publish ~/.nexo/hooks_status.json.
+"""v6.0.0+ — registerAllCoreHooks() must publish hook status canonically.
 
 We exercise the installer in isolation via Node: a tiny driver script
 reads the committed manifest, loads ``bin/nexo-brain.js`` just enough to
@@ -58,10 +58,12 @@ def test_hooks_status_json_is_published(tmp_path):
     )
     assert result.returncode == 0, f"node driver failed: {result.stderr}\n{result.stdout}"
 
-    status_path = home / "hooks_status.json"
-    assert status_path.is_file(), "hooks_status.json should be written by registerAllCoreHooks"
+    canonical_path = home / "runtime" / "operations" / "hooks_status.json"
+    legacy_path = home / "hooks_status.json"
+    assert canonical_path.is_file(), "canonical hooks_status.json should be written under runtime/operations"
+    assert legacy_path.exists(), "legacy hooks_status alias should still exist for compatibility"
 
-    payload = json.loads(status_path.read_text())
+    payload = json.loads(canonical_path.read_text())
     assert payload["total"] == len(manifest["hooks"])
     assert payload["registered"] == payload["total"]
     assert payload["healthy"] is True
@@ -98,7 +100,7 @@ def test_missing_handler_marks_entry_error(tmp_path):
     result = subprocess.run(["node", str(driver)], capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stderr
 
-    payload = json.loads((home / "hooks_status.json").read_text())
+    payload = json.loads((home / "runtime" / "operations" / "hooks_status.json").read_text())
     assert payload["healthy"] is False
     assert payload["registered"] == 0
     assert all(entry["status"] == "error" for entry in payload["hooks"])

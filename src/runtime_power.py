@@ -26,7 +26,7 @@ from pathlib import Path
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parent)))
-CONFIG_DIR = NEXO_HOME / "config"
+CONFIG_DIR = paths.config_dir()
 SCHEDULE_FILE = CONFIG_DIR / "schedule.json"
 POWER_POLICY_KEY = "power_policy"
 POWER_POLICY_VERSION_KEY = "power_policy_version"

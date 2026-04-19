@@ -3,6 +3,7 @@ import json
 import os
 import subprocess
 import sys
+from pathlib import Path
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
 
@@ -76,9 +77,33 @@ def test_runtime_cli_wrapper_text_probes_fastmcp_and_supports_override():
     assert 'import fastmcp' in text
     assert 'resolve_python()' in text
     assert 'DEFAULT_NEXO_HOME=' in text
+    assert '$NEXO_HOME/core/cli.py' in text
     assert '${HOME}/claude' in text
     assert 'pwd -P' in text
     assert '$NEXO_HOME/claude/cli.py' not in text
+
+
+def test_cleanup_legacy_root_db_stubs_archives_zero_byte_root_files(tmp_path, monkeypatch):
+    import auto_update
+
+    runtime_home = tmp_path / "runtime"
+    data_dir = runtime_home / "runtime" / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    (data_dir / "nexo.db").write_text("sqlite")
+    (runtime_home / "nexo.db").write_text("")
+    (runtime_home / "brain.db").write_text("")
+
+    monkeypatch.setenv("NEXO_HOME", str(runtime_home))
+    monkeypatch.setattr(auto_update, "NEXO_HOME", runtime_home)
+
+    result = auto_update._cleanup_legacy_root_db_stubs(runtime_home)
+
+    assert result["ok"] is True
+    assert len(result["archived"]) == 2
+    assert not (runtime_home / "nexo.db").exists()
+    assert not (runtime_home / "brain.db").exists()
+    for item in result["archived"]:
+        assert Path(item["backup_path"]).is_file()
 
 
 def test_resolve_sync_source_supports_hybrid_runtime_code_dir(tmp_path, monkeypatch):
@@ -255,6 +280,56 @@ def test_run_runtime_post_sync_reports_personal_schedule_heal(tmp_path, monkeypa
 
     assert ok is True
     assert "personal-schedules-healed:1" in actions
+
+
+def test_run_runtime_post_sync_reports_superseded_personal_script_retire(tmp_path, monkeypatch):
+    import auto_update
+    import client_sync
+
+    runtime_home = tmp_path / "runtime"
+    (runtime_home / "logs").mkdir(parents=True)
+    (runtime_home / "crons").mkdir(parents=True)
+    (runtime_home / "crons" / "sync.py").write_text("print('ok')\n")
+
+    def fake_run(cmd, **kwargs):
+        if isinstance(cmd, list) and len(cmd) >= 3 and cmd[1] == "-c":
+            return subprocess.CompletedProcess(
+                cmd,
+                0,
+                json.dumps({
+                    "retired_superseded_scripts": {
+                        "archived": [{"name": "morning-agent"}],
+                    },
+                    "retired_superseded_skills": {
+                        "archived": [{"name": "Release Consolidated Brain Desktop"}],
+                    },
+                    "ensure_schedules": {
+                        "created": [],
+                        "repaired": [],
+                        "invalid": [],
+                    },
+                }),
+                "",
+            )
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setenv("NEXO_HOME", str(runtime_home))
+    monkeypatch.setattr(auto_update, "NEXO_HOME", runtime_home)
+    monkeypatch.setattr(auto_update, "_reinstall_runtime_pip_deps", lambda dest: True)
+    monkeypatch.setattr(auto_update.subprocess, "run", fake_run)
+    monkeypatch.setattr(client_sync, "sync_all_clients", lambda **kwargs: {"ok": True, "clients": {}})
+
+    import runtime_power
+
+    monkeypatch.setattr(runtime_power, "apply_power_policy", lambda policy=None: {"ok": True, "action": "enabled"})
+    monkeypatch.setattr(runtime_power, "ensure_full_disk_access_choice", lambda **kwargs: {"status": "unset", "prompted": False, "message": ""})
+    monkeypatch.setattr(runtime_power, "get_full_disk_access_status", lambda schedule=None: "unset")
+
+    ok, actions = auto_update._run_runtime_post_sync(runtime_home)
+
+    assert ok is True
+    assert "personal-scripts-retired:1" in actions
+    assert "personal-skills-retired:1" in actions
 
 
 def test_startup_preflight_reports_personal_schedule_heal(tmp_path, monkeypatch):

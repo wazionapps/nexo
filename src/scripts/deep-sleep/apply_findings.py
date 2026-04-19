@@ -31,11 +31,74 @@ if str(NEXO_CODE) not in sys.path:
     sys.path.insert(0, str(NEXO_CODE))
 
 import db as nexo_db
+import paths
 
-DEEP_SLEEP_DIR = NEXO_HOME / "operations" / "deep-sleep"
-NEXO_DB = NEXO_HOME / "data" / "nexo.db"
-COGNITIVE_DB = NEXO_HOME / "data" / "cognitive.db"
-OPERATIONS_DIR = NEXO_HOME / "operations"
+def _resolve_nexo_db() -> Path:
+    candidates = [
+        paths.resolve_db_path(),
+        paths.legacy_db_path(),
+        paths.data_dir() / "nexo.db",
+    ]
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    for env_key in ("NEXO_TEST_DB", "NEXO_DB"):
+        value = str(os.environ.get(env_key, "") or "").strip()
+        if value:
+            candidate = Path(value).expanduser()
+            if candidate.is_file():
+                return candidate
+            return candidate
+    return paths.resolve_db_path()
+
+
+def _resolve_cognitive_db() -> Path:
+    new = paths.data_dir() / "cognitive.db"
+    legacy = paths.legacy_data_dir() / "cognitive.db"
+    if not new.is_file() and legacy.is_file():
+        return legacy
+    return new
+
+
+def _resolve_operations_dir() -> Path:
+    new = paths.operations_dir()
+    legacy = paths.legacy_operations_dir()
+    if not new.exists() and legacy.exists():
+        return legacy
+    return new
+
+
+def _resolve_deep_sleep_dir() -> Path:
+    return _resolve_operations_dir() / "deep-sleep"
+
+
+class _DynamicPath:
+    def __init__(self, resolver):
+        self._resolver = resolver
+
+    def _path(self) -> Path:
+        return Path(self._resolver())
+
+    def __fspath__(self):
+        return os.fspath(self._path())
+
+    def __str__(self) -> str:
+        return str(self._path())
+
+    def __repr__(self) -> str:
+        return repr(self._path())
+
+    def __truediv__(self, other):
+        return self._path() / other
+
+    def __getattr__(self, name):
+        return getattr(self._path(), name)
+
+
+DEEP_SLEEP_DIR = _DynamicPath(_resolve_deep_sleep_dir)
+NEXO_DB = _DynamicPath(_resolve_nexo_db)
+COGNITIVE_DB = _DynamicPath(_resolve_cognitive_db)
+OPERATIONS_DIR = _DynamicPath(_resolve_operations_dir)
 BACKUP_DIR = DEEP_SLEEP_DIR  # backups stored alongside outputs
 
 STOPWORDS = {
@@ -128,7 +191,7 @@ def _top_followups_by_impact(limit: int = 5) -> list[dict]:
 
 
 def _read_impact_summary() -> dict:
-    path = NEXO_HOME / "coordination" / "impact-scorer-summary.json"
+    path = paths.coordination_dir() / "impact-scorer-summary.json"
     if not path.exists():
         return {}
     try:
@@ -630,7 +693,7 @@ def create_followup(description: str, date: str = "", reasoning_note: str = "", 
 
 def update_calibration_mood(synthesis: dict) -> dict:
     """Update mood in calibration.json based on emotional analysis."""
-    calibration_file = NEXO_HOME / "brain" / "calibration.json"
+    calibration_file = paths.brain_dir() / "calibration.json"
     if not calibration_file.exists():
         return {"success": False, "error": "calibration.json not found"}
 
@@ -862,7 +925,7 @@ def _parse_any_datetime(value) -> datetime | None:
 
 
 def _load_project_aliases() -> dict[str, set[str]]:
-    atlas_path = NEXO_HOME / "brain" / "project-atlas.json"
+    atlas_path = paths.brain_dir() / "project-atlas.json"
     if not atlas_path.is_file():
         return {}
     try:

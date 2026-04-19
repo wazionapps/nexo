@@ -8,6 +8,7 @@ import re
 import subprocess
 from pathlib import Path
 
+import paths
 from db import (
     init_db, cron_runs_recent, cron_runs_summary,
     upsert_personal_script, register_personal_script_schedule,
@@ -304,7 +305,7 @@ def handle_schedule_add(cron_id: str, script: str, schedule: str = '',
 
     Args:
         cron_id: Unique ID for this cron (e.g. 'my-backup', 'report-daily'). Must be lowercase with hyphens.
-        script: Path to the script to run (absolute or relative to NEXO_HOME/scripts/).
+        script: Path to the script to run (absolute or relative to personal/scripts/).
         schedule: Time-based schedule as 'HH:MM' (daily) or 'HH:MM:weekday' (e.g. '08:00:1' for Monday 8AM). Mutually exclusive with interval_seconds.
         interval_seconds: Run every N seconds (e.g. 300 for every 5 min). Mutually exclusive with schedule/keep_alive.
         description: What this cron does (for logs and status).
@@ -317,7 +318,7 @@ def handle_schedule_add(cron_id: str, script: str, schedule: str = '',
     nexo_home = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
     script_path = Path(script)
     if not script_path.is_absolute():
-        script_path = nexo_home / "scripts" / script
+        script_path = paths.personal_scripts_dir() / script
     if not script_path.exists():
         return f"ERROR: script not found: {script_path}"
 
@@ -333,7 +334,7 @@ def handle_schedule_add(cron_id: str, script: str, schedule: str = '',
     if script_type == "auto":
         script_type = detected_runtime if detected_runtime != "unknown" else "python"
 
-    wrapper_path = nexo_home / "scripts" / "nexo-cron-wrapper.sh"
+    wrapper_path = paths.core_scripts_dir() / "nexo-cron-wrapper.sh"
     if not wrapper_path.exists():
         return f"ERROR: wrapper not found at {wrapper_path}. Run crons/sync.py first."
 

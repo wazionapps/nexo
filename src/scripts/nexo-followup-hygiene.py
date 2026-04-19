@@ -25,10 +25,11 @@ if str(NEXO_CODE) not in sys.path:
     sys.path.insert(0, str(NEXO_CODE))
 
 import db as nexo_db
+import paths
 
-NEXO_DB = NEXO_HOME / "data" / "nexo.db"
-COORD_DIR = NEXO_HOME / "coordination"
-LOG_FILE = NEXO_HOME / "logs" / "followup-hygiene.log"
+NEXO_DB = paths.db_path()
+COORD_DIR = paths.coordination_dir()
+LOG_FILE = paths.logs_dir() / "followup-hygiene.log"
 
 TODAY = date.today().isoformat()
 

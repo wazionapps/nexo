@@ -38,6 +38,7 @@ if str(NEXO_CODE) not in sys.path:
 
 from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
 from constants import AUTOMATION_SUBPROCESS_TIMEOUT
+import paths
 try:
     from client_preferences import resolve_user_model as _resolve_user_model
     _USER_MODEL = _resolve_user_model()
@@ -46,10 +47,10 @@ except Exception:
 
 
 # ─── Paths ────────────────────────────────────────────────────────────────────
-CLAUDE_DIR = NEXO_HOME
-BRAIN_DIR = CLAUDE_DIR / "brain"
-COORD_DIR = CLAUDE_DIR / "coordination"
-MEMORY_DIR = CLAUDE_DIR / "memory"
+CLAUDE_DIR = paths.home()
+BRAIN_DIR = paths.brain_dir()
+COORD_DIR = paths.coordination_dir()
+MEMORY_DIR = paths.memory_dir()
 DAEMON_LOGS_DIR = CLAUDE_DIR / "daemon" / "logs"
 
 DAILY_SUMMARIES_DIR = BRAIN_DIR / "daily_summaries"
@@ -60,12 +61,12 @@ HEARTBEAT_LOG = COORD_DIR / "heartbeat-log.json"
 REFLECTION_LOG = COORD_DIR / "reflection-log.json"
 SLEEP_LOG = COORD_DIR / "sleep-log.json"
 
-MEMORY_MD = NEXO_HOME / "memory" / "MEMORY.md"
-NEXO_DB = NEXO_HOME / "data" / "nexo.db"
+MEMORY_MD = paths.memory_dir() / "MEMORY.md"
+NEXO_DB = paths.db_path()
 CLAUDE_MEM_DB = Path.home() / ".claude-mem" / "claude-mem.db"
 def _resolve_claude_cli() -> Path:
     """Find claude CLI: saved path > PATH > common locations."""
-    saved = NEXO_HOME / "config" / "claude-cli-path"
+    saved = paths.config_dir() / "claude-cli-path"
     if saved.exists():
         p = Path(saved.read_text().strip())
         if p.exists():
@@ -612,7 +613,7 @@ def main():
         # Register for catch-up only if all stages succeeded
         if not sleep_had_errors:
             try:
-                state_file = NEXO_HOME / "operations" / ".catchup-state.json"
+                state_file = paths.operations_dir() / ".catchup-state.json"
                 st = json.loads(state_file.read_text()) if state_file.exists() else {}
                 st["sleep"] = datetime.now().isoformat()
                 state_file.write_text(json.dumps(st, indent=2))

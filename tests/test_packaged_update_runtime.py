@@ -73,6 +73,8 @@ def test_sync_packaged_clients_normalizes_preferences_and_targets_runtime_home(t
     import client_sync
 
     runtime_home = tmp_path / "runtime"
+    (runtime_home / "core").mkdir(parents=True)
+    (runtime_home / "core" / "server.py").write_text("print('server')\n")
     config_dir = runtime_home / "config"
     config_dir.mkdir(parents=True)
     schedule_path = config_dir / "schedule.json"
@@ -93,7 +95,7 @@ def test_sync_packaged_clients_normalizes_preferences_and_targets_runtime_home(t
     assert ok is True
     assert err is None
     assert captured["nexo_home"] == runtime_home
-    assert captured["runtime_root"] == runtime_home
+    assert captured["runtime_root"] == runtime_home / "core"
     assert captured["auto_install_missing_claude"] is True
     updated_schedule = json.loads(schedule_path.read_text())
     assert "interactive_clients" in updated_schedule
@@ -120,7 +122,10 @@ def test_refresh_installed_manifest_writes_runtime_core_artifacts(tmp_path, monk
 
     update._refresh_installed_manifest()
 
-    manifest = json.loads((runtime_home / "config" / "runtime-core-artifacts.json").read_text())
+    manifest_path = runtime_home / "personal" / "config" / "runtime-core-artifacts.json"
+    if not manifest_path.is_file():
+        manifest_path = runtime_home / "config" / "runtime-core-artifacts.json"
+    manifest = json.loads(manifest_path.read_text())
     assert manifest["script_names"] == ["nexo-catchup.py"]
     assert manifest["hook_names"] == ["capture-tool-logs.sh"]
     _crons_old = runtime_home / "crons" / "manifest.json"
@@ -151,7 +156,10 @@ def test_refresh_installed_manifest_packaged_mode_uses_npm_src_for_core_artifact
 
     update._refresh_installed_manifest()
 
-    manifest = json.loads((runtime_home / "config" / "runtime-core-artifacts.json").read_text())
+    manifest_path = runtime_home / "personal" / "config" / "runtime-core-artifacts.json"
+    if not manifest_path.is_file():
+        manifest_path = runtime_home / "config" / "runtime-core-artifacts.json"
+    manifest = json.loads(manifest_path.read_text())
     assert manifest["script_names"] == ["nexo-catchup.py"]
     assert manifest["hook_names"] == ["capture-tool-logs.sh"]
     assert "daily-report.py" not in manifest["script_names"]
@@ -203,6 +211,8 @@ def test_sync_packaged_crons_runs_runtime_sync_script(tmp_path, monkeypatch):
     from plugins import update
 
     runtime_home = tmp_path / "runtime"
+    (runtime_home / "core").mkdir(parents=True)
+    (runtime_home / "core" / "cli.py").write_text("print('cli')\n")
     sync_path = runtime_home / "crons" / "sync.py"
     sync_path.parent.mkdir(parents=True)
     sync_path.write_text("print('ok')\n")
@@ -227,7 +237,7 @@ def test_sync_packaged_crons_runs_runtime_sync_script(tmp_path, monkeypatch):
     assert captured["args"] == [sys.executable, str(sync_path)]
     assert captured["cwd"] == str(runtime_home)
     assert captured["env"]["NEXO_HOME"] == str(runtime_home)
-    assert captured["env"]["NEXO_CODE"] == str(runtime_home)
+    assert captured["env"]["NEXO_CODE"] == str(runtime_home / "core")
 
 
 def test_handle_packaged_update_reloads_launchagents_after_successful_bump(monkeypatch):
@@ -241,6 +251,7 @@ def test_handle_packaged_update_reloads_launchagents_after_successful_bump(monke
     monkeypatch.setattr(update, "_reinstall_pip_deps", lambda: None)
     monkeypatch.setattr(update, "_run_migrations", lambda: None)
     monkeypatch.setattr(update, "_verify_import", lambda: None)
+    monkeypatch.setattr(update, "_finalize_packaged_runtime_layout", lambda: (True, None))
     monkeypatch.setattr(update, "_sync_packaged_crons", lambda progress_fn=None: (True, None))
     monkeypatch.setattr(update, "_sync_hooks_to_home", lambda: None)
     monkeypatch.setattr(update, "_cleanup_retired_runtime_files", lambda: [])

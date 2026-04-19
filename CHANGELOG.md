@@ -1,5 +1,83 @@
 # Changelog
 
+## [7.1.0] - 2026-04-19
+
+Minor release that closes the post-F0.6 runtime contract and ships
+coordinated with NEXO Desktop v0.22.0. The runtime now treats
+`~/.nexo/core` as the canonical shipped code root, Desktop consumes a
+real Brain-generated Guardian snapshot instead of stale manual lists,
+core automations become product surfaces instead of personal carry-over,
+and the local classifier baseline auto-installs on fresh installs and
+updates unless the operator explicitly opts out.
+
+### Added
+
+- `src/guardian_runtime_surfaces.py` — canonical Brain-generated snapshot
+  for Desktop-facing Guardian datasets (`known_hosts`, `read_only_hosts`,
+  `destructive_patterns`, `projects`, `legacy_mappings`,
+  `vhost_mappings`, `db_production_markers`, `all_entities_flat`).
+  `client_sync.sync_all_clients()` now writes it to
+  `~/.nexo/personal/brain/guardian-runtime-surfaces.json`.
+- `src/automation_controls.py` — product contract for supported core
+  automations. Centralises operator profile, extra instructions,
+  schedule overrides, runtime prerequisites, and per-automation
+  metadata for `email-monitor`, `followup-runner`, and `morning-agent`.
+- `src/scripts/nexo-morning-agent.py` + `src/crons/manifest.json` entry
+  — a real core daily briefing automation with a fixed product prompt,
+  operator-facing overrides, and a resolved briefing recipient.
+- Local classifier baseline auto-install in `src/auto_update.py`.
+  Fresh installs and `nexo update` now attempt to install the required
+  Python packages and cache the pinned model automatically; opt-out is
+  explicit via `NEXO_LOCAL_CLASSIFIER=off`.
+
+### Changed
+
+- Runtime install/update paths now finalise the F0.6 layout
+  automatically after sync. `bin/nexo.js`, `bin/nexo-brain.js`,
+  `src/auto_update.py`, and `src/plugins/update.py` prefer
+  `~/.nexo/core` as the canonical code root, re-run layout healers
+  after runtime sync, and pass the canonical `NEXO_CODE` into cron and
+  client sync helpers.
+- Hook installation now follows the Python manifest contract instead of
+  a parallel hardcoded list. `client_sync.py` promotes
+  `session_start.py`, `auto_capture.py`, `post_tool_use.py`,
+  `pre_compact.py`, `stop.py`, `notification.py`, and
+  `subagent_stop.py` as the canonical managed surfaces.
+- Email runtime shape now supports two clear levels on the same
+  `email_accounts` table: `account_type='agent'|'operator'`,
+  `description`, `can_read`, `can_send`, `is_default`, and
+  `sent_folder`. Core email automations and Desktop now use the same
+  contract for routing, default recipient selection, and optional IMAP
+  copy placement.
+- `nexo-email-monitor.py`, `nexo-followup-runner.py`, and
+  `nexo-send-reply.py` no longer depend on operator-specific naming or
+  legacy personal APIs. The default assistant fallback is now neutral
+  (`Nova`), operator overrides are additive, and the old regex-only
+  attention hints are a final compatibility fallback instead of the
+  primary decision path.
+- Brain-facing identity surfaces (`desktop_bridge.py`, `user_context.py`
+  and onboarding helpers) now block product-name variants such as
+  `NEXO` as assistant names so the product and the operator’s agent no
+  longer collapse into the same identity by default.
+
+### Tests
+
+- Added or extended release-facing coverage for runtime layout healing,
+  Guardian runtime surfaces parity, classifier auto-install, core
+  automation productisation, preferences/onboarding identity guards,
+  and release-readiness drift checks.
+- The guarded validation block for this release includes Brain runtime
+  contract tests, client-sync parity, classifier auto-install tests,
+  core automation tests, public-surface readiness checks, and the
+  coordinated NEXO Desktop QA build/test pipeline.
+
+### Notes
+
+- The companion NEXO Desktop release (v0.22.0) turns the same runtime
+  contract into a closed product flow: guided bootstrap, Claude login
+  handoff, operator/agent email surfaces, and productised automation
+  controls.
+
 ## [7.0.1] - 2026-04-19
 
 CRITICAL hotfix over v7.0.0. `src/db/_core.py::DB_PATH` was the only

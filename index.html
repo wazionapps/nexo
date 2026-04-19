@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>NEXO Brain — Libre Shared Brain for Claude Code, Codex, and MCP Agents</title>
-    <meta name="description" content="Libre/open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients. Version 5.4.5 increases CI test timeout so the publish workflow passes on slow runners.">
+    <meta name="description" content="Libre/open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients. Version 7.1.0 closes the post-F0.6 runtime contract with canonical core layout healing, Guardian runtime surfaces, configurable core automations, and local classifier auto-install.">
     <meta name="keywords" content="AI memory, cognitive architecture, MCP, Claude Code, Codex, Claude Desktop, agent memory, vector search, AI agents, shared brain, open source">
     <meta name="author" content="WAzion">
     <meta name="robots" content="index, follow">
@@ -14,7 +14,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com">
     <meta property="og:title" content="NEXO Brain — Libre Shared Brain for Claude Code, Codex, and MCP Agents">
-    <meta property="og:description" content="Libre/open-source cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Version 5.4.5 increases CI test timeout so the publish workflow passes on slow runners.">
+    <meta property="og:description" content="Libre/open-source cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Version 7.1.0 closes the post-F0.6 runtime contract with canonical core layout healing, Guardian runtime surfaces, configurable core automations, and local classifier auto-install.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-home.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -22,7 +22,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="NEXO Brain — Libre Shared Brain for Claude Code, Codex, and MCP Agents">
-    <meta name="twitter:description" content="Libre/open-source cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Version 5.4.5 increases CI test timeout so the publish workflow passes on slow runners.">
+    <meta name="twitter:description" content="Libre/open-source cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Version 7.1.0 closes the post-F0.6 runtime contract with canonical core layout healing, Guardian runtime surfaces, configurable core automations, and local classifier auto-install.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-home.png">
 
     <!-- Google Analytics (GA4) -->
@@ -46,12 +46,12 @@
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
         "name": "NEXO Brain",
-        "description": "Libre/open-source local cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Version 5.4.5 increases CI test timeout so the publish workflow passes on slow runners.",
+        "description": "Libre/open-source local cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Version 7.1.0 closes the post-F0.6 runtime contract with canonical core layout healing, Guardian runtime surfaces, configurable core automations, and local classifier auto-install.",
         "applicationCategory": "DeveloperApplication",
         "operatingSystem": "macOS, Linux, Windows",
         "url": "https://nexo-brain.com",
         "downloadUrl": "https://www.npmjs.com/package/nexo-brain",
-        "softwareVersion": "7.0.1",
+        "softwareVersion": "7.1.0",
         "license": "https://www.gnu.org/licenses/agpl-3.0",
         "author": {
             "@type": "Organization",
@@ -88,7 +88,7 @@
         "@type": "WebSite",
         "name": "NEXO Brain",
         "url": "https://nexo-brain.com",
-        "description": "Libre/open-source local cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Version 5.4.5 increases CI test timeout so the publish workflow passes on slow runners.",
+        "description": "Libre/open-source local cognitive runtime with a shared brain across Claude Code, Codex, Claude Desktop, and other MCP clients. Version 7.1.0 closes the post-F0.6 runtime contract with canonical core layout healing, Guardian runtime surfaces, configurable core automations, and local classifier auto-install.",
         "publisher": {
             "@type": "Organization",
             "name": "WAzion",
@@ -697,7 +697,7 @@
     <div class="container">
         <div class="hero-badge fade-up">
             <span class="dot"></span>
-            <span id="version-badge">v7.0.1</span> <span id="version-badge">v7.0.0</span>mdash; hotfix sobre v7.0.0 (db.&#x5F;core.DB_PATH ten<span id="version-badge">v7.0.0</span>iacute;a hardcoded el path legacy del DB; <code>nexo email list</code> y otros comandos devolv<span id="version-badge">v7.0.0</span>iacute;an cuentas vac<span id="version-badge">v7.0.0</span>iacute;as tras la migraci<span id="version-badge">v7.0.0</span>oacute;n F0.6). &mdash; <strong>BREAKING</strong>: Plan Consolidado fase F0.6. Separaci&oacute;n f&iacute;sica del runtime en <code>~/.nexo/{core,personal,runtime}/</code>. La estructura flat (<code>scripts/</code>, <code>brain/</code>, <code>data/</code>, <code>operations/</code>...) desaparece. Auto-migraci&oacute;n en primer <code>nexo update</code> a v7.0.0; fresh installs caen directos en la nueva estructura. Nuevo m&oacute;dulo <code>paths.py</code> centraliza todos los path helpers (transition-aware). El cliente acompa&ntilde;ante NEXO Desktop (v0.21.0, closed-source distribuido aparte) actualiza tambi&eacute;n sus paths.
+            <span id="version-badge">v7.1.0</span> Post-F0.6 contract closure: canonical <code>~/.nexo/core</code> runtime root, Guardian runtime surfaces for Desktop, configurable core automations, and local classifier auto-install.
         </div>
         <div class="fade-up" style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;">
             <img src="https://img.shields.io/npm/v/nexo-brain?color=7C3AED&label=npm" alt="npm version">
@@ -852,27 +852,27 @@
             If someone asks "what does this actually feel like?", these are the shortest honest answers: install, shared brain across clients, decision-to-outcome loops, runtime discipline beyond memory, and the public Evolution loop.
         </p>
         <div class="features-grid" style="grid-template-columns:repeat(auto-fit,minmax(280px,1fr));">
-            <a href="/demos/install-in-60-seconds/" class="feature-card" style="text-decoration:none;color:inherit;">
+            <a href="/demos/#install-in-60-seconds" class="feature-card" style="text-decoration:none;color:inherit;">
                 <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18"/><path d="m5 10 7-7 7 7"/></svg></div>
                 <h3>Demo 1: install in 60 seconds</h3>
                 <p>The one-command path: runtime install, client detection, local brain wiring, and the first <code>nexo chat</code> / <code>nexo doctor</code> loop.</p>
             </a>
-            <a href="/demos/shared-brain-claude-code-codex/" class="feature-card" style="text-decoration:none;color:inherit;">
+            <a href="/demos/#shared-brain-claude-code-codex" class="feature-card" style="text-decoration:none;color:inherit;">
                 <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 6.1H3"/><path d="M21 12.1H3"/><path d="M15.1 18H3"/><path d="M17 6.1 21 12l-3.9 5.9"/></svg></div>
                 <h3>Demo 2: shared brain across Claude Code and Codex</h3>
                 <p>One local runtime, two client surfaces, the same operator memory. See what survives when you move from one session environment to the other.</p>
             </a>
-            <a href="/demos/evolution-draft-pr-loop/" class="feature-card" style="text-decoration:none;color:inherit;">
+            <a href="/demos/#evolution-draft-pr-loop" class="feature-card" style="text-decoration:none;color:inherit;">
                 <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4"/><path d="M12 18v4"/><path d="M4.93 4.93l2.83 2.83"/><path d="M16.24 16.24l2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/></svg></div>
                 <h3>Demo 3: review-gated public Evolution</h3>
                 <p>Opt in, open a Draft PR, pause while it stays open, help review other proposals, then resume cleanly after merge or close.</p>
             </a>
-            <a href="/demos/decision-outcome-skill-loop/" class="feature-card" style="text-decoration:none;color:inherit;">
+            <a href="/demos/#decision-outcome-skill-loop" class="feature-card" style="text-decoration:none;color:inherit;">
                 <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h4"/><path d="M15 12h4"/><path d="m8 9 4 3-4 3"/><path d="M12 5v14"/></svg></div>
                 <h3>Demo 4: decision -&gt; outcome -&gt; skill</h3>
                 <p>See the v5 story in one loop: alternatives are evaluated, outcomes are checked, and repeated wins can become reusable behavior.</p>
             </a>
-            <a href="/demos/more-than-memory-runtime/" class="feature-card" style="text-decoration:none;color:inherit;">
+            <a href="/demos/#more-than-memory-runtime" class="feature-card" style="text-decoration:none;color:inherit;">
                 <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 8h10"/><path d="M7 12h10"/><path d="M7 16h6"/></svg></div>
                 <h3>Demo 5: why NEXO is more than memory</h3>
                 <p>Understand the category correctly: one local working brain with runtime discipline, not only a memory layer plugged into a larger stack.</p>
@@ -1156,56 +1156,41 @@
 
         <div class="release-evolution-grid">
             <div class="release-evolution-card">
-                <div class="release-evolution-version">v5.3.29</div>
-                <h3>Runtime hygiene now fails closed instead of drifting quietly</h3>
-                <p>5.3.29 turns several soft failure paths into explicit release/runtime contracts: duplicate <code>* 2</code> artifacts now fail hygiene gates, startup preflight runs synchronously, corrupt DB state no longer respawns an empty brain by default, and cron runs spool locally if SQLite is unavailable.</p>
+                <div class="release-evolution-version">v7.1.0</div>
+                <h3>Post-migration hotfix: the shared DB path is real again</h3>
+                <p>v7.1.0 closes the remaining “half migration, half product” gap after F0.6: runtime updates heal the canonical <code>~/.nexo/core</code> layout, Desktop consumes Brain-generated Guardian datasets, email/operator routing becomes a real product contract, and the local classifier baseline installs itself on fresh installs and updates.</p>
+            </div>
+            <div class="release-evolution-card">
+                <div class="release-evolution-version">v7.0.0</div>
+                <h3>The runtime tree is physically split, not only conceptually</h3>
+                <p>F0.6 makes the runtime structure honest: <code>core</code>, <code>personal</code>, and <code>runtime</code> live as separate buckets, fresh installs land there directly, and transition-aware path helpers let updates survive the migration without pretending the flat legacy tree is still the product.</p>
+            </div>
+            <div class="release-evolution-card">
+                <div class="release-evolution-version">v6.5.0</div>
+                <h3>Operators can disable noisy automations without surgery</h3>
+                <p>Personal automations gained first-class enable/disable/status controls. The cron wrapper respects the operator flag at every tick, so disabling a script is a reversible product action instead of a manual LaunchAgent intervention.</p>
+            </div>
+            <div class="release-evolution-card">
+                <div class="release-evolution-version">v6.4.0</div>
+                <h3>Email became a real managed subsystem</h3>
+                <p>Multiple inboxes now live in a proper <code>email_accounts</code> table with credential pointers, interactive and machine-safe setup flows, and a Desktop bridge that lets non-technical operators manage accounts without editing files.</p>
+            </div>
+            <div class="release-evolution-card">
+                <div class="release-evolution-version">v6.3.0–6.3.1</div>
+                <h3>Guardian moved closer to a real product safety layer</h3>
+                <p>Extended sentiment/entity schemas, labelled rule fixtures, telemetry loops, and the local classifier skeleton landed in 6.3.0; 6.3.1 immediately stripped operator-specific data back out of the public preset so privacy stayed aligned with the product claim.</p>
             </div>
             <div class="release-evolution-card">
                 <div class="release-evolution-version">v5.1.0</div>
-                <h3>Every open loop closes under itself</h3>
-                <p>Evolution, adaptive, cognitive, and skills subsystems now close their own loops under evidence instead of leaving half-delivered signals in the database. The bitemporal knowledge graph exports cleanly to JSON-LD and GraphML, OpenTelemetry spans hook in on demand, and every PR has to clear lint, security, coverage, and release-readiness gates before it can merge.</p>
-            </div>
-            <div class="release-evolution-card">
-                <div class="release-evolution-version">v5.0.0</div>
-                <h3>Goals, decisions, outcomes, and public proof finally match</h3>
-                <p>Goal profiles shape decisions, decisions connect to measured outcomes, outcomes seed reusable skills, and the public proof surface finally matches the broader runtime instead of stretching a single memory benchmark.</p>
-            </div>
-            <div class="release-evolution-card">
-                <div class="release-evolution-version">v4.1.0</div>
-                <h3>NEXO gets curious: autonomous investigation signals</h3>
-                <p>A new Drive/Curiosity layer accumulates tension-based signals during normal work. Anomalies, patterns, gaps, and opportunities mature over time and trigger silent autonomous investigation. Deep Sleep synthesizes cross-area connections overnight.</p>
-            </div>
-            <div class="release-evolution-card">
-                <div class="release-evolution-version">v3.2.0</div>
-                <h3>Recent memory now has a real fallback ladder</h3>
-                <p>NEXO now keeps 24-hour hot context explicit, can search and read recent Claude Code / Codex transcripts directly when that layer is too thin, and can inspect its own live runtime surface through a generated system catalog.</p>
-            </div>
-            <div class="release-evolution-card">
-                <div class="release-evolution-version">v2.6.21</div>
-                <h3>Deep Sleep gets hands-on</h3>
-                <p>Recurring nightly findings now deduplicate followups semantically, consolidate overlapping learnings, flag contradictions for review, and backfill concrete engineering fixes such as scripts, hooks, checklists, and guardrails.</p>
-            </div>
-            <div class="release-evolution-card">
-                <div class="release-evolution-version">v2.6.20</div>
-                <h3>Claude 1M defaults</h3>
-                <p>Claude Code now defaults to <strong>Opus 4.6 with 1M context</strong> both during install and in runtime-safe updates, while Codex keeps an explicit <strong>GPT-5.4 · xhigh</strong> profile.</p>
-            </div>
-            <div class="release-evolution-card">
-                <div class="release-evolution-version">v2.6.18</div>
-                <h3>Auditable parity</h3>
-                <p>Codex keeps a managed MCP contract, runtime doctor audits real recent sessions, and Deep Sleep writes weighted weekly and monthly summaries instead of only short-horizon noise.</p>
-            </div>
-            <div class="release-evolution-card">
-                <div class="release-evolution-version">v2.6.16–2.6.17</div>
-                <h3>Smarter defaults</h3>
-                <p>Codex bootstrap/model sync became durable outside <code>nexo chat</code>, retrieval gained HyDE + shallow spreading auto mode, and Deep Sleep moved to a 60-day blended horizon.</p>
+                <h3>Evolution stopped being a slogan and became a loop</h3>
+                <p>By v5.1.0, Evolution, adaptive, cognitive, and skills subsystems were closing under evidence. NEXO was no longer only a memory layer: it had become a runtime that could measure, learn, review, and reuse what actually worked.</p>
             </div>
         </div>
 
         <div class="release-evolution-actions">
             <a href="/evolution/" class="btn btn-primary">How Evolution works</a>
             <a href="/changelog/" class="btn btn-secondary">Read the full changelog</a>
-            <a href="/changelog/#v520" class="btn btn-secondary">Read the latest release notes</a>
+            <a href="/changelog/#v710" class="btn btn-secondary">Read the latest release notes</a>
         </div>
     </div>
 </section>

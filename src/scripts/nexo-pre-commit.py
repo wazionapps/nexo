@@ -9,9 +9,10 @@ import sqlite3
 import subprocess
 import sys
 from pathlib import Path
+from paths import data_dir
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
-NEXO_DB = NEXO_HOME / "data" / "nexo.db"
+NEXO_DB = data_dir() / "nexo.db"
 
 
 def get_staged_files():

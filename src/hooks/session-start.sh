@@ -5,6 +5,30 @@
 set -uo pipefail
 
 NEXO_HOME="${NEXO_HOME:-$HOME/.nexo}"
+BRAIN_DIR="$NEXO_HOME/personal/brain"
+if [ ! -d "$BRAIN_DIR" ] && [ -d "$NEXO_HOME/brain" ]; then
+    BRAIN_DIR="$NEXO_HOME/brain"
+fi
+COORDINATION_DIR="$NEXO_HOME/runtime/coordination"
+if [ ! -d "$COORDINATION_DIR" ] && [ -d "$NEXO_HOME/coordination" ]; then
+    COORDINATION_DIR="$NEXO_HOME/coordination"
+fi
+OPERATIONS_DIR="$NEXO_HOME/runtime/operations"
+if [ ! -d "$OPERATIONS_DIR" ] && [ -d "$NEXO_HOME/operations" ]; then
+    OPERATIONS_DIR="$NEXO_HOME/operations"
+fi
+LOG_DIR="$NEXO_HOME/runtime/logs"
+if [ ! -d "$LOG_DIR" ] && [ -d "$NEXO_HOME/logs" ]; then
+    LOG_DIR="$NEXO_HOME/logs"
+fi
+DATA_DIR="$NEXO_HOME/runtime/data"
+if [ ! -d "$DATA_DIR" ] && [ -d "$NEXO_HOME/data" ]; then
+    DATA_DIR="$NEXO_HOME/data"
+fi
+CORE_SCRIPTS_DIR="$NEXO_HOME/core/scripts"
+if [ ! -d "$CORE_SCRIPTS_DIR" ] && [ -d "$NEXO_HOME/scripts" ]; then
+    CORE_SCRIPTS_DIR="$NEXO_HOME/scripts"
+fi
 
 # Fase 3 item 7: hook lifecycle observability — record duration + exit code
 # in hook_runs on EXIT. Best-effort: a failure here must not break the hook.
@@ -23,8 +47,8 @@ _nexo_record_hook_run() {
     local recorder=""
     if [ -n "${NEXO_CODE:-}" ] && [ -f "${NEXO_CODE%/}/scripts/nexo-hook-record.py" ]; then
         recorder="${NEXO_CODE%/}/scripts/nexo-hook-record.py"
-    elif [ -f "$NEXO_HOME/scripts/nexo-hook-record.py" ]; then
-        recorder="$NEXO_HOME/scripts/nexo-hook-record.py"
+    elif [ -f "$CORE_SCRIPTS_DIR/nexo-hook-record.py" ]; then
+        recorder="$CORE_SCRIPTS_DIR/nexo-hook-record.py"
     fi
     if [ -f "$recorder" ]; then
         python3 "$recorder" record \
@@ -36,16 +60,16 @@ _nexo_record_hook_run() {
     fi
 }
 trap _nexo_record_hook_run EXIT
-BRIEFING_FILE="$NEXO_HOME/coordination/session-briefing.txt"
+BRIEFING_FILE="$COORDINATION_DIR/session-briefing.txt"
 MAX_AGE_SECONDS=3600  # 1 hour cache
 
-mkdir -p "$NEXO_HOME/coordination" "$NEXO_HOME/operations"
+mkdir -p "$COORDINATION_DIR" "$OPERATIONS_DIR" "$BRAIN_DIR"
 
 # Write session start timestamp for session-scoped tool counting
-date +%s > "$NEXO_HOME/operations/.session-start-ts"
+date +%s > "$OPERATIONS_DIR/.session-start-ts"
 
 # Clean up post-mortem flag from previous session
-rm -f "$NEXO_HOME/operations/.postmortem-complete" 2>/dev/null
+rm -f "$OPERATIONS_DIR/.postmortem-complete" 2>/dev/null
 
 # Capture Claude Code session_id for inter-terminal inbox hook
 HOOK_INPUT=$(cat || true)
@@ -56,7 +80,7 @@ fi
 if [ -n "$CLAUDE_SID" ]; then
     echo "$CLAUDE_SID" > "/tmp/nexo-claude-sid-${CLAUDE_SID}"
     # Also write to a predictable location for the startup prompt
-    echo "$CLAUDE_SID" > "$NEXO_HOME/coordination/.claude-session-id"
+    echo "$CLAUDE_SID" > "$COORDINATION_DIR/.claude-session-id"
 fi
 
 # If briefing exists and is less than 1 hour old, skip regeneration
@@ -82,7 +106,9 @@ from datetime import date
 today_str = '$TODAY'
 weekday = '$WEEKDAY'
 nexo_home = os.environ.get('NEXO_HOME', os.path.expanduser('~/.nexo'))
-db_path = os.path.join(nexo_home, 'data', 'nexo.db')
+db_path = os.path.join(nexo_home, 'runtime', 'data', 'nexo.db')
+if not os.path.exists(db_path):
+    db_path = os.path.join(nexo_home, 'data', 'nexo.db')
 
 lines = []
 lines.append(f'## Date: {today_str} ({weekday})')
@@ -194,7 +220,9 @@ else:
 lines.append('')
 
 # Last self-audit
-audit_file = os.path.join(nexo_home, 'logs', 'self-audit-summary.json')
+audit_file = os.path.join(nexo_home, 'runtime', 'logs', 'self-audit-summary.json')
+if not os.path.exists(audit_file):
+    audit_file = os.path.join(nexo_home, 'logs', 'self-audit-summary.json')
 if os.path.exists(audit_file):
     try:
         audit = json.load(open(audit_file))
@@ -205,7 +233,9 @@ if os.path.exists(audit_file):
         pass
 
 # Evolution status
-evolution_file = os.path.join(nexo_home, 'brain', 'evolution-objective.json')
+evolution_file = os.path.join(nexo_home, 'personal', 'brain', 'evolution-objective.json')
+if not os.path.exists(evolution_file):
+    evolution_file = os.path.join(nexo_home, 'brain', 'evolution-objective.json')
 if os.path.exists(evolution_file):
     try:
         evo = json.load(open(evolution_file))
@@ -264,7 +294,7 @@ fi
 
 # ─── Cortex Report: what happened while user was away ───
 # Check brain/ (canonical) first, fall back to cortex/ (legacy)
-CORTEX_BRIEFING="$NEXO_HOME/brain/last-briefing.json"
+CORTEX_BRIEFING="$BRAIN_DIR/last-briefing.json"
 if [ ! -f "$CORTEX_BRIEFING" ] && [ -f "$NEXO_HOME/cortex/last-briefing.json" ]; then
     CORTEX_BRIEFING="$NEXO_HOME/cortex/last-briefing.json"
 fi

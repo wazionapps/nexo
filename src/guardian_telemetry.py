@@ -9,7 +9,7 @@ Entry shape:
   {
     "ts": 1776520000.123,             # epoch seconds
     "rule_id": "R13_pre_edit_guard",
-    "event": "trigger" | "injection" | "compliance" | "false_positive",
+    "event": "trigger" | "evaluated" | "injection" | "skipped" | "compliance" | "false_positive" | "classifier_unavailable",
     "mode": "hard" | "soft" | "shadow" | "off",
     "tool": "Edit",
     "session_id": "sid-...",          # optional, best-effort
@@ -102,9 +102,12 @@ def summarize_rule(rule_id: str, *, path: pathlib.Path | None = None) -> dict[st
     target = path or _telemetry_path()
     counts: dict[str, int] = {
         "trigger": 0,
+        "evaluated": 0,
         "injection": 0,
+        "skipped": 0,
         "compliance": 0,
         "false_positive": 0,
+        "classifier_unavailable": 0,
     }
     try:
         for line in target.read_text(encoding="utf-8", errors="ignore").splitlines():

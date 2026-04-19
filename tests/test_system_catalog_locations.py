@@ -64,3 +64,5 @@ def test_build_system_catalog_exposes_locations(tmp_path):
     assert "locations" in cat
     assert isinstance(cat["locations"], dict)
     assert cat["locations"]["nexo_home"].startswith(str(tmp_path))
+    assert "/runtime/data/" in cat["locations"]["brain.db"]
+    assert "/personal/brain/" in cat["locations"]["brain.calibration"]

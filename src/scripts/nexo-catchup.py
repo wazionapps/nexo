@@ -29,6 +29,7 @@ if str(_runtime_root) not in sys.path:
 from agent_runner import AutomationBackendUnavailableError, probe_automation_backend, run_automation_prompt
 from constants import AUTOMATION_SUBPROCESS_TIMEOUT
 from cron_recovery import catchup_candidates
+import paths
 
 HOME = Path.home()
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(HOME / ".nexo")))
@@ -36,7 +37,7 @@ NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(HOME / ".nexo")))
 
 def _resolve_claude_cli() -> Path:
     """Find claude CLI: saved path > PATH > common locations."""
-    saved = NEXO_HOME / "config" / "claude-cli-path"
+    saved = paths.config_dir() / "claude-cli-path"
     if saved.exists():
         p = Path(saved.read_text().strip())
         if p.exists():
@@ -56,13 +57,13 @@ def _resolve_claude_cli() -> Path:
 
 
 CLAUDE_CLI = _resolve_claude_cli()
-LOG_DIR = NEXO_HOME / "logs"
+LOG_DIR = paths.logs_dir()
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE = LOG_DIR / "catchup.log"
-STATE_FILE = NEXO_HOME / "operations" / ".catchup-state.json"
-LOCK_FILE = NEXO_HOME / "operations" / ".catchup.lock"
+STATE_FILE = paths.operations_dir() / ".catchup-state.json"
+LOCK_FILE = paths.operations_dir() / ".catchup.lock"
 
-SCRIPTS = NEXO_HOME / "scripts"
+SCRIPTS = paths.core_scripts_dir()
 WRAPPER = SCRIPTS / "nexo-cron-wrapper.sh"
 
 # Resolve Python: prefer NEXO's venv, then the same Python running this script
@@ -75,7 +76,7 @@ def _resolve_python() -> str:
         if venv_python.exists():
             return str(venv_python)
     # Check for venv relative to NEXO_HOME
-    venv_python = NEXO_HOME / ".venv" / "bin" / "python"
+    venv_python = paths.home() / ".venv" / "bin" / "python"
     if venv_python.exists():
         return str(venv_python)
     # Fall back to the same Python running this script

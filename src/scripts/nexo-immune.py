@@ -39,6 +39,7 @@ if str(NEXO_CODE) not in sys.path:
 
 from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
 from constants import AUTOMATION_SUBPROCESS_TIMEOUT
+import paths
 
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
@@ -73,10 +74,10 @@ SSL_CTX = _make_ssl_context()
 
 # ─── Paths ────────────────────────────────────────────────────────────────────
 HOME = Path.home()
-CLAUDE_DIR = NEXO_HOME
-COORD_DIR = CLAUDE_DIR / "coordination"
-BRAIN_DIR = CLAUDE_DIR / "brain"
-SCRIPTS_DIR = CLAUDE_DIR / "scripts"
+CLAUDE_DIR = paths.home()
+COORD_DIR = paths.coordination_dir()
+BRAIN_DIR = paths.brain_dir()
+SCRIPTS_DIR = paths.core_scripts_dir()
 
 IMMUNE_STATUS = COORD_DIR / "immune-status.json"
 IMMUNE_LOG = COORD_DIR / "immune-log.json"
@@ -363,8 +364,8 @@ def check_databases():
     results = []
 
     dbs = [
-        ("nexo.db", NEXO_HOME / "data" / "nexo.db"),
-        ("cognitive.db", NEXO_HOME / "data" / "cognitive.db"),
+        ("nexo.db", paths.db_path()),
+        ("cognitive.db", paths.data_dir() / "cognitive.db"),
         ("claude-mem.db", CLAUDE_MEM_DB),
     ]
 

@@ -9,7 +9,12 @@ so the migration is a one-line change per call site.
 New structure (post-F0.6):
     ~/.nexo/
     ├── core/                  ← shipped with the package
+    │   ├── db/
+    │   ├── cognitive/
+    │   ├── dashboard/
+    │   ├── doctor/
     │   ├── scripts/           (38 packaged automations)
+    │   ├── skills/
     │   ├── plugins/
     │   ├── hooks/
     │   ├── rules/
@@ -33,11 +38,9 @@ New structure (post-F0.6):
         ├── operations/
         ├── backups/
         ├── memory/
-        ├── cognitive/
         ├── coordination/
         ├── exports/
         ├── nexo-email/
-        ├── doctor/
         ├── snapshots/
         └── crons/
 
@@ -105,6 +108,46 @@ def core_contracts_dir() -> Path:
     return core_dir() / "contracts"
 
 
+def core_skills_dir(*, allow_legacy_fallback: bool = True) -> Path:
+    new = core_dir() / "skills"
+    legacy = home() / "skills-core"
+    if allow_legacy_fallback and not new.exists() and legacy.exists():
+        return legacy
+    return new
+
+
+def core_db_dir(*, allow_legacy_fallback: bool = True) -> Path:
+    new = core_dir() / "db"
+    legacy = home() / "db"
+    if allow_legacy_fallback and not new.exists() and legacy.exists():
+        return legacy
+    return new
+
+
+def core_cognitive_dir(*, allow_legacy_fallback: bool = True) -> Path:
+    new = core_dir() / "cognitive"
+    legacy = home() / "cognitive"
+    if allow_legacy_fallback and not new.exists() and legacy.exists():
+        return legacy
+    return new
+
+
+def core_dashboard_dir(*, allow_legacy_fallback: bool = True) -> Path:
+    new = core_dir() / "dashboard"
+    legacy = home() / "dashboard"
+    if allow_legacy_fallback and not new.exists() and legacy.exists():
+        return legacy
+    return new
+
+
+def core_doctor_dir(*, allow_legacy_fallback: bool = True) -> Path:
+    new = core_dir() / "doctor"
+    legacy = home() / "doctor"
+    if allow_legacy_fallback and not new.exists() and legacy.exists():
+        return legacy
+    return new
+
+
 # ---------------------------------------------------------------------------
 # Core-dev (off by default, only useful to product devs)
 # ---------------------------------------------------------------------------
@@ -124,19 +167,35 @@ def personal_dir() -> Path:
 
 
 def personal_scripts_dir() -> Path:
-    return personal_dir() / "scripts"
+    new = personal_dir() / "scripts"
+    legacy = home() / "scripts"
+    if not new.exists() and legacy.exists():
+        return legacy
+    return new
 
 
 def personal_plugins_dir() -> Path:
-    return personal_dir() / "plugins"
+    new = personal_dir() / "plugins"
+    legacy = home() / "plugins"
+    if not new.exists() and legacy.exists():
+        return legacy
+    return new
 
 
 def personal_hooks_dir() -> Path:
-    return personal_dir() / "hooks"
+    new = personal_dir() / "hooks"
+    legacy = home() / "hooks"
+    if not new.exists() and legacy.exists():
+        return legacy
+    return new
 
 
 def personal_rules_dir() -> Path:
-    return personal_dir() / "rules"
+    new = personal_dir() / "rules"
+    legacy = home() / "rules"
+    if not new.exists() and legacy.exists():
+        return legacy
+    return new
 
 
 def personal_skills_dir() -> Path:
@@ -157,7 +216,11 @@ def brain_dir() -> Path:
 
 
 def personal_config_dir() -> Path:
-    return personal_dir() / "config"
+    new = personal_dir() / "config"
+    legacy = home() / "config"
+    if not new.exists() and legacy.exists():
+        return legacy
+    return new
 
 
 def personal_lib_dir() -> Path:
@@ -166,6 +229,16 @@ def personal_lib_dir() -> Path:
 
 def personal_overrides_dir() -> Path:
     return personal_dir() / "overrides"
+
+
+def config_dir() -> Path:
+    """Canonical operator config dir.
+
+    Post-F0.6 this lives in ``personal/config``. During the transition
+    window we still honour a live legacy ``~/.nexo/config`` tree until
+    the migrator has converted it into a shim/symlink.
+    """
+    return personal_config_dir()
 
 
 # ---------------------------------------------------------------------------

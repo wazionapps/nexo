@@ -22,8 +22,11 @@ from __future__ import annotations
 
 import logging
 import threading
+from pathlib import Path
 from dataclasses import dataclass
 from typing import Iterable
+
+import paths
 
 _logger = logging.getLogger(__name__)
 
@@ -38,6 +41,42 @@ _logger = logging.getLogger(__name__)
 MODEL_ID = "MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7"
 MODEL_REVISION = "b5113eb38ab63efdd7f280f8c144ea8b13f978ce"
 DEFAULT_CONFIDENCE_FLOOR = 0.6
+
+
+def _install_state_path() -> Path:
+    return paths.operations_dir() / "classifier-install-state.json"
+
+
+def _probe_importable_dependencies() -> bool:
+    for module_name in ("transformers", "torch", "sentencepiece", "sentence_transformers"):
+        try:
+            __import__(module_name)
+        except Exception:
+            return False
+    return True
+
+
+def is_local_classifier_available_with_install_state() -> bool:
+    """Return True only when the install looks complete enough to use.
+
+    The state file is advisory: it helps detect partial/broken installs
+    across updates, but an explicit import probe is still the final gate
+    so a stale state file cannot incorrectly report availability.
+    """
+    deps_ok = _probe_importable_dependencies()
+    try:
+        state = _install_state_path()
+        if state.is_file():
+            import json
+
+            payload = json.loads(state.read_text() or "{}")
+            if isinstance(payload, dict) and payload.get("opt_out") is True:
+                return False
+            if isinstance(payload, dict) and payload.get("deps_ok") is False and not deps_ok:
+                return False
+    except Exception:
+        pass
+    return deps_ok
 
 
 @dataclass
@@ -111,7 +150,9 @@ class LocalZeroShotClassifier:
     # Public API
     # ------------------------------------------------------------------
     def is_available(self) -> bool:
-        return self._ensure_loaded()
+        if self._pipe is not None:
+            return True
+        return is_local_classifier_available_with_install_state()
 
     def classify(
         self,
@@ -173,4 +214,5 @@ __all__ = [
     "MODEL_ID",
     "MODEL_REVISION",
     "DEFAULT_CONFIDENCE_FLOOR",
+    "is_local_classifier_available_with_install_state",
 ]

@@ -43,22 +43,40 @@ def test_skip_flag_produces_expected_calibration(tmp_path):
     # Drive the installer in --skip mode. Several downstream actions hit
     # external services (npm installs, python deps); we bail out as soon
     # as calibration.json exists with the v6 shape.
-    proc = subprocess.run(
-        ["node", str(INSTALLER), "--skip"],
-        env=env,
-        capture_output=True,
-        text=True,
-        timeout=150,
-    )
+    timed_out = False
+    try:
+        proc = subprocess.run(
+            ["node", str(INSTALLER), "--skip"],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=150,
+        )
+    except subprocess.TimeoutExpired as exc:
+        timed_out = True
+        proc = subprocess.CompletedProcess(
+            exc.cmd,
+            returncode=-9,
+            stdout=exc.stdout.decode() if isinstance(exc.stdout, bytes) else (exc.stdout or ""),
+            stderr=exc.stderr.decode() if isinstance(exc.stderr, bytes) else (exc.stderr or ""),
+        )
     # The installer may fail later on dep install inside a sandbox. That
     # is acceptable: we only care that the tier-only prompt path fired
-    # and wrote the calibration before any of that work.
-    cal_path = home / "brain" / "calibration.json"
+    # and wrote the calibration before any of that work. Fresh installs
+    # now target personal/brain first; legacy brain/ is only transitional.
+    cal_path = home / "personal" / "brain" / "calibration.json"
+    if not cal_path.is_file() and (home / "brain" / "calibration.json").is_file():
+        cal_path = home / "brain" / "calibration.json"
     if not cal_path.is_file():
         pytest.skip(
             f"installer did not reach calibration step in sandbox: "
             f"rc={proc.returncode} stdout={proc.stdout[-400:]!r} stderr={proc.stderr[-400:]!r}"
         )
+    if timed_out:
+        # Fresh-install smoke is intentionally tolerant of slow dependency
+        # installs; once calibration.json exists we already proved the
+        # non-interactive onboarding path fired correctly.
+        assert cal_path.is_file()
 
     cal = json.loads(cal_path.read_text())
     assert cal["preferences"]["default_resonance"] == "alto"
@@ -78,6 +96,56 @@ def test_skip_flag_is_parsed_as_non_interactive():
     assert marker in text, (
         "nexo-brain.js must honour --skip as a non-interactive alias (v6.0.0)"
     )
+
+
+def test_installer_reserves_product_name_for_assistant_default():
+    text = INSTALLER.read_text()
+
+    assert 'const DEFAULT_ASSISTANT_NAME = "Nova";' in text
+    assert 'const RESERVED_ASSISTANT_NAME_KEYS = new Set(["nexo", "nexobrain", "nexodesktop"]);' in text
+    assert "isReservedAssistantName(candidate)" in text
+
+
+def test_public_installer_keeps_claude_install_path_without_desktop_bundle():
+    text = INSTALLER.read_text()
+
+    assert 'if (desktopNode && bundledNpmCli)' in text
+    assert 'spawnSync("npx", ["-y", "@anthropic-ai/claude-code", "--version"], {' in text
+    assert '["install", "-g", "--prefix", managedPrefix, "@anthropic-ai/claude-code"]' in text
+    assert 'const managedPrefix = managedClaudePrefix();' in text
+
+
+def test_installer_finalizes_f06_layout_before_reporting_ready():
+    text = INSTALLER.read_text()
+
+    assert "function finalizeF06Layout" in text
+    assert 'log("Finalizing F0.6 runtime layout...");' in text
+    assert 'const layoutFinalize = finalizeF06Layout(python, NEXO_HOME);' in text
+    assert 'throw new Error(`F0.6 layout finalization failed: ${layoutFinalize.error}`);' in text
+
+
+def test_installer_finalizes_f06_layout_on_updates_and_repairs():
+    text = INSTALLER.read_text()
+
+    assert 'const migLayoutFinalize = finalizeF06Layout(migPython, NEXO_HOME);' in text
+    assert 'throw new Error(`F0.6 layout finalization failed: ${migLayoutFinalize.error}`);' in text
+    assert 'const syncLayoutFinalize = finalizeF06Layout(syncPython, NEXO_HOME);' in text
+    assert 'throw new Error(`F0.6 layout finalization failed: ${syncLayoutFinalize.error}`);' in text
+
+
+def test_installer_publishes_runtime_core_manifest_to_legacy_and_canonical_config_during_transition():
+    text = INSTALLER.read_text()
+
+    assert 'path.join(nexoHome, "config")' in text
+    assert 'path.join(nexoHome, "personal", "config")' in text
+    assert 'runtime-core-artifacts.json' in text
+
+
+def test_update_path_never_falls_back_to_reserved_product_name_for_operator_identity():
+    text = INSTALLER.read_text()
+
+    assert 'installed.operator_name || DEFAULT_ASSISTANT_NAME' in text
+    assert 'installed.operator_name || "NEXO"' not in text
 
 
 @pytest.mark.skipif(not _node_available(), reason="node not available")

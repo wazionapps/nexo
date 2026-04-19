@@ -19,6 +19,7 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from paths import data_dir, logs_dir
 
 
 _DEFAULT_RUNTIME_ROOT = Path(__file__).resolve().parents[1]
@@ -34,9 +35,9 @@ from fase_f_loops import (  # noqa: E402
 )
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
-LOG_PATH = NEXO_HOME / "logs" / "guardian-telemetry.ndjson"
+LOG_PATH = logs_dir() / "guardian-telemetry.ndjson"
 REPORT_DIR = NEXO_HOME / "reports"
-NEXO_DB = NEXO_HOME / "data" / "nexo.db"
+NEXO_DB = data_dir() / "nexo.db"
 
 
 def _recent_corrections_from_db(window_seconds: int = 30 * 86400) -> list[dict]:

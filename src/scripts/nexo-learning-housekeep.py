@@ -13,6 +13,7 @@ import sys
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
+from paths import data_dir, operations_dir
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 # Auto-detect: if running from repo (src/scripts/), use src/ as NEXO_CODE
@@ -22,8 +23,8 @@ NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(_repo_src) if (_repo_src / "ser
 
 sys.path.insert(0, str(NEXO_CODE))
 
-DB_PATH = NEXO_HOME / "data" / "nexo.db"
-STATE_FILE = NEXO_HOME / "operations" / ".catchup-state.json"
+DB_PATH = data_dir() / "nexo.db"
+STATE_FILE = operations_dir() / ".catchup-state.json"
 
 # Weight adjustment rates
 GUARD_HIT_BOOST = 0.02       # per guard hit since last run

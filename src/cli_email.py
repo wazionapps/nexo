@@ -65,6 +65,14 @@ def _mask_password(pw: str) -> str:
     return pw[0] + "•" * (len(pw) - 2) + pw[-1]
 
 
+def _sent_folder_from_account(account: dict | None) -> str:
+    metadata = {}
+    if isinstance(account, dict) and isinstance(account.get("metadata"), dict):
+        metadata = account.get("metadata") or {}
+    value = str(metadata.get("sent_folder") or "").strip()
+    return value or "INBOX.Sent"
+
+
 def _store_credential(service: str, key: str, value: str) -> None:
     """Write password to the `credentials` table (simple cleartext by
     default — upgrading to keychain is a v7 follow-up). Never echo the
@@ -93,12 +101,12 @@ def _delete_credential(service: str, key: str) -> None:
 
 
 def cmd_email_setup(args) -> int:
-    """Interactive wizard. Fresh install: operator runs this once."""
+    """Interactive wizard for the primary agent mailbox."""
     print("━" * 60)
     print("NEXO · Asistente de configuración de email")
     print("━" * 60)
-    print("Te voy a preguntar los datos de la cuenta de correo que")
-    print("NEXO usará para leer y contestar. Si te equivocas, vuelve")
+    print("Te voy a preguntar los datos de la cuenta de correo del agente")
+    print("que NEXO usará para leer y contestar. Si te equivocas, vuelve")
     print("a ejecutar `nexo email setup` en cualquier momento.\n")
 
     from db import init_db
@@ -146,6 +154,7 @@ def cmd_email_setup(args) -> int:
         "",
     )
     trusted = [d.strip() for d in trusted_raw.split(",") if d.strip()]
+    sent_folder = _prompt("Carpeta IMAP de enviados", "INBOX.Sent").strip() or "INBOX.Sent"
 
     role = _prompt(
         "Rol de la cuenta: inbox (solo leer) / outbox (solo enviar) / both",
@@ -170,6 +179,12 @@ def cmd_email_setup(args) -> int:
         operator_email=operator_email,
         trusted_domains=trusted,
         role=role,
+        account_type="agent",
+        description="Agent mailbox",
+        can_read=role in ("inbox", "both"),
+        can_send=role in ("outbox", "both"),
+        is_default=False,
+        metadata={"sent_folder": sent_folder},
     )
 
     print()
@@ -181,6 +196,7 @@ def cmd_email_setup(args) -> int:
     print(f"  operator_email: {account.get('operator_email')}")
     print(f"  trusted:        {account.get('trusted_domains') or '(ninguno)'}")
     print(f"  role:           {account.get('role')}")
+    print(f"  sent_folder:    {_sent_folder_from_account(account)}")
     print(f"  password:       {_mask_password(pwd)} (guardada en credentials)")
     print()
     if _prompt_yes_no("¿Pruebo la conexión ahora?", default=True):
@@ -205,14 +221,20 @@ def _account_to_public_dict(account: dict) -> dict:
     return {
         "label": account.get("label"),
         "email": account.get("email"),
+        "account_type": account.get("account_type", "agent"),
+        "description": account.get("description", ""),
         "imap_host": account.get("imap_host"),
         "imap_port": account.get("imap_port"),
         "smtp_host": account.get("smtp_host"),
         "smtp_port": account.get("smtp_port"),
+        "sent_folder": _sent_folder_from_account(account),
         "operator_email": account.get("operator_email"),
         "trusted_domains": account.get("trusted_domains") or [],
         "role": account.get("role", "both"),
         "enabled": bool(account.get("enabled", True)),
+        "can_read": bool(account.get("can_read")),
+        "can_send": bool(account.get("can_send")),
+        "is_default": bool(account.get("is_default")),
         "has_credential": bool(account.get("credential_service")
                                and account.get("credential_key")),
     }
@@ -233,15 +255,47 @@ def cmd_email_list(args) -> int:
     if not accounts:
         print("(sin cuentas configuradas — corre `nexo email setup`)")
         return 0
-    print(f"{'LABEL':<16} {'EMAIL':<40} {'ROLE':<8} {'ENABLED':<8} IMAP")
+    print(f"{'LABEL':<18} {'TYPE':<9} {'EMAIL':<34} {'PERMS':<7} {'DEF':<4} IMAP")
     for a in accounts:
+        perms = []
+        if a.get("can_read"):
+            perms.append("R")
+        if a.get("can_send"):
+            perms.append("S")
         print(
-            f"{a.get('label',''):<16} {a.get('email',''):<40} "
-            f"{a.get('role',''):<8} "
-            f"{'✓' if a.get('enabled') else '✗':<8} "
+            f"{a.get('label',''):<18} "
+            f"{a.get('account_type','agent'):<9} "
+            f"{a.get('email',''):<34} "
+            f"{(''.join(perms) or '-'): <7}"
+            f"{'✓' if a.get('is_default') else '-':<4} "
             f"{a.get('imap_host','')}:{a.get('imap_port','')}"
         )
     return 0
+
+
+def _resolve_permissions_and_role(
+    *,
+    account_type: str,
+    role: str,
+    can_read: bool | None,
+    can_send: bool | None,
+) -> tuple[bool, bool, str]:
+    if account_type == "agent":
+        resolved_read = role in ("inbox", "both") if can_read is None else bool(can_read)
+        resolved_send = role in ("outbox", "both") if can_send is None else bool(can_send)
+        return resolved_read, resolved_send, role
+
+    resolved_read = role in ("inbox", "both") if can_read is None else bool(can_read)
+    resolved_send = role in ("outbox", "both") if can_send is None else bool(can_send)
+    if resolved_read and resolved_send:
+        resolved_role = "both"
+    elif resolved_read:
+        resolved_role = "inbox"
+    elif resolved_send:
+        resolved_role = "outbox"
+    else:
+        resolved_role = "both"
+    return resolved_read, resolved_send, resolved_role
 
 
 def cmd_email_add(args) -> int:
@@ -253,8 +307,8 @@ def cmd_email_add(args) -> int:
     email = (getattr(args, "email", None) or "").strip()
     imap_host = (getattr(args, "imap_host", None) or "").strip()
     smtp_host = (getattr(args, "smtp_host", None) or "").strip()
-    if not (label and email and imap_host and smtp_host):
-        msg = "missing required field (--label, --email, --imap-host, --smtp-host)"
+    if not (label and email):
+        msg = "missing required field (--label, --email)"
         if json_mode:
             _emit_json({"ok": False, "message": msg})
         else:
@@ -272,9 +326,48 @@ def cmd_email_add(args) -> int:
     role = (getattr(args, "role", None) or "both").strip()
     if role not in ("inbox", "outbox", "both"):
         role = "both"
+    account_type = (getattr(args, "account_type", None) or "agent").strip().lower()
+    if account_type not in ("agent", "operator"):
+        account_type = "agent"
+    description = (getattr(args, "description", None) or "").strip()
+    can_read_flag = getattr(args, "can_read", None)
+    can_send_flag = getattr(args, "can_send", None)
     operator_email = (getattr(args, "operator", None) or "").strip()
     trusted_raw = (getattr(args, "trusted_domains", None) or "").strip()
     trusted = [d.strip() for d in trusted_raw.split(",") if d.strip()] if trusted_raw else []
+    sent_folder_arg = getattr(args, "sent_folder", None)
+
+    from db import init_db
+    from db._email_accounts import add_email_account, get_email_account
+
+    init_db()
+    existing = get_email_account(label)
+    is_default_arg = getattr(args, "is_default", None)
+    is_default = (
+        bool(existing.get("is_default")) if (account_type == "operator" and is_default_arg is None and existing)
+        else bool(is_default_arg) if account_type == "operator"
+        else False
+    )
+    can_read, can_send, role = _resolve_permissions_and_role(
+        account_type=account_type,
+        role=role,
+        can_read=can_read_flag,
+        can_send=can_send_flag,
+    )
+    if (account_type == "agent" or can_read) and not imap_host:
+        msg = "missing required field (--imap-host)"
+        if json_mode:
+            _emit_json({"ok": False, "message": msg})
+        else:
+            print(f"✗ {msg}")
+        return 1
+    if (account_type == "agent" or can_send) and not smtp_host:
+        msg = "missing required field (--smtp-host)"
+        if json_mode:
+            _emit_json({"ok": False, "message": msg})
+        else:
+            print(f"✗ {msg}")
+        return 1
 
     if getattr(args, "password_stdin", False):
         try:
@@ -294,21 +387,39 @@ def cmd_email_add(args) -> int:
             pwd = pwd[:-1]
     else:
         pwd = getattr(args, "password", None) or ""
-    if not pwd:
-        msg = "missing password (use --password-stdin or --password)"
+    needs_runtime_credentials = account_type == "agent" or can_read or can_send
+    if needs_runtime_credentials and not pwd and not (
+        existing and existing.get("credential_service") and existing.get("credential_key")
+    ):
+        msg = "missing password (use --password-stdin or --password, or edit an account with an existing saved credential)"
         if json_mode:
             _emit_json({"ok": False, "message": msg})
         else:
             print(f"✗ {msg}")
         return 1
 
-    from db import init_db
-    from db._email_accounts import add_email_account
-
-    init_db()
-    cred_service = "email"
-    cred_key = label
-    _store_credential(cred_service, cred_key, pwd)
+    if existing and existing.get("credential_service") and existing.get("credential_key"):
+        cred_service = str(existing.get("credential_service") or "").strip()
+        cred_key = str(existing.get("credential_key") or "").strip()
+    elif pwd:
+        cred_service = "email"
+        cred_key = label
+    else:
+        cred_service = ""
+        cred_key = ""
+    if pwd:
+        _store_credential(cred_service, cred_key, pwd)
+    metadata = None
+    if existing and isinstance(existing.get("metadata"), dict):
+        metadata = dict(existing.get("metadata") or {})
+    if sent_folder_arg is not None:
+        if metadata is None:
+            metadata = {}
+        clean_sent_folder = str(sent_folder_arg).strip()
+        if clean_sent_folder:
+            metadata["sent_folder"] = clean_sent_folder
+        else:
+            metadata.pop("sent_folder", None)
     account = add_email_account(
         label=label,
         email=email,
@@ -321,6 +432,12 @@ def cmd_email_add(args) -> int:
         operator_email=operator_email,
         trusted_domains=trusted,
         role=role,
+        account_type=account_type,
+        description=description,
+        can_read=can_read,
+        can_send=can_send,
+        is_default=is_default,
+        metadata=metadata,
     )
     public = _account_to_public_dict(account)
     if json_mode:
@@ -434,6 +551,54 @@ def cmd_email_remove(args) -> int:
     return 0
 
 
+def cmd_email_set_enabled(args) -> int:
+    label = getattr(args, "label", None) or getattr(args, "label_pos", None)
+    json_mode = bool(getattr(args, "json", False))
+    enabled = bool(getattr(args, "enabled", True))
+    if not label:
+        msg = "usage: nexo email enable|disable <label>"
+        if json_mode:
+            _emit_json({"ok": False, "message": msg})
+        else:
+            print(msg)
+        return 1
+    from db import init_db
+    from db._email_accounts import get_email_account, set_email_account_enabled
+
+    init_db()
+    acc = get_email_account(label)
+    if not acc:
+        msg = f"Cuenta '{label}' no encontrada."
+        if json_mode:
+            _emit_json({"ok": False, "message": msg})
+        else:
+            print(f"✗ {msg}")
+        return 1
+    changed = set_email_account_enabled(label, enabled)
+    if not changed:
+        msg = f"No se pudo actualizar la cuenta '{label}'."
+        if json_mode:
+            _emit_json({"ok": False, "message": msg})
+        else:
+            print(f"✗ {msg}")
+        return 1
+    updated = get_email_account(label) or {}
+    payload = {
+        "ok": True,
+        "label": label,
+        "enabled": bool(updated.get("enabled", enabled)),
+        "message": "enabled" if enabled else "disabled",
+    }
+    if json_mode:
+        _emit_json(payload)
+    else:
+        print(
+            f"✓ Cuenta '{label}' "
+            + ("activada." if payload["enabled"] else "desactivada.")
+        )
+    return 0
+
+
 def register_email_parser(subparsers) -> None:
     """Hook called by cli.py to add the `email` subcommand tree."""
     p = subparsers.add_parser("email", help="Gestionar cuentas de correo NEXO")
@@ -446,13 +611,26 @@ def register_email_parser(subparsers) -> None:
     s = sub.add_parser("add", help="Añadir cuenta de forma no-interactiva (Desktop / scripts)")
     s.add_argument("--label", required=True)
     s.add_argument("--email", required=True)
-    s.add_argument("--imap-host", dest="imap_host", required=True)
+    s.add_argument("--imap-host", dest="imap_host", default="")
     s.add_argument("--imap-port", dest="imap_port", type=int, default=993)
-    s.add_argument("--smtp-host", dest="smtp_host", required=True)
+    s.add_argument("--smtp-host", dest="smtp_host", default="")
     s.add_argument("--smtp-port", dest="smtp_port", type=int, default=465)
+    s.add_argument("--account-type", dest="account_type", default="agent",
+                   choices=["agent", "operator"])
+    s.add_argument("--description", dest="description", default="")
     s.add_argument("--operator", dest="operator", default="")
     s.add_argument("--trusted-domains", dest="trusted_domains", default="")
+    s.add_argument("--sent-folder", dest="sent_folder", default=None,
+                   help="IMAP folder where sent copies should be appended (default: INBOX.Sent).")
     s.add_argument("--role", dest="role", default="both", choices=["inbox", "outbox", "both"])
+    read_group = s.add_mutually_exclusive_group()
+    read_group.add_argument("--can-read", dest="can_read", action="store_true", default=None)
+    read_group.add_argument("--no-can-read", dest="can_read", action="store_false")
+    send_group = s.add_mutually_exclusive_group()
+    send_group.add_argument("--can-send", dest="can_send", action="store_true", default=None)
+    send_group.add_argument("--no-can-send", dest="can_send", action="store_false")
+    s.add_argument("--default", dest="is_default", action="store_true", default=None,
+                   help="Mark this operator inbox as the default fallback destination.")
     pwd_group = s.add_mutually_exclusive_group()
     pwd_group.add_argument("--password", dest="password",
                            help="Password on argv (NOT recommended; visible to ps).")
@@ -481,6 +659,20 @@ def register_email_parser(subparsers) -> None:
     s.add_argument("--json", dest="json", action="store_true")
     s.set_defaults(func=cmd_email_remove)
 
+    s = sub.add_parser("enable", help="Activar una cuenta sin borrarla")
+    s.add_argument("label_pos", nargs="?", default=None,
+                   help="Etiqueta de la cuenta (legacy positional)")
+    s.add_argument("--label", dest="label", default=None)
+    s.add_argument("--json", dest="json", action="store_true")
+    s.set_defaults(func=cmd_email_set_enabled, enabled=True)
+
+    s = sub.add_parser("disable", help="Desactivar una cuenta sin borrarla")
+    s.add_argument("label_pos", nargs="?", default=None,
+                   help="Etiqueta de la cuenta (legacy positional)")
+    s.add_argument("--label", dest="label", default=None)
+    s.add_argument("--json", dest="json", action="store_true")
+    s.set_defaults(func=cmd_email_set_enabled, enabled=False)
+
 
 __all__ = [
     "cmd_email_setup",
@@ -488,5 +680,6 @@ __all__ = [
     "cmd_email_list",
     "cmd_email_test",
     "cmd_email_remove",
+    "cmd_email_set_enabled",
     "register_email_parser",
 ]

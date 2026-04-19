@@ -164,7 +164,7 @@ def test_impact_scorer_writes_reasoned_summary(tmp_path, monkeypatch):
 
     assert script.main() == 0
 
-    summary = json.loads((home / "coordination" / "impact-scorer-summary.json").read_text(encoding="utf-8"))
+    summary = json.loads((home / "runtime" / "coordination" / "impact-scorer-summary.json").read_text(encoding="utf-8"))
     assert summary["scored_count"] >= 2
     assert summary["top_followups"][0]["id"] == "NF-SUMMARY"
     assert "reasoning" in summary["top_followups"][0]["impact_factors"]

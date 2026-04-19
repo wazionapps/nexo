@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `7.0.1` is the current packaged-runtime line — hotfix over v7.0.0 (db._core.DB_PATH was only caller still hardcoded to legacy ~/.nexo/data/nexo.db; every shared-DB command silently returned empty results post-migration). Previously in `7.0.0`: **BREAKING — Plan Consolidado fase F0.6**: physical separation of the runtime tree into `~/.nexo/{core,personal,runtime}/`. The flat layout (`~/.nexo/scripts/`, `brain/`, `data/`, `operations/`, ...) is gone. Operators on v6.x are auto-migrated on first `nexo update`; fresh installs land directly in the new tree. New `paths.py` helpers are transition-aware. The companion NEXO Desktop client (v0.21.0, closed-source distributed separately) updates its hardcoded paths so auto-update keeps working.
+Version `7.1.0` is the current packaged-runtime line. It closes the post-F0.6 runtime contract: `~/.nexo/core` is now the canonical shipped code root, layout healers re-run automatically after sync/update, Desktop consumes a Brain-generated Guardian runtime snapshot instead of stale manual lists, the core automation surface now officially includes `email-monitor`, `followup-runner`, and `morning-agent`, and the local classifier baseline auto-installs on fresh installs / `nexo update` unless the operator explicitly opts out with `NEXO_LOCAL_CLASSIFIER=off`. The companion NEXO Desktop client (v0.22.0, closed-source distributed separately) turns that same contract into a closed bootstrap/login/product flow.
+
+Previously in `7.0.1`: hotfix over v7.0.0 (db._core.DB_PATH was only caller still hardcoded to legacy ~/.nexo/data/nexo.db; every shared-DB command silently returned empty results post-migration). Previously in `7.0.0`: **BREAKING — Plan Consolidado fase F0.6**: physical separation of the runtime tree into `~/.nexo/{core,personal,runtime}/`. The flat layout (`~/.nexo/scripts/`, `brain/`, `data/`, `operations/`, ...) is gone. Operators on v6.x are auto-migrated on first `nexo update`; fresh installs land directly in the new tree. New `paths.py` helpers are transition-aware.
 
 Previously in `6.5.0`: Plan Consolidado fase F0.2: operators can now `nexo scripts enable|disable|status <name>` any personal automation. The cron wrapper honours the flag at every tick (`exit 0` with `summary='[disabled]'` while the LaunchAgent stays loaded). The companion NEXO Desktop client (a closed-source product, distributed separately) wires the same toggle into its Automatizaciones panel. See [CHANGELOG](CHANGELOG.md) for the full diff.
 
@@ -794,7 +796,7 @@ npx nexo-brain
 The installer handles everything and syncs the same `nexo` MCP brain into Claude Code, Claude Desktop, and Codex when those clients are present:
 
 ```
-  How should I call myself? (default: NEXO) > Atlas
+  How should I call myself? (default: Nova) > Atlas
 
   Can I explore your workspace to learn about your projects? (y/n) > y
 
