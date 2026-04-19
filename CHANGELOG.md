@@ -1,5 +1,25 @@
 # Changelog
 
+## [7.0.1] - 2026-04-19
+
+CRITICAL hotfix over v7.0.0. `src/db/_core.py::DB_PATH` was the only
+caller still hardcoded to the legacy pre-F0.6 path `~/.nexo/data/nexo.db`.
+After the v7.0.0 migration the shared DB lives at
+`~/.nexo/runtime/data/nexo.db`, so every command that opened the
+process-wide connection (`nexo email list`, `nexo scripts list`,
+`nexo_task_open`, ...) silently read from a non-existent file —
+returning empty results despite the real table being populated.
+
+### Fixed
+- `src/db/_core.py`: DB_PATH is now transition-aware. `NEXO_TEST_DB`
+  and `NEXO_DB` env overrides keep priority. Otherwise: prefer
+  `runtime/data/nexo.db` when it exists; fall back to legacy
+  `data/nexo.db` only when legacy is the only one present; default
+  to `runtime/data/nexo.db` for fresh installs.
+- Reproduces against Francisco's runtime: `nexo email list --json`
+  now returns the primary account; `nexo email test --label primary`
+  returns IMAP+SMTP login OK.
+
 ## [7.0.0] - 2026-04-19
 
 **BREAKING — Plan Consolidado fase F0.6**: physical separation of the
