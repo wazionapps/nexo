@@ -20,6 +20,9 @@
 
 Version `6.5.0` is the current packaged-runtime line — Plan Consolidado fase F0.2: operators can now `nexo scripts enable|disable|status <name>` any personal automation. The cron wrapper honours the flag at every tick (`exit 0` with `summary='[disabled]'` while the LaunchAgent stays loaded). The companion NEXO Desktop client (a closed-source product, distributed separately) wires the same toggle into its Automatizaciones panel. See [CHANGELOG](CHANGELOG.md) for the full diff.
 
+> **About NEXO Desktop.** NEXO Desktop is a separate closed-source companion app distributed at [systeam.es/nexo-desktop](https://systeam.es/nexo-desktop) — its source does not live in this repo. When release notes mention Desktop they describe a coordinated client release that consumes the Brain's CLI / MCP contract; the Brain itself is fully usable on its own (terminal, Codex, Claude Code, or any MCP client).
+
+
 Previously in `6.4.0`: Plan Consolidado fase F1 — multi-tenant email accounts (`email_accounts` table, `nexo email setup` interactive wizard, `nexo email add --password-stdin --json` for machine consumers, idempotent migrator from legacy `~/.nexo/nexo-email/config.json`).
 
 Previously in `6.3.1`: privacy hotfix over v6.3.0. The nightly auditor caught that `src/presets/entities_universal.json` in v6.3.0 shipped operator-specific `vhost_mapping` entries (private IPs, hostnames, tenant names). v6.3.1 pulls those out into `src/presets/entities_local.sample.json` (template) + `.gitignore`'d `~/.nexo/brain/presets/entities_local.json` (operator copy), and the installer drops the sample at `nexo init`. No behaviour change on the Guardian side.
