@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Changelog — NEXO Brain</title>
-    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.1.0 closes the post-F0.6 runtime and product contract with canonical layout healing, Guardian runtime surfaces, configurable core automations, and local classifier auto-install.">
+    <meta name="description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.1.1 hotfixes the packaged updater path after F0.6 so compatibility shims and packaged/runtime mode detection no longer break real updates.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/changelog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/changelog/">
     <meta property="og:title" content="Changelog — NEXO Brain">
-    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.1.0 closes the post-F0.6 runtime and product contract with canonical layout healing, Guardian runtime surfaces, configurable core automations, and local classifier auto-install.">
+    <meta property="og:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.1.1 hotfixes the packaged updater path after F0.6 so compatibility shims and packaged/runtime mode detection no longer break real updates.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Changelog — NEXO Brain">
-    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.1.0 closes the post-F0.6 runtime and product contract with canonical layout healing, Guardian runtime surfaces, configurable core automations, and local classifier auto-install.">
+    <meta name="twitter:description" content="Full version history for NEXO Brain cognitive runtime. Latest release: v7.1.1 hotfixes the packaged updater path after F0.6 so compatibility shims and packaged/runtime mode detection no longer break real updates.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-changelog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Changelog — NEXO Brain",
-        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.1.0 closes the post-F0.6 runtime and product contract with canonical layout healing, Guardian runtime surfaces, configurable core automations, and local classifier auto-install.",
+        "description": "Full version history for NEXO Brain cognitive runtime. Latest release: v7.1.1 hotfixes the packaged updater path after F0.6 so compatibility shims and packaged/runtime mode detection no longer break real updates.",
         "url": "https://nexo-brain.com/changelog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -87,30 +87,34 @@
                 <h1 class="section-title" style="font-size:clamp(32px,5vw,56px);">Changelog</h1>
                 <p class="section-subtitle">Every feature, fix, and improvement &mdash; from the beginning, with the same visual clarity as the rest of the site.</p>
                 <div class="page-chip-row">
-                    <span class="page-chip">v7.1.0 live</span>
-                    <span class="page-chip">Runtime contract closure</span>
-                    <span class="page-chip">Guardian parity</span>
-                    <span class="page-chip">Core automations</span>
+                    <span class="page-chip">v7.1.1 live</span>
+                    <span class="page-chip">Updater hotfix</span>
+                    <span class="page-chip">Packaged installs</span>
+                    <span class="page-chip">F0.6 shim-safe</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="#v710" class="btn btn-primary">Start with v7.1.0</a>
-                    <a href="#v701" class="btn btn-secondary">See v7.0.1</a>
+                    <a href="#v711" class="btn btn-primary">Start with v7.1.1</a>
+                    <a href="#v710" class="btn btn-secondary">See v7.1.0</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
             </div>
             <div class="page-visual">
                 <div class="page-stack">
                     <div class="page-stack-card">
+                        <strong>v7.1.1</strong>
+                        <span>Hotfix: packaged installs no longer mis-detect <code>~/.nexo/core</code> as a mutable repo, and F0.6 compatibility shims stop breaking update replay and rollback.</span>
+                    </div>
+                    <div class="page-stack-card">
                         <strong>v7.1.0</strong>
                         <span>Post-F0.6 contract closure: canonical <code>core</code> code root, layout healing after update, Guardian runtime surfaces for Desktop, productised core automations, and local classifier auto-install.</span>
                     </div>
                     <div class="page-stack-card">
-                        <strong>v7.0.1</strong>
-                        <span>Hotfix over F0.6: the final shared-DB caller now resolves the transition-aware runtime path, so post-migration installs stop seeing empty results from DB-backed commands.</span>
-                    </div>
-                    <div class="page-stack-card">
                         <strong>v7.0.0</strong>
                         <span>Plan Consolidado F0.6: the runtime is physically split into <code>core</code>, <code>personal</code>, and <code>runtime</code>, with transition-aware helpers and auto-migration for existing operators.</span>
+                    </div>
+                    <div class="page-stack-card">
+                        <strong>v7.0.1</strong>
+                        <span>Hotfix over F0.6: the final shared-DB caller now resolves the transition-aware runtime path, so post-migration installs stop seeing empty results from DB-backed commands.</span>
                     </div>
                     <div class="page-stack-card">
                         <strong>v6.5.0</strong>
@@ -164,6 +168,16 @@
 <section class="section-compact" style="background:rgba(124,58,237,0.08);">
     <div class="container desktop-disclaimer" style="max-width:860px;font-size:13px;line-height:1.55;">
         <p><strong>Sobre NEXO Desktop.</strong> NEXO Desktop es un cliente acompa&ntilde;ante closed-source distribuido aparte en <a href="https://systeam.es/nexo-desktop">systeam.es/nexo-desktop</a>. Cuando una entrada de changelog menciona "NEXO Desktop" se refiere a una versi&oacute;n coordinada de ese cliente que consume el contrato CLI/MCP del Brain. El c&oacute;digo de Desktop no vive en este repo; el Brain (AGPL-3.0) es 100% usable por s&iacute; solo desde terminal, Codex, Claude Code, o cualquier cliente MCP.</p>
+    </div>
+</section>
+
+<section id="v711" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.1.1 <span style="opacity:.5;font-weight:400;">&mdash; April 20, 2026 &mdash; <strong>HOTFIX</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">Updater hotfix &mdash; packaged runtime vs F0.6 shims</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            Hotfix over <code>v7.1.0</code>. Packaged installs were still able to mistake <code>~/.nexo/core</code> for a mutable source repo, and F0.6 compatibility shims (<code>db</code>, <code>cognitive</code>, <code>skills-core</code>, root Python modules, script/plugin links) could therefore break <code>nexo update</code> with copy collisions during replay or rollback. <code>src/auto_update.py</code> now distinguishes packaged runtime mode from true source-linked mode, and the runtime copy/restore path is shim-aware when replacing symlink/file targets. Result: packaged installs update cleanly again, and true source-sync installs keep working too.
+        </p>
     </div>
 </section>
 
