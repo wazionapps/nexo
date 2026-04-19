@@ -1,8 +1,10 @@
 # NEXO Brain
 
-> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v7.0.0). NEXO Desktop is a separate closed-source companion app distributed at systeam.es/nexo-desktop; its source does not ship in this repo. Mentions of "NEXO Desktop" in changelog entries describe coordinated client releases that consume the Brain CLI / MCP contract.
+> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v7.0.1). NEXO Desktop is a separate closed-source companion app distributed at systeam.es/nexo-desktop; its source does not ship in this repo. Mentions of "NEXO Desktop" in changelog entries describe coordinated client releases that consume the Brain CLI / MCP contract.
 
 NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It adds a local shared brain across supported clients, configurable terminal and automation backends, recovery-aware background jobs, startup preflight, runtime self-healing, smarter retrieval defaults, long-horizon overnight analysis, and 150+ MCP tools.
+
+v7.0.1: hotfix over v7.0.0. `src/db/_core.py::DB_PATH` was the only caller still hardcoded to the legacy pre-F0.6 path `~/.nexo/data/nexo.db`. Every command that opened the process-wide DB connection (`nexo email list`, `nexo scripts list`, `nexo_task_open`, ...) silently returned empty results despite the real table being populated. Fix: DB_PATH is now transition-aware. NEXO_TEST_DB and NEXO_DB env overrides keep priority.
 
 v7.0.0: BREAKING — Plan Consolidado fase F0.6. Physical separation of the runtime tree into `~/.nexo/{core,personal,runtime}/`. The flat layout (`~/.nexo/scripts/`, `brain/`, `data/`, `operations/`, ...) is gone. Operators on v6.x are auto-migrated on first `nexo update` to v7.0.0; fresh installs land directly in the new tree. New `paths.py` module centralises every runtime path helper. 24 src files refactored, 7 shell scripts updated, 71 `personal_scripts.path` rows UPDATEd transactionally, 40 LaunchAgent plists rewritten. 1551 tests pass. The companion NEXO Desktop release (v0.21.0) updates its hardcoded paths so auto-update keeps working.
 

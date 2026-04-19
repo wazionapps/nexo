@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.0.1: hotfix — db._core.DB_PATH transition-aware</title>
+<meta name="description" content="NEXO Brain v7.0.1 hotfix over v7.0.0. db._core.DB_PATH was the only caller still hardcoded to the legacy pre-F0.6 path; every shared-DB command silently returned empty results post-migration. Fix: DB_PATH is now transition-aware.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-0-1/">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.0.1: hotfix — db._core.DB_PATH transition-aware","datePublished":"2026-04-19","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head><body><main><article style="max-width:760px;margin:80px auto;padding:0 24px;line-height:1.75;">
+<h1>NEXO 7.0.1 — hotfix sobre v7.0.0</h1>
+<p><em>Published 2026-04-19. Critical hotfix.</em></p>
+<p><code>src/db/_core.py::DB_PATH</code> era el único caller que seguía hardcoded a la ruta legacy pre-F0.6. Tras la migración F0.6 la DB vive en <code>~/.nexo/runtime/data/nexo.db</code>, pero ese módulo seguía abriendo <code>~/.nexo/data/nexo.db</code> (inexistente). Resultado: <code>nexo email list</code>, <code>nexo scripts list</code>, <code>nexo_task_open</code> y todo lo demás que comparte la conexión DB devolvían resultados vacíos.</p>
+<h2>Fix</h2>
+<p>DB_PATH ahora es transition-aware: <code>NEXO_TEST_DB</code> y <code>NEXO_DB</code> env overrides mantienen prioridad. Si no, prefiere <code>runtime/data/nexo.db</code> cuando existe; cae a legacy <code>data/nexo.db</code> solo cuando legacy es lo único presente; default a <code>runtime/data/nexo.db</code> para fresh installs.</p>
+<h2>Verificación</h2>
+<p>Reproducido contra el runtime real: <code>nexo email list --json</code> devuelve la cuenta primary; <code>nexo email test --label primary --json</code> devuelve IMAP+SMTP login OK.</p>
+</article></main></body></html>
