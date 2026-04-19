@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXO 6.5.0: Operators can enable / disable any personal automation from the CLI</title>
+    <meta name="description" content="NEXO Brain v6.5.0 ships Plan Consolidado fase F0.2: three new CLI verbs (nexo scripts enable / disable / status) plus a cron wrapper gate that exits silently when the operator has the script off. The LaunchAgent stays loaded so re-enabling is a single CLI call. The companion NEXO Desktop client (a closed-source product distributed separately) wires the same toggle into its Settings panel.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-6-5-0/">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/blog/nexo-6-5-0/">
+    <meta property="og:title" content="NEXO 6.5.0: Toggle any automation from the CLI">
+    <meta property="og:description" content="Plan Consolidado fase F0.2 — three CLI verbs + cron wrapper gate. Personal_scripts.enabled is now sticky across sync runs.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+    <meta property="article:published_time" content="2026-04-19">
+    <meta property="article:author" content="Francisco Cerda Puigserver">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO 6.5.0: Toggle automations from the CLI">
+    <meta name="twitter:description" content="nexo scripts enable / disable / status — sticky flag, cron wrapper gate, no LaunchAgent churn.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "NEXO 6.5.0: Operators can enable / disable any personal automation from the CLI",
+        "description": "Plan Consolidado fase F0.2. Three CLI verbs (enable / disable / status) backed by a cron wrapper gate that respects personal_scripts.enabled, with the flag now sticky across sync runs.",
+        "datePublished": "2026-04-19",
+        "dateModified": "2026-04-19",
+        "author": {"@type": "Person", "name": "Francisco Cerda Puigserver"},
+        "publisher": {"@type": "Organization", "name": "WAzion", "url": "https://www.wazion.com"},
+        "mainEntityOfPage": {"@type": "WebPage", "@id": "https://nexo-brain.com/blog/nexo-6-5-0/"},
+        "url": "https://nexo-brain.com/blog/nexo-6-5-0/",
+        "image": "https://nexo-brain.com/assets/og/og-blog.png",
+        "keywords": ["NEXO 6.5.0", "nexo scripts enable", "Plan Consolidado F0.2", "personal_scripts", "cron wrapper gate"]
+    }
+    </script>
+</head>
+<body>
+<main>
+<article class="article-body" style="max-width: 760px; margin: 80px auto; padding: 0 24px; line-height: 1.75;">
+    <h1>NEXO 6.5.0 — Toggle any personal automation from one CLI call</h1>
+    <p><em>Published 2026-04-19. Plan Consolidado fase F0.2.</em></p>
+
+    <h2>What changes</h2>
+    <p>v6.5.0 adds three CLI verbs that close the operator-side gap left by the previous release:</p>
+    <ul>
+        <li><code>nexo scripts enable &lt;name&gt;</code> &mdash; turns a personal automation back on.</li>
+        <li><code>nexo scripts disable &lt;name&gt;</code> &mdash; turns it off without uninstalling anything.</li>
+        <li><code>nexo scripts status &lt;name&gt;</code> &mdash; reports the enabled flag, classification, core flag, and the most recent <code>cron_runs</code> row.</li>
+    </ul>
+    <p>All three accept <code>--json</code> for machine consumers. Internally they go through two new helpers in <code>src/script_registry.py</code>: <code>set_personal_script_enabled(name_or_path, enabled)</code> and <code>get_personal_script_status(name_or_path)</code>.</p>
+
+    <h2>How the gate works</h2>
+    <p><code>src/scripts/nexo-cron-wrapper.sh</code> now reads <code>personal_scripts.enabled</code> on every tick, before executing the wrapped command. When the script is disabled the wrapper short-circuits to <code>exit 0</code> with <code>summary='[disabled]'</code>, leaves a one-line note in the run log (<code>[disabled] $CRON_ID skipped &mdash; re-enable with: nexo scripts enable $CRON_ID</code>), and finalises the <code>cron_runs</code> row exactly the way a real run would. The LaunchAgent stays loaded &mdash; no <code>launchctl</code> churn &mdash; so re-enabling is a single CLI call. The daily audit can tell apart "didn't run because off" from "ran with exit 0" because the summary explicitly says <code>[disabled]</code>.</p>
+
+    <h2>Sticky flag across sync</h2>
+    <p>Up to v6.4.0, the upsert path on <code>personal_scripts</code> overwrote <code>enabled = excluded.enabled</code> on the <code>ON CONFLICT DO UPDATE</code> branch &mdash; meaning the next <code>nexo scripts sync</code> would silently flip a disabled script back on. v6.5.0 drops that overwrite: the operator-set flag is now sticky. Initial INSERT still defaults <code>enabled=True</code>; the change only affects existing rows. Four new tests in <code>tests/test_personal_scripts_enabled.py</code> cover the round-trip, the unknown-script error envelope, the read-only status shape, and the regression that broke before the upsert fix.</p>
+
+    <h2>Companion client</h2>
+    <p>The NEXO Desktop client &mdash; a closed-source companion app distributed separately from this open-source Brain &mdash; wires the same toggle into its Settings &rarr; Automatizaciones panel via the existing <code>nexo scripts list --json --all</code> + <code>nexo scripts enable|disable --json</code> contract. Operators who would rather click than type get exactly the same gate; operators who want a terminal keep the same Brain.</p>
+</article>
+</main>
+</body>
+</html>

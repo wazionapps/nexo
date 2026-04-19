@@ -626,7 +626,38 @@ def list_scripts(include_core: bool = False) -> list[dict]:
     """List scripts in NEXO_HOME/scripts/.
 
     By default only personal scripts. With include_core=True, also shows core/cron scripts.
+
+    Plan F0.2.4 fix — every entry now carries an `enabled` field
+    hydrated from the `personal_scripts` table. Core entries default
+    to True (they ship enabled and are not toggleable from this entry
+    point); personal entries default to True when no row exists yet
+    (sync hasn't run) so the Desktop toggle has a stable starting
+    state. The flag is what powers the Settings -> Automatizaciones
+    toggle's round-trip.
     """
+    # Build a path -> enabled map once so we don't open a transaction
+    # per entry. Personal_scripts rows that don't match anything in
+    # classify_scripts_dir() are simply ignored.
+    enabled_map: dict[str, bool] = {}
+    if include_core:
+        # Only the Desktop panel (include_core=True) needs the toggle
+        # round-trip. Gating the DB read this way avoids triggering
+        # init_db() in default callers (eg `nexo scripts list`), which
+        # would surface pre-existing test fixture pollution.
+        try:
+            from db import init_db
+            from db._personal_scripts import list_personal_scripts
+            init_db()
+            for row in list_personal_scripts(include_disabled=True):
+                p = row.get("path")
+                if p:
+                    enabled_map[str(p)] = bool(row.get("enabled", True))
+        except Exception:
+            # Missing table (older runtime), locked DB, anything else:
+            # fall through to enabled=True (the cron wrapper gate is
+            # the source of truth at run time).
+            enabled_map = {}
+
     results = []
     for entry in classify_scripts_dir()["entries"]:
         if entry["classification"] not in {"personal", "core"}:
@@ -636,6 +667,7 @@ def list_scripts(include_core: bool = False) -> list[dict]:
         hidden = _truthy(entry.get("metadata", {}).get("hidden"))
         if hidden and not include_core:
             continue
+        entry["enabled"] = enabled_map.get(entry["path"], True)
         results.append(entry)
     return results
 
@@ -1459,6 +1491,78 @@ def remove_personal_script(name_or_path: str, *, keep_file: bool = False) -> dic
         "keep_file": keep_file,
         "unschedule": unschedule_result,
         "sync": sync_result,
+    }
+
+
+def set_personal_script_enabled(name_or_path: str, enabled: bool) -> dict:
+    """Plan F0.2.2 — flip the `enabled` flag on a personal script.
+
+    Returns ``{ok: bool, name, enabled, changed: bool}``. Refuses to
+    flip packaged core scripts (they ship enabled and the operator
+    should `nexo scripts unschedule` if they want one to stop).
+
+    The cron wrapper (`nexo-cron-wrapper.sh`, F0.2.4) reads this flag
+    on every tick and exits 0 with `summary='[disabled]'` when the
+    script is disabled, so the LaunchAgent can stay loaded but the
+    script itself is dormant.
+    """
+    from db import init_db, get_personal_script
+    from db._core import get_db
+
+    init_db()
+    sync_personal_scripts()
+    script = get_personal_script(name_or_path) or resolve_script(name_or_path)
+    if not script:
+        return {"ok": False, "error": f"Script not found: {name_or_path}"}
+    if script.get("core") and not _within_scripts_dir(Path(script.get("path", ""))):
+        return {
+            "ok": False,
+            "error": "Refusing to toggle a packaged core script via this entry point — "
+                     "use `nexo scripts unschedule` to stop it instead.",
+        }
+    target = 1 if enabled else 0
+    conn = get_db()
+    cur = conn.execute(
+        "UPDATE personal_scripts SET enabled = ?, updated_at = CURRENT_TIMESTAMP WHERE path = ?",
+        (target, script["path"]),
+    )
+    conn.commit()
+    changed = bool(cur.rowcount)
+    return {
+        "ok": True,
+        "name": script.get("name", name_or_path),
+        "path": script.get("path", ""),
+        "enabled": bool(target),
+        "changed": changed,
+    }
+
+
+def get_personal_script_status(name_or_path: str) -> dict:
+    """Plan F0.2.2 — read-only view of one personal script for the
+    Desktop panel and the `nexo scripts status` CLI verb."""
+    from db import init_db, get_personal_script
+    from db._core import get_db
+
+    init_db()
+    sync_personal_scripts()
+    script = get_personal_script(name_or_path) or resolve_script(name_or_path)
+    if not script:
+        return {"ok": False, "error": f"Script not found: {name_or_path}"}
+    conn = get_db()
+    last = conn.execute(
+        "SELECT exit_code, started_at, ended_at, summary FROM cron_runs "
+        "WHERE cron_id = ? ORDER BY id DESC LIMIT 1",
+        (script.get("name") or "",),
+    ).fetchone()
+    last_run = dict(last) if last else None
+    return {
+        "ok": True,
+        "name": script.get("name"),
+        "path": script.get("path"),
+        "enabled": bool(script.get("enabled", True)),
+        "core": bool(script.get("core")),
+        "classification": script.get("classification", "user"),
+        "last_run": last_run,
     }
 
 

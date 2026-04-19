@@ -122,7 +122,9 @@ def upsert_personal_script(
             metadata_json = excluded.metadata_json,
             created_by = COALESCE(NULLIF(personal_scripts.created_by, ''), excluded.created_by),
             source = excluded.source,
-            enabled = excluded.enabled,
+            -- Plan F0.2.2: preserve operator-set `enabled` flag across sync runs.
+            -- Sync defaults to enabled=True for INSERTs; on UPDATE we keep
+            -- whatever the operator (or `nexo scripts disable`) set.
             has_inline_metadata = excluded.has_inline_metadata,
             last_synced_at = excluded.last_synced_at,
             updated_at = excluded.updated_at
