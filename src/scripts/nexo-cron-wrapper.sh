@@ -185,6 +185,44 @@ trap 'on_signal SIGTERM 143' TERM
 trap 'on_signal SIGINT 130' INT
 trap 'on_signal SIGHUP 129' HUP
 
+
+# Plan F0.2.4 — disabled-script gate. Personal_scripts table holds an
+# `enabled` flag flipped via `nexo scripts enable|disable <name>`. When
+# the operator disables a cron the LaunchAgent stays loaded (no
+# launchctl churn) but this wrapper short-circuits to a clean exit 0
+# with summary='[disabled]'. The corresponding cron_runs row gets an
+# explicit "skipped (disabled)" note so the daily audit can tell apart
+# "didn't run because off" from "ran with exit 0".
+DISABLED_GATE_OUTPUT=$(python3 - "$DB" "$CRON_ID" <<'PYGATE' 2>/dev/null || true
+from __future__ import annotations
+import sqlite3
+import sys
+db_path, cron_id = sys.argv[1:]
+try:
+    conn = sqlite3.connect(db_path)
+    try:
+        row = conn.execute(
+            "SELECT enabled FROM personal_scripts WHERE name = ? LIMIT 1",
+            (cron_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+except Exception:
+    sys.exit(0)
+if row is not None and not int(row[0] or 0):
+    print("disabled")
+PYGATE
+)
+if [ "$DISABLED_GATE_OUTPUT" = "disabled" ]; then
+    EXIT_CODE=0
+    SIGNAL_NAME=""
+    : > "$OUTPUT_FILE"
+    echo "[disabled] $CRON_ID skipped - re-enable with: nexo scripts enable $CRON_ID" > "$OUTPUT_FILE"
+    finalize_row
+    cleanup
+    exit 0
+fi
+
 "$@" > "$OUTPUT_FILE" 2>&1 &
 CHILD_PID=$!
 

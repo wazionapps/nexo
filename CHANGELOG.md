@@ -1,5 +1,55 @@
 # Changelog
 
+## [6.5.0] - 2026-04-19
+
+Plan Consolidado fase F0.2 — operator can now enable / disable any
+personal script without touching plists, and the cron wrapper honours
+the flag at every tick.
+
+### Added
+
+- New CLI verbs `nexo scripts enable <name>`, `nexo scripts disable <name>`,
+  and `nexo scripts status <name>` (all accept `--json` for machine
+  consumers like the NEXO Desktop F0.2 panel). Refuse to toggle
+  packaged core scripts — operators have `nexo scripts unschedule` for
+  that. Status returns `{enabled, classification, core, last_run}` so
+  the Desktop panel can render the current state without a second
+  query.
+- New helper functions in `src/script_registry.py`:
+  `set_personal_script_enabled(name_or_path, enabled)` and
+  `get_personal_script_status(name_or_path)`.
+
+### Changed
+
+- `src/scripts/nexo-cron-wrapper.sh` now reads `personal_scripts.enabled`
+  on every tick (`Plan F0.2.4` gate). When the script is disabled the
+  wrapper short-circuits to `exit 0` with `summary='[disabled]'` and a
+  visible `[disabled] $CRON_ID skipped — re-enable with: nexo scripts
+  enable $CRON_ID` message in the log. The LaunchAgent stays loaded
+  (zero `launchctl` churn) so re-enabling is a single CLI call.
+- `src/db/_personal_scripts.py::upsert_personal_script` no longer
+  overwrites `enabled` on the `ON CONFLICT DO UPDATE` branch. The
+  operator-set flag is now sticky across `nexo scripts sync` runs.
+  Initial INSERT still defaults `enabled=True`; the change only
+  affects the UPDATE branch.
+
+### Tests
+
+- New `tests/test_personal_scripts_enabled.py`:
+  - `test_enable_then_disable_then_enable` — round-trip lifecycle.
+  - `test_unknown_script_returns_error` — clear error envelope.
+  - `test_status_returns_enabled_and_classification` — read-only view
+    shape.
+  - `test_status_after_disable_reports_disabled` — sticky flag across
+    sync (regression that broke before the upsert fix).
+
+### Notes
+
+- The matching NEXO Desktop release (v0.19.0 → v0.20.0) re-wires the
+  Settings → Automatizaciones panel toggle on top of these CLI verbs.
+  Both releases ship coordinated.
+
+
 ## [6.4.0] - 2026-04-19
 
 Plan Consolidado fase F1 — multi-tenant email accounts and the JSON

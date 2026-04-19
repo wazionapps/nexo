@@ -452,6 +452,49 @@ def _scripts_unschedule(args):
     return 0 if result.get("ok") else 1
 
 
+def _scripts_set_enabled(args, enabled):
+    from script_registry import set_personal_script_enabled
+
+    result = set_personal_script_enabled(args.name, enabled)
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 0 if result.get("ok") else 1
+    if not result.get("ok"):
+        print(result.get("error", "Failed to toggle script"), file=sys.stderr)
+        return 1
+    verb = "enabled" if enabled else "disabled"
+    if result.get("changed"):
+        print(f"Script {result['name']} {verb}.")
+    else:
+        print(f"Script {result['name']} already {verb}.")
+    return 0
+
+
+def _scripts_status(args):
+    from script_registry import get_personal_script_status
+
+    result = get_personal_script_status(args.name)
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 0 if result.get("ok") else 1
+    if not result.get("ok"):
+        print(result.get("error", "Failed to read status"), file=sys.stderr)
+        return 1
+    state = "enabled" if result.get("enabled") else "DISABLED"
+    print(f"{result.get('name')} [{result.get('classification')}] -> {state}")
+    last = result.get("last_run") or {}
+    if last:
+        exit_code = last.get("exit_code")
+        started = last.get("started_at") or "?"
+        print(f"  last run: {started} (exit={exit_code})")
+        summary = (last.get("summary") or "").strip()
+        if summary:
+            print(f"  summary: {summary[:120]}")
+    else:
+        print("  last run: (none)")
+    return 0
+
+
 def _scripts_remove(args):
     from script_registry import remove_personal_script
 
@@ -2116,6 +2159,19 @@ def main():
     unschedule_p.add_argument("name", help="Script name or path")
     unschedule_p.add_argument("--json", action="store_true", help="JSON output")
 
+    # scripts enable / disable / status (Plan F0.2.2)
+    enable_p = scripts_sub.add_parser("enable", help="Enable a personal script (cron wrapper will run it again)")
+    enable_p.add_argument("name", help="Script name or path")
+    enable_p.add_argument("--json", action="store_true", help="JSON output")
+
+    disable_p = scripts_sub.add_parser("disable", help="Disable a personal script (cron wrapper will skip it)")
+    disable_p.add_argument("name", help="Script name or path")
+    disable_p.add_argument("--json", action="store_true", help="JSON output")
+
+    status_p = scripts_sub.add_parser("status", help="Show enabled flag + last cron_runs row for a script")
+    status_p.add_argument("name", help="Script name or path")
+    status_p.add_argument("--json", action="store_true", help="JSON output")
+
     # scripts remove
     remove_p = scripts_sub.add_parser("remove", help="Remove a personal script and any attached schedules")
     remove_p.add_argument("name", help="Script name or path")
@@ -2394,6 +2450,12 @@ def main():
             return _scripts_doctor(args)
         elif args.scripts_command == "call":
             return _scripts_call(args)
+        elif args.scripts_command == "enable":
+            return _scripts_set_enabled(args, True)
+        elif args.scripts_command == "disable":
+            return _scripts_set_enabled(args, False)
+        elif args.scripts_command == "status":
+            return _scripts_status(args)
         else:
             scripts_parser.print_help()
             return 0

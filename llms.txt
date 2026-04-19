@@ -1,8 +1,10 @@
 # NEXO Brain
 
-> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v6.4.0).
+> Open-source cognitive runtime with a shared brain for Claude Code, Codex, Claude Desktop, and other MCP clients (v6.5.0).
 
 NEXO Brain gives AI agents persistent memory using the Atkinson-Shiffrin cognitive architecture. It adds a local shared brain across supported clients, configurable terminal and automation backends, recovery-aware background jobs, startup preflight, runtime self-healing, smarter retrieval defaults, long-horizon overnight analysis, and 150+ MCP tools.
+
+v6.5.0: Plan Consolidado fase F0.2. New CLI verbs `nexo scripts enable|disable|status <name>` (all accept `--json`). The cron wrapper (`nexo-cron-wrapper.sh`) reads the `personal_scripts.enabled` flag on every tick and short-circuits to `exit 0` with `summary='[disabled]'` when the operator has the script off — the LaunchAgent stays loaded so re-enabling is a single CLI call. The upsert path on `personal_scripts` no longer overwrites `enabled` on the UPDATE branch, so the operator-set flag is now sticky across `nexo scripts sync` runs. New helper functions `set_personal_script_enabled` + `get_personal_script_status`. 4 new tests in `tests/test_personal_scripts_enabled.py`. The companion NEXO Desktop client (closed-source, distributed separately) wires the same toggle into its Settings → Automatizaciones panel.
 
 v6.4.0: Plan Consolidado fase F1. New `email_accounts` table (m46) stores multi-tenant mailbox config with passwords pointed at the existing `credentials` table (never duplicated). New CLI `nexo email setup` (interactive wizard for first-time operators) + `nexo email add --label X --email X --imap-host X --password-stdin --json` (non-interactive, used by NEXO Desktop v0.19.0 Email panel — passwords pipe through stdin so they never appear on argv). `list`/`test`/`remove` accept `--json` for machine consumers. `email_config.load_email_config()` is the single loader (DB first, legacy `~/.nexo/nexo-email/config.json` fallback). Auto-migrator runs on next session (`auto_update.py`) — existing operators upgrade transparently. `nexo-email-monitor.py` and `nexo-send-reply.py` now go through the new loader. 8 tests in `tests/test_email_accounts.py`. Bandit-clean (`_debt_fingerprint` SHA1 marked `usedforsecurity=False`).
 

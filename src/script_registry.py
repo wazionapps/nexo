@@ -1462,6 +1462,78 @@ def remove_personal_script(name_or_path: str, *, keep_file: bool = False) -> dic
     }
 
 
+def set_personal_script_enabled(name_or_path: str, enabled: bool) -> dict:
+    """Plan F0.2.2 — flip the `enabled` flag on a personal script.
+
+    Returns ``{ok: bool, name, enabled, changed: bool}``. Refuses to
+    flip packaged core scripts (they ship enabled and the operator
+    should `nexo scripts unschedule` if they want one to stop).
+
+    The cron wrapper (`nexo-cron-wrapper.sh`, F0.2.4) reads this flag
+    on every tick and exits 0 with `summary='[disabled]'` when the
+    script is disabled, so the LaunchAgent can stay loaded but the
+    script itself is dormant.
+    """
+    from db import init_db, get_personal_script
+    from db._core import get_db
+
+    init_db()
+    sync_personal_scripts()
+    script = get_personal_script(name_or_path) or resolve_script(name_or_path)
+    if not script:
+        return {"ok": False, "error": f"Script not found: {name_or_path}"}
+    if script.get("core") and not _within_scripts_dir(Path(script.get("path", ""))):
+        return {
+            "ok": False,
+            "error": "Refusing to toggle a packaged core script via this entry point — "
+                     "use `nexo scripts unschedule` to stop it instead.",
+        }
+    target = 1 if enabled else 0
+    conn = get_db()
+    cur = conn.execute(
+        "UPDATE personal_scripts SET enabled = ?, updated_at = CURRENT_TIMESTAMP WHERE path = ?",
+        (target, script["path"]),
+    )
+    conn.commit()
+    changed = bool(cur.rowcount)
+    return {
+        "ok": True,
+        "name": script.get("name", name_or_path),
+        "path": script.get("path", ""),
+        "enabled": bool(target),
+        "changed": changed,
+    }
+
+
+def get_personal_script_status(name_or_path: str) -> dict:
+    """Plan F0.2.2 — read-only view of one personal script for the
+    Desktop panel and the `nexo scripts status` CLI verb."""
+    from db import init_db, get_personal_script
+    from db._core import get_db
+
+    init_db()
+    sync_personal_scripts()
+    script = get_personal_script(name_or_path) or resolve_script(name_or_path)
+    if not script:
+        return {"ok": False, "error": f"Script not found: {name_or_path}"}
+    conn = get_db()
+    last = conn.execute(
+        "SELECT exit_code, started_at, ended_at, summary FROM cron_runs "
+        "WHERE cron_id = ? ORDER BY id DESC LIMIT 1",
+        (script.get("name") or "",),
+    ).fetchone()
+    last_run = dict(last) if last else None
+    return {
+        "ok": True,
+        "name": script.get("name"),
+        "path": script.get("path"),
+        "enabled": bool(script.get("enabled", True)),
+        "core": bool(script.get("core")),
+        "classification": script.get("classification", "user"),
+        "last_run": last_run,
+    }
+
+
 def doctor_script(path_or_name: str) -> dict:
     """Validate a single script. Returns dict with pass/warn/fail items."""
     # Resolve
