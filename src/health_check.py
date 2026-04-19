@@ -47,7 +47,8 @@ def _check_runtime() -> dict:
 
 
 def _check_database() -> dict:
-    db_path = _nexo_home() / "data" / "nexo.db"
+    import paths
+    db_path = paths.db_path()
     out: dict[str, Any] = {"path": str(db_path), "exists": db_path.is_file()}
     if not out["exists"]:
         out["status"] = "error"
@@ -108,7 +109,8 @@ def _check_mcp() -> dict:
 
 
 def _check_errors(hours: int = 24) -> dict:
-    ops_dir = _nexo_home() / "operations"
+    import paths
+    ops_dir = paths.operations_dir()
     out: dict[str, Any] = {"dir": str(ops_dir)}
     if not ops_dir.is_dir():
         out["recent_errors"] = 0

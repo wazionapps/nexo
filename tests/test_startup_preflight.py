@@ -26,6 +26,11 @@ def test_startup_preflight_defers_sync_update_when_runtime_busy(tmp_path, monkey
     }))
 
     monkeypatch.setenv("HOME", str(user_home))
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
+
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
+
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
     monkeypatch.setattr(auto_update, "NEXO_HOME", nexo_home)
     monkeypatch.setattr(auto_update, "UPDATE_SUMMARY_FILE", nexo_home / "logs" / "update-last-summary.json")
     monkeypatch.setattr(auto_update, "UPDATE_HISTORY_FILE", nexo_home / "logs" / "update-history.jsonl")
@@ -85,6 +90,19 @@ def test_resolve_sync_source_supports_hybrid_runtime_code_dir(tmp_path, monkeypa
     (runtime_code / "db").mkdir()
     (runtime_code / "package.json").write_text("{}")
 
+    monkeypatch.setenv("NEXO_HOME", str(runtime_home))
+
+
+    monkeypatch.setenv("NEXO_HOME", str(runtime_home))
+
+
+    monkeypatch.setenv("NEXO_HOME", str(runtime_home))
+
+
+    monkeypatch.setenv("NEXO_HOME", str(runtime_home))
+
+
+    monkeypatch.setenv("NEXO_HOME", str(runtime_home))
     monkeypatch.setattr(auto_update, "NEXO_HOME", runtime_home)
     monkeypatch.setattr(auto_update, "NEXO_CODE", runtime_code)
 
@@ -170,6 +188,7 @@ def test_run_runtime_post_sync_uses_reconcile_personal_scripts(tmp_path, monkeyp
         calls.append(cmd)
         return subprocess.CompletedProcess(cmd, 0, "", "")
 
+    monkeypatch.setenv("NEXO_HOME", str(runtime_home))
     monkeypatch.setattr(auto_update, "NEXO_HOME", runtime_home)
     monkeypatch.setattr(auto_update, "_reinstall_runtime_pip_deps", lambda dest: True)
     monkeypatch.setattr(auto_update.subprocess, "run", fake_run)
@@ -220,6 +239,7 @@ def test_run_runtime_post_sync_reports_personal_schedule_heal(tmp_path, monkeypa
             )
         return subprocess.CompletedProcess(cmd, 0, "", "")
 
+    monkeypatch.setenv("NEXO_HOME", str(runtime_home))
     monkeypatch.setattr(auto_update, "NEXO_HOME", runtime_home)
     monkeypatch.setattr(auto_update, "_reinstall_runtime_pip_deps", lambda dest: True)
     monkeypatch.setattr(auto_update.subprocess, "run", fake_run)
@@ -256,6 +276,7 @@ def test_startup_preflight_reports_personal_schedule_heal(tmp_path, monkeypatch)
     }))
 
     monkeypatch.setenv("HOME", str(user_home))
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
     monkeypatch.setattr(auto_update, "NEXO_HOME", nexo_home)
     monkeypatch.setattr(auto_update, "UPDATE_SUMMARY_FILE", nexo_home / "logs" / "update-last-summary.json")
     monkeypatch.setattr(auto_update, "UPDATE_HISTORY_FILE", nexo_home / "logs" / "update-history.jsonl")
@@ -315,6 +336,7 @@ def test_copy_runtime_from_source_preserves_personal_script_collision(tmp_path, 
     (src_dir / "scripts" / "email-triage-agent.py").write_text("# core candidate\n")
     (src_dir / "scripts" / "nexo-watchdog.sh").write_text("#!/bin/bash\necho core\n")
 
+    monkeypatch.setenv("NEXO_HOME", str(runtime_home))
     monkeypatch.setattr(auto_update, "NEXO_HOME", runtime_home)
     monkeypatch.setattr(
         auto_update,

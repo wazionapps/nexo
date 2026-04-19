@@ -60,6 +60,7 @@ def scripts_dir(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(nexo_home))
     # Patch module-level constants
     import script_registry
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
     monkeypatch.setattr(script_registry, "NEXO_HOME", nexo_home)
 
     # Plan Consolidado wave 2 CI pollution fix: close any shared DB

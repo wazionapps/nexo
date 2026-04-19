@@ -32,6 +32,28 @@ def test_backup_code_tree_includes_skills_runtime_and_templates(tmp_path, monkey
     (runtime_home / "templates" / "skill-template.md").write_text("# template\n")
     (runtime_home / "bin" / "nexo").write_text("#!/bin/bash\n")
 
+    monkeypatch.setenv("NEXO_HOME", str(runtime_home))
+
+
+    monkeypatch.setenv("NEXO_HOME", str(runtime_home))
+
+
+    monkeypatch.setenv("NEXO_HOME", str(runtime_home))
+
+
+    monkeypatch.setenv("NEXO_HOME", str(runtime_home))
+
+
+    monkeypatch.setenv("NEXO_HOME", str(runtime_home))
+
+
+    monkeypatch.setenv("NEXO_HOME", str(runtime_home))
+
+
+    monkeypatch.setenv("NEXO_HOME", str(runtime_home))
+
+
+    monkeypatch.setenv("NEXO_HOME", str(runtime_home))
     monkeypatch.setattr(update, "NEXO_HOME", runtime_home)
     monkeypatch.setattr(update, "BACKUP_BASE", backup_base)
 
@@ -62,6 +84,7 @@ def test_sync_packaged_clients_normalizes_preferences_and_targets_runtime_home(t
         captured.update(kwargs)
         return {"ok": True, "clients": {}}
 
+    monkeypatch.setenv("NEXO_HOME", str(runtime_home))
     monkeypatch.setattr(update, "NEXO_HOME", runtime_home)
     monkeypatch.setattr(client_sync, "sync_all_clients", fake_sync_all_clients)
 
@@ -91,6 +114,7 @@ def test_refresh_installed_manifest_writes_runtime_core_artifacts(tmp_path, monk
     (src_dir / "hooks" / "capture-tool-logs.sh").write_text("#!/bin/bash\necho ok\n")
     (src_dir / "hooks" / "capture-tool-logs 2.sh").write_text("#!/bin/bash\necho old\n")
 
+    monkeypatch.setenv("NEXO_HOME", str(runtime_home))
     monkeypatch.setattr(update, "NEXO_HOME", runtime_home)
     monkeypatch.setattr(update, "SRC_DIR", src_dir)
 
@@ -99,7 +123,9 @@ def test_refresh_installed_manifest_writes_runtime_core_artifacts(tmp_path, monk
     manifest = json.loads((runtime_home / "config" / "runtime-core-artifacts.json").read_text())
     assert manifest["script_names"] == ["nexo-catchup.py"]
     assert manifest["hook_names"] == ["capture-tool-logs.sh"]
-    assert (runtime_home / "crons" / "manifest.json").is_file()
+    _crons_old = runtime_home / "crons" / "manifest.json"
+    _crons_new = runtime_home / "runtime" / "crons" / "manifest.json"
+    assert _crons_old.is_file() or _crons_new.is_file(), f"manifest at neither {_crons_old} nor {_crons_new}"
 
 
 def test_refresh_installed_manifest_packaged_mode_uses_npm_src_for_core_artifacts(tmp_path, monkeypatch):
@@ -117,6 +143,7 @@ def test_refresh_installed_manifest_packaged_mode_uses_npm_src_for_core_artifact
     (npm_src / "scripts" / "nexo-catchup.py").write_text("print('core')\n")
     (npm_src / "hooks" / "capture-tool-logs.sh").write_text("#!/bin/bash\necho ok\n")
 
+    monkeypatch.setenv("NEXO_HOME", str(runtime_home))
     monkeypatch.setattr(update, "NEXO_HOME", runtime_home)
     monkeypatch.setattr(update, "SRC_DIR", runtime_home)
     monkeypatch.setattr(update, "_PACKAGED_INSTALL", True)
@@ -145,6 +172,7 @@ def test_cleanup_retired_runtime_files_removes_legacy_heartbeat_files(tmp_path, 
     for path in legacy_files:
         path.write_text("legacy\n")
 
+    monkeypatch.setenv("NEXO_HOME", str(runtime_home))
     monkeypatch.setattr(update, "NEXO_HOME", runtime_home)
 
     removed = update._cleanup_retired_runtime_files()
@@ -162,6 +190,7 @@ def test_sync_hooks_to_home_skips_samefile_when_packaged_runtime_is_source(tmp_p
     hook = hooks_dir / "session-stop.sh"
     hook.write_text("#!/bin/bash\nexit 0\n")
 
+    monkeypatch.setenv("NEXO_HOME", str(runtime_home))
     monkeypatch.setattr(update, "NEXO_HOME", runtime_home)
     monkeypatch.setattr(update, "SRC_DIR", runtime_home)
 
@@ -186,6 +215,7 @@ def test_sync_packaged_crons_runs_runtime_sync_script(tmp_path, monkeypatch):
         captured["env"] = kwargs.get("env", {})
         return mock.Mock(returncode=0, stdout="", stderr="")
 
+    monkeypatch.setenv("NEXO_HOME", str(runtime_home))
     monkeypatch.setattr(update, "NEXO_HOME", runtime_home)
     monkeypatch.setattr(update, "SRC_DIR", runtime_home)
     monkeypatch.setattr(update.subprocess, "run", fake_run)

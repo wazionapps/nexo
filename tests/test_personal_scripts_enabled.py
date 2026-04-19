@@ -32,6 +32,9 @@ def isolated_home(tmp_path, monkeypatch):
     # popping the module — keeps test_script_registry.py's bindings live.
     try:
         import script_registry as _sr
+        monkeypatch.setenv("NEXO_HOME", str(home))
+
+        monkeypatch.setenv("NEXO_HOME", str(home))
         monkeypatch.setattr(_sr, "NEXO_HOME", home)
     except Exception:
         pass

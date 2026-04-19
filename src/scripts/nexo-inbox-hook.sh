@@ -27,7 +27,7 @@ echo "$NOW" > "$DEBOUNCE_FILE"
 
 # 4. Find NEXO SID mapped to this Claude session_id
 NEXO_HOME="${NEXO_HOME:-$HOME/.nexo}"
-DB="$NEXO_HOME/data/nexo.db"
+DB="$NEXO_HOME/runtime/data/nexo.db"
 [ -f "$DB" ] || exit 0
 
 NEXO_SID=$(sqlite3 "$DB" "SELECT sid FROM sessions WHERE (external_session_id = '${CLAUDE_SID}' OR claude_session_id = '${CLAUDE_SID}') AND last_update_epoch > (strftime('%s','now') - 900) ORDER BY last_update_epoch DESC LIMIT 1;" 2>/dev/null)

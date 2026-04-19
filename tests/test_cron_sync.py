@@ -24,6 +24,21 @@ def test_build_plist_runs_from_runtime_root(tmp_path, monkeypatch):
 
     monkeypatch.setattr(cron_sync, "SOURCE_ROOT", source_root)
     monkeypatch.setattr(cron_sync, "RUNTIME_ROOT", runtime_root)
+    monkeypatch.setenv("NEXO_HOME", str(runtime_root))
+
+    monkeypatch.setenv("NEXO_HOME", str(runtime_root))
+
+    monkeypatch.setenv("NEXO_HOME", str(runtime_root))
+
+    monkeypatch.setenv("NEXO_HOME", str(runtime_root))
+
+    monkeypatch.setenv("NEXO_HOME", str(runtime_root))
+
+    monkeypatch.setenv("NEXO_HOME", str(runtime_root))
+
+    monkeypatch.setenv("NEXO_HOME", str(runtime_root))
+
+    monkeypatch.setenv("NEXO_HOME", str(runtime_root))
     monkeypatch.setattr(cron_sync, "NEXO_HOME", runtime_root)
     monkeypatch.setattr(cron_sync, "LOG_DIR", runtime_root / "logs")
 
@@ -57,6 +72,7 @@ def test_build_plist_preserves_script_subdirectories(tmp_path, monkeypatch):
 
     monkeypatch.setattr(cron_sync, "SOURCE_ROOT", source_root)
     monkeypatch.setattr(cron_sync, "RUNTIME_ROOT", runtime_root)
+    monkeypatch.setenv("NEXO_HOME", str(runtime_root))
     monkeypatch.setattr(cron_sync, "NEXO_HOME", runtime_root)
     monkeypatch.setattr(cron_sync, "LOG_DIR", runtime_root / "logs")
 
@@ -85,6 +101,7 @@ def test_build_plist_reuses_runtime_script_when_source_already_matches_runtime(t
 
     monkeypatch.setattr(cron_sync, "SOURCE_ROOT", runtime_root)
     monkeypatch.setattr(cron_sync, "RUNTIME_ROOT", runtime_root)
+    monkeypatch.setenv("NEXO_HOME", str(runtime_root))
     monkeypatch.setattr(cron_sync, "NEXO_HOME", runtime_root)
     monkeypatch.setattr(cron_sync, "LOG_DIR", runtime_root / "logs")
 
@@ -111,6 +128,7 @@ def test_build_plist_supports_keep_alive_jobs(tmp_path, monkeypatch):
 
     monkeypatch.setattr(cron_sync, "SOURCE_ROOT", source_root)
     monkeypatch.setattr(cron_sync, "RUNTIME_ROOT", runtime_root)
+    monkeypatch.setenv("NEXO_HOME", str(runtime_root))
     monkeypatch.setattr(cron_sync, "NEXO_HOME", runtime_root)
     monkeypatch.setattr(cron_sync, "LOG_DIR", runtime_root / "logs")
 
@@ -139,6 +157,7 @@ def test_build_plist_supports_interval_jobs_that_also_run_at_load(tmp_path, monk
 
     monkeypatch.setattr(cron_sync, "SOURCE_ROOT", source_root)
     monkeypatch.setattr(cron_sync, "RUNTIME_ROOT", runtime_root)
+    monkeypatch.setenv("NEXO_HOME", str(runtime_root))
     monkeypatch.setattr(cron_sync, "NEXO_HOME", runtime_root)
     monkeypatch.setattr(cron_sync, "LOG_DIR", runtime_root / "logs")
 
@@ -175,6 +194,7 @@ def test_build_plist_uses_machine_staggered_weekly_schedule(tmp_path, monkeypatc
 
     monkeypatch.setattr(cron_sync, "SOURCE_ROOT", source_root)
     monkeypatch.setattr(cron_sync, "RUNTIME_ROOT", runtime_root)
+    monkeypatch.setenv("NEXO_HOME", str(runtime_root))
     monkeypatch.setattr(cron_sync, "NEXO_HOME", runtime_root)
     monkeypatch.setattr(cron_sync, "LOG_DIR", runtime_root / "logs")
     monkeypatch.setattr(cron_recovery, "SCHEDULE_FILE", schedule_file)
@@ -210,6 +230,13 @@ def test_load_manifest_skips_disabled_optionals(tmp_path, monkeypatch):
     (nexo_home / "config" / "optionals.json").write_text('{"autonomy": false}')
 
     monkeypatch.setattr(cron_sync, "MANIFEST", manifest)
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
+
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
+
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
+
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
     monkeypatch.setattr(cron_sync, "NEXO_HOME", nexo_home)
     monkeypatch.setattr(cron_sync, "OPTIONALS_FILE", nexo_home / "config" / "optionals.json")
 
@@ -302,6 +329,7 @@ def test_sync_script_runs_directly_from_runtime_root(tmp_path):
     runtime_root = tmp_path / "runtime"
     (runtime_root / "crons").mkdir(parents=True)
     shutil.copy2(repo_src / "cron_recovery.py", runtime_root / "cron_recovery.py")
+    shutil.copy2(repo_src / "paths.py", runtime_root / "paths.py")
     shutil.copy2(repo_src / "crons" / "sync.py", runtime_root / "crons" / "sync.py")
     (runtime_root / "crons" / "manifest.json").write_text('{"crons":[]}')
     (runtime_root / "scripts").mkdir(parents=True, exist_ok=True)
@@ -356,6 +384,7 @@ def test_sync_linux_weekday_uses_launchd_convention(tmp_path, monkeypatch):
 
     monkeypatch.setattr(cron_sync, "SOURCE_ROOT", source_root)
     monkeypatch.setattr(cron_sync, "RUNTIME_ROOT", runtime_root)
+    monkeypatch.setenv("NEXO_HOME", str(runtime_root))
     monkeypatch.setattr(cron_sync, "NEXO_HOME", runtime_root)
     monkeypatch.setattr(cron_sync, "LOG_DIR", runtime_root / "logs")
     monkeypatch.setattr(cron_sync, "MANIFEST", manifest)
@@ -417,6 +446,7 @@ def test_sync_does_not_remove_wrapper_based_personal_launchagent(tmp_path, monke
     removed: list[str] = []
     monkeypatch.setattr(cron_sync.platform, "system", lambda: "Darwin")
     monkeypatch.setattr(cron_sync, "LAUNCH_AGENTS_DIR", launch_agents_dir)
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
     monkeypatch.setattr(cron_sync, "NEXO_HOME", nexo_home)
     monkeypatch.setattr(cron_sync, "SOURCE_ROOT", source_root)
     monkeypatch.setattr(cron_sync, "LOG_DIR", nexo_home / "logs")
@@ -465,6 +495,7 @@ def test_sync_removes_legacy_core_wrapper_launchagent_not_in_manifest(tmp_path, 
     removed: list[str] = []
     monkeypatch.setattr(cron_sync.platform, "system", lambda: "Darwin")
     monkeypatch.setattr(cron_sync, "LAUNCH_AGENTS_DIR", launch_agents_dir)
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
     monkeypatch.setattr(cron_sync, "NEXO_HOME", nexo_home)
     monkeypatch.setattr(cron_sync, "SOURCE_ROOT", source_root)
     monkeypatch.setattr(cron_sync, "LOG_DIR", nexo_home / "logs")

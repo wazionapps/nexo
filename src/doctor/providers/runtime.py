@@ -4,6 +4,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
+import paths
 import platform
 import plistlib
 import re
@@ -423,7 +424,7 @@ def _extract_declared_file_targets(args: dict, cwd: str) -> set[str]:
 
 
 def _load_active_conditioned_learnings() -> list[dict]:
-    db_path = NEXO_HOME / "data" / "nexo.db"
+    db_path = paths.db_path()
     if not db_path.is_file():
         return []
     try:
@@ -622,7 +623,7 @@ def _recent_codex_conditioned_file_discipline_status(*, days: int = 7, max_files
 
 
 def _open_protocol_debt_summary(*debt_types: str) -> dict:
-    db_path = NEXO_HOME / "data" / "nexo.db"
+    db_path = paths.db_path()
     summary = {"available": False, "open_total": 0, "counts": {}}
     if not db_path.is_file() or not debt_types:
         return summary
@@ -661,7 +662,7 @@ def _client_assumption_regressions() -> list[str]:
     if not src_root.is_dir():
         return []
     src_root = src_root.resolve()
-    backup_root = (NEXO_HOME / "backups").resolve()
+    backup_root = (paths.backups_dir()).resolve()
     contrib_root = (NEXO_HOME / "contrib").resolve()
     allowed_relative_paths = {
         Path("scripts") / "deep-sleep" / "collect.py",
@@ -715,7 +716,7 @@ def _load_json(path: Path) -> dict:
 
 
 def _latest_cron_run_age_seconds(cron_id: str) -> float | None:
-    db_path = NEXO_HOME / "data" / "nexo.db"
+    db_path = paths.db_path()
     if not db_path.is_file():
         return None
     try:
@@ -748,7 +749,7 @@ def _latest_cron_run_age_seconds(cron_id: str) -> float | None:
 def _latest_periodic_summary(kind: str) -> dict | None:
     pattern = f"*-{kind}-summary.json"
     candidates: list[tuple[str, Path]] = []
-    for path in (NEXO_HOME / "operations" / "deep-sleep").glob(pattern):
+    for path in (paths.operations_dir() / "deep-sleep").glob(pattern):
         try:
             payload = json.loads(path.read_text())
         except Exception:
@@ -830,7 +831,7 @@ def _enabled_optionals() -> dict[str, bool]:
 
 def _enabled_manifest_crons() -> list[dict]:
     manifest_candidates = [
-        NEXO_HOME / "crons" / "manifest.json",
+        paths.crons_dir() / "manifest.json",
         NEXO_CODE / "crons" / "manifest.json",
     ]
     optionals = _enabled_optionals()
@@ -1049,7 +1050,7 @@ def _plist_runtime_paths(plist_data: dict) -> list[str]:
 
 
 def _recent_permission_denial(cron_id: str, max_age_seconds: int = 7 * 86400) -> bool:
-    stderr_path = NEXO_HOME / "logs" / f"{cron_id}-stderr.log"
+    stderr_path = paths.logs_dir() / f"{cron_id}-stderr.log"
     age = _file_age_seconds(stderr_path)
     if age is None or age > max_age_seconds:
         return False
@@ -1135,7 +1136,7 @@ def _sync_launchagents_from_manifest() -> tuple[bool, list[str]]:
 
 def check_immune_status() -> DoctorCheck:
     """Check immune system status freshness."""
-    status_file = NEXO_HOME / "coordination" / "immune-status.json"
+    status_file = paths.coordination_dir() / "immune-status.json"
     age = _file_age_seconds(status_file)
 
     if age is None:
@@ -1230,7 +1231,7 @@ def check_immune_status() -> DoctorCheck:
 
 def check_watchdog_status() -> DoctorCheck:
     """Check watchdog status freshness."""
-    status_file = NEXO_HOME / "operations" / "watchdog-status.json"
+    status_file = paths.operations_dir() / "watchdog-status.json"
     age = _file_age_seconds(status_file)
 
     if age is None:
@@ -1307,7 +1308,7 @@ def check_stale_sessions() -> DoctorCheck:
     """Check for stale sessions from DB."""
     try:
         import sqlite3
-        db_path = NEXO_HOME / "data" / "nexo.db"
+        db_path = paths.db_path()
         if not db_path.is_file():
             return DoctorCheck(
                 id="runtime.stale_sessions",
@@ -1358,7 +1359,7 @@ def check_cron_freshness() -> DoctorCheck:
     """Check cron_runs table for recent executions."""
     try:
         import sqlite3
-        db_path = NEXO_HOME / "data" / "nexo.db"
+        db_path = paths.db_path()
         if not db_path.is_file():
             return DoctorCheck(
                 id="runtime.cron_freshness",
@@ -2404,7 +2405,7 @@ def check_protocol_compliance() -> DoctorCheck:
     try:
         import sqlite3
 
-        db_path = NEXO_HOME / "data" / "nexo.db"
+        db_path = paths.db_path()
         if db_path.is_file():
             conn = sqlite3.connect(str(db_path), timeout=2)
             try:
@@ -2775,7 +2776,7 @@ def check_release_artifact_sync() -> DoctorCheck:
 
 
 def check_release_trace_hygiene() -> DoctorCheck:
-    db_path = NEXO_HOME / "data" / "nexo.db"
+    db_path = paths.db_path()
     if not db_path.is_file():
         return DoctorCheck(
             id="runtime.release_trace_hygiene",
@@ -2906,8 +2907,8 @@ def check_release_trace_hygiene() -> DoctorCheck:
 
 
 def check_state_watchers() -> DoctorCheck:
-    db_path = NEXO_HOME / "data" / "nexo.db"
-    summary_path = NEXO_HOME / "operations" / "state-watchers-status.json"
+    db_path = paths.db_path()
+    summary_path = paths.operations_dir() / "state-watchers-status.json"
     active_watchers = 0
     if db_path.is_file():
         try:
@@ -3007,7 +3008,7 @@ def check_state_watchers() -> DoctorCheck:
 
 
 def check_automation_telemetry(days: int = 7) -> DoctorCheck:
-    db_path = NEXO_HOME / "data" / "nexo.db"
+    db_path = paths.db_path()
     if not db_path.is_file():
         return DoctorCheck(
             id="runtime.automation_telemetry",

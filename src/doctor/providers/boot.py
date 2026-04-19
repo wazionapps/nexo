@@ -13,7 +13,8 @@ NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 
 def check_db_exists() -> DoctorCheck:
     """Check that the main database file exists and is readable."""
-    db_path = NEXO_HOME / "data" / "nexo.db"
+    import paths
+    db_path = paths.db_path()
     if db_path.is_file():
         size_kb = db_path.stat().st_size / 1024
         return DoctorCheck(
@@ -37,9 +38,21 @@ def check_db_exists() -> DoctorCheck:
 
 
 def check_required_dirs() -> DoctorCheck:
-    """Check that required NEXO_HOME directories exist."""
-    required = ["data", "scripts", "plugins", "crons", "hooks", "coordination", "operations", "logs"]
-    missing = [d for d in required if not (NEXO_HOME / d).is_dir()]
+    """Check that required NEXO_HOME directories exist (post-F0.6 layout
+    or pre-F0.6 fallback)."""
+    import paths
+    # Each required dir maps to one of the new locations OR the legacy fallback.
+    required_helpers = [
+        ("data", paths.data_dir()),
+        ("scripts", paths.core_scripts_dir()),
+        ("plugins", paths.core_plugins_dir()),
+        ("crons", paths.crons_dir()),
+        ("hooks", paths.core_hooks_dir()),
+        ("coordination", paths.coordination_dir()),
+        ("operations", paths.operations_dir()),
+        ("logs", paths.logs_dir()),
+    ]
+    missing = [name for (name, path) in required_helpers if not path.is_dir()]
 
     if not missing:
         return DoctorCheck(
@@ -47,7 +60,7 @@ def check_required_dirs() -> DoctorCheck:
             tier="boot",
             status="healthy",
             severity="info",
-            summary=f"All {len(required)} required directories present",
+            summary=f"All {len(required_helpers)} required directories present",
         )
 
     return DoctorCheck(
@@ -57,7 +70,7 @@ def check_required_dirs() -> DoctorCheck:
         severity="warn" if len(missing) < 3 else "error",
         summary=f"{len(missing)} required director{'y' if len(missing) == 1 else 'ies'} missing",
         evidence=[f"Missing: {d}" for d in missing],
-        repair_plan=[f"mkdir -p {NEXO_HOME / d}" for d in missing],
+        repair_plan=[f"mkdir -p {dict(required_helpers)[d]}" for d in missing],
     )
 
 
@@ -107,7 +120,8 @@ def check_disk_space() -> DoctorCheck:
 
 def check_wrapper_scripts() -> DoctorCheck:
     """Check that cron wrapper script exists."""
-    wrapper = NEXO_HOME / "scripts" / "nexo-cron-wrapper.sh"
+    import paths
+    wrapper = paths.core_scripts_dir() / "nexo-cron-wrapper.sh"
     if wrapper.is_file():
         return DoctorCheck(
             id="boot.wrapper_scripts",

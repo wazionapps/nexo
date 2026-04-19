@@ -1,5 +1,114 @@
 # Changelog
 
+## [7.0.0] - 2026-04-19
+
+**BREAKING — Plan Consolidado fase F0.6**: physical separation of the
+runtime tree into `~/.nexo/{core,personal,runtime}/`. The flat layout
+(`~/.nexo/scripts/`, `~/.nexo/brain/`, `~/.nexo/data/`,
+`~/.nexo/operations/`, ...) is gone. Operators on v6.x runtimes are
+auto-migrated on first `nexo update` to v7.0.0; fresh installs land
+directly in the new tree.
+
+### New layout
+
+```
+~/.nexo/
+├── core/                  ← shipped with the package, replaced on update
+│   ├── scripts/           (38 packaged automations)
+│   ├── plugins/
+│   ├── hooks/
+│   ├── rules/
+│   └── contracts/
+├── core-dev/              ← dev-only, off by default
+│   └── scripts/
+├── personal/              ← operator-owned, `nexo update` never touches
+│   ├── scripts/
+│   ├── skills/
+│   ├── plugins/
+│   ├── hooks/
+│   ├── rules/
+│   ├── brain/             (calibration.json, project-atlas.json, ...)
+│   ├── config/
+│   ├── lib/
+│   └── overrides/
+└── runtime/               ← dynamic state, never edited by hand
+    ├── data/              (nexo.db)
+    ├── logs/
+    ├── operations/
+    ├── backups/
+    ├── memory/
+    ├── cognitive/
+    ├── coordination/
+    ├── exports/
+    ├── nexo-email/
+    ├── doctor/
+    ├── snapshots/
+    └── crons/
+```
+
+### Added
+
+- New `src/paths.py` module centralises every runtime path helper
+  (`core_scripts_dir`, `personal_scripts_dir`, `brain_dir`, `data_dir`,
+  `db_path`, `logs_dir`, `operations_dir`, ...). All shipped src code
+  uses these helpers instead of hardcoding `NEXO_HOME / "X"`. Each
+  helper is transition-aware: returns the new (post-F0.6) location if
+  it exists; falls back to the legacy (pre-F0.6) location if only the
+  legacy path is present. This lets the same code work on every
+  runtime version (pre-F0.6, mid-F0.6, post-F0.6, fresh install).
+- New file `~/.nexo/.structure-version` carrying the F0.6 marker.
+
+### Changed
+
+- 24 src files refactored to use `paths.py` (auto_update.py, cli.py,
+  evolution_cycle.py, runtime_power.py, cron_recovery.py,
+  user_data_portability.py, system_catalog.py, public_contribution.py,
+  tools_sessions.py, plugins/recover.py, plugins/personal_plugins.py,
+  plugins/update.py, doctor/providers/runtime.py,
+  doctor/providers/deep.py, doctor/providers/boot.py, db/_skills.py,
+  ...). 100+ legacy `NEXO_HOME / "<flat>"` refs replaced.
+- 7 shell scripts in `src/scripts/` (nexo-backup.sh, nexo-cron-wrapper.sh,
+  nexo-deep-sleep.sh, nexo-inbox-hook.sh, nexo-snapshot-restore.sh,
+  nexo-tcc-approve.sh, nexo-watchdog.sh) updated to reference the new
+  layout. The cron wrapper's `DB="$NEXO_HOME/data/nexo.db"` is now
+  `DB="$NEXO_HOME/runtime/data/nexo.db"`.
+- `script_registry.classify_scripts_dir()` scans every dir in
+  `paths.all_scripts_dirs()` (core/scripts, personal/scripts,
+  core-dev/scripts) instead of the single legacy `~/.nexo/scripts/`.
+- `script_registry.list_scripts(include_core=True)` hydrates `enabled`
+  from `personal_scripts` table; gated to `include_core=True` so the
+  default callers (CLI `nexo scripts list`) keep their v6.x behaviour.
+- `doctor/providers/boot.py::check_required_dirs()` checks every
+  required dir via the path helpers; `check_database_exists()` reads
+  `paths.db_path()` instead of the legacy hardcoded path.
+
+### Migration
+
+- 13 dirs moved from `~/.nexo/<X>/` to `~/.nexo/{core,personal,runtime}/<X>/`.
+- 71 `personal_scripts.path` rows UPDATEd transactionally to point at
+  the new physical locations.
+- 40 LaunchAgent plists (`~/Library/LaunchAgents/com.nexo.*.plist`)
+  rewritten so their `ProgramArguments` script paths and
+  `StandardOutPath`/`StandardErrorPath` log paths use the new layout.
+- One snapshot (`~/.nexo-pre-f06-snapshot/`) is kept by the migrator;
+  operators can `mv ~/.nexo-pre-f06-snapshot ~/.nexo` to roll back.
+
+### Tests
+
+- 1551/1551 pytest serial pass on the new tree.
+- Test fixtures updated to either monkeypatch the env var alongside
+  module constants OR use `tmp_path / "runtime" / X` for runtime state.
+- `tests/test_cron_wrapper_contract.py`,
+  `tests/test_doctor.py::test_missing_dirs_fix`,
+  `tests/test_watchdog_in_flight.py` updated to use the new layout.
+
+### Notes
+
+- The companion NEXO Desktop release (v0.21.0) updates its hardcoded
+  paths so the auto-update flow keeps working without operator
+  intervention. Desktop is a closed-source companion app distributed
+  separately from this open-source Brain.
+
 ## [6.5.0] - 2026-04-19
 
 Plan Consolidado fase F0.2 — operator can now enable / disable any

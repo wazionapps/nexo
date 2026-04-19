@@ -13,16 +13,16 @@ set -uo pipefail
 HOME_DIR="$HOME"
 NEXO_HOME="${NEXO_HOME:-$HOME/.nexo}"
 NEXO_DIR="$NEXO_HOME"
-CORTEX_DIR="$NEXO_HOME/brain"
-OPS_DIR="$NEXO_HOME/operations"
-LOG_DIR="$NEXO_HOME/logs"
-DB_PATH="$NEXO_HOME/data/nexo.db"
+CORTEX_DIR="$NEXO_HOME/personal/brain"
+OPS_DIR="$NEXO_HOME/runtime/operations"
+LOG_DIR="$NEXO_HOME/runtime/logs"
+DB_PATH="$NEXO_HOME/runtime/data/nexo.db"
 LOG="$LOG_DIR/watchdog.log"
 STATUS_JSON="$OPS_DIR/watchdog-status.json"
 REPORT_TXT="$OPS_DIR/watchdog-report.txt"
 ALERT_FILE="$OPS_DIR/.watchdog-alert"
-HASH_REGISTRY="$NEXO_HOME/scripts/.watchdog-hashes"
-FAIL_COUNT_FILE="$NEXO_HOME/scripts/.watchdog-fails"
+HASH_REGISTRY="$NEXO_HOME/core/scripts/.watchdog-hashes"
+FAIL_COUNT_FILE="$NEXO_HOME/core/scripts/.watchdog-fails"
 MAX_FAILS=3
 
 mkdir -p "$LOG_DIR" "$OPS_DIR"
@@ -47,8 +47,8 @@ log() { echo "[$TS] $1" >> "$LOG"; }
 # Add personal (non-manifest) monitors to PERSONAL_MONITORS below.
 NEXO_CODE="${NEXO_CODE:-$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)}"
 # Look for manifest in NEXO_HOME first (packaged install), then NEXO_CODE (dev/repo)
-if [ -f "$NEXO_HOME/crons/manifest.json" ]; then
-  MANIFEST_FILE="$NEXO_HOME/crons/manifest.json"
+if [ -f "$NEXO_HOME/runtime/crons/manifest.json" ]; then
+  MANIFEST_FILE="$NEXO_HOME/runtime/crons/manifest.json"
 else
   MANIFEST_FILE="$NEXO_CODE/crons/manifest.json"
 fi
@@ -166,7 +166,7 @@ done < <(_build_monitors_from_manifest)
 # Personal (non-manifest) monitors — add yours below.
 # These are NOT in manifest.json and won't be synced by cron-sync.
 PERSONAL_MONITORS=(
-  # "My Service|com.nexo.my-service|$NEXO_HOME/logs/my-service.log||3600||Every 30 min|personal"
+  # "My Service|com.nexo.my-service|$NEXO_HOME/runtime/logs/my-service.log||3600||Every 30 min|personal"
 )
 MONITORS+=("${PERSONAL_MONITORS[@]+"${PERSONAL_MONITORS[@]}"}")
 
@@ -882,7 +882,7 @@ if [ -f "$HASH_REGISTRY" ]; then
       if [ "$ACTUAL" != "$expected_hash" ]; then
         TAMPERED=$((TAMPERED + 1))
         log "CRITICAL: Immutable file modified: $filepath"
-        LATEST_SNAP=$(ls -td "$NEXO_HOME/snapshots/"*/ 2>/dev/null | head -1)
+        LATEST_SNAP=$(ls -td "$NEXO_HOME/runtime/snapshots/"*/ 2>/dev/null | head -1)
         if [ -n "$LATEST_SNAP" ] && [ -f "${LATEST_SNAP}files/${filepath#$HOME_DIR/}" ]; then
           cp "${LATEST_SNAP}files/${filepath#$HOME_DIR/}" "$filepath"
           log "RESTORED immutable file from snapshot"
@@ -1075,7 +1075,7 @@ fi
 # ============================================================================
 # Only triggers if: (a) there are FAILs after mechanical repair, (b) no NEXO
 # repair is already running, (c) no interactive session is active (avoid conflict)
-REPAIR_LOCK="$NEXO_HOME/scripts/.watchdog-nexo-repair.lock"
+REPAIR_LOCK="$NEXO_HOME/core/scripts/.watchdog-nexo-repair.lock"
 REPAIR_COOLDOWN=1800  # 30 min between NEXO repair attempts
 
 if [ "$TOTAL_FAIL" -gt 0 ]; then
@@ -1162,19 +1162,19 @@ STEPS:
 2. Check stderr/stdout logs for the actual error
 3. Fix the root cause (missing file, bad config, dependency issue, etc.)
 4. Reload the service and verify it is running (launchctl on macOS, systemctl on Linux)
-5. Log what you did to $NEXO_HOME/logs/watchdog-repair-result.log
+5. Log what you did to $NEXO_HOME/runtime/logs/watchdog-repair-result.log
 ${PROPAGATE_BLOCK}
 
 CONSTRAINTS:
 - Do NOT modify CLAUDE.md, AGENTS.md, or any protected file
 - Do NOT start interactive conversations
 - Keep it under 5 minutes
-- Log what you did to $NEXO_HOME/logs/watchdog-repair-result.log
+- Log what you did to $NEXO_HOME/runtime/logs/watchdog-repair-result.log
 NEXOPROMPT
 
       # Launch NEXO in background with the configured automation backend.
       # Keep the hardened Claude fallback for older runtimes or partial installs.
-      AGENT_RUNNER="$NEXO_HOME/scripts/nexo-agent-run.py"
+      AGENT_RUNNER="$NEXO_HOME/core/scripts/nexo-agent-run.py"
       NEXO_PYTHON="$NEXO_HOME/.venv/bin/python3"
       if [ ! -x "$NEXO_PYTHON" ]; then
         NEXO_PYTHON=$(command -v python3 2>/dev/null || echo "python3")

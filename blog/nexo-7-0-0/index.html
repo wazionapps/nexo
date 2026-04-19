@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXO 7.0.0 (BREAKING) — Plan Consolidado F0.6: physical layout split</title>
+    <meta name="description" content="NEXO Brain v7.0.0 ships Plan Consolidado fase F0.6 (BREAKING): physical separation of the runtime tree into ~/.nexo/{core,personal,runtime}/. The flat layout (~/.nexo/scripts/, brain/, data/, operations/, ...) is gone. Operators on v6.x are auto-migrated on first nexo update to v7.0.0; fresh installs land directly in the new tree. New paths.py module centralises every runtime path helper (transition-aware: returns new location if it exists, falls back to legacy when only legacy is present)." >
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-0-0/">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/blog/nexo-7-0-0/">
+    <meta property="og:title" content="NEXO 7.0.0 (BREAKING): Physical layout split — core/personal/runtime">
+    <meta property="og:description" content="Plan Consolidado fase F0.6. Flat ~/.nexo/* layout gone, replaced by core/personal/runtime tree. paths.py centralised helpers, transition-aware, auto-migration on first update.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+    <meta property="article:published_time" content="2026-04-19">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO 7.0.0 (BREAKING): Physical layout split">
+    <meta name="twitter:description" content="Plan Consolidado fase F0.6. Flat layout gone. paths.py helpers transition-aware. Auto-migration on first nexo update.">
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "NEXO 7.0.0 (BREAKING) — Plan Consolidado F0.6: physical layout split",
+        "description": "Plan Consolidado fase F0.6. Physical separation of the runtime tree into ~/.nexo/{core,personal,runtime}/. paths.py centralised helpers transition-aware. Auto-migration on first nexo update; fresh installs land directly in new tree.",
+        "datePublished": "2026-04-19",
+        "dateModified": "2026-04-19",
+        "author": {"@type": "Person", "name": "Francisco Cerda Puigserver"},
+        "publisher": {"@type": "Organization", "name": "WAzion", "url": "https://www.wazion.com"},
+        "mainEntityOfPage": {"@type": "WebPage", "@id": "https://nexo-brain.com/blog/nexo-7-0-0/"},
+        "url": "https://nexo-brain.com/blog/nexo-7-0-0/",
+        "image": "https://nexo-brain.com/assets/og/og-blog.png",
+        "keywords": ["NEXO 7.0.0", "BREAKING", "Plan Consolidado F0.6", "paths.py", "core personal runtime"]
+    }
+    </script>
+</head>
+<body>
+<main>
+<article class="article-body" style="max-width: 760px; margin: 80px auto; padding: 0 24px; line-height: 1.75;">
+    <h1>NEXO 7.0.0 (BREAKING) — Physical layout split</h1>
+    <p><em>Published 2026-04-19. Plan Consolidado fase F0.6.</em></p>
+
+    <h2>What changes</h2>
+    <p>v7.0.0 finishes the multi-release migration that began with F0.0 (schema marker) and walked through F0.5 (safe symlinks): the flat <code>~/.nexo/scripts/</code>, <code>brain/</code>, <code>data/</code>, <code>operations/</code>, ... layout is replaced by an explicit three-zone tree:</p>
+    <pre>~/.nexo/
+├── core/                  ← shipped with the package, replaced on update
+│   ├── scripts/           (38 packaged automations)
+│   ├── plugins/
+│   ├── hooks/
+│   ├── rules/
+│   └── contracts/
+├── core-dev/              ← dev-only, off by default
+│   └── scripts/
+├── personal/              ← operator-owned, `nexo update` never touches
+│   ├── scripts/
+│   ├── skills/
+│   ├── plugins/
+│   ├── hooks/
+│   ├── rules/
+│   ├── brain/             (calibration.json, project-atlas.json, ...)
+│   ├── config/
+│   ├── lib/
+│   └── overrides/
+└── runtime/               ← dynamic state, never edited by hand
+    ├── data/              (nexo.db)
+    ├── logs/
+    ├── operations/
+    ├── backups/
+    ├── memory/
+    ├── cognitive/
+    ├── coordination/
+    ├── exports/
+    ├── nexo-email/
+    ├── doctor/
+    ├── snapshots/
+    └── crons/</pre>
+
+    <h2>Why the split</h2>
+    <p>Three goals the flat layout could not satisfy:</p>
+    <ul>
+        <li><strong>Update safety.</strong> <code>nexo update</code> needs to replace shipped code without ever touching operator-edited content. With everything mixed under <code>~/.nexo/scripts/</code>, the update path could only act conservatively — a hash check before every overwrite. With <code>core/</code> vs <code>personal/</code> separated physically, update can swap <code>core/</code> wholesale and never read <code>personal/</code>.</li>
+        <li><strong>State vs config vs code.</strong> Calibration, project-atlas, operator routing rules belong with the operator (they're hers, not ours). Logs, backups, the SQLite DB, the cron spool are dynamic state nobody edits by hand. Mixing the three under <code>~/.nexo/*</code> made it hard to back up sensibly, hard to ship a fresh-install template, hard to write Doctor checks.</li>
+        <li><strong>Multi-machine sync.</strong> When a future feature wants to mirror operator state across machines (Mac + Linux + iPad companion), <code>personal/</code> is the right unit to sync; <code>core/</code> is package-managed; <code>runtime/</code> stays local.</li>
+    </ul>
+
+    <h2>How it ships safely</h2>
+    <p>The new <code>src/paths.py</code> module is the core of the migration. Every helper (<code>core_scripts_dir</code>, <code>personal_scripts_dir</code>, <code>brain_dir</code>, <code>data_dir</code>, <code>db_path</code>, <code>logs_dir</code>, <code>operations_dir</code>, ...) is <strong>transition-aware</strong>: it returns the new (post-F0.6) location if that location exists; otherwise it falls back to the legacy (pre-F0.6) location if the legacy one is present; otherwise it returns the new location (fresh install). This means:</p>
+    <ul>
+        <li>Pre-F0.6 runtimes that haven't migrated yet keep working.</li>
+        <li>Mid-migration runtimes work on both halves of the tree.</li>
+        <li>Post-F0.6 runtimes use the clean new tree.</li>
+        <li>Fresh installs land directly in the new tree.</li>
+    </ul>
+
+    <p>24 src files were refactored to use the helpers (auto_update.py, cli.py, evolution_cycle.py, runtime_power.py, cron_recovery.py, user_data_portability.py, system_catalog.py, public_contribution.py, tools_sessions.py, plugins/recover.py, plugins/personal_plugins.py, plugins/update.py, doctor/providers/runtime.py, doctor/providers/deep.py, doctor/providers/boot.py, db/_skills.py, ...). 7 shell scripts under <code>src/scripts/</code> were updated to reference the new layout. The cron wrapper's <code>DB="$NEXO_HOME/data/nexo.db"</code> is now <code>DB="$NEXO_HOME/runtime/data/nexo.db"</code>.</p>
+
+    <h2>Migration mechanics</h2>
+    <p>On first <code>nexo update</code> from v6.x to v7.0.0, the migrator:</p>
+    <ol>
+        <li>Snapshots the runtime to <code>~/.nexo-pre-f06-snapshot/</code>.</li>
+        <li>Unloads every <code>com.nexo.*.plist</code> via <code>launchctl</code>.</li>
+        <li>Moves 13 directories from <code>~/.nexo/&lt;X&gt;/</code> to <code>~/.nexo/{core,personal,runtime}/&lt;X&gt;/</code>.</li>
+        <li>UPDATEs <code>personal_scripts.path</code> transactionally so the cron wrapper gate keeps finding scripts.</li>
+        <li>Rewrites every LaunchAgent plist (<code>ProgramArguments</code> + <code>StandardOutPath</code> + <code>StandardErrorPath</code>) to reference the new layout.</li>
+        <li>Writes <code>~/.nexo/.structure-version = F0.6</code> and reloads every plist.</li>
+    </ol>
+    <p>Total downtime: ~30 sec. Rollback path: <code>mv ~/.nexo-pre-f06-snapshot ~/.nexo</code> if anything fails.</p>
+
+    <h2>Tests &amp; auditing</h2>
+    <p>1551 pytest tests pass. Test fixtures were updated to either monkeypatch the env var alongside module constants OR use <code>tmp_path / "runtime" / X</code> for runtime state. The fixture for cron-wrapper, doctor, and watchdog were updated to point at the new layout.</p>
+
+    <h2>Companion client</h2>
+    <p>The NEXO Desktop client &mdash; a closed-source companion app distributed separately at <a href="https://systeam.es/nexo-desktop">systeam.es/nexo-desktop</a> &mdash; ships v0.21.0 in coordination with this Brain release. Desktop's hardcoded path references (<code>~/.nexo/data/nexo.db</code>, <code>~/.nexo/brain/calibration.json</code>, <code>~/.nexo/brain/profile.json</code>) get the same transition-aware treatment so the auto-update flow keeps working without operator intervention.</p>
+</article>
+</main>
+</body>
+</html>

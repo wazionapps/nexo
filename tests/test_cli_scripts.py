@@ -214,7 +214,8 @@ class TestRuntimeUpdate:
             "maintenance.py", "storage_router.py", "claim_graph.py", "hnsw_index.py",
             "evolution_cycle.py", "migrate_embeddings.py", "auto_close_sessions.py",
             "client_sync.py",
-            "client_preferences.py", "agent_runner.py", "bootstrap_docs.py",
+            "client_preferences.py",
+    "paths.py", "agent_runner.py", "bootstrap_docs.py",
             "hook_guardrails.py", "protocol_settings.py", "public_evolution_queue.py",
             "auto_update.py", "tools_sessions.py", "tools_coordination.py",
             "tools_hot_context.py",
@@ -272,6 +273,7 @@ class TestRuntimeUpdate:
         (runtime_home / "auto_update.py").write_text((current_src / "auto_update.py").read_text())
         (runtime_home / "runtime_home.py").write_text((current_src / "runtime_home.py").read_text())
         (runtime_home / "tree_hygiene.py").write_text((current_src / "tree_hygiene.py").read_text())
+        (runtime_home / "paths.py").write_text((current_src / "paths.py").read_text())
         (runtime_home / "runtime_power.py").write_text(
             "def ensure_power_policy_choice(**kwargs):\n"
             "    return {'policy': 'disabled', 'prompted': False}\n\n"
@@ -329,7 +331,8 @@ class TestRuntimeUpdate:
             "server.py", "plugin_loader.py", "knowledge_graph.py", "kg_populate.py",
             "maintenance.py", "storage_router.py", "claim_graph.py", "hnsw_index.py",
             "evolution_cycle.py", "migrate_embeddings.py", "auto_close_sessions.py",
-            "client_sync.py", "client_preferences.py", "agent_runner.py", "bootstrap_docs.py", "auto_update.py", "tools_sessions.py", "tools_coordination.py",
+            "client_sync.py", "client_preferences.py",
+    "paths.py", "agent_runner.py", "bootstrap_docs.py", "auto_update.py", "tools_sessions.py", "tools_coordination.py",
             "tools_hot_context.py",
             "tools_reminders.py", "tools_reminders_crud.py", "tools_learnings.py",
             "tools_credentials.py", "tools_task_history.py", "tools_menu.py", "cli.py",
@@ -427,7 +430,8 @@ class TestRuntimeUpdate:
             "server.py", "plugin_loader.py", "knowledge_graph.py", "kg_populate.py",
             "maintenance.py", "storage_router.py", "claim_graph.py", "hnsw_index.py",
             "evolution_cycle.py", "migrate_embeddings.py", "auto_close_sessions.py",
-            "client_sync.py", "client_preferences.py", "agent_runner.py", "bootstrap_docs.py", "auto_update.py", "tools_sessions.py", "tools_coordination.py",
+            "client_sync.py", "client_preferences.py",
+    "paths.py", "agent_runner.py", "bootstrap_docs.py", "auto_update.py", "tools_sessions.py", "tools_coordination.py",
             "tools_hot_context.py",
             "tools_reminders.py", "tools_reminders_crud.py", "tools_learnings.py",
             "tools_credentials.py", "tools_task_history.py", "tools_menu.py", "cli.py",
@@ -473,6 +477,9 @@ class TestRuntimeUpdate:
         )
         (runtime_home / "tree_hygiene.py").write_text(
             (Path(os.path.dirname(__file__)).parent / "src" / "tree_hygiene.py").read_text()
+        )
+        (runtime_home / "paths.py").write_text(
+            (Path(os.path.dirname(__file__)).parent / "src" / "paths.py").read_text()
         )
 
         probe = (
@@ -571,11 +578,18 @@ class TestUserDataPortability:
         payload = json.loads(import_result.stdout)
         assert payload["ok"] is True
         assert Path(payload["safety_backup"]).is_file()
-        assert (target_home / "brain" / "session.txt").read_text() == "resume me\n"
+        _brain_old = target_home / "brain" / "session.txt"
+        _brain_new = target_home / "personal" / "brain" / "session.txt"
+        _session_path = _brain_new if _brain_new.exists() else _brain_old
+        assert _session_path.read_text() == "resume me\n"
         assert json.loads((target_home / "config" / "schedule.json").read_text())["timezone"] == "Europe/Madrid"
-        assert (target_home / "scripts" / "daily-report.py").is_file()
+        _script_old = target_home / "scripts" / "daily-report.py"
+        _script_new = target_home / "personal" / "scripts" / "daily-report.py"
+        assert _script_old.is_file() or _script_new.is_file()
 
-        verify_conn = sqlite3.connect(target_home / "data" / "nexo.db")
+        _db_old = target_home / "data" / "nexo.db"
+        _db_new = target_home / "runtime" / "data" / "nexo.db"
+        verify_conn = sqlite3.connect(_db_new if _db_new.exists() else _db_old)
         row = verify_conn.execute("SELECT value FROM marker").fetchone()
         verify_conn.close()
         assert row[0] == "source-state"

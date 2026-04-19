@@ -193,7 +193,8 @@ def _target_path(client: str, *, user_home: Path | None = None) -> Path:
 
 
 def _version_tracker_path(nexo_home: Path, client: str) -> Path:
-    return nexo_home / "data" / BOOTSTRAP_SPECS[client]["version_file"]
+    import paths
+    return paths.data_dir() / BOOTSTRAP_SPECS[client]["version_file"]
 
 
 def render_bootstrap_template(

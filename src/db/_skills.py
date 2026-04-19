@@ -11,6 +11,7 @@ Executable skills are indexed in SQLite but sourced from filesystem definitions.
 import datetime
 import json
 import os
+import paths
 import re
 import shutil
 from pathlib import Path
@@ -25,7 +26,7 @@ NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parents[1])))
 
 NEXO_ROOT = NEXO_CODE.parent
-PERSONAL_SKILLS_DIR = NEXO_HOME / "skills"
+PERSONAL_SKILLS_DIR = paths.personal_skills_dir()
 
 
 def _resolve_core_skills_dir() -> Path:

@@ -37,6 +37,7 @@ import contextlib
 import io
 import json
 import os
+import paths
 import shutil
 import subprocess
 import sys
@@ -303,7 +304,7 @@ def _scripts_list(args):
         print(json.dumps(scripts, indent=2))
     else:
         if not scripts:
-            print("No personal scripts found in", NEXO_HOME / "scripts")
+            print("No personal scripts found in", paths.core_scripts_dir())
             return 0
         # Table output
         name_w = max(len(s["name"]) for s in scripts)
@@ -347,7 +348,7 @@ def _scripts_classify(args):
 
     entries = report.get("entries", [])
     if not entries:
-        print("No scripts directory found:", report.get("scripts_dir", NEXO_HOME / "scripts"))
+        print("No scripts directory found:", report.get("scripts_dir", paths.core_scripts_dir()))
         return 0
 
     path_w = max(len(Path(entry["path"]).name) for entry in entries)
@@ -538,8 +539,8 @@ def _scripts_run(args):
 
     # Only inject DB paths for core scripts
     if is_core:
-        env["NEXO_DB"] = str(NEXO_HOME / "data" / "nexo.db")
-        env["NEXO_COGNITIVE_DB"] = str(NEXO_HOME / "data" / "cognitive.db")
+        env["NEXO_DB"] = str(paths.db_path())
+        env["NEXO_COGNITIVE_DB"] = str(paths.data_dir() / "cognitive.db")
 
     # Timeout
     timeout = None
@@ -1031,7 +1032,7 @@ def _update(args):
     # the sensory-register buffer. Keeps a .pre-v5.4.1.bak backup the first
     # time it runs on a given host.
     try:
-        buf = NEXO_HOME / "brain" / "session_buffer.jsonl"
+        buf = paths.brain_dir() / "session_buffer.jsonl"
         marker = buf.with_suffix(".jsonl.pre-v5.4.1.bak")
         if buf.is_file() and not marker.is_file():
             raw = buf.read_text(errors="ignore").splitlines()
@@ -1163,7 +1164,7 @@ def _write_calibration_default_resonance(tier: str) -> None:
     …). This helper keeps the CLI path writing to both calibration.json
     AND schedule.json so the two surfaces never disagree.
     """
-    cal_path = NEXO_HOME / "brain" / "calibration.json"
+    cal_path = paths.brain_dir() / "calibration.json"
     try:
         cal_path.parent.mkdir(parents=True, exist_ok=True)
         if cal_path.exists():

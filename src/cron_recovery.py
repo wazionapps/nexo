@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import paths
 import plistlib
 import sqlite3
 import contextlib
@@ -16,8 +17,8 @@ NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parent
 LAUNCH_AGENTS_DIR = Path.home() / "Library" / "LaunchAgents"
 OPTIONALS_FILE = NEXO_HOME / "config" / "optionals.json"
 SCHEDULE_FILE = NEXO_HOME / "config" / "schedule.json"
-DB_PATH = NEXO_HOME / "data" / "nexo.db"
-STATE_FILE = NEXO_HOME / "operations" / ".catchup-state.json"
+DB_PATH = paths.db_path()
+STATE_FILE = paths.operations_dir() / ".catchup-state.json"
 
 
 def _local_timezone():
@@ -84,7 +85,7 @@ def resolve_declared_schedule(cron: dict) -> dict:
 
 def load_enabled_crons() -> list[dict]:
     manifest_candidates = [
-        NEXO_HOME / "crons" / "manifest.json",
+        paths.crons_dir() / "manifest.json",
         NEXO_CODE / "crons" / "manifest.json",
     ]
     optionals = _load_json(OPTIONALS_FILE, {})

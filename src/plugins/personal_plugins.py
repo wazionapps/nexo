@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import paths
 from pathlib import Path
 
 from db import init_db
@@ -15,7 +16,7 @@ NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parent
 
 
 def _plugins_dir() -> Path:
-    path = NEXO_HOME / "plugins"
+    path = paths.core_plugins_dir()
     path.mkdir(parents=True, exist_ok=True)
     return path
 

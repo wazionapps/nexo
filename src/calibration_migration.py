@@ -54,7 +54,8 @@ TOP_LEVEL_KEYS = {"version", "created", "mood_history", "operator_name"}
 
 def _calibration_path(nexo_home: Path | None = None) -> Path:
     home = nexo_home or Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
-    return home / "brain" / "calibration.json"
+    import paths
+    return paths.brain_dir() / "calibration.json"
 
 
 def _is_nested(cal: dict) -> bool:
@@ -342,7 +343,9 @@ def apply_v6_purge(
         "seeded_default_resonance": False,
     }
 
-    cal_path = home / "brain" / "calibration.json"
+    _brain_new = home / "personal" / "brain"
+    _brain_legacy = home / "brain"
+    cal_path = (_brain_new if _brain_new.is_dir() else _brain_legacy) / "calibration.json"
     sched_path = home / "config" / "schedule.json"
 
     # --- calibration.json ---

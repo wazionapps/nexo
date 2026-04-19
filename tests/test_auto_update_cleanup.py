@@ -28,6 +28,10 @@ def test_cleanup_retired_runtime_files_removes_legacy_heartbeat_scripts(tmp_path
     ):
         target.write_text("legacy\n")
 
+    monkeypatch.setenv("NEXO_HOME", str(runtime_home))
+
+
+    monkeypatch.setenv("NEXO_HOME", str(runtime_home))
     monkeypatch.setattr(auto_update, "NEXO_HOME", runtime_home)
     auto_update._cleanup_retired_runtime_files()
 

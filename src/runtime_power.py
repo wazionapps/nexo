@@ -15,6 +15,7 @@ Important semantic note:
 
 import json
 import os
+import paths
 import platform
 import plistlib
 import shutil
@@ -336,7 +337,7 @@ def detect_full_disk_access_reasons(*, system: str | None = None) -> list[str]:
             f"NEXO_HOME is inside a protected macOS folder: {NEXO_HOME}"
         )
 
-    logs_dir = NEXO_HOME / "logs"
+    logs_dir = paths.logs_dir()
     if logs_dir.is_dir():
         for log_file in sorted(logs_dir.glob("*-stderr.log")):
             if _tail_has_permission_denial(log_file):
@@ -715,7 +716,7 @@ def ensure_full_disk_access_choice(
 
 
 def _prevent_sleep_script_path() -> Path:
-    runtime_script = NEXO_HOME / "scripts" / "nexo-prevent-sleep.sh"
+    runtime_script = paths.core_scripts_dir() / "nexo-prevent-sleep.sh"
     if runtime_script.is_file():
         return runtime_script
     source_script = NEXO_CODE / "scripts" / "nexo-prevent-sleep.sh"
@@ -730,8 +731,8 @@ def _macos_prevent_sleep_plist() -> tuple[Path, dict]:
         "ProgramArguments": ["/bin/bash", str(script_path)],
         "RunAtLoad": True,
         "KeepAlive": True,
-        "StandardOutPath": str(NEXO_HOME / "logs" / "prevent-sleep-stdout.log"),
-        "StandardErrorPath": str(NEXO_HOME / "logs" / "prevent-sleep-stderr.log"),
+        "StandardOutPath": str(paths.logs_dir() / "prevent-sleep-stdout.log"),
+        "StandardErrorPath": str(paths.logs_dir() / "prevent-sleep-stderr.log"),
         "EnvironmentVariables": {
             "HOME": str(Path.home()),
             "NEXO_HOME": str(NEXO_HOME),
@@ -766,7 +767,7 @@ WantedBy=default.target
 def apply_power_policy(policy: str | None = None) -> dict:
     policy = normalize_power_policy(policy or get_power_policy())
     system = platform.system()
-    logs_dir = NEXO_HOME / "logs"
+    logs_dir = paths.logs_dir()
     logs_dir.mkdir(parents=True, exist_ok=True)
     details = describe_power_policy(policy=policy, system=system)
 

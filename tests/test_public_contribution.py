@@ -18,10 +18,18 @@ def _patch_schedule_paths(monkeypatch, nexo_home: Path):
     schedule_file.parent.mkdir(parents=True, exist_ok=True)
     schedule_file.write_text('{"timezone":"UTC","auto_update":true,"processes":{}}')
 
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
+
+
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
     monkeypatch.setattr(runtime_power, "NEXO_HOME", nexo_home)
     monkeypatch.setattr(runtime_power, "CONFIG_DIR", nexo_home / "config")
     monkeypatch.setattr(runtime_power, "SCHEDULE_FILE", schedule_file)
 
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
+
+
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
     monkeypatch.setattr(public_contribution, "NEXO_HOME", nexo_home)
     monkeypatch.setattr(public_contribution, "CONTRIB_ROOT", nexo_home / "contrib" / "public-core")
     monkeypatch.setattr(public_contribution, "CONTRIB_REPO_DIR", nexo_home / "contrib" / "public-core" / "repo")

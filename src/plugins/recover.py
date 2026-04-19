@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import os
+import paths
 import re
 import sys
 import time
@@ -46,8 +47,8 @@ from db_guard import (
 )
 
 NEXO_HOME = export_resolved_nexo_home()
-DATA_DIR = NEXO_HOME / "data"
-BACKUP_BASE = NEXO_HOME / "backups"
+DATA_DIR = paths.data_dir()
+BACKUP_BASE = paths.backups_dir()
 PRIMARY_DB = DATA_DIR / "nexo.db"
 
 

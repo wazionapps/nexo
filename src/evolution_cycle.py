@@ -7,6 +7,7 @@ v1.1 (future): sandbox execution of auto-approved changes.
 
 import json
 import os
+import paths
 import shutil
 import subprocess
 import sqlite3
@@ -16,17 +17,17 @@ from pathlib import Path
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(NEXO_HOME)))
-NEXO_DB = NEXO_HOME / "data" / "nexo.db"
+NEXO_DB = paths.db_path()
 SANDBOX_DIR = NEXO_HOME / "sandbox" / "workspace"
-SNAPSHOTS_DIR = NEXO_HOME / "snapshots"
-RESTORE_LOG = NEXO_HOME / "logs" / "snapshot-restores.log"
+SNAPSHOTS_DIR = paths.snapshots_dir()
+RESTORE_LOG = paths.logs_dir() / "snapshot-restores.log"
 
 # Evolution config: brain/ (canonical) > cortex/ (legacy) > NEXO_CODE (dev)
 def _resolve_evolution_file(name: str) -> Path:
-    for candidate in [NEXO_HOME / "brain" / name, NEXO_HOME / "cortex" / name, NEXO_CODE / name]:
+    for candidate in [paths.brain_dir() / name, NEXO_HOME / "cortex" / name, NEXO_CODE / name]:
         if candidate.exists():
             return candidate
-    return NEXO_HOME / "brain" / name  # default canonical path
+    return paths.brain_dir() / name  # default canonical path
 
 OBJECTIVE_FILE = _resolve_evolution_file("evolution-objective.json")
 PROMPT_FILE = _resolve_evolution_file("evolution-prompt.md")
@@ -233,7 +234,7 @@ def dry_run_restore_test() -> bool:
     _nexo_code = Path(os.environ.get("NEXO_CODE", ""))
     restore_script = None
     for candidate in [_nexo_code / "scripts" / "nexo-snapshot-restore.sh",
-                      NEXO_HOME / "scripts" / "nexo-snapshot-restore.sh"]:
+                      paths.core_scripts_dir() / "nexo-snapshot-restore.sh"]:
         if candidate.exists():
             restore_script = candidate
             break
