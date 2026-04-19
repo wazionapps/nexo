@@ -22,8 +22,8 @@ CRON_ID="${1:?Usage: nexo-cron-wrapper.sh <cron_id> <command...>}"
 shift
 
 NEXO_HOME="${NEXO_HOME:-$HOME/.nexo}"
-DB="$NEXO_HOME/data/nexo.db"
-SPOOL_DIR="$NEXO_HOME/operations/cron-spool"
+DB="$NEXO_HOME/runtime/data/nexo.db"
+SPOOL_DIR="$NEXO_HOME/runtime/operations/cron-spool"
 
 # Unlock macOS Keychain so headless Claude Code can read auth tokens.
 # Claude Code stores its API key in the login keychain which auto-locks.

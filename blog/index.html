@@ -134,7 +134,7 @@
                     <span class="page-chip">Competitive analysis</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="/blog/nexo-6-5-0/" class="btn btn-primary">Read latest release</a>
+                    <a href="/blog/nexo-7-0-0/" class="btn btn-primary">Read latest release</a>
                     <a href="/changelog/" class="btn btn-secondary">Latest release notes</a>
             <p class="desktop-disclaimer field-hint" style="margin-top:18px;padding:10px 14px;background:rgba(124,58,237,0.08);border-radius:8px;border:1px solid rgba(124,58,237,0.2);font-size:13px;line-height:1.55;"><strong>NEXO Desktop</strong> es un cliente acompa&ntilde;ante closed-source distribuido aparte en <a href="https://systeam.es/nexo-desktop">systeam.es/nexo-desktop</a>. Cuando un release habla de "NEXO Desktop" se refiere a una versi&oacute;n coordinada de ese cliente que consume el contrato CLI/MCP del Brain. El Brain (este repo, AGPL-3.0) es 100% usable por s&iacute; solo desde terminal, Codex, Claude Code, o cualquier cliente MCP.</p>
 
@@ -173,6 +173,13 @@
 <section class="section-flush-top">
     <div class="container">
         <div class="blog-grid">
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 19, 2026</div>
+                <h2><a href="/blog/nexo-7-0-0/">NEXO 7.0.0: Plan Consolidado F0.6 (BREAKING) — physical layout split</a></h2>
+                <p>Plan Consolidado fase F0.6 (BREAKING). Separación física del runtime tree en <code>~/.nexo/{core,personal,runtime}/</code>; la estructura flat (<code>scripts/</code>, <code>brain/</code>, <code>data/</code>, <code>operations/</code>...) desaparece. Auto-migración en primer <code>nexo update</code>; fresh installs caen directos en la nueva estructura. Nuevo módulo <code>paths.py</code> centraliza todos los path helpers transition-aware. 24 archivos src refactorizados, 7 shell scripts actualizados, 71 <code>personal_scripts.path</code> rows UPDATEd, 40 LaunchAgents reescritos. El cliente NEXO Desktop (v0.21.0, closed-source separado) actualiza sus paths para que auto-update siga funcionando.</p>
+                <a href="/blog/nexo-7-0-0/" class="read-more">Read more &rarr;</a>
+            </div>
 
             <div class="blog-card">
                 <div class="blog-card-date">April 19, 2026</div>

@@ -142,12 +142,12 @@ class TestBootChecks:
 
     def test_missing_dirs_fix(self, nexo_home):
         import shutil
-        shutil.rmtree(str(nexo_home / "coordination"))
+        shutil.rmtree(str(nexo_home / "runtime" / "coordination"), ignore_errors=True); shutil.rmtree(str(nexo_home / "coordination"), ignore_errors=True)
         from doctor.providers.boot import run_boot_checks
         checks = run_boot_checks(fix=True)
         dir_check = [c for c in checks if c.id == "boot.required_dirs"][0]
         assert dir_check.fixed
-        assert (nexo_home / "coordination").is_dir()
+        assert (nexo_home / "runtime" / "coordination").is_dir() or (nexo_home / "coordination").is_dir()
 
     def test_config_parse_catches_broken_manifest(self, nexo_home):
         (nexo_home / "crons" / "manifest.json").write_text("{not valid json")

@@ -187,6 +187,16 @@
     </div>
 </section>
 
+<section id="v700" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
+    <div class="container" style="max-width:860px;">
+        <div class="section-label">New in v7.0.0 <span style="opacity:.5;font-weight:400;">&mdash; April 19, 2026 &mdash; <strong>BREAKING</strong></span></div>
+        <h2 style="color:white;margin-bottom:16px;">Plan Consolidado fase F0.6 &mdash; physical layout split</h2>
+        <p style="color:rgba(255,255,255,0.85);line-height:1.7;">
+            Separaci&oacute;n f&iacute;sica del runtime en <code>~/.nexo/{core,personal,runtime}/</code>. La estructura flat (<code>scripts/</code>, <code>brain/</code>, <code>data/</code>, <code>operations/</code>...) desaparece. Operadores en v6.x se auto-migran en primer <code>nexo update</code> a v7.0.0; fresh installs caen directos en la nueva estructura. Nuevo m&oacute;dulo <code>src/paths.py</code> centraliza cada path helper (<code>core_scripts_dir</code>, <code>personal_scripts_dir</code>, <code>brain_dir</code>, <code>data_dir</code>, <code>db_path</code>, ...) y todos son <em>transition-aware</em>: devuelven la ruta nueva si existe, caen al legacy si solo el legacy est&aacute; presente. 24 archivos src refactorizados, 7 shell scripts actualizados, 71 <code>personal_scripts.path</code> rows UPDATEd transaccional, 40 LaunchAgent plists reescritos. 1551 tests pasan. El cliente NEXO Desktop v0.21.0 (closed-source distribuido aparte) actualiza tambi&eacute;n sus paths.
+        </p>
+    </div>
+</section>
+
 <section id="v650" class="section-compact" style="background:linear-gradient(135deg,#0f172a 0%,#7c3aed 100%);">
     <div class="container" style="max-width:860px;">
         <div class="section-label">New in v6.5.0 <span style="opacity:.5;font-weight:400;">&mdash; April 19, 2026</span></div>

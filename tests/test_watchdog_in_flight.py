@@ -30,7 +30,7 @@ MANIFEST = REPO_ROOT / "src" / "crons" / "manifest.json"
 def _bootstrap_home(tmp_path: Path) -> Path:
     home = tmp_path / "nexo"
     (home / "operations").mkdir(parents=True)
-    (home / "data").mkdir(parents=True)
+    (home / "runtime" / "data").mkdir(parents=True)
     (home / "logs").mkdir(parents=True)
     (home / "scripts").mkdir(parents=True)
     (home / "crons").mkdir(parents=True)
@@ -46,7 +46,7 @@ def _bootstrap_home(tmp_path: Path) -> Path:
     (home / "config" / "schedule.json").write_text('{"automation_enabled":true}')
 
     # cron_runs schema
-    db = home / "data" / "nexo.db"
+    db = home / "runtime" / "data" / "nexo.db"
     conn = sqlite3.connect(db)
     conn.execute(
         """
@@ -92,7 +92,7 @@ def test_watchdog_treats_fresh_in_flight_row_as_healthy(tmp_path):
     """A cron_runs row with started_at = now() and ended_at = NULL must be
     interpreted as 'currently running', not as 'missed cron'."""
     home = _bootstrap_home(tmp_path)
-    db = home / "data" / "nexo.db"
+    db = home / "runtime" / "data" / "nexo.db"
     conn = sqlite3.connect(db)
     conn.execute(
         "INSERT INTO cron_runs (cron_id, started_at, ended_at) "
@@ -115,7 +115,7 @@ def test_watchdog_warns_on_long_in_flight_with_alive_process(tmp_path):
     """An in-flight row older than 3× max_stale but whose worker process is
     alive must WARN, not FAIL — long-running legitimate work."""
     home = _bootstrap_home(tmp_path)
-    db = home / "data" / "nexo.db"
+    db = home / "runtime" / "data" / "nexo.db"
     conn = sqlite3.connect(db)
     # 4 hours ago — well above 3× max_stale for any reasonable threshold.
     conn.execute(

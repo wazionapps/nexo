@@ -33,7 +33,7 @@ def _create_cron_runs_db(db_path: Path) -> None:
 
 def test_cron_wrapper_writes_completed_row(tmp_path):
     nexo_home = tmp_path / "nexo"
-    db_dir = nexo_home / "data"
+    db_dir = nexo_home / "runtime" / "data"
     db_dir.mkdir(parents=True)
     db_path = db_dir / "nexo.db"
     _create_cron_runs_db(db_path)
@@ -77,7 +77,7 @@ def test_cron_wrapper_spools_when_db_write_fails(tmp_path):
 
     assert result.returncode == 0, result.stderr
 
-    spool_dir = nexo_home / "operations" / "cron-spool"
+    spool_dir = nexo_home / "runtime" / "operations" / "cron-spool"
     spool_files = sorted(spool_dir.glob("impact-scorer-*.json"))
     assert len(spool_files) == 1
 
@@ -98,7 +98,7 @@ def test_cron_wrapper_inserts_in_flight_row_at_start(tmp_path):
     import time
 
     nexo_home = tmp_path / "nexo"
-    db_dir = nexo_home / "data"
+    db_dir = nexo_home / "runtime" / "data"
     db_dir.mkdir(parents=True)
     db_path = db_dir / "nexo.db"
     _create_cron_runs_db(db_path)
@@ -152,7 +152,7 @@ def test_cron_wrapper_closes_row_on_sigterm(tmp_path):
     import time
 
     nexo_home = tmp_path / "nexo"
-    db_dir = nexo_home / "data"
+    db_dir = nexo_home / "runtime" / "data"
     db_dir.mkdir(parents=True)
     db_path = db_dir / "nexo.db"
     _create_cron_runs_db(db_path)

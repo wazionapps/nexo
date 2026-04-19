@@ -18,7 +18,9 @@
 
 [Watch the overview video](https://nexo-brain.com/watch/) · [Watch on YouTube](https://www.youtube.com/watch?v=i2lkGhKyVqI) · [Open the infographic](https://nexo-brain.com/assets/nexo-brain-infographic-v5.png)
 
-Version `6.5.0` is the current packaged-runtime line — Plan Consolidado fase F0.2: operators can now `nexo scripts enable|disable|status <name>` any personal automation. The cron wrapper honours the flag at every tick (`exit 0` with `summary='[disabled]'` while the LaunchAgent stays loaded). The companion NEXO Desktop client (a closed-source product, distributed separately) wires the same toggle into its Automatizaciones panel. See [CHANGELOG](CHANGELOG.md) for the full diff.
+Version `7.0.0` is the current packaged-runtime line — **BREAKING — Plan Consolidado fase F0.6**: physical separation of the runtime tree into `~/.nexo/{core,personal,runtime}/`. The flat layout (`~/.nexo/scripts/`, `brain/`, `data/`, `operations/`, ...) is gone. Operators on v6.x are auto-migrated on first `nexo update`; fresh installs land directly in the new tree. New `paths.py` helpers are transition-aware. The companion NEXO Desktop client (v0.21.0, closed-source distributed separately) updates its hardcoded paths so auto-update keeps working.
+
+Previously in `6.5.0`: Plan Consolidado fase F0.2: operators can now `nexo scripts enable|disable|status <name>` any personal automation. The cron wrapper honours the flag at every tick (`exit 0` with `summary='[disabled]'` while the LaunchAgent stays loaded). The companion NEXO Desktop client (a closed-source product, distributed separately) wires the same toggle into its Automatizaciones panel. See [CHANGELOG](CHANGELOG.md) for the full diff.
 
 > **About NEXO Desktop.** NEXO Desktop is a separate closed-source companion app distributed at [systeam.es/nexo-desktop](https://systeam.es/nexo-desktop) — its source does not live in this repo. When release notes mention Desktop they describe a coordinated client release that consumes the Brain's CLI / MCP contract; the Brain itself is fully usable on its own (terminal, Codex, Claude Code, or any MCP client).
 

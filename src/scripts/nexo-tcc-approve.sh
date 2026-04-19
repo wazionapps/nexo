@@ -23,8 +23,8 @@ fi
 NEXO_HOME="${NEXO_HOME:-$HOME/.nexo}"
 TCC_DB="$HOME/Library/Application Support/com.apple.TCC/TCC.db"
 VERSIONS_DIR="$HOME/.local/share/claude/versions"
-MARKER_DIR="$NEXO_HOME/data/.tcc-approved"
-LOG="$NEXO_HOME/logs/tcc-auto-approve.log"
+MARKER_DIR="$NEXO_HOME/runtime/data/.tcc-approved"
+LOG="$NEXO_HOME/runtime/logs/tcc-auto-approve.log"
 
 mkdir -p "$MARKER_DIR" "$(dirname "$LOG")"
 

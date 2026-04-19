@@ -5,14 +5,14 @@
 # Watermark approach: tracks the last processed timestamp so nothing is missed.
 # Sessions from late-night/early-morning work are included in the next run.
 #
-# Logs to $NEXO_HOME/logs/deep-sleep.log
+# Logs to $NEXO_HOME/runtime/logs/deep-sleep.log
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 NEXO_HOME="${NEXO_HOME:-$HOME/.nexo}"
 LOG_DIR="$NEXO_HOME/logs"
-DEEP_SLEEP_DIR="$NEXO_HOME/operations/deep-sleep"
+DEEP_SLEEP_DIR="$NEXO_HOME/runtime/operations/deep-sleep"
 WATERMARK_FILE="$DEEP_SLEEP_DIR/.watermark"
 RUN_ID=$(date +%Y-%m-%d)
 

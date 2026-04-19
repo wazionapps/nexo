@@ -591,35 +591,62 @@ def _script_entry(path: Path, meta: dict, *, is_core: bool, classification: str,
 
 
 def classify_scripts_dir() -> dict:
-    """Classify every file in NEXO_HOME/scripts into personal/core/ignored/non-script buckets."""
+    """Classify every file in scripts dirs into personal/core/ignored/non-script buckets.
+
+    Plan F0.6 — scans every dir returned by paths.all_scripts_dirs():
+    core/scripts, personal/scripts, core-dev/scripts. Falls back to the
+    legacy ~/.nexo/scripts/ if the new layout has no entries (transition
+    safety; remove the fallback once F0.6 has been validated for a week).
+    """
     _apply_legacy_personal_script_backfills()
-    scripts_dir = get_scripts_dir()
-    if not scripts_dir.is_dir():
-        return {"scripts_dir": str(scripts_dir), "entries": [], "summary": {}}
+    import paths
+    candidate_dirs = list(paths.all_scripts_dirs())
+    legacy = get_scripts_dir()
+    if legacy.is_dir() and legacy not in candidate_dirs:
+        candidate_dirs.append(legacy)
 
     core_names = load_core_script_names()
     entries: list[dict] = []
-    for f in sorted(scripts_dir.iterdir()):
-        if not f.is_file():
+    seen_names: set[str] = set()
+    for sdir in candidate_dirs:
+        if not sdir.is_dir():
             continue
-
-        meta = parse_inline_metadata(f)
-        if _is_ignored(f):
-            entries.append(_script_entry(f, meta, is_core=False, classification="ignored", reason="internal or hidden artifact"))
-            continue
-
-        if not _is_script_candidate(f, meta):
-            entries.append(_script_entry(f, meta, is_core=False, classification="non-script", reason="not an executable/script candidate"))
-            continue
-
-        is_core = f.name in core_names
-        classification = "core" if is_core else "personal"
-        entries.append(_script_entry(f, meta, is_core=is_core, classification=classification))
+        # Decide default classification per directory: a script dropped
+        # in core/scripts is core unless its name says otherwise; same
+        # for personal and core-dev.
+        if "core-dev" in sdir.parts:
+            dir_classification = "core-dev"
+        elif "personal" in sdir.parts:
+            dir_classification = "personal"
+        elif "core" in sdir.parts:
+            dir_classification = "core"
+        else:
+            dir_classification = None  # legacy — fall back to name-based
+        for f in sorted(sdir.iterdir()):
+            if not f.is_file():
+                continue
+            if f.name in seen_names:
+                continue
+            seen_names.add(f.name)
+            meta = parse_inline_metadata(f)
+            if _is_ignored(f):
+                entries.append(_script_entry(f, meta, is_core=False, classification="ignored", reason="internal or hidden artifact"))
+                continue
+            if not _is_script_candidate(f, meta):
+                entries.append(_script_entry(f, meta, is_core=False, classification="non-script", reason="not an executable/script candidate"))
+                continue
+            if dir_classification:
+                cls = dir_classification
+                is_core = cls in ("core", "core-dev")
+            else:
+                is_core = f.name in core_names
+                cls = "core" if is_core else "personal"
+            entries.append(_script_entry(f, meta, is_core=is_core, classification=cls))
 
     summary: dict[str, int] = {}
     for entry in entries:
         summary[entry["classification"]] = summary.get(entry["classification"], 0) + 1
-    return {"scripts_dir": str(scripts_dir), "entries": entries, "summary": summary}
+    return {"scripts_dir": str(candidate_dirs[0]) if candidate_dirs else "", "entries": entries, "summary": summary}
 
 
 def list_scripts(include_core: bool = False) -> list[dict]:
