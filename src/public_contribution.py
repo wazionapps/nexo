@@ -9,6 +9,7 @@ This module manages the opt-in "public core evolution" mode:
 
 import json
 import os
+import paths
 import platform
 import re
 import shutil
@@ -47,7 +48,7 @@ NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 CONTRIB_ROOT = NEXO_HOME / "contrib" / "public-core"
 CONTRIB_REPO_DIR = CONTRIB_ROOT / "repo"
 CONTRIB_WORKTREES_DIR = CONTRIB_ROOT / "worktrees"
-CONTRIB_ARTIFACTS_DIR = NEXO_HOME / "operations" / "public-contrib"
+CONTRIB_ARTIFACTS_DIR = paths.operations_dir() / "public-contrib"
 
 
 def _utcnow() -> datetime:

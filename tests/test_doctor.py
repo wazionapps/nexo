@@ -61,8 +61,17 @@ def nexo_home(tmp_path, monkeypatch):
 
     # Patch module-level NEXO_HOME in all doctor modules
     from doctor.providers import boot, runtime, deep
+    monkeypatch.setenv("NEXO_HOME", str(home))
+
+    monkeypatch.setenv("NEXO_HOME", str(home))
     monkeypatch.setattr(boot, "NEXO_HOME", home)
+    monkeypatch.setenv("NEXO_HOME", str(home))
+
+    monkeypatch.setenv("NEXO_HOME", str(home))
     monkeypatch.setattr(runtime, "NEXO_HOME", home)
+    monkeypatch.setenv("NEXO_HOME", str(home))
+
+    monkeypatch.setenv("NEXO_HOME", str(home))
     monkeypatch.setattr(deep, "NEXO_HOME", home)
 
     return home
@@ -500,6 +509,22 @@ class TestRuntimeChecks:
             ]
         }))
 
+        monkeypatch.setenv("NEXO_HOME", str(nexo_home))
+
+
+        monkeypatch.setenv("NEXO_HOME", str(nexo_home))
+
+
+        monkeypatch.setenv("NEXO_HOME", str(nexo_home))
+
+
+        monkeypatch.setenv("NEXO_HOME", str(nexo_home))
+
+
+        monkeypatch.setenv("NEXO_HOME", str(nexo_home))
+
+
+        monkeypatch.setenv("NEXO_HOME", str(nexo_home))
         monkeypatch.setattr(runtime, "NEXO_HOME", nexo_home)
         monkeypatch.setattr(runtime, "OPTIONALS_FILE", nexo_home / "config" / "optionals.json")
 
@@ -524,6 +549,7 @@ class TestRuntimeChecks:
             ]
         }))
 
+        monkeypatch.setenv("NEXO_HOME", str(nexo_home))
         monkeypatch.setattr(runtime, "NEXO_HOME", nexo_home)
         monkeypatch.setattr(runtime, "OPTIONALS_FILE", nexo_home / "config" / "optionals.json")
         monkeypatch.setattr(runtime, "SCHEDULE_FILE", nexo_home / "config" / "schedule.json")
@@ -607,6 +633,7 @@ class TestRuntimeChecks:
         conn.commit()
         conn.close()
 
+        monkeypatch.setenv("NEXO_HOME", str(nexo_home))
         monkeypatch.setattr(runtime, "NEXO_HOME", nexo_home)
         monkeypatch.setattr(runtime, "OPTIONALS_FILE", nexo_home / "config" / "optionals.json")
 
@@ -918,6 +945,7 @@ class TestRuntimeChecks:
             },
         }))
 
+        monkeypatch.setenv("NEXO_HOME", str(nexo_home))
         monkeypatch.setattr(runtime, "NEXO_HOME", nexo_home)
         check = runtime.check_protocol_compliance()
 
@@ -996,6 +1024,19 @@ class TestRuntimeChecks:
         runtime_home.mkdir()
         (runtime_home / "version.json").write_text(json.dumps({"version": "3.0.0", "source": str(repo)}))
 
+        monkeypatch.setenv("NEXO_HOME", str(runtime_home))
+
+
+        monkeypatch.setenv("NEXO_HOME", str(runtime_home))
+
+
+        monkeypatch.setenv("NEXO_HOME", str(runtime_home))
+
+
+        monkeypatch.setenv("NEXO_HOME", str(runtime_home))
+
+
+        monkeypatch.setenv("NEXO_HOME", str(runtime_home))
         monkeypatch.setattr(runtime, "NEXO_HOME", runtime_home)
         monkeypatch.setattr(runtime, "NEXO_CODE", runtime_home)
         monkeypatch.setattr(runtime, "PACKAGE_JSON", runtime_home / "package.json")
@@ -1013,6 +1054,7 @@ class TestRuntimeChecks:
         runtime_home.mkdir()
         (runtime_home / "version.json").write_text(json.dumps({"version": "5.3.0"}))
 
+        monkeypatch.setenv("NEXO_HOME", str(runtime_home))
         monkeypatch.setattr(runtime, "NEXO_HOME", runtime_home)
         monkeypatch.setattr(runtime, "NEXO_CODE", runtime_home)
         monkeypatch.setattr(runtime, "PACKAGE_JSON", runtime_home / "package.json")
@@ -1079,6 +1121,7 @@ class TestRuntimeChecks:
         conn.commit()
         conn.close()
 
+        monkeypatch.setenv("NEXO_HOME", str(nexo_home))
         monkeypatch.setattr(runtime, "NEXO_HOME", nexo_home)
         check = runtime.check_release_trace_hygiene()
 
@@ -1692,6 +1735,7 @@ class TestRuntimeChecks:
             "CLAUDE='~/.claude/projects'\nCODEX='~/.codex/sessions'\nfind_codex_session_files=True\n"
         )
 
+        monkeypatch.setenv("NEXO_HOME", str(runtime_home))
         monkeypatch.setattr(runtime, "NEXO_HOME", runtime_home)
         monkeypatch.setattr(runtime, "NEXO_CODE", runtime_home)
 
@@ -1715,6 +1759,7 @@ class TestRuntimeChecks:
             "if '.claude/projects' in text and '.codex' in text:\n    pass\n"
         )
 
+        monkeypatch.setenv("NEXO_HOME", str(runtime_home))
         monkeypatch.setattr(runtime, "NEXO_HOME", runtime_home)
         monkeypatch.setattr(runtime, "NEXO_CODE", runtime_home)
 

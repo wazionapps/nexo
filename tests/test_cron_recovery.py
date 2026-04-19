@@ -15,6 +15,7 @@ _CATCHUP_RUNTIME_FILES = (
     "cron_recovery.py",
     "runtime_power.py",
     "client_preferences.py",
+    "paths.py",
     "agent_runner.py",
     "model_defaults.py",
     "model_defaults.json",
@@ -75,6 +76,19 @@ def test_catchup_candidates_use_successful_cron_runs(tmp_path, monkeypatch):
     conn.commit()
     conn.close()
 
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
+
+
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
+
+
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
+
+
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
+
+
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
     monkeypatch.setattr(cron_recovery, "NEXO_HOME", nexo_home)
     monkeypatch.setattr(cron_recovery, "DB_PATH", db_path)
     monkeypatch.setattr(cron_recovery, "OPTIONALS_FILE", nexo_home / "config" / "optionals.json")
@@ -117,6 +131,7 @@ def test_catchup_candidates_fall_back_to_legacy_state(tmp_path, monkeypatch):
     db_path = nexo_home / "data" / "nexo.db"
     sqlite3.connect(str(db_path)).close()
 
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
     monkeypatch.setattr(cron_recovery, "NEXO_HOME", nexo_home)
     monkeypatch.setattr(cron_recovery, "DB_PATH", db_path)
     monkeypatch.setattr(cron_recovery, "OPTIONALS_FILE", nexo_home / "config" / "optionals.json")
@@ -151,6 +166,7 @@ def test_catchup_candidates_include_managed_personal_interval(tmp_path, monkeypa
     conn.commit()
     conn.close()
 
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
     monkeypatch.setattr(cron_recovery, "NEXO_HOME", nexo_home)
     monkeypatch.setattr(cron_recovery, "DB_PATH", db_path)
     monkeypatch.setattr(cron_recovery, "OPTIONALS_FILE", nexo_home / "config" / "optionals.json")
@@ -211,6 +227,7 @@ def test_catchup_candidates_do_not_relaunch_inflight_due_window(tmp_path, monkey
     conn.commit()
     conn.close()
 
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
     monkeypatch.setattr(cron_recovery, "NEXO_HOME", nexo_home)
     monkeypatch.setattr(cron_recovery, "DB_PATH", db_path)
     monkeypatch.setattr(cron_recovery, "OPTIONALS_FILE", nexo_home / "config" / "optionals.json")

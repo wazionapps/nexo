@@ -13,6 +13,21 @@ def test_ensure_power_policy_choice_prompts_once(tmp_path, monkeypatch):
     schedule_file.parent.mkdir(parents=True)
     schedule_file.write_text('{"timezone":"UTC","auto_update":true,"processes":{}}')
 
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
+
+
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
+
+
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
+
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
+
+
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
+
+
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
     monkeypatch.setattr(runtime_power, "NEXO_HOME", nexo_home)
     monkeypatch.setattr(runtime_power, "CONFIG_DIR", nexo_home / "config")
     monkeypatch.setattr(runtime_power, "SCHEDULE_FILE", schedule_file)
@@ -38,6 +53,7 @@ def test_ensure_power_policy_choice_skips_when_noninteractive(tmp_path, monkeypa
     schedule_file.parent.mkdir(parents=True)
     schedule_file.write_text('{"timezone":"UTC","auto_update":true,"processes":{}}')
 
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
     monkeypatch.setattr(runtime_power, "NEXO_HOME", nexo_home)
     monkeypatch.setattr(runtime_power, "CONFIG_DIR", nexo_home / "config")
     monkeypatch.setattr(runtime_power, "SCHEDULE_FILE", schedule_file)
@@ -110,6 +126,7 @@ def test_detect_full_disk_access_reasons_flags_protected_runtime(tmp_path, monke
 
     nexo_home = tmp_path / "Documents" / "nexo"
     nexo_home.mkdir(parents=True)
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
     monkeypatch.setattr(runtime_power, "NEXO_HOME", nexo_home)
     monkeypatch.setattr(runtime_power.platform, "system", lambda: "Darwin")
     monkeypatch.setattr(runtime_power, "_protected_macos_roots", lambda home=None: (tmp_path / "Documents",))
@@ -128,6 +145,7 @@ def test_ensure_full_disk_access_choice_prompts_and_marks_granted(tmp_path, monk
     schedule_file.parent.mkdir(parents=True)
     schedule_file.write_text('{"timezone":"UTC","auto_update":true,"processes":{}}')
 
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
     monkeypatch.setattr(runtime_power, "NEXO_HOME", nexo_home)
     monkeypatch.setattr(runtime_power, "CONFIG_DIR", nexo_home / "config")
     monkeypatch.setattr(runtime_power, "SCHEDULE_FILE", schedule_file)
@@ -164,6 +182,7 @@ def test_ensure_full_disk_access_choice_defers_when_grant_cannot_be_verified(tmp
     schedule_file.parent.mkdir(parents=True)
     schedule_file.write_text('{"timezone":"UTC","auto_update":true,"full_disk_access_status":"granted","processes":{}}')
 
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
     monkeypatch.setattr(runtime_power, "NEXO_HOME", nexo_home)
     monkeypatch.setattr(runtime_power, "CONFIG_DIR", nexo_home / "config")
     monkeypatch.setattr(runtime_power, "SCHEDULE_FILE", schedule_file)

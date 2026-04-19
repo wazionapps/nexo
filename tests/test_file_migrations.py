@@ -118,6 +118,13 @@ def test_backup_dbs_closes_connections_on_success(tmp_path, monkeypatch):
     conn.close()
 
     monkeypatch.setattr(auto_update, "DATA_DIR", data_dir)
+    monkeypatch.setenv("NEXO_HOME", str(tmp_path))
+
+    monkeypatch.setenv("NEXO_HOME", str(tmp_path))
+
+    monkeypatch.setenv("NEXO_HOME", str(tmp_path))
+
+    monkeypatch.setenv("NEXO_HOME", str(tmp_path))
     monkeypatch.setattr(auto_update, "NEXO_HOME", tmp_path)
     monkeypatch.setattr(auto_update, "SRC_DIR", tmp_path / "src_nonexistent")
 
@@ -145,6 +152,7 @@ def test_backup_dbs_closes_connections_on_corrupt_source(tmp_path, monkeypatch):
     db_file.write_bytes(b"this is not a valid sqlite database" * 100)
 
     monkeypatch.setattr(auto_update, "DATA_DIR", data_dir)
+    monkeypatch.setenv("NEXO_HOME", str(tmp_path))
     monkeypatch.setattr(auto_update, "NEXO_HOME", tmp_path)
     monkeypatch.setattr(auto_update, "SRC_DIR", tmp_path / "src_nonexistent")
 
@@ -183,6 +191,7 @@ def test_restore_dbs_handles_missing_gracefully(tmp_path, monkeypatch):
     src.close()
 
     monkeypatch.setattr(auto_update, "DATA_DIR", data_dir)
+    monkeypatch.setenv("NEXO_HOME", str(tmp_path))
     monkeypatch.setattr(auto_update, "NEXO_HOME", tmp_path)
     monkeypatch.setattr(auto_update, "SRC_DIR", tmp_path / "src_nonexistent")
 

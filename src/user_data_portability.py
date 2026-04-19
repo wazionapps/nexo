@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import paths
 import shutil
 import sqlite3
 import tarfile
@@ -17,7 +18,7 @@ from runtime_home import export_resolved_nexo_home
 
 NEXO_HOME = export_resolved_nexo_home()
 NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parent)))
-EXPORTS_DIR = NEXO_HOME / "exports"
+EXPORTS_DIR = paths.exports_dir()
 STAGING_DIR = EXPORTS_DIR / ".staging"
 USER_DIRS = ("brain", "coordination", "nexo-email", "assets")
 USER_CONFIG_FILES = ("schedule.json",)
@@ -182,12 +183,12 @@ def export_user_bundle(output_path: str = "") -> dict:
     sections: dict[str, dict] = {}
 
     try:
-        data_db = NEXO_HOME / "data" / "nexo.db"
+        data_db = paths.db_path()
         if data_db.is_file():
             _sqlite_backup(data_db, bundle_root / "data" / "nexo.db")
             sections["data_db"] = {"path": "data/nexo.db"}
 
-        brain_dir = NEXO_HOME / "brain"
+        brain_dir = paths.brain_dir()
         if brain_dir.is_dir():
             copied = _copy_tree_filtered(brain_dir, bundle_root / "brain", exclude_names={"nexo.db"})
             brain_db = brain_dir / "nexo.db"
@@ -271,7 +272,7 @@ def import_user_bundle(bundle_path: str) -> dict:
     if not archive_path.is_file():
         return {"ok": False, "error": f"bundle not found: {archive_path}"}
 
-    backups_dir = NEXO_HOME / "backups"
+    backups_dir = paths.backups_dir()
     backups_dir.mkdir(parents=True, exist_ok=True)
     safety_backup = backups_dir / f"pre-import-user-data-{_now_stamp()}.tar.gz"
     safety_result = export_user_bundle(str(safety_backup))
@@ -300,15 +301,15 @@ def import_user_bundle(bundle_path: str) -> dict:
 
         data_db = bundle_root / "data" / "nexo.db"
         if data_db.is_file():
-            _sqlite_backup(data_db, NEXO_HOME / "data" / "nexo.db")
+            _sqlite_backup(data_db, paths.db_path())
             restored["data_db"] = {"path": "data/nexo.db"}
 
         brain_dir = bundle_root / "brain"
         if brain_dir.is_dir():
-            copied = _copy_tree_filtered(brain_dir, NEXO_HOME / "brain", exclude_names={"nexo.db"})
+            copied = _copy_tree_filtered(brain_dir, paths.brain_dir(), exclude_names={"nexo.db"})
             brain_db = brain_dir / "nexo.db"
             if brain_db.is_file():
-                _sqlite_backup(brain_db, NEXO_HOME / "brain" / "nexo.db")
+                _sqlite_backup(brain_db, paths.brain_dir() / "nexo.db")
                 copied += 1
             restored["brain"] = {"path": "brain", "files": copied}
 
@@ -328,7 +329,7 @@ def import_user_bundle(bundle_path: str) -> dict:
 
         imported_scripts = 0
         scripts_dir = bundle_root / "personal-scripts"
-        target_scripts_dir = NEXO_HOME / "scripts"
+        target_scripts_dir = paths.core_scripts_dir()
         target_scripts_dir.mkdir(parents=True, exist_ok=True)
         if scripts_dir.is_dir():
             for script_path in sorted(scripts_dir.iterdir()):

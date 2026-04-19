@@ -6,6 +6,7 @@ import importlib.util
 import inspect
 import json
 import os
+import paths
 import re
 import sys
 from pathlib import Path
@@ -17,8 +18,8 @@ from script_registry import list_scripts
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
 NEXO_CODE = Path(__file__).resolve().parent
 SERVER_PATH = NEXO_CODE / "server.py"
-MANIFEST_PATHS = [NEXO_CODE / "crons" / "manifest.json", NEXO_HOME / "crons" / "manifest.json"]
-ATLAS_PATH = NEXO_HOME / "brain" / "project-atlas.json"
+MANIFEST_PATHS = [NEXO_CODE / "crons" / "manifest.json", paths.crons_dir() / "manifest.json"]
+ATLAS_PATH = paths.brain_dir() / "project-atlas.json"
 
 SECTION_ORDER = (
     "core_tools",

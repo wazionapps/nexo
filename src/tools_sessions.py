@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import paths
 import time
 import secrets
 import threading
@@ -26,7 +27,7 @@ from db import (
 
 KEEPALIVE_INTERVAL = 600  # 10 min — well inside the 15-min TTL
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
-SESSION_PORTABILITY_DIR = NEXO_HOME / "operations" / "session-portability"
+SESSION_PORTABILITY_DIR = paths.operations_dir() / "session-portability"
 
 _keepalive_threads: dict[str, threading.Event] = {}  # sid → stop_event
 

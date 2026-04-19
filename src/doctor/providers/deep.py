@@ -4,6 +4,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
+import paths
 import time
 from pathlib import Path
 
@@ -67,7 +68,7 @@ def _self_audit_enabled() -> bool | None:
 
 def check_self_audit_summary() -> DoctorCheck:
     """Check latest self-audit summary exists and is recent."""
-    summary_file = NEXO_HOME / "logs" / "self-audit-summary.json"
+    summary_file = paths.logs_dir() / "self-audit-summary.json"
     age = _file_age_seconds(summary_file)
 
     if age is None:
@@ -154,7 +155,7 @@ def check_schema_version() -> DoctorCheck:
     """Check DB schema version is present and reasonable."""
     try:
         import sqlite3
-        db_path = NEXO_HOME / "data" / "nexo.db"
+        db_path = paths.db_path()
         if not db_path.is_file():
             return DoctorCheck(
                 id="deep.schema_version",
@@ -187,7 +188,7 @@ def check_schema_version() -> DoctorCheck:
 
 def check_preflight_summary() -> DoctorCheck:
     """Check runtime preflight summary."""
-    summary_file = NEXO_HOME / "logs" / "runtime-preflight-summary.json"
+    summary_file = paths.logs_dir() / "runtime-preflight-summary.json"
     age = _file_age_seconds(summary_file)
 
     if age is None:
@@ -242,7 +243,7 @@ def check_preflight_summary() -> DoctorCheck:
 
 def check_watchdog_smoke() -> DoctorCheck:
     """Check watchdog smoke summary."""
-    summary_file = NEXO_HOME / "logs" / "watchdog-smoke-summary.json"
+    summary_file = paths.logs_dir() / "watchdog-smoke-summary.json"
     age = _file_age_seconds(summary_file)
 
     if age is None:
@@ -300,7 +301,7 @@ def check_learning_count() -> DoctorCheck:
     """Check learning count as a health proxy."""
     try:
         import sqlite3
-        db_path = NEXO_HOME / "data" / "nexo.db"
+        db_path = paths.db_path()
         if not db_path.is_file():
             return DoctorCheck(
                 id="deep.learning_count",

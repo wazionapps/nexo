@@ -10,6 +10,7 @@ This is separate from plugins/update.py which handles MANUAL updates with rollba
 import json
 import hashlib
 import os
+import paths
 import re
 import shutil
 import subprocess
@@ -32,7 +33,7 @@ except ModuleNotFoundError as exc:
         return False
 
 NEXO_HOME = export_resolved_nexo_home()
-DATA_DIR = NEXO_HOME / "data"
+DATA_DIR = paths.data_dir()
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 # Repo root: go up from src/
@@ -212,10 +213,10 @@ def _write_last_check(data: dict):
 def _sync_watchdog_hash_registry():
     """Keep the immutable-hash registry aligned with the installed watchdog script."""
     try:
-        watchdog_file = NEXO_HOME / "scripts" / "nexo-watchdog.sh"
+        watchdog_file = paths.core_scripts_dir() / "nexo-watchdog.sh"
         if not watchdog_file.exists():
             return
-        registry_file = NEXO_HOME / "scripts" / ".watchdog-hashes"
+        registry_file = paths.core_scripts_dir() / ".watchdog-hashes"
         entries: dict[str, str] = {}
         if registry_file.exists():
             for line in registry_file.read_text().splitlines():
@@ -523,7 +524,7 @@ def _refresh_installed_manifest():
     try:
         import shutil
         src_crons = SRC_DIR / "crons"
-        dst_crons = NEXO_HOME / "crons"
+        dst_crons = paths.crons_dir()
         if src_crons.exists():
             dst_crons.mkdir(parents=True, exist_ok=True)
             for f in src_crons.iterdir():
@@ -537,17 +538,17 @@ def _refresh_installed_manifest():
 def _cleanup_retired_runtime_files():
     """Remove retired core files that should not survive updates."""
     retired = [
-        NEXO_HOME / "scripts" / "nexo-day-orchestrator.sh",
-        NEXO_HOME / "scripts" / "heartbeat-enforcement.py",
-        NEXO_HOME / "scripts" / "heartbeat-posttool.sh",
-        NEXO_HOME / "scripts" / "heartbeat-user-msg.sh",
-        NEXO_HOME / "hooks" / "heartbeat-guard.sh",
+        paths.core_scripts_dir() / "nexo-day-orchestrator.sh",
+        paths.core_scripts_dir() / "heartbeat-enforcement.py",
+        paths.core_scripts_dir() / "heartbeat-posttool.sh",
+        paths.core_scripts_dir() / "heartbeat-user-msg.sh",
+        paths.core_hooks_dir() / "heartbeat-guard.sh",
     ]
     conditional_retired = [
-        (NEXO_HOME / "scripts" / "nexo-postcompact.sh", NEXO_HOME / "hooks" / "post-compact.sh"),
-        (NEXO_HOME / "scripts" / "nexo-memory-precompact.sh", NEXO_HOME / "hooks" / "pre-compact.sh"),
-        (NEXO_HOME / "scripts" / "nexo-memory-stop.sh", NEXO_HOME / "hooks" / "session-stop.sh"),
-        (NEXO_HOME / "scripts" / "nexo-session-briefing.sh", NEXO_HOME / "hooks" / "session-start.sh"),
+        (paths.core_scripts_dir() / "nexo-postcompact.sh", paths.core_hooks_dir() / "post-compact.sh"),
+        (paths.core_scripts_dir() / "nexo-memory-precompact.sh", paths.core_hooks_dir() / "pre-compact.sh"),
+        (paths.core_scripts_dir() / "nexo-memory-stop.sh", paths.core_hooks_dir() / "session-stop.sh"),
+        (paths.core_scripts_dir() / "nexo-session-briefing.sh", paths.core_hooks_dir() / "session-start.sh"),
     ]
     for target in retired:
         try:
@@ -692,7 +693,7 @@ def _rotate_auto_update_backups(prefix: str, keep: int = AUTO_UPDATE_BACKUP_KEEP
     """
     if keep <= 0:
         return 0
-    base = NEXO_HOME / "backups"
+    base = paths.backups_dir()
     if not base.is_dir():
         return 0
     try:
@@ -721,7 +722,7 @@ def _rotate_auto_update_backups(prefix: str, keep: int = AUTO_UPDATE_BACKUP_KEEP
     return removed
 
 
-SELF_HEAL_STATE_FILE = NEXO_HOME / "operations" / ".self-heal-state.json"
+SELF_HEAL_STATE_FILE = paths.operations_dir() / ".self-heal-state.json"
 SELF_HEAL_COOLDOWN_SECONDS = 6 * 3600  # Never auto-heal twice within 6 h.
 
 
@@ -765,7 +766,7 @@ def _self_heal_if_wiped() -> dict | None:
     if not db_looks_wiped(primary, CRITICAL_TABLES):
         return None
     reference = find_latest_hourly_backup(
-        NEXO_HOME / "backups",
+        paths.backups_dir(),
         max_age_seconds=HOURLY_BACKUP_MAX_AGE,
     )
     if reference is None:
@@ -813,7 +814,7 @@ def _self_heal_if_wiped() -> dict | None:
         time.sleep(0.5)
 
     # Snapshot the current (wiped) state so the heal is reversible.
-    pre_heal_dir = NEXO_HOME / "backups" / f"pre-heal-{time.strftime('%Y-%m-%d-%H%M%S')}"
+    pre_heal_dir = paths.backups_dir() / f"pre-heal-{time.strftime('%Y-%m-%d-%H%M%S')}"
     try:
         import shutil as _shutil
         pre_heal_dir.mkdir(parents=True, exist_ok=True)
@@ -1282,7 +1283,7 @@ def _backup_dbs() -> str | None:
     # validation and rollback paths. Safe no-op when there are none.
     _purge_zero_byte_db_files()
     timestamp = _time.strftime("%Y-%m-%d-%H%M%S")
-    backup_dir = NEXO_HOME / "backups" / f"pre-autoupdate-{timestamp}"
+    backup_dir = paths.backups_dir() / f"pre-autoupdate-{timestamp}"
 
     db_files = list(DATA_DIR.glob("*.db")) if DATA_DIR.is_dir() else []
     db_files += [f for f in NEXO_HOME.glob("*.db") if f.is_file()]
@@ -1353,7 +1354,7 @@ def _sync_hooks():
     """Copy hook scripts from src/hooks/ to NEXO_HOME/hooks/ after a git pull."""
     import shutil
     hooks_src = SRC_DIR / "hooks"
-    hooks_dest = NEXO_HOME / "hooks"
+    hooks_dest = paths.core_hooks_dir()
     if not hooks_src.is_dir():
         return
     hooks_dest.mkdir(parents=True, exist_ok=True)
@@ -1540,7 +1541,7 @@ def _maybe_migrate_legacy_email_config() -> None:
     except Exception:
         return  # m46 not applied yet (older runtime), nothing to do
     try:
-        legacy = NEXO_HOME / "nexo-email" / "config.json"
+        legacy = paths.nexo_email_dir() / "config.json"
         if not legacy.exists():
             return
         if get_email_account("primary"):
@@ -2067,7 +2068,7 @@ def _sync_client_bootstraps(preferences: dict | None = None) -> list[str]:
 
 # ── Main entry point ─────────────────────────────────────────────────
 
-_AUTO_UPDATE_LOCK_FILE = NEXO_HOME / "operations" / ".auto_update.lock"
+_AUTO_UPDATE_LOCK_FILE = paths.operations_dir() / ".auto_update.lock"
 _AUTO_UPDATE_LOCK_STALE_SECONDS = 600  # 10 minutes
 
 
@@ -2265,10 +2266,10 @@ def _auto_update_check_locked() -> dict:
 
     # Backfill evolution-objective.json for existing installs
     try:
-        evo_obj_path = NEXO_HOME / "brain" / "evolution-objective.json"
+        evo_obj_path = paths.brain_dir() / "evolution-objective.json"
         from evolution_cycle import normalize_objective
         if not evo_obj_path.exists():
-            (NEXO_HOME / "brain").mkdir(parents=True, exist_ok=True)
+            (paths.brain_dir()).mkdir(parents=True, exist_ok=True)
             default_objective = {
                 "objective": "Improve operational excellence and reduce repeated errors",
                 "focus_areas": ["error_prevention", "proactivity", "memory_quality"],
@@ -2298,7 +2299,7 @@ def _auto_update_check_locked() -> dict:
 
     # Backfill NEXO_HOME/scripts/ for existing installs
     try:
-        scripts_dest = NEXO_HOME / "scripts"
+        scripts_dest = paths.core_scripts_dir()
         # Deduce NEXO_CODE: env var first, then from __file__ (auto_update.py is in src/)
         nexo_code = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parent)))
         scripts_src = nexo_code / "scripts" if (nexo_code / "scripts").is_dir() else None
@@ -2336,7 +2337,7 @@ def _auto_update_check_locked() -> dict:
     # Backfill doctor package for existing installs
     try:
         doctor_src = SRC_DIR / "doctor"
-        doctor_dest = NEXO_HOME / "doctor"
+        doctor_dest = paths.doctor_dir()
         if doctor_src.is_dir():
             import shutil
             if not doctor_dest.is_dir():
@@ -2391,7 +2392,7 @@ def _auto_update_check_locked() -> dict:
     # Backfill MCP doctor plugin so existing installs expose nexo_doctor.
     try:
         plugin_src = SRC_DIR / "plugins" / "doctor.py"
-        plugin_dest = NEXO_HOME / "plugins" / "doctor.py"
+        plugin_dest = paths.core_plugins_dir() / "doctor.py"
         plugin_dest.parent.mkdir(parents=True, exist_ok=True)
         if plugin_src.is_file() and (not plugin_dest.exists() or plugin_src.stat().st_mtime > plugin_dest.stat().st_mtime):
             import shutil
@@ -2478,8 +2479,8 @@ def _auto_update_check_locked() -> dict:
     return result
 
 
-UPDATE_SUMMARY_FILE = NEXO_HOME / "logs" / "update-last-summary.json"
-UPDATE_HISTORY_FILE = NEXO_HOME / "logs" / "update-history.jsonl"
+UPDATE_SUMMARY_FILE = paths.logs_dir() / "update-last-summary.json"
+UPDATE_HISTORY_FILE = paths.logs_dir() / "update-history.jsonl"
 
 
 def _resolve_sync_source() -> tuple[Path | None, Path | None]:
@@ -2645,7 +2646,7 @@ def _installed_scripts_classification(dest: Path) -> dict[str, str]:
 
 def _backup_runtime_tree(dest: Path = NEXO_HOME) -> str:
     timestamp = time.strftime("%Y-%m-%d-%H%M%S")
-    backup_dir = NEXO_HOME / "backups" / f"runtime-tree-{timestamp}"
+    backup_dir = paths.backups_dir() / f"runtime-tree-{timestamp}"
     backup_dir.mkdir(parents=True, exist_ok=True)
 
     code_dirs = [
@@ -3090,7 +3091,7 @@ def _runtime_busy_reason() -> str | None:
 
 def _write_update_summary(summary: dict):
     try:
-        logs_dir = NEXO_HOME / "logs"
+        logs_dir = paths.logs_dir()
         logs_dir.mkdir(parents=True, exist_ok=True)
         payload = dict(summary)
         payload.setdefault("timestamp", time.strftime("%Y-%m-%dT%H:%M:%S"))

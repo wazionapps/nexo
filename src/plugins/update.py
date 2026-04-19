@@ -2,6 +2,7 @@ from __future__ import annotations
 """Update plugin — pull latest code, backup DBs, run migrations, verify."""
 import json
 import os
+import paths
 import re
 import shutil
 import sqlite3
@@ -84,8 +85,8 @@ CODE_ROOT = _THIS_DIR.parent
 _REPO_CANDIDATE = CODE_ROOT.parent
 
 NEXO_HOME = export_resolved_nexo_home()
-DATA_DIR = NEXO_HOME / "data"
-BACKUP_BASE = NEXO_HOME / "backups"
+DATA_DIR = paths.data_dir()
+BACKUP_BASE = paths.backups_dir()
 
 # In packaged installs, update.py lives at <NEXO_HOME>/plugins/update.py.
 _PACKAGED_INSTALL = not (_REPO_CANDIDATE / ".git").exists() and not (_REPO_CANDIDATE / ".git").is_file()
@@ -161,7 +162,7 @@ def _refresh_installed_manifest():
             return
 
         src_crons = artifact_src / "crons"
-        dst_crons = NEXO_HOME / "crons"
+        dst_crons = paths.crons_dir()
         if src_crons.exists():
             dst_crons.mkdir(parents=True, exist_ok=True)
             for f in src_crons.iterdir():
@@ -193,10 +194,10 @@ def _refresh_installed_manifest():
 def _cleanup_retired_runtime_files() -> list[str]:
     removed: list[str] = []
     retired_paths = [
-        NEXO_HOME / "scripts" / "heartbeat-enforcement.py",
-        NEXO_HOME / "scripts" / "heartbeat-posttool.sh",
-        NEXO_HOME / "scripts" / "heartbeat-user-msg.sh",
-        NEXO_HOME / "hooks" / "heartbeat-guard.sh",
+        paths.core_scripts_dir() / "heartbeat-enforcement.py",
+        paths.core_scripts_dir() / "heartbeat-posttool.sh",
+        paths.core_scripts_dir() / "heartbeat-user-msg.sh",
+        paths.core_hooks_dir() / "heartbeat-guard.sh",
     ]
     for path in retired_paths:
         if not path.exists():
@@ -723,7 +724,7 @@ def _sync_hooks_to_home():
     """Copy hook scripts from src/hooks/ to NEXO_HOME/hooks/ after update."""
     import shutil
     hooks_src = SRC_DIR / "hooks"
-    hooks_dest = NEXO_HOME / "hooks"
+    hooks_dest = paths.core_hooks_dir()
     if not hooks_src.is_dir():
         return
     hooks_dest.mkdir(parents=True, exist_ok=True)
@@ -893,7 +894,7 @@ def _paths_match(src: Path, dest: Path) -> bool:
 
 
 def _sync_packaged_crons(progress_fn=None) -> tuple[bool, str | None]:
-    sync_path = NEXO_HOME / "crons" / "sync.py"
+    sync_path = paths.crons_dir() / "sync.py"
     if not sync_path.is_file():
         _refresh_installed_manifest()
         return True, None
