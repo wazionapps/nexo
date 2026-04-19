@@ -109,7 +109,8 @@ def _check_mcp() -> dict:
 
 
 def _check_errors(hours: int = 24) -> dict:
-    ops_dir = _nexo_home() / "operations"
+    import paths
+    ops_dir = paths.operations_dir()
     out: dict[str, Any] = {"dir": str(ops_dir)}
     if not ops_dir.is_dir():
         out["recent_errors"] = 0
