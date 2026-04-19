@@ -7,8 +7,12 @@ from pathlib import Path
 from types import SimpleNamespace
 
 
-def _reload_auto_update(monkeypatch, home: Path):
+def _reload_auto_update(monkeypatch, home: Path, *, allow_ephemeral: bool = True):
     monkeypatch.setenv("NEXO_HOME", str(home))
+    if allow_ephemeral:
+        monkeypatch.setenv("NEXO_ALLOW_EPHEMERAL_INSTALL", "1")
+    else:
+        monkeypatch.delenv("NEXO_ALLOW_EPHEMERAL_INSTALL", raising=False)
     sys.modules.pop("auto_update", None)
     import auto_update as au
 
@@ -104,4 +108,19 @@ def test_runtime_post_sync_does_not_skip_classifier_when_client_sync_warns(monke
     assert "client-sync-warning" in actions
     assert "classifier-install" in actions
     assert classifier_calls == ["classifier"]
+    assert len(sync_calls) == 1
+
+
+def test_runtime_post_sync_skips_classifier_on_ephemeral_runtime(monkeypatch, tmp_path):
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    au = _reload_auto_update(monkeypatch, tmp_path, allow_ephemeral=False)
+    sync_calls, classifier_calls = _install_post_sync_stubs(monkeypatch, au, sync_ok=True)
+
+    ok, actions = au._run_runtime_post_sync(tmp_path)
+
+    assert ok is True
+    assert "classifier-install" in actions
+    assert classifier_calls == []
     assert len(sync_calls) == 1

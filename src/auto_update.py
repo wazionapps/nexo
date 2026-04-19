@@ -15,6 +15,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -531,6 +532,64 @@ def _should_skip_shell_profile_backfill() -> tuple[bool, str]:
     if not same:
         return True, f"NEXO_HOME={NEXO_HOME} is not the canonical {canonical}"
     return False, ""
+
+
+def _normalize_runtime_probe_path(candidate: str | os.PathLike[str] | None) -> str:
+    if not candidate:
+        return ""
+    try:
+        resolved = Path(candidate).expanduser().resolve(strict=False)
+    except Exception:
+        try:
+            resolved = Path(candidate).expanduser()
+        except Exception:
+            return ""
+    normalized = str(resolved).replace("\\", "/").rstrip("/")
+    return normalized
+
+
+def _is_within_path(candidate: str, root: str) -> bool:
+    return bool(candidate) and bool(root) and (candidate == root or candidate.startswith(f"{root}/"))
+
+
+def _is_ephemeral_runtime_install(runtime_root: Path | None = None) -> bool:
+    """Return True for pytest/CI temp installs that should skip heavyweight bootstrap.
+
+    Mirrors the installer's ``isEphemeralInstall()`` contract: real product
+    installs should still bootstrap the local classifier automatically, but
+    sandboxed test runtimes under ``/tmp`` / macOS ``/var/folders`` must not
+    spend minutes installing large ML dependencies during ``nexo update``.
+    """
+    if str(os.environ.get("NEXO_ALLOW_EPHEMERAL_INSTALL", "")).strip() == "1":
+        return False
+
+    temp_roots: set[str] = set()
+    for root in (
+        tempfile.gettempdir(),
+        "/tmp",
+        "/private/tmp",
+        "/var/folders",
+        "/private/var/folders",
+    ):
+        normalized = _normalize_runtime_probe_path(root)
+        if not normalized:
+            continue
+        temp_roots.add(normalized)
+        if normalized == "/tmp":
+            temp_roots.add("/private/tmp")
+        elif normalized == "/private/tmp":
+            temp_roots.add("/tmp")
+        elif normalized.startswith("/var/"):
+            temp_roots.add(f"/private{normalized}")
+        elif normalized.startswith("/private/var/"):
+            temp_roots.add(normalized.removeprefix("/private"))
+
+    user_home = _normalize_runtime_probe_path(os.environ.get("HOME", str(Path.home())))
+    runtime_home = _normalize_runtime_probe_path(runtime_root or NEXO_HOME)
+    for candidate in (runtime_home, user_home):
+        if any(_is_within_path(candidate, root) for root in temp_roots):
+            return True
+    return False
 
 
 def _ensure_runtime_cli_in_shell():
@@ -4148,7 +4207,12 @@ def _run_runtime_post_sync(dest: Path = NEXO_HOME, progress_fn=None) -> tuple[bo
 
     try:
         _emit_progress(progress_fn, "Ensuring local classifier baseline...")
-        _maybe_install_local_classifier()
+        if _is_ephemeral_runtime_install(dest):
+            _write_classifier_install_log(
+                f"[classifier-install] skipped on ephemeral runtime: {dest}"
+            )
+        else:
+            _maybe_install_local_classifier()
         actions.append("classifier-install")
     except Exception as exc:
         actions.append(f"classifier-install-warning:{exc.__class__.__name__}")
