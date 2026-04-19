@@ -192,7 +192,7 @@ def _debt_fingerprint(debt_block):
     text = (debt_block or "").strip()
     if not text:
         return ""
-    return hashlib.sha1(text.encode("utf-8")).hexdigest()
+    return hashlib.sha1(text.encode("utf-8"), usedforsecurity=False).hexdigest()
 
 
 def load_empty_inbox_backoff_state():
