@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Blog — NEXO Brain</title>
-    <meta name="description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.1.0 contract-closure release and the 7.0.x F0.6 migration follow-up.">
+    <meta name="description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.1.1 updater hotfix and the 7.1.0 post-F0.6 contract-closure release.">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://nexo-brain.com/blog/">
 
@@ -12,7 +12,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://nexo-brain.com/blog/">
     <meta property="og:title" content="Blog — NEXO Brain">
-    <meta property="og:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.1.0 contract-closure release and the 7.0.x F0.6 migration follow-up.">
+    <meta property="og:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.1.1 updater hotfix and the 7.1.0 post-F0.6 contract-closure release.">
     <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -20,7 +20,7 @@
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Blog — NEXO Brain">
-    <meta name="twitter:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.1.0 contract-closure release and the 7.0.x F0.6 migration follow-up.">
+    <meta name="twitter:description" content="Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.1.1 updater hotfix and the 7.1.0 post-F0.6 contract-closure release.">
     <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
 
     <script type="application/ld+json">
@@ -28,7 +28,7 @@
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         "name": "Blog — NEXO Brain",
-        "description": "Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.1.0 contract-closure release and the 7.0.x F0.6 migration follow-up.",
+        "description": "Articles on AI agent memory, cognitive runtimes, release engineering, and the science behind NEXO Brain, including the current 7.1.1 updater hotfix and the 7.1.0 post-F0.6 contract-closure release.",
         "url": "https://nexo-brain.com/blog/",
         "isPartOf": {
             "@type": "WebSite",
@@ -134,7 +134,7 @@
                     <span class="page-chip">Shared brain product notes</span>
                 </div>
                 <div class="hero-actions" style="justify-content:flex-start;">
-                    <a href="/blog/nexo-7-1-0/" class="btn btn-primary">Read latest release</a>
+                    <a href="/blog/nexo-7-1-1/" class="btn btn-primary">Read latest release</a>
                     <a href="/changelog/" class="btn btn-secondary">Latest release notes</a>
                     <a href="/evolution/" class="btn btn-secondary">See Evolution</a>
                 </div>
@@ -143,24 +143,24 @@
             <div class="blog-featured-card">
                 <div class="section-label">Latest release</div>
                 <div class="blog-featured-meta">
-                    <span class="compare-chip">April 19, 2026</span>
-                    <span class="compare-chip">Minor release</span>
-                    <span class="compare-chip">Runtime / product contract</span>
+                    <span class="compare-chip">April 20, 2026</span>
+                    <span class="compare-chip">Hotfix</span>
+                    <span class="compare-chip">Updater reliability</span>
                 </div>
-                <h2>NEXO 7.1.0: post-F0.6 contract closure — runtime, Guardian, automations</h2>
-                <p>v7.1.0 turns the F0.6 migration into a stable product contract: canonical <code>~/.nexo/core</code> runtime root, Brain-generated Guardian surfaces for Desktop, configurable core automations, richer email routing, and local classifier auto-install.</p>
+                <h2>NEXO 7.1.1: hotfix — packaged updater vs F0.6 shims</h2>
+                <p>v7.1.1 fixes the next real packaged-install edge after 7.1.0: the updater no longer mistakes <code>~/.nexo/core</code> for a mutable source repo, and F0.6 compatibility shims stop breaking real update/rollback flows.</p>
                 <div class="hero-actions" style="justify-content:flex-start;margin-bottom:18px;">
-                    <a href="/blog/nexo-7-1-0/" class="btn btn-primary">Open article</a>
-                    <a href="/changelog/#v710" class="btn btn-secondary">Open changelog</a>
+                    <a href="/blog/nexo-7-1-1/" class="btn btn-primary">Open article</a>
+                    <a href="/changelog/#v711" class="btn btn-secondary">Open changelog</a>
                 </div>
                 <div class="blog-mini-stack">
                     <div class="blog-mini-card">
                         <strong>Companion view</strong>
-                        <span><a href="/changelog/#v710">See the full v7.1.0 changelog</a></span>
+                        <span><a href="/changelog/#v711">See the full v7.1.1 changelog</a></span>
                     </div>
                     <div class="blog-mini-card">
                         <strong>Previous release</strong>
-                        <span><a href="/blog/nexo-7-0-1/">NEXO 7.0.1: hotfix — db._core.DB_PATH transition-aware</a>.</span>
+                        <span><a href="/blog/nexo-7-1-0/">NEXO 7.1.0: post-F0.6 contract closure — runtime, Guardian, automations</a>.</span>
                     </div>
                 </div>
             </div>
@@ -172,6 +172,13 @@
 <section class="section-flush-top">
     <div class="container">
         <div class="blog-grid">
+
+            <div class="blog-card">
+                <div class="blog-card-date">April 20, 2026</div>
+                <h2><a href="/blog/nexo-7-1-1/">NEXO 7.1.1: hotfix — packaged updater vs F0.6 shims</a></h2>
+                <p>Hotfix over v7.1.0. Packaged installs no longer confuse <code>~/.nexo/core</code> with a mutable source repo, and compatibility shims such as <code>db</code>, <code>cognitive</code>, <code>skills-core</code>, root Python modules, and script/plugin links stop breaking real updates and rollbacks.</p>
+                <a href="/blog/nexo-7-1-1/" class="read-more">Read more &rarr;</a>
+            </div>
 
             <div class="blog-card">
                 <div class="blog-card-date">April 19, 2026</div>

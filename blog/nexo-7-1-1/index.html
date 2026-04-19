@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXO 7.1.1: hotfix — packaged updater vs F0.6 shims</title>
+<meta name="description" content="NEXO Brain v7.1.1 hotfix over v7.1.0. Packaged installs no longer mistake ~/.nexo/core for a mutable source repo, and compatibility shims stop breaking real updates and rollbacks.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://nexo-brain.com/blog/nexo-7-1-1/">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"NEXO 7.1.1: hotfix — packaged updater vs F0.6 shims","datePublished":"2026-04-20","author":{"@type":"Person","name":"Francisco Cerda Puigserver"},"publisher":{"@type":"Organization","name":"WAzion"}}</script>
+</head><body><main><article style="max-width:760px;margin:80px auto;padding:0 24px;line-height:1.75;">
+<h1>NEXO 7.1.1 — packaged updater hotfix</h1>
+<p><em>Published 2026-04-20. Hotfix over v7.1.0.</em></p>
+<p>The <code>7.1.0</code> line closed the post-F0.6 runtime contract, but a real packaged install still exposed one more updater edge: the runtime launcher resolves code under <code>~/.nexo/core</code>, and the updater was still willing to treat that path as a mutable source tree. Combined with F0.6 compatibility shims such as <code>db</code>, <code>cognitive</code>, <code>skills-core</code>, root Python module links, and script/plugin shims, that could break <code>nexo update</code> with <code>FileExistsError</code> or same-file copy collisions.</p>
+<h2>Fix</h2>
+<p><code>src/auto_update.py</code> now distinguishes packaged installs from true source-linked runtimes. A packaged runtime only re-enters source-sync mode when <code>version.json.source</code> explicitly points at a real repo. The copy/restore path is also shim-aware, so symlinks and root compatibility files are removed explicitly before replay.</p>
+<h2>Impact</h2>
+<p>Packaged installs update cleanly again. Source-linked installs keep working too, because the same shim-aware copy logic now handles F0.6 compatibility links safely during sync and rollback.</p>
+<h2>Verification</h2>
+<p>The failure was reproduced against Francisco&rsquo;s live runtime before the fix and then re-run after the patch. The corrected runtime now completes both the source-linked sync path and the installed <code>~/.nexo/bin/nexo update --json --no-clis</code> path successfully.</p>
+</article></main></body></html>
