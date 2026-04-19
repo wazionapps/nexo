@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEXO 6.4.0: Multi-tenant email accounts + Desktop bridge for non-technical operators</title>
+    <meta name="description" content="NEXO Brain v6.4.0 ships Plan Consolidado fase F1: a new email_accounts table with passwords stored in the existing credentials table (never duplicated), an interactive `nexo email setup` wizard for first-time operators, and a non-interactive `nexo email add --password-stdin --json` that lets the new NEXO Desktop v0.19.0 Email panel configure mailboxes without operators ever touching a config file. An idempotent migrator promotes the legacy ~/.nexo/nexo-email/config.json transparently on next session.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://nexo-brain.com/blog/nexo-6-4-0/">
+
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nexo-brain.com/blog/nexo-6-4-0/">
+    <meta property="og:title" content="NEXO 6.4.0: Multi-tenant email accounts + Desktop bridge for non-technical operators">
+    <meta property="og:description" content="Plan Consolidado fase F1: email_accounts table, nexo email setup wizard, password-stdin JSON CLI for the Desktop bridge, automatic migrator from the legacy single-tenant config.">
+    <meta property="og:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+    <meta property="article:published_time" content="2026-04-19">
+    <meta property="article:author" content="Francisco Cerda Puigserver">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="NEXO 6.4.0: Multi-tenant email accounts">
+    <meta name="twitter:description" content="A new email_accounts table, an interactive setup wizard, a password-stdin JSON CLI for the NEXO Desktop bridge, and an idempotent migrator from the legacy config. Non-technical operators never touch a JSON file.">
+    <meta name="twitter:image" content="https://nexo-brain.com/assets/og/og-blog.png">
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+    <link rel="stylesheet" href="/assets/style.css">
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "NEXO 6.4.0: Multi-tenant email accounts + Desktop bridge for non-technical operators",
+        "description": "Plan Consolidado fase F1. New email_accounts table, nexo email setup wizard, password-stdin JSON CLI for the NEXO Desktop v0.19.0 Email panel, idempotent migrator from legacy single-tenant ~/.nexo/nexo-email/config.json.",
+        "datePublished": "2026-04-19",
+        "dateModified": "2026-04-19",
+        "author": {"@type": "Person", "name": "Francisco Cerda Puigserver"},
+        "publisher": {"@type": "Organization", "name": "WAzion", "url": "https://www.wazion.com"},
+        "mainEntityOfPage": {"@type": "WebPage", "@id": "https://nexo-brain.com/blog/nexo-6-4-0/"},
+        "url": "https://nexo-brain.com/blog/nexo-6-4-0/",
+        "image": "https://nexo-brain.com/assets/og/og-blog.png",
+        "keywords": ["NEXO 6.4.0", "email_accounts", "multi-tenant", "nexo email", "Plan Consolidado F1", "Desktop bridge", "password-stdin"]
+    }
+    </script>
+</head>
+<body>
+<main>
+<article class="article-body" style="max-width: 760px; margin: 80px auto; padding: 0 24px; line-height: 1.75;">
+    <h1>NEXO 6.4.0 — Multi-tenant email accounts + Desktop bridge</h1>
+    <p><em>Published 2026-04-19. Plan Consolidado fase F1.</em></p>
+
+    <h2>What changes</h2>
+    <p>v6.4.0 introduces a new <code>email_accounts</code> table (migration <code>m46</code>) so a single NEXO Brain install can now own more than one mailbox at the same time, each with its own IMAP / SMTP coords, role (<code>inbox</code> / <code>outbox</code> / <code>both</code>), enabled flag, operator notification address, and trusted-domain list. Passwords are <strong>not</strong> stored in this table &mdash; only a pointer (<code>credential_service</code> + <code>credential_key</code>) into the existing <code>credentials</code> table that already holds every other secret on the box. One DB, one credentials surface, one CLI.</p>
+
+    <p>On top of the table sits a <code>nexo email</code> subcommand tree built for two very different consumers:</p>
+    <ul>
+        <li><strong>Operators on a terminal</strong> &mdash; <code>nexo email setup</code> is an interactive wizard. It asks one question at a time (label, address, IMAP / SMTP coords, password through <code>getpass</code>, operator email, trusted senders, role), confirms, stores the password in the credentials table, and offers an IMAP+SMTP test on the spot. Designed for someone who would never open a JSON file and who shouldn't have to.</li>
+        <li><strong>NEXO Desktop &amp; scripts</strong> &mdash; <code>nexo email add --label X --email X --imap-host X --smtp-host X --role both --password-stdin --json</code> is the non-interactive variant. The password is read from stdin (never on argv), so it never appears in <code>ps</code>. <code>list</code>, <code>test</code>, and <code>remove</code> all accept <code>--json</code> too, with stable shapes documented inside <code>cli_email.py</code>.</li>
+    </ul>
+
+    <h2>Why this matters</h2>
+    <p>The legacy config lived at <code>~/.nexo/nexo-email/config.json</code>. It was single-tenant, stored the password in cleartext next to other settings, and was invisible to the rest of the runtime DB. F1 unifies email config with everything else: one DB, one credentials table, one CLI, and a stable JSON contract for any UI that wants to drive it.</p>
+
+    <p>The matching <a href="https://github.com/wazionapps/nexo-desktop">NEXO Desktop release (v0.19.0)</a> ships a <em>Settings &rarr; Email</em> panel that does exactly that &mdash; lists every configured account, lets you add a new one through a small modal form, runs the IMAP+SMTP probe, and removes accounts with a confirm dialog. Operators who can't (or shouldn't) edit JSON now have a real surface, and the same Brain code keeps powering the terminal wizard for the people who prefer it.</p>
+
+    <h2>Backwards compatibility</h2>
+    <p>Existing installs are not asked to do anything. The <code>email_config.load_email_config()</code> loader prefers the new table and falls back to the legacy JSON if the table is empty, so today's operators keep running. On the next session, <code>auto_update.py</code> calls <code>_maybe_migrate_legacy_email_config()</code>, which runs the new <code>src/scripts/nexo-email-migrate-config.py</code> exactly once: it reads the legacy file, inserts a credential into <code>credentials</code> and an account row into <code>email_accounts</code> with <code>label='primary'</code>, and is idempotent &mdash; if the migration already ran, it short-circuits.</p>
+
+    <p>The two existing email runners (<code>nexo-email-monitor.py</code> and <code>nexo-send-reply.py</code>) were retrofitted to call <code>load_email_config()</code> first and to fall back to the legacy JSON path only if the loader returns nothing. Behaviour is identical for any operator still on the old config.</p>
+
+    <h2>What's not in this release</h2>
+    <p>F0.6 (the breaking physical migration of <code>~/.nexo/scripts</code> &rarr; <code>~/.nexo/core/scripts</code> + <code>~/.nexo/personal/scripts</code> with the safe-symlink layer removed) is intentionally deferred to <code>v7.0.0</code>. v6.4.0 is a non-breaking minor: the safe symlinks the previous wave introduced still cover the old paths.</p>
+
+    <h2>Tests &amp; auditing</h2>
+    <p>8 new tests in <code>tests/test_email_accounts.py</code> exercise the CRUD module (add+list, upsert by label, role validation, remove, primary picker), the loader (prefers table, falls back to JSON), and the migrator end-to-end. The PR was reviewed by the second-pass nightly auditor (Opus 4.7 effort=xhigh) before merge; bandit's B324 SHA1 finding on <code>_debt_fingerprint</code> was resolved by passing <code>usedforsecurity=False</code> (the call is a content fingerprint for dedup, not a security hash).</p>
+</article>
+</main>
+</body>
+</html>
