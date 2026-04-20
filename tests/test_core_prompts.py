@@ -69,6 +69,10 @@ def test_prompt_catalog_dir_exists_and_contains_automation_prompts():
     assert (core_prompts.PROMPTS_DIR / "r24-stale-memory-injection.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "r25-read-only-host-injection.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "sleep.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "t4-r15-project-context-gate.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "t4-r23e-force-push-gate.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "t4-r23f-db-no-where-gate.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "t4-r23h-shebang-mismatch-gate.md").is_file()
 
 
 def test_render_core_prompt_replaces_named_tokens():

@@ -23,6 +23,8 @@ import hashlib
 import time
 from typing import Any, Callable, Optional
 
+from core_prompts import render_core_prompt
+
 _TTL_SECONDS = 5 * 60
 _MAX_ENTRIES = 256
 
@@ -75,99 +77,30 @@ def classify_with_llm(
     return verdict
 
 
-PROMPTS: dict[str, dict] = {
-    "R15": {
-        "instruction": (
-            "Decide whether the user just started work on a project without the "
-            "agent having pulled the project context (atlas, git log, project "
-            "files). Answer \"yes\" if a context pull is required, \"no\" if the "
-            "turn is conversational / off-topic / meta."
-        ),
-        "positives": [
-            "User: \"Vamos a arreglar el bug del checkout\" → yes",
-            "User: \"Hazme un refactor del login de CanaRirural\" → yes",
-            "User: \"Revisa la PR del orchestrator\" → yes",
-        ],
-        "negatives": [
-            "User: \"qué hora es\" → no",
-            "User: \"gracias, ya está\" → no",
-            "User: \"dime un chiste\" → no",
-        ],
-    },
-    "R23e": {
-        "instruction": (
-            "Decide whether the proposed `git push --force` command would actually "
-            "rewrite a protected branch (main, master, production, release-*). "
-            "Answer \"yes\" if the target is protected, \"no\" if it targets a "
-            "personal branch, a temporary backup branch, or is clearly a local-only "
-            "operation that the user explicitly authorised."
-        ),
-        "positives": [
-            "`git push --force origin main` → yes",
-            "`git push -f origin production` → yes",
-            "`git push --force origin release-2026-04` → yes",
-        ],
-        "negatives": [
-            "`git push --force origin my-feature` → no",
-            "`git push --force-with-lease origin main` → no",
-            "`git push --force origin backup-before-refactor` → no",
-        ],
-    },
-    "R23f": {
-        "instruction": (
-            "Decide whether the SQL statement performs DELETE/UPDATE without a "
-            "WHERE clause against a production table. Answer \"yes\" if it is an "
-            "unscoped destructive write, \"no\" if it is a well-scoped delete, a "
-            "DDL command, or a scratch table known to be temporary."
-        ),
-        "positives": [
-            "`DELETE FROM orders` → yes",
-            "`UPDATE users SET active=0` → yes",
-            "`DELETE FROM clients` → yes",
-        ],
-        "negatives": [
-            "`DELETE FROM orders WHERE id = 123` → no",
-            "`TRUNCATE TABLE tmp_scratch` → no",
-            "`UPDATE users SET last_login = NOW() WHERE id = 42` → no",
-        ],
-    },
-    "R23h": {
-        "instruction": (
-            "Decide whether the shebang of the script disagrees with the "
-            "interpreter that will actually be invoked. Answer \"yes\" if the "
-            "mismatch will break execution, \"no\" otherwise."
-        ),
-        "positives": [
-            "\"#!/usr/bin/env python3\" + bash body with `for i in $(seq 1 10); do` → yes",
-            "\"#!/bin/sh\" + bashisms like `[[ ${foo} == \"bar\" ]]` → yes",
-            "\"#!/usr/bin/env node\" + bash heredoc body → yes",
-        ],
-        "negatives": [
-            "\"#!/usr/bin/env python3\" + real Python body → no",
-            "\"#!/bin/bash\" + bash arrays → no",
-            "Python script with no shebang at all → no",
-        ],
-    },
+PROMPT_TEMPLATE_NAMES: dict[str, str] = {
+    "R15": "t4-r15-project-context-gate",
+    "R23e": "t4-r23e-force-push-gate",
+    "R23f": "t4-r23f-db-no-where-gate",
+    "R23h": "t4-r23h-shebang-mismatch-gate",
 }
 
 
 def build_prompt(rule_id: str, *, span: str = "", context: str = "") -> Optional[str]:
-    p = PROMPTS.get(rule_id)
-    if p is None:
+    template_name = PROMPT_TEMPLATE_NAMES.get(rule_id)
+    if template_name is None:
         return None
-    examples = "\n".join(
-        ["+ " + e for e in p["positives"]] + ["- " + e for e in p["negatives"]]
-    )
-    body = p["instruction"] + "\n\nExamples:\n" + examples
-    body += "\n\nNow decide. Input:\n" + (span or "")
+    context_section = ""
     if context:
-        body += "\n\nAdditional context:\n" + context
-    body += "\n\nAnswer exactly \"yes\" or \"no\"."
-    return body
+        context_section = "\n\nAdditional context:\n" + context
+    return render_core_prompt(
+        template_name,
+        span=(span or ""),
+        context_section=context_section,
+    )
 
 
 __all__ = [
-    "PROMPTS",
+    "PROMPT_TEMPLATE_NAMES",
     "build_prompt",
     "classify_with_llm",
     "_cache",
