@@ -58,6 +58,7 @@ from automation_controls import (
     get_send_reply_script_path,
 )
 from client_preferences import resolve_automation_backend, resolve_client_runtime_profile
+from core_prompts import render_core_prompt
 import db as nexo_db
 
 NEXO_DB = db_path()
@@ -126,40 +127,37 @@ def record_attempt(state: dict, fu_id: str, status: str):
     }
 
 
-def _legacy_operator_attention_hint(text: str, operator_name: str = "") -> bool:
-    desc_lower = str(text or "").lower()
-    if not desc_lower:
+def _operator_attention_label_set(operator_name: str = "") -> tuple[str, str, str]:
+    clean_operator = " ".join(str(operator_name or "").split()).strip()
+    subject = clean_operator if clean_operator else "the operator"
+    return (
+        f"this pending item needs {subject} to decide, approve, reply, or provide missing input before the automation can continue",
+        "this pending item can continue without operator input and the automation should keep working on its own",
+        "this pending item is only waiting on a customer, vendor, colleague, or external system rather than on the operator",
+    )
+
+
+def _fallback_operator_attention_hint(followup: dict) -> bool:
+    """Last-resort structural fallback.
+
+    Keep this intentionally narrow: product direction is semantic
+    classification via the local classifier / LLM gate, not bilingual
+    keyword lists wired to specific phrasings.
+    """
+    status = str(followup.get("status") or "").strip().lower()
+    owner = str(followup.get("owner") or "").strip().lower()
+    if status in {"needs_decision", "waiting_user"}:
+        return True
+    if owner == "user":
+        return True
+    if owner == "waiting":
         return False
-    probes = [
-        "esperar respuesta",
-        "preguntar al operador",
-        "decision del operador",
-        "decisión del operador",
-        "ask the operator",
-        "need operator input",
-        "waiting for operator",
-        "operator decision",
-        "owner decision",
-    ]
-    clean_operator = str(operator_name or "").strip().lower()
-    if clean_operator and clean_operator not in {"the operator", "operator"}:
-        probes.extend([
-            f"{clean_operator} debe",
-            f"{clean_operator} dice",
-            f"preguntar a {clean_operator}",
-            f"decisión de {clean_operator}",
-            f"decision de {clean_operator}",
-            f"ask {clean_operator}",
-            f"check with {clean_operator}",
-            f"waiting for {clean_operator}",
-            f"{clean_operator} respond",
-        ])
-    return any(token in desc_lower for token in probes)
+    return False
 
 
-def _classifier_requires_operator_attention(text: str) -> bool | None:
+def _classifier_requires_operator_attention(text: str, operator_name: str = "") -> bool | None:
     clean_text = " ".join(str(text or "").split())
-    if len(clean_text) < 24:
+    if len(clean_text) < 12:
         return None
     try:
         from classifier_local import LocalZeroShotClassifier
@@ -170,34 +168,31 @@ def _classifier_requires_operator_attention(text: str) -> bool | None:
     if not classifier.is_available():
         return None
 
-    result = classifier.classify(
-        clean_text,
-        labels=(
-            "operator_action_required",
-            "agent_can_continue",
-            "waiting_on_external_party",
-        ),
-    )
+    needs_attention, can_continue, waiting_external = _operator_attention_label_set(operator_name)
+    result = classifier.classify(clean_text, labels=(needs_attention, can_continue, waiting_external))
     if result is None or result.confidence < 0.72:
         return None
-    if result.label == "operator_action_required":
+    if result.label == needs_attention:
         return True
-    if result.label in {"agent_can_continue", "waiting_on_external_party"}:
+    if result.label in {can_continue, waiting_external}:
         return False
     return None
 
 
-def _llm_requires_operator_attention(text: str) -> bool | None:
+def _llm_requires_operator_attention(text: str, operator_name: str = "") -> bool | None:
     clean_text = " ".join(str(text or "").split())
     if len(clean_text) < 24:
         return None
+    clean_operator = " ".join(str(operator_name or "").split()).strip()
+    subject = clean_operator if clean_operator else "the operator"
     question = (
-        "Does this pending item clearly require operator attention, input, "
-        "approval, or a decision before the automation can continue?"
+        f"Does this pending item clearly require {subject} to intervene with "
+        "input, approval, a reply, or a decision before the automation can continue?"
     )
     context = (
         "Answer yes only when the operator must decide, approve, reply, or provide missing input. "
-        "Answer no when the automation can continue on its own or the item is mainly waiting on an external party.\n\n"
+        "Answer no when the automation can continue on its own or the item is mainly waiting on an external party. "
+        "Treat references in any language as normal task text; do not depend on literal keyword matching.\n\n"
         f"Pending item:\n{clean_text}"
     )
     try:
@@ -236,13 +231,19 @@ def _followup_needs_operator_attention(followup: dict, operator_name: str = "") 
         )
         if part
     )
-    classifier_verdict = _classifier_requires_operator_attention(semantic_text)
+    classifier_verdict = _classifier_requires_operator_attention(
+        semantic_text,
+        operator_name=operator_name,
+    )
     if classifier_verdict is not None:
         return classifier_verdict
-    llm_verdict = _llm_requires_operator_attention(semantic_text)
+    llm_verdict = _llm_requires_operator_attention(
+        semantic_text,
+        operator_name=operator_name,
+    )
     if llm_verdict is not None:
         return llm_verdict
-    return _legacy_operator_attention_hint(semantic_text, operator_name=operator_name)
+    return _fallback_operator_attention_hint(followup)
 
 
 def get_all_active_followups(state: dict) -> dict:
@@ -692,86 +693,24 @@ Do not repeat queries, verifications, or operator emails that already happened t
 """
 
     proactive_block = ""
-
-    return f"""You are {assistant_name} running automated followups in headless mode (no user present).
-{"You have " + str(len(actionable)) + " followups to EXECUTE — not to classify." if actionable else "There are no pending followups. Enter PROACTIVE MODE."}
-
-{followup_text}
-{recent_block}
-{proactive_block}
-{extra_instructions_block}
-
-== STARTUP AND SHUTDOWN ==
-
-Start:
-- `nexo_startup(task="followup-runner-cycle")`
-- `nexo_smart_startup`
-- `nexo_heartbeat(sid=SID, task="followup-runner")`
-
-During:
-- use periodic heartbeats
-- use the real NEXO runtime with any MCPs you need
-
-Finish:
-- `nexo_session_diary_write(domain="followup-runner", summary="executed followups and blockers")`
-- `nexo_stop(sid=SID)`
-
-== AVAILABLE TOOLS ==
-Read, Write, Edit, Glob, Grep, Bash, plus every NEXO MCP available in this runtime.
-To send email to the operator (reports, alerts, proposals), use `subprocess` + `{sys.executable} {send_reply_script} --to {send_target} --subject ... --body-file /tmp/...`. The `nexo_email_send` tool does NOT exist in the MCP runtime.
-
-== CRITICAL INSTRUCTIONS ==
-
-YOUR JOB IS TO EXECUTE, NOT TO CLASSIFY.
-
-For EACH followup:
-1. Read the real followup through MCP: `nexo_followup_get(id="...")`. History is the source of truth.
-2. DO IT. Execute the real work: run queries, edit files, call APIs, whatever is required.
-3. If you need to preserve operating context (asked, waited, verified, blocked by X), use `nexo_followup_note(...)`. Do NOT overwrite `verification` with operational diary text.
-4. If it has recurrence: execute the work and report the result. Do NOT call `nexo_followup_complete`.
-5. If it has no recurrence and you finished it: call `nexo_followup_complete(id="...", result="what you did")`.
-6. Use `"needs_decision"` ONLY if {operator_name} truly must choose among concrete options.
-7. Use `"blocked"` ONLY if execution is impossible (host down, missing credentials, real external blocker).
-8. If a followup requires an operator-facing email (reports, alerts, proposals), SEND IT with `{sys.executable} {send_reply_script} --to {send_target} --subject ... --body-file /tmp/...` (subprocess/Bash). `nexo_email_send` does not exist in MCP. Never hide an important outcome as an internal note when the operator actually needs to see it.
-9. If you detect an obvious technical issue (broken cron, failed backup, service down), FIX IT first and report after.
-
-DO NOT DO THIS:
-- Do NOT classify everything as `"needs_decision"` — that is avoidance, not execution.
-- Do NOT say "someone should do X" — DO IT.
-- Do NOT postpone work you can do right now.
-- If you already have the tools needed to solve it, SOLVE IT.
-- Do NOT repeat work you already did in the last 24h (review the context above).
-
-WRITE RESULTS to {results_path}:
-
-```json
-{{
-  "results": [
-    {{
-      "id": "NF-XXX",
-      "status": "completed|checked|needs_decision|blocked|proactive",
-      "summary": "What you DID (not what you would do). Concrete data: metrics, values, URLs. 2-4 sentences.",
-      "needs_attention": false,
-      "options": null
-    }}
-  ]
-}}
-```
-
-Statuses:
-- completed: you DID the work and it is resolved (non-recurring only)
-- checked: you EXECUTED the verification and everything is OK (recurring items)
-- needs_decision: progress is impossible until {operator_name} chooses — include `options` with A/B/C
-- blocked: execution is impossible (no access, host down, genuine external dependency)
-- proactive: there were no due followups, but you found/fixed something useful on your own
-
-== RULES ==
-- EXECUTE first, report after
-- NEVER mark something complete without real verification
-- `summary` must ALWAYS include REAL facts about what you DID (metrics, values, URLs, dates)
-- NEVER include internal NEXO system noise (diaries, buffers, post-mortem)
-- The operator needs results, not internal runtime chatter
-- If there is nothing pending and nothing worth fixing, finish quickly — do not invent work"""
+    return render_core_prompt(
+        "followup-runner",
+        assistant_name=assistant_name,
+        work_intro=(
+            "You have " + str(len(actionable)) + " followups to EXECUTE — not to classify."
+            if actionable
+            else "There are no pending followups. Enter PROACTIVE MODE."
+        ),
+        followup_block=(followup_text + "\n\n") if followup_text else "\n",
+        recent_block=recent_block,
+        proactive_block=proactive_block,
+        extra_instructions_block=(extra_instructions_block + "\n\n") if extra_instructions_block else "",
+        python_executable=sys.executable,
+        send_reply_script=send_reply_script,
+        send_target=send_target,
+        operator_name=operator_name,
+        results_path=results_path,
+    )
 
 # ── Main ────────────────────────────────────────────────────────────────
 def main():

@@ -136,11 +136,53 @@ def test_email_monitor_defaults_to_neutral_assistant_name(tmp_path, monkeypatch)
     assert assistant_name == "Nova"
 
 
+def test_email_monitor_processing_prompt_is_catalog_backed_and_generic(tmp_path, monkeypatch):
+    home = tmp_path / "nexo-home"
+    (home / "nexo-email").mkdir(parents=True)
+    monkeypatch.setenv("NEXO_HOME", str(home))
+    helper = types.ModuleType("nexo_helper")
+    helper.call_tool_text = lambda *args, **kwargs: ""
+    monkeypatch.setitem(sys.modules, "nexo_helper", helper)
+    module = _load_script_module("nexo_email_monitor_prompt_test", "nexo-email-monitor.py")
+
+    prompt = module.build_processing_prompt(
+        config={
+            "email": "agent@hotel-example.com",
+            "operator_email": "owner@hotel-example.com",
+        },
+        operator_name="Laura",
+        assistant_name="Nova",
+        operator_email="owner@hotel-example.com",
+        operator_aliases_label="owner@hotel-example.com, laura@hotel-example.com",
+        trusted_domains_label="hotel-example.com, clients.example.com",
+        send_reply_script=Path("/tmp/nexo-send-reply.py"),
+        send_reply_target="owner@hotel-example.com",
+        agent_email_label="agent@hotel-example.com",
+        extra_instructions_block="Keep replies short and factual.",
+        project_atlas_path=Path("/tmp/project-atlas.json"),
+        target_emails=[{"message_id": "<abc@example.com>"}],
+        needs_interactive=[],
+        normal_emails=[{"message_id": "<abc@example.com>"}],
+        debt_block="== PENDING EMAIL DEBT ==\n- none",
+        routing_rules="No special routing rules.",
+        recent_hot_context="Recent memory: supplier thread active.",
+    )
+
+    assert prompt.startswith("You are Nova")
+    assert "This is your mailbox (agent@hotel-example.com)." in prompt
+    assert "Keep replies short and factual." in prompt
+    assert "EMAILS ASSIGNED TO THIS SESSION" in prompt
+    assert "Francisco" not in prompt
+    assert "franciscocp@gmail.com" not in prompt
+
+
 def test_followup_runner_detects_dynamic_operator_name(tmp_path, monkeypatch):
     home = tmp_path / "nexo-home"
     home.mkdir(parents=True)
     monkeypatch.setenv("NEXO_HOME", str(home))
     module = _load_script_module("nexo_followup_runner_test", "nexo-followup-runner.py")
+    monkeypatch.setattr(module, "_classifier_requires_operator_attention", lambda text, operator_name="": "pricing" in text.lower())
+    monkeypatch.setattr(module, "_llm_requires_operator_attention", lambda text, operator_name="": None)
 
     assert module._followup_needs_operator_attention(
         {"description": "Ask Laura about pricing"},
@@ -166,14 +208,68 @@ def test_followup_runner_uses_llm_fallback_before_legacy_keyword_probe(tmp_path,
     monkeypatch.setenv("NEXO_HOME", str(home))
     module = _load_script_module("nexo_followup_runner_llm_test", "nexo-followup-runner.py")
 
-    monkeypatch.setattr(module, "_classifier_requires_operator_attention", lambda text: None)
-    monkeypatch.setattr(module, "_llm_requires_operator_attention", lambda text: True)
-    monkeypatch.setattr(module, "_legacy_operator_attention_hint", lambda text, operator_name="": False)
+    monkeypatch.setattr(module, "_classifier_requires_operator_attention", lambda text, operator_name="": None)
+    monkeypatch.setattr(module, "_llm_requires_operator_attention", lambda text, operator_name="": True)
+    monkeypatch.setattr(module, "_fallback_operator_attention_hint", lambda followup: False)
 
     assert module._followup_needs_operator_attention(
         {"description": "The operator still needs to approve the contract before we proceed."},
         operator_name="Laura",
     ) is True
+
+
+def test_followup_runner_no_longer_depends_on_bilingual_keyword_lists(tmp_path, monkeypatch):
+    home = tmp_path / "nexo-home"
+    home.mkdir(parents=True)
+    monkeypatch.setenv("NEXO_HOME", str(home))
+    module = _load_script_module("nexo_followup_runner_no_keyword_test", "nexo-followup-runner.py")
+
+    monkeypatch.setattr(module, "_classifier_requires_operator_attention", lambda text, operator_name="": None)
+    monkeypatch.setattr(module, "_llm_requires_operator_attention", lambda text, operator_name="": None)
+
+    assert module._followup_needs_operator_attention(
+        {"description": "Waiting for operator decision"},
+        operator_name="Laura",
+    ) is False
+
+
+def test_followup_runner_local_classifier_labels_include_operator_name(tmp_path, monkeypatch):
+    home = tmp_path / "nexo-home"
+    home.mkdir(parents=True)
+    monkeypatch.setenv("NEXO_HOME", str(home))
+    module = _load_script_module("nexo_followup_runner_classifier_prompt_test", "nexo-followup-runner.py")
+
+    seen = {}
+
+    class _Result:
+        label = ""
+        confidence = 0.91
+
+    class _FakeClassifier:
+        def __init__(self, confidence_floor=0.72):
+            seen["confidence_floor"] = confidence_floor
+
+        def is_available(self):
+            return True
+
+        def classify(self, text, labels, multi_label=False):
+            seen["text"] = text
+            seen["labels"] = tuple(labels)
+            seen["multi_label"] = multi_label
+            result = _Result()
+            result.label = labels[0]
+            return result
+
+    fake_module = type("FakeClassifierModule", (), {"LocalZeroShotClassifier": _FakeClassifier})
+    monkeypatch.setitem(sys.modules, "classifier_local", fake_module)
+
+    assert module._classifier_requires_operator_attention(
+        "Laura needs to approve the quote before we continue",
+        operator_name="Laura",
+    ) is True
+    assert seen["confidence_floor"] == 0.72
+    assert "Laura" in seen["labels"][0]
+    assert "keyword" not in seen["labels"][0].lower()
 
 
 def test_followup_runner_prompt_defaults_to_nova_and_stays_english_base(tmp_path, monkeypatch):
@@ -306,3 +402,165 @@ def test_morning_agent_contract_requires_operator_recipient(tmp_path, monkeypatc
     contract = automation_controls.get_script_runtime_contract("morning-agent")
     assert contract["available"] is False
     assert contract["blocked_reason_code"] == "missing_operator_recipient"
+
+
+def test_core_automation_contracts_expose_product_controls(tmp_path, monkeypatch):
+    home = tmp_path / "nexo-home"
+    home.mkdir(parents=True)
+    monkeypatch.setenv("NEXO_HOME", str(home))
+
+    sys.modules.pop("automation_controls", None)
+    import automation_controls
+
+    monkeypatch.setattr(
+        automation_controls,
+        "get_agent_email_account_status",
+        lambda: {
+            "available": True,
+            "reason_code": "",
+            "reason": "",
+            "eligible_labels": ["agent-primary"],
+        },
+    )
+    monkeypatch.setattr(
+        automation_controls,
+        "get_operator_briefing_recipient_status",
+        lambda: {
+            "available": True,
+            "reason_code": "",
+            "reason": "",
+            "recipient_email": "owner@hotel-example.com",
+            "recipient_label": "Owner",
+        },
+    )
+
+    email_contract = automation_controls.get_script_runtime_contract("email-monitor")
+    assert email_contract["toggleable_core"] is True
+    assert email_contract["supports_extra_instructions"] is True
+    assert email_contract["schedule_configurable"] is True
+    assert email_contract["schedule_type"] == "interval"
+    assert email_contract["minimum_interval_seconds"] == 60
+    assert email_contract["required_roles"] == ["both"]
+    assert email_contract["available"] is True
+
+    followup_contract = automation_controls.get_script_runtime_contract("followup-runner")
+    assert followup_contract["toggleable_core"] is True
+    assert followup_contract["supports_extra_instructions"] is True
+    assert followup_contract["schedule_configurable"] is True
+    assert followup_contract["schedule_type"] == "interval"
+    assert followup_contract["minimum_interval_seconds"] == 300
+    assert followup_contract["required_roles"] == ["both"]
+    assert followup_contract["available"] is True
+
+    morning_contract = automation_controls.get_script_runtime_contract("morning-agent")
+    assert morning_contract["toggleable_core"] is True
+    assert morning_contract["supports_extra_instructions"] is True
+    assert morning_contract["schedule_configurable"] is True
+    assert morning_contract["schedule_type"] == "calendar"
+    assert morning_contract["required_roles"] == ["both"]
+    assert morning_contract["available"] is True
+
+
+def test_synthesis_prompt_is_catalog_backed_and_generic(tmp_path, monkeypatch):
+    home = tmp_path / "nexo-home"
+    home.mkdir(parents=True)
+    monkeypatch.setenv("NEXO_HOME", str(home))
+    module = _load_script_module("nexo_synthesis_prompt_test", "nexo-synthesis.py")
+
+    prompt = module.render_core_prompt(
+        "daily-synthesis",
+        data_json='{"changes": ["updated release gate"]}',
+        output_file=Path("/tmp/daily-synthesis.md"),
+        today_str="2026-04-20",
+    )
+
+    assert "FIRST: Call nexo_startup(task='daily synthesis')" in prompt
+    assert '{"changes": ["updated release gate"]}' in prompt
+    assert "/tmp/daily-synthesis.md" in prompt
+    assert "2026-04-20" in prompt
+
+
+def test_postmortem_prompt_is_catalog_backed_and_generic(tmp_path, monkeypatch):
+    home = tmp_path / "nexo-home"
+    home.mkdir(parents=True)
+    monkeypatch.setenv("NEXO_HOME", str(home))
+    module = _load_script_module("nexo_postmortem_prompt_test", "nexo-postmortem-consolidator.py")
+
+    prompt = module.render_core_prompt(
+        "postmortem-consolidator",
+        date="2026-04-20",
+        session_total=8,
+        sessions_with_critique=3,
+        diaries_json='[{"self_critique":"Skipped verification"}]',
+        existing_feedback_count=2,
+        existing_feedbacks_json='["feedback_postmortem_verify_before_done"]',
+        recent_rules_json='["Always verify before closing."]',
+        memory_dir=Path("/tmp/memory"),
+        postmortem_daily_file=Path("/tmp/postmortem-daily.md"),
+    )
+
+    assert "nightly postmortem consolidation" in prompt
+    assert "SESSIONS TODAY: 8 total, 3 with self-critique" in prompt
+    assert '/tmp/memory' in prompt
+    assert '/tmp/postmortem-daily.md' in prompt
+
+
+def test_sleep_prompt_is_catalog_backed_and_generic(tmp_path, monkeypatch):
+    home = tmp_path / "nexo-home"
+    home.mkdir(parents=True)
+    monkeypatch.setenv("NEXO_HOME", str(home))
+    module = _load_script_module("nexo_sleep_prompt_test", "nexo-sleep.py")
+
+    prompt = module.render_core_prompt(
+        "sleep",
+        learnings_count=42,
+        memory_md_lines=190,
+        preferences_count=7,
+        feedback_count=12,
+        old_observations_count=501,
+        tasks_block="TASK 1: consolidate learnings",
+        sleep_report_file=Path("/tmp/sleep-report.md"),
+    )
+
+    assert "You are NEXO Sleep" in prompt
+    assert "- 42 active learnings" in prompt
+    assert "TASK 1: consolidate learnings" in prompt
+    assert "/tmp/sleep-report.md" in prompt
+
+
+def test_catchup_prompt_is_catalog_backed_and_generic(tmp_path, monkeypatch):
+    home = tmp_path / "nexo-home"
+    home.mkdir(parents=True)
+    monkeypatch.setenv("NEXO_HOME", str(home))
+    module = _load_script_module("nexo_catchup_prompt_test", "nexo-catchup.py")
+
+    prompt = module.render_core_prompt(
+        "catchup-assessment",
+        ran=4,
+        skipped=2,
+        state_summary='{"daily-synthesis": "2026-04-20T07:00:00"}',
+        assessment_file=Path("/tmp/catchup-assessment.md"),
+        now_label="2026-04-20 09:30",
+    )
+
+    assert "NEXO Catch-Up system" in prompt
+    assert "4 scheduled tasks just ran as catch-up" in prompt
+    assert "/tmp/catchup-assessment.md" in prompt
+    assert "2026-04-20 09:30" in prompt
+
+
+def test_immune_prompt_is_catalog_backed_and_generic(tmp_path, monkeypatch):
+    home = tmp_path / "nexo-home"
+    home.mkdir(parents=True)
+    monkeypatch.setenv("NEXO_HOME", str(home))
+    module = _load_script_module("nexo_immune_prompt_test", "nexo-immune.py")
+
+    prompt = module.render_core_prompt(
+        "immune-triage",
+        triage_file=Path("/tmp/immune-triage.md"),
+        findings_json='{"counts":{"FAIL":1,"WARN":2},"repairs":["ok"]}',
+    )
+
+    assert "NEXO Immune System triage analyst" in prompt
+    assert "/tmp/immune-triage.md" in prompt
+    assert '"FAIL":1' in prompt

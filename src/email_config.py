@@ -4,7 +4,7 @@
 The loader prefers the `email_accounts` table. When the table is empty
 (fresh install that hasn't run `nexo email setup` yet) it falls back
 to the legacy JSON for backwards compatibility — no crons stall while
-Francisco migrates.
+the operator migrates.
 
 Usage from any script:
 
@@ -117,6 +117,8 @@ def _account_to_legacy_shape(
         "password": runtime_account["password"],
         "operator_email": default_operator_email,
         "operator_aliases": list(extra_operator_emails or []),
+        # Transitional compatibility for older scripts that still read the
+        # pre-F2 alias key directly.
         "francisco_emails": list(extra_operator_emails or []),
         "trusted_domains": runtime_account["trusted_domains"],
         "sender_policy": runtime_account["sender_policy"],
@@ -205,19 +207,26 @@ def load_email_runtime_snapshot() -> dict[str, Any] | None:
     }
 
 
-def load_email_config(label: str | None = None) -> dict | None:
-    """Return the email config for a given label (or the primary account).
+def load_email_config(label: str | None = None, account_id: int | str | None = None) -> dict | None:
+    """Return the email config for a given selector (or the primary account).
 
     Preference order:
-      1. email_accounts table (via label or get_primary_email_account).
+      1. email_accounts table (via id, label, or get_primary_email_account).
       2. ~/.nexo/nexo-email/config.json legacy file.
       3. None if neither is available.
     """
     account: dict | None = None
     operator_accounts: list[dict] = []
     try:
-        from db._email_accounts import get_email_account, get_primary_email_account, list_email_accounts
-        if label:
+        from db._email_accounts import (
+            get_email_account,
+            get_email_account_by_id,
+            get_primary_email_account,
+            list_email_accounts,
+        )
+        if account_id is not None:
+            account = get_email_account_by_id(account_id)
+        elif label:
             account = get_email_account(label)
         else:
             account = get_primary_email_account()
@@ -231,9 +240,9 @@ def load_email_config(label: str | None = None) -> dict | None:
             value = str(op.get("email") or "").strip().lower()
             if value and value not in extra:
                 extra.append(value)
-        # F1/F2 — operator aliases are canonical now. Keep the legacy
-        # `francisco_emails` compatibility shape in the returned payload
-        # so old code paths do not break during transition.
+        # F1/F2 — operator aliases are canonical now. Keep the legacy alias
+        # compatibility key in the returned payload so old code paths do not
+        # break during transition.
         aliases = (account.get("metadata") or {}).get("operator_aliases") or []
         for a in aliases:
             if a and a not in extra:

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import importlib
 from pathlib import Path
 
 import pytest
@@ -21,10 +22,16 @@ def isolated_home(tmp_path, monkeypatch):
     (home / "data").mkdir(parents=True)
     (home / "nexo-email").mkdir(parents=True)
     monkeypatch.setenv("NEXO_HOME", str(home))
-    # Invalidate any cached db module so DB_PATH picks up the new NEXO_HOME.
-    for mod in list(sys.modules):
-        if mod == "db" or mod.startswith("db."):
-            sys.modules.pop(mod, None)
+    # Reload the DB stack in place so existing references held by other test
+    # modules keep pointing at the same module objects instead of drifting.
+    import db._core as db_core
+    import db._schema as db_schema
+    import db
+
+    db_core.close_db()
+    importlib.reload(db_core)
+    importlib.reload(db_schema)
+    importlib.reload(db)
     from db import init_db
     init_db()
     yield home
@@ -87,9 +94,9 @@ def test_cli_enable_disable_account(isolated_home, capsys):
     from types import SimpleNamespace
 
     from cli_email import cmd_email_set_enabled
-    from db._email_accounts import add_email_account, get_email_account
+    from db._email_accounts import add_email_account, get_email_account, get_email_account_by_id
 
-    add_email_account(
+    account = add_email_account(
         label="primary",
         email="agent@example.com",
         imap_host="imap.agent.com",
@@ -97,20 +104,31 @@ def test_cli_enable_disable_account(isolated_home, capsys):
     )
 
     rc = cmd_email_set_enabled(
-        SimpleNamespace(label="primary", label_pos=None, json=True, enabled=False)
+        SimpleNamespace(label=None, label_pos=None, account_id=account["id"], json=True, enabled=False)
     )
     assert rc == 0
     payload = json.loads(capsys.readouterr().out)
+    assert payload["id"] == account["id"]
     assert payload["enabled"] is False
-    assert get_email_account("primary")["enabled"] is False
+    assert get_email_account_by_id(account["id"])["enabled"] is False
 
     rc = cmd_email_set_enabled(
-        SimpleNamespace(label="primary", label_pos=None, json=True, enabled=True)
+        SimpleNamespace(label=None, label_pos=None, account_id=account["id"], json=True, enabled=True)
     )
     assert rc == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["enabled"] is True
     assert get_email_account("primary")["enabled"] is True
+
+
+def test_get_account_by_id_and_remove_by_id(isolated_home):
+    from db._email_accounts import add_email_account, get_email_account_by_id, remove_email_account
+
+    account = add_email_account(label="primary", email="agent@example.com")
+    fetched = get_email_account_by_id(account["id"])
+    assert fetched["label"] == "primary"
+    assert remove_email_account(account_id=account["id"]) is True
+    assert get_email_account_by_id(account["id"]) is None
 
 
 def test_primary_picks_most_recent(isolated_home):
@@ -210,6 +228,8 @@ def test_loader_prefers_table_over_legacy_json(isolated_home):
     assert cfg["password"] == "sekret-1"
     assert cfg["_source"] == "email_accounts"
     assert cfg["operator_email"] == "owner@company.com"
+    assert cfg["operator_aliases"] == ["owner@company.com"]
+    assert cfg["francisco_emails"] == ["owner@company.com"]
     assert cfg["default_operator_account"]["email"] == "owner@company.com"
     assert len(cfg["operator_accounts"]) == 1
 
@@ -277,7 +297,8 @@ def test_loader_falls_back_to_legacy_when_table_empty(isolated_home):
 
 
 def test_migrate_script_populates_table(isolated_home):
-    legacy = isolated_home / "nexo-email" / "config.json"
+    legacy = isolated_home / "runtime" / "nexo-email" / "config.json"
+    legacy.parent.mkdir(parents=True, exist_ok=True)
     legacy.write_text(json.dumps({
         "email": "migrate@me.com",
         "password": "hidden",
@@ -401,7 +422,8 @@ def test_migrate_script_normalizes_existing_primary_before_operator_backfill(iso
         metadata={"operator_aliases": ["existing-owner@example.com"]},
     )
 
-    legacy = isolated_home / "nexo-email" / "config.json"
+    legacy = isolated_home / "runtime" / "nexo-email" / "config.json"
+    legacy.parent.mkdir(parents=True, exist_ok=True)
     legacy.write_text(json.dumps({
         "email": "existing@agent.com",
         "password": "hidden",

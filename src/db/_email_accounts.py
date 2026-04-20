@@ -200,6 +200,21 @@ def get_email_account(label: str) -> dict | None:
     return _row_to_dict(row) if row else None
 
 
+def get_email_account_by_id(account_id: int | str | None) -> dict | None:
+    try:
+        clean_id = int(account_id or 0)
+    except Exception:
+        return None
+    if clean_id <= 0:
+        return None
+    conn = get_db()
+    row = conn.execute(
+        "SELECT * FROM email_accounts WHERE id = ?",
+        (clean_id,),
+    ).fetchone()
+    return _row_to_dict(row) if row else None
+
+
 def get_primary_email_account() -> dict | None:
     """Most-recently-updated enabled agent account. Returns None if table empty."""
     conn = get_db()
@@ -223,20 +238,48 @@ def get_default_operator_email_account() -> dict | None:
     return _row_to_dict(row) if row else None
 
 
-def set_email_account_enabled(label: str, enabled: bool) -> bool:
+def set_email_account_enabled(
+    label: str | None = None,
+    enabled: bool = True,
+    account_id: int | str | None = None,
+) -> bool:
     conn = get_db()
-    cur = conn.execute(
-        "UPDATE email_accounts SET enabled = ?, updated_at = datetime('now') "
-        "WHERE label = ?",
-        (1 if enabled else 0, label),
-    )
+    if account_id is not None:
+        try:
+            clean_id = int(account_id)
+        except Exception:
+            clean_id = 0
+        if clean_id > 0:
+            cur = conn.execute(
+                "UPDATE email_accounts SET enabled = ?, updated_at = datetime('now') "
+                "WHERE id = ?",
+                (1 if enabled else 0, clean_id),
+            )
+        else:
+            cur = conn.execute("SELECT 0 WHERE 1=0")
+    else:
+        cur = conn.execute(
+            "UPDATE email_accounts SET enabled = ?, updated_at = datetime('now') "
+            "WHERE label = ?",
+            (1 if enabled else 0, label),
+        )
     conn.commit()
     return cur.rowcount > 0
 
 
-def remove_email_account(label: str) -> bool:
+def remove_email_account(label: str | None = None, account_id: int | str | None = None) -> bool:
     conn = get_db()
-    cur = conn.execute("DELETE FROM email_accounts WHERE label = ?", (label,))
+    if account_id is not None:
+        try:
+            clean_id = int(account_id)
+        except Exception:
+            clean_id = 0
+        if clean_id > 0:
+            cur = conn.execute("DELETE FROM email_accounts WHERE id = ?", (clean_id,))
+        else:
+            cur = conn.execute("SELECT 0 WHERE 1=0")
+    else:
+        cur = conn.execute("DELETE FROM email_accounts WHERE label = ?", (label,))
     conn.commit()
     return cur.rowcount > 0
 
@@ -245,6 +288,7 @@ __all__ = [
     "add_email_account",
     "list_email_accounts",
     "get_email_account",
+    "get_email_account_by_id",
     "get_primary_email_account",
     "get_default_operator_email_account",
     "set_email_account_enabled",

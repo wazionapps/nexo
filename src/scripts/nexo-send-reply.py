@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # nexo: doctor_allow_db=true
 """
-NEXO Send Reply — Envía respuestas email via SMTP (Mundiserver).
-Mantiene hilos con In-Reply-To y References.
+NEXO Send Reply — send email replies via SMTP.
+Preserves message threads with In-Reply-To and References.
 
-Uso:
+Usage:
   python3 nexo-send-reply.py \
     --to "Name <email>" \
     --cc "Name <email>" \
@@ -16,8 +16,8 @@ Uso:
     [--quote-file /tmp/nexo-quote.txt] \
     [--quote-from "Name <email>"] \
     [--quote-date "date string"] \
-    [--attach /ruta/al/archivo] \
-    [--attachment /ruta/al/archivo]
+    [--attach /path/to/file] \
+    [--attachment /path/to/file]
 """
 
 import argparse
@@ -255,9 +255,9 @@ def build_quoted_text(quote_file, quote_from, quote_date):
 
     header = ""
     if quote_from and quote_date:
-        header = f"\nEl {quote_date}, {quote_from} escribió:\n\n"
+        header = f"\nOn {quote_date}, {quote_from} wrote:\n\n"
     elif quote_from:
-        header = f"\n{quote_from} escribió:\n\n"
+        header = f"\n{quote_from} wrote:\n\n"
 
     return f"{header}{quoted_lines}"
 
@@ -299,7 +299,9 @@ def build_html_quoted(quote_file, quote_from, quote_date):
 
     header = ""
     if quote_from and quote_date:
-        header = f"<p>El {quote_date}, {html_mod.escape(quote_from)} escribió:</p>"
+        header = f"<p>On {quote_date}, {html_mod.escape(quote_from)} wrote:</p>"
+    elif quote_from:
+        header = f"<p>{html_mod.escape(quote_from)} wrote:</p>"
 
     return f"""
 {header}
