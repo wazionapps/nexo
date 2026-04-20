@@ -17,7 +17,6 @@ import json
 import os
 import paths
 import platform
-import plistlib
 import shutil
 import subprocess
 import sys
@@ -715,53 +714,16 @@ def ensure_full_disk_access_choice(
     }
 
 
-def _prevent_sleep_script_path() -> Path:
-    runtime_script = paths.core_scripts_dir() / "nexo-prevent-sleep.sh"
-    if runtime_script.is_file():
-        return runtime_script
-    source_script = NEXO_CODE / "scripts" / "nexo-prevent-sleep.sh"
-    return source_script
+def _sync_core_crons_for_power_policy() -> None:
+    try:
+        from crons import sync as cron_sync
+    except Exception:
+        return
 
-
-def _macos_prevent_sleep_plist() -> tuple[Path, dict]:
-    script_path = _prevent_sleep_script_path()
-    plist_path = LAUNCH_AGENTS_DIR / "com.nexo.prevent-sleep.plist"
-    plist = {
-        "Label": "com.nexo.prevent-sleep",
-        "ProgramArguments": ["/bin/bash", str(script_path)],
-        "RunAtLoad": True,
-        "KeepAlive": True,
-        "StandardOutPath": str(paths.logs_dir() / "prevent-sleep-stdout.log"),
-        "StandardErrorPath": str(paths.logs_dir() / "prevent-sleep-stderr.log"),
-        "EnvironmentVariables": {
-            "HOME": str(Path.home()),
-            "NEXO_HOME": str(NEXO_HOME),
-            "NEXO_CODE": str(NEXO_HOME),
-            "PATH": resolve_launchagent_path(),
-        },
-    }
-    return plist_path, plist
-
-
-def _linux_prevent_sleep_service() -> tuple[Path, str]:
-    script_path = _prevent_sleep_script_path()
-    service_path = LINUX_SYSTEMD_USER_DIR / "nexo-prevent-sleep.service"
-    body = f"""[Unit]
-Description=NEXO prevent sleep
-
-[Service]
-Type=simple
-ExecStart=/bin/bash {script_path}
-Environment=HOME={Path.home()}
-Environment=NEXO_HOME={NEXO_HOME}
-Environment=NEXO_CODE={NEXO_HOME}
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=default.target
-"""
-    return service_path, body
+    sync_fn = getattr(cron_sync, "sync", None)
+    if not callable(sync_fn):
+        return
+    sync_fn(dry_run=False)
 
 
 def apply_power_policy(policy: str | None = None) -> dict:
@@ -786,9 +748,7 @@ def apply_power_policy(policy: str | None = None) -> dict:
 
 
 def _apply_macos_power_policy(policy: str, *, details: dict | None = None) -> dict:
-    plist_path, plist = _macos_prevent_sleep_plist()
-    label = plist["Label"]
-    uid = str(os.getuid())
+    plist_path = LAUNCH_AGENTS_DIR / "com.nexo.prevent-sleep.plist"
     if policy == POWER_POLICY_ALWAYS_ON:
         details = details or describe_power_policy(policy, system="Darwin")
         if not details.get("helper_available"):
@@ -800,30 +760,24 @@ def _apply_macos_power_policy(policy: str, *, details: dict | None = None) -> di
                 "message": f"Required helper not found: {details.get('helper_path') or 'caffeinate'}",
                 "details": details,
             }
-        LAUNCH_AGENTS_DIR.mkdir(parents=True, exist_ok=True)
-        with plist_path.open("wb") as fh:
-            plistlib.dump(plist, fh)
-        subprocess.run(["launchctl", "bootout", f"gui/{uid}", str(plist_path)], capture_output=True)
-        result = subprocess.run(
-            ["launchctl", "bootstrap", f"gui/{uid}", str(plist_path)],
-            capture_output=True,
-            text=True,
-        )
-        ok = result.returncode == 0
+        try:
+            _sync_core_crons_for_power_policy()
+            ok = plist_path.exists()
+            message = ""
+        except Exception as exc:
+            ok = False
+            message = str(exc)
         return {
             "ok": ok,
             "policy": policy,
             "platform": "Darwin",
             "action": "enabled",
             "plist_path": str(plist_path),
-            "message": "" if ok else (result.stderr.strip() or result.stdout.strip()),
+            "message": message,
             "details": details,
         }
 
-    subprocess.run(["launchctl", "bootout", f"gui/{uid}", str(plist_path)], capture_output=True)
-    if plist_path.exists():
-        plist_path.unlink()
-    subprocess.run(["launchctl", "remove", label], capture_output=True)
+    _sync_core_crons_for_power_policy()
     return {
         "ok": True,
         "policy": policy,
@@ -835,7 +789,7 @@ def _apply_macos_power_policy(policy: str, *, details: dict | None = None) -> di
 
 
 def _apply_linux_power_policy(policy: str, *, details: dict | None = None) -> dict:
-    service_path, service_body = _linux_prevent_sleep_service()
+    service_path = LINUX_SYSTEMD_USER_DIR / "nexo-prevent-sleep.service"
     if policy == POWER_POLICY_ALWAYS_ON:
         details = details or describe_power_policy(policy, system="Linux")
         if not details.get("helper_available"):
@@ -847,29 +801,24 @@ def _apply_linux_power_policy(policy: str, *, details: dict | None = None) -> di
                 "message": "No Linux power helper found. Install systemd-inhibit or caffeine.",
                 "details": details,
             }
-        LINUX_SYSTEMD_USER_DIR.mkdir(parents=True, exist_ok=True)
-        service_path.write_text(service_body)
-        subprocess.run(["systemctl", "--user", "daemon-reload"], capture_output=True)
-        result = subprocess.run(
-            ["systemctl", "--user", "enable", "--now", "nexo-prevent-sleep.service"],
-            capture_output=True,
-            text=True,
-        )
-        ok = result.returncode == 0
+        try:
+            _sync_core_crons_for_power_policy()
+            ok = service_path.exists()
+            message = ""
+        except Exception as exc:
+            ok = False
+            message = str(exc)
         return {
             "ok": ok,
             "policy": policy,
             "platform": "Linux",
             "action": "enabled",
             "service_path": str(service_path),
-            "message": "" if ok else (result.stderr.strip() or result.stdout.strip()),
+            "message": message,
             "details": details,
         }
 
-    subprocess.run(["systemctl", "--user", "disable", "--now", "nexo-prevent-sleep.service"], capture_output=True)
-    if service_path.exists():
-        service_path.unlink()
-    subprocess.run(["systemctl", "--user", "daemon-reload"], capture_output=True)
+    _sync_core_crons_for_power_policy()
     return {
         "ok": True,
         "policy": policy,

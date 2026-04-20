@@ -203,6 +203,36 @@ class TestScriptsCreateAndSync:
         assert data["ensure_schedules"]["created"][0]["cron_id"] == "mail-poller"
 
 
+class TestAutomationsCLI:
+    def test_list_json_defaults_to_product_automations(self, nexo_home):
+        core_dir = nexo_home / "core" / "scripts"
+        core_dir.mkdir(parents=True, exist_ok=True)
+        (core_dir / "nexo-email-monitor.py").write_text("# nexo: name=email-monitor\nprint('hi')\n")
+        (core_dir / "nexo-followup-runner.py").write_text("# nexo: name=followup-runner\nprint('hi')\n")
+        (nexo_home / "scripts" / "custom-task.py").write_text("# nexo: name=custom-task\nprint('hi')\n")
+
+        result = _run_cli(nexo_home, "automations", "list", "--json")
+
+        assert result.returncode == 0, result.stderr
+        data = json.loads(result.stdout)
+        names = [row["name"] for row in data["automations"]]
+        assert names == ["email-monitor", "followup-runner"]
+
+    def test_list_json_all_includes_support_rows(self, nexo_home):
+        core_dir = nexo_home / "core" / "scripts"
+        core_dir.mkdir(parents=True, exist_ok=True)
+        (core_dir / "nexo-email-monitor.py").write_text("# nexo: name=email-monitor\nprint('hi')\n")
+        (nexo_home / "scripts" / "custom-task.py").write_text("# nexo: name=custom-task\nprint('hi')\n")
+
+        result = _run_cli(nexo_home, "automations", "list", "--all", "--json")
+
+        assert result.returncode == 0, result.stderr
+        data = json.loads(result.stdout)
+        names = [row["name"] for row in data["automations"]]
+        assert "email-monitor" in names
+        assert "custom-task" in names
+
+
 class TestRuntimeUpdate:
     def test_update_uses_recorded_source_repo(self, tmp_path):
         runtime_home = tmp_path / "runtime"
@@ -290,6 +320,7 @@ class TestRuntimeUpdate:
         current_src = Path(os.path.dirname(__file__)).parent / "src"
         (runtime_home / "cli.py").write_text((current_src / "cli.py").read_text())
         (runtime_home / "auto_update.py").write_text((current_src / "auto_update.py").read_text())
+        (runtime_home / "product_mode.py").write_text((current_src / "product_mode.py").read_text())
         (runtime_home / "runtime_home.py").write_text((current_src / "runtime_home.py").read_text())
         (runtime_home / "tree_hygiene.py").write_text((current_src / "tree_hygiene.py").read_text())
         (runtime_home / "paths.py").write_text((current_src / "paths.py").read_text())
@@ -362,7 +393,7 @@ class TestRuntimeUpdate:
             "tools_reminders.py", "tools_reminders_crud.py", "tools_learnings.py",
             "tools_credentials.py", "tools_task_history.py", "tools_menu.py", "cli.py",
             "skills_runtime.py", "user_context.py", "public_contribution.py",
-            "classifier_local.py", "cron_recovery.py", "runtime_power.py", "requirements.txt",
+            "classifier_local.py", "cron_recovery.py", "runtime_power.py", "product_mode.py", "requirements.txt",
         ]:
             target = src / flat
             if not target.exists():
@@ -569,7 +600,7 @@ class TestUserDataPortability:
         assert "bundle/manifest.json" in names
         assert "bundle/data/nexo.db" in names
         assert "bundle/brain/session.txt" in names
-        assert "bundle/config/schedule.json" in names
+        assert "bundle/personal-config/schedule.json" in names
         assert "bundle/personal-scripts/daily-report.py" in names
         assert "bundle/personal-scripts/core-tool.sh" not in names
 

@@ -576,6 +576,129 @@ def _scripts_status(args):
     return 0
 
 
+def _automations_list(args):
+    from script_registry import list_operator_automations
+
+    rows = list_operator_automations(include_all=bool(getattr(args, "all", False)))
+    if args.json:
+        print(json.dumps({"ok": True, "automations": rows}, indent=2, ensure_ascii=False))
+        return 0
+    if not rows:
+        print("No automations registered.")
+        return 0
+    for row in rows:
+        state = "enabled" if row.get("enabled", True) else "disabled"
+        availability = "ready" if row.get("available", True) else "setup required"
+        schedule = str(row.get("effective_schedule_label") or row.get("first_schedule_label") or "—")
+        print(f"{row.get('name')} [{state}] · {availability} · {schedule}")
+    return 0
+
+
+def _automations_set_enabled(args, enabled):
+    from script_registry import set_automation_enabled
+
+    result = set_automation_enabled(args.name, enabled)
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 0 if result.get("ok") else 1
+    if not result.get("ok"):
+        print(result.get("error", "Failed to toggle automation"), file=sys.stderr)
+        return 1
+    verb = "enabled" if enabled else "disabled"
+    print(f"Automation {result['name']} {verb}.")
+    return 0
+
+
+def _automations_status(args):
+    from script_registry import get_automation_status
+
+    result = get_automation_status(args.name)
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 0 if result.get("ok") else 1
+    if not result.get("ok"):
+        print(result.get("error", "Failed to read automation status"), file=sys.stderr)
+        return 1
+    state = "enabled" if result.get("enabled") else "DISABLED"
+    print(f"{result.get('name')} [{result.get('classification')}] -> {state}")
+    blocked_reason = (result.get("blocked_reason") or "").strip()
+    if blocked_reason:
+        print(f"  blocked: {blocked_reason}")
+    schedule_label = (result.get("effective_schedule_label") or "").strip()
+    if schedule_label:
+        schedule_source = (result.get("schedule_source") or "manifest").strip()
+        print(f"  schedule: {schedule_label} ({schedule_source})")
+    extra = (result.get("operator_extra_instructions") or "").strip()
+    if extra:
+        print(f"  extra instructions: {extra[:160]}")
+    return 0
+
+
+def _automations_set_instructions(args):
+    from script_registry import set_automation_instructions
+
+    if getattr(args, "clear", False):
+        text = ""
+    elif getattr(args, "stdin", False):
+        try:
+            text = sys.stdin.read()
+        except Exception as exc:
+            msg = f"Could not read instructions from stdin: {exc}"
+            if args.json:
+                print(json.dumps({"ok": False, "error": msg}, ensure_ascii=False))
+            else:
+                print(msg, file=sys.stderr)
+            return 1
+    else:
+        text = getattr(args, "text", None) or ""
+
+    result = set_automation_instructions(args.name, text)
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 0 if result.get("ok") else 1
+    if not result.get("ok"):
+        print(result.get("error", "Failed to update automation instructions"), file=sys.stderr)
+        return 1
+    if result.get("cleared"):
+        print(f"Extra instructions cleared for {result['name']}.")
+    else:
+        print(f"Extra instructions updated for {result['name']}.")
+    return 0
+
+
+def _automations_set_schedule(args):
+    from script_registry import set_automation_schedule
+
+    interval_seconds = None
+    daily_at = None
+    if getattr(args, "every_minutes", None) is not None:
+        interval_seconds = int(args.every_minutes) * 60
+    elif getattr(args, "every_seconds", None) is not None:
+        interval_seconds = int(args.every_seconds)
+    elif getattr(args, "daily_at", None):
+        daily_at = str(args.daily_at).strip()
+
+    result = set_automation_schedule(
+        args.name,
+        interval_seconds=interval_seconds,
+        daily_at=daily_at,
+        clear=bool(getattr(args, "reset", False)),
+    )
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 0 if result.get("ok") else 1
+    if not result.get("ok"):
+        print(result.get("error", "Failed to update automation cadence"), file=sys.stderr)
+        return 1
+    label = str(result.get("effective_schedule_label") or "").strip()
+    source = str(result.get("schedule_source") or "manifest").strip()
+    if label:
+        print(f"Schedule updated for {result['name']}: {label} ({source})")
+    else:
+        print(f"Schedule updated for {result['name']}.")
+    return 0
+
+
 def _scripts_remove(args):
     from script_registry import remove_personal_script
 
@@ -2264,7 +2387,7 @@ def main():
     create_p.add_argument("--json", action="store_true", help="JSON output")
 
     # scripts classify
-    classify_p = scripts_sub.add_parser("classify", help="Classify all files in NEXO_HOME/scripts")
+    classify_p = scripts_sub.add_parser("classify", help="Classify all files in NEXO_HOME/personal/scripts")
     classify_p.add_argument("--json", action="store_true", help="JSON output")
 
     # scripts sync
@@ -2347,6 +2470,48 @@ def main():
     call_p.add_argument("tool", help="MCP tool name")
     call_p.add_argument("--input", default="{}", help="JSON input payload")
     call_p.add_argument("--json-output", action="store_true", help="Force JSON output")
+
+    automations_parser = sub.add_parser("automations", help="Manage Desktop-facing automations")
+    automations_sub = automations_parser.add_subparsers(dest="automations_command")
+
+    automations_list_p = automations_sub.add_parser("list", help="List operator-facing automations")
+    automations_list_p.add_argument("--all", action="store_true", help="Include support/debug automation rows as well")
+    automations_list_p.add_argument("--json", action="store_true", help="JSON output")
+
+    automations_enable_p = automations_sub.add_parser("enable", help="Enable an automation")
+    automations_enable_p.add_argument("name", help="Automation name or path")
+    automations_enable_p.add_argument("--json", action="store_true", help="JSON output")
+
+    automations_disable_p = automations_sub.add_parser("disable", help="Disable an automation")
+    automations_disable_p.add_argument("name", help="Automation name or path")
+    automations_disable_p.add_argument("--json", action="store_true", help="JSON output")
+
+    automations_status_p = automations_sub.add_parser("status", help="Read automation status")
+    automations_status_p.add_argument("name", help="Automation name or path")
+    automations_status_p.add_argument("--json", action="store_true", help="JSON output")
+
+    automations_instructions_p = automations_sub.add_parser(
+        "instructions",
+        help="Set or clear operator extra instructions for an automation",
+    )
+    automations_instructions_p.add_argument("name", help="Automation name or path")
+    automations_instructions_group = automations_instructions_p.add_mutually_exclusive_group(required=True)
+    automations_instructions_group.add_argument("--text", help="Instruction text to persist")
+    automations_instructions_group.add_argument("--stdin", action="store_true", help="Read instruction text from stdin")
+    automations_instructions_group.add_argument("--clear", action="store_true", help="Clear any persisted extra instructions")
+    automations_instructions_p.add_argument("--json", action="store_true", help="JSON output")
+
+    automations_schedule_p = automations_sub.add_parser(
+        "schedule",
+        help="Change the cadence of an operator-facing automation",
+    )
+    automations_schedule_p.add_argument("name", help="Automation name or path")
+    automations_schedule_group = automations_schedule_p.add_mutually_exclusive_group(required=True)
+    automations_schedule_group.add_argument("--every-minutes", type=int, help="Run the automation every N minutes")
+    automations_schedule_group.add_argument("--every-seconds", type=int, help="Run the automation every N seconds")
+    automations_schedule_group.add_argument("--daily-at", type=str, help="Run the automation every day at HH:MM (24h)")
+    automations_schedule_group.add_argument("--reset", action="store_true", help="Restore the shipped default cadence")
+    automations_schedule_p.add_argument("--json", action="store_true", help="JSON output")
 
     # -- update --
     update_parser = sub.add_parser("update", help="Update installed runtime")
@@ -2638,6 +2803,21 @@ def main():
         else:
             scripts_parser.print_help()
             return 0
+    elif args.command == "automations":
+        if args.automations_command == "list":
+            return _automations_list(args)
+        elif args.automations_command == "enable":
+            return _automations_set_enabled(args, True)
+        elif args.automations_command == "disable":
+            return _automations_set_enabled(args, False)
+        elif args.automations_command == "status":
+            return _automations_status(args)
+        elif args.automations_command == "instructions":
+            return _automations_set_instructions(args)
+        elif args.automations_command == "schedule":
+            return _automations_set_schedule(args)
+        automations_parser.print_help()
+        return 0
     elif args.command == "chat":
         return _chat(args)
     elif args.command == "export":

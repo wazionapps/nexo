@@ -1,6 +1,6 @@
 """NEXO Script Registry — discovery, metadata, validation for personal scripts.
 
-Scripts live in NEXO_HOME/scripts/. Core scripts (from manifest) are filtered by default.
+Scripts live in NEXO_HOME/personal/scripts/. Core scripts (from manifest) are filtered by default.
 Personal scripts use CLI as stable interface, never direct DB access.
 """
 from __future__ import annotations
@@ -101,6 +101,11 @@ _LEGACY_CORE_SCRIPT_ALIASES = {
     "nexo-memory-stop.sh": "session-stop.sh",
     "nexo-session-briefing.sh": "session-start.sh",
 }
+PRODUCT_AUTOMATION_NAMES = (
+    "email-monitor",
+    "followup-runner",
+    "morning-agent",
+)
 
 
 def get_nexo_home() -> Path:
@@ -442,7 +447,17 @@ def _logical_personal_script_name(name: str) -> str:
     slug = _safe_slug(name)
     if slug.startswith(PERSONAL_SCRIPT_FILENAME_PREFIX):
         slug = slug[len(PERSONAL_SCRIPT_FILENAME_PREFIX):]
+    if slug.startswith("nexo-"):
+        slug = slug[len("nexo-"):]
     return slug or "personal-script"
+
+
+def _resolved_script_name(path: Path, metadata: dict | None = None, *, classification: str = "") -> str:
+    metadata = metadata or {}
+    raw_name = str(metadata.get("name", "") or "").strip()
+    if classification == "personal":
+        return _logical_personal_script_name(raw_name or path.stem)
+    return raw_name or path.stem
 
 
 def get_declared_schedule(metadata: dict, default_name: str = "") -> dict:
@@ -656,7 +671,7 @@ def get_declared_schedule(metadata: dict, default_name: str = "") -> dict:
 
 def _script_entry(path: Path, meta: dict, *, is_core: bool, classification: str, reason: str = "") -> dict:
     runtime = classify_runtime(path, meta)
-    name = meta.get("name", path.stem)
+    name = _resolved_script_name(path, meta, classification=classification)
     entry = {
         "name": name,
         "runtime": runtime,
@@ -749,7 +764,7 @@ def classify_scripts_dir() -> dict:
 
 
 def list_scripts(include_core: bool = False) -> list[dict]:
-    """List scripts in NEXO_HOME/scripts/.
+    """List scripts in NEXO_HOME/personal/scripts/.
 
     By default only personal scripts. With include_core=True, also shows core/cron scripts.
 
@@ -887,6 +902,29 @@ def list_scripts(include_core: bool = False) -> list[dict]:
             entry["last_exit_code"] = latest.get("exit_code")
             entry["last_summary"] = str(latest.get("summary") or "")
     return results
+
+
+def _product_automation_sort_key(row: dict) -> tuple[int, str]:
+    name = str((row or {}).get("name") or "")
+    try:
+        index = PRODUCT_AUTOMATION_NAMES.index(name)
+    except ValueError:
+        index = len(PRODUCT_AUTOMATION_NAMES)
+    return (index, name)
+
+
+def list_operator_automations(*, include_all: bool = False) -> list[dict]:
+    """Return the Desktop/operator-facing automation catalog."""
+    from db import init_db
+
+    init_db()
+    sync_personal_scripts()
+    rows = list_scripts(include_core=True)
+    if not include_all:
+        allowed = set(PRODUCT_AUTOMATION_NAMES)
+        rows = [row for row in rows if str(row.get("name") or "") in allowed]
+    rows.sort(key=_product_automation_sort_key)
+    return rows
 
 
 def _within_scripts_dir(path: Path) -> bool:
@@ -1221,7 +1259,7 @@ def audit_personal_schedules() -> dict:
 
         problems: list[str] = []
         if not record.get("script_within_scripts_dir"):
-            problems.append("schedule points outside NEXO_HOME/scripts")
+            problems.append("schedule points outside NEXO_HOME/personal/scripts")
         elif not record.get("script_path"):
             problems.append("schedule does not resolve a script path")
         elif not record.get("script_exists"):
@@ -1529,11 +1567,13 @@ def ensure_personal_schedules(*, dry_run: bool = False) -> dict:
 
 def reconcile_personal_scripts(*, dry_run: bool = False) -> dict:
     """Full lifecycle reconciliation: classify, sync registry, ensure declared schedules."""
+    renamed_result = rename_legacy_personal_script_filenames(dry_run=dry_run)
     sync_result = sync_personal_scripts()
     ensure_result = ensure_personal_schedules(dry_run=dry_run)
     return {
         "ok": True,
         "dry_run": dry_run,
+        "renamed_legacy_filenames": renamed_result,
         "sync": sync_result,
         "ensure_schedules": ensure_result,
         "classification": ensure_result.get("classification", sync_result.get("classification", {})),
@@ -1577,7 +1617,7 @@ def retire_superseded_personal_scripts(*, dry_run: bool = False) -> dict:
     backup_root: Path | None = None
     for path, meta in candidates:
         name = meta.get("name", path.stem)
-        report["candidates"].append({"name": name, "path": str(path)})
+        report["candidates"].append({"name": _resolved_script_name(path, meta, classification="personal"), "path": str(path)})
         resolved_path = str(path.expanduser().resolve(strict=False))
         matching_schedules = [
             record for record in schedule_records
@@ -1639,6 +1679,165 @@ def _script_filename_from_name(name: str, runtime: str) -> str:
 def _personal_script_filename_from_name(name: str, runtime: str) -> str:
     logical_name = _logical_personal_script_name(name)
     return _script_filename_from_name(f"{PERSONAL_SCRIPT_FILENAME_PREFIX}{logical_name}", runtime)
+
+
+def _legacy_personal_script_target_path(path: Path, metadata: dict | None = None) -> Path | None:
+    metadata = metadata or {}
+    if not path.name.startswith("nexo-"):
+        return None
+    runtime = classify_runtime(path, metadata)
+    target_name = _personal_script_filename_from_name(
+        metadata.get("name", "") or path.stem,
+        runtime,
+    )
+    target = path.with_name(target_name)
+    if target.name == path.name:
+        return None
+    return target
+
+
+def _legacy_personal_script_reference_hits(path: Path) -> list[str]:
+    """Return stable operator-owned artifacts that still reference the legacy filename."""
+    hits: list[str] = []
+    needle = path.name
+    search_paths = [paths.brain_dir() / "project-atlas.json"]
+
+    for candidate in search_paths:
+        if not candidate.is_file():
+            continue
+        try:
+            content = candidate.read_text(errors="replace")
+        except Exception:
+            continue
+        if needle in content:
+            hits.append(str(candidate))
+
+    scripts_dir = get_scripts_dir()
+    if scripts_dir.is_dir():
+        for sibling in sorted(scripts_dir.iterdir()):
+            if sibling == path or not sibling.is_file():
+                continue
+            try:
+                content = sibling.read_text(errors="replace")
+            except Exception:
+                continue
+            if needle in content:
+                hits.append(str(sibling))
+    return hits
+
+
+def _normalize_legacy_personal_script_metadata_name(content: str) -> str:
+    lines = content.splitlines(keepends=True)
+    updated: list[str] = []
+    changed = False
+    for line in lines:
+        stripped = line.lstrip()
+        if stripped.startswith("# nexo: name="):
+            prefix = line[: len(line) - len(stripped)]
+            raw_value = stripped.split("=", 1)[1].strip()
+            normalized_name = _logical_personal_script_name(raw_value)
+            newline = "\n" if line.endswith("\n") else ""
+            updated.append(f"{prefix}# nexo: name={normalized_name}{newline}")
+            changed = True
+            continue
+        updated.append(line)
+    return "".join(updated) if changed else content
+
+
+def rename_legacy_personal_script_filenames(*, dry_run: bool = False) -> dict:
+    """Move legacy personal filenames from ``nexo-*`` to canonical ``ps-*`` names."""
+    from db import delete_personal_script_schedule
+
+    scripts_dir = get_scripts_dir()
+    report = {
+        "ok": True,
+        "dry_run": dry_run,
+        "candidates": [],
+        "renamed": [],
+        "unscheduled": [],
+        "skipped": [],
+        "errors": [],
+    }
+    if not scripts_dir.is_dir():
+        return report
+
+    schedule_records = _discover_personal_schedule_records()
+    core_identities = load_core_script_identities()
+
+    for path in sorted(scripts_dir.iterdir()):
+        if not path.is_file():
+            continue
+        metadata = parse_inline_metadata(path)
+        if _is_ignored(path) or not _is_script_candidate(path, metadata):
+            continue
+        if _script_collides_with_core_identity(path, metadata, core_identities=core_identities):
+            continue
+
+        target = _legacy_personal_script_target_path(path, metadata)
+        if target is None:
+            continue
+
+        entry = {
+            "name": _logical_personal_script_name(metadata.get("name", "") or path.stem),
+            "old_path": str(path),
+            "new_path": str(target),
+        }
+        report["candidates"].append(entry)
+
+        if target.exists():
+            report["skipped"].append({
+                **entry,
+                "reason": f"target already exists: {target.name}",
+            })
+            continue
+
+        reference_hits = _legacy_personal_script_reference_hits(path)
+        if reference_hits:
+            report["skipped"].append({
+                **entry,
+                "reason": "legacy filename still referenced by operator-owned artifacts",
+                "references": reference_hits,
+            })
+            continue
+
+        if dry_run:
+            continue
+
+        resolved_old = str(path.expanduser().resolve(strict=False))
+        matching_schedules = [
+            record for record in schedule_records
+            if str(Path(record.get("script_path", "")).expanduser().resolve(strict=False)) == resolved_old
+        ]
+        for record in matching_schedules:
+            removed = _remove_schedule_file(
+                cron_id=str(record.get("cron_id", "")),
+                plist_path=str(record.get("plist_path", "")),
+            )
+            delete_personal_script_schedule(str(record.get("cron_id", "")))
+            report["unscheduled"].append(removed)
+
+        try:
+            shutil.move(str(path), str(target))
+            try:
+                original = target.read_text(errors="replace")
+                normalized = _normalize_legacy_personal_script_metadata_name(original)
+                if normalized != original:
+                    target.write_text(normalized)
+            except Exception as exc:
+                report["errors"].append({
+                    **entry,
+                    "error": f"renamed but failed to normalize inline metadata: {exc}",
+                })
+            report["renamed"].append(entry)
+        except Exception as exc:
+            report["errors"].append({
+                **entry,
+                "error": str(exc),
+            })
+
+    if report["errors"]:
+        report["ok"] = False
+    return report
 
 
 def create_script(name: str, *, description: str = "", runtime: str = "python", force: bool = False) -> dict:
@@ -1856,6 +2055,11 @@ def set_personal_script_enabled(name_or_path: str, enabled: bool) -> dict:
     }
 
 
+def set_automation_enabled(name_or_path: str, enabled: bool) -> dict:
+    """Stable contract wrapper for operator-facing automation toggles."""
+    return set_personal_script_enabled(name_or_path, enabled)
+
+
 def get_personal_script_status(name_or_path: str) -> dict:
     """Plan F0.2.2 — read-only view of one personal script for the
     Desktop panel and the `nexo scripts status` CLI verb."""
@@ -1899,6 +2103,11 @@ def get_personal_script_status(name_or_path: str) -> dict:
         "maximum_interval_seconds": int(contract.get("maximum_interval_seconds", 0) or 0),
         "interval_step_seconds": int(contract.get("interval_step_seconds", 0) or 0),
     }
+
+
+def get_automation_status(name_or_path: str) -> dict:
+    """Stable contract wrapper for operator-facing automation status."""
+    return get_personal_script_status(name_or_path)
 
 
 def set_script_extra_instructions(name_or_path: str, instructions: str) -> dict:
@@ -1953,6 +2162,11 @@ def set_script_extra_instructions(name_or_path: str, instructions: str) -> dict:
     }
 
 
+def set_automation_instructions(name_or_path: str, instructions: str) -> dict:
+    """Stable contract wrapper for automation operator notes."""
+    return set_script_extra_instructions(name_or_path, instructions)
+
+
 def set_script_schedule_override(
     name_or_path: str,
     *,
@@ -1970,6 +2184,22 @@ def set_script_schedule_override(
         return {"ok": False, "error": f"Script not found: {name_or_path}"}
     return set_core_automation_schedule(
         script.get("name", name_or_path),
+        interval_seconds=interval_seconds,
+        daily_at=daily_at,
+        clear=clear,
+    )
+
+
+def set_automation_schedule(
+    name_or_path: str,
+    *,
+    interval_seconds: int | None = None,
+    daily_at: str | None = None,
+    clear: bool = False,
+) -> dict:
+    """Stable contract wrapper for automation cadence overrides."""
+    return set_script_schedule_override(
+        name_or_path,
         interval_seconds=interval_seconds,
         daily_at=daily_at,
         clear=clear,
@@ -2001,7 +2231,7 @@ def doctor_script(path_or_name: str) -> dict:
         return {"status": "fail", "items": items}
 
     # Name collision with core
-    name = meta.get("name", p.stem)
+    name = _resolved_script_name(p, meta, classification="personal")
     if not is_core and _script_collides_with_core_identity(p, meta, core_identities=core_identities):
         colliding = sorted(_script_identity_tokens(p, meta) & core_identities)
         surface = colliding[0] if colliding else name
