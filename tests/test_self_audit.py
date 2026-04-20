@@ -1083,3 +1083,30 @@ def test_run_mechanical_autofixes_disables_broken_personal_plugins(self_audit_en
     conn.close()
     assert remaining == 0
     assert any("plugin autofix" in item["msg"] for item in module.findings if item["area"] == "autofix")
+
+
+def test_check_evolution_health_treats_desktop_product_disable_as_info(self_audit_env):
+    module = _load_self_audit_module()
+    module.findings.clear()
+
+    brain_dir = self_audit_env / "personal" / "brain"
+    brain_dir.mkdir(parents=True, exist_ok=True)
+    (brain_dir / "evolution-objective.json").write_text(json.dumps({
+        "evolution_enabled": False,
+        "disabled_reason": "Disabled by NEXO Desktop product contract",
+        "disabled_by": "desktop_product",
+        "consecutive_failures": 0,
+    }))
+
+    module.check_evolution_health()
+
+    assert any(
+        item["area"] == "evolution"
+        and item["severity"] == "INFO"
+        and "desktop product contract" in item["msg"]
+        for item in module.findings
+    )
+    assert not any(
+        item["area"] == "evolution" and item["severity"] == "ERROR"
+        for item in module.findings
+    )

@@ -26,6 +26,7 @@ if str(NEXO_CODE) not in sys.path:
 
 from agent_runner import AutomationBackendUnavailableError, run_automation_prompt
 from constants import AUTOMATION_SUBPROCESS_TIMEOUT
+from core_prompts import render_core_prompt
 import paths
 try:
     from client_preferences import resolve_user_model as _resolve_user_model
@@ -189,14 +190,9 @@ def analyze_session(
     prompt += shared_ctx_instruction
 
     try:
-        JSON_SYSTEM_PROMPT = (
-            "You are a JSON-only analyst. Your ENTIRE response must be a single valid JSON object. "
-            "No text before it. No text after it. No markdown fences. No explanations. "
-            "If you want to summarize, put it inside the JSON fields. Start with { and end with }. "
-            "If for ANY reason you cannot comply with the requested schema (context too large, "
-            "file unreadable, ambiguous, uncertain), you MUST still return a JSON object shaped as "
-            '{"session_id":"<the id>","findings":[],"error":"cannot_comply","reason":"<short reason>"}. '
-            "NEVER return plain text, apology, markdown, or empty output."
+        json_system_prompt = render_core_prompt(
+            "deep-sleep-extract-json-output",
+            session_id=session_id,
         )
 
         result = run_automation_prompt(
@@ -204,7 +200,7 @@ def analyze_session(
             caller="deep-sleep/extract",
             timeout=CLAUDE_TIMEOUT,
             output_format="text",
-            append_system_prompt=JSON_SYSTEM_PROMPT,
+            append_system_prompt=json_system_prompt,
             allowed_tools="Read,Grep,Bash",
         )
 

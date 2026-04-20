@@ -28,6 +28,7 @@ if str(_runtime_root) not in sys.path:
 
 from agent_runner import AutomationBackendUnavailableError, probe_automation_backend, run_automation_prompt
 from constants import AUTOMATION_SUBPROCESS_TIMEOUT
+from core_prompts import render_core_prompt
 from cron_recovery import catchup_candidates
 import paths
 
@@ -257,25 +258,14 @@ def _cli_post_catchup_assessment(ran: int, skipped: int, state: dict):
     assessment_file = LOG_DIR / "catchup-assessment.md"
     state_summary = json.dumps(state, indent=2, default=str)
 
-    prompt = f"""You are the NEXO Catch-Up system. The Mac was off/asleep and {ran} scheduled tasks just ran as catch-up ({skipped} were already current).
-
-Task run state (timestamps of last successful runs):
-{state_summary}
-
-Assess:
-1. How long was the system likely offline? (compare timestamps to now)
-2. Are there any tasks that depend on each other where order matters?
-3. Any tasks that may have produced stale results because they ran late?
-4. Should any task be re-run at its normal time today?
-
-Write a brief assessment (max 20 lines) to: {assessment_file}
-
-Format:
-## Catch-Up Assessment — {datetime.now().strftime('%Y-%m-%d %H:%M')}
-- Offline duration: ~Xh
-- Tasks caught up: {ran}
-- Concerns: ...
-- Recommendation: ..."""
+    prompt = render_core_prompt(
+        "catchup-assessment",
+        ran=ran,
+        skipped=skipped,
+        state_summary=state_summary,
+        assessment_file=assessment_file,
+        now_label=datetime.now().strftime('%Y-%m-%d %H:%M'),
+    )
 
     log(f"Caught up {ran} tasks — running CLI assessment...")
     try:
