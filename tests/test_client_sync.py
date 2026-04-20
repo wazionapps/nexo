@@ -130,6 +130,16 @@ def test_sync_claude_code_preserves_existing_settings(tmp_path):
     assert "Evolution" in bootstrap_text
 
 
+def test_resolve_operator_name_falls_back_to_neutral_default(tmp_path):
+    import client_sync
+
+    runtime = tmp_path / "runtime"
+    (runtime / "personal" / "brain").mkdir(parents=True, exist_ok=True)
+    (runtime / "version.json").write_text(json.dumps({"operator_name": ""}))
+
+    assert client_sync._resolve_operator_name(runtime) == "Nova"
+
+
 def test_sync_claude_code_removes_legacy_managed_hooks_but_keeps_custom_hooks(tmp_path):
     import client_sync
 
@@ -578,9 +588,47 @@ def test_sync_codex_defaults_operator_name_when_runtime_version_has_blank_value(
     )
 
     assert result["ok"] is True
-    assert "NEXO_NAME=NEXO" in captured["cmd"]
+    assert "NEXO_NAME=Nova" in captured["cmd"]
     bootstrap_text = (home / ".codex" / "AGENTS.md").read_text()
-    assert "You are NEXO" in bootstrap_text
+    assert "You are Nova" in bootstrap_text
+    assert "You are NEXO" not in bootstrap_text
+
+
+def test_sync_codex_prefers_calibration_assistant_name_over_blank_version_value(tmp_path, monkeypatch):
+    import client_sync
+
+    runtime = _make_runtime(tmp_path, operator_name="")
+    home = tmp_path / "home"
+    captured = {}
+
+    calibration_dir = runtime / "personal" / "brain"
+    calibration_dir.mkdir(parents=True, exist_ok=True)
+    (calibration_dir / "calibration.json").write_text(json.dumps({
+        "user": {
+            "assistant_name": "Nero",
+            "name": "Francisco",
+            "language": "es",
+        }
+    }))
+
+    monkeypatch.setattr(client_sync.shutil, "which", lambda name: "/tmp/fake-codex" if name == "codex" else None)
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        return subprocess.CompletedProcess(cmd, 0, "Added global MCP server 'nexo'.", "")
+
+    monkeypatch.setattr(client_sync.subprocess, "run", fake_run)
+
+    result = client_sync.sync_codex(
+        nexo_home=runtime,
+        runtime_root=runtime,
+        user_home=home,
+    )
+
+    assert result["ok"] is True
+    assert "NEXO_NAME=Nero" in captured["cmd"]
+    bootstrap_text = (home / ".codex" / "AGENTS.md").read_text()
+    assert "You are Nero" in bootstrap_text
 
 
 def test_sync_codex_falls_back_to_managed_config_when_cli_add_fails(tmp_path, monkeypatch):

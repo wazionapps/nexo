@@ -30,6 +30,7 @@ def _resolve_templates_dir(module_file: str | os.PathLike[str]) -> Path:
 
 
 TEMPLATES_DIR = _resolve_templates_dir(__file__)
+DEFAULT_ASSISTANT_NAME = "Nova"
 
 CORE_LABEL = "******CORE******"
 USER_LABEL = "******USER******"
@@ -64,6 +65,16 @@ def _default_nexo_home() -> Path:
     return resolve_nexo_home(os.environ.get("NEXO_HOME", str(_user_home() / ".nexo")))
 
 
+def _read_json_file(path: Path) -> dict:
+    if not path.is_file():
+        return {}
+    try:
+        payload = json.loads(path.read_text())
+    except Exception:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
 def _resolve_operator_name(nexo_home: Path, explicit: str = "") -> str:
     explicit = (explicit or "").strip()
     if explicit:
@@ -71,6 +82,16 @@ def _resolve_operator_name(nexo_home: Path, explicit: str = "") -> str:
     env_name = os.environ.get("NEXO_NAME", "").strip()
     if env_name:
         return env_name
+    calibration = _read_json_file(nexo_home / "personal" / "brain" / "calibration.json")
+    user_payload = calibration.get("user")
+    if isinstance(user_payload, dict):
+        candidate = str(user_payload.get("assistant_name", "")).strip()
+        if candidate:
+            return candidate
+    for key in ("assistant_name", "identity", "operator_name"):
+        candidate = str(calibration.get(key, "")).strip()
+        if candidate:
+            return candidate
     version_file = nexo_home / "version.json"
     if version_file.is_file():
         try:
@@ -79,7 +100,7 @@ def _resolve_operator_name(nexo_home: Path, explicit: str = "") -> str:
                 return candidate
         except Exception:
             pass
-    return "NEXO"
+    return DEFAULT_ASSISTANT_NAME
 
 
 def _read_version(text: str, pattern: str) -> str:
