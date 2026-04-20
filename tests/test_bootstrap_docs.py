@@ -33,6 +33,8 @@ def test_render_bootstrap_template_prefers_calibration_assistant_name(tmp_path):
     assert "You are NEXO" not in text
     assert "never present yourself as a generic model or LLM" in text
     assert "docs/agent-product-playbook.md" in text
+    assert "docs/product-operator-wiki.md" in text
+    assert "docs/solution-playbook.md" in text
     assert "I am Nero. Nero is a single operational identity." in text
     assert "No decir" not in text
     assert "La LLM subyacente" not in text
@@ -53,4 +55,6 @@ def test_render_bootstrap_template_falls_back_to_neutral_assistant_name(tmp_path
     assert "You are Nova" in text
     assert "You are NEXO" not in text
     assert "Mission: help the operator reach the real outcome" in text
+    assert "docs/product-operator-wiki.md" in text
+    assert "docs/solution-playbook.md" in text
     assert "I am Nova. Nova is a single operational identity." in text
