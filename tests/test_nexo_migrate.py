@@ -93,3 +93,10 @@ def test_bootstrap_f00_convenience():
     assert r["applied"] is True
     assert r["version"] == "F0.0"
     assert is_applied("F0.0") is True
+
+
+def test_db_path_defaults_to_runtime_data_layout(monkeypatch, tmp_path):
+    monkeypatch.delenv("NEXO_DB_PATH", raising=False)
+    monkeypatch.setenv("NEXO_HOME", str(tmp_path))
+
+    assert nexo_migrate._db_path() == tmp_path / "runtime" / "data" / "nexo.db"

@@ -20,11 +20,10 @@ NEXO_HOME = export_resolved_nexo_home()
 NEXO_CODE = Path(os.environ.get("NEXO_CODE", str(Path(__file__).resolve().parent)))
 EXPORTS_DIR = paths.exports_dir()
 STAGING_DIR = EXPORTS_DIR / ".staging"
-USER_DIRS = ("brain", "coordination", "nexo-email", "assets")
-USER_CONFIG_FILES = ("schedule.json",)
 IGNORED_FILENAMES = {".DS_Store"}
 IGNORED_DIRS = {"__pycache__"}
 IGNORED_SUFFIXES = {".pyc", ".pyo"}
+PORTABLE_CONFIG_EXCLUDE_NAMES = {".keychain-pass"}
 
 # v5.5.6: rate-limit the whole-bundle export so a runaway MCP client cannot
 # loop this tool. Each export snapshots the entire NEXO state through
@@ -140,6 +139,21 @@ def _user_section_target(dirname: str) -> Path:
     return _user_section_source(dirname)
 
 
+def _portable_tree_sections() -> tuple[tuple[str, Path, Path, set[str]], ...]:
+    return (
+        ("coordination", paths.coordination_dir(), paths.coordination_dir(), set()),
+        ("nexo-email", paths.nexo_email_dir(), paths.nexo_email_dir(), set()),
+        ("assets", NEXO_HOME / "assets", NEXO_HOME / "assets", set()),
+        ("personal-plugins", paths.personal_plugins_dir(), paths.personal_plugins_dir(), set()),
+        ("personal-hooks", paths.personal_hooks_dir(), paths.personal_hooks_dir(), set()),
+        ("personal-rules", paths.personal_rules_dir(), paths.personal_rules_dir(), set()),
+        ("personal-skills", paths.personal_skills_dir(), paths.personal_skills_dir(), set()),
+        ("personal-config", paths.personal_config_dir(), paths.personal_config_dir(), set(PORTABLE_CONFIG_EXCLUDE_NAMES)),
+        ("personal-lib", paths.personal_lib_dir(), paths.personal_lib_dir(), set()),
+        ("personal-overrides", paths.personal_overrides_dir(), paths.personal_overrides_dir(), set()),
+    )
+
+
 def _safe_extract(archive_path: Path, dest_dir: Path) -> None:
     resolved_dest = dest_dir.resolve()
     with tarfile.open(archive_path, "r:*") as tar:
@@ -210,19 +224,11 @@ def export_user_bundle(output_path: str = "") -> dict:
                 copied += 1
             sections["brain"] = {"path": "brain", "files": copied}
 
-        for dirname in USER_DIRS[1:]:
-            src_dir = _user_section_source(dirname)
+        for dirname, src_dir, _target_dir, exclude_names in _portable_tree_sections():
             if not src_dir.is_dir():
                 continue
-            copied = _copy_tree_filtered(src_dir, bundle_root / dirname)
+            copied = _copy_tree_filtered(src_dir, bundle_root / dirname, exclude_names=exclude_names)
             sections[dirname] = {"path": dirname, "files": copied}
-
-        copied_configs: list[str] = []
-        for filename in USER_CONFIG_FILES:
-            if _copy_file_if_present(paths.config_dir() / filename, bundle_root / "config" / filename):
-                copied_configs.append(filename)
-        if copied_configs:
-            sections["config"] = {"path": "config", "files": copied_configs}
 
         scripts, schedules = _load_personal_scripts()
         exported_scripts: list[dict] = []
@@ -326,19 +332,12 @@ def import_user_bundle(bundle_path: str) -> dict:
                 copied += 1
             restored["brain"] = {"path": "brain", "files": copied}
 
-        for dirname in USER_DIRS[1:]:
+        for dirname, _src_dir, target_dir, _exclude_names in _portable_tree_sections():
             src_dir = bundle_root / dirname
             if not src_dir.is_dir():
                 continue
-            copied = _copy_tree_filtered(src_dir, _user_section_target(dirname))
+            copied = _copy_tree_filtered(src_dir, target_dir)
             restored[dirname] = {"path": dirname, "files": copied}
-
-        restored_configs: list[str] = []
-        for filename in USER_CONFIG_FILES:
-            if _copy_file_if_present(bundle_root / "config" / filename, paths.config_dir() / filename):
-                restored_configs.append(filename)
-        if restored_configs:
-            restored["config"] = {"path": "config", "files": restored_configs}
 
         imported_scripts = 0
         scripts_dir = bundle_root / "personal-scripts"
@@ -352,10 +351,16 @@ def import_user_bundle(bundle_path: str) -> dict:
                 imported_scripts += 1
         restored["personal_scripts"] = {"path": "personal-scripts", "files": imported_scripts}
 
-        from db import init_db
-        from script_registry import reconcile_personal_scripts
+        from db import init_db, sync_skill_directories, retire_superseded_personal_skills
+        from script_registry import (
+            reconcile_personal_scripts,
+            retire_superseded_personal_scripts,
+        )
 
         init_db()
+        skill_sync_result = sync_skill_directories()
+        retired_skills_result = retire_superseded_personal_skills(dry_run=False)
+        retired_scripts_result = retire_superseded_personal_scripts(dry_run=False)
         reconcile_result = reconcile_personal_scripts(dry_run=False)
 
         return {
@@ -365,6 +370,9 @@ def import_user_bundle(bundle_path: str) -> dict:
             "bundle_version": manifest.get("version"),
             "safety_backup": str(safety_backup),
             "restored": restored,
+            "skill_sync": skill_sync_result,
+            "retired_superseded_skills": retired_skills_result,
+            "retired_superseded_scripts": retired_scripts_result,
             "reconciled": reconcile_result,
         }
     except Exception as exc:

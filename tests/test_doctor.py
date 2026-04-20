@@ -484,7 +484,7 @@ class TestRuntimeChecks:
         managed = runtime._managed_launchagent_plists()
         assert ("catchup", launch_agents / "com.nexo.catchup.plist") in managed
 
-    def test_managed_launchagents_include_auxiliary_core_services(self, nexo_home, monkeypatch):
+    def test_managed_launchagents_include_manifest_managed_keep_alive_services(self, nexo_home, monkeypatch):
         from doctor.providers import runtime
 
         launch_agents = nexo_home / "launchagents"
@@ -492,7 +492,16 @@ class TestRuntimeChecks:
         (launch_agents / "com.nexo.dashboard.plist").write_text("<plist/>")
 
         monkeypatch.setattr(runtime, "LAUNCH_AGENTS_DIR", launch_agents)
-        monkeypatch.setattr(runtime, "_launchagent_schedule_expectations", lambda: {})
+        monkeypatch.setattr(runtime, "_launchagent_schedule_expectations", lambda: {
+            "dashboard": {
+                "StartInterval": None,
+                "StartCalendarInterval": None,
+                "RunAtLoad": True,
+                "KeepAlive": True,
+                "WatchPaths": None,
+                "schedule_configured": True,
+            }
+        })
 
         managed = runtime._managed_launchagent_plists()
         assert ("dashboard", launch_agents / "com.nexo.dashboard.plist") in managed
@@ -565,6 +574,33 @@ class TestRuntimeChecks:
             "Minute": 33,
             "Weekday": 3,
         }
+
+    def test_launchagent_expectations_include_watch_paths(self, nexo_home, monkeypatch):
+        from doctor.providers import runtime
+
+        (nexo_home / "config").mkdir(parents=True, exist_ok=True)
+        (nexo_home / "config" / "optionals.json").write_text("{}")
+        (nexo_home / "crons").mkdir(parents=True, exist_ok=True)
+        (nexo_home / "crons" / "manifest.json").write_text(json.dumps({
+            "crons": [
+                {
+                    "id": "tcc-approve",
+                    "type": "shell",
+                    "run_at_load": True,
+                    "platforms": ["darwin"],
+                    "watch_paths": ["~/.local/share/claude/versions"],
+                }
+            ]
+        }))
+
+        monkeypatch.setenv("NEXO_HOME", str(nexo_home))
+        monkeypatch.setenv("NEXO_PLATFORM", "Darwin")
+        monkeypatch.setattr(runtime, "NEXO_HOME", nexo_home)
+        monkeypatch.setattr(runtime, "OPTIONALS_FILE", nexo_home / "config" / "optionals.json")
+
+        expectations = runtime._launchagent_schedule_expectations()
+        assert expectations["tcc-approve"]["RunAtLoad"] is True
+        assert expectations["tcc-approve"]["WatchPaths"] == [str(Path.home() / ".local" / "share" / "claude" / "versions")]
 
     def test_launchagent_integrity_detects_keepalive_schedule_drift(self, nexo_home, monkeypatch):
         from doctor.providers import runtime
@@ -705,7 +741,10 @@ class TestRuntimeChecks:
 
         monkeypatch.setattr(runtime, "LAUNCH_AGENTS_DIR", launch_agents)
         monkeypatch.setattr(runtime.platform, "system", lambda: "Darwin")
-        monkeypatch.setattr(runtime, "_launchagent_schedule_expectations", lambda: {})
+        monkeypatch.setattr(runtime, "_launchagent_schedule_expectations", lambda: {
+            "backup": {"schedule_configured": True},
+            "dashboard": {"schedule_configured": True},
+        })
         monkeypatch.setattr(db, "init_db", lambda: None)
         monkeypatch.setattr(script_registry, "sync_personal_scripts", lambda prune_missing=True: {"ok": True})
         monkeypatch.setattr(
@@ -1842,7 +1881,7 @@ class TestRuntimeChecks:
         def fake_run(args, **kwargs):
             if args[:2] == ["launchctl", "print"]:
                 calls["print"] += 1
-                current_code = old_code if calls["print"] == 1 else str(nexo_home)
+                current_code = old_code if calls["print"] == 1 else str(nexo_home / "core")
                 return SimpleNamespace(
                     returncode=0,
                     stdout=(
@@ -1861,7 +1900,7 @@ class TestRuntimeChecks:
         assert check.fixed
         with plist_path.open("rb") as fh:
             fixed = plistlib.load(fh)
-        assert fixed["EnvironmentVariables"]["NEXO_CODE"] == str(nexo_home)
+        assert fixed["EnvironmentVariables"]["NEXO_CODE"] == str(nexo_home / "core")
 
     def test_protocol_compliance_prefers_live_runtime_data_when_healthy(self, nexo_home):
         db_path = nexo_home / "data" / "nexo.db"

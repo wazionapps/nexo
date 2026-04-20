@@ -22,7 +22,7 @@ import auto_update  # noqa: E402
 
 @pytest.fixture
 def fake_home(tmp_path):
-    (tmp_path / "brain").mkdir()
+    (tmp_path / "personal" / "brain").mkdir(parents=True)
     return tmp_path
 
 
@@ -38,7 +38,7 @@ def _sample_payload() -> dict:
 
 def test_relocates_legacy_file_when_brain_empty(fake_home):
     legacy = fake_home / "resonance_tiers.json"
-    contract = fake_home / "brain" / "resonance_tiers.json"
+    contract = fake_home / "personal" / "brain" / "resonance_tiers.json"
     payload = _sample_payload()
     legacy.write_text(json.dumps(payload))
     assert not contract.exists()
@@ -53,7 +53,7 @@ def test_relocates_legacy_file_when_brain_empty(fake_home):
 
 def test_drops_legacy_when_brain_already_has_contract(fake_home):
     legacy = fake_home / "resonance_tiers.json"
-    contract = fake_home / "brain" / "resonance_tiers.json"
+    contract = fake_home / "personal" / "brain" / "resonance_tiers.json"
     legacy.write_text(json.dumps({"stale": True}))
     contract.write_text(json.dumps(_sample_payload()))
 
@@ -68,7 +68,7 @@ def test_drops_legacy_when_brain_already_has_contract(fake_home):
 
 
 def test_idempotent_when_only_contract_exists(fake_home):
-    contract = fake_home / "brain" / "resonance_tiers.json"
+    contract = fake_home / "personal" / "brain" / "resonance_tiers.json"
     contract.write_text(json.dumps(_sample_payload()))
 
     actions = auto_update._relocate_resonance_tiers_contract(fake_home)
@@ -80,7 +80,7 @@ def test_idempotent_when_only_contract_exists(fake_home):
 def test_noop_when_neither_exists(fake_home):
     # Both legacy and contract are absent — the JS installer will write
     # the file on the next pass; Python migration has nothing to do.
-    contract = fake_home / "brain" / "resonance_tiers.json"
+    contract = fake_home / "personal" / "brain" / "resonance_tiers.json"
     legacy = fake_home / "resonance_tiers.json"
     assert not contract.exists() and not legacy.exists()
 

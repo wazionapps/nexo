@@ -15,10 +15,12 @@ import sys
 import time
 import numpy as np
 
+import paths
+
 NEXO_HOME = os.environ.get("NEXO_HOME", os.path.expanduser("~/.nexo"))
-_data_dir = os.path.join(NEXO_HOME, "data")
-os.makedirs(_data_dir, exist_ok=True)
-DB_PATH = os.path.join(_data_dir, "cognitive.db")
+_cognitive_dir = paths.cognitive_dir()
+_cognitive_dir.mkdir(parents=True, exist_ok=True)
+DB_PATH = str(_cognitive_dir / "cognitive.db")
 BACKUP_PATH = DB_PATH + ".bak-384dims-pre-upgrade"
 
 MODELS = {

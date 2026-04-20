@@ -24,6 +24,7 @@ _CATCHUP_RUNTIME_FILES = (
     "enforcement_engine.py",
     "resonance_map.py",
     "constants.py",
+    "core_prompts.py",
 )
 
 
@@ -226,6 +227,32 @@ def test_load_enabled_crons_applies_core_automation_interval_override(tmp_path, 
     assert crons[0]["id"] == "email-monitor"
     assert crons[0]["interval_seconds"] == 300
     assert crons[0]["_schedule_source"] == "override"
+
+
+def test_load_enabled_crons_filters_platforms_and_power_policy(tmp_path, monkeypatch):
+    import cron_recovery
+
+    nexo_home = tmp_path / "nexo"
+    manifest_dir = nexo_home / "runtime" / "crons"
+    manifest_dir.mkdir(parents=True)
+    config_dir = nexo_home / "personal" / "config"
+    config_dir.mkdir(parents=True)
+    (manifest_dir / "manifest.json").write_text(json.dumps({
+        "crons": [
+            {"id": "watchdog", "script": "scripts/nexo-watchdog.sh", "interval_seconds": 1800},
+            {"id": "tcc-approve", "script": "scripts/nexo-tcc-approve.sh", "platforms": ["darwin"], "run_at_load": True},
+            {"id": "prevent-sleep", "script": "scripts/nexo-prevent-sleep.sh", "keep_alive": True, "requires_power_policy": "always_on"},
+        ]
+    }))
+    (config_dir / "schedule.json").write_text(json.dumps({"power_policy": "disabled"}))
+
+    monkeypatch.setenv("NEXO_HOME", str(nexo_home))
+    monkeypatch.setattr(cron_recovery, "NEXO_HOME", nexo_home)
+    monkeypatch.setenv("NEXO_PLATFORM", "Darwin")
+    monkeypatch.setattr(cron_recovery, "SCHEDULE_FILE", config_dir / "schedule.json")
+
+    crons = cron_recovery.load_enabled_crons()
+    assert [cron["id"] for cron in crons] == ["watchdog", "tcc-approve"]
 
 
 def test_catchup_candidates_do_not_relaunch_inflight_due_window(tmp_path, monkeypatch):

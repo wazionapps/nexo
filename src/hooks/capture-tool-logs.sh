@@ -17,7 +17,15 @@ case "$TOOL_NAME" in
 esac
 
 NEXO_HOME="${NEXO_HOME:-$HOME/.nexo}"
-LOG_DIR="$NEXO_HOME/operations/tool-logs"
+OPERATIONS_DIR="$NEXO_HOME/runtime/operations"
+if [ ! -d "$OPERATIONS_DIR" ] && [ -d "$NEXO_HOME/operations" ]; then
+    OPERATIONS_DIR="$NEXO_HOME/operations"
+fi
+DATA_DIR="$NEXO_HOME/runtime/data"
+if [ ! -d "$DATA_DIR" ] && [ -d "$NEXO_HOME/data" ]; then
+    DATA_DIR="$NEXO_HOME/data"
+fi
+LOG_DIR="$OPERATIONS_DIR/tool-logs"
 mkdir -p "$LOG_DIR"
 
 TODAY=$(date +%Y-%m-%d)
@@ -58,10 +66,10 @@ print(json.dumps(record))
 # ── Layer 1: Auto-diary every 10 tool calls (session-scoped) ─────────
 # Extract session_id for per-session counters (prevents cross-terminal contamination)
 SESSION_ID=$(echo "$INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('session_id','global'))" 2>/dev/null || echo "global")
-COUNTER_DIR="$NEXO_HOME/operations/counters"
+COUNTER_DIR="$OPERATIONS_DIR/counters"
 mkdir -p "$COUNTER_DIR"
 COUNTER_FILE="$COUNTER_DIR/.tool-call-count-${SESSION_ID}"
-NEXO_DB="$NEXO_HOME/data/nexo.db"
+NEXO_DB="$DATA_DIR/nexo.db"
 
 # Increment counter (atomic: read+write in one step)
 COUNT=1

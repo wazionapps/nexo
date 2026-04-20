@@ -9,6 +9,8 @@ NEXO_HOME="${NEXO_HOME:-$HOME/.nexo}"
 HELPER=""
 if [ -n "${NEXO_CODE:-}" ] && [ -f "${NEXO_CODE%/}/hooks/heartbeat-enforcement.py" ]; then
     HELPER="${NEXO_CODE%/}/hooks/heartbeat-enforcement.py"
+elif [ -f "$NEXO_HOME/core/hooks/heartbeat-enforcement.py" ]; then
+    HELPER="$NEXO_HOME/core/hooks/heartbeat-enforcement.py"
 elif [ -f "$NEXO_HOME/hooks/heartbeat-enforcement.py" ]; then
     HELPER="$NEXO_HOME/hooks/heartbeat-enforcement.py"
 fi

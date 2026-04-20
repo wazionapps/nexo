@@ -8,6 +8,7 @@ import signal
 import sys
 import time
 
+import paths
 from db import get_db
 from fastmcp.tools import Tool
 
@@ -25,9 +26,9 @@ except ModuleNotFoundError as exc:
 SERVER_DIR = os.path.dirname(os.path.abspath(__file__))
 PLUGINS_DIR = os.path.join(SERVER_DIR, "plugins")
 
-# Personal plugins directory: NEXO_HOME/plugins/ (env var, defaults to ~/.nexo/)
+# Personal plugins directory: NEXO_HOME/personal/plugins/ (env var, defaults to ~/.nexo/)
 NEXO_HOME = os.environ.get("NEXO_HOME", os.path.expanduser("~/.nexo"))
-PERSONAL_PLUGINS_DIR = os.path.join(NEXO_HOME, "plugins")
+PERSONAL_PLUGINS_DIR = str(paths.personal_plugins_dir())
 
 PLUGIN_LOAD_TIMEOUT = 10  # seconds per plugin
 
@@ -141,14 +142,22 @@ def load_all_plugins(mcp) -> int:
                     continue
                 plugin_map[f] = (PLUGINS_DIR, "repo")
 
-    # 2. Personal plugins (override if same filename)
+    # 2. Personal plugins. Never let a personal file shadow a packaged core
+    # plugin at startup: creation already rejects that collision, and keeping
+    # the repo plugin canonical avoids hybrid installs with two sources of truth.
     if os.path.isdir(PERSONAL_PLUGINS_DIR):
         for f in sorted(os.listdir(PERSONAL_PLUGINS_DIR)):
             if f.endswith(".py") and f != "__init__.py":
                 if is_duplicate_artifact_name(os.path.join(PERSONAL_PLUGINS_DIR, f)):
                     continue
-                source = "personal (override)" if f in plugin_map else "personal"
-                plugin_map[f] = (PERSONAL_PLUGINS_DIR, source)
+                if f in plugin_map:
+                    print(
+                        f"[PLUGIN SHADOW SKIP] {f}: personal plugin collides with packaged core filename; "
+                        "keeping core plugin canonical",
+                        file=sys.stderr,
+                    )
+                    continue
+                plugin_map[f] = (PERSONAL_PLUGINS_DIR, "personal")
 
     # Load all in sorted order
     for f in sorted(plugin_map):

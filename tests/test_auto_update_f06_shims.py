@@ -107,3 +107,34 @@ def test_maybe_migrate_f06_keeps_watchdog_runtime_files_under_core_scripts(monke
     assert (home / "core" / "scripts" / ".watchdog-fails").is_file()
     assert not (home / "personal" / "scripts" / ".watchdog-hashes").exists()
     assert not (home / "personal" / "scripts" / ".watchdog-fails").exists()
+
+
+def test_maybe_migrate_f06_does_not_create_legacy_shims_for_already_canonical_install(monkeypatch, tmp_path):
+    home = tmp_path
+    (home / ".structure-version").write_text("F0.6\n")
+    (home / "core").mkdir(parents=True)
+    (home / "personal" / "brain").mkdir(parents=True)
+    (home / "personal" / "config").mkdir(parents=True)
+    (home / "runtime" / "data").mkdir(parents=True)
+    (home / "core" / "server.py").write_text("print('runtime')\n")
+
+    au = _reload_auto_update(monkeypatch, home)
+    au._maybe_migrate_to_f06_layout()
+
+    assert not (home / "brain").exists()
+    assert not (home / "config").exists()
+    assert not (home / "server.py").exists()
+
+
+def test_maybe_migrate_f06_removes_root_pycache_residue(monkeypatch, tmp_path):
+    home = tmp_path
+    (home / ".structure-version").write_text("F0.6\n")
+    (home / "core").mkdir(parents=True)
+    cache_dir = home / "__pycache__"
+    cache_dir.mkdir(parents=True)
+    (cache_dir / "email_config.cpython-314.pyc").write_bytes(b"pyc")
+
+    au = _reload_auto_update(monkeypatch, home)
+    au._maybe_migrate_to_f06_layout()
+
+    assert not cache_dir.exists()

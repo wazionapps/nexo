@@ -25,7 +25,7 @@ from client_preferences import (
     normalize_client_preferences,
     resolve_client_runtime_profile,
 )
-from cron_recovery import resolve_declared_schedule, should_run_at_load
+from cron_recovery import is_cron_enabled, resolve_declared_schedule, should_run_at_load
 from doctor.models import DoctorCheck, safe_check
 
 NEXO_HOME = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
@@ -43,13 +43,18 @@ IMMUNE_FRESHNESS = 3600  # 1 hour (runs every 30 min)
 WATCHDOG_FRESHNESS = 3600  # 1 hour (runs every 30 min)
 DEFAULT_CRON_THRESHOLD = 7200  # Fallback when manifest data is unavailable
 LIVE_PROTOCOL_SESSION_FRESHNESS = 1800  # 30 minutes
-AUXILIARY_CORE_LAUNCHAGENT_IDS = {"backup", "dashboard", "prevent-sleep", "tcc-approve"}
-SPECIAL_LAUNCHAGENT_IDS = {"prevent-sleep", "tcc-approve"}
-SPECIAL_ENV_NORMALIZE_IDS = SPECIAL_LAUNCHAGENT_IDS
+SPECIAL_ENV_NORMALIZE_IDS = {"prevent-sleep", "tcc-approve"}
 OPTIONALS_FILE = paths.config_dir() / "optionals.json"
 SCHEDULE_FILE = paths.config_dir() / "schedule.json"
 PACKAGE_JSON = NEXO_CODE / "package.json"
 CHANGELOG_FILE = NEXO_CODE / "CHANGELOG.md"
+
+
+def _expected_runtime_code_dir() -> Path:
+    packaged = NEXO_HOME / "core"
+    if packaged.exists() or not (NEXO_HOME / "server.py").is_file():
+        return packaged
+    return NEXO_HOME
 
 
 def _recorded_source_root() -> Path | None:
@@ -835,12 +840,12 @@ def _enabled_manifest_crons() -> list[dict]:
         NEXO_CODE / "crons" / "manifest.json",
     ]
     optionals = _enabled_optionals()
-    automation_default = True
+    schedule = {}
     try:
         if SCHEDULE_FILE.is_file():
-            schedule = _load_json(SCHEDULE_FILE)
-            if isinstance(schedule, dict):
-                automation_default = bool(schedule.get("automation_enabled", True))
+            loaded = _load_json(SCHEDULE_FILE)
+            if isinstance(loaded, dict):
+                schedule = loaded
     except Exception:
         pass
     for manifest_path in manifest_candidates:
@@ -856,12 +861,12 @@ def _enabled_manifest_crons() -> list[dict]:
             cron_id = cron.get("id")
             if not cron_id:
                 continue
-            optional_key = cron.get("optional")
-            if optional_key == "automation":
-                optional_enabled = optionals.get(optional_key, automation_default)
-            else:
-                optional_enabled = optionals.get(optional_key, False)
-            if optional_key and not optional_enabled:
+            if not is_cron_enabled(
+                cron,
+                optionals=optionals,
+                schedule_data=schedule,
+                system=platform.system(),
+            ):
                 continue
             enabled.append(cron)
         return enabled
@@ -919,6 +924,7 @@ def _launchagent_schedule_expectations() -> dict[str, dict]:
             "StartCalendarInterval": None,
             "RunAtLoad": None,
             "KeepAlive": None,
+            "WatchPaths": None,
             "schedule_configured": False,
         }
         if cron.get("keep_alive"):
@@ -944,12 +950,17 @@ def _launchagent_schedule_expectations() -> dict[str, dict]:
         elif should_run_at_load(cron):
             expected["RunAtLoad"] = True
             expected["schedule_configured"] = True
+        if cron.get("watch_paths"):
+            expected["WatchPaths"] = [
+                str(Path(str(path)).expanduser()) if str(path).startswith("~") else str(path)
+                for path in cron.get("watch_paths", [])
+            ]
         expectations[cron_id] = expected
     return expectations
 
 
 def _managed_launchagent_plists() -> list[tuple[str, Path]]:
-    ids = set(AUXILIARY_CORE_LAUNCHAGENT_IDS)
+    ids = set()
     for cron_id, expected in _launchagent_schedule_expectations().items():
         if expected.get("schedule_configured"):
             ids.add(cron_id)
@@ -963,7 +974,7 @@ def _managed_launchagent_plists() -> list[tuple[str, Path]]:
 
 
 def _known_nexo_launchagent_ids() -> set[str]:
-    ids = set(AUXILIARY_CORE_LAUNCHAGENT_IDS)
+    ids = set()
     for cron_id, expected in _launchagent_schedule_expectations().items():
         if expected.get("schedule_configured"):
             ids.add(cron_id)
@@ -1088,6 +1099,7 @@ def _repair_launchagents(items: list[tuple[str, Path]]) -> tuple[bool, list[str]
 def _repair_special_launchagent_plists(items: list[tuple[str, Path]]) -> tuple[bool, list[str]]:
     evidence: list[str] = []
     ok = True
+    expected_code = _expected_runtime_code_dir()
     for cron_id, plist_path in items:
         if cron_id not in SPECIAL_ENV_NORMALIZE_IDS:
             continue
@@ -1096,8 +1108,8 @@ def _repair_special_launchagent_plists(items: list[tuple[str, Path]]) -> tuple[b
                 plist_data = plistlib.load(fh)
             env = plist_data.setdefault("EnvironmentVariables", {})
             changed = False
-            if env.get("NEXO_CODE") != str(NEXO_HOME):
-                env["NEXO_CODE"] = str(NEXO_HOME)
+            if env.get("NEXO_CODE") != str(expected_code):
+                env["NEXO_CODE"] = str(expected_code)
                 changed = True
             if env.get("NEXO_HOME") != str(NEXO_HOME):
                 env["NEXO_HOME"] = str(NEXO_HOME)
@@ -1533,12 +1545,14 @@ def check_launchagent_integrity(fix: bool = False) -> DoctorCheck:
                 "StartCalendarInterval": plist_data.get("StartCalendarInterval"),
                 "RunAtLoad": plist_data.get("RunAtLoad"),
                 "KeepAlive": plist_data.get("KeepAlive"),
+                "WatchPaths": plist_data.get("WatchPaths"),
             }
             target_schedule = {
                 "StartInterval": expected_schedule.get("StartInterval"),
                 "StartCalendarInterval": expected_schedule.get("StartCalendarInterval"),
                 "RunAtLoad": expected_schedule.get("RunAtLoad"),
                 "KeepAlive": expected_schedule.get("KeepAlive"),
+                "WatchPaths": expected_schedule.get("WatchPaths"),
             }
             if actual_schedule != target_schedule:
                 problems.append(
@@ -1764,12 +1778,12 @@ def check_personal_script_registry(fix: bool = False) -> DoctorCheck:
             "Run nexo scripts sync to reconcile filesystem scripts and personal LaunchAgents",
             "Run nexo scripts reconcile so declared schedules are recreated through the official flow",
             "Use nexo doctor --tier runtime --fix to apply the safe reconcile path for declared schedules",
-            "Keep personal scripts in NEXO_HOME/scripts so updates do not collide with core",
+            "Keep personal scripts in NEXO_HOME/personal/scripts so updates do not collide with core",
             "Prefer ps- prefixed filenames for new personal scripts so ownership stays obvious at a glance",
         ],
         escalation_prompt=(
             "Personal script metadata, files, and personal cron schedules are out of sync. "
-            "Reconcile NEXO_HOME/scripts with personal LaunchAgents without treating them as core crons."
+            "Reconcile NEXO_HOME/personal/scripts with personal LaunchAgents without treating them as core crons."
         ),
     )
 

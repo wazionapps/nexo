@@ -28,10 +28,13 @@ import time
 import math
 import subprocess
 from datetime import datetime, timedelta
+from pathlib import Path
+
+import paths
 from db import get_db
 
 NEXO_HOME = os.environ.get("NEXO_HOME", os.path.expanduser("~/.nexo"))
-ADAPTIVE_STATE_FILE = os.path.join(NEXO_HOME, "brain", "adaptive_state.json")
+ADAPTIVE_STATE_FILE = str(paths.brain_dir() / "adaptive_state.json")
 
 # Mode definitions
 MODES = {

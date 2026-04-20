@@ -18,7 +18,20 @@ import sys
 import time
 from pathlib import Path
 
-STATE_FILE = Path(os.environ.get("NEXO_HOME", Path.home() / ".nexo")) / "operations" / ".heartbeat-state.json"
+try:
+    import paths
+except ModuleNotFoundError as exc:
+    if getattr(exc, "name", "") != "paths":
+        raise
+
+    class _PathsFallback:
+        @staticmethod
+        def operations_dir():
+            return Path(os.environ.get("NEXO_HOME", Path.home() / ".nexo")) / "operations"
+
+    paths = _PathsFallback()
+
+STATE_FILE = paths.operations_dir() / ".heartbeat-state.json"
 THRESHOLD = 2
 HEARTBEAT_TOOL = "nexo_heartbeat"
 SKIP_TOOLS = {"nexo_startup", "nexo_stop", "nexo_smart_startup"}

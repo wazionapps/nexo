@@ -3,6 +3,7 @@
 from datetime import datetime, timedelta
 import json
 import os
+import paths
 import subprocess
 from user_context import get_context as _get_ctx
 import sys
@@ -66,8 +67,7 @@ MENU_ITEMS = [
 def _get_dashboard_alerts() -> list[dict]:
     """Run proactive dashboard and return alerts."""
     try:
-        nexo_home = Path(os.environ.get("NEXO_HOME", str(Path.home() / ".nexo")))
-        script = nexo_home / "scripts" / "nexo-proactive-dashboard.py"
+        script = paths.core_scripts_dir() / "nexo-proactive-dashboard.py"
         if not script.exists():
             return []
         result = subprocess.run(
