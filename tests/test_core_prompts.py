@@ -35,9 +35,18 @@ def test_prompt_catalog_dir_exists_and_contains_automation_prompts():
     assert (core_prompts.PROMPTS_DIR / "morning-agent.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "morning-agent-json-output.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "postmortem-consolidator.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "r14-correction-learning-injection.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "r14-correction-learning-question.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "r15-project-context-injection.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "r-catalog.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "r34-identity-coherence-probe.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "r34-identity-coherence-question.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "r16-declared-done-injection.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "r16-declared-done-question.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "r17-promise-debt-injection.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "r17-promise-debt-question.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "r20-constant-change-injection.md").is_file()
+    assert (core_prompts.PROMPTS_DIR / "r20-constant-change-question.md").is_file()
     assert (core_prompts.PROMPTS_DIR / "sleep.md").is_file()
 
 
@@ -142,16 +151,34 @@ def test_render_core_prompt_supports_json_and_drive_classifier_templates():
 def test_render_core_prompt_supports_enforcer_and_startup_templates():
     strict = core_prompts.render_core_prompt("enforcement-classifier-strict")
     retry = core_prompts.render_core_prompt("enforcement-classifier-retry")
+    r14_question = core_prompts.render_core_prompt("r14-correction-learning-question")
+    r14_injection = core_prompts.render_core_prompt("r14-correction-learning-injection")
+    r15 = core_prompts.render_core_prompt("r15-project-context-injection", project="nexo-desktop")
     catalog = core_prompts.render_core_prompt("r-catalog", tool="nexo_followup_create")
     r34_probe = core_prompts.render_core_prompt("r34-identity-coherence-probe")
     r34_question = core_prompts.render_core_prompt("r34-identity-coherence-question")
+    r16_question = core_prompts.render_core_prompt("r16-declared-done-question")
+    r16_injection = core_prompts.render_core_prompt("r16-declared-done-injection")
+    r17_question = core_prompts.render_core_prompt("r17-promise-debt-question")
+    r17_injection = core_prompts.render_core_prompt("r17-promise-debt-injection")
+    r20_question = core_prompts.render_core_prompt("r20-constant-change-question")
+    r20_injection = core_prompts.render_core_prompt("r20-constant-change-injection", path="src/foo.py")
     startup = core_prompts.render_core_prompt("interactive-startup")
 
     assert "Respond with EXACTLY ONE WORD: yes OR no." in strict
     assert "Emit 'yes' or 'no' and stop." in retry
+    assert "teaching the assistant a rule it should have known" in r14_question
+    assert "nexo_learning_add" in r14_injection
+    assert "nexo-desktop" in r15
     assert "nexo_followup_create" in catalog
     assert "shared brain" in r34_probe
     assert "past-tense denial" in r34_question
+    assert "task is finished, completed, shipped, or already done" in r16_question
+    assert "nexo_task_close" in r16_injection
+    assert "explicitly promise a FUTURE action" in r17_question
+    assert "promise without execution opens operational debt" in r17_injection
+    assert "module-level constant, configuration key" in r20_question
+    assert "src/foo.py" in r20_injection
     assert "run nexo_startup and nexo_heartbeat" in startup
 
 

@@ -1,0 +1,1 @@
+Does the assistant message below declare that a task is finished, completed, shipped, or already done? Answer yes only if the assistant is claiming completion of the current work. Answer no for status updates, mid-task progress reports, questions, or partial summaries.

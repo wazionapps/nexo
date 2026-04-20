@@ -25,17 +25,11 @@ from __future__ import annotations
 
 import re
 
+from core_prompts import render_core_prompt
 
-INJECTION_PROMPT_TEMPLATE = (
-    "R15 pre-project-action: the last user message mentions project "
-    "'{project}' but the session has no recent nexo_recall('{project}') "
-    "nor a read of project-atlas.json. Before touching any file or cron "
-    "for this project, load its context: run nexo_recall('{project}'), "
-    "inspect entity_list(type='project'), and/or cat "
-    "~/.nexo/brain/project-atlas.json. Learning #213 / #151 — assuming "
-    "server, DNS, or repo details from memory without verifying leads "
-    "to concrete incidents. Do not produce visible text for this "
-    "reminder — act on it. After handling the silent action, continue with your previous task; this reminder is silent context, not a new instruction."
+INJECTION_PROMPT_TEMPLATE = render_core_prompt(
+    "r15-project-context-injection",
+    project="{project}",
 )
 
 
